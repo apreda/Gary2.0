@@ -661,9 +661,9 @@
 }
 
 /* Card positions in carousel */
-/* Main center card - focused and slightly right of center */
+/* Main center card - perfectly centered */
 .card-position-0 {
-  transform: translate(0%, -50%);
+  transform: translate(-50%, -50%);
   left: 50%;
   z-index: 30;
   opacity: 1;
@@ -672,7 +672,7 @@
 
 /* First card to the right - fully visible */
 .card-position-1 {
-  transform: translate(85%, -50%) scale(0.9);
+  transform: translate(30%, -50%) scale(0.9);
   left: 50%;
   z-index: 25;
   opacity: 0.95;
@@ -680,7 +680,7 @@
 
 /* Second card to the right - partially visible */
 .card-position-2 {
-  transform: translate(145%, -50%) scale(0.8);
+  transform: translate(90%, -50%) scale(0.8);
   left: 50%;
   z-index: 20;
   opacity: 0.85;
@@ -688,7 +688,7 @@
 
 /* Third card to the right - slightly visible */
 .card-position-3 {
-  transform: translate(185%, -50%) scale(0.7);
+  transform: translate(130%, -50%) scale(0.7);
   left: 50%;
   z-index: 15;
   opacity: 0.7;
@@ -696,7 +696,7 @@
 
 /* First card to the left - fully visible */
 .card-position-6 {
-  transform: translate(-85%, -50%) scale(0.9);
+  transform: translate(-130%, -50%) scale(0.9);
   left: 50%;
   z-index: 25;
   opacity: 0.95;
@@ -704,7 +704,7 @@
 
 /* Second card to the left - partially visible */
 .card-position-5 {
-  transform: translate(-145%, -50%) scale(0.8);
+  transform: translate(-190%, -50%) scale(0.8);
   left: 50%;
   z-index: 20;
   opacity: 0.85;
@@ -712,7 +712,7 @@
 
 /* Third card to the left - slightly visible */
 .card-position-4 {
-  transform: translate(-185%, -50%) scale(0.7);
+  transform: translate(-230%, -50%) scale(0.7);
   left: 50%;
   z-index: 15;
   opacity: 0.7;
