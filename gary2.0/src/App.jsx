@@ -11,6 +11,10 @@ import { Billfold } from "./pages/Billfold";
 import { Leaderboard } from "./pages/Leaderboard";
 import { HowItWorks } from "./pages/HowItWorks";
 
+// Import the refresh tool component - dynamically loaded
+const RefreshTool = lazy(() => import('./components/RefreshTool'));
+
+
 import { SignIn } from "./pages/SignIn";
 import { SignOut } from "./pages/SignOut";
 import { Checkout } from "./pages/Checkout";
@@ -104,6 +108,8 @@ function AppContent() {
               <Route path="/dashboard" element={
                 session ? <UserDashboard /> : <Navigate to="/signin" replace />
               } />
+              {/* Admin route for refreshing picks with real data */}
+              <Route path="/admin/refresh-picks" element={<RefreshTool />} />
             </Routes>
           </Suspense>
         </div>
