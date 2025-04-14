@@ -19,14 +19,33 @@ export const schedulerService = {
     const now = new Date();
     
     // SPECIAL TEST: Force generation at 6:35pm on April 14, 2025
+    // Create a more explicit time check for the test
+    const today = new Date();
     const targetTime = new Date();
     targetTime.setHours(18, 35, 0, 0); // 6:35 PM
     
-    // Check if it's after our target time (6:35 PM)
-    const isAfterTargetTime = now >= targetTime;
+    // Log current time and target time for debugging
+    console.log('Current time:', now.toLocaleTimeString());
+    console.log('Target time:', targetTime.toLocaleTimeString());
+    console.log('Last generation time:', lastGen.toLocaleTimeString());
     
-    // Check if the last generation was before our target time
-    const lastGenBeforeTarget = lastGen < targetTime;
+    // Get current hours and minutes for a direct comparison
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // Check if it's after 6:35 PM today (18:35) - inclusive of 6:35pm exactly
+    const isAfterTargetTime = (currentHour > 18 || (currentHour === 18 && currentMinute >= 35));
+    
+    // Get the last generation hour and minute
+    const lastGenHour = lastGen.getHours();
+    const lastGenMinute = lastGen.getMinutes();
+    
+    // Check if last generation was before 6:35 PM today
+    const lastGenBeforeTarget = lastGen.getDate() !== today.getDate() || 
+                               (lastGenHour < 18 || (lastGenHour === 18 && lastGenMinute < 35));
+    
+    console.log('Is after target time?', isAfterTargetTime);
+    console.log('Was last gen before target?', lastGenBeforeTarget);
     
     // If it's past 6:35 PM and we haven't generated picks since then, do it
     if (isAfterTargetTime && lastGenBeforeTarget) {
