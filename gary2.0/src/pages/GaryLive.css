@@ -1,0 +1,65 @@
+.gary-live-page {
+  padding: 1rem;
+}
+
+.sport-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sport-toggle button {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: #ddd;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.sport-toggle button.active {
+  background: #444;
+  color: #fff;
+}
+
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.game-card {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+
+.odds-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.odds-row > div {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  row-gap: 0.25rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.value {
+  font-size: 0.95rem;
+}

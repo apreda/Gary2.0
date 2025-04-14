@@ -1,0 +1,466 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from "react-router-dom";
+import { useUserStats } from "../hooks/useUserStats";
+import "./RealGaryPicks.css";
+import "./PickCards.css";
+import ErrorBoundary from "../components/ErrorBoundary";
+import garyLogo from '../assets/images/gary_logo.svg';
+
+// Import Gary images directly
+import gary1 from '../assets/images/gary1.svg';
+import gary2 from '../assets/images/gary2.svg';
+import gary3 from '../assets/images/gary3.svg';
+import gary4 from '../assets/images/gary4.svg';
+import gary5 from '../assets/images/gary5.svg';
+import gary6 from '../assets/images/gary6.svg';
+import gary7 from '../assets/images/gary7.svg';
+import gary8 from '../assets/images/gary8.svg';
+
+// Import styles
+import '../assets/css/animations.css';
+import '../styles/gritty-theme.css';
+import '../styles/dimensional.css';
+
+// Gary images array for card designs
+const GARY_IMAGES = [gary1, gary2, gary3, gary4, gary5, gary6, gary7, gary8];
+
+// Constants for responses
+const GARY_RESPONSES = {
+  ride: [
+    "Excellent choice. Let's capitalize.",
+    "Smart money aligns with Gary's analysis.",
+    "You've shown great instinct on this one.",
+    "Together we'll find success on this pick."
+  ],
+  fade: [
+    "Going against the analysis? Bold strategy.",
+    "Fading Gary's pick is a calculated risk.",
+    "We'll see how this contrarian approach plays out.",
+    "History suggests this might be challenging."
+  ]
+};
+
+// Mock data with game information
+const mockPicks = [
+  {
+    id: 1,
+    league: "NBA",
+    game: "Celtics vs Bulls",
+    moneyline: "Bulls -220",
+    spread: "Celtics +3.5",
+    overUnder: "Over 210.5",
+    time: "7:10 PM ET",
+    pickDetail: "Bulls are an absolute LOCK tonight. Do not fade me on this one, pal. Boston's defense is FULL of holes right now.",
+    walletValue: "$150",
+    confidenceLevel: 87
+  },
+  {
+    id: 2,
+    league: "NFL",
+    game: "Patriots vs Giants",
+    moneyline: "Patriots -150",
+    spread: "Giants +4.0",
+    overUnder: "Under 45.5",
+    time: "8:30 PM ET",
+    pickDetail: "Giants +4? Vegas is practically BEGGING you to take the Pats. Trust me, this line stinks worse than week-old fish. Giants cover EASY.",
+    walletValue: "$200",
+    confidenceLevel: 92
+  },
+  {
+    id: 3,
+    league: "MLB",
+    game: "Yankees vs Red Sox",
+    moneyline: "Yankees -120",
+    spread: "Red Sox +1.5",
+    overUnder: "Over 8.5",
+    time: "4:05 PM ET",
+    pickDetail: "Yankees own the Red Sox this season. PERIOD. This is the closest thing to free money you'll ever see. I'm betting the house on this one.",
+    walletValue: "$100",
+    confidenceLevel: 78
+  },
+];
+
+export function RealGaryPicks({ plan = "free" }) {
+  const [picks, setPicks] = useState([]);
+  const [flippedCards, setFlippedCards] = useState({});
+  const [userDecisions, setUserDecisions] = useState({});
+  const [garyResponses, setGaryResponses] = useState({});
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const { updateStats } = useUserStats();
+  const navigate = useNavigate();
+  const containerRef = useRef(null);
+  const [betTracking, setBetTracking] = useState({
+    betsWithGary: 0,
+    betsAgainstGary: 0,
+    totalBets: 0,
+    currentStreak: 0,
+    picks: []
+  });
+
+  // Initialize picks, card states, and load bet tracking data
+  useEffect(() => {
+    // Set picks from mock data
+    setPicks(mockPicks);
+    
+    // Initialize all cards as not flipped, including the parlay card
+    const initialState = { 'parlay': false };
+    mockPicks.forEach(pick => {
+      initialState[pick.id] = false;
+    });
+    setFlippedCards(initialState);
+    
+    // Load betting history from localStorage if available
+    const savedBetTracking = localStorage.getItem('garyBetTracking');
+    if (savedBetTracking) {
+      setBetTracking(JSON.parse(savedBetTracking));
+    }
+  }, []);
+
+  // Function to toggle card flip
+  const toggleFlip = (pickId) => {
+    // For special cards
+    if (pickId === 'parlay') {
+      setFlippedCards(prev => ({
+        ...prev,
+        [pickId]: !prev[pickId]
+      }));
+      return;
+    }
+    
+    // For regular pick cards (only first pick is free)
+    const targetPick = picks.find(p => p.id === pickId);
+    const pickIndex = picks.indexOf(targetPick);
+    const isLocked = plan === "free" && pickIndex > 0;
+    
+    if (!isLocked) {
+      setFlippedCards(prev => ({
+        ...prev,
+        [pickId]: !prev[pickId]
+      }));
+    }
+  };
+
+  // Get a random response from Gary
+  const getRandomResponse = (responses) => {
+    return responses[Math.floor(Math.random() * responses.length)];
+  };
+
+  // Handle user decision (bet with Gary or fade the bear)
+  const handleDecision = (pickId, decision) => {
+    // Prevent propagation to avoid toggling card
+    if (userDecisions[pickId] === decision) return; // Already made this decision
+    
+    // Set user decision
+    setUserDecisions(prev => ({
+      ...prev,
+      [pickId]: decision
+    }));
+    
+    // Get a random Gary response
+    const response = getRandomResponse(GARY_RESPONSES[decision]);
+    setGaryResponses(prev => ({
+      ...prev,
+      [pickId]: response
+    }));
+    
+    // Get the pick details
+    const targetPick = picks.find(p => p.id === pickId);
+    
+    // Update bet tracking
+    setBetTracking(prev => {
+      const newTracking = { ...prev };
+      newTracking.totalBets += 1;
+      
+      if (decision === 'ride') {
+        newTracking.betsWithGary += 1;
+        newTracking.currentStreak = prev.currentStreak >= 0 ? prev.currentStreak + 1 : 1;
+      } else {
+        newTracking.betsAgainstGary += 1;
+        newTracking.currentStreak = prev.currentStreak <= 0 ? prev.currentStreak - 1 : -1;
+      }
+      
+      // Store pick details
+      newTracking.picks.push({
+        id: pickId,
+        gameId: targetPick.id,
+        game: targetPick.game,
+        league: targetPick.league,
+        garyPick: targetPick.moneyline,
+        userDecision: decision,
+        timestamp: new Date().toISOString(),
+        result: 'pending' // Will be updated when game result is known
+      });
+      
+      // Save to localStorage for persistence
+      localStorage.setItem('garyBetTracking', JSON.stringify(newTracking));
+      
+      return newTracking;
+    });
+    
+    // Update user stats via context
+    updateStats(decision, pickId);
+  };
+
+  // Handle mouse movement for parallax effects
+  const handleMouseMove = (e) => {
+    if (!containerRef.current) return;
+    
+    const { left, top, width, height } = containerRef.current.getBoundingClientRect();
+    const x = (e.clientX - left) / width - 0.5;
+    const y = (e.clientY - top) / height - 0.5;
+    
+    setMousePosition({ x, y });
+  };
+
+  return (
+    <ErrorBoundary>
+      <div className="min-h-screen bg-white" ref={containerRef} onMouseMove={handleMouseMove}>
+        {/* Dimensional Background */}
+        <div className="dimension-bg" style={{ opacity: 0.8 }}>
+          <div className="left-wall side-wall" style={{ opacity: 0.2, background: 'linear-gradient(to right, #e5e5e5, transparent)' }}></div>
+          <div className="right-wall side-wall" style={{ opacity: 0.2, background: 'linear-gradient(to left, #e5e5e5, transparent)' }}></div>
+        </div>
+        
+        <div className="min-h-screen bg-[#f8f9fa] flex flex-col">
+          {/* Hero section with depth and dimensional effects */}
+          <div className="relative bg-[#111] py-12 px-4 sm:px-6 lg:px-8 border-b border-[#222]">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute left-1/3 top-0 bg-gradient-to-r from-[#e5c349] via-[#d4af37] to-transparent w-1/3 h-[400px] blur-[120px] opacity-10 transform -translate-y-1/2 rounded-full"></div>
+              <div className="absolute right-1/3 bottom-0 bg-gradient-to-l from-[#e5c349] via-[#d4af37] to-transparent w-1/3 h-[400px] blur-[120px] opacity-10 transform translate-y-1/2 rounded-full"></div>
+            </div>
+            
+            <div className="relative z-10 text-center">
+              <h2 className="text-3xl font-bold text-[#111] mb-10 relative inline-block">
+                <div className="relative inline-block">
+                  <span className="relative z-10">Gary's Picks </span>
+                  <div className="absolute bottom-1 left-0 w-full h-[3px] bg-gradient-to-r from-[#d4af37]/0 via-[#d4af37] to-[#d4af37]/0"></div>
+                </div>
+                <div 
+                  className="absolute -inset-x-6 -inset-y-2 bg-gradient-to-r from-[#d4af37]/0 via-[#d4af37]/5 to-[#d4af37]/0 blur-xl -z-10" 
+                  style={{ transform: `translateX(${mousePosition.x * 10}px) translateY(${mousePosition.y * 10}px)` }}
+                ></div>
+              </h2>
+            </div>
+            
+            {/* All cards in a consistent 4-column grid with baseball card styling */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 max-w-6xl mx-auto mb-16">
+              {/* Free Pick Card */}
+              {picks.length > 0 && (
+                <div className="card-container free-card cursor-pointer" onClick={() => toggleFlip(picks[0].id)}>
+                  <div className={`card-inner ${flippedCards[picks[0].id] ? 'is-flipped' : ''}`}>
+                    {/* Front of card */}
+                    <div className="card-front">
+                      <div className="card-badge">
+                        FREE PICK
+                      </div>
+                      <div className="p-5 pt-10">
+                        <div className="flex items-center mb-3">
+                          <div className="bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded mr-2">{picks[0].league}</div>
+                          <div className="text-gray-500 text-xs">{picks[0].time}</div>
+                        </div>
+                        
+                        <h3 className="text-gray-900 font-bold text-lg mb-3">{picks[0].game}</h3>
+                        
+                        <div className="border-t border-gray-200 pt-3 pb-2">
+                          <div className="text-gray-700">Best Bet</div>
+                          <div className="text-xl font-bold text-gray-900">{picks[0].moneyline}</div>
+                        </div>
+                        
+                        <div className="mt-4">
+                          <div className="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>Confidence</span>
+                            <span>{picks[0].confidenceLevel}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="bg-[#d4af37] h-2.5 rounded-full" style={{ width: `${picks[0].confidenceLevel}%` }}></div>
+                          </div>
+                        </div>
+                        
+                        <button className="mt-6 w-full py-2 px-3 flex items-center justify-center text-[#d4af37] border border-[#d4af37] rounded hover:bg-[#d4af37]/5 transition-colors action-btn action-btn-outline">
+                          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path>
+                          </svg>
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Back of card (Analysis) */}
+                    <div className="card-back p-5 bg-white">
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded">{picks[0].league}</div>
+                        <button className="text-gray-400 hover:text-gray-600" onClick={(e) => { e.stopPropagation(); toggleFlip(picks[0].id); }}>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      <h3 className="text-gray-900 font-bold text-lg mb-3">{picks[0].game}</h3>
+                      
+                      <div className="my-4">
+                        <h4 className="font-bold text-gray-700 mb-2">Gary's Analysis:</h4>
+                        <p className="text-gray-600">{picks[0].pickDetail}</p>
+                      </div>
+                      
+                      <div className="border-t border-gray-200 pt-4 mt-4">
+                        <h4 className="font-bold text-gray-700 mb-2">What's your call?</h4>
+                        <div className="flex justify-between gap-2">
+                          <button 
+                            className="bet-btn bet-with-gary"
+                            onClick={(e) => { e.stopPropagation(); handleDecision(picks[0].id, 'ride'); }}
+                          >
+                            BET WITH GARY
+                          </button>
+                          <button 
+                            className="bet-btn fade-the-bear"
+                            onClick={(e) => { e.stopPropagation(); handleDecision(picks[0].id, 'fade'); }}
+                          >
+                            FADE THE BEAR
+                          </button>
+                        </div>
+                        
+                        {userDecisions[picks[0].id] && (
+                          <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+                            <p className="text-gray-700 italic text-sm">"{garyResponses[picks[0].id]}"</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Premium Pick Cards (Locked for free users) */}
+              {picks.slice(1, 3).map((pick, index) => (
+                <div key={pick.id} className="card-container premium-card">
+                  <div className="card-badge">
+                    PREMIUM PICK
+                  </div>
+                  <div className="p-4 pt-10 text-center">
+                    <h3 className="text-gray-900 font-bold text-xl mb-3">Unlock Gary's<br />Premium Pick</h3>
+                    
+                    <p className="text-gray-600 text-sm mb-8">
+                      Premium picks have a historical win rate of 64% and provide detailed analysis.
+                    </p>
+                    
+                    <Link to="/pricing" className="w-full py-3 px-4 bg-[#d4af37] text-black font-bold rounded-lg transition-colors hover:bg-[#c4a127] flex items-center justify-center action-btn action-btn-primary">
+                      <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd"></path>
+                      </svg>
+                      UPGRADE NOW
+                    </Link>
+                  </div>
+                </div>
+              ))}
+              
+              {/* Parlay of the Day Card */}
+              <div className="card-container parlay-card text-white">
+                <div className="card-badge">
+                  PARLAY OF THE DAY
+                </div>
+                <div className="relative p-4">
+                  <div className="w-16 h-16 bg-[#d4af37] rounded-lg overflow-hidden mb-3">
+                    <img src={gary1} alt="Gary AI" className="w-full h-full object-contain" />
+                  </div>
+                  <h3 className="text-white font-bold text-lg mb-1">GARY A.I.</h3>
+                </div>
+                
+                <div className="p-4 pt-0">
+                  <h3 className="text-white font-bold text-xl mb-3">Parlay of the Day</h3>
+                  
+                  <div className="flex items-center text-sm mb-4">
+                    <span className="inline-block w-2 h-2 bg-white rounded-full mr-2"></span>
+                    <span className="text-white">Today's Multi-Leg Special</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="text-sm text-white">Potential Return</div>
+                    <div className="text-white font-bold">+850 odds</div>
+                  </div>
+                  
+                  <button className="w-full py-3 px-4 bg-white text-[#d4af37] font-bold rounded-lg transition-colors hover:bg-gray-100 flex items-center justify-center action-btn action-btn-lg">
+                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd"></path>
+                    </svg>
+                    View Parlay Details
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* How it Works Section */}
+            <div className="max-w-6xl mx-auto mt-8 mb-16">
+              <div className="text-center mb-12">
+                <h3 className="text-2xl font-bold text-[#111] mb-4">How It Works</h3>
+                <p className="text-gray-600 max-w-2xl mx-auto">Gary analyzes thousands of data points to find the best value picks for you every day.</p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#f0f0f0] mb-4 mx-auto">
+                    <svg className="w-6 h-6 text-[#d4af37]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                    </svg>
+                  </div>
+                  <h4 className="font-bold text-center mb-2">Data Analysis</h4>
+                  <p className="text-sm text-gray-600 text-center">Gary crunches the numbers to find overlooked value and betting opportunities.</p>
+                </div>
+                
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#f0f0f0] mb-4 mx-auto">
+                    <svg className="w-6 h-6 text-[#d4af37]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                    </svg>
+                  </div>
+                  <h4 className="font-bold text-center mb-2">Gary's Insight</h4>
+                  <p className="text-sm text-gray-600 text-center">Expert analysis on each pick, explaining why Gary believes it's a strong play.</p>
+                </div>
+                
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#f0f0f0] mb-4 mx-auto">
+                    <svg className="w-6 h-6 text-[#d4af37]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                    </svg>
+                  </div>
+                  <h4 className="font-bold text-center mb-2">Track Results</h4>
+                  <p className="text-sm text-gray-600 text-center">Follow your betting performance and see how Gary's picks perform over time.</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Today's Stats */}
+            <div className="max-w-6xl mx-auto mb-20">
+              <div className="text-center mb-12">
+                <h3 className="text-2xl font-bold text-[#111] mb-4">Today's Stats</h3>
+                <p className="text-gray-600 max-w-2xl mx-auto">A snapshot of Gary's recent performance</p>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                  <div className="text-4xl font-bold text-[#d4af37] mb-2">62%</div>
+                  <div className="text-sm text-gray-600">Win Rate</div>
+                </div>
+                
+                <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                  <div className="text-4xl font-bold text-[#d4af37] mb-2">7-3</div>
+                  <div className="text-sm text-gray-600">Last 10 Picks</div>
+                </div>
+                
+                <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                  <div className="text-4xl font-bold text-[#d4af37] mb-2">3-0</div>
+                  <div className="text-sm text-gray-600">Parlay Streak</div>
+                </div>
+                
+                <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                  <div className="text-4xl font-bold text-[#d4af37] mb-2">+18.2%</div>
+                  <div className="text-sm text-gray-600">ROI Last Week</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ErrorBoundary>
+  );
+}

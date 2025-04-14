@@ -1,0 +1,267 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { SignupForm } from '../components/SignupForm';
+import garyLogo from '../assets/images/gary3.png';
+import '../styles/dimensional.css';
+
+export function SignIn() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [appearAnimation, setAppearAnimation] = useState(false);
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
+
+  useEffect(() => {
+    // Trigger appear animation after mount
+    const timer = setTimeout(() => {
+      setAppearAnimation(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Reset animation when switching between sign in and sign up
+  useEffect(() => {
+    setAppearAnimation(false);
+    const timer = setTimeout(() => {
+      setAppearAnimation(true);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [isSignUp]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setError('');
+      setLoading(true);
+      
+      // Use Supabase authentication
+      const { data, error } = await signIn(email, password);
+      
+      if (error) throw error;
+      
+      // Set user information if authentication succeeds
+      localStorage.setItem('username', email.split('@')[0]);
+      
+      // Get user plan from Supabase user metadata or set default to 'free'
+      const userPlan = data?.user?.user_metadata?.plan || 'free';
+      localStorage.setItem('userPlan', userPlan);
+      
+      // Initialize betting tracking if not exists
+      if (!localStorage.getItem('garyBetTracking')) {
+        const initialTracking = {
+          betsWithGary: 0,
+          betsAgainstGary: 0,
+          totalBets: 0,
+          correctDecisions: 0,
+          currentStreak: 0,
+          picks: []
+        };
+        localStorage.setItem('garyBetTracking', JSON.stringify(initialTracking));
+      }
+      
+      // Navigate to home page
+      navigate('/');
+    } catch (err) {
+      console.error('Sign in error:', err);
+      setError(err.message || 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-black py-8 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Dimensional Background */}
+      <div className="dimension-bg" style={{ opacity: 0.8 }}>
+        <div className="left-wall side-wall" style={{ opacity: 0.2, background: 'linear-gradient(to right, #1a1a1a, transparent)' }}></div>
+        <div className="right-wall side-wall" style={{ opacity: 0.2, background: 'linear-gradient(to left, #1a1a1a, transparent)' }}></div>
+      </div>
+      
+      {/* Floor grid */}
+      <div className="perspective-floor" style={{ opacity: 0.3, height: '70%' }}></div>
+      
+      {/* Decorative background elements with enhanced depth */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-[#d4af37]/5 rounded-full blur-3xl animate-pulse-glow" style={{ animationDuration: '8s' }}></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-[#c0c0c0]/10 rounded-full blur-3xl animate-pulse-glow" style={{ animationDuration: '12s' }}></div>
+      
+      {/* Tech grid patterns */}
+      <div className="absolute inset-0 opacity-10" style={{ 
+        backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100%25\' height=\'100%25\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'grid\' width=\'40\' height=\'40\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M 40 0 L 0 0 0 40\' fill=\'none\' stroke=\'%23d4af37\' stroke-width=\'0.5\' stroke-opacity=\'0.05\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100%25\' height=\'100%25\' fill=\'url(%23grid)\' /%3E%3C/svg%3E")',
+        backgroundSize: '40px 40px'
+      }}></div>
+      
+      <div className={`w-[440px] mx-auto relative z-10 transform transition-transform duration-500 ease-out scale-y-[0.8] ${appearAnimation ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div className="bg-black border border-[#333333] rounded-xl overflow-hidden p-6 relative" style={{
+          boxShadow: '0 0 0 1px rgba(212, 175, 55, 0.2), 0 0 0 2px rgba(212, 175, 55, 0.1), 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(212, 175, 55, 0.1)'
+        }}>
+          {/* Corner accents */}
+          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-[#d4af37] opacity-50"></div>
+          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-[#d4af37] opacity-50"></div>
+          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-[#d4af37] opacity-50"></div>
+          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#d4af37] opacity-50"></div>
+          
+          <div className="flex flex-col items-center mb-4">
+            <div className="relative mb-2 mt-10">
+              <div className="absolute inset-0 rounded-full bg-[#d4af37]/10 blur-md transform scale-110 animate-pulse-glow" style={{ animationDuration: '3s' }}></div>
+              <img src={garyLogo} alt="Gary The Bear" className="w-56 h-56 mx-auto object-contain" />
+            </div>
+            <div className="w-full text-center mt-1">
+              <span className="text-2xl font-bold text-white tracking-wide">THE BEAR'S DEN</span>
+              <div className="h-[3px] w-44 mx-auto mt-1" style={{ background: 'linear-gradient(to right, transparent, rgba(212, 175, 55, 0.7), transparent)' }}></div>
+            </div>
+          </div>
+          <button
+            className={`px-4 py-2 text-lg font-medium rounded-t-lg transition-all relative ${!isSignUp ? 'text-[#d4af37] font-semibold' : 'text-gray-400 dark:text-[#c0c0c0] hover:text-gray-300'}`}
+            onClick={() => setIsSignUp(false)}
+          >
+            Sign In
+            {!isSignUp && (
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent"></span>
+            )}
+          </button>
+          <button
+            className={`px-4 py-2 text-lg font-medium rounded-t-lg transition-all relative ${isSignUp ? 'text-[#d4af37] font-semibold' : 'text-gray-400 dark:text-[#c0c0c0] hover:text-gray-300'}`}
+            onClick={() => setIsSignUp(true)}
+          >
+            Sign Up
+            {isSignUp && (
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent"></span>
+            )}
+          </button>
+        </div>
+        
+        <div>
+          {/* Heading removed as requested */}
+        </div>
+        
+        {isSignUp ? (
+          <SignupForm onAuthSuccess={() => navigate('/')} />
+        ) : (
+          <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+            {error && (
+              <div className="bg-red-500/10 text-red-500 p-3 rounded-lg mb-4 border border-red-200">{error}</div>
+            )}
+            <div className="rounded-md bg-[#f9f9f9] p-4 shadow-inner">
+              <div className="mb-4">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-4 py-3 border border-gray-300 dark:border-[#333333] placeholder-gray-500 dark:placeholder-[#c0c0c0]/70 rounded-t-md focus:outline-none focus:ring-[#d4af37] focus:border-[#d4af37] focus:z-10 sm:text-sm bg-white dark:bg-[#222222]"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{color: '#000000'}}
+                />
+              </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-4 py-3 border border-gray-300 dark:border-[#333333] placeholder-gray-500 dark:placeholder-[#c0c0c0]/70 rounded-b-md focus:outline-none focus:ring-[#d4af37] focus:border-[#d4af37] focus:z-10 sm:text-sm bg-white dark:bg-[#222222]"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{color: '#000000'}}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="relative flex items-center">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    className="h-4 w-4 text-[#d4af37] focus:ring-[#d4af37] border-[#333333] rounded appearance-none relative z-10 checked:bg-[#d4af37] transition-colors"
+                  />
+                  <div className="absolute w-3 h-3 bg-[#d4af37]/20 rounded-sm blur-sm"></div>
+                </div>
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-[#c0c0c0]">
+                  Remember me
+                </label>
+              </div>
+
+              <div className="text-sm">
+                <a href="#" className="font-medium text-[#d4af37] hover:text-[#d4af37]/80 transition-colors">
+                  Forgot password?
+                </a>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="group relative w-full flex justify-center py-3 px-6 border border-transparent text-base font-bold uppercase tracking-wider rounded-md text-black bg-[#d4af37] hover:bg-[#c4a127] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-4 shadow-lg hover:shadow-xl overflow-hidden"
+                data-testid="signin-button"
+              >
+                {/* Button shimmer effect */}
+                <div className="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-10 transform -translate-x-full group-hover:translate-x-full transition-all duration-1000"></div>
+                {loading ? (
+                  <div className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Signing in...
+                  </div>
+                ) : 'Sign in'}
+              </button>
+            </div>
+          </form>
+        )}
+        
+        {!isSignUp ? (
+          <div className="mt-6 text-center text-sm text-gray-600 dark:text-[#c0c0c0]">
+            <p>Don't have an account?{' '}
+              <button 
+                onClick={() => setIsSignUp(true)}
+                className="text-[#d4af37] hover:text-[#d4af37]/80 font-medium transition-colors"
+              >
+                Sign up here
+              </button>
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 text-center text-sm text-gray-600 dark:text-[#c0c0c0]">
+            <p>Already have an account?{' '}
+              <button 
+                onClick={() => setIsSignUp(false)}
+                className="text-[#d4af37] hover:text-[#d4af37]/80 font-medium transition-colors"
+              >
+                Sign in here
+              </button>
+            </p>
+          </div>
+        )}
+        
+        {/* Footer */}
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-[#333333] text-center">
+          <p className="text-xs text-gray-500 dark:text-[#c0c0c0]/70">
+            By signing in, you agree to Gary's{' '}
+            <Link to="/terms" className="text-[#d4af37] hover:text-[#d4af37]/80">Terms of Service</Link>
+            {' '}and{' '}
+            <Link to="/privacy" className="text-[#d4af37] hover:text-[#d4af37]/80">Privacy Policy</Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
