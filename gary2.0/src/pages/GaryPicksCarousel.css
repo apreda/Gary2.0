@@ -622,6 +622,53 @@
   .carousel-arrow-right {
     right: 20px;
   }
+  
+  /* Adjust card positioning for smaller screens */
+  .card-position-0 {
+    transform: translate(-50%, -50%);
+    left: 50%;
+  }
+  
+  .card-position-1 {
+    transform: translate(40%, -50%) scale(0.9);
+    left: 50%;
+  }
+  
+  .card-position-2 {
+    transform: translate(90%, -50%) scale(0.8);
+    left: 50%;
+  }
+  
+  .card-position-3 {
+    transform: translate(130%, -50%) scale(0.7);
+    left: 50%;
+  }
+  
+  .card-position-4 {
+    transform: translate(-230%, -50%) scale(0.7);
+    left: 50%;
+  }
+  
+  .card-position-5 {
+    transform: translate(-190%, -50%) scale(0.8);
+    left: 50%;
+  }
+  
+  .card-position-6 {
+    transform: translate(-140%, -50%) scale(0.9);
+    left: 50%;
+  }
+}
+
+@media (max-width: 992px) {
+  .carousel-container {
+    margin-top: 60px;
+    min-height: 550px;
+  }
+  
+  .carousel-track {
+    height: 550px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -637,6 +684,173 @@
   .carousel-arrow {
     width: 40px;
     height: 40px;
+  }
+  
+  .carousel-container {
+    margin-top: 40px;
+    min-height: 500px;
+  }
+  
+  .carousel-track {
+    height: 500px;
+  }
+  
+  /* Adjust ambient glow for mobile */
+  .ambient-glow-1 {
+    width: 50vw;
+    height: 50vw;
+  }
+  
+  .ambient-glow-2 {
+    width: 40vw;
+    height: 40vw;
+  }
+  
+  /* Center the main card and show fewer cards on smaller screens */
+  .card-position-0 {
+    transform: translate(-50%, -50%);
+    left: 50%;
+    z-index: 30;
+  }
+  
+  .card-position-1 {
+    transform: translate(65%, -50%) scale(0.85);
+    left: 50%;
+    z-index: 25;
+  }
+  
+  .card-position-2 {
+    transform: translate(150%, -50%) scale(0.7);
+    left: 50%;
+    z-index: 20;
+    opacity: 0.7;
+  }
+  
+  .card-position-6 {
+    transform: translate(-165%, -50%) scale(0.85);
+    left: 50%;
+    z-index: 25;
+  }
+  
+  .card-position-5 {
+    transform: translate(-250%, -50%) scale(0.7);
+    left: 50%;
+    z-index: 20;
+    opacity: 0.7;
+  }
+  
+  /* Hide cards that are too far off screen on mobile */
+  .card-position-3, .card-position-4 {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .pick-card {
+    width: 220px;
+    height: 340px;
+  }
+  
+  .carousel-container {
+    margin-top: 30px;
+    min-height: 450px;
+  }
+  
+  .carousel-track {
+    height: 450px;
+  }
+  
+  .pick-card-league {
+    font-size: 13px;
+  }
+  
+  .pick-card-game {
+    font-size: 14px;
+  }
+  
+  .pick-card-time {
+    font-size: 12px;
+  }
+  
+  .pick-card-bet {
+    font-size: 18px;
+  }
+  
+  .confidence-label {
+    font-size: 12px;
+  }
+  
+  .btn-view-pick {
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+  
+  .gary-analysis-content {
+    font-size: 12px;
+  }
+  
+  /* Further adjust card positioning for very small screens */
+  .card-position-0 {
+    transform: translate(-50%, -50%);
+    left: 50%;
+  }
+  
+  .card-position-1 {
+    transform: translate(70%, -50%) scale(0.8);
+    left: 50%;
+  }
+  
+  .card-position-6 {
+    transform: translate(-170%, -50%) scale(0.8);
+    left: 50%;
+  }
+  
+  /* Hide these cards on very small screens */
+  .card-position-2, .card-position-3, .card-position-4, .card-position-5 {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  /* Adjust carousel arrows */
+  .carousel-arrow-left {
+    left: 10px;
+  }
+  
+  .carousel-arrow-right {
+    right: 10px;
+  }
+  
+  .carousel-nav {
+    bottom: 20px;
+    gap: 10px;
+  }
+  
+  .carousel-nav-item {
+    width: 20px;
+    height: 3px;
+  }
+  
+  .carousel-nav-item.active {
+    width: 30px;
+  }
+  
+  /* Adjustments for parlay cards */
+  .parlay-title {
+    font-size: 18px;
+  }
+  
+  .parlay-odds {
+    font-size: 14px;
+  }
+  
+  .parlay-leg-game {
+    font-size: 14px;
+  }
+  
+  .parlay-potential-payout {
+    font-size: 16px;
+    padding: 4px 8px;
   }
 }
 
