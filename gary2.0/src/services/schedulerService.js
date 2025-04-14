@@ -18,12 +18,26 @@ export const schedulerService = {
     const lastGen = new Date(lastGenerationTime);
     const now = new Date();
     
-    // Check if it's a new day
+    // SPECIAL TEST: Force generation at 6:35pm on April 14, 2025
+    const targetTime = new Date();
+    targetTime.setHours(18, 35, 0, 0); // 6:35 PM
+    
+    // Check if it's after our target time (6:35 PM)
+    const isAfterTargetTime = now >= targetTime;
+    
+    // Check if the last generation was before our target time
+    const lastGenBeforeTarget = lastGen < targetTime;
+    
+    // If it's past 6:35 PM and we haven't generated picks since then, do it
+    if (isAfterTargetTime && lastGenBeforeTarget) {
+      console.log('TEST MODE: Generating new picks at 6:35 PM');
+      return true;
+    }
+    
+    // Normal rule: check if it's a new day and after 10am
     const isNewDay = lastGen.getDate() !== now.getDate() || 
                      lastGen.getMonth() !== now.getMonth() || 
                      lastGen.getFullYear() !== now.getFullYear();
-                     
-    // Check if it's after 10am
     const isAfter10AM = now.getHours() >= 10;
     
     return isNewDay && isAfter10AM;
@@ -41,6 +55,14 @@ export const schedulerService = {
    * @returns {string} - The scheduled time for new picks (e.g., "10:00 AM")
    */
   getScheduledTime: () => {
+    // SPECIAL TEST: For today only, return 6:35 PM
+    const now = new Date();
+    const isTestDay = now.getDate() === 14 && now.getMonth() === 3; // April 14 (0-indexed months)
+    
+    if (isTestDay) {
+      return "6:35 PM";
+    }
+    
     return "10:00 AM";
   },
   
@@ -50,18 +72,28 @@ export const schedulerService = {
    */
   getNextPicksInfo: () => {
     const now = new Date();
-    const today10AM = new Date(now);
-    today10AM.setHours(10, 0, 0, 0);
     
-    // If it's before 10am today, next picks are at 10am today
-    // If it's after 10am today, next picks are at 10am tomorrow
+    // SPECIAL TEST: For April 14, use 6:35 PM instead of 10 AM
+    const isTestDay = now.getDate() === 14 && now.getMonth() === 3; // April 14 (0-indexed months)
+    
+    let todayTargetTime;
+    if (isTestDay) {
+      todayTargetTime = new Date(now);
+      todayTargetTime.setHours(18, 35, 0, 0); // 6:35 PM
+    } else {
+      todayTargetTime = new Date(now);
+      todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM (normal schedule)
+    }
+    
+    // If it's before the target time today, next picks are at the target time today
+    // If it's after the target time today, next picks are at 10am tomorrow
     let nextPicksTime;
-    if (now < today10AM) {
-      nextPicksTime = today10AM;
+    if (now < todayTargetTime) {
+      nextPicksTime = todayTargetTime;
     } else {
       const tomorrow10AM = new Date(now);
       tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
-      tomorrow10AM.setHours(10, 0, 0, 0);
+      tomorrow10AM.setHours(10, 0, 0, 0); // Always 10am for future days
       nextPicksTime = tomorrow10AM;
     }
     
