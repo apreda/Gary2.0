@@ -13,15 +13,28 @@ export const oddsService = {
    */
   getSports: async () => {
     try {
+      // Log API key being used (truncated for security)
+      const displayKey = ODDS_API_KEY ? `${ODDS_API_KEY.substring(0, 5)}...${ODDS_API_KEY.substring(ODDS_API_KEY.length - 4)}` : 'MISSING';
+      console.log(`🔍 Making API request to The Odds API with key: ${displayKey}`);
+      console.log(`🔗 API URL: ${ODDS_API_BASE_URL}/sports`);
+      
+      // Check if API key is missing
+      if (!ODDS_API_KEY) {
+        throw new Error('API Key is missing. Please check your environment variables.');
+      }
+      
       const response = await axios.get(`${ODDS_API_BASE_URL}/sports`, {
         params: {
           apiKey: ODDS_API_KEY
         }
       });
+      
+      console.log(`✅ Successfully retrieved ${response.data.length} sports`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching sports:', error);
-      throw error;
+      console.error('❌ Error fetching sports:', error.response?.data || error.message);
+      // Throw the error instead of falling back to mock data
+      throw new Error(`Failed to fetch sports data: ${error.response?.data?.message || error.message}`);
     }
   },
 
@@ -32,13 +45,16 @@ export const oddsService = {
    */
   getOdds: async (sport) => {
     try {
+      // Check if API key is missing
+      if (!ODDS_API_KEY) {
+        throw new Error('API Key is missing. Please check your environment variables.');
+      }
+      
       // Check if it's a futures market (contains "winner" in the key)
       const isFuturesMarket = sport.includes('winner');
       
       // Different endpoints and params for game odds vs futures
-      const endpoint = isFuturesMarket 
-        ? `https://api.the-odds-api.com/v4/sports/${sport}/odds`
-        : `https://api.the-odds-api.com/v4/sports/${sport}/odds`;
+      const endpoint = `https://api.the-odds-api.com/v4/sports/${sport}/odds`;
       
       const params = isFuturesMarket
         ? {
@@ -53,12 +69,15 @@ export const oddsService = {
             oddsFormat: 'american'
           };
       
+      console.log(`🔍 Fetching odds for ${sport} from: ${endpoint}`);
+      
       const response = await axios.get(endpoint, { params });
+      console.log(`✅ Retrieved ${response.data.length} games for ${sport}`);
       return response.data;
     } catch (error) {
-      console.error(`Error fetching odds for ${sport}:`, error);
-      // Return empty array instead of throwing
-      return [];
+      console.error(`❌ Error fetching odds for ${sport}:`, error.response?.data || error.message);
+      // Throw the error instead of using mock data
+      throw new Error(`Failed to fetch odds for ${sport}: ${error.response?.data?.message || error.message}`);
     }
   },
 
@@ -72,6 +91,16 @@ export const oddsService = {
       const promises = sports.map(sport => oddsService.getOdds(sport));
       const results = await Promise.allSettled(promises);
       
+      // Log any failed requests
+      const failedRequests = results
+        .map((result, index) => ({ sport: sports[index], result }))
+        .filter(item => item.result.status === 'rejected');
+      
+      if (failedRequests.length > 0) {
+        console.error(`❌ Failed to fetch odds for ${failedRequests.length} sports:`, 
+          failedRequests.map(item => `${item.sport}: ${item.result.reason}`))
+      }
+      
       const batchOdds = {};
       sports.forEach((sport, index) => {
         // Only use fulfilled promises, empty array for rejected ones
@@ -80,14 +109,16 @@ export const oddsService = {
           : [];
       });
       
+      // Check if we got any valid data at all
+      const hasAnyValidData = Object.values(batchOdds).some(odds => odds.length > 0);
+      if (!hasAnyValidData) {
+        throw new Error('Failed to get odds for any sports. Check API key and network connection.');
+      }
+      
       return batchOdds;
     } catch (error) {
-      console.error('Error fetching batch odds:', error);
-      // Return empty object instead of throwing
-      return sports.reduce((acc, sport) => {
-        acc[sport] = [];
-        return acc;
-      }, {});
+      console.error('❌ Error fetching batch odds:', error.message);
+      throw error;
     }
   },
 
