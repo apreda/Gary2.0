@@ -18,11 +18,11 @@ export const schedulerService = {
     const lastGen = new Date(lastGenerationTime);
     const now = new Date();
     
-    // SPECIAL TEST: Force generation at 6:35pm on April 14, 2025
+    // SPECIAL TEST: Force generation at 6:50pm on April 14, 2025
     // Create a more explicit time check for the test
     const today = new Date();
     const targetTime = new Date();
-    targetTime.setHours(18, 35, 0, 0); // 6:35 PM
+    targetTime.setHours(18, 50, 0, 0); // 6:50 PM
     
     // Log current time and target time for debugging
     console.log('Current time:', now.toLocaleTimeString());
@@ -33,23 +33,23 @@ export const schedulerService = {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Check if it's after 6:35 PM today (18:35) - inclusive of 6:35pm exactly
-    const isAfterTargetTime = (currentHour > 18 || (currentHour === 18 && currentMinute >= 35));
+    // Check if it's after 6:50 PM today (18:50) - inclusive of 6:50pm exactly
+    const isAfterTargetTime = (currentHour > 18 || (currentHour === 18 && currentMinute >= 50));
     
     // Get the last generation hour and minute
     const lastGenHour = lastGen.getHours();
     const lastGenMinute = lastGen.getMinutes();
     
-    // Check if last generation was before 6:35 PM today
+    // Check if last generation was before 6:50 PM today
     const lastGenBeforeTarget = lastGen.getDate() !== today.getDate() || 
-                               (lastGenHour < 18 || (lastGenHour === 18 && lastGenMinute < 35));
+                               (lastGenHour < 18 || (lastGenHour === 18 && lastGenMinute < 50));
     
     console.log('Is after target time?', isAfterTargetTime);
     console.log('Was last gen before target?', lastGenBeforeTarget);
     
-    // If it's past 6:35 PM and we haven't generated picks since then, do it
+    // If it's past 6:50 PM and we haven't generated picks since then, do it
     if (isAfterTargetTime && lastGenBeforeTarget) {
-      console.log('TEST MODE: Generating new picks at 6:35 PM');
+      console.log('TEST MODE: Generating new picks at 6:50 PM');
       return true;
     }
     
@@ -74,12 +74,12 @@ export const schedulerService = {
    * @returns {string} - The scheduled time for new picks (e.g., "10:00 AM")
    */
   getScheduledTime: () => {
-    // SPECIAL TEST: For today only, return 6:35 PM
+    // SPECIAL TEST: For today only, return 6:50 PM
     const now = new Date();
     const isTestDay = now.getDate() === 14 && now.getMonth() === 3; // April 14 (0-indexed months)
     
     if (isTestDay) {
-      return "6:35 PM";
+      return "6:50 PM";
     }
     
     return "10:00 AM";
@@ -98,7 +98,7 @@ export const schedulerService = {
     let todayTargetTime;
     if (isTestDay) {
       todayTargetTime = new Date(now);
-      todayTargetTime.setHours(18, 35, 0, 0); // 6:35 PM
+      todayTargetTime.setHours(18, 50, 0, 0); // 6:50 PM
     } else {
       todayTargetTime = new Date(now);
       todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM (normal schedule)
