@@ -159,7 +159,7 @@ export function GaryHero() {
               
               <div className="flex flex-wrap gap-4 mb-10">
                 <Link 
-                  to="/picks" 
+                  to="/real-gary-picks" 
                   className="btn-primary py-3 px-8 rounded-lg text-black font-bold"
                 >
                   Get Today's Picks

@@ -9,6 +9,7 @@ import { RealGaryPicks } from "./pages/RealGaryPicks";
 import { Pricing } from "./pages/Pricing";
 import { Billfold } from "./pages/Billfold";
 import { Leaderboard } from "./pages/Leaderboard";
+import { HowItWorks } from "./pages/HowItWorks";
 
 import { SignIn } from "./pages/SignIn";
 import { SignOut } from "./pages/SignOut";
@@ -91,6 +92,7 @@ function AppContent() {
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/billfold" element={<Billfold />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/how-it-works" element={<HowItWorks />} />
 
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signout" element={<SignOut />} />

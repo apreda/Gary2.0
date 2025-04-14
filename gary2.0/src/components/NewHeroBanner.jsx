@@ -232,7 +232,7 @@ export function NewHeroBanner() {
                   </div>
                 </div>
                 
-                <Link to="/picks" className="block w-full text-center py-3 px-4 bg-[#d4af37] hover:bg-[#e5c349] text-black font-bold rounded-lg transition-all duration-300 hover:transform hover:translate-y-[-2px] hover:shadow-lg">
+                <Link to="/real-gary-picks" className="block w-full text-center py-3 px-4 bg-[#d4af37] hover:bg-[#e5c349] text-black font-bold rounded-lg transition-all duration-300 hover:transform hover:translate-y-[-2px] hover:shadow-lg">
                   <span>Unlock Full Analysis</span>
                 </Link>
               </div>
