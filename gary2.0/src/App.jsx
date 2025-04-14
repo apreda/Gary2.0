@@ -11,8 +11,9 @@ import { Billfold } from "./pages/Billfold";
 import { Leaderboard } from "./pages/Leaderboard";
 import { HowItWorks } from "./pages/HowItWorks";
 
-// Import the refresh tool component - dynamically loaded
+// Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
+const AdminTools = lazy(() => import('./pages/AdminTools'));
 
 
 import { SignIn } from "./pages/SignIn";
@@ -108,8 +109,9 @@ function AppContent() {
               <Route path="/dashboard" element={
                 session ? <UserDashboard /> : <Navigate to="/signin" replace />
               } />
-              {/* Admin route for refreshing picks with real data */}
+              {/* Admin routes */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
+              <Route path="/admin/tools" element={<AdminTools />} />
             </Routes>
           </Suspense>
         </div>
