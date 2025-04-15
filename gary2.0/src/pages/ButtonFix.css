@@ -21,6 +21,12 @@
   top: -8px !important; /* Move Gary's Analysis up by a quarter inch */
 }
 
+/* Move Gary's Analysis up more for regular cards, but not for Parlay card */
+.pick-card:not(.parlay-card) .pick-card-back .gary-analysis {
+  position: relative !important;
+  top: -24px !important; /* Move up by total of 3/4 inch (additional half inch) */
+}
+
 /* Make the buttons more compact but still visually appealing */
 .pick-card-back .btn-decision {
   padding: 8px 12px !important;
