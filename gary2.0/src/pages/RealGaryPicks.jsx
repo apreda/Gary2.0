@@ -5,6 +5,7 @@ import { useUserPlan } from "../hooks/useUserPlan";
 import ErrorBoundary from "../components/ErrorBoundary";
 import gary1 from '../assets/images/gary1.svg';
 import "./GaryPicksCarousel.css";
+import "./CarouselFix.css";
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
@@ -42,6 +43,12 @@ export function RealGaryPicks() {
   const [flippedCards, setFlippedCards] = useState({});
   const [autoplayPaused, setAutoplayPaused] = useState(false);
   const autoplayRef = useRef(null);
+  
+  // Touch handling refs and state
+  const carouselRef = useRef(null);
+  const touchStartXRef = useRef(0);
+  const touchEndXRef = useRef(0);
+  const [isSwiping, setIsSwiping] = useState(false);
   
   // Control which cards are visible based on user plan
   const isCardUnlocked = (index) => {
@@ -205,8 +212,21 @@ export function RealGaryPicks() {
     startAutoplay();
   };
 
-  // Rotate carousel
+  // Rotate carousel with improved animation
   const rotateCarousel = (direction) => {
+    // Play a subtle click sound (for better UX)
+    const clickSound = new Audio();
+    clickSound.volume = 0.2;
+    try {
+      clickSound.play().catch(() => {}); // Ignore autoplay errors
+    } catch (e) {}
+    
+    // Animate the transition
+    if (carouselRef.current) {
+      carouselRef.current.style.transition = 'transform 0.3s ease-out';
+    }
+    
+    // Update the active card index
     setActiveCardIndex(prevIndex => {
       if (direction === 'next') {
         return (prevIndex + 1) % picks.length;
@@ -214,6 +234,13 @@ export function RealGaryPicks() {
         return (prevIndex - 1 + picks.length) % picks.length;
       }
     });
+    
+    // Reset transition after animation completes
+    setTimeout(() => {
+      if (carouselRef.current) {
+        carouselRef.current.style.transition = '';
+      }
+    }, 300);
   };
 
   // Toggle card flip
@@ -244,15 +271,13 @@ export function RealGaryPicks() {
     }));
     
     // Save to localStorage
-    const updatedDecisions = {
+    localStorage.setItem('userPickDecisions', JSON.stringify({
       ...userDecisions,
       [pickId]: decision
-    };
-    localStorage.setItem('userPickDecisions', JSON.stringify(updatedDecisions));
+    }));
     
     // Show toast notification
-    const toastMsg = getRandomResponse(decision);
-    setToastMessage(toastMsg);
+    setToastMessage(getRandomResponse(decision));
     setShowToast(true);
     
     // Hide toast after 3 seconds
@@ -268,22 +293,62 @@ export function RealGaryPicks() {
       });
     }
   };
+  
+  // Touch event handlers for mobile swipe
+  const handleTouchStart = (e) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    setIsSwiping(true);
+  };
+  
+  const handleTouchMove = (e) => {
+    if (!isSwiping) return;
+    touchEndXRef.current = e.touches[0].clientX;
+    
+    // Optional: add visual feedback during swiping
+    const swipeDiff = touchEndXRef.current - touchStartXRef.current;
+    if (Math.abs(swipeDiff) > 30) {
+      // Prevent default to stop page scrolling when swiping the carousel
+      e.preventDefault();
+    }
+  };
+  
+  const handleTouchEnd = () => {
+    if (!isSwiping) return;
+    
+    const swipeThreshold = 50; // minimum distance to register as a swipe
+    const swipeDiff = touchEndXRef.current - touchStartXRef.current;
+    
+    if (swipeDiff > swipeThreshold) {
+      // Swiped right - go to previous card
+      rotateCarousel('prev');
+    } else if (swipeDiff < -swipeThreshold) {
+      // Swiped left - go to next card
+      rotateCarousel('next');
+    }
+    
+    setIsSwiping(false);
+  };
 
-  // Calculate position class for each card
+  // Calculate position class for each card with enhanced positioning
   const getCardPositionClass = (index) => {
     // Calculate relative position to the active card in a circular manner
     const position = (index - activeCardIndex + picks.length) % picks.length;
     
-    // Return the appropriate position class based on the calculated position
-    if (position === 0) return 'card-position-0'; // Center/active card
-    if (position === 1) return 'card-position-1'; // First card to the right
-    if (position === 2) return 'card-position-2'; // Second card to the right
-    if (position === 3) return 'card-position-3'; // Third card to the right
-    if (position === picks.length - 1) return 'card-position-6'; // First card to the left
-    if (position === picks.length - 2) return 'card-position-5'; // Second card to the left
-    if (position === picks.length - 3) return 'card-position-4'; // Third card to the left
+    // Enhanced positioning logic for fanned-out display
+    // Center card
+    if (position === 0) return 'card-position-0';
     
-    // Fallback for any other positions
+    // Cards to the right
+    if (position === 1) return 'card-position-1';
+    if (position === 2) return 'card-position-2';
+    if (position === 3) return 'card-position-3';
+    
+    // Cards to the left
+    if (position === picks.length - 1) return 'card-position-6';
+    if (position === picks.length - 2) return 'card-position-5';
+    if (position === picks.length - 3) return 'card-position-4';
+    
+    // Fallback for any other positions to ensure all cards have a position
     return position < picks.length / 2 ? 'card-position-3' : 'card-position-4';
   };
 
@@ -317,7 +382,12 @@ export function RealGaryPicks() {
             </div>
           ) : (
             <div className="carousel-container picks-carousel">
-              <div className="carousel-track">
+              <div className="carousel-track"
+                ref={carouselRef}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
                 {picks.map((pick, index) => (
                   <div 
                     key={pick.id}
@@ -343,32 +413,20 @@ export function RealGaryPicks() {
                           )}
                         </div>
                         
-                        <div className="pick-card-content">
-                          {pick.league === 'PARLAY' ? (
-                            <div className="parlay-details">
-                              <div className="parlay-title">3-Leg Parlay</div>
-                              <div className="parlay-potential-payout">
-                                Payout: {pick.potentialPayout}
-                              </div>
-                            </div>
-                          ) : null}
+                        {/* Center content area - can be used for team logos or additional info */}
+                        <div className="pick-card-center-content">
+                          {/* Empty space for now or you can add content here */}
                         </div>
                         
-                        <div className="confidence-container">
-                          <div className="confidence-label">
-                            <span>Gary's Confidence</span>
-                            <span>{pick.confidenceLevel}%</span>
-                          </div>
-                          <div className="confidence-bar">
-                            <div 
-                              className="confidence-fill" 
-                              style={{ width: `${pick.confidenceLevel}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                        
-                        <div className="pick-card-actions">
-                          <button className="btn-view-pick">
+                        {/* Bottom button container */}
+                        <div className="pick-card-bottom">
+                          <button 
+                            className="btn-view-pick"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFlip(pick.id);
+                            }}
+                          >
                             View Pick
                           </button>
                         </div>
@@ -391,92 +449,72 @@ export function RealGaryPicks() {
                               {pick.betType === 'Best Bet: Moneyline' ? pick.moneyline : 
                               pick.betType === 'Spread Pick' ? pick.spread : pick.overUnder}
                             </div>
-                          </div>
-                        ) : (
-                          <div className="pick-card-content">
-                            <div className="pick-card-bet-type">3-Leg Parlay</div>
-                            <div className="parlay-odds">{pick.parlayOdds}</div>
-                            {pick.parlayLegs && (
-                              <div className="parlay-legs">
-                                {pick.parlayLegs.map((leg, idx) => (
-                                  <div key={idx} className="parlay-leg">
-                                    <div className="parlay-leg-game">{leg.pick}</div>
-                                  </div>
-                                ))}
+                            {pick.result && pick.result !== 'pending' && (
+                              <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
+                                <div className="result-label">{pick.result === 'WIN' ? '✓ WINNER' : pick.result === 'LOSS' ? '✗ INCORRECT' : 'PUSH'}</div>
+                                {pick.finalScore && <div className="final-score">Final: {pick.finalScore}</div>}
                               </div>
                             )}
-                          </div>
-                        )}
-                        
-                        {pick.league !== 'PARLAY' && (
-                          <div className="gary-analysis">
-                            <div className="gary-analysis-label">Gary's Analysis</div>
-                            <div className="gary-analysis-content">
-                              {pick.pickDetail}
+                            
+                            {/* Gary's Analysis Section */}
+                            <div className="gary-analysis">
+                              <div className="gary-analysis-label">Gary's Analysis</div>
+                              <div className="gary-analysis-content">{pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!"}</div>
+                            </div>
+                            
+                            <div className="pick-card-actions">
+                              <div className="decision-actions">
+                                {(!pick.result || pick.result === 'pending') ? (
+                                  <>
+                                    <button 
+                                      className="btn-decision btn-ride"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDecision(pick.id, 'ride');
+                                      }}
+                                      disabled={userDecisions[pick.id]}
+                                    >
+                                      Bet with Gary
+                                    </button>
+                                    <button 
+                                      className="btn-decision btn-fade"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDecision(pick.id, 'fade');
+                                      }}
+                                      disabled={userDecisions[pick.id]}
+                                    >
+                                      Fade the Bear
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div className="decision-result">
+                                    {userDecisions[pick.id] === 'ride' ? 
+                                      (pick.result === 'WIN' ? 'You won with Gary! 🎉' : 'Better luck next time with Gary.') :
+                                      userDecisions[pick.id] === 'fade' ? 
+                                        (pick.result === 'LOSS' ? 'Your fade was right! 🎉' : 'Gary was right this time.') :
+                                        'Game concluded.'
+                                    }
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        )}
-                        
-                        {/* Show result if available */}
-                        {pick.result && pick.result !== 'pending' && (
-                          <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
-                            <div className="result-label">{pick.result === 'WIN' ? '✓ WINNER' : pick.result === 'LOSS' ? '✗ INCORRECT' : 'PUSH'}</div>
-                            {pick.finalScore && <div className="final-score">Final: {pick.finalScore}</div>}
-                          </div>
-                        )}
-                        
-                        <div className="pick-card-actions">
-                          <div className="decision-actions">
-                            {/* Only show buttons if result is not available yet */}
-                            {(!pick.result || pick.result === 'pending') ? (
-                              <>
-                                <button 
-                                  className="btn-decision btn-ride"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDecision(pick.id, 'ride');
-                                  }}
-                                  disabled={userDecisions[pick.id]}
-                                >
-                                  Bet with Gary
-                                </button>
-                                <button 
-                                  className="btn-decision btn-fade"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDecision(pick.id, 'fade');
-                                  }}
-                                  disabled={userDecisions[pick.id]}
-                                >
-                                  Fade the Bear
-                                </button>
-                              </>
-                            ) : (
-                              <div className="decision-result">
-                                {userDecisions[pick.id] === 'ride' ? 
-                                  (pick.result === 'WIN' ? 'You won with Gary! 🎉' : 'Better luck next time with Gary.') :
-                                  userDecisions[pick.id] === 'fade' ? 
-                                    (pick.result === 'LOSS' ? 'Your fade was right! 🎉' : 'Gary was right this time.') :
-                                    'Game concluded.'
-                                }
-                              </div>
-                            )}
-                          </div>
+                        ) : null}
+                      </div>
+                      
+                      {/* Premium lock overlay */}
+                      {!isCardUnlocked(index) && (
+                        <div className="premium-lock-overlay">
+                          <div className="premium-badge">Premium</div>
+                          <h3 className="premium-lock-title">Unlock Gary's Premium Pick</h3>
+                          <p className="premium-lock-desc">Gain access to all of Gary's premium picks with a Pro subscription.</p>
+                          <Link to="/pricing">
+                            <button className="btn-upgrade">Upgrade Now</button>
+                          </Link>
                         </div>
-                      </div>
+                      )}
                     </div>
-                    
-                    {/* Premium lock overlay - Lock ALL cards except first one for free users */}
-                    {!isCardUnlocked(index) && (
-                      <div className="premium-lock-overlay">
-                        <div className="premium-badge">Premium</div>
-                        <h3 className="premium-lock-title">Unlock Gary's Premium Pick</h3>
-                        <p className="premium-lock-desc">Gain access to all of Gary's premium picks with a Pro subscription.</p>
-                        <Link to="/pricing">
-                          <button className="btn-upgrade">Upgrade Now</button>
-                        </Link>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -501,18 +539,6 @@ export function RealGaryPicks() {
               <path d="M9 18l6-6-6-6" />
             </svg>
           </button>
-          
-          <div className="carousel-nav">
-            {picks.map((_, index) => (
-              <div 
-                key={index}
-                className={`carousel-nav-item ${index === activeCardIndex ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveCardIndex(index);
-                }}
-              ></div>
-            ))}
-          </div>
         </div>
         
         {/* Toast notification */}
