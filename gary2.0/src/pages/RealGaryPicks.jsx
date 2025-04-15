@@ -658,9 +658,6 @@ export function RealGaryPicks() {
                               {pick.parlayOdds && (
                                 <div className="parlay-odds">Odds: {pick.parlayOdds}</div>
                               )}
-                              {pick.potentialPayout && (
-                                <div className="potential-payout">Potential Payout: {pick.potentialPayout}</div>
-                              )}
                             </div>
                             
                             {/* Direct Parlay Legs Display */}
@@ -669,8 +666,7 @@ export function RealGaryPicks() {
                                 <div className="parlay-legs-title">Parlay Legs</div>
                                 {pick.parlayLegs.map((leg, legIndex) => (
                                   <div key={legIndex} className="parlay-leg">
-                                    <div className="parlay-leg-league">{leg.league}</div>
-                                    <div className="parlay-leg-game">{leg.game}</div>
+                                    <div className="parlay-leg-number">Leg {legIndex + 1}</div>
                                     <div className="parlay-leg-pick">{leg.pick}</div>
                                   </div>
                                 ))}
