@@ -36,78 +36,30 @@ const GARY_RESPONSES = {
 };
 
 export function RealGaryPicks() {
-  // Improved mobile card behavior
+  // Load mobile card handling script
   useEffect(() => {
     // Only apply on mobile devices
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-      const fixMobileBehavior = () => {
-        // Fix View Pick button issue
-        const viewPickButtons = document.querySelectorAll('.btn-view-pick');
-        viewPickButtons.forEach(button => {
-          // Remove old event listeners
-          const newButton = button.cloneNode(true);
-          if (button.parentNode) {
-            button.parentNode.replaceChild(newButton, button);
-          }
-          
-          // Add new click listener with proper event handling
-          newButton.addEventListener('click', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            
-            // Find parent card and flip it
-            const card = this.closest('.pick-card');
-            if (card) {
-              card.classList.toggle('flipped');
-            }
-          }, { capture: true });
-        });
-        
-        // Fix decision buttons to prevent card movement
-        const decisionButtons = document.querySelectorAll('.btn-decision');
-        decisionButtons.forEach(button => {
-          // Add proper event handling
-          button.addEventListener('click', function(e) {
-            e.stopPropagation();
-          }, { capture: true });
-        });
-        
-        // Prevent carousel swipe
-        const carousel = document.querySelector('.carousel');
-        if (carousel) {
-          carousel.addEventListener('touchstart', function(e) {
-            this._touchStartX = e.touches[0].clientX;
-            this._touchStartY = e.touches[0].clientY;
-          }, { passive: true });
-          
-          carousel.addEventListener('touchmove', function(e) {
-            if (!this._touchStartX) return;
-            
-            const xDiff = this._touchStartX - e.touches[0].clientX;
-            const yDiff = this._touchStartY - e.touches[0].clientY;
-            
-            // If horizontal swipe is greater than vertical, prevent it
-            if (Math.abs(xDiff) > Math.abs(yDiff)) {
-              e.preventDefault();
-            }
-          }, { passive: false });
-        }
-      };
+      document.body.classList.add('mobile-view');
       
-      // Run immediately and also after a slight delay to catch dynamically created elements
-      fixMobileBehavior();
-      const timeout = setTimeout(fixMobileBehavior, 1000);
+      // Create and load the script for better mobile handling
+      const script = document.createElement('script');
+      script.src = '/src/pages/MobileCardFlip.js';
+      script.async = true;
+      script.id = 'mobile-card-flip-script';
+      document.body.appendChild(script);
       
-      // Also run when carousel buttons are clicked
-      const carouselControls = document.querySelectorAll('.carousel-control');
-      carouselControls.forEach(control => {
-        control.addEventListener('click', () => {
-          setTimeout(fixMobileBehavior, 300);
-        });
-      });
+      // Mark body for mobile-specific CSS
+      document.body.classList.add('mobile-card-active');
       
       return () => {
-        clearTimeout(timeout);
+        // Clean up on unmount
+        document.body.classList.remove('mobile-card-active');
+        document.body.classList.remove('mobile-view');
+        const loadedScript = document.getElementById('mobile-card-flip-script');
+        if (loadedScript) {
+          loadedScript.remove();
+        }
       };
     }
   }, []);
