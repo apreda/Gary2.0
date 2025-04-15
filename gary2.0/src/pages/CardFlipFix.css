@@ -1,0 +1,30 @@
+/* Fixes for card flipping issues */
+
+/* Fix for the back of the card - counter-rotate the text so it's not mirrored */
+.picks-carousel .pick-card-back {
+  transform: rotateY(180deg);
+}
+
+/* When card is flipped, we need the back to appear correct (not mirrored) */
+.picks-carousel .pick-card-flipped .pick-card-back {
+  transform: rotateY(0deg);
+}
+
+/* Make sure clicks on view pick button don't propagate on mobile */
+.gary-picks-container .btn-view-pick {
+  pointer-events: auto !important;
+  touch-action: none !important;
+  position: relative !important;
+  z-index: 1000 !important;
+}
+
+/* Enhance touch behavior for mobile */
+.gary-picks-container .pick-card {
+  touch-action: pan-y !important;
+}
+
+/* Ensure the carousel container doesn't shift when swiping */
+.gary-carousel {
+  touch-action: none !important;
+  position: relative !important;
+}

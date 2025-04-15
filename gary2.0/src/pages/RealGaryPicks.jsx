@@ -6,6 +6,8 @@ import ErrorBoundary from "../components/ErrorBoundary";
 import gary1 from '../assets/images/gary1.svg';
 import "./GaryPicksCarousel.css";
 import "./CarouselFix.css";
+import "./CardFlipFix.css";
+import "./ParlayCardFix.css";
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
@@ -55,15 +57,21 @@ export function RealGaryPicks() {
     // Debug: Log card unlock check
     console.log(`Checking if card ${index} is unlocked for user with plan: ${userPlan}`);
     
-    // Only the first card is available to free users
+    // Pro users can access all 7 cards
     if (userPlan === 'pro') {
       console.log(`Card ${index} is unlocked - user has pro plan`);
-      return true;
+      return true; // All 7 cards unlocked for pro users
     }
     
+    // Free users can only see the first pick unlocked
     const result = index === 0;
     console.log(`Card ${index} is ${result ? 'unlocked' : 'locked'} - user has free plan`);
     return result;
+  };
+  
+  // Determine if a card should be visible (both locked and unlocked cards are visible)
+  const isCardVisible = (index) => {
+    return index < 7; // Always show all 7 cards, regardless of lock status
   };
   
   // State for tracking user decisions
@@ -116,37 +124,54 @@ export function RealGaryPicks() {
     refreshUserPlan();
   }, []); // Run once on component mount
   
+  // State for error handling
+  const [loadError, setLoadError] = useState(null);
+  
   useEffect(() => {
     async function fetchPicks() {
       try {
         setLoading(true);
+        setLoadError(null); // Reset any previous errors
+        
+        // Check for environment variables first
+        const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
+        if (!oddsApiKey) {
+          console.error('Missing VITE_ODDS_API_KEY environment variable. Picks cannot be generated.');
+          setLoadError('API key not configured. Please set up your environment variables.');
+          setLoading(false);
+          return;
+        }
         
         // Check if we should generate new picks
         const shouldGenerate = schedulerService.shouldGenerateNewPicks();
         let dailyPicks;
         
-        if (shouldGenerate) {
-          // Generate new picks for today
-          dailyPicks = await picksService.generateDailyPicks();
-          
-          // Mark that we've generated picks for today
-          schedulerService.markPicksAsGenerated();
+        // First try to get existing picks from localStorage
+        const savedPicks = localStorage.getItem('dailyPicks');
+        if (savedPicks && !shouldGenerate) {
+          console.log('Using cached picks from localStorage');
+          dailyPicks = JSON.parse(savedPicks);
         } else {
-          // Get existing picks from localStorage
-          const savedPicks = localStorage.getItem('dailyPicks');
-          if (savedPicks) {
-            dailyPicks = JSON.parse(savedPicks);
-          } else {
-            // Generate new picks since none are saved
+          // Either need to generate new picks or no saves exist
+          console.log('Generating new picks...');
+          try {
+            // Generate new picks
             dailyPicks = await picksService.generateDailyPicks();
+            
+            // Mark that we've generated picks for today
             schedulerService.markPicksAsGenerated();
+            
+            // Save picks to localStorage
+            localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
+          } catch (generateError) {
+            console.error('Error generating picks:', generateError);
+            setLoadError('Unable to generate picks. API service may be unavailable.');
+            setLoading(false);
+            return;
           }
         }
         
-        // Save picks to localStorage
-        localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
-        
-        // Update state with the picks
+        // If we get here, we have valid picks
         setPicks(dailyPicks);
         
         // Initialize flipped state for all cards
@@ -243,12 +268,17 @@ export function RealGaryPicks() {
     }, 300);
   };
 
-  // Toggle card flip
-  const toggleFlip = (pickId) => {
+  // Handle card flip toggle
+  const toggleFlip = (cardId) => {
+    // Prevent changing active card when flipping
     setFlippedCards(prev => ({
       ...prev,
-      [pickId]: !prev[pickId]
+      [cardId]: !prev[cardId]
     }));
+    
+    // Stop any event propagation that might trigger card rotation
+    // This is especially important for mobile
+    return false;
   };
 
   // Get a random response from Gary
@@ -376,6 +406,11 @@ export function RealGaryPicks() {
               <p className="text-center text-[#d4af37] text-xl">Loading Gary's picks...</p>
               <div className="loader"></div>
             </div>
+          ) : loadError ? (
+            <div className="error-container">
+              <p className="text-center text-[#d4af37] text-xl">{loadError}</p>
+              <p className="text-center text-white text-sm mt-2">Please ensure your API keys are properly configured.</p>
+            </div>
           ) : picks.length === 0 ? (
             <div className="error-container">
               <p className="text-center text-[#d4af37] text-xl">Unable to load picks. Please try again later.</p>
@@ -388,7 +423,7 @@ export function RealGaryPicks() {
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               >
-                {picks.map((pick, index) => (
+                {picks.filter((_, index) => isCardVisible(index)).map((pick, index) => (
                   <div 
                     key={pick.id}
                     className={`pick-card ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.silverCard ? 'silver-card' : ''} ${pick.primeTimeCard ? 'primetime-card' : ''} ${getCardPositionClass(index)} ${flippedCards[pick.id] ? 'pick-card-flipped' : ''}`}
@@ -424,7 +459,9 @@ export function RealGaryPicks() {
                             className="btn-view-pick"
                             onClick={(e) => {
                               e.stopPropagation();
+                              e.preventDefault(); // Prevent any default action
                               toggleFlip(pick.id);
+                              return false; // Ensure no further event handling
                             }}
                           >
                             View Pick
@@ -500,7 +537,76 @@ export function RealGaryPicks() {
                               </div>
                             </div>
                           </div>
-                        ) : null}
+                        ) : (
+                          /* Parlay of the Day content */
+                          <div className="pick-card-content parlay-content">
+                            <div className="pick-card-bet-type">{pick.betType || "3-Leg Parlay"}</div>
+                            {pick.parlayOdds && (
+                              <div className="parlay-odds">Odds: {pick.parlayOdds}</div>
+                            )}
+                            {pick.potentialPayout && (
+                              <div className="potential-payout">Potential Payout: {pick.potentialPayout}</div>
+                            )}
+                            
+                            {/* Parlay Legs */}
+                            {pick.parlayLegs && pick.parlayLegs.length > 0 && (
+                              <div className="parlay-legs">
+                                <div className="parlay-legs-title">Parlay Legs:</div>
+                                {pick.parlayLegs.map((leg, legIndex) => (
+                                  <div key={legIndex} className="parlay-leg">
+                                    <div className="parlay-leg-league">{leg.league}</div>
+                                    <div className="parlay-leg-game">{leg.game}</div>
+                                    <div className="parlay-leg-pick">{leg.pick}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* Gary's Analysis for Parlay */}
+                            <div className="gary-analysis">
+                              <div className="gary-analysis-label">Gary's Analysis</div>
+                              <div className="gary-analysis-content">{pick.analysis || "Gary's parlay of the day combines the best value picks across multiple sports. Ride with me for a big payday!"}</div>
+                            </div>
+                            
+                            <div className="pick-card-actions">
+                              <div className="decision-actions">
+                                {(!pick.result || pick.result === 'pending') ? (
+                                  <>
+                                    <button 
+                                      className="btn-decision btn-ride"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDecision(pick.id, 'ride');
+                                      }}
+                                      disabled={userDecisions[pick.id]}
+                                    >
+                                      Bet with Gary
+                                    </button>
+                                    <button 
+                                      className="btn-decision btn-fade"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDecision(pick.id, 'fade');
+                                      }}
+                                      disabled={userDecisions[pick.id]}
+                                    >
+                                      Fade the Bear
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div className="decision-result">
+                                    {userDecisions[pick.id] === 'ride' ? 
+                                      (pick.result === 'WIN' ? 'You won with Gary! 🎉' : 'Better luck next time with Gary.') :
+                                      userDecisions[pick.id] === 'fade' ? 
+                                        (pick.result === 'LOSS' ? 'Your fade was right! 🎉' : 'Gary was right this time.') :
+                                        'Game concluded.'
+                                    }
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Premium lock overlay */}
