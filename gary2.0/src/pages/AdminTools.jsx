@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import ApiKeyCheck from '../apiKeyCheck';
+import ApiKeyCheck from '../apiKeyCheck.js';
 import { picksService } from '../services/picksService';
 import { oddsProxyService } from '../services/oddsProxyService';
 import { schedulerService } from '../services/schedulerService';
@@ -188,7 +188,13 @@ const AdminTools = () => {
     }}>
       <h1 style={{ color: '#FFC94C', marginBottom: '30px' }}>Gary's Picks Admin Tools</h1>
       
-      <ApiKeyCheck />
+      <div id="api-key-check-container" ref={el => {
+        if (el && !el.hasChildNodes()) {
+          // Mount the ApiKeyCheck component to this container
+          const apiKeyChecker = ApiKeyCheck();
+          apiKeyChecker.mount(el);
+        }
+      }}></div>
       
       <div style={{ 
         background: '#222', 
