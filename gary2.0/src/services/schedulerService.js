@@ -18,10 +18,10 @@ export const schedulerService = {
     const lastGen = new Date(lastGenerationTime);
     const now = new Date();
     
-    // Schedule picks generation daily at 3:11 PM EST
+    // Schedule picks generation daily at 3:35 PM EST
     const today = new Date();
     const targetTime = new Date();
-    targetTime.setHours(15, 11, 0, 0); // 3:11 PM EST
+    targetTime.setHours(15, 35, 0, 0); // 3:35 PM EST
     
     // Log current time and target time for debugging
     console.log('Current time:', now.toLocaleTimeString());
@@ -32,33 +32,33 @@ export const schedulerService = {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Check if it's after 3:11 PM - inclusive of 3:11 PM exactly
-    const isAfterTargetTime = (currentHour > 15 || (currentHour === 15 && currentMinute >= 11));
+    // Check if it's after 3:35 PM - inclusive of 3:35 PM exactly
+    const isAfterTargetTime = (currentHour > 15 || (currentHour === 15 && currentMinute >= 35));
     
     // Get the last generation hour and minute
     const lastGenHour = lastGen.getHours();
     const lastGenMinute = lastGen.getMinutes();
     
-    // Check if last generation was before 3:11 PM today
+    // Check if last generation was before 3:35 PM today
     const lastGenBeforeTarget = lastGen.getDate() !== today.getDate() || 
-                               (lastGenHour < 15 || (lastGenHour === 15 && lastGenMinute < 11));
+                               (lastGenHour < 15 || (lastGenHour === 15 && lastGenMinute < 35));
     
     console.log('Is after target time?', isAfterTargetTime);
     console.log('Was last gen before target?', lastGenBeforeTarget);
     
     // If it's past 10:00 AM EST and we haven't generated picks since then, do it
     if (isAfterTargetTime && lastGenBeforeTarget) {
-      console.log('Standard schedule: Generating new picks at 3:11 PM EST');
+      console.log('Standard schedule: Generating new picks at 3:35 PM EST');
       return true;
     }
     
-    // Normal rule: check if it's a new day and after 3:11pm EST
+    // Normal rule: check if it's a new day and after 3:35pm EST
     const isNewDay = lastGen.getDate() !== now.getDate() || 
                      lastGen.getMonth() !== now.getMonth() || 
                      lastGen.getFullYear() !== now.getFullYear();
-    const isAfter311PM = now.getHours() > 15 || (now.getHours() === 15 && now.getMinutes() >= 11); // 3:11 PM EST
+    const isAfter335PM = now.getHours() > 15 || (now.getHours() === 15 && now.getMinutes() >= 35); // 3:35 PM EST
     
-    return isNewDay && isAfter311PM;
+    return isNewDay && isAfter335PM;
   },
   
   /**
@@ -73,8 +73,8 @@ export const schedulerService = {
    * @returns {string} - The scheduled time for new picks (e.g., "10:00 AM")
    */
   getScheduledTime: () => {
-    // Always returns the standard 3:11 PM schedule
-    return "3:11 PM";
+    // Always returns the standard 3:35 PM schedule
+    return "3:35 PM";
   },
   
   /**
@@ -84,9 +84,9 @@ export const schedulerService = {
   getNextPicksInfo: () => {
     const now = new Date();
     
-    // Using standard 3:11 PM schedule
+    // Using standard 3:35 PM schedule
     let todayTargetTime = new Date(now);
-    todayTargetTime.setHours(15, 11, 0, 0); // 3:11 PM
+    todayTargetTime.setHours(15, 35, 0, 0); // 3:35 PM
     
     // If it's before the target time today, next picks are at the target time today
     // If it's after the target time today, next picks are at 10am tomorrow
@@ -96,7 +96,7 @@ export const schedulerService = {
     } else {
       const tomorrow10AM = new Date(now);
       tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
-      tomorrow10AM.setHours(15, 11, 0, 0); // Always 3:11pm for future days
+      tomorrow10AM.setHours(15, 35, 0, 0); // Always 3:35pm for future days
       nextPicksTime = tomorrow10AM;
     }
     
