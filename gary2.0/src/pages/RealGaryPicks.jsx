@@ -9,6 +9,7 @@ import "./CarouselFix.css";
 import "./CardFlipFix.css";
 import "./ParlayCardFix.css"; // Special fixes for Parlay card
 import "./ButtonFix.css"; // Fix button positioning
+import { useEffect } from 'react';
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
@@ -31,6 +32,59 @@ const GARY_RESPONSES = {
 };
 
 export function RealGaryPicks() {
+  // Mobile card behavior for flipping cards and preventing swipe
+  useEffect(() => {
+    // Only apply on mobile devices
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      // Setup a timeout to ensure the DOM has fully loaded
+      const setupMobileBehavior = setTimeout(() => {
+        // Add flip functionality to the entire card (not just the button)
+        const pickCards = document.querySelectorAll('.pick-card');
+        
+        pickCards.forEach(card => {
+          // Remove existing handlers by cloning the card
+          const cardClone = card.cloneNode(true);
+          if (card.parentNode) {
+            card.parentNode.replaceChild(cardClone, card);
+          }
+          
+          // Add click listener to the entire card
+          cardClone.addEventListener('click', function(e) {
+            // Don't trigger if clicking on buttons or arrows
+            if (
+              e.target.closest('.carousel-control') || 
+              e.target.closest('.btn') || 
+              e.target.closest('.btn-decision') || 
+              e.target.closest('.pick-card-actions')
+            ) {
+              return;
+            }
+            
+            // Flip the card
+            cardClone.classList.toggle('flipped');
+          });
+        });
+        
+        // Disable swiping behavior
+        const carousel = document.querySelector('.carousel');
+        if (carousel) {
+          carousel.addEventListener('touchmove', function(e) {
+            // Only prevent horizontal swiping
+            const touch = e.touches[0];
+            if (Math.abs(touch.clientX - (this._touchStartX || touch.clientX)) > 10) {
+              e.preventDefault();
+            }
+            this._touchStartX = touch.clientX;
+          }, { passive: false });
+        }
+      }, 1000); // Delay by 1 second to ensure DOM is ready
+      
+      return () => {
+        clearTimeout(setupMobileBehavior);
+      };
+    }
+  }, []);
+
   const { userPlan, updateUserPlan } = useUserPlan();
   const { updateUserStats } = useUserStats();
   
