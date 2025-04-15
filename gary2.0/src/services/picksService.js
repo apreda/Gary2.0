@@ -125,14 +125,38 @@ export const picksService = {
       }
       
       // Create a prompt for DeepSeek
+      // Define the explicit pick to ensure consistency
+      const pickValue = pick.pick || betDetails;
+      
+      // Force the analysis to match the actual displayed pick
+      let forcedPickType;
+      let forcedPickValue = pickValue;
+      
+      // Determine the true pick type from the actual pick value
+      if (pickValue.includes('Over') || pickValue.includes('Under')) {
+        forcedPickType = 'Total (Over/Under)';
+      } else if (pickValue.includes('+') || pickValue.includes('-')) {
+        const isSpread = pick.game.split(' vs ').some(team => pickValue.includes(team));
+        forcedPickType = isSpread ? 'Spread' : 'Moneyline';
+      } else {
+        // Default case - use detected type
+        forcedPickType = betType;
+      }
+
+      // Store the forced pick type and value in the pick object for later use
+      pick.forcedPickType = forcedPickType;
+      pick.forcedPickValue = forcedPickValue;
+      
       const prompt = `You are Gary the Bear, a legendary sports handicapper known for your confident, colorful analysis.
       
       Generate an analysis for this pick:
       Game: ${pick.game}
       League: ${pick.league}
-      Pick Type: ${betType}
-      My Pick: ${betDetails}
+      Pick Type: ${forcedPickType}
+      My Pick: ${forcedPickValue}
       Confidence Level: ${pick.confidenceLevel}/100
+      
+      IMPORTANT: Your analysis MUST be about ${forcedPickValue} and ONLY about ${forcedPickValue}. DO NOT analyze any other bet type.
       
       Write a 2-3 sentence pick analysis in Gary's distinctive style with these elements:
       1. Use CAPITALIZED words for emphasis (like "LOCK", "VALUE", "PRIME SPOT")
