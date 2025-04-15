@@ -3,11 +3,13 @@
   margin-top: 6px !important;
   display: flex !important;
   flex-direction: column !important;
-  background: transparent !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
-  max-height: none !important;
-  overflow: visible !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  max-height: 140px !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #d4af37 rgba(0, 0, 0, 0.2) !important;
 }
 
 .pick-card.parlay-card .pick-card-back .parlay-leg {

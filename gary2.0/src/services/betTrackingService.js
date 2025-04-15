@@ -19,6 +19,9 @@ export const betTrackingService = {
       // Save back to localStorage
       localStorage.setItem('userPickDecisions', JSON.stringify(decisions));
       
+      // Update BetCard stats
+      betTrackingService.updateBetCardStats(decision);
+      
       // If user is logged in, save to Supabase too
       if (userId) {
         await supabase
@@ -49,6 +52,53 @@ export const betTrackingService = {
     }
   },
   
+  // Update the BetCard stats
+  updateBetCardStats: (decision) => {
+    try {
+      // Get existing BetCard tracking data from localStorage
+      const savedTracking = localStorage.getItem('garyBetTracking') || JSON.stringify({
+        betsWithGary: 0,
+        betsAgainstGary: 0,
+        totalBets: 0,
+        correctDecisions: 0,
+        currentStreak: 0,
+        picks: []
+      });
+      
+      const tracking = JSON.parse(savedTracking);
+      
+      // Update counts based on decision
+      if (decision === 'ride') {
+        tracking.betsWithGary += 1;
+      } else if (decision === 'fade') {
+        tracking.betsAgainstGary += 1;
+      }
+      
+      // Update total bets
+      tracking.totalBets += 1;
+      
+      // Add to picks history (limited to last 10)
+      tracking.picks.unshift({
+        decision,
+        timestamp: new Date().toISOString(),
+        result: null
+      });
+      
+      if (tracking.picks.length > 10) {
+        tracking.picks = tracking.picks.slice(0, 10);
+      }
+      
+      // Save updated tracking data
+      localStorage.setItem('garyBetTracking', JSON.stringify(tracking));
+      
+      console.log('Updated BetCard stats:', tracking);
+      return tracking;
+    } catch (error) {
+      console.error('Error updating BetCard stats:', error);
+      return null;
+    }
+  },
+  
   // Track game result and update user's bet performance
   updateBetResult: async (pickId, gameResult, userId = null) => {
     try {
@@ -58,35 +108,44 @@ export const betTrackingService = {
       
       // If user made a decision on this pick
       if (decisions[pickId]) {
+        const userDecision = decisions[pickId].decision;
+        let userResult;
+        
         // User rode with Gary
-        if (decisions[pickId].decision === 'ride') {
-          decisions[pickId].result = gameResult; // WIN, LOSS, PUSH
+        if (userDecision === 'ride') {
+          userResult = gameResult; // WIN, LOSS, PUSH
         }
         // User faded Gary
-        else if (decisions[pickId].decision === 'fade') {
+        else if (userDecision === 'fade') {
           // If Gary won, user lost by fading
           if (gameResult === 'WIN') {
-            decisions[pickId].result = 'LOSS';
+            userResult = 'LOSS';
           }
           // If Gary lost, user won by fading
           else if (gameResult === 'LOSS') {
-            decisions[pickId].result = 'WIN';
+            userResult = 'WIN';
           }
           // If push, still a push
           else {
-            decisions[pickId].result = 'PUSH';
+            userResult = 'PUSH';
           }
         }
         
+        // Update decision with result
+        decisions[pickId].result = userResult;
+        
         // Save updated results
         localStorage.setItem('userPickDecisions', JSON.stringify(decisions));
+        
+        // Update BetCard with result
+        betTrackingService.updateBetCardWithResult(userDecision, userResult);
         
         // If user is logged in, update Supabase too
         if (userId) {
           await supabase
             .from('user_picks')
             .update({ 
-              result: decisions[pickId].result,
+              result: userResult,
               updated_at: new Date().toISOString()
             })
             .eq('user_id', userId)
@@ -98,6 +157,43 @@ export const betTrackingService = {
     } catch (error) {
       console.error('Error updating bet result:', error);
       return { success: false, error };
+    }
+  },
+  
+  // Update BetCard with game result
+  updateBetCardWithResult: (decision, result) => {
+    try {
+      // Get existing BetCard tracking
+      const savedTracking = localStorage.getItem('garyBetTracking');
+      if (!savedTracking) return;
+      
+      const tracking = JSON.parse(savedTracking);
+      
+      // Update correctDecisions count
+      if (result === 'WIN') {
+        tracking.correctDecisions += 1;
+        tracking.currentStreak = Math.max(0, tracking.currentStreak) + 1;
+      } else if (result === 'LOSS') {
+        tracking.currentStreak = Math.min(0, tracking.currentStreak) - 1;
+      }
+      
+      // Update the most recent pick with the result
+      if (tracking.picks.length > 0) {
+        for (let i = 0; i < tracking.picks.length; i++) {
+          if (tracking.picks[i].decision === decision && tracking.picks[i].result === null) {
+            tracking.picks[i].result = result;
+            break;
+          }
+        }
+      }
+      
+      // Save updated tracking
+      localStorage.setItem('garyBetTracking', JSON.stringify(tracking));
+      
+      return tracking;
+    } catch (error) {
+      console.error('Error updating BetCard with result:', error);
+      return null;
     }
   },
   
