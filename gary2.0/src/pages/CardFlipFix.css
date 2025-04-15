@@ -1,105 +1,100 @@
-/* Fixed Card Flipping CSS */
+/* Fixed Card Flipping CSS - Minimal Changes */
 
-/* Ensure the pick card has the correct positioning */
-.picks-carousel .pick-card {
-  perspective: 1000px !important;
-  position: relative !important;
-  height: 450px !important; /* Restore original fixed height */
-  width: 280px !important; /* Restore original fixed width */
-  transform-style: preserve-3d !important;
-  margin: auto !important; /* Keep cards centered */
-  border-radius: 16px !important; /* Keep rounded corners */
+/* The original card flip functionality */
+.pick-card-inner {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+  position: relative;
 }
 
-/* Reset any transforms that might be interfering */
-.picks-carousel .pick-card-inner {
-  position: relative !important;
-  width: 100% !important;
-  height: 100% !important;
-  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-  transform-style: preserve-3d !important;
+.pick-card-flipped .pick-card-inner {
+  transform: rotateY(180deg);
 }
 
-.picks-carousel .pick-card-front,
-.picks-carousel .pick-card-back {
-  -webkit-backface-visibility: hidden !important;
-  backface-visibility: hidden !important;
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  transform-style: preserve-3d !important;
+/* Card front and back positioning */
+.pick-card-front, .pick-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
-/* Front card styling */
-.picks-carousel .pick-card-front {
-  z-index: 2 !important;
-  transform: rotateY(0deg) !important;
-  display: flex !important;
-  flex-direction: column !important;
-  -webkit-backface-visibility: hidden !important;
-  backface-visibility: hidden !important;
+.pick-card-front {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Back card styling - position it initially hidden */
-.picks-carousel .pick-card-back {
-  transform: rotateY(180deg) !important;
-  display: flex !important;
-  flex-direction: column !important;
-  overflow-y: auto !important;
-  -webkit-backface-visibility: hidden !important;
-  backface-visibility: hidden !important;
+.pick-card-back {
+  transform: rotateY(180deg);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  background-color: #121212;
 }
 
-/* When the card is flipped, rotate the inner container */
-.picks-carousel .pick-card-flipped .pick-card-inner {
-  transform: rotateY(180deg) !important;
+/* Parlay card specific styling */
+.parlay-card .pick-card-content {
+  overflow-y: auto;
+  max-height: 320px;
+  padding: 15px;
 }
 
-/* Extra fixes for parlay cards */
-.picks-carousel .parlay-card {
-  height: 450px !important; /* Maintain same height as other cards */
-  width: 280px !important; /* Maintain same width as other cards */
+.parlay-card .parlay-legs {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
 }
 
-.picks-carousel .parlay-card .pick-card-back {
-  height: 450px !important;
-  overflow-y: auto !important;
-  padding: 15px !important;
+.parlay-card .parlay-leg {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.picks-carousel .parlay-card .pick-card-content {
-  height: 380px !important; /* Leave space for buttons at bottom */
-  overflow-y: auto !important;
+.parlay-card .parlay-leg:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
-/* Fix to ensure text isn't mirrored on the back */
-.picks-carousel .pick-card-header,
-.picks-carousel .pick-card-content,
-.picks-carousel .gary-analysis,
-.picks-carousel .pick-card-actions {
-  -webkit-backface-visibility: hidden !important;
-  backface-visibility: hidden !important;
+/* Special card types */
+.primetime-card {
+  border: 3px solid #000 !important;
+  background: linear-gradient(135deg, #222, #000) !important;
 }
 
-/* Make sure clicks on view pick button don't propagate on mobile */
-.gary-picks-container .btn-view-pick {
-  pointer-events: auto !important;
-  touch-action: none !important;
-  position: relative !important;
-  z-index: 1000 !important;
+.primetime-card::before {
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.2), transparent) !important;
 }
 
-/* Enhance touch behavior for mobile */
-.gary-picks-container .pick-card {
-  touch-action: pan-y !important;
+.silver-card {
+  border: 3px solid #c0c0c0 !important;
+  background: linear-gradient(135deg, #303030, #505050) !important;
 }
 
-/* Ensure the carousel container doesn't shift when swiping */
-.gary-carousel {
-  touch-action: none !important;
-  position: relative !important;
+.silver-card::before {
+  background: linear-gradient(45deg, transparent, rgba(192, 192, 192, 0.4), transparent) !important;
+}
+
+/* Mobile touch fixes */
+.btn-view-pick {
+  position: relative;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+/* Prevent text mirroring */
+.pick-card-content,
+.gary-analysis,
+.pick-card-actions {
+  transform: rotateY(0deg);
 }
 
 /* Ensure league badge and time are correctly positioned and not mirrored */

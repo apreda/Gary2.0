@@ -68,9 +68,9 @@ export function RealGaryPicks() {
     return result;
   };
   
-  // Determine if a card should be visible (both locked and unlocked cards are visible)
+  // Determine if a card should be visible in the carousel
   const isCardVisible = (index) => {
-    return index < 7; // Always show all 7 cards, regardless of lock status
+    return true; // Show all cards in the carousel as per original design
   };
   
   // State for tracking user decisions
@@ -154,6 +154,15 @@ export function RealGaryPicks() {
           // Either need to generate new picks or no saves exist
           console.log('Generating new picks...');
           try {
+            // Check for DeepSeek API key
+            const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+            if (!deepseekApiKey) {
+              console.error('Missing VITE_DEEPSEEK_API_KEY environment variable. Picks cannot be generated.');
+              setLoadError('DeepSeek API key not configured. Please set up your environment variables.');
+              setLoading(false);
+              return;
+            }
+            
             // Generate new picks
             dailyPicks = await picksService.generateDailyPicks();
             
@@ -164,7 +173,7 @@ export function RealGaryPicks() {
             localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
           } catch (generateError) {
             console.error('Error generating picks:', generateError);
-            setLoadError('Unable to generate picks. API service may be unavailable.');
+            setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
             setLoading(false);
             return;
           }
@@ -422,7 +431,7 @@ export function RealGaryPicks() {
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               >
-                {picks.filter((_, index) => isCardVisible(index)).map((pick, index) => (
+                {picks.map((pick, index) => (
                   <div 
                     key={pick.id}
                     className={`pick-card ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.silverCard ? 'silver-card' : ''} ${pick.primeTimeCard ? 'primetime-card' : ''} ${getCardPositionClass(index)} ${flippedCards[pick.id] ? 'pick-card-flipped' : ''}`}
