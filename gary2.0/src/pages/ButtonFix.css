@@ -1,7 +1,7 @@
 /* Fix buttons positioning across all card types */
 .pick-card-back .pick-card-actions {
   position: absolute !important;
-  bottom: 12px !important; /* Moved down closer to the bottom of the card */
+  bottom: 8px !important; /* Moved down another 1/8th inch */
   left: 0 !important;
   right: 0 !important;
   padding: 0 15px !important;
@@ -13,10 +13,12 @@
   padding-bottom: 50px !important;
 }
 
-/* Ensure the Gary's Analysis section isn't too long */
+/* Ensure the Gary's Analysis section isn't too long and positioned properly */
 .pick-card-back .gary-analysis {
   max-height: 180px !important;
   overflow-y: auto !important;
+  position: relative !important;
+  top: -8px !important; /* Move Gary's Analysis up by a quarter inch */
 }
 
 /* Make the buttons more compact but still visually appealing */
