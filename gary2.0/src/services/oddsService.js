@@ -1,6 +1,17 @@
 import axios from 'axios';
 
-const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY;
+// Get the API key with mobile compatibility
+function getOddsApiKey() {
+  // First try window.ENV_VARS (our mobile solution)
+  if (typeof window !== 'undefined' && window.ENV_VARS && window.ENV_VARS.VITE_ODDS_API_KEY && 
+      window.ENV_VARS.VITE_ODDS_API_KEY !== '__ODDS_API_KEY__') {
+    return window.ENV_VARS.VITE_ODDS_API_KEY;
+  }
+  // Otherwise use standard Vite env
+  return import.meta.env.VITE_ODDS_API_KEY;
+}
+
+const ODDS_API_KEY = getOddsApiKey();
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
 /**
@@ -14,6 +25,11 @@ export const oddsService = {
   getSports: async () => {
     try {
       // Log API key being used (truncated for security)
+      if (!ODDS_API_KEY) {
+        console.error('⚠️ ODDS API KEY IS MISSING - This will cause picks generation to fail');
+        throw new Error('API key is required for The Odds API');
+      }
+      
       const displayKey = ODDS_API_KEY ? `${ODDS_API_KEY.substring(0, 5)}...${ODDS_API_KEY.substring(ODDS_API_KEY.length - 4)}` : 'MISSING';
       console.log(`🔍 Making API request to The Odds API with key: ${displayKey}`);
       console.log(`🔗 API URL: ${ODDS_API_BASE_URL}/sports`);
