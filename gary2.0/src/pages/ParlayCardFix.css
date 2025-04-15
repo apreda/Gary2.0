@@ -1,78 +1,92 @@
-/* Parlay card fixes */
-.pick-card.parlay-card .pick-card-back .parlay-legs {
-  margin-top: 6px !important;
+/* Parlay card fixes - Completely redesigned */
+/* Adjust the overall content layout to fit everything */
+.pick-card.parlay-card .pick-card-back .pick-card-content {
   display: flex !important;
   flex-direction: column !important;
-  background: rgba(0, 0, 0, 0.3) !important;
-  padding: 4px 8px !important;
-  border-radius: 4px !important;
-  max-height: 140px !important;
-  overflow-y: auto !important;
-  scrollbar-width: thin !important;
-  scrollbar-color: #d4af37 rgba(0, 0, 0, 0.2) !important;
+  height: 100% !important;
+  padding: 15px 12px 60px 12px !important;
+}
+
+/* Style for each parlay leg - now with clearer separation */
+.pick-card.parlay-card .pick-card-back .parlay-legs {
+  display: flex !important;
+  flex-direction: column !important;
+  margin-bottom: 8px !important;
+  flex: 1 !important;
+  overflow: visible !important;
+}
+
+.pick-card.parlay-card .pick-card-back .parlay-legs-title {
+  font-size: 0.8rem !important;
+  font-weight: bold !important;
+  color: #d4af37 !important;
+  margin-bottom: 5px !important;
+  text-transform: uppercase !important;
 }
 
 .pick-card.parlay-card .pick-card-back .parlay-leg {
-  margin-bottom: 4px !important;
-  padding-bottom: 4px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-  display: grid !important;
-  grid-template-columns: auto 1fr !important;
-  grid-gap: 4px !important;
-  align-items: center !important;
-  overflow: visible !important;
-  max-height: none !important;
+  margin-bottom: 6px !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
 }
 
+/* Leg details styling */
 .pick-card.parlay-card .pick-card-back .parlay-leg-league {
   font-size: 0.7rem !important;
   font-weight: bold !important;
   color: #d4af37 !important;
   text-transform: uppercase !important;
-  grid-column: 1 !important;
-  grid-row: 1 !important;
+  margin-bottom: 2px !important;
 }
 
 .pick-card.parlay-card .pick-card-back .parlay-leg-game {
   font-size: 0.72rem !important;
-  grid-column: 2 !important;
-  grid-row: 1 !important;
-  text-align: right !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+  margin-bottom: 2px !important;
+  white-space: normal !important;
+  line-height: 1.1 !important;
 }
 
 .pick-card.parlay-card .pick-card-back .parlay-leg-pick {
   font-size: 0.78rem !important;
   font-weight: bold !important;
-  grid-column: 1 / span 2 !important;
-  grid-row: 2 !important;
+  color: #fff !important;
 }
 
 /* Make parlay card title more compact */
 .pick-card.parlay-card .pick-card-back .pick-card-bet-type {
   font-size: 1.2rem !important;
-  margin-bottom: 2px !important;
+  margin: 0 0 5px 0 !important;
   text-align: center !important;
+  color: #d4af37 !important;
+  font-weight: bold !important;
 }
 
 /* Make parlay details more compact and side-by-side */
 .pick-card.parlay-card .pick-card-back .parlay-details {
   display: flex !important;
   justify-content: space-between !important;
-  margin-bottom: 4px !important;
-  font-size: 0.75rem !important;
+  margin-bottom: 8px !important;
+  font-size: 0.8rem !important;
+  background-color: rgba(212, 175, 55, 0.1) !important;
+  border-radius: 4px !important;
+  padding: 6px 8px !important;
 }
 
 /* Fix spacing for buttons at bottom */
 .pick-card.parlay-card .pick-card-back .pick-card-actions {
-  margin-top: 8px !important;
-  position: relative !important;
+  position: absolute !important;
+  bottom: 15px !important;
+  left: 0 !important;
+  right: 0 !important;
+  padding: 0 12px !important;
+  margin: 0 !important;
 }
 
 /* Make buttons more compact */
 .pick-card.parlay-card .pick-card-back .btn-decision {
-  padding: 6px 10px !important;
+  padding: 8px 10px !important;
   font-size: 0.85rem !important;
 }
