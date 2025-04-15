@@ -456,7 +456,7 @@ export const picksService = {
       console.log(`Retrieved ${sportsList.length} sports`);
       
       // 2. Filter for sports (be more lenient with active flag as API might vary)
-      const activeSports = sportsList
+      let activeSports = sportsList
         .filter(sport => {
           // If sport.active is undefined or null, default to true
           // Only exclude sports explicitly marked as inactive
@@ -466,11 +466,26 @@ export const picksService = {
           return isActive && isNotOutright;
         })
         .map(sport => sport.key);
-      console.log(`Found ${activeSports.length} active sports: ${activeSports.join(', ')}`);
+      console.log(`Found ${activeSports.length} non-outright sports: ${activeSports.join(', ')}`);
       
-      // If no active sports found, log more details about what we received
+      // If no active sports found, check if we have any active outright markets as a backup
       if (activeSports.length === 0) {
-        console.log('No active sports found. Raw sports data:', JSON.stringify(sportsList.slice(0, 3)));
+        console.log('No regular games available. Checking if there are any outright markets...');
+        
+        // As a last resort, include outright markets (like championship winners)
+        const outrightSports = sportsList
+          .filter(sport => sport.active !== false && sport.has_outrights === true)
+          .map(sport => sport.key);
+        
+        if (outrightSports.length > 0) {
+          console.log(`Found ${outrightSports.length} outright markets: ${outrightSports.join(', ')}`);
+          activeSports = outrightSports;
+        } else {
+          console.log('No sports available at all. The API may be experiencing issues.');
+        }
+        
+        // Log some details about what we received from the API for debugging
+        console.log('Raw sports data sample:', JSON.stringify(sportsList.slice(0, 3)));
       }
       
       // 3. Prioritize popular sports that are currently in season
