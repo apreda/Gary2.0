@@ -1,50 +1,39 @@
 /* Mobile-specific fixes for cards */
 @media screen and (max-width: 768px), (pointer: coarse) {
   /* Adjust the entire layout for mobile to prevent cutoff at bottom */
-  body.mobile-touch-device .picks-page-content {
-    padding-bottom: 120px !important;
+  .mobile-view .picks-page-content {
+    padding-bottom: 80px !important;
     position: relative !important;
-    min-height: 100vh !important;
-    height: auto !important;
-    overflow: auto !important;
   }
   
-  /* Center the carousel on mobile */
-  body.mobile-touch-device .carousel-container {
-    padding-top: 20px !important;
-    padding-bottom: 100px !important; 
-    transform: translateY(0) !important;
-    margin-bottom: 80px !important;
+  /* Simple centering for carousel */
+  .mobile-view .carousel-container {
+    padding-bottom: 60px !important;
   }
   
-  /* Completely disable ANY touch events on the carousel except arrows */
-  body.mobile-touch-device .carousel {
+  /* Allow carousel to be visible but block unwanted interactions */
+  .mobile-view .carousel {
     touch-action: none !important;
-    user-select: none !important;
-    pointer-events: none !important; /* Disable ALL events on carousel */
+  }
+  
+  /* Ensure carousel is properly sized */
+  .mobile-view .carousel-inner {
+    min-height: 500px !important;
+    height: auto !important;
     overflow: visible !important;
   }
   
-  /* Fix the height of the carousel container */
-  body.mobile-touch-device .carousel,
-  body.mobile-touch-device .carousel-inner {
-    height: auto !important;
-    min-height: 480px !important;
-  }
-  
-  /* Ensure cards accept interaction but NEVER cause carousel movement */
-  body.mobile-touch-device .pick-card {
+  /* Make cards visible and tappable */
+  .mobile-view .pick-card {
     pointer-events: auto !important;
     touch-action: manipulation !important;
     cursor: pointer !important;
     position: relative !important;
     z-index: 5 !important;
     transition: transform 0.6s !important;
-  }
-
-  /* Completely prevent ANY click on card from moving carousel */
-  body.mobile-touch-device .carousel .pick-card * {
-    pointer-events: auto !important; /* Allow interaction */
+    max-width: 320px !important;
+    margin: 0 auto !important;
+    display: block !important;
   }
   
   /* Prevent ANY click handlers attached to the card content */
@@ -120,22 +109,18 @@
     padding: 10px 15px !important;
   }
   
-  /* Make carousel controls VERY prominent and ALWAYS accept clicks */
-  body.mobile-touch-device .carousel-control {
-    min-width: 50px !important;
-    min-height: 50px !important;
+  /* Simple but effective carousel controls */
+  .mobile-view .carousel-control {
+    min-width: 44px !important;
+    min-height: 44px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    z-index: 1000 !important; /* Higher than everything else */
-    background-color: rgba(0, 0, 0, 0.8) !important;
-    border-radius: 25px !important;
-    pointer-events: auto !important; /* CRUCIAL - enables clicks on arrows */
+    z-index: 50 !important;
+    background-color: rgba(0, 0, 0, 0.7) !important;
+    border-radius: 50% !important;
+    pointer-events: auto !important;
     touch-action: manipulation !important;
-    opacity: 1 !important;
-    position: absolute !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
   }
   
   body.mobile-touch-device .carousel-control-prev {
