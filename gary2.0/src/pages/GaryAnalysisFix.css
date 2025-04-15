@@ -2,7 +2,7 @@
 .pick-card-back .gary-analysis {
   display: flex !important;
   flex-direction: column !important;
-  margin-top: 75px !important; /* Moved down by approx 3/4 of an inch */
+  margin-top: 25px !important; /* Just a quarter inch below the pick */
   margin-bottom: 10px !important;
   padding: 0 !important;
   position: relative !important;
@@ -26,6 +26,8 @@
   color: #ffffff !important;
   text-align: center !important;
   padding: 0 10px !important;
+  max-height: 140px !important; /* Taller content area */
+  overflow-y: auto !important; /* Make scrollable if needed */
   font-family: 'Arial', sans-serif !important;
   font-weight: 500 !important;
 }
