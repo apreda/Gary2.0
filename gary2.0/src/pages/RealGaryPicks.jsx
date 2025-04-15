@@ -570,11 +570,7 @@ export function RealGaryPicks() {
                               </div>
                             )}
                             
-                            {/* Gary's Analysis for Parlay */}
-                            <div className="gary-analysis">
-                              <div className="gary-analysis-label">Gary's Analysis</div>
-                              <div className="gary-analysis-content">{pick.analysis || "Gary's parlay of the day combines the best value picks across multiple sports. Ride with me for a big payday!"}</div>
-                            </div>
+                            {/* No Gary's Analysis for Parlay - removed as requested */}
                             
                             <div className="pick-card-actions">
                               <div className="decision-actions">
