@@ -429,7 +429,10 @@ export const picksService = {
       let allPicks = [];
       let pickId = 1;
       
-      // Process each sport for regular picks
+      // Track what bet types we've generated
+      let hasStraightBet = false;
+      let hasMoneylineBet = false;
+      
       for (const sport of prioritizedSports) {
         const sportOdds = batchOdds[sport] || [];
         console.log(`Retrieved ${sportOdds.length} games for ${sport}`);
@@ -477,8 +480,21 @@ export const picksService = {
             bankroll: 10000
           };
           
-          // Use Gary's AI to make a pick
-          const garyPick = makeGaryPick(mockData);
+          // Use Gary's AI to make a pick - enforce variety in bet types
+          let garyPick = makeGaryPick(mockData);
+          
+          // First pick should be a straight bet (spread) if we don't have one yet
+          if (!hasStraightBet && allPicks.length === 0) {
+            console.log('Forcing first pick to be a Spread bet for variety');
+            garyPick.bet_type = 'spread';
+            hasStraightBet = true;
+          }
+          // Second pick should be moneyline if we don't have one yet
+          else if (!hasMoneylineBet && allPicks.length === 1) {
+            console.log('Forcing second pick to be a Moneyline bet for variety');
+            garyPick.bet_type = 'moneyline';
+            hasMoneylineBet = true;
+          }
           
           // Format the pick for our UI
           const sportTitle = sport.includes('basketball_nba') ? 'NBA' : 
@@ -523,7 +539,14 @@ export const picksService = {
           const detailedPick = await picksService.generatePickDetail(pick);
           allPicks.push(detailedPick);
           
-          console.log(`Added ${sportTitle} pick for ${game.home_team} vs ${game.away_team}`);
+          // Update our tracking of bet types
+          if (garyPick.bet_type === 'spread') {
+            hasStraightBet = true;
+          } else if (garyPick.bet_type === 'moneyline') {
+            hasMoneylineBet = true;
+          }
+          
+          console.log(`Added ${sportTitle} pick for ${game.home_team} vs ${game.away_team} (${garyPick.bet_type})`);
         } catch (error) {
           console.error(`Error creating pick for ${sport}:`, error);
         }
