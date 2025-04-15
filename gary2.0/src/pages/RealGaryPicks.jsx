@@ -641,7 +641,7 @@ export function RealGaryPicks() {
                             
                             {/* Gary's Analysis Section */}
                             <div className="gary-analysis">
-                              <div className="gary-analysis-label">GARY'S ANALYSIS</div>
+                              {/* Title removed as requested */}
                               <div className="gary-analysis-content">{pick.pickDetail || pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!"}</div>
                             </div>
                             
