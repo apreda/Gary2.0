@@ -608,7 +608,20 @@
   }
 }
 
-/* Responsive adjustments */
+/* Responsive and Mobile Touch Optimization */
+
+/* Touch areas for better UX */
+.carousel-track {
+  touch-action: pan-y; /* Enable vertical scrolling but capture horizontal swipes */
+  -webkit-overflow-scrolling: touch; /* Smoother scrolling on iOS */
+  user-select: none; /* Prevent text selection during swipes */
+}
+
+/* Mobile swipe indicator */
+.swipe-indicator {
+  display: none;
+}
+
 @media (max-width: 1200px) {
   .pick-card {
     width: 280px;
@@ -621,6 +634,15 @@
   
   .carousel-arrow-right {
     right: 20px;
+  }
+  
+  /* Adjust card positions for smaller screens */
+  .card-position-1 {
+    transform: translate(25%, -50%) scale(0.9) rotateY(8deg);
+  }
+  
+  .card-position-6 {
+    transform: translate(-125%, -50%) scale(0.9) rotateY(-8deg);
   }
 }
 
@@ -637,6 +659,49 @@
   .carousel-arrow {
     width: 40px;
     height: 40px;
+    opacity: 0.7;
+  }
+  
+  /* More compact positioning for mobile */
+  .card-position-0 {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  
+  .card-position-1 {
+    transform: translate(30%, -50%) scale(0.85) rotateY(8deg);
+    opacity: 0.85;
+  }
+  
+  .card-position-6 {
+    transform: translate(-130%, -50%) scale(0.85) rotateY(-8deg);
+    opacity: 0.85;
+  }
+  
+  /* Hide far cards on mobile */
+  .card-position-2,
+  .card-position-3,
+  .card-position-4,
+  .card-position-5 {
+    opacity: 0.6;
+  }
+  
+  /* Show swipe indicator on mobile */
+  .swipe-indicator {
+    display: block;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
   }
 }
 
@@ -660,62 +725,66 @@
   display: inline-block;
 }
 
-/* Card positions in carousel */
-/* Main center card - perfectly centered */
+/* Card positions in carousel - Improved positioning for better centered cards with fanning */
+/* Main center card - perfectly centered and larger */
 .card-position-0 {
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(1.05);
   left: 50%;
   z-index: 30;
   opacity: 1;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 201, 76, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 201, 76, 0.4);
 }
 
-/* First card to the right - fully visible */
+/* First card to the right - slightly behind and to the right */
 .card-position-1 {
-  transform: translate(30%, -50%) scale(0.9);
+  transform: translate(20%, -50%) scale(0.9) rotateY(10deg);
   left: 50%;
   z-index: 25;
-  opacity: 0.95;
+  opacity: 0.9;
+  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.5);
 }
 
-/* Second card to the right - partially visible */
+/* Second card to the right - further behind */
 .card-position-2 {
-  transform: translate(90%, -50%) scale(0.8);
+  transform: translate(35%, -50%) scale(0.85) rotateY(20deg);
   left: 50%;
   z-index: 20;
-  opacity: 0.85;
+  opacity: 0.8;
+  box-shadow: 8px 5px 15px rgba(0, 0, 0, 0.4);
 }
 
-/* Third card to the right - slightly visible */
+/* Cards on far right - stacked and barely visible */
 .card-position-3 {
-  transform: translate(130%, -50%) scale(0.7);
+  transform: translate(40%, -50%) scale(0.8) rotateY(30deg);
   left: 50%;
   z-index: 15;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
-/* First card to the left - fully visible */
+/* First card to the left - slightly behind and to the left */
 .card-position-6 {
-  transform: translate(-130%, -50%) scale(0.9);
+  transform: translate(-120%, -50%) scale(0.9) rotateY(-10deg);
   left: 50%;
   z-index: 25;
-  opacity: 0.95;
+  opacity: 0.9;
+  box-shadow: -5px 5px 15px rgba(0, 0, 0, 0.5);
 }
 
-/* Second card to the left - partially visible */
+/* Second card to the left - further behind */
 .card-position-5 {
-  transform: translate(-190%, -50%) scale(0.8);
+  transform: translate(-135%, -50%) scale(0.85) rotateY(-20deg);
   left: 50%;
   z-index: 20;
-  opacity: 0.85;
+  opacity: 0.8;
+  box-shadow: -8px 5px 15px rgba(0, 0, 0, 0.4);
 }
 
-/* Third card to the left - slightly visible */
+/* Cards on far left - stacked and barely visible */
 .card-position-4 {
-  transform: translate(-230%, -50%) scale(0.7);
+  transform: translate(-140%, -50%) scale(0.8) rotateY(-30deg);
   left: 50%;
   z-index: 15;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 /* Enhanced Parlay Card Styling */
