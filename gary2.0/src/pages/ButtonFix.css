@@ -1,7 +1,7 @@
 /* Fix buttons positioning across all card types */
 .pick-card-back .pick-card-actions {
   position: absolute !important;
-  bottom: 28px !important; /* Moved down by a quarter inch (approximately 8px) */
+  bottom: 12px !important; /* Moved down closer to the bottom of the card */
   left: 0 !important;
   right: 0 !important;
   padding: 0 15px !important;
