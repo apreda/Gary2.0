@@ -89,10 +89,40 @@ export const picksService = {
   generatePickDetail: async (pick) => {
     try {
       const teams = pick.game.split(' vs ');
-      const betType = pick.betType.split(':')[0].trim();
-      const betDetails = pick.betType.includes('Spread') ? pick.spread : 
-                        pick.betType.includes('Over/Under') ? pick.overUnder : 
-                        pick.moneyline;
+      
+      // Determine the actual bet type based on pick value, not just the label
+      // First extract what's shown in the UI as the bet
+      const actualBet = pick.pick || pick.betValue || '';
+      
+      // Detect if it's an over/under bet by checking if it starts with "Over" or "Under"
+      const isOverUnderBet = actualBet.startsWith('Over') || actualBet.startsWith('Under') || 
+                            pick.overUnder.includes('Over') || pick.overUnder.includes('Under');
+      
+      // Detect spread bet by checking for + or - at the beginning or point values
+      const isSpreadBet = pick.spread && (/^[+-]/.test(pick.spread) || pick.spread.includes('point'));
+      
+      // Detect moneyline bet
+      const isMoneylineBet = pick.moneyline && pick.moneyline.includes('+') || pick.moneyline.includes('-');
+      
+      // Determine bet type based on what's actually being picked
+      let betType;
+      let betDetails;
+      
+      if (isOverUnderBet || (actualBet.includes('Over') || actualBet.includes('Under'))) {
+        betType = 'Total (Over/Under)';
+        betDetails = pick.overUnder || actualBet;
+      } else if (isSpreadBet || pick.betType.includes('Spread')) {
+        betType = 'Spread';
+        betDetails = pick.spread;
+      } else {
+        betType = 'Moneyline';
+        betDetails = pick.moneyline;
+      }
+      
+      // If we have an explicit pick value displayed in the UI, use that
+      if (pick.pick) {
+        betDetails = pick.pick;
+      }
       
       // Create a prompt for DeepSeek
       const prompt = `You are Gary the Bear, a legendary sports handicapper known for your confident, colorful analysis.

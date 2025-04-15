@@ -630,8 +630,11 @@ export function RealGaryPicks() {
                           <div className="pick-card-content">
                             <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
                             <div className="pick-card-bet">
-                              {pick.betType === 'Best Bet: Moneyline' ? pick.moneyline : 
-                              pick.betType === 'Spread Pick' ? pick.spread : pick.overUnder}
+                              {pick.pick ? pick.pick : 
+                              pick.betType === 'Best Bet: Moneyline' ? pick.moneyline : 
+                              pick.betType === 'Spread Pick' ? pick.spread : 
+                              pick.overUnder ? pick.overUnder : 
+                              `Over ${pick.game.split(' vs ')[0]}`}
                             </div>
                             {pick.result && pick.result !== 'pending' && (
                               <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
