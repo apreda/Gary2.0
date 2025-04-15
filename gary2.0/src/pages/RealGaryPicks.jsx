@@ -195,6 +195,9 @@ export function RealGaryPicks() {
         // Check for results immediately
         await resultsService.checkResults();
         
+        // Set loading to false now that we have the picks
+        setLoading(false);
+        
         // Set up listener for localStorage changes (for when results are updated)
         const handleStorageChange = (e) => {
           if (e.key === 'dailyPicks') {
