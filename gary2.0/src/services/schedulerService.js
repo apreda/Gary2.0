@@ -18,10 +18,10 @@ export const schedulerService = {
     const lastGen = new Date(lastGenerationTime);
     const now = new Date();
     
-    // Schedule picks generation daily at 9:55 AM EST
+    // Schedule picks generation daily at 10:08 AM EST
     const today = new Date();
     const targetTime = new Date();
-    targetTime.setHours(9, 55, 0, 0); // 9:55 AM EST
+    targetTime.setHours(10, 8, 0, 0); // 10:08 AM EST
     
     // Log current time and target time for debugging
     console.log('Current time:', now.toLocaleTimeString());
@@ -32,8 +32,8 @@ export const schedulerService = {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Check if it's after 9:55 AM - inclusive of 9:55 AM exactly
-    const isAfterTargetTime = (currentHour > 9 || (currentHour === 9 && currentMinute >= 55));
+    // Check if it's after 10:08 AM - inclusive of 10:08 AM exactly
+    const isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 8));
     
     // Get the last generation hour and minute
     const lastGenHour = lastGen.getHours();
