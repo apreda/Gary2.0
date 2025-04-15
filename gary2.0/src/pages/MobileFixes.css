@@ -24,6 +24,19 @@
     overflow: hidden !important;
   }
   
+  /* Hide 'Gary's Analysis' title on mobile view only */
+  .mobile-fix .gary-analysis-title,
+  .mobile-view .gary-analysis-title,
+  .mobile-fix h3:contains("GARY'S ANALYSIS"),
+  .mobile-view h3:contains("GARY'S ANALYSIS") {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
   /* Only show active carousel item to allow proper navigation */
   .mobile-fix .carousel-item,
   .mobile-view .carousel-item {
