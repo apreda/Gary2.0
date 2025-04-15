@@ -92,6 +92,13 @@ export const oddsService = {
    */
   getBatchOdds: async (sports) => {
     try {
+      // Handle case where no sports are passed
+      if (!sports || sports.length === 0) {
+        console.error('No sports provided to getBatchOdds - API returned no active sports');
+        throw new Error('No active sports found to get odds for. The API may be experiencing issues.');
+      }
+      
+      console.log(`Fetching batch odds for sports: ${sports.join(', ')}`);
       const promises = sports.map(sport => oddsService.getOdds(sport));
       const results = await Promise.allSettled(promises);
       

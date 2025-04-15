@@ -455,11 +455,23 @@ export const picksService = {
       const sportsList = await oddsService.getSports();
       console.log(`Retrieved ${sportsList.length} sports`);
       
-      // 2. Filter for active sports with events (excluding outrights/futures)
+      // 2. Filter for sports (be more lenient with active flag as API might vary)
       const activeSports = sportsList
-        .filter(sport => sport.active && !sport.has_outrights)
+        .filter(sport => {
+          // If sport.active is undefined or null, default to true
+          // Only exclude sports explicitly marked as inactive
+          const isActive = sport.active !== false;
+          // Skip outrights/futures markets if that property exists
+          const isNotOutright = sport.has_outrights === false || sport.has_outrights === undefined;
+          return isActive && isNotOutright;
+        })
         .map(sport => sport.key);
       console.log(`Found ${activeSports.length} active sports: ${activeSports.join(', ')}`);
+      
+      // If no active sports found, log more details about what we received
+      if (activeSports.length === 0) {
+        console.log('No active sports found. Raw sports data:', JSON.stringify(sportsList.slice(0, 3)));
+      }
       
       // 3. Prioritize popular sports that are currently in season
       const sportPriority = [
