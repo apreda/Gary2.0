@@ -542,8 +542,8 @@ export const picksService = {
         
         if (upcomingGames.length === 0) continue;
         
-        // Choose a game from this sport
-        const game = upcomingGames[0];
+        // Evaluate all games to find those meeting criteria
+        for (const game of upcomingGames) {
         try {
           // Generate narrative for context
           const narrative = await picksService.generateNarrative(game);
@@ -637,8 +637,13 @@ export const picksService = {
           }
           
           console.log(`Added ${sportTitle} pick for ${game.home_team} vs ${game.away_team} (${garyPick.bet_type})`);
-        } catch (error) {
-          console.error(`Error creating pick for ${sport}:`, error);
+          
+          // We found a good pick for this sport, move to the next sport
+          break;
+        } catch (err) {
+          console.log(`Error processing game for ${sport}:`, err);
+          // Continue to the next game if this one fails
+          continue;
         }
       }
       

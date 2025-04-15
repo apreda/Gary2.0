@@ -103,10 +103,16 @@ export function shouldGutOverride(brainScore, soulScore) {
 // ——————————————
 export function selectBetType(confidence, behindPace) {
   const types = ProfitModel.bet_types;
-  if (confidence > 0.9)      return "straight_moneyline";
-  if (confidence > 0.75)     return "spread";
-  if (confidence > 0.6)      return behindPace ? "parlay" : "teaser";
-  if (behindPace && confidence > 0.5) return "same_game_parlay";
+  // Simplified - any confidence above 0.6 qualifies for any bet type
+  if (confidence > 0.6) {
+    // Randomize between available bet types for variety
+    const betOptions = ["straight_moneyline", "spread", "parlay", "teaser"];
+    if (behindPace) betOptions.push("same_game_parlay");
+    
+    // Random selection from available options
+    const randomIndex = Math.floor(Math.random() * betOptions.length);
+    return betOptions[randomIndex];
+  }
   return "no_bet";
 }
 
