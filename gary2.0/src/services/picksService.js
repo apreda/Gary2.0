@@ -378,5 +378,178 @@ export const picksService = {
         ]
       }
     ];
+  },
+  
+  /**
+   * Generate daily picks for all available sports
+   * @returns {Promise<Array>} - Array of daily picks
+   */
+  generateDailyPicks: async () => {
+    try {
+      console.log('[PICKS DEBUG] Attempting to generate daily picks...');
+      
+      // 1. Get sports list from The Odds API
+      const sportsList = await oddsService.getSports();
+      console.log(`Retrieved ${sportsList.length} sports`);
+      
+      // 2. Filter for active sports with events (excluding outrights/futures)
+      const activeSports = sportsList
+        .filter(sport => sport.active && !sport.has_outrights)
+        .map(sport => sport.key);
+      console.log(`Found ${activeSports.length} active sports: ${activeSports.join(', ')}`);
+      
+      // 3. Prioritize popular sports that are currently in season
+      const sportPriority = [
+        'basketball_nba', 
+        'basketball_ncaab',
+        'baseball_mlb', 
+        'americanfootball_nfl',
+        'americanfootball_ncaaf',
+        'icehockey_nhl',
+        'soccer_epl',
+        'soccer_uefa_champs_league',
+        'soccer_spain_la_liga',
+        'soccer_italy_serie_a'
+      ];
+      
+      // Sort sports by priority and take top 4
+      const prioritizedSports = activeSports.sort((a, b) => {
+        const aIndex = sportPriority.indexOf(a);
+        const bIndex = sportPriority.indexOf(b);
+        // If sport isn't in priority list, give it a low priority
+        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+      }).slice(0, 4);
+      
+      console.log(`Selected ${prioritizedSports.length} prioritized sports: ${prioritizedSports.join(', ')}`);
+      
+      // 4. Get odds for selected sports
+      const batchOdds = await oddsService.getBatchOdds(prioritizedSports);
+      
+      // 5. Process each sport and select games
+      let allPicks = [];
+      let pickId = 1;
+      
+      // Process each sport for regular picks
+      for (const sport of prioritizedSports) {
+        const sportOdds = batchOdds[sport] || [];
+        console.log(`Retrieved ${sportOdds.length} games for ${sport}`);
+        
+        if (sportOdds.length === 0) continue;
+        
+        // Filter for games in the next 36 hours
+        const upcomingGames = sportOdds.filter(game => {
+          const gameTime = new Date(game.commence_time);
+          const now = new Date();
+          const timeDiff = gameTime - now;
+          const hoursUntilGame = timeDiff / (1000 * 60 * 60);
+          
+          // Games in the next 36 hours, but not starting in the next hour
+          return hoursUntilGame > 1 && hoursUntilGame < 36;
+        });
+        
+        if (upcomingGames.length === 0) continue;
+        
+        // Choose a game from this sport
+        const game = upcomingGames[0];
+        try {
+          // Generate narrative for context
+          const narrative = await picksService.generateNarrative(game);
+          
+          // Mock data for garyEngine input
+          const mockData = {
+            gameId: game.id,
+            teamKey: game.home_team,
+            playerKeys: [],
+            dataMetrics: {
+              ev: 0.6 + Math.random() * 0.4,
+              line: `${game.home_team} vs ${game.away_team}`,
+              market: {
+                lineMoved: Math.random() > 0.5,
+                publicPct: Math.floor(Math.random() * 100)
+              }
+            },
+            narrative: narrative,
+            pastPerformance: {
+              gutOverrideHits: Math.floor(Math.random() * 10),
+              totalGutOverrides: 10
+            },
+            progressToTarget: 0.7,
+            bankroll: 10000
+          };
+          
+          // Use Gary's AI to make a pick
+          const garyPick = makeGaryPick(mockData);
+          
+          // Format the pick for our UI
+          const sportTitle = sport.includes('basketball_nba') ? 'NBA' : 
+                            sport.includes('baseball_mlb') ? 'MLB' : 
+                            sport.includes('football_nfl') ? 'NFL' : 
+                            sport.includes('hockey_nhl') ? 'NHL' :
+                            sport.includes('epl') ? 'EURO' :
+                            sport.split('_').pop().toUpperCase();
+          
+          // Special card types
+          const isPrimeTime = garyPick.confidence > 0.85 && game.commence_time && 
+                           new Date(game.commence_time).getHours() >= 19;
+          const isSilverCard = sportTitle === 'EURO';
+          
+          // Extract odds data
+          const bookmaker = game.bookmakers && game.bookmakers[0];
+          const moneylineMarket = bookmaker?.markets.find(m => m.key === 'h2h');
+          const spreadMarket = bookmaker?.markets.find(m => m.key === 'spreads');
+          const totalsMarket = bookmaker?.markets.find(m => m.key === 'totals');
+          
+          // Create the pick object
+          const pick = {
+            id: pickId++,
+            league: sportTitle,
+            game: `${game.home_team} vs ${game.away_team}`,
+            moneyline: moneylineMarket ? `${moneylineMarket.outcomes[0].name} ${moneylineMarket.outcomes[0].price > 0 ? '+' : ''}${moneylineMarket.outcomes[0].price}` : "",
+            spread: spreadMarket ? `${spreadMarket.outcomes[0].name} ${spreadMarket.outcomes[0].point > 0 ? '+' : ''}${spreadMarket.outcomes[0].point}` : "",
+            overUnder: totalsMarket ? `${totalsMarket.outcomes[0].name} ${totalsMarket.outcomes[0].point}` : "",
+            time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+            walletValue: `$${Math.floor(garyPick.stake)}`,
+            confidenceLevel: Math.floor(garyPick.rationale.brain_score * 100),
+            betType: garyPick.bet_type === 'spread' ? 'Spread Pick' : 
+                     garyPick.bet_type === 'parlay' ? 'Parlay Pick' :
+                     garyPick.bet_type === 'same_game_parlay' ? 'SGP Pick' :
+                     'Best Bet: Moneyline',
+            isPremium: allPicks.length > 0, // First pick is free
+            primeTimeCard: isPrimeTime,
+            silverCard: isSilverCard
+          };
+          
+          // Generate detailed analysis
+          const detailedPick = await picksService.generatePickDetail(pick);
+          allPicks.push(detailedPick);
+          
+          console.log(`Added ${sportTitle} pick for ${game.home_team} vs ${game.away_team}`);
+        } catch (error) {
+          console.error(`Error creating pick for ${sport}:`, error);
+        }
+      }
+      
+      // 6. Add a PARLAY pick if we have enough individual picks
+      if (allPicks.length >= 3) {
+        try {
+          const parlay = await picksService.generateParlay(allPicks);
+          allPicks.push(parlay);
+          console.log('Added parlay pick.');
+        } catch (error) {
+          console.error('Error generating parlay:', error);
+        }
+      }
+      
+      // 7. If we didn't get enough picks, use fallbacks
+      if (allPicks.length < 7) {
+        console.warn(`Only generated ${allPicks.length} picks, using fallbacks.`);
+        return picksService.getFallbackPicks();
+      }
+      
+      return allPicks;
+    } catch (error) {
+      console.error('Error generating daily picks:', error);
+      return picksService.getFallbackPicks();
+    }
   }
 };
