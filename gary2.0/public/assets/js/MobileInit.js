@@ -5,14 +5,36 @@
 
 // Initialize as soon as DOM is ready
 if (typeof window !== 'undefined') {
+  // Force iOS Safari detection on page load, before DOM is ready
+  const forceIOSDetection = function() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isIOS || isMobile) {
+      // Apply mobile classes to both html and body tags to ensure CSS applies
+      document.documentElement.classList.add('mobile-fix', 'mobile-view', 'mobile-device');
+      document.body.classList.add('mobile-fix', 'mobile-view', 'mobile-device');
+      
+      // Store in localStorage for persistent detection
+      localStorage.setItem('viewMode', 'mobile');
+      console.log('iOS Safari detected - forcing mobile enhancements');
+    }
+  };
+  
+  // Run immediately
+  forceIOSDetection();
+  
+  // Also run when DOM content is fully loaded
   window.addEventListener('DOMContentLoaded', () => {
-    // Only run on mobile devices
-    const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    // Recheck for mobile devices
+    const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || localStorage.getItem('viewMode') === 'mobile';
+    
     if (isMobile) {
       console.log('MobileInit.js: Enhancing mobile experience');
       
-      // Add mobile marker class
-      document.body.classList.add('mobile-fix');
+      // Add mobile marker classes to ensure CSS applies
+      document.documentElement.classList.add('mobile-fix', 'mobile-view');
+      document.body.classList.add('mobile-fix', 'mobile-view');
       
       // Fix card visibility and styling
       const fixCardVisibility = () => {

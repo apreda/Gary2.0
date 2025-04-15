@@ -1,5 +1,22 @@
 /* MOBILE ONLY - Emergency fix for card visibility */
 /* This ONLY affects mobile devices and preserves all desktop styling */
+
+/* Special iOS Safari targeting to ensure mobile view shows on iPhone */
+.mobile-device .pick-card,
+.mobile-fix .pick-card,
+html.mobile-device .pick-card,
+.mobile-view .pick-card {
+  max-width: 300px !important;
+  min-height: 450px !important;
+  height: auto !important;
+  margin: 0 auto !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  border: 2px solid #d4af37 !important;
+  background: linear-gradient(145deg, #d4af37, #b08d1c) !important;
+}
+
 @media screen and (max-width: 768px) {
   /* Make cards visible with proper gold styling */
   .mobile-fix .pick-card,

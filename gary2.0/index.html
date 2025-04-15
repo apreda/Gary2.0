@@ -16,6 +16,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet" />
     <title>Gary A.I. - Sports Handicapping & Betting Picks</title>
+    <script>
+      // Force mobile detection - run this before anything else
+      (function() {
+        // Force mobile detection for iOS Safari
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768;
+        if (isMobile) {
+          document.documentElement.classList.add('mobile-device');
+          document.documentElement.classList.add('mobile-fix');
+          localStorage.setItem('viewMode', 'mobile');
+          console.log('Mobile device detected - forcing mobile optimizations');
+        }
+      })();
+    </script>
     <style>
       /* Basic CSS reset to ensure visibility */
       body {
