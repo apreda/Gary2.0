@@ -540,16 +540,13 @@ export const picksService = {
         }
       }
       
-      // 7. If we didn't get enough picks, use fallbacks
-      if (allPicks.length < 7) {
-        console.warn(`Only generated ${allPicks.length} picks, using fallbacks.`);
-        return picksService.getFallbackPicks();
-      }
+      // 7. Log how many real picks we generated - no minimum requirement
+      console.log(`Successfully generated ${allPicks.length} real picks. No fallbacks will be used.`);
       
       return allPicks;
     } catch (error) {
       console.error('Error generating daily picks:', error);
-      return picksService.getFallbackPicks();
+      throw error; // Propagate the error rather than using fallbacks
     }
   }
 };

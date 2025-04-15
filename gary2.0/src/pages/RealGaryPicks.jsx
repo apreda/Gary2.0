@@ -209,18 +209,15 @@ export function RealGaryPicks() {
         return () => window.removeEventListener('storage', handleStorageChange);
       } catch (error) {
         console.error('Error fetching picks:', error);
-        // If API fails, use fallback picks
-        const fallbackPicks = picksService.getFallbackPicks();
-        setPicks(fallbackPicks);
-        
-        // Initialize flipped state for fallback picks
-        const initialFlippedState = {};
-        fallbackPicks.forEach(pick => {
-          initialFlippedState[pick.id] = false;
-        });
-        setFlippedCards(initialFlippedState);
-      } finally {
         setLoading(false);
+        
+        // Display error message - no fallbacks
+        setLoadError(`Error fetching picks: ${error.message}. Please try again later.`);
+        setPicks([]);
+        setFlippedCards({});
+        
+        // Set next picks info
+        setNextPicksInfo(schedulerService.getNextPicksInfo());
       }
     }
     
