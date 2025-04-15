@@ -1,13 +1,85 @@
-/* Fixes for card flipping issues */
+/* Fixed Card Flipping CSS */
 
-/* Fix for the back of the card - counter-rotate the text so it's not mirrored */
-.picks-carousel .pick-card-back {
-  transform: rotateY(180deg);
+/* Ensure the pick card has the correct positioning */
+.picks-carousel .pick-card {
+  perspective: 1000px !important;
+  position: relative !important;
+  height: 100% !important;
+  width: 100% !important;
+  transform-style: preserve-3d !important;
 }
 
-/* When card is flipped, we need the back to appear correct (not mirrored) */
-.picks-carousel .pick-card-flipped .pick-card-back {
-  transform: rotateY(0deg);
+/* Reset any transforms that might be interfering */
+.picks-carousel .pick-card-inner {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+  transform-style: preserve-3d !important;
+}
+
+.picks-carousel .pick-card-front,
+.picks-carousel .pick-card-back {
+  -webkit-backface-visibility: hidden !important;
+  backface-visibility: hidden !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform-style: preserve-3d !important;
+}
+
+/* Front card styling */
+.picks-carousel .pick-card-front {
+  z-index: 2 !important;
+  transform: rotateY(0deg) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  -webkit-backface-visibility: hidden !important;
+  backface-visibility: hidden !important;
+}
+
+/* Back card styling - position it initially hidden */
+.picks-carousel .pick-card-back {
+  transform: rotateY(180deg) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: auto !important;
+  -webkit-backface-visibility: hidden !important;
+  backface-visibility: hidden !important;
+}
+
+/* When the card is flipped, rotate the inner container */
+.picks-carousel .pick-card-flipped .pick-card-inner {
+  transform: rotateY(180deg) !important;
+}
+
+/* Extra fixes for parlay cards */
+.picks-carousel .parlay-card {
+  height: auto !important;
+  min-height: 300px !important;
+}
+
+.picks-carousel .parlay-card .pick-card-back {
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+}
+
+.picks-carousel .parlay-card .pick-card-content {
+  height: auto !important;
+  overflow-y: auto !important;
+}
+
+/* Fix to ensure text isn't mirrored on the back */
+.picks-carousel .pick-card-header,
+.picks-carousel .pick-card-content,
+.picks-carousel .gary-analysis,
+.picks-carousel .pick-card-actions {
+  -webkit-backface-visibility: hidden !important;
+  backface-visibility: hidden !important;
 }
 
 /* Make sure clicks on view pick button don't propagate on mobile */
@@ -27,4 +99,12 @@
 .gary-carousel {
   touch-action: none !important;
   position: relative !important;
+}
+
+/* Ensure league badge and time are correctly positioned and not mirrored */
+.picks-carousel .pick-card-back .pick-card-league,
+.picks-carousel .pick-card-back .primetime-badge,
+.picks-carousel .pick-card-back .parlay-badge,
+.picks-carousel .pick-card-back .pick-card-time {
+  transform: rotateY(0deg) !important;
 }

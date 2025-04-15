@@ -214,14 +214,14 @@ export const picksService = {
       ];
       
       return {
-        id: 4, // This will be overwritten by the caller
+        id: picks.length + 1, // Assign ID after all individual picks
         league: 'PARLAY',
         game: 'Parlay of the Day',
         moneyline: '',
         spread: '',
         overUnder: '',
         time: 'All Day',
-        pickDetail: '', // Removing Gary's Analysis from the front of card as requested
+        pickDetail: '', // No Gary's Analysis on the front card
         confidenceLevel: 75,
         isPremium: true,
         betType: '3-Leg Parlay',
@@ -237,186 +237,15 @@ export const picksService = {
   },
   
   /**
-   * Generate daily picks for all available sports
-   * @returns {Promise<Array>} - Array of daily picks
-   */
-  generateDailyPicks: async () => {
-    try {
-      console.log('Attempting to generate daily picks...');
-      
-      // 1. Get sports list from The Odds API
-      const sportsList = await oddsService.getSports();
-      console.log(`Retrieved ${sportsList.length} sports`);
-      
-      // 2. Filter for active sports with events (excluding outrights/futures)
-      const activeSports = sportsList
-        .filter(sport => sport.active && !sport.has_outrights)
-        .map(sport => sport.key);
-      console.log(`Found ${activeSports.length} active sports: ${activeSports.join(', ')}`);
-      
-      // 3. Prioritize popular sports that are currently in season
-      const sportPriority = [
-        'basketball_nba', 
-        'basketball_ncaab',
-        'baseball_mlb', 
-        'americanfootball_nfl',
-        'americanfootball_ncaaf',
-        'icehockey_nhl',
-        'soccer_epl',
-        'soccer_uefa_champs_league',
-        'soccer_spain_la_liga',
-        'soccer_italy_serie_a'
-      ];
-      
-      // Sort sports by priority and take top 4
-      const prioritizedSports = activeSports.sort((a, b) => {
-        const aIndex = sportPriority.indexOf(a);
-        const bIndex = sportPriority.indexOf(b);
-        // If sport isn't in priority list, give it a low priority
-        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-      }).slice(0, 4);
-      
-      console.log(`Selected ${prioritizedSports.length} prioritized sports: ${prioritizedSports.join(', ')}`);
-      
-      // 4. Get odds for selected sports
-      const batchOdds = await oddsService.getBatchOdds(prioritizedSports);
-      
-      // 5. Process each sport and select games
-      let allPicks = [];
-      let pickId = 1;
-      
-      // Process each sport for regular picks
-      for (const sport of prioritizedSports) {
-        const sportOdds = batchOdds[sport] || [];
-        console.log(`Retrieved ${sportOdds.length} games for ${sport}`);
-        
-        if (sportOdds.length === 0) continue;
-        
-        // Filter for games in the next 36 hours
-        const upcomingGames = sportOdds.filter(game => {
-          const gameTime = new Date(game.commence_time);
-          const now = new Date();
-          const timeDiff = gameTime - now;
-          const hoursUntilGame = timeDiff / (1000 * 60 * 60);
-          
-          // Games in the next 36 hours, but not starting in the next hour
-          return hoursUntilGame > 1 && hoursUntilGame < 36;
-        });
-        
-        if (upcomingGames.length === 0) continue;
-        
-        // Choose a game from this sport
-        const game = upcomingGames[0];
-        try {
-          // Generate narrative for context
-          const narrative = await picksService.generateNarrative(game);
-          
-          // Mock data for garyEngine input
-          const mockData = {
-            gameId: game.id,
-            teamKey: game.home_team,
-            playerKeys: [],
-            dataMetrics: {
-              ev: 0.6 + Math.random() * 0.4,
-              line: `${game.home_team} vs ${game.away_team}`,
-              market: {
-                lineMoved: Math.random() > 0.5,
-                publicPct: Math.floor(Math.random() * 100)
-              }
-            },
-            narrative: narrative,
-            pastPerformance: {
-              gutOverrideHits: Math.floor(Math.random() * 10),
-              totalGutOverrides: 10
-            },
-            progressToTarget: 0.7,
-            bankroll: 10000
-          };
-          
-          // Use Gary's AI to make a pick
-          const garyPick = makeGaryPick(mockData);
-          
-          // Format the pick for our UI
-          const sportTitle = sport.includes('basketball_nba') ? 'NBA' : 
-                             sport.includes('baseball_mlb') ? 'MLB' : 
-                             sport.includes('football_nfl') ? 'NFL' : 
-                             sport.includes('hockey_nhl') ? 'NHL' :
-                             sport.includes('epl') ? 'EURO' :
-                             sport.split('_').pop().toUpperCase();
-          
-          // Special card types
-          const isPrimeTime = garyPick.confidence > 0.85 && game.commence_time && 
-                            new Date(game.commence_time).getHours() >= 19;
-          const isSilverCard = sportTitle === 'EURO';
-          
-          // Extract odds data
-          const bookmaker = game.bookmakers && game.bookmakers[0];
-          const moneylineMarket = bookmaker?.markets.find(m => m.key === 'h2h');
-          const spreadMarket = bookmaker?.markets.find(m => m.key === 'spreads');
-          const totalsMarket = bookmaker?.markets.find(m => m.key === 'totals');
-          
-          // Create the pick object
-          const pick = {
-            id: pickId++,
-            league: sportTitle,
-            game: `${game.home_team} vs ${game.away_team}`,
-            moneyline: moneylineMarket ? `${moneylineMarket.outcomes[0].name} ${moneylineMarket.outcomes[0].price > 0 ? '+' : ''}${moneylineMarket.outcomes[0].price}` : "",
-            spread: spreadMarket ? `${spreadMarket.outcomes[0].name} ${spreadMarket.outcomes[0].point > 0 ? '+' : ''}${spreadMarket.outcomes[0].point}` : "",
-            overUnder: totalsMarket ? `${totalsMarket.outcomes[0].name} ${totalsMarket.outcomes[0].point}` : "",
-            time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-            walletValue: `$${Math.floor(garyPick.stake)}`,
-            confidenceLevel: Math.floor(garyPick.rationale.brain_score * 100),
-            betType: garyPick.bet_type === 'spread' ? 'Spread Pick' : 
-                     garyPick.bet_type === 'parlay' ? 'Parlay Pick' :
-                     garyPick.bet_type === 'same_game_parlay' ? 'SGP Pick' :
-                     'Best Bet: Moneyline',
-            isPremium: allPicks.length > 0, // First pick is free
-            primeTimeCard: isPrimeTime,
-            silverCard: isSilverCard
-          };
-          
-          // Generate detailed analysis
-          const detailedPick = await picksService.generatePickDetail(pick);
-          allPicks.push(detailedPick);
-          
-          console.log(`Added ${sportTitle} pick for ${game.home_team} vs ${game.away_team}`);
-        } catch (error) {
-          console.error(`Error creating pick for ${sport}:`, error);
-        }
-      }
-      
-      // 6. Add a PARLAY pick if we have enough individual picks
-      if (allPicks.length >= 3) {
-        try {
-          const parlay = await picksService.generateParlay(allPicks);
-          allPicks.push(parlay);
-          console.log('Added parlay pick.');
-        } catch (error) {
-          console.error('Error generating parlay:', error);
-        }
-      }
-      
-      // 7. If we didn't get enough picks, use fallbacks
-      if (allPicks.length < 4) {
-        console.warn(`Only generated ${allPicks.length} picks, using fallbacks.`);
-        return picksService.getFallbackPicks();
-      }
-      
-      return allPicks;
-    } catch (error) {
-      console.error('Error generating daily picks:', error);
-      return picksService.getFallbackPicks();
-    }
-  },
-  
-  /**
    * Get fallback picks in case API calls fail
    * @returns {Array} - Array of mock picks
    */
   getFallbackPicks: () => {
+    console.log('Using fallback picks - generating all 7 picks for carousel');
     return [
       {
         id: 1,
+        isPremium: false, // First card is free
         league: "NBA",
         game: "Celtics vs Bulls",
         moneyline: "Bulls -220",
@@ -426,50 +255,105 @@ export const picksService = {
         pickDetail: "Bulls are an absolute LOCK tonight. Do not fade me on this one, pal. Boston's defense is FULL of holes right now.",
         walletValue: "$150",
         confidenceLevel: 87,
-        isPremium: false,
-        betType: "Best Bet: Moneyline"
+        betType: "Best Bet: Moneyline",
+        primeTimeCard: false,
+        silverCard: false
       },
       {
         id: 2,
+        isPremium: true,
         league: "NFL",
         game: "Patriots vs Giants",
         moneyline: "Patriots -150",
         spread: "Giants +4.0",
         overUnder: "Under 45.5",
-        time: "8:30 PM ET",
-        pickDetail: "Giants +4? Vegas is practically BEGGING you to take the Pats. Trust me, this line stinks worse than week-old fish. Giants cover EASY.",
+        time: "1:00 PM ET",
+        pickDetail: "Giants plus the points is the play. Pats' offense is struggling.",
         walletValue: "$200",
         confidenceLevel: 92,
-        isPremium: true,
-        betType: "Spread Pick"
+        betType: "Spread Pick",
+        primeTimeCard: false,
+        silverCard: false
       },
       {
         id: 3,
+        isPremium: true,
         league: "MLB",
         game: "Yankees vs Red Sox",
         moneyline: "Yankees -120",
         spread: "Red Sox +1.5",
         overUnder: "Over 8.5",
         time: "4:05 PM ET",
-        pickDetail: "Yankees own the Red Sox this season. PERIOD. This is the closest thing to free money you'll ever see. I'm betting the house on this one.",
+        pickDetail: "Yankees own the Red Sox this season. PERIOD. This is the closest thing to free money you'll ever see.",
         walletValue: "$100",
         confidenceLevel: 78,
-        isPremium: true,
-        betType: "Total: Over/Under"
+        betType: "Total: Over/Under",
+        primeTimeCard: false,
+        silverCard: false
       },
       {
         id: 4,
+        isPremium: true,
+        league: "NHL",
+        game: "Penguins vs Blackhawks",
+        moneyline: "Penguins -180",
+        spread: "Blackhawks +1.5",
+        overUnder: "Under 5.5",
+        time: "8:00 PM ET",
+        pickDetail: "I've been sitting on this Blackhawks pick ALL WEEK. Their defense has been tightening up, and Pittsburgh is due for a letdown. Perfect spot for a live dog.",
+        walletValue: "$175",
+        confidenceLevel: 83,
+        betType: "Best Bet: Moneyline",
+        primeTimeCard: false,
+        silverCard: false
+      },
+      {
+        id: 5,
+        isPremium: true,
+        league: "EURO",
+        game: "Man City vs Arsenal",
+        moneyline: "Man City -115",
+        spread: "Arsenal +0.5",
+        overUnder: "Over 2.5",
+        time: "2:30 PM ET",
+        pickDetail: "Arsenal's form has been unreal, but City at home with everything on the line? Pure class will show up. City takes this one in a tight match with late-game heroics.",
+        walletValue: "$150",
+        confidenceLevel: 81,
+        betType: "Total: Over/Under",
+        primeTimeCard: false,
+        silverCard: true // Silver edition card (European soccer)
+      },
+      {
+        id: 6,
+        isPremium: true,
+        league: "NFL",
+        game: "Chiefs vs Eagles",
+        moneyline: "Chiefs -135",
+        spread: "Eagles +3",
+        overUnder: "Over 48.5",
+        time: "8:20 PM ET",
+        pickDetail: "PRIMETIME SPECIAL: Sunday Night Football is where stars shine brightest, and Mahomes in prime time is automatic money. Chiefs not only cover, they dominate.",
+        walletValue: "$250",
+        confidenceLevel: 95,
+        betType: "Spread Pick",
+        primeTimeCard: true, // Black PrimeTime bonus pick
+        silverCard: false
+      },
+      {
+        id: 7,
+        isPremium: true,
         league: "PARLAY",
         game: "Parlay of the Day",
         moneyline: "",
         spread: "",
         overUnder: "",
         time: "All Day",
-        pickDetail: "", // Empty as requested
+        pickDetail: "Three-leg parlay with massive value. This is how we'll build our bankroll.",
         walletValue: "$50",
         confidenceLevel: 65,
-        isPremium: true,
         betType: "3-Leg Parlay",
+        primeTimeCard: false,
+        silverCard: false,
         parlayOdds: "+850",
         potentialPayout: "$950",
         parlayLegs: [
@@ -492,50 +376,6 @@ export const picksService = {
             betType: "Spread"
           }
         ]
-      },
-      {
-        id: 5,
-        league: "NHL",
-        game: "Penguins vs Blackhawks",
-        moneyline: "Penguins -180",
-        spread: "Blackhawks +1.5",
-        overUnder: "Under 5.5",
-        time: "8:00 PM ET",
-        pickDetail: "I've been sitting on this Blackhawks pick ALL WEEK. Their defense has been tightening up, and Pittsburgh is due for a letdown. Perfect spot for a live dog.",
-        walletValue: "$175",
-        confidenceLevel: 83,
-        isPremium: true,
-        betType: "Best Bet: Moneyline"
-      },
-      {
-        id: 6,
-        league: "EURO",
-        game: "Man City vs Arsenal",
-        moneyline: "Man City -115",
-        spread: "Arsenal +0.5",
-        overUnder: "Over 2.5",
-        time: "2:30 PM ET",
-        pickDetail: "Arsenal's form has been unreal, but City at home with everything on the line? Pure class will show up. City takes this one in a tight match with late-game heroics.",
-        walletValue: "$150",
-        confidenceLevel: 81,
-        isPremium: true,
-        betType: "Total: Over/Under",
-        silverCard: true
-      },
-      {
-        id: 7,
-        league: "NFL",
-        game: "Chiefs vs Eagles",
-        moneyline: "Chiefs -135",
-        spread: "Eagles +3",
-        overUnder: "Over 48.5",
-        time: "8:20 PM ET",
-        pickDetail: "PRIMETIME SPECIAL: Sunday Night Football is where stars shine brightest, and Mahomes in prime time is automatic money. Chiefs not only cover, they dominate. This nationally televised matchup is getting all the attention, but Gary's seeing value that others are missing.",
-        walletValue: "$250",
-        confidenceLevel: 95,
-        isPremium: true,
-        betType: "Spread Pick",
-        primeTimeCard: true
       }
     ];
   }
