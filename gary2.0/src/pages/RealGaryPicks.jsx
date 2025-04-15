@@ -40,27 +40,81 @@ export function RealGaryPicks() {
   // Load mobile card handling script
   useEffect(() => {
     // Only apply on mobile devices
-    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+    if (typeof window !== 'undefined' && (window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
       document.body.classList.add('mobile-view');
+      document.body.classList.add('mobile-touch-device');
       
-      // Create and load the script for better mobile handling
-      const script = document.createElement('script');
-      script.src = '/src/pages/MobileCardFlip.js';
-      script.async = true;
-      script.id = 'mobile-card-flip-script';
-      document.body.appendChild(script);
+      // Apply mobile fixes directly instead of loading external script
+      const applyMobileFixes = () => {
+        console.log("Manually applying mobile fixes");
+        
+        // Center and adjust the carousel
+        const content = document.querySelector('.picks-page-content');
+        if (content) {
+          content.style.paddingBottom = '100px';
+        }
+        
+        // Handle carousel to prevent unwanted navigation
+        const carousel = document.querySelector('.carousel');
+        if (carousel) {
+          carousel.style.pointerEvents = 'none';
+        }
+        
+        // Make arrows work
+        document.querySelectorAll('.carousel-control').forEach(control => {
+          control.style.pointerEvents = 'auto';
+          control.style.zIndex = '100';
+          
+          // Clear existing handlers
+          const newControl = control.cloneNode(true);
+          if (control.parentNode) {
+            control.parentNode.replaceChild(newControl, control);
+          }
+        });
+        
+        // Fix card interactions
+        document.querySelectorAll('.pick-card').forEach(card => {
+          card.style.pointerEvents = 'auto';
+          
+          // Handle flipping
+          card.addEventListener('click', (e) => {
+            // Stop clicks on cards from bubbling to carousel
+            e.stopPropagation();
+            
+            // Only flip back on non-button clicks
+            if (card.classList.contains('flipped') && 
+                !e.target.closest('.btn-view-pick') && 
+                !e.target.closest('.btn-decision')) {
+              card.classList.remove('flipped');
+            }
+          }, true);
+          
+          // Fix view button
+          const viewButton = card.querySelector('.btn-view-pick');
+          if (viewButton) {
+            viewButton.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              card.classList.add('flipped');
+            }, true);
+          }
+        });
+      };
       
-      // Mark body for mobile-specific CSS
-      document.body.classList.add('mobile-card-active');
+      // Apply immediately and after DOM changes
+      applyMobileFixes();
+      
+      // Also apply when DOM changes
+      const observer = new MutationObserver(() => {
+        setTimeout(applyMobileFixes, 100);
+      });
+      
+      observer.observe(document.body, { childList: true, subtree: true });
       
       return () => {
-        // Clean up on unmount
-        document.body.classList.remove('mobile-card-active');
+        observer.disconnect();
+        document.body.classList.remove('mobile-touch-device');
         document.body.classList.remove('mobile-view');
-        const loadedScript = document.getElementById('mobile-card-flip-script');
-        if (loadedScript) {
-          loadedScript.remove();
-        }
       };
     }
   }, []);
