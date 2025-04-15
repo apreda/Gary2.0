@@ -38,30 +38,65 @@
   background-color: #121212;
 }
 
-/* Parlay card specific styling */
+/* Parlay card specific styling - redesigned for no scrolling */
 .parlay-card .pick-card-back {
-  overflow-y: auto !important;
+  overflow-y: hidden !important;
 }
 
 .parlay-card .pick-card-content {
-  padding: 15px;
+  padding: 12px;
   height: auto !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.parlay-card .pick-card-bet-type {
+  font-size: 1.4rem;
+  margin-bottom: 5px;
+}
+
+.parlay-card .parlay-odds,
+.parlay-card .potential-payout {
+  margin-bottom: 5px;
+  font-size: 0.9rem;
 }
 
 .parlay-card .parlay-legs {
-  margin-top: 15px;
-  padding: 10px;
+  margin-top: 10px;
+  padding: 8px;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 8px;
-  max-height: none !important; /* Remove height restriction */
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.parlay-card .parlay-legs-title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-bottom: 5px;
 }
 
 .parlay-card .parlay-leg {
-  margin-bottom: 10px;
-  padding-bottom: 10px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.parlay-card .parlay-leg-league {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #d4af37;
+}
+
+.parlay-card .parlay-leg-game {
+  font-size: 0.8rem;
+}
+
+.parlay-card .parlay-leg-pick {
+  font-size: 0.85rem;
+  font-weight: bold;
 }
 
 .parlay-card .parlay-leg:last-child {
@@ -70,10 +105,29 @@
   border-bottom: none;
 }
 
-/* Add more space for the action buttons at bottom */
+/* Fix spacing for the action buttons at bottom */
 .parlay-card .pick-card-actions {
-  margin-top: 15px;
+  margin-top: 8px;
   position: relative;
+}
+
+.parlay-card .decision-actions {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Make parlay card buttons more compact */
+.parlay-card .btn-decision {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+/* Ensure parlay details are compact and side-by-side */
+.parlay-details {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
 }
 
 /* Special card types */
