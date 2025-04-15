@@ -1,5 +1,11 @@
 {
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "buildCommand": "vite build",
+  "env": {
+    "VITE_ODDS_API_KEY": "@odds_api_key",
+    "VITE_DEEPSEEK_API_KEY": "@deepseek_api_key",
+    "VITE_DEEPSEEK_BASE_URL": "https://api.deepseek.com/v1"
+  }
 }
