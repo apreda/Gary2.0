@@ -1,0 +1,55 @@
+/* Mobile-specific fixes for cards */
+@media screen and (max-width: 768px) {
+  /* Prevent card movement when clicking buttons */
+  .pick-card {
+    transform: none !important;
+    transition-property: none !important;
+  }
+  
+  /* Ensure card flip works properly */
+  .pick-card .pick-card-inner {
+    transform-style: preserve-3d !important;
+    transition: transform 0.8s !important;
+  }
+  
+  .pick-card.flipped .pick-card-inner {
+    transform: rotateY(180deg) !important;
+  }
+  
+  /* Ensure buttons have proper click events */
+  .btn-view-pick,
+  .btn-decision {
+    position: relative !important;
+    z-index: 10 !important;
+    user-select: auto !important;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1) !important;
+    touch-action: manipulation !important;
+  }
+  
+  /* Stop event propagation on buttons */
+  .pick-card-actions,
+  .pick-card-bottom {
+    position: relative !important;
+    z-index: 20 !important;
+  }
+  
+  /* Fix card flip trigger for View Pick button */
+  .pick-card .btn-view-pick {
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  
+  /* Prevent carousel movement on swipe */
+  .carousel {
+    touch-action: manipulation !important;
+  }
+  
+  /* Make carousel controls easier to tap */
+  .carousel-control {
+    min-width: 40px !important;
+    min-height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+}
