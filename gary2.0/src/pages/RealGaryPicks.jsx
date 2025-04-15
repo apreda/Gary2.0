@@ -37,68 +37,110 @@ const GARY_RESPONSES = {
 };
 
 export function RealGaryPicks() {
-  // Simplified mobile handling - MOBILE ONLY
+  // COMPLETE REBUILD: Mobile-only fixes that won't affect desktop
   useEffect(() => {
-    // Only apply on mobile devices
-    if (typeof window !== 'undefined' && (window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
-      document.body.classList.add('mobile-view');
+    // Only run on actual mobile devices
+    const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      console.log('Mobile device detected - applying specialized fixes');
+      document.body.classList.add('mobile-fix');
       
-      // Simple handler for mobile
-      const setupMobileHandlers = () => {
-        console.log("Setting up mobile handlers for cards");
+      // Completely separate mobile implementation
+      const fixMobileCards = () => {
+        // Step 1: Fix carousel navigation
+        const carousel = document.querySelector('.carousel');
+        if (carousel) {
+          // Clear any existing handlers
+          const newCarousel = carousel.cloneNode(true);
+          if (carousel.parentNode) {
+            carousel.parentNode.replaceChild(newCarousel, carousel);
+          }
+          
+          // Properly position the cards
+          const activeCard = newCarousel.querySelector('.carousel-item.active');
+          if (activeCard) {
+            activeCard.style.display = 'block';
+          }
+        }
         
-        // Handle card flipping without moving carousel
-        document.querySelectorAll('.pick-card').forEach(card => {
-          // Remove any existing handlers
-          const newCard = card.cloneNode(true);
-          if (card.parentNode) {
-            const classes = card.className;
-            card.parentNode.replaceChild(newCard, card);
-            newCard.className = classes;
+        // Step 2: Make navigation arrows work
+        document.querySelectorAll('.carousel-control').forEach(arrow => {
+          // Add proper z-index and handling
+          arrow.style.zIndex = '100';
+          arrow.style.position = 'absolute';
+          arrow.style.pointerEvents = 'auto';
+          
+          // Remove existing handlers
+          const newArrow = arrow.cloneNode(true);
+          if (arrow.parentNode) {
+            arrow.parentNode.replaceChild(newArrow, arrow);
           }
           
-          // Add back-to-front flip handler
-          newCard.addEventListener('click', function(e) {
-            // If clicking on the back of the card (not on buttons), flip back
-            if (this.classList.contains('flipped') && 
-                !e.target.closest('.btn-view-pick') && 
-                !e.target.closest('.btn-decision')) {
-              this.classList.remove('flipped');
-              e.preventDefault();
-              e.stopPropagation();
-            }
+          // Add click handler with delay to prevent rapid clicks
+          newArrow.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Give time for carousel to update
+            setTimeout(fixMobileCards, 600);
           });
-          
-          // Add view pick button handler
-          const viewButton = newCard.querySelector('.btn-view-pick');
-          if (viewButton) {
-            viewButton.addEventListener('click', function(e) {
-              const cardToFlip = this.closest('.pick-card');
-              if (cardToFlip) {
-                cardToFlip.classList.add('flipped');
-              }
-              e.preventDefault();
-              e.stopPropagation();
-            });
-          }
         });
         
-        // Make carousel controls work properly
-        document.querySelectorAll('.carousel-control').forEach(control => {
-          control.style.pointerEvents = 'auto';
-          control.style.zIndex = '50';
+        // Step 3: Fix card flipping
+        document.querySelectorAll('.pick-card').forEach(card => {
+          // Create a pristine copy without existing handlers
+          const cleanCard = card.cloneNode(true);
+          if (card.parentNode) {
+            // Preserve existing state
+            const wasFlipped = card.classList.contains('flipped');
+            card.parentNode.replaceChild(cleanCard, card);
+            if (wasFlipped) {
+              cleanCard.classList.add('flipped');
+            }
+          }
+          
+          // View Pick button handling
+          const viewPickBtn = cleanCard.querySelector('.btn-view-pick');
+          if (viewPickBtn) {
+            viewPickBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              cleanCard.classList.add('flipped');
+              return false;
+            });
+          }
+          
+          // Decision buttons preservation
+          cleanCard.querySelectorAll('.btn-decision').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+            });
+          });
+          
+          // Back-to-front flipping
+          cleanCard.addEventListener('click', (e) => {
+            if (cleanCard.classList.contains('flipped') && 
+                !e.target.closest('.btn-decision') && 
+                !e.target.closest('.btn-view-pick')) {
+              cleanCard.classList.remove('flipped');
+              e.stopPropagation();
+              e.preventDefault();
+            }
+          });
         });
       };
       
-      // Add handler to run after small delay to ensure DOM is ready
-      setTimeout(setupMobileHandlers, 500);
+      // Apply fixes with appropriate timing
+      setTimeout(fixMobileCards, 500);
       
-      // Also apply on window resize
-      window.addEventListener('resize', () => setTimeout(setupMobileHandlers, 500));
+      // Re-apply when orientation changes
+      window.addEventListener('orientationchange', () => {
+        setTimeout(fixMobileCards, 500);
+      });
       
+      // Cleanup function
       return () => {
-        document.body.classList.remove('mobile-view');
-        window.removeEventListener('resize', setupMobileHandlers);
+        document.body.classList.remove('mobile-fix');
+        window.removeEventListener('orientationchange', fixMobileCards);
       };
     }
   }, []);
