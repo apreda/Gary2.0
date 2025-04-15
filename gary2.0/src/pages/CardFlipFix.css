@@ -39,10 +39,13 @@
 }
 
 /* Parlay card specific styling */
+.parlay-card .pick-card-back {
+  overflow-y: auto !important;
+}
+
 .parlay-card .pick-card-content {
-  overflow-y: auto;
-  max-height: 320px;
   padding: 15px;
+  height: auto !important;
 }
 
 .parlay-card .parlay-legs {
@@ -50,18 +53,27 @@
   padding: 10px;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 8px;
+  max-height: none !important; /* Remove height restriction */
+  display: block !important;
 }
 
 .parlay-card .parlay-leg {
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: block !important;
 }
 
 .parlay-card .parlay-leg:last-child {
   margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: none;
+}
+
+/* Add more space for the action buttons at bottom */
+.parlay-card .pick-card-actions {
+  margin-top: 15px;
+  position: relative;
 }
 
 /* Special card types */
