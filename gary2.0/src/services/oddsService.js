@@ -1,17 +1,7 @@
 import axios from 'axios';
 
-// Get the API key with mobile compatibility
-function getOddsApiKey() {
-  // First try window.ENV_VARS (our mobile solution)
-  if (typeof window !== 'undefined' && window.ENV_VARS && window.ENV_VARS.VITE_ODDS_API_KEY && 
-      window.ENV_VARS.VITE_ODDS_API_KEY !== '__ODDS_API_KEY__') {
-    return window.ENV_VARS.VITE_ODDS_API_KEY;
-  }
-  // Otherwise use standard Vite env
-  return import.meta.env.VITE_ODDS_API_KEY;
-}
-
-const ODDS_API_KEY = getOddsApiKey();
+// Always use Vite environment directly - simplifying to fix API issues
+const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY;
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
 /**

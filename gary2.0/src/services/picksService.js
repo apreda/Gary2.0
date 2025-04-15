@@ -2,27 +2,9 @@ import { makeGaryPick } from '../ai/garyEngine';
 import { oddsService } from './oddsService';
 import axios from 'axios';
 
-// Get API keys with mobile compatibility
-function getDeepseekApiKey() {
-  // First try window.ENV_VARS (our mobile solution)
-  if (typeof window !== 'undefined' && window.ENV_VARS && window.ENV_VARS.VITE_DEEPSEEK_API_KEY && 
-      window.ENV_VARS.VITE_DEEPSEEK_API_KEY !== '__DEEPSEEK_API_KEY__') {
-    return window.ENV_VARS.VITE_DEEPSEEK_API_KEY;
-  }
-  // Otherwise use standard Vite env
-  return import.meta.env.VITE_DEEPSEEK_API_KEY;
-}
-
-function getDeepseekBaseUrl() {
-  if (typeof window !== 'undefined' && window.ENV_VARS && window.ENV_VARS.VITE_DEEPSEEK_BASE_URL && 
-      window.ENV_VARS.VITE_DEEPSEEK_BASE_URL !== '__DEEPSEEK_BASE_URL__') {
-    return window.ENV_VARS.VITE_DEEPSEEK_BASE_URL;
-  }
-  return import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
-}
-
-const DEEPSEEK_API_KEY = getDeepseekApiKey();
-const DEEPSEEK_BASE_URL = getDeepseekBaseUrl();
+// Use Vite environment variables directly to avoid API issues
+const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
+const DEEPSEEK_BASE_URL = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
 
 /**
  * Service for generating and managing Gary's picks

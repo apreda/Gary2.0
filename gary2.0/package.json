@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/inject-env.js",
-    "build": "npm run prebuild && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
