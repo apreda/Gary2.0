@@ -81,12 +81,15 @@ if (typeof window !== 'undefined') {
         });
       };
         
-      // Fix carousel navigation with arrow controls
+      // Manually handle carousel navigation with direct jQuery calls
       const fixCarouselNavigation = () => {
+        // Get carousel component
         const carousel = document.querySelector('.carousel');
-        // Make properly styled arrow controls
+        if (!carousel) return;
+        
+        // Properly style arrow controls
         document.querySelectorAll('.carousel-control').forEach(arrow => {
-          // Style the arrows to be easily tappable
+          // Make arrows visually obvious
           arrow.style.zIndex = '999';
           arrow.style.pointerEvents = 'auto';
           arrow.style.display = 'flex';
@@ -101,39 +104,63 @@ if (typeof window !== 'undefined') {
           arrow.style.top = '50%';
           arrow.style.transform = 'translateY(-50%)';
           
-          // Clear existing event listeners
+          // Clone to get clean event handlers
           const newArrow = arrow.cloneNode(true);
           if (arrow.parentNode) {
             arrow.parentNode.replaceChild(newArrow, arrow);
           }
           
-          // Add click handler for proper navigation
-          newArrow.addEventListener('click', e => {
+          // FORCE DIRECT JQUERY CAROUSEL CONTROL
+          newArrow.addEventListener('click', function(e) {
             e.stopPropagation();
-            console.log('Arrow clicked - navigating carousel');
+            e.preventDefault();
             
-            // Let original Bootstrap carousel handlers work
-            // Then fix visibility after navigation completes
-            setTimeout(() => {
-              // Show only active item
-              document.querySelectorAll('.carousel-item').forEach(item => {
-                if (item.classList.contains('active')) {
-                  item.style.visibility = 'visible';
-                  item.style.display = 'block';
-                  item.style.opacity = '1';
-                } else {
-                  item.style.visibility = 'hidden';
-                  item.style.display = 'none';
-                  item.style.opacity = '0';
-                }
-              });
+            try {
+              // Get direction from class
+              const isNext = this.classList.contains('carousel-control-next');
+              const carouselId = carousel.id || 'carousel-mobile';
               
-              // Re-apply all fixes
-              fixCardVisibility();
-              fixDecisionButtons();
-              fixCardFlipping();
-            }, 300);
-          });
+              // Directly trigger Bootstrap carousel
+              if (window.jQuery) {
+                console.log('Using jQuery to trigger carousel ' + (isNext ? 'next' : 'prev'));
+                if (isNext) {
+                  window.jQuery('#' + carouselId).carousel('next');
+                } else {
+                  window.jQuery('#' + carouselId).carousel('prev');
+                }
+              } else {
+                // Fallback for when jQuery isn't available
+                console.log('Using direct call to slide ' + (isNext ? 'next' : 'prev'));
+                const bootstrapCarousel = new bootstrap.Carousel(carousel);
+                isNext ? bootstrapCarousel.next() : bootstrapCarousel.prev();
+              }
+              
+              // Fix visibility after navigation completes
+              setTimeout(() => {
+                // Show only the active item
+                document.querySelectorAll('.carousel-item').forEach(item => {
+                  if (item.classList.contains('active')) {
+                    item.style.visibility = 'visible';
+                    item.style.display = 'block';
+                    item.style.opacity = '1';
+                  } else {
+                    item.style.visibility = 'hidden';
+                    item.style.display = 'none';
+                    item.style.opacity = '0';
+                  }
+                });
+                
+                // Re-apply all fixes for new active card
+                fixCardVisibility();
+                fixDecisionButtons();
+                fixCardFlipping();
+              }, 350);
+            } catch (err) {
+              console.error('Error navigating carousel:', err);
+            }
+            
+            return false;
+          }, true);
         });
       };
       
@@ -267,16 +294,43 @@ if (typeof window !== 'undefined') {
         }
       });
       
-      // Handle any carousel changes
+      // Add ID to carousel if missing (needed for jQuery selector)
       const carouselEl = document.querySelector('.carousel');
+      if (carouselEl && !carouselEl.id) {
+        carouselEl.id = 'carousel-mobile';
+      }
+      
+      // Listen for carousel events
       if (carouselEl) {
+        // After slide completes
         carouselEl.addEventListener('slid.bs.carousel', () => {
+          console.log('Carousel slide completed');
           setTimeout(() => {
             fixCardVisibility();
             fixCardFlipping();
             fixDecisionButtons();
           }, 100);
         });
+        
+        // When slide starts
+        carouselEl.addEventListener('slide.bs.carousel', () => {
+          console.log('Carousel slide starting');
+        });
+      }
+      
+      // Inject jQuery if not already present (for Bootstrap carousel control)
+      if (!window.jQuery) {
+        console.log('Injecting jQuery to assist with carousel control');
+        const jqueryScript = document.createElement('script');
+        jqueryScript.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
+        jqueryScript.onload = () => {
+          console.log('jQuery loaded successfully');
+          // Re-apply fixes after jQuery is available
+          setTimeout(() => {
+            fixCarouselNavigation();
+          }, 100);
+        };
+        document.head.appendChild(jqueryScript);
       }
     }
   });
