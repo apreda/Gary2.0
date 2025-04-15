@@ -4,96 +4,87 @@
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
-  padding: 15px 12px 65px 12px !important;
+  padding: 25px 12px 75px 12px !important;
   justify-content: flex-start !important;
   position: relative !important;
+  text-align: center !important;
 }
 
-/* Style for each parlay leg - simplified layout */
+/* Style for each parlay leg - simplified layout with bullet points */
 .pick-card.parlay-card .pick-card-back .parlay-legs {
   display: flex !important;
   flex-direction: column !important;
-  margin-bottom: 8px !important;
+  margin: 15px 0 20px !important;
   overflow-y: auto !important;
   max-height: calc(100% - 150px) !important;
-  padding-right: 5px !important;
-}
-
-.pick-card.parlay-card .pick-card-back .parlay-legs-title {
-  font-size: 0.9rem !important;
-  font-weight: bold !important;
-  color: #d4af37 !important;
-  margin-bottom: 8px !important;
-  text-transform: uppercase !important;
-  text-align: center !important;
-  letter-spacing: 1px !important;
+  padding: 0 10px !important;
 }
 
 .pick-card.parlay-card .pick-card-back .parlay-leg {
-  margin-bottom: 8px !important;
-  padding-bottom: 8px !important;
-  border-bottom: 1px solid rgba(212, 175, 55, 0.2) !important;
+  margin-bottom: 12px !important;
+  padding-bottom: 0 !important;
+  border-bottom: none !important;
   display: flex !important;
-  flex-direction: column !important;
+  flex-direction: row !important;
+  align-items: center !important;
   width: 100% !important;
 }
 
-/* Simplified leg styling - just leg number and pick */
-.pick-card.parlay-card .pick-card-back .parlay-leg-number {
-  font-size: 0.8rem !important;
+/* Bullet point and pick styling */
+.pick-card.parlay-card .pick-card-back .parlay-leg-bullet {
+  font-size: 1.2rem !important;
   font-weight: bold !important;
   color: #d4af37 !important;
-  margin-bottom: 2px !important;
-  text-transform: uppercase !important;
+  margin-right: 8px !important;
+  line-height: 1 !important;
 }
 
 .pick-card.parlay-card .pick-card-back .parlay-leg-pick {
-  font-size: 0.85rem !important;
+  font-size: 0.95rem !important;
   font-weight: bold !important;
   color: #fff !important;
-  margin-bottom: 3px !important;
-  line-height: 1.2 !important;
+  line-height: 1.3 !important;
+  flex: 1 !important;
 }
 
-/* Make parlay card title more prominent */
+/* Styled 3-Leg Parlay title */
 .pick-card.parlay-card .pick-card-back .pick-card-bet-type {
-  font-size: 1.4rem !important;
-  margin: 0 0 10px 0 !important;
+  font-size: 1.5rem !important;
+  margin: 0 0 5px 0 !important;
   text-align: center !important;
   color: #d4af37 !important;
   font-weight: bold !important;
   text-transform: uppercase !important;
+  letter-spacing: 1px !important;
 }
 
-/* Make odds display prominent */
+/* Make odds display on the same line as title */
 .pick-card.parlay-card .pick-card-back .parlay-details {
   display: flex !important;
   justify-content: center !important;
-  margin-bottom: 15px !important;
-  margin-top: 5px !important;
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
 }
 
 .pick-card.parlay-card .pick-card-back .parlay-odds {
-  font-size: 1.2rem !important;
+  font-size: 1.1rem !important;
   font-weight: bold !important;
   color: #d4af37 !important;
-  background-color: rgba(212, 175, 55, 0.1) !important;
-  border-radius: 4px !important;
-  padding: 8px 15px !important;
-  border: 1px solid rgba(212, 175, 55, 0.3) !important;
+  text-align: center !important;
+  padding: 0 !important;
+  margin-bottom: 15px !important;
 }
 
 /* Fix spacing for buttons at bottom */
 .pick-card.parlay-card .pick-card-back .pick-card-actions {
   position: absolute !important;
-  bottom: 10px !important;
+  bottom: 15px !important;
   left: 0 !important;
   right: 0 !important;
   padding: 0 15px !important;
   margin: 0 !important;
   z-index: 10 !important;
-  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%) !important;
-  padding-top: 15px !important;
+  padding-top: 20px !important;
 }
 
 /* Make buttons more compact */

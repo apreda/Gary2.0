@@ -605,20 +605,19 @@ export function RealGaryPicks() {
                         ) : (
                           /* Parlay of the Day content */
                           <div className="pick-card-content parlay-content">
-                            <div className="pick-card-bet-type">{pick.betType || "Parlay of the Day"}</div>
+                            <div className="pick-card-bet-type">{`${pick.parlayLegs?.length || '3'}-Leg Parlay`}</div>
                             <div className="parlay-details">
                               {pick.parlayOdds && (
                                 <div className="parlay-odds">Odds: {pick.parlayOdds}</div>
                               )}
                             </div>
                             
-                            {/* Direct Parlay Legs Display */}
+                            {/* Simplified Parlay Legs Display */}
                             {pick.parlayLegs && pick.parlayLegs.length > 0 && (
                               <div className="parlay-legs">
-                                <div className="parlay-legs-title">Parlay Legs</div>
                                 {pick.parlayLegs.map((leg, legIndex) => (
                                   <div key={legIndex} className="parlay-leg">
-                                    <div className="parlay-leg-number">Leg {legIndex + 1}</div>
+                                    <div className="parlay-leg-bullet">-</div>
                                     <div className="parlay-leg-pick">{leg.pick}</div>
                                   </div>
                                 ))}
