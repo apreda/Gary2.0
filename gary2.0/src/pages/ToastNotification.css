@@ -1,0 +1,44 @@
+/* Toast Notification styles */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.9);
+  color: #d4af37; /* Gary's gold */
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: 1px solid #d4af37;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  max-width: 300px;
+  animation: slideIn 0.3s ease-out forwards;
+  font-weight: bold;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-message {
+  display: flex;
+  align-items: center;
+}
+
+/* Add bear emoji to ride decisions */
+.toast-message.ride:before {
+  content: "🐻 ";
+  margin-right: 8px;
+}
+
+/* Add thumbs down emoji to fade decisions */
+.toast-message.fade:before {
+  content: "👎 ";
+  margin-right: 8px;
+}
