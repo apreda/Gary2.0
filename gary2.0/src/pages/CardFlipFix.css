@@ -4,9 +4,11 @@
 .picks-carousel .pick-card {
   perspective: 1000px !important;
   position: relative !important;
-  height: 100% !important;
-  width: 100% !important;
+  height: 450px !important; /* Restore original fixed height */
+  width: 280px !important; /* Restore original fixed width */
   transform-style: preserve-3d !important;
+  margin: auto !important; /* Keep cards centered */
+  border-radius: 16px !important; /* Keep rounded corners */
 }
 
 /* Reset any transforms that might be interfering */
@@ -57,19 +59,18 @@
 
 /* Extra fixes for parlay cards */
 .picks-carousel .parlay-card {
-  height: auto !important;
-  min-height: 300px !important;
+  height: 450px !important; /* Maintain same height as other cards */
+  width: 280px !important; /* Maintain same width as other cards */
 }
 
 .picks-carousel .parlay-card .pick-card-back {
-  height: auto !important;
-  min-height: 100% !important;
-  max-height: none !important;
+  height: 450px !important;
   overflow-y: auto !important;
+  padding: 15px !important;
 }
 
 .picks-carousel .parlay-card .pick-card-content {
-  height: auto !important;
+  height: 380px !important; /* Leave space for buttons at bottom */
   overflow-y: auto !important;
 }
 
