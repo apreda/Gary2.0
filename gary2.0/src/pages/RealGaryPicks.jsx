@@ -7,7 +7,6 @@ import gary1 from '../assets/images/gary1.svg';
 import "./GaryPicksCarousel.css";
 import "./CarouselFix.css";
 import "./CardFlipFix.css";
-import "./ParlayCardFix.css";
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
