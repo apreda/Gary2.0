@@ -13,6 +13,7 @@ import "./ToastNotification.css"; // Toast notification styles
 import "./RegularCardFix.css"; // Fix font sizing for regular cards
 import "./MobileFixes.css"; // Specific fixes for mobile
 import "./GaryAnalysisFix.css"; // Enhanced styling for Gary's analysis
+import "./AnalysisBulletsFix.css"; // Styling for the bulleted analysis format
 // useEffect is already imported with React
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
@@ -642,7 +643,47 @@ export function RealGaryPicks() {
                             {/* Gary's Analysis Section */}
                             <div className="gary-analysis">
                               {/* Title removed as requested */}
-                              <div className="gary-analysis-content">{pick.pickDetail || pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!"}</div>
+                              <div className="gary-analysis-content">
+                                {(() => {
+                                  const analysisText = pick.pickDetail || pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!";
+                                  // Split by sentences or natural breaks
+                                  const sentences = analysisText.split(/[.!?]\s+/).filter(s => s.trim().length > 0);
+                                  // Create bullet points from sentences, cap total at 150 chars
+                                  let totalChars = 0;
+                                  const bulletPoints = [];
+                                  
+                                  for (let sentence of sentences) {
+                                    // Clean and trim the sentence
+                                    sentence = sentence.trim();
+                                    // Check if adding this would exceed our limit
+                                    if (totalChars + sentence.length > 150) {
+                                      // If we're about to exceed, truncate and add ellipsis if needed
+                                      const remainingChars = 150 - totalChars;
+                                      if (remainingChars > 3) {
+                                        bulletPoints.push(sentence.substring(0, remainingChars - 3) + '...');
+                                      }
+                                      break;
+                                    }
+                                    
+                                    // Add bullet point and update character count
+                                    bulletPoints.push(sentence);
+                                    totalChars += sentence.length;
+                                  }
+                                  
+                                  // If no sentences were found, add a default
+                                  if (bulletPoints.length === 0 && analysisText.length > 0) {
+                                    bulletPoints.push(analysisText.substring(0, 150));
+                                  }
+                                  
+                                  return (
+                                    <ul className="analysis-bullet-list">
+                                      {bulletPoints.map((point, index) => (
+                                        <li key={index}>{point}</li>
+                                      ))}
+                                    </ul>
+                                  );
+                                })()}
+                              </div>
                             </div>
                             
                             <div className="pick-card-actions">
