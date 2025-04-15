@@ -10,6 +10,8 @@ import "./CardFlipFix.css";
 import "./ParlayCardFix.css"; // Special fixes for Parlay card
 import "./ButtonFix.css"; // Fix button positioning
 import "./ToastNotification.css"; // Toast notification styles
+import "./RegularCardFix.css"; // Fix font sizing for regular cards
+import "./MobileFixes.css"; // Specific fixes for mobile
 // useEffect is already imported with React
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
@@ -34,55 +36,78 @@ const GARY_RESPONSES = {
 };
 
 export function RealGaryPicks() {
-  // Mobile card behavior for flipping cards and preventing swipe
+  // Improved mobile card behavior
   useEffect(() => {
     // Only apply on mobile devices
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-      // Setup a timeout to ensure the DOM has fully loaded
-      const setupMobileBehavior = setTimeout(() => {
-        // Add flip functionality to the entire card (not just the button)
-        const pickCards = document.querySelectorAll('.pick-card');
-        
-        pickCards.forEach(card => {
-          // Remove existing handlers by cloning the card
-          const cardClone = card.cloneNode(true);
-          if (card.parentNode) {
-            card.parentNode.replaceChild(cardClone, card);
+      const fixMobileBehavior = () => {
+        // Fix View Pick button issue
+        const viewPickButtons = document.querySelectorAll('.btn-view-pick');
+        viewPickButtons.forEach(button => {
+          // Remove old event listeners
+          const newButton = button.cloneNode(true);
+          if (button.parentNode) {
+            button.parentNode.replaceChild(newButton, button);
           }
           
-          // Add click listener to the entire card
-          cardClone.addEventListener('click', function(e) {
-            // Don't trigger if clicking on buttons or arrows
-            if (
-              e.target.closest('.carousel-control') || 
-              e.target.closest('.btn') || 
-              e.target.closest('.btn-decision') || 
-              e.target.closest('.pick-card-actions')
-            ) {
-              return;
-            }
+          // Add new click listener with proper event handling
+          newButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
             
-            // Flip the card
-            cardClone.classList.toggle('flipped');
-          });
+            // Find parent card and flip it
+            const card = this.closest('.pick-card');
+            if (card) {
+              card.classList.toggle('flipped');
+            }
+          }, { capture: true });
         });
         
-        // Disable swiping behavior
+        // Fix decision buttons to prevent card movement
+        const decisionButtons = document.querySelectorAll('.btn-decision');
+        decisionButtons.forEach(button => {
+          // Add proper event handling
+          button.addEventListener('click', function(e) {
+            e.stopPropagation();
+          }, { capture: true });
+        });
+        
+        // Prevent carousel swipe
         const carousel = document.querySelector('.carousel');
         if (carousel) {
+          carousel.addEventListener('touchstart', function(e) {
+            this._touchStartX = e.touches[0].clientX;
+            this._touchStartY = e.touches[0].clientY;
+          }, { passive: true });
+          
           carousel.addEventListener('touchmove', function(e) {
-            // Only prevent horizontal swiping
-            const touch = e.touches[0];
-            if (Math.abs(touch.clientX - (this._touchStartX || touch.clientX)) > 10) {
+            if (!this._touchStartX) return;
+            
+            const xDiff = this._touchStartX - e.touches[0].clientX;
+            const yDiff = this._touchStartY - e.touches[0].clientY;
+            
+            // If horizontal swipe is greater than vertical, prevent it
+            if (Math.abs(xDiff) > Math.abs(yDiff)) {
               e.preventDefault();
             }
-            this._touchStartX = touch.clientX;
           }, { passive: false });
         }
-      }, 1000); // Delay by 1 second to ensure DOM is ready
+      };
+      
+      // Run immediately and also after a slight delay to catch dynamically created elements
+      fixMobileBehavior();
+      const timeout = setTimeout(fixMobileBehavior, 1000);
+      
+      // Also run when carousel buttons are clicked
+      const carouselControls = document.querySelectorAll('.carousel-control');
+      carouselControls.forEach(control => {
+        control.addEventListener('click', () => {
+          setTimeout(fixMobileBehavior, 300);
+        });
+      });
       
       return () => {
-        clearTimeout(setupMobileBehavior);
+        clearTimeout(timeout);
       };
     }
   }, []);
@@ -549,8 +574,8 @@ export function RealGaryPicks() {
                               e.stopPropagation();
                               e.preventDefault(); // Prevent any default action
                               toggleFlip(pick.id);
-                              return false; // Ensure no further event handling
                             }}
+                            data-pick-id={pick.id}
                           >
                             View Pick
                           </button>
