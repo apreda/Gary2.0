@@ -81,63 +81,83 @@ if (typeof window !== 'undefined') {
         });
       };
         
-      // Manually handle carousel navigation with direct jQuery calls
-      const fixCarouselNavigation = () => {
+      // Replace arrow controls with swipe gestures
+      const implementSwipeNavigation = () => {
+        console.log('Implementing swipe navigation for mobile');
+        
         // Get carousel component
         const carousel = document.querySelector('.carousel');
         if (!carousel) return;
         
-        // Properly style arrow controls
+        // Hide arrow controls on mobile
         document.querySelectorAll('.carousel-control').forEach(arrow => {
-          // Make arrows visually obvious
-          arrow.style.zIndex = '999';
-          arrow.style.pointerEvents = 'auto';
-          arrow.style.display = 'flex';
-          arrow.style.alignItems = 'center';
-          arrow.style.justifyContent = 'center';
-          arrow.style.width = '44px';
-          arrow.style.height = '44px';
-          arrow.style.background = 'rgba(0, 0, 0, 0.7)';
-          arrow.style.borderRadius = '50%';
-          arrow.style.opacity = '1';
-          arrow.style.position = 'absolute';
-          arrow.style.top = '50%';
-          arrow.style.transform = 'translateY(-50%)';
-          
-          // Clone to get clean event handlers
-          const newArrow = arrow.cloneNode(true);
-          if (arrow.parentNode) {
-            arrow.parentNode.replaceChild(newArrow, arrow);
+          arrow.style.display = 'none';
+          arrow.style.visibility = 'hidden';
+          arrow.style.opacity = '0';
+          arrow.style.pointerEvents = 'none';
+        });
+        
+        // Variables for touch tracking
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let touchStartY = 0;
+        let touchEndY = 0;
+        let minSwipeDistance = 50; // Minimum distance to be considered a swipe
+        let maxVerticalMovement = 100; // Maximum vertical movement to still be considered a horizontal swipe
+        
+        // Add swipe functionality directly to the carousel container
+        carousel.addEventListener('touchstart', function(e) {
+          // Only proceed if not in a flipped card
+          if (e.target.closest('.pick-card.flipped')) {
+            return;
           }
           
-          // FORCE DIRECT JQUERY CAROUSEL CONTROL
-          newArrow.addEventListener('click', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
+          touchStartX = e.changedTouches[0].screenX;
+          touchStartY = e.changedTouches[0].screenY;
+        }, false);
+        
+        carousel.addEventListener('touchend', function(e) {
+          // Only proceed if not in a flipped card
+          if (e.target.closest('.pick-card.flipped')) {
+            return;
+          }
+          
+          touchEndX = e.changedTouches[0].screenX;
+          touchEndY = e.changedTouches[0].screenY;
+          
+          // Calculate horizontal and vertical movement
+          const horizontalDistance = touchEndX - touchStartX;
+          const verticalDistance = Math.abs(touchEndY - touchStartY);
+          
+          // Only trigger if horizontal movement is significant and vertical movement is limited
+          if (Math.abs(horizontalDistance) > minSwipeDistance && verticalDistance < maxVerticalMovement) {
+            const carouselId = carousel.id || 'carousel-mobile';
             
+            // Determine direction and trigger carousel
             try {
-              // Get direction from class
-              const isNext = this.classList.contains('carousel-control-next');
-              const carouselId = carousel.id || 'carousel-mobile';
-              
-              // Directly trigger Bootstrap carousel
-              if (window.jQuery) {
-                console.log('Using jQuery to trigger carousel ' + (isNext ? 'next' : 'prev'));
-                if (isNext) {
-                  window.jQuery('#' + carouselId).carousel('next');
-                } else {
+              if (horizontalDistance > 0) {
+                // Swipe right = previous
+                console.log('Swipe right detected - going to previous card');
+                if (window.jQuery) {
                   window.jQuery('#' + carouselId).carousel('prev');
+                } else {
+                  const bootstrapCarousel = new bootstrap.Carousel(carousel);
+                  bootstrapCarousel.prev();
                 }
               } else {
-                // Fallback for when jQuery isn't available
-                console.log('Using direct call to slide ' + (isNext ? 'next' : 'prev'));
-                const bootstrapCarousel = new bootstrap.Carousel(carousel);
-                isNext ? bootstrapCarousel.next() : bootstrapCarousel.prev();
+                // Swipe left = next
+                console.log('Swipe left detected - going to next card');
+                if (window.jQuery) {
+                  window.jQuery('#' + carouselId).carousel('next');
+                } else {
+                  const bootstrapCarousel = new bootstrap.Carousel(carousel);
+                  bootstrapCarousel.next();
+                }
               }
               
               // Fix visibility after navigation completes
               setTimeout(() => {
-                // Show only the active item
+                // Show only the active card
                 document.querySelectorAll('.carousel-item').forEach(item => {
                   if (item.classList.contains('active')) {
                     item.style.visibility = 'visible';
@@ -156,12 +176,10 @@ if (typeof window !== 'undefined') {
                 fixCardFlipping();
               }, 350);
             } catch (err) {
-              console.error('Error navigating carousel:', err);
+              console.error('Error during swipe navigation:', err);
             }
-            
-            return false;
-          }, true);
-        });
+          }
+        }, false);
       };
       
       // Fix View Pick button and card flipping
@@ -260,14 +278,14 @@ if (typeof window !== 'undefined') {
       
       // Run all fixes in sequence with proper timing
       fixCardVisibility();
-      fixCarouselNavigation();
+      implementSwipeNavigation();
       fixCardFlipping();
       fixDecisionButtons();
       
       // Apply fixes again after a delay to ensure they take effect
       setTimeout(() => {
         fixCardVisibility();
-        fixCarouselNavigation();
+        implementSwipeNavigation();
         fixCardFlipping();
         fixDecisionButtons();
       }, 500);
@@ -276,7 +294,7 @@ if (typeof window !== 'undefined') {
       window.addEventListener('orientationchange', () => {
         setTimeout(() => {
           fixCardVisibility();
-          fixCarouselNavigation();
+          implementSwipeNavigation();
           fixCardFlipping();
           fixDecisionButtons();
         }, 300);
@@ -287,7 +305,7 @@ if (typeof window !== 'undefined') {
         if (window.innerWidth <= 768) {
           setTimeout(() => {
             fixCardVisibility();
-            fixCarouselNavigation();
+            implementSwipeNavigation();
             fixCardFlipping();
             fixDecisionButtons();
           }, 300);
@@ -327,7 +345,7 @@ if (typeof window !== 'undefined') {
           console.log('jQuery loaded successfully');
           // Re-apply fixes after jQuery is available
           setTimeout(() => {
-            fixCarouselNavigation();
+            implementSwipeNavigation();
           }, 100);
         };
         document.head.appendChild(jqueryScript);
