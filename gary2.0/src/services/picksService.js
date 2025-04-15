@@ -1,10 +1,7 @@
 import { makeGaryPick } from '../ai/garyEngine';
 import { oddsService } from './oddsService';
+import { configLoader } from './configLoader';
 import axios from 'axios';
-
-// Use Vite environment variables directly to avoid API issues
-const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
-const DEEPSEEK_BASE_URL = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
 
 /**
  * Service for generating and managing Gary's picks
@@ -43,8 +40,12 @@ export const picksService = {
         "rationale": string (brief 1-2 sentence analysis of the matchup)
       }`;
       
+      // Get the API key from the config loader
+      const apiKey = await configLoader.getDeepseekApiKey();
+      const baseUrl = await configLoader.getDeepseekBaseUrl();
+      
       // Call DeepSeek API
-      const response = await axios.post(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+      const response = await axios.post(`${baseUrl}/chat/completions`, {
         model: "deepseek-chat",
         messages: [
           { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks." },
@@ -55,7 +56,7 @@ export const picksService = {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+          'Authorization': `Bearer ${apiKey}`
         }
       });
       
@@ -168,21 +169,28 @@ export const picksService = {
       
       Include NO introduction or conclusion - JUST the analysis text.`;
       
-      // Call DeepSeek API
-      const response = await axios.post(`${DEEPSEEK_BASE_URL}/chat/completions`, {
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: "You are Gary the Bear, a legendary sports handicapper. You speak confidently with brief, punchy analysis. You USE CAPS for emphasis and have a distinctive voice." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 300
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-        }
-      });
+      // Get the API key from the config loader
+      const apiKey = await configLoader.getDeepseekApiKey();
+      const baseUrl = await configLoader.getDeepseekBaseUrl();
+      
+      // Call DeepSeek API to get the pick analysis
+      const response = await axios.post(
+        `${baseUrl}/chat/completions`,
+        {
+          model: "deepseek-chat",
+          messages: [
+            { role: "system", content: "You are a professional sports handicapper named Gary the Bear. You provide colorful, confident analysis about your sports picks." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 300
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
       
       // Extract and clean the analysis
       let analysis = response.data.choices[0].message.content.trim();

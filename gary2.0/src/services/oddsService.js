@@ -1,7 +1,6 @@
 import axios from 'axios';
+import { configLoader } from './configLoader';
 
-// Always use Vite environment directly - simplifying to fix API issues
-const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY;
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
 /**
@@ -9,29 +8,27 @@ const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
  */
 export const oddsService = {
   /**
-   * Get sports list available from the API
-   * @returns {Promise<Array>} List of available sports
+   * Get list of available sports
+   * @returns {Promise<Array>} - List of sports
    */
   getSports: async () => {
     try {
+      // Get the API key from the config loader
+      const apiKey = await configLoader.getOddsApiKey();
+      
       // Log API key being used (truncated for security)
-      if (!ODDS_API_KEY) {
+      if (!apiKey) {
         console.error('⚠️ ODDS API KEY IS MISSING - This will cause picks generation to fail');
         throw new Error('API key is required for The Odds API');
       }
       
-      const displayKey = ODDS_API_KEY ? `${ODDS_API_KEY.substring(0, 5)}...${ODDS_API_KEY.substring(ODDS_API_KEY.length - 4)}` : 'MISSING';
+      const displayKey = apiKey ? `${apiKey.substring(0, 5)}...${apiKey.substring(apiKey.length - 4)}` : 'MISSING';
       console.log(`🔍 Making API request to The Odds API with key: ${displayKey}`);
       console.log(`🔗 API URL: ${ODDS_API_BASE_URL}/sports`);
       
-      // Check if API key is missing
-      if (!ODDS_API_KEY) {
-        throw new Error('API Key is missing. Please check your environment variables.');
-      }
-      
       const response = await axios.get(`${ODDS_API_BASE_URL}/sports`, {
         params: {
-          apiKey: ODDS_API_KEY
+          apiKey: apiKey
         }
       });
       
@@ -40,7 +37,7 @@ export const oddsService = {
     } catch (error) {
       console.error('❌ Error fetching sports:', error.response?.data || error.message);
       // Throw the error instead of falling back to mock data
-      throw new Error(`Failed to fetch sports data: ${error.response?.data?.message || error.message}`);
+      throw new Error('Failed to get sports list. Check API key and network connection.');
     }
   },
 
@@ -51,8 +48,11 @@ export const oddsService = {
    */
   getOdds: async (sport) => {
     try {
+      // Get the API key from the config loader
+      const apiKey = await configLoader.getOddsApiKey();
+      
       // Check if API key is missing
-      if (!ODDS_API_KEY) {
+      if (!apiKey) {
         throw new Error('API Key is missing. Please check your environment variables.');
       }
       
@@ -64,12 +64,12 @@ export const oddsService = {
       
       const params = isFuturesMarket
         ? {
-            apiKey: ODDS_API_KEY,
+            apiKey: apiKey,
             regions: 'us',
             oddsFormat: 'american'
           }
         : {
-            apiKey: ODDS_API_KEY,
+            apiKey: apiKey,
             regions: 'us',
             markets: 'spreads,totals,h2h',
             oddsFormat: 'american'
@@ -135,9 +135,12 @@ export const oddsService = {
    */
   getEvents: async (sport) => {
     try {
+      // Get the API key from the config loader
+      const apiKey = await configLoader.getOddsApiKey();
+      
       const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/scores`, {
         params: {
-          apiKey: ODDS_API_KEY
+          apiKey: apiKey
         }
       });
       return response.data;
