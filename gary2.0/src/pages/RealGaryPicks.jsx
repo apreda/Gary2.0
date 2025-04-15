@@ -505,7 +505,7 @@ export function RealGaryPicks() {
                             {/* Gary's Analysis Section */}
                             <div className="gary-analysis">
                               <div className="gary-analysis-label">Gary's Analysis</div>
-                              <div className="gary-analysis-content">{pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!"}</div>
+                              <div className="gary-analysis-content">{pick.pickDetail || pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!"}</div>
                             </div>
                             
                             <div className="pick-card-actions">
