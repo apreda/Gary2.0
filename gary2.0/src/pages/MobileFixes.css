@@ -1,55 +1,87 @@
 /* Mobile-specific fixes for cards */
 @media screen and (max-width: 768px) {
-  /* Prevent card movement when clicking buttons */
+  /* Ensure entire card is tappable */
   .pick-card {
-    transform: none !important;
-    transition-property: none !important;
+    cursor: pointer !important;
   }
   
-  /* Ensure card flip works properly */
+  /* Make cards flip responsively */
   .pick-card .pick-card-inner {
     transform-style: preserve-3d !important;
-    transition: transform 0.8s !important;
+    transition: transform 0.6s !important;
+    backface-visibility: hidden !important;
+    -webkit-backface-visibility: hidden !important;
   }
   
   .pick-card.flipped .pick-card-inner {
     transform: rotateY(180deg) !important;
   }
   
-  /* Ensure buttons have proper click events */
+  /* Make sure front and back are properly positioned */
+  .pick-card-front,
+  .pick-card-back {
+    -webkit-backface-visibility: hidden !important;
+    backface-visibility: hidden !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  .pick-card-front {
+    transform: rotateY(0deg) !important;
+    z-index: 2 !important;
+  }
+  
+  .pick-card-back {
+    transform: rotateY(180deg) !important;
+  }
+  
+  /* Ensure buttons have proper tap behavior */
   .btn-view-pick,
   .btn-decision {
     position: relative !important;
-    z-index: 10 !important;
-    user-select: auto !important;
-    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1) !important;
+    z-index: 11 !important;
+    user-select: none !important;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.2) !important;
     touch-action: manipulation !important;
+    cursor: pointer !important;
   }
   
-  /* Stop event propagation on buttons */
+  /* Fix hit areas */
   .pick-card-actions,
   .pick-card-bottom {
     position: relative !important;
     z-index: 20 !important;
   }
   
-  /* Fix card flip trigger for View Pick button */
+  /* Make View Pick button more prominent */
   .pick-card .btn-view-pick {
-    touch-action: manipulation !important;
-    -webkit-tap-highlight-color: transparent !important;
+    padding: 12px 20px !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
   }
   
-  /* Prevent carousel movement on swipe */
+  /* Stop carousel swiping */
   .carousel {
-    touch-action: manipulation !important;
+    touch-action: none !important;
   }
   
-  /* Make carousel controls easier to tap */
+  /* Larger touch targets for carousel controls */
   .carousel-control {
-    min-width: 40px !important;
-    min-height: 40px !important;
+    min-width: 50px !important;
+    min-height: 50px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    z-index: 30 !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    border-radius: 25px !important;
+  }
+  
+  /* Fix scroll issues */
+  body.mobile-card-active {
+    overflow: hidden !important;
   }
 }
