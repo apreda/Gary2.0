@@ -1,38 +1,78 @@
-/* MOBILE ONLY - Complete rebuild of mobile fixes */
+/* MOBILE ONLY - Emergency fix for card visibility */
 /* This ONLY affects mobile devices and preserves all desktop styling */
 @media screen and (max-width: 768px) {
-  .mobile-fix .pick-card {
-    max-width: 100% !important;
+  /* Make sure cards are always visible and properly sized */
+  .mobile-fix .pick-card,
+  .pick-card {
+    max-width: 300px !important;
+    min-height: 450px !important;
     height: auto !important;
     margin: 0 auto !important;
-  }
-  
-  /* Ensure card content is visible */
-  .mobile-fix .carousel-item {
     display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    border: 2px solid #d4af37 !important;
   }
   
-  /* Ensure page has enough space */
-  .mobile-fix .picks-page-content {
-    padding-bottom: 60px !important;
+  /* Force carousel items to display properly */
+  .mobile-fix .carousel-item,
+  .carousel-item,
+  .carousel-item.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
   
-  /* Ensure buttons work properly */
+  /* Ensure the page has enough space */
+  .mobile-fix .picks-page-content,
+  .picks-page-content {
+    padding-bottom: 100px !important;
+    min-height: 500px !important;
+  }
+  
+  /* Force carousel visibility */
+  .carousel,
+  .carousel-inner {
+    display: block !important;
+    visibility: visible !important;
+    min-height: 450px !important;
+  }
+  
+  /* Ensure buttons work properly and are visible */
   .mobile-fix .btn-view-pick,
-  .mobile-fix .btn-decision {
+  .btn-view-pick,
+  .mobile-fix .btn-decision,
+  .btn-decision {
     pointer-events: auto !important;
     position: relative !important;
     z-index: 10 !important;
     min-height: 44px !important;
     cursor: pointer !important;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: #d4af37 !important;
+    color: #000 !important;
+    font-weight: bold !important;
+    padding: 10px 15px !important;
+    margin: 5px !important;
+    border-radius: 5px !important;
   }
   
-  /* Make flip animation work */
-  .mobile-fix .pick-card-inner {
+  /* Make card structure and flip animation work */
+  .mobile-fix .pick-card-inner,
+  .pick-card-inner {
     transform-style: preserve-3d !important;
     transition: transform 0.6s ease !important;
     -webkit-backface-visibility: hidden !important;
     backface-visibility: hidden !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 450px !important;
+    display: block !important;
+    visibility: visible !important;
+    background-color: #111 !important;
   }
   
   /* Position the front and back sides properly */
