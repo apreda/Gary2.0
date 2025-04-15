@@ -2,15 +2,19 @@
 @media screen and (max-width: 768px), (pointer: coarse) {
   /* Adjust the entire layout for mobile to prevent cutoff at bottom */
   body.mobile-touch-device .picks-page-content {
-    padding-bottom: 80px !important;
+    padding-bottom: 120px !important;
     position: relative !important;
+    min-height: 100vh !important;
+    height: auto !important;
+    overflow: auto !important;
   }
   
   /* Center the carousel on mobile */
   body.mobile-touch-device .carousel-container {
-    padding-top: 50px !important;
-    padding-bottom: 80px !important; 
-    transform: translateY(-40px) !important;
+    padding-top: 20px !important;
+    padding-bottom: 100px !important; 
+    transform: translateY(0) !important;
+    margin-bottom: 80px !important;
   }
   
   /* Completely disable ANY touch events on the carousel except arrows */
@@ -18,6 +22,14 @@
     touch-action: none !important;
     user-select: none !important;
     pointer-events: none !important; /* Disable ALL events on carousel */
+    overflow: visible !important;
+  }
+  
+  /* Fix the height of the carousel container */
+  body.mobile-touch-device .carousel,
+  body.mobile-touch-device .carousel-inner {
+    height: auto !important;
+    min-height: 480px !important;
   }
   
   /* Ensure cards accept interaction but NEVER cause carousel movement */
@@ -109,18 +121,29 @@
   }
   
   /* Make carousel controls VERY prominent and ALWAYS accept clicks */
-  .carousel-control {
+  body.mobile-touch-device .carousel-control {
     min-width: 50px !important;
     min-height: 50px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    z-index: 100 !important; /* Higher than everything */
-    background-color: rgba(0, 0, 0, 0.7) !important;
+    z-index: 1000 !important; /* Higher than everything else */
+    background-color: rgba(0, 0, 0, 0.8) !important;
     border-radius: 25px !important;
     pointer-events: auto !important; /* CRUCIAL - enables clicks on arrows */
     touch-action: manipulation !important;
-    opacity: 0.9 !important;
+    opacity: 1 !important;
+    position: absolute !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+  }
+  
+  body.mobile-touch-device .carousel-control-prev {
+    left: 5px !important;
+  }
+  
+  body.mobile-touch-device .carousel-control-next {
+    right: 5px !important;
   }
   
   /* Fix scroll issues */
