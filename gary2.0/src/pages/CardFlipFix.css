@@ -51,8 +51,9 @@
 }
 
 .parlay-card .pick-card-bet-type {
-  font-size: 1.4rem;
-  margin-bottom: 5px;
+  font-size: 1.2rem;
+  margin-bottom: 2px;
+  text-align: center;
 }
 
 .parlay-card .parlay-odds,
@@ -62,41 +63,52 @@
 }
 
 .parlay-card .parlay-legs {
-  margin-top: 10px;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
+  margin-top: 6px;
   display: flex !important;
   flex-direction: column;
 }
 
 .parlay-card .parlay-legs-title {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.parlay-card .parlay-leg {
-  margin-bottom: 6px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex !important;
-  flex-direction: column;
-}
-
-.parlay-card .parlay-leg-league {
-  font-size: 0.8rem;
-  font-weight: bold;
+  margin-bottom: 4px;
   color: #d4af37;
 }
 
+.parlay-card .parlay-leg {
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: grid !important;
+  grid-template-columns: auto 1fr;
+  grid-gap: 4px;
+  align-items: center;
+}
+
+.parlay-card .parlay-leg-league {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: #d4af37;
+  text-transform: uppercase;
+  grid-column: 1;
+  grid-row: 1;
+}
+
 .parlay-card .parlay-leg-game {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .parlay-card .parlay-leg-pick {
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: bold;
+  grid-column: 1 / span 2;
+  grid-row: 2;
 }
 
 .parlay-card .parlay-leg:last-child {
@@ -126,8 +138,8 @@
 .parlay-details {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 0.85rem;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
 }
 
 /* Special card types */

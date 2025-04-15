@@ -558,10 +558,10 @@ export function RealGaryPicks() {
                               )}
                             </div>
                             
-                            {/* Compact Parlay Legs */}
+                            {/* Direct Parlay Legs Display */}
                             {pick.parlayLegs && pick.parlayLegs.length > 0 && (
                               <div className="parlay-legs">
-                                <div className="parlay-legs-title">Parlay Legs:</div>
+                                <div className="parlay-legs-title">Parlay Legs</div>
                                 {pick.parlayLegs.map((leg, legIndex) => (
                                   <div key={legIndex} className="parlay-leg">
                                     <div className="parlay-leg-league">{leg.league}</div>
