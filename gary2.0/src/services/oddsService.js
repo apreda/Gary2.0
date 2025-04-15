@@ -13,18 +13,12 @@ export const oddsService = {
    */
   getSports: async () => {
     try {
-      // First check if we have the fallback data available
-      if (typeof window !== 'undefined' && window.FALLBACK_DATA && window.FALLBACK_DATA.sports) {
-        console.log('Using fallback sports data for reliable testing');
-        return window.FALLBACK_DATA.sports;
-      }
-      
       // Get the API key from the config loader
       const apiKey = await configLoader.getOddsApiKey();
       
       // Log API key being used (truncated for security)
       if (!apiKey) {
-        console.error('⚠️ ODDS API KEY IS MISSING - Using fallback data');
+        console.error('⚠️ ODDS API KEY IS MISSING - This will cause picks generation to fail');
         throw new Error('API key is required for The Odds API');
       }
       
@@ -42,13 +36,6 @@ export const oddsService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error fetching sports:', error.response?.data || error.message);
-      
-      // Use fallback data if available
-      if (typeof window !== 'undefined' && window.FALLBACK_DATA && window.FALLBACK_DATA.sports) {
-        console.log('Using fallback sports data after API error');
-        return window.FALLBACK_DATA.sports;
-      }
-      
       throw new Error('Failed to get sports list. Check API key and network connection.');
     }
   },
@@ -60,18 +47,11 @@ export const oddsService = {
    */
   getOdds: async (sport) => {
     try {
-      // First check if we have the fallback data available
-      if (typeof window !== 'undefined' && window.FALLBACK_DATA && window.FALLBACK_DATA.odds && window.FALLBACK_DATA.odds[sport]) {
-        console.log(`Using fallback odds data for ${sport} for reliable testing`);
-        return window.FALLBACK_DATA.odds[sport];
-      }
-      
       // Get the API key from the config loader
       const apiKey = await configLoader.getOddsApiKey();
       
       // Check if API key is missing
       if (!apiKey) {
-        console.error('⚠️ ODDS API KEY IS MISSING - Using fallback data');
         throw new Error('API Key is missing. Please check your environment variables.');
       }
       
@@ -101,13 +81,6 @@ export const oddsService = {
       return response.data;
     } catch (error) {
       console.error(`❌ Error fetching odds for ${sport}:`, error.response?.data || error.message);
-      
-      // Use fallback data if available
-      if (typeof window !== 'undefined' && window.FALLBACK_DATA && window.FALLBACK_DATA.odds && window.FALLBACK_DATA.odds[sport]) {
-        console.log(`Using fallback odds data for ${sport} after API error`);
-        return window.FALLBACK_DATA.odds[sport];
-      }
-      
       throw new Error(`Failed to fetch odds for ${sport}: ${error.response?.data?.message || error.message}`);
     }
   },
