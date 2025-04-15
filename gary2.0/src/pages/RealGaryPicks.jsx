@@ -12,6 +12,7 @@ import "./ButtonFix.css"; // Fix button positioning
 import "./ToastNotification.css"; // Toast notification styles
 import "./RegularCardFix.css"; // Fix font sizing for regular cards
 import "./MobileFixes.css"; // Specific fixes for mobile
+import "./GaryAnalysisFix.css"; // Enhanced styling for Gary's analysis
 // useEffect is already imported with React
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
@@ -560,7 +561,7 @@ export function RealGaryPicks() {
                             
                             {/* Gary's Analysis Section */}
                             <div className="gary-analysis">
-                              <div className="gary-analysis-label">Gary's Analysis</div>
+                              <div className="gary-analysis-label">GARY'S ANALYSIS</div>
                               <div className="gary-analysis-content">{pick.pickDetail || pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!"}</div>
                             </div>
                             
