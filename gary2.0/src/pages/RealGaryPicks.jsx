@@ -40,8 +40,11 @@ const GARY_RESPONSES = {
 export function RealGaryPicks() {
   // COMPLETE REBUILD: Mobile-only fixes that won't affect desktop
   useEffect(() => {
-    // Only run on actual mobile devices
-    const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    // Force iOS Safari detection by checking both user agent and viewport
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isMobile = window.innerWidth <= 768 || 
+                     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                     localStorage.getItem('viewMode') === 'mobile';
     
     if (isMobile) {
       console.log('Mobile device detected - applying specialized fixes');
