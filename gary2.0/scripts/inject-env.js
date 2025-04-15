@@ -1,6 +1,11 @@
 // This script injects environment variables into the public/env-config.js file during build
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get current file directory in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Define the path to the env-config.js file
 const envConfigPath = path.join(__dirname, '../public/env-config.js');
