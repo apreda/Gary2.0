@@ -2,7 +2,7 @@
 .pick-card-back .gary-analysis {
   display: flex !important;
   flex-direction: column !important;
-  margin-top: 5px !important;
+  margin-top: 75px !important; /* Moved down by approx 3/4 of an inch */
   margin-bottom: 10px !important;
   padding: 0 !important;
   position: relative !important;
