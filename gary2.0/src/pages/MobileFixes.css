@@ -1,39 +1,56 @@
-/* Mobile-specific fixes for cards */
-@media screen and (max-width: 768px), (pointer: coarse) {
-  /* Adjust the entire layout for mobile to prevent cutoff at bottom */
-  .mobile-view .picks-page-content {
-    padding-bottom: 80px !important;
-    position: relative !important;
+/* MOBILE ONLY - Complete rebuild of mobile fixes */
+/* This ONLY affects mobile devices and preserves all desktop styling */
+@media screen and (max-width: 768px) {
+  .mobile-fix .pick-card {
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 0 auto !important;
   }
   
-  /* Simple centering for carousel */
-  .mobile-view .carousel-container {
+  /* Ensure card content is visible */
+  .mobile-fix .carousel-item {
+    display: block !important;
+  }
+  
+  /* Ensure page has enough space */
+  .mobile-fix .picks-page-content {
     padding-bottom: 60px !important;
   }
   
-  /* Allow carousel to be visible but block unwanted interactions */
-  .mobile-view .carousel {
-    touch-action: none !important;
-  }
-  
-  /* Ensure carousel is properly sized */
-  .mobile-view .carousel-inner {
-    min-height: 500px !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-  
-  /* Make cards visible and tappable */
-  .mobile-view .pick-card {
+  /* Ensure buttons work properly */
+  .mobile-fix .btn-view-pick,
+  .mobile-fix .btn-decision {
     pointer-events: auto !important;
-    touch-action: manipulation !important;
-    cursor: pointer !important;
     position: relative !important;
-    z-index: 5 !important;
-    transition: transform 0.6s !important;
-    max-width: 320px !important;
-    margin: 0 auto !important;
-    display: block !important;
+    z-index: 10 !important;
+    min-height: 44px !important;
+    cursor: pointer !important;
+  }
+  
+  /* Make flip animation work */
+  .mobile-fix .pick-card-inner {
+    transform-style: preserve-3d !important;
+    transition: transform 0.6s ease !important;
+    -webkit-backface-visibility: hidden !important;
+    backface-visibility: hidden !important;
+  }
+  
+  /* Position the front and back sides properly */
+  .mobile-fix .pick-card-front,
+  .mobile-fix .pick-card-back {
+    position: absolute !important;
+    width: 100% !important;
+    height: 100% !important;
+    -webkit-backface-visibility: hidden !important;
+    backface-visibility: hidden !important;
+  }
+  
+  .mobile-fix .pick-card-back {
+    transform: rotateY(180deg) !important;
+  }
+  
+  .mobile-fix .pick-card.flipped .pick-card-inner {
+    transform: rotateY(180deg) !important;
   }
   
   /* Prevent ANY click handlers attached to the card content */
