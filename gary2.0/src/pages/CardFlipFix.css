@@ -117,10 +117,11 @@
   border-bottom: none;
 }
 
-/* Fix spacing for the action buttons at bottom */
-.parlay-card .pick-card-actions {
-  margin-top: 8px;
+/* Position the action buttons higher on the card */
+.pick-card-actions {
+  margin-top: 10px;
   position: relative;
+  bottom: 32px; /* Move up by approximately half an inch */
 }
 
 .parlay-card .decision-actions {

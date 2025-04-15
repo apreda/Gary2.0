@@ -8,6 +8,7 @@ import "./GaryPicksCarousel.css";
 import "./CarouselFix.css";
 import "./CardFlipFix.css";
 import "./ParlayCardFix.css"; // Special fixes for Parlay card
+import "./ButtonFix.css"; // Fix button positioning
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
