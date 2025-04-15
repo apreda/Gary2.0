@@ -9,6 +9,7 @@ import "./CarouselFix.css";
 import "./CardFlipFix.css";
 import "./ParlayCardFix.css"; // Special fixes for Parlay card
 import "./ButtonFix.css"; // Fix button positioning
+import "./ToastNotification.css"; // Toast notification styles
 // useEffect is already imported with React
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
@@ -368,18 +369,29 @@ export function RealGaryPicks() {
       const result = await betTrackingService.saveBetDecision(pickId, decision, userId);
       
       if (result.success) {
-        // Update local state with the new decision
+        // Get the updated decisions
         const decisions = betTrackingService.getBetDecisions();
-        setUserDecisions(decisions);
         
-        // Show toast notification
-        setToastMessage(getRandomResponse(decision));
+        // Update the local state with the simplified version for checking disabled state
+        const simplifiedDecisions = {};
+        Object.keys(decisions).forEach(id => {
+          simplifiedDecisions[id] = decisions[id].decision;
+        });
+        
+        setUserDecisions(simplifiedDecisions);
+        
+        // Show toast notification with the appropriate response
+        const response = getRandomResponse(decision);
+        setToastMessage(response);
         setShowToast(true);
         
-        // Hide toast after 3 seconds
+        // Log the decision for debugging
+        console.log(`User ${decision === 'ride' ? 'rode with' : 'faded'} Gary on pick ${pickId}`);
+        
+        // Hide toast after 4 seconds
         setTimeout(() => {
           setShowToast(false);
-        }, 3000);
+        }, 4000);
         
         // Update user stats if available
         if (updateUserStats) {
@@ -724,7 +736,7 @@ export function RealGaryPicks() {
         {/* Toast notification */}
         {showToast && (
           <div className="toast-container">
-            <div className="toast-message">
+            <div className={`toast-message ${userDecisions[Object.keys(userDecisions)[Object.keys(userDecisions).length - 1]]}`}>
               {toastMessage}
             </div>
           </div>
