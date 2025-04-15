@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
+import { betTrackingService } from '../services/betTrackingService';
 import { supabase } from '../supabaseClient';
 
 // Constants for Gary's responses
@@ -352,39 +353,50 @@ export function RealGaryPicks() {
   };
 
   // Handle user betting decision
-  const handleDecision = (pickId, decision) => {
+  const handleDecision = async (pickId, decision) => {
     // Prevent multiple decisions on the same pick
     if (userDecisions[pickId]) {
       return;
     }
     
-    // Update local state
-    setUserDecisions(prev => ({
-      ...prev,
-      [pickId]: decision
-    }));
-    
-    // Save to localStorage
-    localStorage.setItem('userPickDecisions', JSON.stringify({
-      ...userDecisions,
-      [pickId]: decision
-    }));
-    
-    // Show toast notification
-    setToastMessage(getRandomResponse(decision));
-    setShowToast(true);
-    
-    // Hide toast after 3 seconds
-    setTimeout(() => {
-      setShowToast(false);
-    }, 3000);
-    
-    // Update user stats if available
-    if (updateUserStats) {
-      updateUserStats({
-        action: decision === 'ride' ? 'rode_with_gary' : 'faded_gary',
-        pickId
-      });
+    try {
+      // Get current user ID if logged in
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      
+      // Save the decision using our tracking service
+      const result = await betTrackingService.saveBetDecision(pickId, decision, userId);
+      
+      if (result.success) {
+        // Update local state with the new decision
+        const decisions = betTrackingService.getBetDecisions();
+        setUserDecisions(decisions);
+        
+        // Show toast notification
+        setToastMessage(getRandomResponse(decision));
+        setShowToast(true);
+        
+        // Hide toast after 3 seconds
+        setTimeout(() => {
+          setShowToast(false);
+        }, 3000);
+        
+        // Update user stats if available
+        if (updateUserStats) {
+          updateUserStats({
+            action: decision === 'ride' ? 'rode_with_gary' : 'faded_gary',
+            pickId
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error processing bet decision:', error);
+      setToastMessage('Something went wrong. Please try again.');
+      setShowToast(true);
+      
+      setTimeout(() => {
+        setShowToast(false);
+      }, 3000);
     }
   };
   
@@ -545,7 +557,7 @@ export function RealGaryPicks() {
                         
                         {pick.league !== 'PARLAY' ? (
                           <div className="pick-card-content">
-                            <div className="pick-card-bet-type">{pick.betType}</div>
+                            <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
                             <div className="pick-card-bet">
                               {pick.betType === 'Best Bet: Moneyline' ? pick.moneyline : 
                               pick.betType === 'Spread Pick' ? pick.spread : pick.overUnder}
