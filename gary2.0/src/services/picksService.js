@@ -2,11 +2,137 @@ import { makeGaryPick } from '../ai/garyEngine';
 import { oddsService } from './oddsService';
 import { configLoader } from './configLoader';
 import axios from 'axios';
+import { supabase } from '../supabaseClient';
 
 /**
  * Service for generating and managing Gary's picks
  */
 const picksService = {
+  /**
+   * Store daily picks in Supabase for sharing across all users
+   * @param {Array} picks - Array of picks to store
+   * @returns {Promise<Object>} - Result of storage operation
+   */
+  storeDailyPicksInDatabase: async (picks) => {
+    try {
+      // Get the current date in YYYY-MM-DD format to use as the ID
+      const today = new Date();
+      const dateString = today.toISOString().split('T')[0]; // e.g., "2025-04-16"
+      
+      // Check if an entry for today already exists
+      const { data: existingData } = await supabase
+        .from('daily_picks')
+        .select('*')
+        .eq('date', dateString)
+        .single();
+      
+      if (existingData) {
+        // Update existing record
+        const { data, error } = await supabase
+          .from('daily_picks')
+          .update({ 
+            picks: picks,
+            updated_at: new Date().toISOString()
+          })
+          .eq('date', dateString);
+          
+        if (error) throw error;
+        console.log('Updated picks in database for', dateString);
+        return data;
+      } else {
+        // Create new record
+        const { data, error } = await supabase
+          .from('daily_picks')
+          .insert([
+            { 
+              date: dateString, 
+              picks: picks,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
+          ]);
+          
+        if (error) throw error;
+        console.log('Stored new picks in database for', dateString);
+        return data;
+      }
+    } catch (error) {
+      console.error('Error storing picks in database:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Retrieve daily picks from Supabase
+   * @returns {Promise<Array>} - Array of picks for today
+   */
+  getDailyPicksFromDatabase: async () => {
+    try {
+      // Get the current date in YYYY-MM-DD format
+      const today = new Date();
+      const dateString = today.toISOString().split('T')[0]; // e.g., "2025-04-16"
+      
+      // Query the database for today's picks
+      const { data, error } = await supabase
+        .from('daily_picks')
+        .select('*')
+        .eq('date', dateString)
+        .single();
+        
+      if (error) {
+        // If the error is because no record was found, return null
+        if (error.code === 'PGRST116') {
+          console.log('No picks found in database for today');
+          return null;
+        }
+        throw error;
+      }
+      
+      console.log('Retrieved picks from database for', dateString);
+      return data.picks;
+    } catch (error) {
+      console.error('Error retrieving picks from database:', error);
+      return null;
+    }
+  },
+  
+  /**
+   * Check if picks have been generated for today
+   * @returns {Promise<boolean>} - Whether picks exist for today
+   */
+  checkPicksExistInDatabase: async () => {
+    try {
+      // Get the current date in YYYY-MM-DD format
+      const today = new Date();
+      const dateString = today.toISOString().split('T')[0];
+      
+      // Check if an entry exists
+      const { data, error } = await supabase
+        .from('daily_picks')
+        .select('date')
+        .eq('date', dateString)
+        .single();
+        
+      // If no error, picks exist
+      if (!error) {
+        console.log('Picks exist in database for', dateString);
+        return true;
+      }
+      
+      // If error is 'not found', picks don't exist
+      if (error.code === 'PGRST116') {
+        console.log('No picks exist in database for', dateString);
+        return false;
+      }
+      
+      // For any other error, log and treat as not existing
+      console.error('Error checking if picks exist:', error);
+      return false;
+    } catch (error) {
+      console.error('Error checking if picks exist in database:', error);
+      return false;
+    }
+  },
   /**
    * Generate narrative for a game using DeepSeek API
    * @param {Object} game - Game data from The Odds API
@@ -925,5 +1051,6 @@ function enhancePickWithDefaultData(pick) {
     analysis: "Statistical models and situational factors show value in this pick."
   };
 }
+};
 
 export { picksService };

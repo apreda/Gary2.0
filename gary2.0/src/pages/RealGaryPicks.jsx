@@ -383,63 +383,64 @@ export function RealGaryPicks() {
       setLoading(true);
       setLoadError(null); // Reset any previous errors
       
-      // Always try to use cached picks first to avoid regeneration on refresh
-      const savedPicks = localStorage.getItem('dailyPicks');
       let dailyPicks;
       
-      if (savedPicks) {
-        console.log('Using cached picks from localStorage');
-        let parsedPicks = JSON.parse(savedPicks);
+      // Step 1: First check if picks exist in Supabase database (shared across all users)
+      console.log('Checking for picks in Supabase database...');
+      try {
+        const dbPicks = await picksService.getDailyPicksFromDatabase();
         
-        // Fix for existing picks - normalize to ensure they have all required fields
-        parsedPicks = parsedPicks.map(pick => picksService.normalizePick(pick));
-        console.log('Normalized picks data for display');
-        
-        // Set picks from cache and avoid regeneration
-        dailyPicks = parsedPicks;
-        
-        // Only check for new picks if we already have cached picks
-        const shouldGenerate = schedulerService.shouldGenerateNewPicks();
-        
-        // Only generate new picks if the scheduler says it's time AND we don't have today's picks
-        if (shouldGenerate) {
-          console.log('Time to generate new picks according to scheduler');
+        if (dbPicks) {
+          console.log('Found picks in Supabase database - using shared picks');
+          // Normalize the picks to ensure they have all required fields
+          dailyPicks = dbPicks.map(pick => picksService.normalizePick(pick));
           
-          // Check for required API keys
-          const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
-          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+          // Also update local cache
+          localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
           
-          if (!oddsApiKey || !deepseekApiKey) {
-            console.error('Missing required API keys. Using cached picks instead.');
-          } else {
-            try {
-              console.log('Generating new picks to replace cached ones...');
-              // Generate new picks
-              dailyPicks = await picksService.generateDailyPicks();
-              
-              // Mark that we've generated picks for today
-              schedulerService.markPicksAsGenerated();
-              
-              // Save picks to localStorage
-              localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
-              console.log('Successfully generated and cached new picks');
-            } catch (generateError) {
-              console.error('Error generating new picks:', generateError);
-              console.log('Using cached picks instead due to generation error');
-              // Continue using the cached picks we already loaded
-            }
+          // Use these shared picks from database and skip further processing
+          console.log('Successfully loaded shared picks from database');
+        } else {
+          console.log('No picks found in database, checking local cache...');
+          
+          // Step 2: If no picks in database, check localStorage
+          const savedPicks = localStorage.getItem('dailyPicks');
+          
+          if (savedPicks) {
+            console.log('Using cached picks from localStorage');
+            let parsedPicks = JSON.parse(savedPicks);
+            
+            // Fix for existing picks - normalize to ensure they have all required fields
+            parsedPicks = parsedPicks.map(pick => picksService.normalizePick(pick));
+            console.log('Normalized picks data for display');
+            
+            // Set picks from cache
+            dailyPicks = parsedPicks;
           }
         }
-      } else {
-        // No saved picks in localStorage - must generate new ones
-        console.log('No cached picks found, checking if we should generate new ones');
+      } catch (dbError) {
+        console.error('Error retrieving picks from database:', dbError);
+        // If database check fails, continue to try localStorage
+        const savedPicks = localStorage.getItem('dailyPicks');
         
-        // Check if we should generate new picks
+        if (savedPicks) {
+          console.log('Using cached picks from localStorage as fallback');
+          dailyPicks = JSON.parse(savedPicks).map(pick => picksService.normalizePick(pick));
+        }
+      }
+      
+      // Step 3: Check if we need to generate new picks based on schedule
+      if (!dailyPicks) {
+        console.log('No picks found in database or localStorage');
+        
+        // Check if it's time to generate new picks
         const shouldGenerate = schedulerService.shouldGenerateNewPicks();
         
         if (shouldGenerate) {
-          console.log('Generating fresh picks...');
-          // Check for environment variables
+          // Step 4: Generate new picks
+          console.log('Time to generate new picks...');
+          
+          // Check for required API keys
           const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
           const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
           
@@ -457,7 +458,12 @@ export function RealGaryPicks() {
             // Mark that we've generated picks for today
             schedulerService.markPicksAsGenerated();
             
-            // Save picks to localStorage
+            // Save picks to Supabase database for sharing with other users
+            console.log('Storing newly generated picks in Supabase database...');
+            await picksService.storeDailyPicksInDatabase(dailyPicks);
+            console.log('Successfully stored picks in database for sharing across users');
+            
+            // Also save to localStorage as a backup
             localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
           } catch (generateError) {
             console.error('Error generating picks:', generateError);
@@ -466,11 +472,61 @@ export function RealGaryPicks() {
             return;
           }
         } else {
-          // Not time to generate picks yet and no cached picks exist
-          console.error('No cached picks found and not time to generate new ones');
+          // It's not time to generate picks yet and no existing picks were found
+          console.error('No picks found and not time to generate new ones');
           setLoadError('No picks available. Please try again later.');
           setLoading(false);
           return;
+        }
+      } else if (schedulerService.shouldGenerateNewPicks()) {
+        // We have picks but it's time to generate new ones according to schedule
+        console.log('We have picks but it\'s time to generate new ones');
+        
+        // Check if picks already exist in the database for today before generating
+        const picksExistInDb = await picksService.checkPicksExistInDatabase();
+        
+        if (!picksExistInDb) {
+          console.log('No picks exist in database for today - generating new ones');
+          // Check for required API keys
+          const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
+          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+          
+          if (oddsApiKey && deepseekApiKey) {
+            try {
+              // Generate new picks
+              console.log('Generating fresh picks...');
+              const newPicks = await picksService.generateDailyPicks();
+              
+              // Mark that we've generated picks for today
+              schedulerService.markPicksAsGenerated();
+              
+              // Save to database for sharing
+              await picksService.storeDailyPicksInDatabase(newPicks);
+              
+              // Update local cache
+              localStorage.setItem('dailyPicks', JSON.stringify(newPicks));
+              
+              // Use the new picks
+              dailyPicks = newPicks;
+              console.log('Successfully generated and stored new picks');
+            } catch (error) {
+              console.error('Error generating new picks:', error);
+              // Continue using the existing picks we already loaded
+            }
+          }
+        } else {
+          console.log('Picks already exist in database - retrieving latest version');
+          // Retrieve latest picks from database to ensure we have the most up-to-date version
+          try {
+            const latestPicks = await picksService.getDailyPicksFromDatabase();
+            if (latestPicks) {
+              dailyPicks = latestPicks.map(pick => picksService.normalizePick(pick));
+              localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
+            }
+          } catch (error) {
+            console.error('Error retrieving latest picks from database:', error);
+            // Continue using existing picks
+          }
         }
       }
       
