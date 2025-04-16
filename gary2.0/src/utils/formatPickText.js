@@ -1,4 +1,5 @@
 // Pick text formatter utility - fixes formatting for all sports with proper caching
+import { getTeamAbbreviation } from './teamAbbreviations';
 
 /**
  * Formats pick text consistently for all sports
@@ -15,126 +16,10 @@ export function formatPickText(pick) {
     console.error('formatPickText received null/undefined pick');
     return 'PICK DATA MISSING';
   }
-  // Use direct access to avoid circular import
+  // Use our comprehensive team abbreviation utility
   const abbreviateTeamName = (name) => {
     if (!name) return '';
-    
-    // Simple abbreviation rules to avoid circular dependencies
-    const teamMap = {
-      // MLB Teams
-      'Arizona Diamondbacks': 'ARI',
-      'Atlanta Braves': 'ATL',
-      'Baltimore Orioles': 'BAL',
-      'Boston Red Sox': 'BOS',
-      'Chicago Cubs': 'CHC',
-      'Chicago White Sox': 'CHW',
-      'Cincinnati Reds': 'CIN',
-      'Cleveland Guardians': 'CLE',
-      'Colorado Rockies': 'COL',
-      'Detroit Tigers': 'DET',
-      'Houston Astros': 'HOU',
-      'Kansas City Royals': 'KC',
-      'Los Angeles Angels': 'LAA',
-      'Los Angeles Dodgers': 'LAD',
-      'Miami Marlins': 'MIA',
-      'Milwaukee Brewers': 'MIL',
-      'Minnesota Twins': 'MIN',
-      'New York Mets': 'NYM',
-      'New York Yankees': 'NYY',
-      'Oakland Athletics': 'OAK',
-      'Philadelphia Phillies': 'PHI',
-      'Pittsburgh Pirates': 'PIT',
-      'San Diego Padres': 'SD',
-      'San Francisco Giants': 'SF',
-      'Seattle Mariners': 'SEA',
-      'St. Louis Cardinals': 'STL',
-      'Tampa Bay Rays': 'TB',
-      'Texas Rangers': 'TEX',
-      'Toronto Blue Jays': 'TOR',
-      'Washington Nationals': 'WAS',
-      
-      // NBA Teams
-      'Atlanta Hawks': 'ATL',
-      'Boston Celtics': 'BOS',
-      'Brooklyn Nets': 'BKN',
-      'Charlotte Hornets': 'CHA',
-      'Chicago Bulls': 'CHI',
-      'Cleveland Cavaliers': 'CLE',
-      'Dallas Mavericks': 'DAL',
-      'Denver Nuggets': 'DEN',
-      'Detroit Pistons': 'DET',
-      'Golden State Warriors': 'GSW',
-      'Houston Rockets': 'HOU',
-      'Indiana Pacers': 'IND',
-      'LA Clippers': 'LAC',
-      'Los Angeles Clippers': 'LAC',
-      'Los Angeles Lakers': 'LAL',
-      'Memphis Grizzlies': 'MEM',
-      'Miami Heat': 'MIA',
-      'Milwaukee Bucks': 'MIL',
-      'Minnesota Timberwolves': 'MIN',
-      'New Orleans Pelicans': 'NOP',
-      'New York Knicks': 'NYK',
-      'Oklahoma City Thunder': 'OKC',
-      'Orlando Magic': 'ORL',
-      'Philadelphia 76ers': 'PHI',
-      'Phoenix Suns': 'PHX',
-      'Portland Trail Blazers': 'POR',
-      'Sacramento Kings': 'SAC',
-      'San Antonio Spurs': 'SAS',
-      'Toronto Raptors': 'TOR',
-      'Utah Jazz': 'UTA',
-      'Washington Wizards': 'WAS',
-      
-      // NHL Teams
-      'Anaheim Ducks': 'ANA',
-      'Arizona Coyotes': 'ARI',
-      'Boston Bruins': 'BOS',
-      'Buffalo Sabres': 'BUF',
-      'Calgary Flames': 'CGY',
-      'Carolina Hurricanes': 'CAR',
-      'Chicago Blackhawks': 'CHI',
-      'Colorado Avalanche': 'COL',
-      'Columbus Blue Jackets': 'CBJ',
-      'Dallas Stars': 'DAL',
-      'Detroit Red Wings': 'DET',
-      'Edmonton Oilers': 'EDM',
-      'Florida Panthers': 'FLA',
-      'Los Angeles Kings': 'LAK',
-      'Minnesota Wild': 'MIN',
-      'Montreal Canadiens': 'MTL',
-      'Nashville Predators': 'NSH',
-      'New Jersey Devils': 'NJD',
-      'New York Islanders': 'NYI',
-      'New York Rangers': 'NYR',
-      'Ottawa Senators': 'OTT',
-      'Philadelphia Flyers': 'PHI',
-      'Pittsburgh Penguins': 'PIT',
-      'San Jose Sharks': 'SJS',
-      'Seattle Kraken': 'SEA',
-      'St. Louis Blues': 'STL',
-      'Tampa Bay Lightning': 'TBL',
-      'Toronto Maple Leafs': 'TOR',
-      'Vancouver Canucks': 'VAN',
-      'Vegas Golden Knights': 'VGK',
-      'Washington Capitals': 'WSH',
-      'Winnipeg Jets': 'WPG'
-    };
-    
-    // Check if we have a direct match
-    if (teamMap[name]) {
-      return teamMap[name];
-    }
-    
-    // Try to find partial match
-    for (const [fullName, abbr] of Object.entries(teamMap)) {
-      if (name.includes(fullName)) {
-        return abbr;
-      }
-    }
-    
-    // Basic abbreviation if no match found (first 3 chars)
-    return name.slice(0, 3).toUpperCase();
+    return getTeamAbbreviation(name);
   };
   
   if (!pick) return 'NO PICK';
@@ -167,7 +52,7 @@ export function formatPickText(pick) {
     
     // MONEYLINES: Team ML Odds (e.g. "KC ML -115")
     else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
-      // For MLB, format as 'CIN +104' (no 'ML')
+      // For MLB, format as 'Cubs +104' (no 'ML')
       if (pick.league === 'MLB') {
         // Extract team name and odds from moneyline
         // First, try to extract odds from the last part of the pick.moneyline
