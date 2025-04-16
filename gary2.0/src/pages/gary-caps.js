@@ -1,17 +1,19 @@
 // Script to apply gold styling to capitalized words in Gary's analysis
-document.addEventListener('DOMContentLoaded', function() {
-  highlightGaryCaps();
-  
-  // Watch for DOM changes to catch dynamic content updates
-  const observer = new MutationObserver(function(mutations) {
+export function initGaryCaps() {
+  document.addEventListener('DOMContentLoaded', function() {
     highlightGaryCaps();
+    
+    // Watch for DOM changes to catch dynamic content updates
+    const observer = new MutationObserver(function(mutations) {
+      highlightGaryCaps();
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
   });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-});
+}
 
 function highlightGaryCaps() {
   // Find all Gary's analysis content sections

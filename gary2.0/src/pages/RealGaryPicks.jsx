@@ -383,22 +383,11 @@ export function RealGaryPicks() {
       setLoading(true);
       setLoadError(null); // Reset any previous errors
       
-      // Check for environment variables first
-      const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
-      if (!oddsApiKey) {
-        console.error('Missing VITE_ODDS_API_KEY environment variable. Picks cannot be generated.');
-        setLoadError('API key not configured. Please set up your environment variables.');
-        setLoading(false);
-        return;
-      }
-      
-      // Check if we should generate new picks
-      const shouldGenerate = schedulerService.shouldGenerateNewPicks();
+      // Always try to use cached picks first to avoid regeneration on refresh
+      const savedPicks = localStorage.getItem('dailyPicks');
       let dailyPicks;
       
-      // First try to get existing picks from localStorage
-      const savedPicks = localStorage.getItem('dailyPicks');
-      if (savedPicks && !shouldGenerate) {
+      if (savedPicks) {
         console.log('Using cached picks from localStorage');
         let parsedPicks = JSON.parse(savedPicks);
         
@@ -406,34 +395,80 @@ export function RealGaryPicks() {
         parsedPicks = parsedPicks.map(pick => picksService.normalizePick(pick));
         console.log('Normalized picks data for display');
         
-        // Save the normalized picks back to localStorage
-        localStorage.setItem('dailyPicks', JSON.stringify(parsedPicks));
-        
+        // Set picks from cache and avoid regeneration
         dailyPicks = parsedPicks;
-      } else {
-        // Either need to generate new picks or no saves exist
-        console.log('Generating new picks...');
-        try {
-          // Check for DeepSeek API key
+        
+        // Only check for new picks if we already have cached picks
+        const shouldGenerate = schedulerService.shouldGenerateNewPicks();
+        
+        // Only generate new picks if the scheduler says it's time AND we don't have today's picks
+        if (shouldGenerate) {
+          console.log('Time to generate new picks according to scheduler');
+          
+          // Check for required API keys
+          const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
           const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-          if (!deepseekApiKey) {
-            console.error('Missing VITE_DEEPSEEK_API_KEY environment variable. Picks cannot be generated.');
-            setLoadError('DeepSeek API key not configured. Please set up your environment variables.');
+          
+          if (!oddsApiKey || !deepseekApiKey) {
+            console.error('Missing required API keys. Using cached picks instead.');
+          } else {
+            try {
+              console.log('Generating new picks to replace cached ones...');
+              // Generate new picks
+              dailyPicks = await picksService.generateDailyPicks();
+              
+              // Mark that we've generated picks for today
+              schedulerService.markPicksAsGenerated();
+              
+              // Save picks to localStorage
+              localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
+              console.log('Successfully generated and cached new picks');
+            } catch (generateError) {
+              console.error('Error generating new picks:', generateError);
+              console.log('Using cached picks instead due to generation error');
+              // Continue using the cached picks we already loaded
+            }
+          }
+        }
+      } else {
+        // No saved picks in localStorage - must generate new ones
+        console.log('No cached picks found, checking if we should generate new ones');
+        
+        // Check if we should generate new picks
+        const shouldGenerate = schedulerService.shouldGenerateNewPicks();
+        
+        if (shouldGenerate) {
+          console.log('Generating fresh picks...');
+          // Check for environment variables
+          const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
+          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+          
+          if (!oddsApiKey || !deepseekApiKey) {
+            console.error('Missing required API keys. Picks cannot be generated.');
+            setLoadError('API keys not configured. Please set up your environment variables.');
             setLoading(false);
             return;
           }
           
-          // Generate new picks
-          dailyPicks = await picksService.generateDailyPicks();
-          
-          // Mark that we've generated picks for today
-          schedulerService.markPicksAsGenerated();
-          
-          // Save picks to localStorage
-          localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
-        } catch (generateError) {
-          console.error('Error generating picks:', generateError);
-          setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
+          try {
+            // Generate new picks
+            dailyPicks = await picksService.generateDailyPicks();
+            
+            // Mark that we've generated picks for today
+            schedulerService.markPicksAsGenerated();
+            
+            // Save picks to localStorage
+            localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
+          } catch (generateError) {
+            console.error('Error generating picks:', generateError);
+            setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
+            setLoading(false);
+            return;
+          }
+        } else {
+          // Not time to generate picks yet and no cached picks exist
+          console.error('No cached picks found and not time to generate new ones');
+          setLoadError('No picks available. Please try again later.');
           setLoading(false);
           return;
         }
@@ -644,11 +679,20 @@ export function RealGaryPicks() {
                           <div className="pick-card-content">
                             <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
                             <div className="pick-card-bet">
-                              {pick.shortPick || pick.pick || 
-                              pick.betType === 'Best Bet: Moneyline' ? pick.moneyline : 
-                              pick.betType === 'Spread Pick' ? pick.spread : 
-                              pick.overUnder ? pick.overUnder : 
-                              `Over ${pick.game.split(' vs ')[0]}`}
+                              {pick.shortPick || 
+                               ((pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) ? 
+                                (picksService.abbreviateTeamName(pick.moneyline)) : 
+                               (pick.betType && pick.betType.includes('Spread') && pick.spread) ? 
+                                (() => {
+                                  const parts = pick.spread.split(' ');
+                                  const teamName = parts.slice(0, parts.length - 1).join(' ');
+                                  const number = parts[parts.length - 1];
+                                  return `${picksService.abbreviateTeamName(teamName)} ${number}`;
+                                })() :
+                               pick.overUnder ? 
+                                pick.overUnder :
+                                pick.pick || 
+                                `Over ${pick.game.split(' vs ')[0]}`)}
                             </div>
                             {pick.result && pick.result !== 'pending' && (
                               <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
