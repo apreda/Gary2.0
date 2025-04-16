@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset and Generate New Picks</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #121212;
+      color: #e0e0e0;
+      line-height: 1.5;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: #1e1e1e;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+    
+    h1 {
+      color: #d4af37;
+      margin-top: 0;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+    
+    button {
+      background-color: #d4af37;
+      color: #000;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 20px;
+      font-size: 16px;
+    }
+    
+    button:hover {
+      background-color: #e5c349;
+    }
+    
+    #log {
+      background-color: #2a2a2a;
+      border-radius: 4px;
+      padding: 15px;
+      margin-top: 20px;
+      font-family: monospace;
+      height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    
+    .success {
+      color: #4caf50;
+    }
+    
+    .error {
+      color: #f44336;
+    }
+    
+    .warning {
+      color: #ff9800;
+    }
+    
+    .info {
+      color: #2196f3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Reset and Generate New Picks</h1>
+    <p>This utility will:</p>
+    <ol>
+      <li>Clear today's picks from Supabase</li>
+      <li>Clear localStorage cache</li>
+      <li>Generate brand new picks</li>
+      <li>Store them in Supabase</li>
+    </ol>
+    <p>Use this to force a fresh pick generation outside the normal schedule.</p>
+    
+    <button id="resetButton">Reset and Generate New Picks</button>
+    
+    <div id="log">Logs will appear here...</div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const logArea = document.getElementById('log');
+      const resetButton = document.getElementById('resetButton');
+      
+      function log(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        logArea.innerHTML += `<div class="${type}">[${timestamp}] ${message}</div>`;
+        logArea.scrollTop = logArea.scrollHeight;
+      }
+      
+      resetButton.addEventListener('click', async () => {
+        log('Starting reset and pick generation process...', 'info');
+        resetButton.disabled = true;
+        
+        try {
+          // Step 1: Clear localStorage
+          log('Step 1: Clearing localStorage cache...', 'info');
+          localStorage.removeItem('lastPicksGenerationTime');
+          localStorage.removeItem('dailyPicks');
+          log('✅ Successfully cleared localStorage cache', 'success');
+          
+          // Step 2: Reload the page to trigger fresh pick generation
+          log('Step 2: Reloading page to generate fresh picks...', 'info');
+          log('⏳ The page will reload in 3 seconds...', 'warning');
+          
+          setTimeout(() => {
+            window.location.href = '/'; // Redirect to home page to generate new picks
+          }, 3000);
+          
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+          resetButton.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

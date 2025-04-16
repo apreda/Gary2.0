@@ -26,7 +26,7 @@ export const schedulerService = {
     const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
     
     if (isApril16_2025) {
-      targetTime.setHours(17, 55, 0, 0); // 5:55 PM for April 16, 2025
+      targetTime.setHours(18, 0, 0, 0); // 6:00 PM for April 16, 2025
     } else {
       targetTime.setHours(10, 0, 0, 0); // 10:00 AM EST for all other days
     }
@@ -43,7 +43,7 @@ export const schedulerService = {
     // Check if it's after target time (2:35 PM on April 16, 2025 or 10:00 AM on other days)
     let isAfterTargetTime;
     if (isApril16_2025) {
-      isAfterTargetTime = (currentHour > 17 || (currentHour === 17 && currentMinute >= 55));
+      isAfterTargetTime = (currentHour > 18 || (currentHour === 18 && currentMinute >= 0));
     } else {
       isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
     }
@@ -72,7 +72,7 @@ export const schedulerService = {
     // Check if after target time (2:35 PM on April 16, 2025 or 10:00 AM on other days)
     let isAfterTargetHour;
     if (isApril16_2025) {
-      isAfterTargetHour = now.getHours() > 17 || (now.getHours() === 17 && now.getMinutes() >= 55); // 5:55 PM on April 16
+      isAfterTargetHour = now.getHours() > 18 || (now.getHours() === 18 && now.getMinutes() >= 0); // 6:00 PM on April 16
     } else {
       isAfterTargetHour = now.getHours() > 10 || (now.getHours() === 10 && now.getMinutes() >= 0); // 10:00 AM EST on other days
     }
@@ -97,7 +97,7 @@ export const schedulerService = {
     const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
     
     if (isApril16_2025) {
-      return "5:55 PM";
+      return "6:00 PM";
     } else {
       return "10:00 AM";
     }
@@ -116,7 +116,7 @@ export const schedulerService = {
     // Set target time based on date
     let todayTargetTime = new Date(now);
     if (isApril16_2025) {
-      todayTargetTime.setHours(17, 55, 0, 0); // 5:55 PM on April 16, 2025
+      todayTargetTime.setHours(18, 0, 0, 0); // 6:00 PM on April 16, 2025
     } else {
       todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM on other days
     }
