@@ -102,35 +102,26 @@ const picksService = {
    */
   checkPicksExistInDatabase: async () => {
     try {
-      // Get the current date in YYYY-MM-DD format
-      const today = new Date();
-      const dateString = today.toISOString().split('T')[0];
-      
-      // Check if an entry exists
+      const todayDate = new Date();
+      const dateString = todayDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+      // Query the database for today's picks
       const { data, error } = await supabase
         .from('daily_picks')
-        .select('date')
+        .select('id')
         .eq('date', dateString)
         .single();
-        
-      // If no error, picks exist
-      if (!error) {
-        console.log('Picks exist in database for', dateString);
-        return true;
-      }
-      
-      // If error is 'not found', picks don't exist
-      if (error.code === 'PGRST116') {
-        console.log('No picks exist in database for', dateString);
+
+      if (error && error.code !== 'PGSQL_ERROR_NO_DATA_FOUND') {
+        console.error('Error checking database for picks:', error);
         return false;
       }
-      
-      // For any other error, log and treat as not existing
-      console.error('Error checking if picks exist:', error);
-      return false;
+
+      // If data exists, picks for today have been generated
+      return !!data;
     } catch (error) {
-      console.error('Error checking if picks exist in database:', error);
-      return false;
+      console.error('Error in checkPicksExistInDatabase:', error);
+      throw error; // Propagate the error rather than using fallbacks
     }
   },
   /**
@@ -905,152 +896,199 @@ const picksService = {
       throw error; // Propagate the error rather than using fallbacks
     }
   }
-};
-
-// Helper function to abbreviate team names
-function abbreviateTeamName(teamName) {
-  const abbreviations = {
-    // NBA
-    'Atlanta Hawks': 'Hawks',
-    'Boston Celtics': 'Celtics',
-    'Brooklyn Nets': 'Nets',
-    'Charlotte Hornets': 'Hornets',
-    'Chicago Bulls': 'Bulls',
-    'Cleveland Cavaliers': 'Cavs',
-    'Dallas Mavericks': 'Mavs',
-    'Denver Nuggets': 'Nuggets',
-    'Detroit Pistons': 'Pistons',
-    'Golden State Warriors': 'Warriors',
-    'Houston Rockets': 'Rockets',
-    'Indiana Pacers': 'Pacers',
-    'Los Angeles Clippers': 'Clippers',
-    'Los Angeles Lakers': 'Lakers',
-    'Memphis Grizzlies': 'Grizzlies',
-    'Miami Heat': 'Heat',
-    'Milwaukee Bucks': 'Bucks',
-    'Minnesota Timberwolves': 'Wolves',
-    'New Orleans Pelicans': 'Pelicans',
-    'New York Knicks': 'Knicks',
-    'Oklahoma City Thunder': 'Thunder',
-    'Orlando Magic': 'Magic',
-    'Philadelphia 76ers': '76ers',
-    'Phoenix Suns': 'Suns',
-    'Portland Trail Blazers': 'Blazers',
-    'Sacramento Kings': 'Kings',
-    'San Antonio Spurs': 'Spurs',
-    'Toronto Raptors': 'Raptors',
-    'Utah Jazz': 'Jazz',
-    'Washington Wizards': 'Wizards',
+  /**
+   * Abbreviate team names for display purposes
+   * @param {string} teamName - Full team name
+   * @returns {string} - Abbreviated team name
+   */
+  abbreviateTeamName: (teamName) => {
+    // NBA teams
+    if (teamName === 'Atlanta Hawks') return 'Hawks';
+    if (teamName === 'Boston Celtics') return 'Celtics';
+    if (teamName === 'Brooklyn Nets') return 'Nets';
+    if (teamName === 'Charlotte Hornets') return 'Hornets';
+    if (teamName === 'Chicago Bulls') return 'Bulls';
+    if (teamName === 'Cleveland Cavaliers') return 'Cavs';
+    if (teamName === 'Dallas Mavericks') return 'Mavs';
+    if (teamName === 'Denver Nuggets') return 'Nuggets';
+    if (teamName === 'Detroit Pistons') return 'Pistons';
+    if (teamName === 'Golden State Warriors') return 'Warriors';
+    if (teamName === 'Houston Rockets') return 'Rockets';
+    if (teamName === 'Indiana Pacers') return 'Pacers';
+    if (teamName === 'Los Angeles Clippers') return 'Clippers';
+    if (teamName === 'Los Angeles Lakers') return 'Lakers';
+    if (teamName === 'Memphis Grizzlies') return 'Grizzlies';
+    if (teamName === 'Miami Heat') return 'Heat';
+    if (teamName === 'Milwaukee Bucks') return 'Bucks';
+    if (teamName === 'Minnesota Timberwolves') return 'Wolves';
+    if (teamName === 'New Orleans Pelicans') return 'Pelicans';
+    if (teamName === 'New York Knicks') return 'Knicks';
+    if (teamName === 'Oklahoma City Thunder') return 'Thunder';
+    if (teamName === 'Orlando Magic') return 'Magic';
+    if (teamName === 'Philadelphia 76ers') return '76ers';
+    if (teamName === 'Phoenix Suns') return 'Suns';
+    if (teamName === 'Portland Trail Blazers') return 'Blazers';
+    if (teamName === 'Sacramento Kings') return 'Kings';
+    if (teamName === 'San Antonio Spurs') return 'Spurs';
+    if (teamName === 'Toronto Raptors') return 'Raptors';
+    if (teamName === 'Utah Jazz') return 'Jazz';
+    if (teamName === 'Washington Wizards') return 'Wizards';
     
-    // MLB
-    'Arizona Diamondbacks': 'D-backs',
-    'Atlanta Braves': 'Braves',
-    'Baltimore Orioles': 'Orioles',
-    'Boston Red Sox': 'Red Sox',
-    'Chicago Cubs': 'Cubs',
-    'Chicago White Sox': 'White Sox',
-    'Cincinnati Reds': 'Reds',
-    'Cleveland Guardians': 'Guardians',
-    'Colorado Rockies': 'Rockies',
-    'Detroit Tigers': 'Tigers',
-    'Houston Astros': 'Astros',
-    'Kansas City Royals': 'Royals',
-    'Los Angeles Angels': 'Angels',
-    'Los Angeles Dodgers': 'Dodgers',
-    'Miami Marlins': 'Marlins',
-    'Milwaukee Brewers': 'Brewers',
-    'Minnesota Twins': 'Twins',
-    'New York Mets': 'Mets',
-    'New York Yankees': 'Yankees',
-    'Oakland Athletics': 'A\'s',
-    'Philadelphia Phillies': 'Phillies',
-    'Pittsburgh Pirates': 'Pirates',
-    'San Diego Padres': 'Padres',
-    'San Francisco Giants': 'Giants',
-    'Seattle Mariners': 'Mariners',
-    'St. Louis Cardinals': 'Cardinals',
-    'Tampa Bay Rays': 'Rays',
-    'Texas Rangers': 'Rangers',
-    'Toronto Blue Jays': 'Blue Jays',
-    'Washington Nationals': 'Nationals',
+    // MLB teams
+    if (teamName === 'Arizona Diamondbacks') return 'D-backs';
+    if (teamName === 'Atlanta Braves') return 'Braves';
+    if (teamName === 'Baltimore Orioles') return 'Orioles';
+    if (teamName === 'Boston Red Sox') return 'Red Sox';
+    if (teamName === 'Chicago Cubs') return 'Cubs';
+    if (teamName === 'Chicago White Sox') return 'White Sox';
+    if (teamName === 'Cincinnati Reds') return 'Reds';
+    if (teamName === 'Cleveland Guardians') return 'Guardians';
+    if (teamName === 'Colorado Rockies') return 'Rockies';
+    if (teamName === 'Detroit Tigers') return 'Tigers';
+    if (teamName === 'Houston Astros') return 'Astros';
+    if (teamName === 'Kansas City Royals') return 'Royals';
+    if (teamName === 'Los Angeles Angels') return 'Angels';
+    if (teamName === 'Los Angeles Dodgers') return 'Dodgers';
+    if (teamName === 'Miami Marlins') return 'Marlins';
+    if (teamName === 'Milwaukee Brewers') return 'Brewers';
+    if (teamName === 'Minnesota Twins') return 'Twins';
+    if (teamName === 'New York Mets') return 'Mets';
+    if (teamName === 'New York Yankees') return 'Yankees';
+    if (teamName === 'Oakland Athletics') return 'A\'s';
+    if (teamName === 'Philadelphia Phillies') return 'Phillies';
+    if (teamName === 'Pittsburgh Pirates') return 'Pirates';
+    if (teamName === 'San Diego Padres') return 'Padres';
+    if (teamName === 'San Francisco Giants') return 'Giants';
+    if (teamName === 'Seattle Mariners') return 'Mariners';
+    if (teamName === 'St. Louis Cardinals') return 'Cardinals';
+    if (teamName === 'Tampa Bay Rays') return 'Rays';
+    if (teamName === 'Texas Rangers') return 'Rangers';
+    if (teamName === 'Toronto Blue Jays') return 'Blue Jays';
+    if (teamName === 'Washington Nationals') return 'Nationals';
     
-    // NHL
-    'Anaheim Ducks': 'Ducks',
-    'Arizona Coyotes': 'Coyotes',
-    'Boston Bruins': 'Bruins',
-    'Buffalo Sabres': 'Sabres',
-    'Calgary Flames': 'Flames',
-    'Carolina Hurricanes': 'Hurricanes',
-    'Chicago Blackhawks': 'Blackhawks',
-    'Colorado Avalanche': 'Avalanche',
-    'Columbus Blue Jackets': 'Blue Jackets',
-    'Dallas Stars': 'Stars',
-    'Detroit Red Wings': 'Red Wings',
-    'Edmonton Oilers': 'Oilers',
-    'Florida Panthers': 'Panthers',
-    'Los Angeles Kings': 'Kings',
-    'Minnesota Wild': 'Wild',
-    'Montréal Canadiens': 'Canadiens',
-    'Nashville Predators': 'Predators',
-    'New Jersey Devils': 'Devils',
-    'New York Islanders': 'Islanders',
-    'New York Rangers': 'Rangers',
-    'Ottawa Senators': 'Senators',
-    'Philadelphia Flyers': 'Flyers',
-    'Pittsburgh Penguins': 'Penguins',
-    'San Jose Sharks': 'Sharks',
-    'Seattle Kraken': 'Kraken',
-    'St. Louis Blues': 'Blues',
-    'Tampa Bay Lightning': 'Lightning',
-    'Toronto Maple Leafs': 'Maple Leafs',
-    'Vancouver Canucks': 'Canucks',
-    'Vegas Golden Knights': 'Golden Knights',
-    'Washington Capitals': 'Capitals',
-    'Winnipeg Jets': 'Jets'
-  };
+    // NHL teams
+    if (teamName === 'Anaheim Ducks') return 'Ducks';
+    if (teamName === 'Arizona Coyotes') return 'Coyotes';
+    if (teamName === 'Boston Bruins') return 'Bruins';
+    if (teamName === 'Buffalo Sabres') return 'Sabres';
+    if (teamName === 'Calgary Flames') return 'Flames';
+    if (teamName === 'Carolina Hurricanes') return 'Hurricanes';
+    if (teamName === 'Chicago Blackhawks') return 'Blackhawks';
+    if (teamName === 'Colorado Avalanche') return 'Avalanche';
+    if (teamName === 'Columbus Blue Jackets') return 'Blue Jackets';
+    if (teamName === 'Dallas Stars') return 'Stars';
+    if (teamName === 'Detroit Red Wings') return 'Red Wings';
+    if (teamName === 'Edmonton Oilers') return 'Oilers';
+    if (teamName === 'Florida Panthers') return 'Panthers';
+    if (teamName === 'Los Angeles Kings') return 'Kings';
+    if (teamName === 'Minnesota Wild') return 'Wild';
+    if (teamName === 'Montréal Canadiens') return 'Canadiens';
+    if (teamName === 'Nashville Predators') return 'Predators';
+    if (teamName === 'New Jersey Devils') return 'Devils';
+    if (teamName === 'New York Islanders') return 'Islanders';
+    if (teamName === 'New York Rangers') return 'Rangers';
+    if (teamName === 'Ottawa Senators') return 'Senators';
+    if (teamName === 'Philadelphia Flyers') return 'Flyers';
+    if (teamName === 'Pittsburgh Penguins') return 'Penguins';
+    if (teamName === 'San Jose Sharks') return 'Sharks';
+    if (teamName === 'Seattle Kraken') return 'Kraken';
+    if (teamName === 'St. Louis Blues') return 'Blues';
+    if (teamName === 'Tampa Bay Lightning') return 'Lightning';
+    if (teamName === 'Toronto Maple Leafs') return 'Maple Leafs';
+    if (teamName === 'Vancouver Canucks') return 'Canucks';
+    if (teamName === 'Vegas Golden Knights') return 'Golden Knights';
+    if (teamName === 'Washington Capitals') return 'Capitals';
+    if (teamName === 'Winnipeg Jets') return 'Jets';
+    
+    // Default: return the original name if no match found
+    return teamName;
+  },
   
-  return abbreviations[teamName] || teamName;
-}
-
-// Helper function for creating short-form pick text
-function createShortPickText(pick) {
-  // For spreads, moneylines, and over/unders
-  if (pick.betType.includes('Spread') && pick.spread) {
-    // Extract team name from spread and abbreviate it
-    const parts = pick.spread.split(' ');
-    const teamName = parts.slice(0, parts.length - 1).join(' ');
-    const number = parts[parts.length - 1];
-    return `${abbreviateTeamName(teamName)} ${number}`;
-  } else if (pick.betType.includes('Moneyline') && pick.moneyline) {
-    return abbreviateTeamName(pick.moneyline);
-  } else if (pick.betType.includes('Total') && pick.overUnder) {
-    // For over/unders, create a shorter format
-    const parts = pick.overUnder.split(' ');
-    if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
-      return `${parts[0]} ${parts[parts.length - 1]}`;
+  /**
+   * Create a short-form pick text for display
+   * @param {Object} pick - Pick object
+   * @returns {string} - Short-form text of the pick
+   */
+  createShortPickText: (pick) => {
+    // Local function to avoid circular reference
+    const abbreviateTeam = (teamName) => {
+      // NBA teams
+      if (teamName === 'Atlanta Hawks') return 'Hawks';
+      if (teamName === 'Boston Celtics') return 'Celtics';
+      if (teamName === 'Brooklyn Nets') return 'Nets';
+      if (teamName === 'Charlotte Hornets') return 'Hornets';
+      if (teamName === 'Chicago Bulls') return 'Bulls';
+      if (teamName === 'Cleveland Cavaliers') return 'Cavs';
+      if (teamName === 'Dallas Mavericks') return 'Mavs';
+      if (teamName === 'Denver Nuggets') return 'Nuggets';
+      if (teamName === 'Detroit Pistons') return 'Pistons';
+      if (teamName === 'Golden State Warriors') return 'Warriors';
+      if (teamName === 'Houston Rockets') return 'Rockets';
+      if (teamName === 'Indiana Pacers') return 'Pacers';
+      if (teamName === 'Los Angeles Clippers') return 'Clippers';
+      if (teamName === 'Los Angeles Lakers') return 'Lakers';
+      if (teamName === 'Memphis Grizzlies') return 'Grizzlies';
+      if (teamName === 'Miami Heat') return 'Heat';
+      if (teamName === 'Milwaukee Bucks') return 'Bucks';
+      if (teamName === 'Minnesota Timberwolves') return 'Wolves';
+      if (teamName === 'New Orleans Pelicans') return 'Pelicans';
+      if (teamName === 'New York Knicks') return 'Knicks';
+      if (teamName === 'Oklahoma City Thunder') return 'Thunder';
+      if (teamName === 'Orlando Magic') return 'Magic';
+      if (teamName === 'Philadelphia 76ers') return '76ers';
+      if (teamName === 'Phoenix Suns') return 'Suns';
+      if (teamName === 'Portland Trail Blazers') return 'Blazers';
+      if (teamName === 'Sacramento Kings') return 'Kings';
+      if (teamName === 'San Antonio Spurs') return 'Spurs';
+      if (teamName === 'Toronto Raptors') return 'Raptors';
+      if (teamName === 'Utah Jazz') return 'Jazz';
+      if (teamName === 'Washington Wizards') return 'Wizards';
+      
+      // Return original if no match (MLB and NHL teams handled in main abbreviateTeamName method)
+      return teamName;
+    };
+    
+    // For spreads, moneylines, and over/unders
+    if (pick.betType.includes('Spread') && pick.spread) {
+      // Extract team name from spread and abbreviate it
+      const parts = pick.spread.split(' ');
+      const teamName = parts.slice(0, parts.length - 1).join(' ');
+      const number = parts[parts.length - 1];
+      return `${abbreviateTeam(teamName)} ${number}`;
+    } else if (pick.betType.includes('Moneyline') && pick.moneyline) {
+      return abbreviateTeam(pick.moneyline);
+    } else if (pick.betType.includes('Total') && pick.overUnder) {
+      // For over/unders, create a shorter format
+      const parts = pick.overUnder.split(' ');
+      if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
+        return `${parts[0]} ${parts[parts.length - 1]}`;
+      }
+      return pick.overUnder;
     }
-    return pick.overUnder;
-  }
+    
+    // Default case - just return the pick
+    return pick.pick || '';
+  },
   
-  // Default case - just return the pick
-  return pick.pick || '';
-}
-
-// Helper function for default pick analysis
-function enhancePickWithDefaultData(pick) {
-  return {
-    ...pick,
-    garysAnalysis: "Statistical models and situational factors show value in this pick.",
-    garysBullets: [
-      "Strong betting value identified", 
-      "Favorable matchup conditions",
-      "Statistical edge discovered"
-    ],
-    // Ensure these properties are also set for compatibility with card back display
-    pickDetail: "Statistical models and situational factors show value in this pick.",
-    analysis: "Statistical models and situational factors show value in this pick."
-  };
-}
+  /**
+   * Enhance a pick with default data
+   * @param {Object} pick - Pick object
+   * @returns {Object} - Enhanced pick object
+   */
+  enhancePickWithDefaultData: (pick) => {
+    return {
+      ...pick,
+      garysAnalysis: "Statistical models and situational factors show value in this pick.",
+      garysBullets: [
+        "Strong betting value identified", 
+        "Favorable matchup conditions",
+        "Statistical edge discovered"
+      ],
+      // Ensure these properties are also set for compatibility with card back display
+      pickDetail: "Statistical models and situational factors show value in this pick.",
+      analysis: "Statistical models and situational factors show value in this pick."
+    };
+  }
 };
 
 export { picksService };
