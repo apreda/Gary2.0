@@ -22,11 +22,11 @@ export const schedulerService = {
     const today = new Date();
     const targetTime = new Date();
     
-    // Special case for April 16, 2025 - generate at 10:55 AM
+    // Special case for April 16, 2025 - generate at 11:30 AM
     const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
     
     if (isApril16_2025) {
-      targetTime.setHours(10, 55, 0, 0); // 10:55 AM for April 16, 2025
+      targetTime.setHours(11, 30, 0, 0); // 11:30 AM for April 16, 2025
     } else {
       targetTime.setHours(10, 0, 0, 0); // 10:00 AM EST for all other days
     }
@@ -40,10 +40,10 @@ export const schedulerService = {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Check if it's after target time (10:55 AM on April 16, 2025 or 10:00 AM on other days)
+    // Check if it's after target time (11:30 AM on April 16, 2025 or 10:00 AM on other days)
     let isAfterTargetTime;
     if (isApril16_2025) {
-      isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 55));
+      isAfterTargetTime = (currentHour > 11 || (currentHour === 11 && currentMinute >= 30));
     } else {
       isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
     }
@@ -58,9 +58,9 @@ export const schedulerService = {
     console.log('Is after target time?', isAfterTargetTime);
     console.log('Was last gen before target?', lastGenBeforeTarget);
     
-    // If it's past 10:00 AM EST and we haven't generated picks since then, do it
+    // If it's past the target time and we haven't generated picks since then, do it
     if (isAfterTargetTime && lastGenBeforeTarget) {
-      console.log('Standard schedule: Generating new picks at 10:00 AM EST');
+      console.log(`Generating new picks at ${isApril16_2025 ? '11:30 AM' : '10:00 AM'} EST`);
       return true;
     }
     
@@ -69,10 +69,10 @@ export const schedulerService = {
                      lastGen.getMonth() !== now.getMonth() || 
                      lastGen.getFullYear() !== now.getFullYear();
     
-    // Check if after target time (10:55 AM on April 16, 2025 or 10:00 AM on other days)
+    // Check if after target time (11:30 AM on April 16, 2025 or 10:00 AM on other days)
     let isAfterTargetHour;
     if (isApril16_2025) {
-      isAfterTargetHour = now.getHours() > 10 || (now.getHours() === 10 && now.getMinutes() >= 55); // 10:55 AM on April 16
+      isAfterTargetHour = now.getHours() > 11 || (now.getHours() === 11 && now.getMinutes() >= 30); // 11:30 AM on April 16
     } else {
       isAfterTargetHour = now.getHours() > 10 || (now.getHours() === 10 && now.getMinutes() >= 0); // 10:00 AM EST on other days
     }
@@ -97,7 +97,7 @@ export const schedulerService = {
     const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
     
     if (isApril16_2025) {
-      return "10:55 AM";
+      return "11:30 AM";
     } else {
       return "10:00 AM";
     }
@@ -116,7 +116,7 @@ export const schedulerService = {
     // Set target time based on date
     let todayTargetTime = new Date(now);
     if (isApril16_2025) {
-      todayTargetTime.setHours(10, 55, 0, 0); // 10:55 AM on April 16, 2025
+      todayTargetTime.setHours(11, 30, 0, 0); // 11:30 AM on April 16, 2025
     } else {
       todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM on other days
     }
