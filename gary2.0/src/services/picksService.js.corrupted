@@ -24,40 +24,6 @@ const picksService = {
       }
 
       console.log('Storing picks directly in Supabase...');
-      
-      // Get the current date in YYYY-MM-DD format to use as the ID
-      const todayDate = new Date();
-      const currentDateString = todayDate.toISOString().split('T')[0]; // e.g., "2025-04-16"
-      
-      // IMPORTANT FIX: First delete any existing entries for today to prevent duplicates
-      console.log('Removing any existing entries for today to prevent duplicates...');
-      try {
-        const { error: deleteError } = await supabase
-          .from('daily_picks')
-          .delete()
-          .eq('date', currentDateString);
-          
-        if (deleteError) {
-          console.error('Error deleting existing entries:', deleteError);
-          // Continue anyway - we'll try to create a new entry
-        } else {
-          console.log('Successfully removed any existing entries for today');
-        }
-      } catch (deleteErr) {
-        console.error('Unexpected error when deleting existing entries:', deleteErr);
-        // Continue anyway
-      }
-      
-      // Ensure we have an anonymous session for database access
-      await ensureAnonymousSession();
-      
-      // Clean up picks data to ONLY include what's shown on the cards
-      const cleanedPicks = picks.map(pick => {
-        // For a parlay pick
-        if (pick.parlayCard) {
-          const cleanParlay = {
-            id: pick.id,
-            league: 'PARLAY',
             betType: 'Parlay of the Day',
             confidenceLevel: pick.confidenceLevel || 'Medium',
             result: pick.result || 'pending',
@@ -443,12 +409,53 @@ const picksService = {
   },
   
   /**
-        
-        return formattedText;
-      } catch (error) {
-        console.error('Error in normalizer createShortText:', error);
-        return p.pick || '';
+   * Normalize a pick object to ensure it has all required fields for display
+   * @param {Object} pick - Pick object to normalize
+   * @returns {Object} - Normalized pick object
+   */
+  normalizePick: (pick) => {
+    const normalizedPick = {
+      id: pick.id || `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      league: pick.league || 'Unknown',
+      game: pick.game || 'Unknown Game',
+      betType: pick.betType || 'Unknown Bet',
+      pick: pick.pick || pick.moneyline || pick.spread || pick.overUnder || 'Unknown Pick',
+      moneyline: pick.moneyline || '',
+      spread: pick.spread || '',
+      overUnder: pick.overUnder || '',
+      time: pick.time || 'Today',
+      analysis: pick.analysis || pick.pickDetail || pick.garysAnalysis || 'Gary is analyzing this pick.',
+      pickDetail: pick.pickDetail || pick.analysis || pick.garysAnalysis || 'Gary is analyzing this pick.',
+      garysAnalysis: pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.',
+      result: pick.result || 'pending',
+      finalScore: pick.finalScore || '',
+      confidenceLevel: pick.confidenceLevel || 75,
+      primeTimeCard: pick.primeTimeCard || false,
+      silverCard: pick.silverCard || false
+    };
+    
+    // Create a local version of the createShortPickText function to avoid circular references
+    const createShortText = (p) => {
+      // For spreads, moneylines, and over/unders
+      if (p.betType.includes('Spread') && p.spread) {
+        // Extract team name from spread and abbreviate it
+        const parts = p.spread.split(' ');
+        const teamName = parts.slice(0, parts.length - 1).join(' ');
+        const number = parts[parts.length - 1];
+        return `${picksService.abbreviateTeamName(teamName)} ${number}`;
+      } else if (p.betType.includes('Moneyline') && p.moneyline) {
+        return picksService.abbreviateTeamName(p.moneyline);
+      } else if (p.betType.includes('Total') && p.overUnder) {
+        // For over/unders, create a shorter format
+        const parts = p.overUnder.split(' ');
+        if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
+          return `${parts[0]} ${parts[parts.length - 1]}`;
+        }
+        return p.overUnder;
       }
+      
+      // Default case - just return the pick
+      return p.pick || '';
     };
     
     // Add shortened version of the pick for display
@@ -1068,18 +1075,46 @@ const picksService = {
   },
   
   /**
-        formattedText = `${abbreviateTeam(teamName)} ${number}`;
-        console.log(`SPREAD BET (${pick.league}): Formatted as "${formattedText}"`);
+   * Create a short-form pick text for display
+   * @param {Object} pick - Pick object
+   * @returns {string} - Short-form text of the pick with appropriate formatting
+   */
+  createShortPickText: (pick) => {
+    // Use industry standard abbreviations
+    const abbreviateTeam = picksService.abbreviateTeamName;
+    
+    // Function to format odds for display
+    const formatOdds = (odds) => {
+      if (!odds) return '';
+      if (typeof odds === 'number') {
+        return odds > 0 ? `+${odds}` : `${odds}`;
+      }
+      // If already a string with + or -, return as is
+      if (typeof odds === 'string' && (odds.startsWith('+') || odds.startsWith('-'))) {
+        return odds;
+      }
+      // Default format if string without sign
+      return `${odds}`;
+    };
+    
+    try {
+      // Handle each type of bet with consistent formatting across all leagues
+      
+      // For spreads - just team name and number (no SPR text)
+      if (pick.betType && pick.betType.includes('Spread') && pick.spread) {
+        // Extract team name and spread number
+        const parts = pick.spread.split(' ');
+        const teamName = parts.slice(0, parts.length - 1).join(' ');
+        const number = parts[parts.length - 1];
+        return `${abbreviateTeam(teamName)} ${number}`;
       } 
       // For moneylines - show team, ML, and odds
       else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
         // Add odds if available
-        const odds = pick.odds || pick.moneylineOdds || '';
-        // Format as "Team ML Odds" (e.g. "KC ML -115")
-        formattedText = `${abbreviateTeam(pick.moneyline)} ML ${formatOdds(odds)}`.trim();
-        console.log(`MONEYLINE BET (${pick.league}): Formatted as "${formattedText}"`);
+        const odds = pick.odds || pick.moneylineOdds;
+        return `${abbreviateTeam(pick.moneyline)} ML ${formatOdds(odds)}`;
       } 
-      // For totals (over/unders) - just OVER/UNDER and total, no odds
+      // For totals (over/unders) - just show over/under and total
       else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
         const parts = pick.overUnder.split(' ');
         let overUnderType = '';
@@ -1090,37 +1125,25 @@ const picksService = {
           total = parts[parts.length - 1];
         }
         
-        // Format as "OVER/UNDER Total" (e.g., "OVER 6.5")
-        formattedText = `${overUnderType} ${total}`;
-        console.log(`OVER/UNDER BET (${pick.league}): Formatted as "${formattedText}"`);
+        return `${overUnderType} ${total}`;
       }
-      // For Parlay picks
+      // For Parlay picks - show PARLAY with odds
       else if (pick.league === 'PARLAY') {
-        // Include odds if available
+        // Parlay picks should include the odds if available
         const odds = pick.odds || pick.parlayOdds;
-        formattedText = odds ? `PARLAY ${formatOdds(odds)}` : 'PARLAY OF THE DAY';
-        console.log(`PARLAY: Formatted as "${formattedText}"`);
+        return `PARLAY ${formatOdds(odds)}`;
       }
+      
       // Default case for any other type of pick
-      else if (pick.pick) {
-        formattedText = pick.pick;
-        console.log(`DEFAULT FORMATTING (${pick.league}): Using original pick text "${formattedText}"`);
+      if (pick.pick) {
+        return pick.pick;
       }
-      else {
-        formattedText = 'NO PICK';
-        console.log(`NO VALID PICK DATA FOUND (${pick.league || 'Unknown'}): Using "${formattedText}"`);
-      }
-      
-      // Force override shortPick property to ensure it's set correctly
-      if (pick && typeof pick === 'object') {
-        pick.shortPick = formattedText;
-      }
-      
-      return formattedText;
     } catch (error) {
-      console.error('Error in createShortPickText:', error, pick);
-      return pick && pick.pick ? pick.pick : 'NO PICK';
+      console.error('Error formatting pick text:', error, pick);
     }
+    
+    // Final fallback
+    return 'NO PICK';
   },
   
   /**
