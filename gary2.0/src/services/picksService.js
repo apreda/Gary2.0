@@ -4,6 +4,7 @@ import { configLoader } from './configLoader';
 import axios from 'axios';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 import { getTeamAbbreviation } from '../utils/teamAbbreviations';
+import { getIndustryAbbreviation } from '../utils/industryTeamAbbreviations';
 
 /**
  * Service for generating and managing Gary's picks
@@ -40,7 +41,8 @@ const picksService = {
               league: leg.league,
               game: leg.shortGame || leg.game,
               pick: leg.shortPick || leg.pick,
-              team: leg.team || leg.moneyline || ''
+              team: leg.team || leg.moneyline || '',
+              odds: leg.odds || leg.moneylineOdds || '' // Include odds for parlay legs
             }));
           }
           
@@ -62,8 +64,23 @@ const picksService = {
           confidenceLevel: pick.confidenceLevel,
           result: pick.result || 'pending',
           primeTimeCard: !!pick.primeTimeCard,
-          silverCard: !!pick.silverCard
+          silverCard: !!pick.silverCard,
+          time: pick.time || ''
         };
+        
+        // Include odds based on bet type
+        if (pick.betType && pick.betType.includes('Moneyline')) {
+          cleanPick.moneyline = pick.moneyline || '';
+          cleanPick.odds = pick.odds || pick.moneylineOdds || '';
+        } else if (pick.betType && pick.betType.includes('Spread')) {
+          cleanPick.spread = pick.spread || '';
+          cleanPick.odds = pick.odds || pick.spreadOdds || '';
+        } else if (pick.betType && pick.betType.includes('Total')) {
+          cleanPick.overUnder = pick.overUnder || '';
+          cleanPick.odds = pick.odds || pick.totalOdds || '';
+        } else {
+          cleanPick.odds = pick.odds || '';
+        }
         
         // Include just enough data for display without all the raw data
         if (pick.garysAnalysis) {
@@ -991,41 +1008,80 @@ const picksService = {
   /**
    * Abbreviate team names for display purposes
    * @param {string} teamName - Full team name
+   * @param {boolean} useIndustryStandard - Whether to use industry standard abbreviations
    * @returns {string} - Abbreviated team name
    */
-  abbreviateTeamName: (teamName) => {
-    return getTeamAbbreviation(teamName);
+  abbreviateTeamName: (teamName, useIndustryStandard = true) => {
+    // Use industry standard abbreviations by default, fall back to our custom ones
+    return useIndustryStandard ? 
+      getIndustryAbbreviation(teamName) : 
+      getTeamAbbreviation(teamName);
   },
   
   /**
    * Create a short-form pick text for display
    * @param {Object} pick - Pick object
-   * @returns {string} - Short-form text of the pick
+   * @returns {string} - Short-form text of the pick, including odds
    */
   createShortPickText: (pick) => {
-    // Use the same team abbreviation utility for consistency
-    const abbreviateTeam = getTeamAbbreviation;
+    // Use industry standard abbreviations
+    const abbreviateTeam = picksService.abbreviateTeamName;
     
-    // For spreads, moneylines, and over/unders
+    // Function to format odds for display
+    const formatOdds = (odds) => {
+      if (!odds) return '';
+      if (typeof odds === 'number') {
+        return odds > 0 ? `+${odds}` : `${odds}`;
+      }
+      // If already a string with + or -, return as is
+      if (typeof odds === 'string' && (odds.startsWith('+') || odds.startsWith('-'))) {
+        return odds;
+      }
+      // Default format if string without sign
+      return `${odds}`;
+    };
+    
+    // For spreads
     if (pick.betType.includes('Spread') && pick.spread) {
-      // Extract team name from spread and abbreviate it
+      // Extract team name and spread number
       const parts = pick.spread.split(' ');
       const teamName = parts.slice(0, parts.length - 1).join(' ');
       const number = parts[parts.length - 1];
-      return `${abbreviateTeam(teamName)} ${number}`;
-    } else if (pick.betType.includes('Moneyline') && pick.moneyline) {
-      return abbreviateTeam(pick.moneyline);
-    } else if (pick.betType.includes('Total') && pick.overUnder) {
-      // For over/unders, create a shorter format
+      // Add odds if available
+      const odds = pick.odds || pick.spreadOdds;
+      return odds ? 
+        `${abbreviateTeam(teamName)} ${number} (${formatOdds(odds)})` : 
+        `${abbreviateTeam(teamName)} ${number}`;
+    } 
+    // For moneylines
+    else if (pick.betType.includes('Moneyline') && pick.moneyline) {
+      // Add odds if available
+      const odds = pick.odds || pick.moneylineOdds;
+      return odds ? 
+        `${abbreviateTeam(pick.moneyline)} (${formatOdds(odds)})` : 
+        abbreviateTeam(pick.moneyline);
+    } 
+    // For totals (over/unders)
+    else if (pick.betType.includes('Total') && pick.overUnder) {
       const parts = pick.overUnder.split(' ');
+      let formattedText = pick.overUnder;
+      
       if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
-        return `${parts[0]} ${parts[parts.length - 1]}`;
+        formattedText = `${parts[0]} ${parts[parts.length - 1]}`;
       }
-      return pick.overUnder;
+      
+      // Add odds if available
+      const odds = pick.odds || pick.totalOdds;
+      return odds ? 
+        `${formattedText} (${formatOdds(odds)})` : 
+        formattedText;
     }
     
-    // Default case - just return the pick
-    return pick.pick || '';
+    // Default case - include odds if available
+    const odds = pick.odds;
+    return odds ? 
+      `${pick.pick || ''} (${formatOdds(odds)})` : 
+      (pick.pick || '');
   },
   
   /**

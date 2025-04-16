@@ -735,20 +735,32 @@ export function RealGaryPicks() {
                           <div className="pick-card-content">
                             <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
                             <div className="pick-card-bet">
+                              {/* Format the pick display with odds included */}
                               {pick.shortPick || 
                                ((pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) ? 
-                                (picksService.abbreviateTeamName(pick.moneyline)) : 
+                                (() => {
+                                  const odds = pick.odds || pick.moneylineOdds;
+                                  const teamAbbr = picksService.abbreviateTeamName(pick.moneyline);
+                                  return odds ? `${teamAbbr} (${odds})` : teamAbbr;
+                                })() : 
                                (pick.betType && pick.betType.includes('Spread') && pick.spread) ? 
                                 (() => {
                                   const parts = pick.spread.split(' ');
                                   const teamName = parts.slice(0, parts.length - 1).join(' ');
                                   const number = parts[parts.length - 1];
-                                  return `${picksService.abbreviateTeamName(teamName)} ${number}`;
+                                  const teamAbbr = picksService.abbreviateTeamName(teamName);
+                                  const odds = pick.odds || pick.spreadOdds;
+                                  return odds ? `${teamAbbr} ${number} (${odds})` : `${teamAbbr} ${number}`;
                                 })() :
                                pick.overUnder ? 
-                                pick.overUnder :
-                                pick.pick || 
-                                `Over ${pick.game.split(' vs ')[0]}`)}
+                                (() => {
+                                  const odds = pick.odds || pick.totalOdds;
+                                  return odds ? `${pick.overUnder} (${odds})` : pick.overUnder;
+                                })() :
+                                (() => {
+                                  const odds = pick.odds;
+                                  return odds ? `${pick.pick || ''} (${odds})` : (pick.pick || `Over ${pick.game.split(' vs ')[0]}`);
+                                })())}                               
                             </div>
                             {pick.result && pick.result !== 'pending' && (
                               <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
