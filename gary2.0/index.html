@@ -16,19 +16,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet" />
     <title>Gary A.I. - Sports Handicapping & Betting Picks</title>
-    <script>
-      // Mobile detection disabled
-      (function() {
-        // Completely disabled mobile detection to ensure desktop view always shows
-        var isMobile = false; // Force desktop mode
-        
-        // Remove any existing mobile classes or storage
-        document.documentElement.classList.remove('mobile-device');
-        document.documentElement.classList.remove('mobile-fix');
-        localStorage.removeItem('viewMode');
-        console.log('Mobile detection disabled - forcing desktop view');
-      })();
-    </script>
+
     <style>
       /* Basic CSS reset to ensure visibility */
       body {
@@ -47,65 +35,12 @@
         opacity: 1 !important;
       }
       
-      /* MOBILE STYLES - Direct inclusion to ensure they load */
-      @media screen and (max-width: 768px) {
-        /* Make cards visible with gold styling */
-        .mobile-fix .pick-card,
-        .pick-card {
-          max-width: 300px !important;
-          min-height: 450px !important;
-          height: auto !important;
-          margin: 0 auto !important;
-          display: block !important;
-          visibility: visible !important;
-          opacity: 1 !important;
-          border: 2px solid #d4af37 !important;
-          background: linear-gradient(145deg, #d4af37, #b08d1c) !important;
-        }
-        
-        /* Hide Gary's Analysis title */
-        .gary-analysis-title,
-        h3.analysis-title,
-        h3[class*="analysis"] {
-          display: none !important;
-          height: 0 !important;
-          visibility: hidden !important;
-        }
-        
-        /* Ensure cards flip properly */
-        .pick-card .pick-card-inner {
-          transform-style: preserve-3d !important;
-          transition: transform 0.6s ease !important;
-        }
-        
-        .pick-card.flipped .pick-card-inner {
-          transform: rotateY(180deg) !important;
-        }
-        
-        /* Style decision buttons */
-        .btn-decision[data-decision="ride"] {
-          background-color: #d4af37 !important;
-          color: #000 !important;
-        }
-        
-        .btn-decision[data-decision="fade"] {
-          background-color: #222 !important;
-          color: #d4af37 !important;
-          border: 1px solid #d4af37 !important;
-        }
-        
-        /* Carousel arrows */
-        .carousel-control {
-          display: block !important;
-          z-index: 999 !important;
-        }
-      }
     </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script type="module" src="/src/pages/gary-caps.js"></script>
-    <script src="/assets/js/MobileInit.js"></script>
+
   </body>
 </html>
