@@ -22,7 +22,7 @@ import { picksPersistenceService } from '../services/picksPersistenceService';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 import { useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { useUserAuth } from '../hooks/useUserAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { useUserBets } from '../hooks/useUserBets';
 import { useUserResults } from '../hooks/useUserResults';
