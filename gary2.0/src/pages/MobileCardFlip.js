@@ -52,42 +52,42 @@ function adjustViewportForMobile() {
 function fixMobileCardFlipping() {
   console.log("Applying mobile card flip fixes");
   
-  // COMPLETELY DISABLE the carousel's ability to rotate on card clicks
+  // Enable the carousel's ability to rotate properly
   const carousel = document.querySelector('.carousel');
   if (carousel) {
-    // Clone to remove ALL existing handlers
+    // Clone to reset handlers but maintain carousel functionality
     const newCarousel = carousel.cloneNode(false);
     Array.from(carousel.children).forEach(child => newCarousel.appendChild(child));
     if (carousel.parentNode) {
       carousel.parentNode.replaceChild(newCarousel, carousel);
     }
     
-    // Set the carousel to ignore ALL events except specific ones on the arrows
-    newCarousel.style.pointerEvents = 'none';
+    // Allow carousel to receive events for proper rotation
+    newCarousel.style.pointerEvents = 'auto';
     
-    // Prevent the carousel from receiving ANY touch events that might cause rotation
+    // Allow carousel rotation from controls and swipes, but manage card flipping separately
     newCarousel.addEventListener('click', function(e) {
-      // Cancel ALL click events on the carousel itself
-      if (!e.target.closest('.carousel-control')) {
-        e.stopPropagation();
-        e.preventDefault();
-        return false;
+      // Only stop propagation for clicks on cards, allow carousel controls to work
+      if (e.target.closest('.pick-card') && !e.target.closest('.carousel-control')) {
+        // Don't stop propagation completely to allow carousel to work
+        // But do handle card flipping in the card's own event handler
       }
-    }, true);
+    }, false);
     
-    // Prevent any touch events from being interpreted as swipes
+    // Allow swipe gestures for carousel movement
     newCarousel.addEventListener('touchstart', function(e) {
-      if (!e.target.closest('.carousel-control')) {
-        e.stopPropagation();
+      // Allow touch events on controls and carousel for swiping
+      if (e.target.closest('.pick-card') && !e.target.closest('.carousel-control')) {
+        // We'll handle card-specific behavior in the card handler
       }
-    }, {passive: false, capture: true});
+    }, {passive: true});
     
     newCarousel.addEventListener('touchmove', function(e) {
-      if (!e.target.closest('.carousel-control')) {
-        e.stopPropagation();
-        e.preventDefault();
+      // Allow movement for carousel swiping
+      if (e.target.closest('.pick-card') && !e.target.closest('.carousel-control')) {
+        // We'll handle card-specific behavior in the card handler
       }
-    }, {passive: false, capture: true});
+    }, {passive: true});
   }
   
   // Get all cards
@@ -104,38 +104,61 @@ function fixMobileCardFlipping() {
       newCard.className = classes; // Restore classes including 'flipped' if present
     }
     
-    // CRITICAL: Block ALL events that might cause carousel rotation
+    // Handle card flipping without blocking carousel rotation
     newCard.addEventListener('click', function(e) {
-      // Always stop propagation for ANY click on the card
-      e.stopPropagation();
-      e.preventDefault();
+      // Only prevent default for card flipping to allow carousel to work
+      if (!e.target.closest('.carousel-control')) {
+        e.preventDefault(); // Don't stop propagation to allow carousel to work
+      }
+      
+      // Handle view pick button clicks separately
+      if (e.target.closest('.btn-view-pick')) {
+        this.classList.add('flipped');
+        return;
+      }
       
       // Only flip back if already flipped and not clicking buttons
       if (this.classList.contains('flipped') && 
-          !e.target.closest('.btn-view-pick') && 
           !e.target.closest('.btn-decision') && 
           !e.target.closest('.pick-card-actions')) {
         this.classList.remove('flipped');
+      } else if (!this.classList.contains('flipped') && 
+                !e.target.closest('.carousel-control')) {
+        // If not flipped and not clicking carousel controls, flip the card
+        this.classList.add('flipped');
       }
-      
-      // Never allow click events to go to the carousel
-      return false;
-    }, true);
+    }, false);
     
-    // Prevent any swipe/touch events on cards
+    // Handle card touch events without completely blocking carousel swipes
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
     newCard.addEventListener('touchstart', function(e) {
-      // Always stop propagation except for controls
-      if (!e.target.closest('.carousel-control')) {
-        e.stopPropagation();
+      // Record start position for detecting swipes vs taps
+      touchStartX = e.touches[0].clientX;
+      
+      // Don't block carousel controls
+      if (e.target.closest('.carousel-control')) {
+        return;
       }
-    }, {passive: false, capture: true});
+    }, {passive: true});
     
     newCard.addEventListener('touchmove', function(e) {
-      if (!e.target.closest('.carousel-control')) {
-        e.stopPropagation();
-        e.preventDefault();
+      // Record current position
+      touchEndX = e.touches[0].clientX;
+      
+      // Don't block carousel controls
+      if (e.target.closest('.carousel-control')) {
+        return;
       }
-    }, {passive: false, capture: true});
+      
+      // If it's a clear horizontal swipe (more than 50px), let carousel handle it
+      const swipeDistance = Math.abs(touchEndX - touchStartX);
+      if (swipeDistance > 50) {
+        // Let the carousel handle the swipe
+        return;
+      }
+    }, {passive: true});
     
     // Handle View Pick button
     const viewButton = newCard.querySelector('.btn-view-pick');
@@ -177,19 +200,20 @@ function fixMobileCardFlipping() {
     newControl.style.pointerEvents = 'auto';
     newControl.style.zIndex = '999';
     
-    // Add proper listeners for controls
+    // Enhanced listeners for carousel controls
     newControl.addEventListener('touchstart', function(e) {
       // Let this event work normally for carousel navigation
-      e.stopPropagation();
-    }, {capture: true, passive: false});
+      console.log("Carousel control touch started");
+      // Don't stop propagation to allow normal carousel behavior
+    }, {passive: true});
     
     newControl.addEventListener('click', function(e) {
-      e.stopPropagation();
       console.log("Carousel control clicked");
+      // Don't stop propagation to allow normal carousel behavior
       
       // Re-apply fixes after carousel rotation
       setTimeout(fixMobileCardFlipping, 300);
-    }, true);
+    }, false);
   });
   
   // Detect and fix for Safari on iOS
