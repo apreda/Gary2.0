@@ -5,6 +5,7 @@ import axios from 'axios';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 import { getTeamAbbreviation } from '../utils/teamAbbreviations';
 import { getIndustryAbbreviation } from '../utils/industryTeamAbbreviations';
+import { picksPersistenceService } from './picksPersistenceService';
 
 /**
  * Service for generating and managing Gary's picks
@@ -17,6 +18,9 @@ const picksService = {
    */
   storeDailyPicksInDatabase: async (picks) => {
     try {
+      console.log('Attempting to store picks in Supabase database...');
+      console.log('Number of picks to store:', picks.length);
+      
       // Ensure we have an anonymous session for database access
       await ensureAnonymousSession();
       
@@ -31,7 +35,8 @@ const picksService = {
             confidenceLevel: pick.confidenceLevel || 'Medium',
             result: pick.result || 'pending',
             parlayCard: true,
-            odds: pick.odds || '+350'  // Include odds if available
+            odds: pick.odds || '+350',  // Include odds if available
+            shortPick: pick.shortPick || 'Parlay of the Day'
           };
           
           // Only include minimal information for parlay legs
@@ -82,6 +87,11 @@ const picksService = {
           cleanPick.odds = pick.odds || '';
         }
         
+        // Ensure shortPick is always available
+        if (!cleanPick.shortPick) {
+          cleanPick.shortPick = picksService.createShortPickText(cleanPick);
+        }
+        
         // Include just enough data for display without all the raw data
         if (pick.garysAnalysis) {
           cleanPick.analysis = pick.garysAnalysis.substring(0, 150) + '...'; 
@@ -98,14 +108,25 @@ const picksService = {
       const today = new Date();
       const dateString = today.toISOString().split('T')[0]; // e.g., "2025-04-16"
       
+      console.log('Date string for database entry:', dateString);
+      console.log('Sample pick data to be stored:', JSON.stringify(cleanedPicks[0], null, 2));
+      
       // Check if an entry for today already exists
-      const { data: existingData } = await supabase
+      const { data: existingData, error: checkError } = await supabase
         .from('daily_picks')
         .select('*')
         .eq('date', dateString)
         .single();
       
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking for existing data:', checkError);
+        throw checkError;
+      }
+      
+      let result;
+      
       if (existingData) {
+        console.log('Found existing record for today, updating...');
         // Update existing record
         const { data, error } = await supabase
           .from('daily_picks')
@@ -115,10 +136,14 @@ const picksService = {
           })
           .eq('date', dateString);
           
-        if (error) throw error;
-        console.log('Updated picks in database for', dateString);
-        return data;
+        if (error) {
+          console.error('Error updating existing record:', error);
+          throw error;
+        }
+        console.log('Successfully updated picks in database for', dateString);
+        result = data;
       } else {
+        console.log('No existing record found, creating new entry...');
         // Create new record
         const { data, error } = await supabase
           .from('daily_picks')
@@ -131,10 +156,31 @@ const picksService = {
             }
           ]);
           
-        if (error) throw error;
-        console.log('Stored new picks in database for', dateString);
-        return data;
+        if (error) {
+          console.error('Error creating new record:', error);
+          throw error;
+        }
+        console.log('Successfully created new picks in database for', dateString);
+        result = data;
       }
+      
+      // Double-check that the data was actually saved
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('daily_picks')
+        .select('*')
+        .eq('date', dateString)
+        .single();
+        
+      if (verifyError) {
+        console.error('Error verifying data was saved:', verifyError);
+      } else if (!verifyData || !verifyData.picks || verifyData.picks.length === 0) {
+        console.error('Data verification failed - entry exists but picks are missing or empty');
+      } else {
+        console.log('Verification successful - picks are saved in Supabase');
+        console.log('Number of picks saved:', verifyData.picks.length);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error storing picks in database:', error);
       throw error;
@@ -993,11 +1039,28 @@ const picksService = {
         console.error('Error generating primetime pick:', error);
       }
       
-      // 8. Normalize all picks to ensure they have all the required fields for display
-      allPicks = allPicks.map(pick => picksService.normalizePick(pick));
+      // 6. Run all picks through enhancePickWithDefaultData to ensure complete data
+      allPicks = allPicks.map(pick => picksService.enhancePickWithDefaultData(pick));
       
-      // 9. Log how many real picks we generated - no minimum requirement
+      // 7. Log how many real picks we generated - no minimum requirement
       console.log(`Successfully generated ${allPicks.length} real picks. No fallbacks will be used.`);
+      
+      // 8. Store in database for future use and sharing across all users
+      try {
+        console.log('Saving picks to Supabase database...');
+        await picksService.storeDailyPicksInDatabase(allPicks);
+        console.log('Successfully stored picks in Supabase database');
+      } catch (storageError) {
+        console.error('Error storing picks in database:', storageError);
+        // Try the persistence service as a backup
+        try {
+          console.log('Attempting to save using picksPersistenceService...');
+          const savedSuccessfully = await picksPersistenceService.savePicks(allPicks);
+          console.log('picksPersistenceService save result:', savedSuccessfully);
+        } catch (persistError) {
+          console.error('Failed to save with persistence service:', persistError);
+        }
+      }
       
       return allPicks;
     } catch (error) {
@@ -1021,7 +1084,7 @@ const picksService = {
   /**
    * Create a short-form pick text for display
    * @param {Object} pick - Pick object
-   * @returns {string} - Short-form text of the pick, including odds
+   * @returns {string} - Short-form text of the pick, following format: Team Abbreviation, Bet Type, Odds
    */
   createShortPickText: (pick) => {
     // Use industry standard abbreviations
@@ -1049,39 +1112,36 @@ const picksService = {
       const number = parts[parts.length - 1];
       // Add odds if available
       const odds = pick.odds || pick.spreadOdds;
-      return odds ? 
-        `${abbreviateTeam(teamName)} ${number} (${formatOdds(odds)})` : 
-        `${abbreviateTeam(teamName)} ${number}`;
+      return `${abbreviateTeam(teamName)} SPR ${number} ${formatOdds(odds)}`;
     } 
     // For moneylines
     else if (pick.betType.includes('Moneyline') && pick.moneyline) {
       // Add odds if available
       const odds = pick.odds || pick.moneylineOdds;
-      return odds ? 
-        `${abbreviateTeam(pick.moneyline)} (${formatOdds(odds)})` : 
-        abbreviateTeam(pick.moneyline);
+      return `${abbreviateTeam(pick.moneyline)} ML ${formatOdds(odds)}`;
     } 
     // For totals (over/unders)
     else if (pick.betType.includes('Total') && pick.overUnder) {
       const parts = pick.overUnder.split(' ');
-      let formattedText = pick.overUnder;
+      let overUnderType = '';
+      let total = '';
       
       if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
-        formattedText = `${parts[0]} ${parts[parts.length - 1]}`;
+        overUnderType = parts[0].toUpperCase();
+        total = parts[parts.length - 1];
       }
       
       // Add odds if available
       const odds = pick.odds || pick.totalOdds;
-      return odds ? 
-        `${formattedText} (${formatOdds(odds)})` : 
-        formattedText;
+      return `${overUnderType} ${total} ${formatOdds(odds)}`;
     }
     
-    // Default case - include odds if available
-    const odds = pick.odds;
-    return odds ? 
-      `${pick.pick || ''} (${formatOdds(odds)})` : 
-      (pick.pick || '');
+    // Default case
+    const odds = pick.odds || '+100';
+    if (pick.pick) {
+      return `${pick.pick} ${formatOdds(odds)}`;
+    }
+    return 'NO PICK';
   },
   
   /**
@@ -1089,19 +1149,36 @@ const picksService = {
    * @param {Object} pick - Pick object
    * @returns {Object} - Enhanced pick object
    */
+  /**
+   * Enhance a pick with default data
+   * @param {Object} pick - Pick object
+   * @returns {Object} - Enhanced pick object
+   */
   enhancePickWithDefaultData: (pick) => {
-    return {
+    // Make sure we don't lose any existing data
+    const enhanced = {
       ...pick,
-      garysAnalysis: "Statistical models and situational factors show value in this pick.",
-      garysBullets: [
+      garysAnalysis: pick.garysAnalysis || "Statistical models and situational factors show value in this pick.",
+      garysBullets: pick.garysBullets || [
         "Strong betting value identified", 
         "Favorable matchup conditions",
         "Statistical edge discovered"
       ],
       // Ensure these properties are also set for compatibility with card back display
-      pickDetail: "Statistical models and situational factors show value in this pick.",
-      analysis: "Statistical models and situational factors show value in this pick."
+      pickDetail: pick.pickDetail || "Statistical models and situational factors show value in this pick.",
+      analysis: pick.analysis || "Statistical models and situational factors show value in this pick."
     };
+    
+    // Generate shortPick and shortGame if not present
+    if (!enhanced.shortPick && enhanced.pick) {
+      enhanced.shortPick = picksService.createShortPickText(enhanced);
+    }
+    if (!enhanced.shortGame && enhanced.game) {
+      enhanced.shortGame = enhanced.game.split(' at ').map(team => 
+        picksService.abbreviateTeamName(team)).join(' vs ');
+    }
+    
+    return enhanced;
   }
 };
 

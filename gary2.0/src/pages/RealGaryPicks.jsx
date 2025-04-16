@@ -83,7 +83,7 @@ export function RealGaryPicks() {
     return true; // Show all cards in the carousel as per original design
   };
   
-  // State for tracking user decisions
+  // State for user bet decisions
   const [userDecisions, setUserDecisions] = useState(() => {
     const savedDecisions = localStorage.getItem('userPickDecisions');
     return savedDecisions ? JSON.parse(savedDecisions) : {};
@@ -338,57 +338,87 @@ export function RealGaryPicks() {
 
   // Get a random response from Gary
   const getRandomResponse = (responseType) => {
-    const responses = GARY_RESPONSES[responseType];
-    return responses[Math.floor(Math.random() * responses.length)];
+    try {
+      const responses = GARY_RESPONSES[responseType];
+      if (!responses || !Array.isArray(responses)) {
+        console.error('Invalid responses for type:', responseType);
+        return 'Thanks for your bet!';
+      }
+      return responses[Math.floor(Math.random() * responses.length)];
+    } catch (error) {
+      console.error('Error getting random response:', error);
+      return 'Thanks for your bet!';
+    }
   };
 
   // Handle user betting decision
   const handleDecision = async (pickId, decision) => {
+    console.log(`Button clicked: ${decision} for pick ${pickId}`);
+    
     // Prevent multiple decisions on the same pick
     if (userDecisions[pickId]) {
+      console.log('Decision already made for this pick');
       return;
     }
     
     try {
-      // Get current user ID if logged in
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
+      // Create a simpler implementation for now in case the service is causing issues
+      // Update local state immediately for responsive UI
+      setUserDecisions(prev => ({
+        ...prev,
+        [pickId]: decision
+      }));
       
-      // Save the decision using our tracking service
-      const result = await betTrackingService.saveBetDecision(pickId, decision, userId);
-      
-      if (result.success) {
-        // Get the updated decisions
-        const decisions = betTrackingService.getBetDecisions();
+      // Save decision to localStorage directly
+      try {
+        const savedDecisions = localStorage.getItem('userPickDecisions') || '{}';
+        const decisions = JSON.parse(savedDecisions);
         
-        // Update the local state with the simplified version for checking disabled state
-        const simplifiedDecisions = {};
-        Object.keys(decisions).forEach(id => {
-          simplifiedDecisions[id] = decisions[id].decision;
+        decisions[pickId] = {
+          decision,
+          timestamp: new Date().toISOString(),
+          result: null
+        };
+        
+        localStorage.setItem('userPickDecisions', JSON.stringify(decisions));
+        console.log('Decision saved to localStorage');
+      } catch (localError) {
+        console.error('Error saving to localStorage:', localError);
+      }
+      
+      // Try to use the tracking service as a backup
+      try {
+        // Get current user ID if logged in
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        
+        // Save the decision using our tracking service
+        await betTrackingService.saveBetDecision(pickId, decision, userId);
+        console.log('Decision saved via tracking service');
+      } catch (serviceError) {
+        console.error('Error with bet tracking service:', serviceError);
+        // Already saved to localStorage above, so we can continue
+      }
+      
+      // Show toast notification with the appropriate response
+      const response = getRandomResponse(decision);
+      setToastMessage(response);
+      setShowToast(true);
+      
+      // Log the decision
+      console.log(`User ${decision === 'ride' ? 'rode with' : 'faded'} Gary on pick ${pickId}`);
+      
+      // Hide toast after 4 seconds
+      setTimeout(() => {
+        setShowToast(false);
+      }, 4000);
+      
+      // Update user stats if available
+      if (updateUserStats) {
+        updateUserStats({
+          action: decision === 'ride' ? 'rode_with_gary' : 'faded_gary',
+          pickId
         });
-        
-        setUserDecisions(simplifiedDecisions);
-        
-        // Show toast notification with the appropriate response
-        const response = getRandomResponse(decision);
-        setToastMessage(response);
-        setShowToast(true);
-        
-        // Log the decision for debugging
-        console.log(`User ${decision === 'ride' ? 'rode with' : 'faded'} Gary on pick ${pickId}`);
-        
-        // Hide toast after 4 seconds
-        setTimeout(() => {
-          setShowToast(false);
-        }, 4000);
-        
-        // Update user stats if available
-        if (updateUserStats) {
-          updateUserStats({
-            action: decision === 'ride' ? 'rode_with_gary' : 'faded_gary',
-            pickId
-          });
-        }
       }
     } catch (error) {
       console.error('Error processing bet decision:', error);
