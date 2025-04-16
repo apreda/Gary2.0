@@ -113,10 +113,18 @@ export function RealGaryPicks() {
             });
           }
           
-          // Decision buttons preservation
+          // Decision buttons handling
           cleanCard.querySelectorAll('.btn-decision').forEach(btn => {
             btn.addEventListener('click', (e) => {
               e.stopPropagation();
+              e.preventDefault();
+              
+              // Extract the pick ID and decision type
+              const pickId = cleanCard.getAttribute('data-pick-id');
+              const decision = btn.classList.contains('btn-ride') ? 'ride' : 'fade';
+              
+              // Call the handleDecision function directly
+              window.handleCardDecision(pickId, decision);
             });
           });
           
@@ -356,6 +364,22 @@ export function RealGaryPicks() {
     fetchPicks();
   }, []);
   
+  // Create a global handler for decision buttons that works with the mobile fixes
+  useEffect(() => {
+    window.handleCardDecision = (pickId, decision) => {
+      console.log(`Global handler called for pick: ${pickId}, decision: ${decision}`);
+      handleDecision(pickId, decision);
+    };
+    
+    // Initial fetch of picks
+    fetchPicks();
+    
+    return () => {
+      // Clean up when component unmounts
+      delete window.handleCardDecision;
+    };
+  }, []);
+  
   // Autoplay function (disabled - kept for potential future use)
   const startAutoplay = () => {
     // Autoplay disabled - cards only change when arrows are clicked
@@ -585,6 +609,7 @@ export function RealGaryPicks() {
                 {picks.map((pick, index) => (
                   <div 
                     key={pick.id}
+                    data-pick-id={pick.id}
                     className={`pick-card ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.silverCard ? 'silver-card' : ''} ${pick.primeTimeCard ? 'primetime-card' : ''} ${getCardPositionClass(index)} ${flippedCards[pick.id] ? 'pick-card-flipped' : ''}`}
                     onClick={() => toggleFlip(pick.id)}
                   >
@@ -597,7 +622,7 @@ export function RealGaryPicks() {
                           </div>
                           {pick.league === 'PARLAY' ? (
                             <>
-                              <div className="pick-card-matchup">{pick.game}</div>
+                              <div className="pick-card-matchup">{pick.shortGame || pick.game}</div>
                               <div className="pick-card-time">{pick.time}</div>
                             </>
                           ) : (
@@ -634,7 +659,7 @@ export function RealGaryPicks() {
                           <div className={pick.league === 'PARLAY' ? 'parlay-badge' : pick.primeTimeCard ? 'primetime-badge' : 'pick-card-league'}>
                             {pick.primeTimeCard ? 'PRIMETIME BONUS PICK' : pick.league}
                           </div>
-                          <div className="pick-card-matchup">{pick.game}</div>
+                          <div className="pick-card-matchup">{pick.shortGame || pick.game}</div>
                           <div className="pick-card-time">{pick.time}</div>
                         </div>
                         
@@ -642,7 +667,7 @@ export function RealGaryPicks() {
                           <div className="pick-card-content">
                             <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
                             <div className="pick-card-bet">
-                              {pick.pick ? pick.pick : 
+                              {pick.shortPick || pick.pick || 
                               pick.betType === 'Best Bet: Moneyline' ? pick.moneyline : 
                               pick.betType === 'Spread Pick' ? pick.spread : 
                               pick.overUnder ? pick.overUnder : 

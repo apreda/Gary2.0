@@ -173,7 +173,7 @@ const picksService = {
    * @returns {Object} - Normalized pick object
    */
   normalizePick: (pick) => {
-    return {
+    const normalizedPick = {
       id: pick.id || `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       league: pick.league || 'Unknown',
       game: pick.game || 'Unknown Game',
@@ -192,6 +192,19 @@ const picksService = {
       primeTimeCard: pick.primeTimeCard || false,
       silverCard: pick.silverCard || false
     };
+    
+    // Add shortened version of the pick for display
+    normalizedPick.shortPick = createShortPickText(normalizedPick);
+    
+    // Abbreviate team names in the game title
+    if (normalizedPick.game && normalizedPick.game.includes(' vs ')) {
+      const teams = normalizedPick.game.split(' vs ');
+      normalizedPick.shortGame = `${abbreviateTeamName(teams[0])} vs ${abbreviateTeamName(teams[1])}`;
+    } else {
+      normalizedPick.shortGame = normalizedPick.game;
+    }
+    
+    return normalizedPick;
   },
   
   /**
@@ -541,13 +554,13 @@ const picksService = {
         'soccer_italy_serie_a'
       ];
       
-      // Sort sports by priority and take top 4
+      // Sort sports by priority and take top 5 (to allow for up to 5 regular picks)
       const prioritizedSports = activeSports.sort((a, b) => {
         const aIndex = sportPriority.indexOf(a);
         const bIndex = sportPriority.indexOf(b);
         // If sport isn't in priority list, give it a low priority
         return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-      }).slice(0, 4);
+      }).slice(0, 5);
       
       console.log(`Selected ${prioritizedSports.length} prioritized sports: ${prioritizedSports.join(', ')}`);
       
@@ -726,10 +739,38 @@ const picksService = {
         console.error('Error generating parlay:', error);
       }
       
-      // 7. Normalize all picks to ensure they have all the required fields for display
+      // 7. Add a primetime pick (choose the best pick and mark it as primetime)
+      try {
+        // Find the highest confidence pick that isn't already a primetime pick
+        const regularPicks = allPicks.filter(pick => pick.league !== 'PARLAY' && !pick.primeTimeCard);
+        if (regularPicks.length > 0) {
+          // Sort by confidence (descending)
+          regularPicks.sort((a, b) => b.confidenceLevel - a.confidenceLevel);
+          
+          // Take the highest confidence pick and create a new primetime version
+          const bestPick = regularPicks[0];
+          const primetimePick = {
+            ...bestPick,
+            id: `primetime-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            primeTimeCard: true,
+            analysis: `PRIMETIME PICK: ${bestPick.analysis}`,
+            pickDetail: `PRIMETIME PICK: ${bestPick.pickDetail}`,
+            garysAnalysis: `PRIMETIME PICK: ${bestPick.garysAnalysis}`
+          };
+          
+          allPicks.push(primetimePick);
+          console.log('Added primetime pick based on highest confidence pick.');
+        } else {
+          console.log('No regular picks available to create a primetime pick.');
+        }
+      } catch (error) {
+        console.error('Error generating primetime pick:', error);
+      }
+      
+      // 8. Normalize all picks to ensure they have all the required fields for display
       allPicks = allPicks.map(pick => picksService.normalizePick(pick));
       
-      // 7. Log how many real picks we generated - no minimum requirement
+      // 9. Log how many real picks we generated - no minimum requirement
       console.log(`Successfully generated ${allPicks.length} real picks. No fallbacks will be used.`);
       
       return allPicks;
@@ -739,6 +780,135 @@ const picksService = {
     }
   }
 };
+
+// Helper function to abbreviate team names
+function abbreviateTeamName(teamName) {
+  const abbreviations = {
+    // NBA
+    'Atlanta Hawks': 'Hawks',
+    'Boston Celtics': 'Celtics',
+    'Brooklyn Nets': 'Nets',
+    'Charlotte Hornets': 'Hornets',
+    'Chicago Bulls': 'Bulls',
+    'Cleveland Cavaliers': 'Cavs',
+    'Dallas Mavericks': 'Mavs',
+    'Denver Nuggets': 'Nuggets',
+    'Detroit Pistons': 'Pistons',
+    'Golden State Warriors': 'Warriors',
+    'Houston Rockets': 'Rockets',
+    'Indiana Pacers': 'Pacers',
+    'Los Angeles Clippers': 'Clippers',
+    'Los Angeles Lakers': 'Lakers',
+    'Memphis Grizzlies': 'Grizzlies',
+    'Miami Heat': 'Heat',
+    'Milwaukee Bucks': 'Bucks',
+    'Minnesota Timberwolves': 'Wolves',
+    'New Orleans Pelicans': 'Pelicans',
+    'New York Knicks': 'Knicks',
+    'Oklahoma City Thunder': 'Thunder',
+    'Orlando Magic': 'Magic',
+    'Philadelphia 76ers': '76ers',
+    'Phoenix Suns': 'Suns',
+    'Portland Trail Blazers': 'Blazers',
+    'Sacramento Kings': 'Kings',
+    'San Antonio Spurs': 'Spurs',
+    'Toronto Raptors': 'Raptors',
+    'Utah Jazz': 'Jazz',
+    'Washington Wizards': 'Wizards',
+    
+    // MLB
+    'Arizona Diamondbacks': 'D-backs',
+    'Atlanta Braves': 'Braves',
+    'Baltimore Orioles': 'Orioles',
+    'Boston Red Sox': 'Red Sox',
+    'Chicago Cubs': 'Cubs',
+    'Chicago White Sox': 'White Sox',
+    'Cincinnati Reds': 'Reds',
+    'Cleveland Guardians': 'Guardians',
+    'Colorado Rockies': 'Rockies',
+    'Detroit Tigers': 'Tigers',
+    'Houston Astros': 'Astros',
+    'Kansas City Royals': 'Royals',
+    'Los Angeles Angels': 'Angels',
+    'Los Angeles Dodgers': 'Dodgers',
+    'Miami Marlins': 'Marlins',
+    'Milwaukee Brewers': 'Brewers',
+    'Minnesota Twins': 'Twins',
+    'New York Mets': 'Mets',
+    'New York Yankees': 'Yankees',
+    'Oakland Athletics': 'A\'s',
+    'Philadelphia Phillies': 'Phillies',
+    'Pittsburgh Pirates': 'Pirates',
+    'San Diego Padres': 'Padres',
+    'San Francisco Giants': 'Giants',
+    'Seattle Mariners': 'Mariners',
+    'St. Louis Cardinals': 'Cardinals',
+    'Tampa Bay Rays': 'Rays',
+    'Texas Rangers': 'Rangers',
+    'Toronto Blue Jays': 'Blue Jays',
+    'Washington Nationals': 'Nationals',
+    
+    // NHL
+    'Anaheim Ducks': 'Ducks',
+    'Arizona Coyotes': 'Coyotes',
+    'Boston Bruins': 'Bruins',
+    'Buffalo Sabres': 'Sabres',
+    'Calgary Flames': 'Flames',
+    'Carolina Hurricanes': 'Hurricanes',
+    'Chicago Blackhawks': 'Blackhawks',
+    'Colorado Avalanche': 'Avalanche',
+    'Columbus Blue Jackets': 'Blue Jackets',
+    'Dallas Stars': 'Stars',
+    'Detroit Red Wings': 'Red Wings',
+    'Edmonton Oilers': 'Oilers',
+    'Florida Panthers': 'Panthers',
+    'Los Angeles Kings': 'Kings',
+    'Minnesota Wild': 'Wild',
+    'Montréal Canadiens': 'Canadiens',
+    'Nashville Predators': 'Predators',
+    'New Jersey Devils': 'Devils',
+    'New York Islanders': 'Islanders',
+    'New York Rangers': 'Rangers',
+    'Ottawa Senators': 'Senators',
+    'Philadelphia Flyers': 'Flyers',
+    'Pittsburgh Penguins': 'Penguins',
+    'San Jose Sharks': 'Sharks',
+    'Seattle Kraken': 'Kraken',
+    'St. Louis Blues': 'Blues',
+    'Tampa Bay Lightning': 'Lightning',
+    'Toronto Maple Leafs': 'Maple Leafs',
+    'Vancouver Canucks': 'Canucks',
+    'Vegas Golden Knights': 'Golden Knights',
+    'Washington Capitals': 'Capitals',
+    'Winnipeg Jets': 'Jets'
+  };
+  
+  return abbreviations[teamName] || teamName;
+}
+
+// Helper function for creating short-form pick text
+function createShortPickText(pick) {
+  // For spreads, moneylines, and over/unders
+  if (pick.betType.includes('Spread') && pick.spread) {
+    // Extract team name from spread and abbreviate it
+    const parts = pick.spread.split(' ');
+    const teamName = parts.slice(0, parts.length - 1).join(' ');
+    const number = parts[parts.length - 1];
+    return `${abbreviateTeamName(teamName)} ${number}`;
+  } else if (pick.betType.includes('Moneyline') && pick.moneyline) {
+    return abbreviateTeamName(pick.moneyline);
+  } else if (pick.betType.includes('Total') && pick.overUnder) {
+    // For over/unders, create a shorter format
+    const parts = pick.overUnder.split(' ');
+    if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
+      return `${parts[0]} ${parts[parts.length - 1]}`;
+    }
+    return pick.overUnder;
+  }
+  
+  // Default case - just return the pick
+  return pick.pick || '';
+}
 
 // Helper function for default pick analysis
 function enhancePickWithDefaultData(pick) {
