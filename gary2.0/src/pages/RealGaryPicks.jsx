@@ -38,125 +38,6 @@ const GARY_RESPONSES = {
 };
 
 export function RealGaryPicks() {
-  // COMPLETE REBUILD: Mobile-only fixes that won't affect desktop
-  useEffect(() => {
-    // Force iOS Safari detection by checking both user agent and viewport
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isMobile = window.innerWidth <= 768 || 
-                     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                     localStorage.getItem('viewMode') === 'mobile';
-    
-    if (isMobile) {
-      console.log('Mobile device detected - applying specialized fixes');
-      document.body.classList.add('mobile-fix');
-      
-      // Completely separate mobile implementation
-      const fixMobileCards = () => {
-        // Step 1: Fix carousel navigation
-        const carousel = document.querySelector('.carousel');
-        if (carousel) {
-          // Clear any existing handlers
-          const newCarousel = carousel.cloneNode(true);
-          if (carousel.parentNode) {
-            carousel.parentNode.replaceChild(newCarousel, carousel);
-          }
-          
-          // Properly position the cards
-          const activeCard = newCarousel.querySelector('.carousel-item.active');
-          if (activeCard) {
-            activeCard.style.display = 'block';
-          }
-        }
-        
-        // Step 2: Make navigation arrows work
-        document.querySelectorAll('.carousel-control').forEach(arrow => {
-          // Add proper z-index and handling
-          arrow.style.zIndex = '100';
-          arrow.style.position = 'absolute';
-          arrow.style.pointerEvents = 'auto';
-          
-          // Remove existing handlers
-          const newArrow = arrow.cloneNode(true);
-          if (arrow.parentNode) {
-            arrow.parentNode.replaceChild(newArrow, arrow);
-          }
-          
-          // Add click handler with delay to prevent rapid clicks
-          newArrow.addEventListener('click', (e) => {
-            e.stopPropagation();
-            // Give time for carousel to update
-            setTimeout(fixMobileCards, 600);
-          });
-        });
-        
-        // Step 3: Fix card flipping
-        document.querySelectorAll('.pick-card').forEach(card => {
-          // Create a pristine copy without existing handlers
-          const cleanCard = card.cloneNode(true);
-          if (card.parentNode) {
-            // Preserve existing state
-            const wasFlipped = card.classList.contains('flipped');
-            card.parentNode.replaceChild(cleanCard, card);
-            if (wasFlipped) {
-              cleanCard.classList.add('flipped');
-            }
-          }
-          
-          // View Pick button handling
-          const viewPickBtn = cleanCard.querySelector('.btn-view-pick');
-          if (viewPickBtn) {
-            viewPickBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              cleanCard.classList.add('flipped');
-              return false;
-            });
-          }
-          
-          // Decision buttons handling
-          cleanCard.querySelectorAll('.btn-decision').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              
-              // Extract the pick ID and decision type
-              const pickId = cleanCard.getAttribute('data-pick-id');
-              const decision = btn.classList.contains('btn-ride') ? 'ride' : 'fade';
-              
-              // Call the handleDecision function directly
-              window.handleCardDecision(pickId, decision);
-            });
-          });
-          
-          // Back-to-front flipping
-          cleanCard.addEventListener('click', (e) => {
-            if (cleanCard.classList.contains('flipped') && 
-                !e.target.closest('.btn-decision') && 
-                !e.target.closest('.btn-view-pick')) {
-              cleanCard.classList.remove('flipped');
-              e.stopPropagation();
-              e.preventDefault();
-            }
-          });
-        });
-      };
-      
-      // Apply fixes with appropriate timing
-      setTimeout(fixMobileCards, 500);
-      
-      // Re-apply when orientation changes
-      window.addEventListener('orientationchange', () => {
-        setTimeout(fixMobileCards, 500);
-      });
-      
-      // Cleanup function
-      return () => {
-        document.body.classList.remove('mobile-fix');
-        window.removeEventListener('orientationchange', fixMobileCards);
-      };
-    }
-  }, []);
-
   const { userPlan, updateUserPlan } = useUserPlan();
   const { updateUserStats } = useUserStats();
   
@@ -364,20 +245,7 @@ export function RealGaryPicks() {
     fetchPicks();
   }, []);
   
-  // Create a global handler for decision buttons that works with the mobile fixes
-  useEffect(() => {
-    window.handleCardDecision = (pickId, decision) => {
-      console.log(`Global handler called for pick: ${pickId}, decision: ${decision}`);
-      handleDecision(pickId, decision);
-    };
-    
-    return () => {
-      // Clean up when component unmounts
-      delete window.handleCardDecision;
-    };
-  }, []);
-  
-  // Separate effect to fetch picks to avoid scoping issues
+  // Fetch picks when component mounts
   useEffect(() => {
     fetchPicks();
   }, []);
@@ -506,6 +374,113 @@ export function RealGaryPicks() {
       setTimeout(() => {
         setShowToast(false);
       }, 3000);
+    }
+  };
+  
+  // Fetch picks function
+  const fetchPicks = async () => {
+    try {
+      setLoading(true);
+      setLoadError(null); // Reset any previous errors
+      
+      // Check for environment variables first
+      const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
+      if (!oddsApiKey) {
+        console.error('Missing VITE_ODDS_API_KEY environment variable. Picks cannot be generated.');
+        setLoadError('API key not configured. Please set up your environment variables.');
+        setLoading(false);
+        return;
+      }
+      
+      // Check if we should generate new picks
+      const shouldGenerate = schedulerService.shouldGenerateNewPicks();
+      let dailyPicks;
+      
+      // First try to get existing picks from localStorage
+      const savedPicks = localStorage.getItem('dailyPicks');
+      if (savedPicks && !shouldGenerate) {
+        console.log('Using cached picks from localStorage');
+        let parsedPicks = JSON.parse(savedPicks);
+        
+        // Fix for existing picks - normalize to ensure they have all required fields
+        parsedPicks = parsedPicks.map(pick => picksService.normalizePick(pick));
+        console.log('Normalized picks data for display');
+        
+        // Save the normalized picks back to localStorage
+        localStorage.setItem('dailyPicks', JSON.stringify(parsedPicks));
+        
+        dailyPicks = parsedPicks;
+      } else {
+        // Either need to generate new picks or no saves exist
+        console.log('Generating new picks...');
+        try {
+          // Check for DeepSeek API key
+          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+          if (!deepseekApiKey) {
+            console.error('Missing VITE_DEEPSEEK_API_KEY environment variable. Picks cannot be generated.');
+            setLoadError('DeepSeek API key not configured. Please set up your environment variables.');
+            setLoading(false);
+            return;
+          }
+          
+          // Generate new picks
+          dailyPicks = await picksService.generateDailyPicks();
+          
+          // Mark that we've generated picks for today
+          schedulerService.markPicksAsGenerated();
+          
+          // Save picks to localStorage
+          localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
+        } catch (generateError) {
+          console.error('Error generating picks:', generateError);
+          setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // If we get here, we have valid picks
+      setPicks(dailyPicks);
+      
+      // Initialize flipped state for all cards
+      const initialFlippedState = {};
+      dailyPicks.forEach(pick => {
+        initialFlippedState[pick.id] = false;
+      });
+      setFlippedCards(initialFlippedState);
+      
+      // Get info about next picks
+      setNextPicksInfo(schedulerService.getNextPicksInfo());
+      
+      // Check for results immediately
+      await resultsService.checkResults();
+      
+      // Set loading to false now that we have the picks
+      setLoading(false);
+      
+      // Set up listener for localStorage changes (for when results are updated)
+      const handleStorageChange = (e) => {
+        if (e.key === 'dailyPicks') {
+          const updatedPicks = JSON.parse(e.newValue);
+          setPicks(updatedPicks);
+        }
+      };
+      
+      window.addEventListener('storage', handleStorageChange);
+      
+      // Cleanup listener when component unmounts
+      return () => window.removeEventListener('storage', handleStorageChange);
+    } catch (error) {
+      console.error('Error fetching picks:', error);
+      setLoading(false);
+      
+      // Display error message - no fallbacks
+      setLoadError(`Error fetching picks: ${error.message}. Please try again later.`);
+      setPicks([]);
+      setFlippedCards({});
+      
+      // Set next picks info
+      setNextPicksInfo(schedulerService.getNextPicksInfo());
     }
   };
   
