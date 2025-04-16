@@ -2,8 +2,8 @@
 // This script is loaded directly for better mobile compatibility
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Only run on mobile devices
-  if (window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  // Mobile detection disabled - never run this code
+  if (false) { // Forcing desktop mode by never entering this condition
     console.log("Mobile device detected - applying targeted fixes");
     document.body.classList.add('mobile-touch-device');
     
