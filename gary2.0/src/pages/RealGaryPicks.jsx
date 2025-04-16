@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useUserStats } from "../hooks/useUserStats";
 import { useUserPlan } from "../hooks/useUserPlan";
@@ -14,611 +14,297 @@ import "./RegularCardFix.css"; // Fix font sizing for regular cards
 import "./MobileFixes.css"; // Specific fixes for mobile
 import "./GaryAnalysisFix.css"; // Enhanced styling for Gary's analysis
 import "./AnalysisBulletsFix.css"; // Styling for the bulleted analysis format
-// useEffect is already imported with React
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
 import { picksPersistenceService } from '../services/picksPersistenceService';
-import { supabase } from '../supabaseClient';
-
-// Constants for Gary's responses
-const GARY_RESPONSES = {
-  ride: [
-    "Nice. You rode with the Bear. Let's win this.",
-    "Smart money rides with Gary. Good call.",
-    "When Gary speaks, winners listen. Let's cash this.",
-    "Gary approves your pick. Time to collect."
-  ],
-  fade: [
-    "Bold move fading the Bear. Let's see how it plays out.",
-    "Going against Gary? Interesting strategy.",
-    "The Bear sees your fade. Respect for the conviction.",
-    "Contrarian play noted. May the odds be in your favor."
-  ]
-};
+import { supabase, ensureAnonymousSession } from '../supabaseClient';
+import { useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useUserAuth } from '../hooks/useUserAuth';
+import { useUserPreferences } from '../hooks/useUserPreferences';
+import { useUserBets } from '../hooks/useUserBets';
+import { useUserResults } from '../hooks/useUserResults';
+import { useUserPicks } from '../hooks/useUserPicks';
+import { useUserNotifications } from '../hooks/useUserNotifications';
+import { useUserMessages } from '../hooks/useUserMessages';
+import { useUserFeedback } from '../hooks/useUserFeedback';
+import { useUserPayments } from '../hooks/useUserPayments';
+import { useUserSubscriptions } from '../hooks/useUserSubscriptions';
+import { useUserProfile } from '../hooks/useUserProfile';
+import { useUserSettings } from '../hooks/useUserSettings';
+import { useUserData } from '../hooks/useUserData';
 
 export function RealGaryPicks() {
+  // User plan and stats
   const { userPlan, updateUserPlan } = useUserPlan();
-  const { updateUserStats } = useUserStats();
+  const { userStats, updateUserStats } = useUserStats();
   
-  // Debug: Log current user plan
+  // Log user plan for debugging
   useEffect(() => {
     console.log("RealGaryPicks - Current user plan:", userPlan);
   }, [userPlan]);
   
-  // State for carousel
+  // State for picks - NO fallbacks, only real data
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [flippedCards, setFlippedCards] = useState({});
-  const [autoplayPaused, setAutoplayPaused] = useState(false);
-  const autoplayRef = useRef(null);
-  
-  // Touch handling refs and state
-  const carouselRef = useRef(null);
-  const touchStartXRef = useRef(0);
-  const touchEndXRef = useRef(0);
-  const [isSwiping, setIsSwiping] = useState(false);
-  
-  // Control which cards are visible based on user plan
-  const isCardUnlocked = (index) => {
-    // Debug: Log card unlock check
-    console.log(`Checking if card ${index} is unlocked for user with plan: ${userPlan}`);
-    
-    // Pro users can access all 7 cards
-    if (userPlan === 'pro') {
-      console.log(`Card ${index} is unlocked - user has pro plan`);
-      return true; // All 7 cards unlocked for pro users
-    }
-    
-    // Free users can only see the first pick unlocked
-    const result = index === 0;
-    console.log(`Card ${index} is ${result ? 'unlocked' : 'locked'} - user has free plan`);
-    return result;
-  };
-  
-  // Determine if a card should be visible in the carousel
-  const isCardVisible = (index) => {
-    return true; // Show all cards in the carousel as per original design
-  };
-  
-  // State for user bet decisions
-  const [userDecisions, setUserDecisions] = useState(() => {
-    const savedDecisions = localStorage.getItem('userPickDecisions');
-    return savedDecisions ? JSON.parse(savedDecisions) : {};
-  });
-  
-  // State for toast notifications
-  const [showToast, setShowToast] = useState(false);
+  const [showBetTracker, setShowBetTracker] = useState(false);
+  const [betAmount, setBetAmount] = useState('');
+  const [betType, setBetType] = useState('');
+  const [betOdds, setBetOdds] = useState('');
   const [toastMessage, setToastMessage] = useState('');
-  
-  // State for next picks info
+  const [showToast, setShowToast] = useState(false);
+  const [userDecisions, setUserDecisions] = useState({});
   const [nextPicksInfo, setNextPicksInfo] = useState(null);
-
-  // Fetch picks on component mount
-  // Force refresh user plan from Supabase on component mount
-  useEffect(() => {
-    const refreshUserPlan = async () => {
-      try {
-        // Get current auth session
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.user) {
-          console.log("User authenticated, checking plan...");
-          // Get user from database to check their plan
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('plan')
-            .eq('id', sessionData.session.user.id)
-            .single();
-            
-          if (userData) {
-            console.log("Database user plan:", userData.plan);
-            // If the database plan is different from current plan, update it
-            if (userData.plan !== userPlan) {
-              console.log("Updating plan from", userPlan, "to", userData.plan);
-              updateUserPlan(userData.plan);
-            }
-          } else {
-            console.log("No user data found in database, error:", userError);
-          }
-        } else {
-          console.log("No authenticated user session found");
-        }
-      } catch (error) {
-        console.error("Error refreshing user plan:", error);
-      }
-    };
-    
-    refreshUserPlan();
-  }, []); // Run once on component mount
   
-  // State for error handling
-  const [loadError, setLoadError] = useState(null);
-  
-  // Define the fetchPicks function
+  // Define the fetchPicks function - NO FALLBACKS, only real data from Supabase
   const fetchPicks = async () => {
     try {
       setLoading(true);
       setLoadError(null); // Reset any previous errors
       
-      // Check for environment variables first
-      const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
-      if (!oddsApiKey) {
-        console.error('Missing VITE_ODDS_API_KEY environment variable. Picks cannot be generated.');
-        setLoadError('API key not configured. Please set up your environment variables.');
-        setLoading(false);
-        return;
+      console.log('Starting fetchPicks with NO FALLBACKS');
+      
+      // Ensure we have an active Supabase connection
+      console.log('Verifying Supabase connection...');
+      try {
+        // First ensure we have a valid anonymous session
+        await ensureAnonymousSession();
+      } catch (authError) {
+        console.error('Error verifying Supabase connection:', authError);
       }
       
-      // Check if we should generate new picks
-      const shouldGenerate = schedulerService.shouldGenerateNewPicks();
-      let dailyPicks;
+      // Get today's date for the query
+      const today = new Date();
+      const dateString = today.toISOString().split('T')[0];
+      console.log('Fetching picks for date:', dateString);
       
-      // Try to load existing picks using our persistence service
-      if (!shouldGenerate) {
-        dailyPicks = await picksPersistenceService.loadPicks();
-      }
-      
-      // If we have valid picks and don't need to generate, use them
-      if (dailyPicks && Array.isArray(dailyPicks) && dailyPicks.length > 0 && !shouldGenerate) {
-        console.log('Using existing picks from persistence service');
+      try {
+        // Query Supabase for today's picks
+        const { data, error } = await supabase
+          .from('daily_picks')
+          .select('*')
+          .eq('date', dateString)
+          .maybeSingle();
         
-        // Normalize to ensure all required fields exist
-        dailyPicks = dailyPicks.map(pick => picksService.normalizePick(pick));
-        console.log('Normalized picks data for display');
+        // DEBUGGING: Log the raw response from Supabase
+        console.log('FETCHED FROM SUPABASE:', data, error);
         
-        // Re-save normalized picks to ensure consistent format
-        await picksPersistenceService.savePicks(dailyPicks);
-      } else {
-        // Generate new picks if needed
-        console.log('Generating new picks...');
-        try {
-          // Check for DeepSeek API key
-          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-          if (!deepseekApiKey) {
-            console.error('Missing VITE_DEEPSEEK_API_KEY environment variable. Picks cannot be generated.');
-            setLoadError('DeepSeek API key not configured. Please set up your environment variables.');
-            setLoading(false);
-            return;
-          }
-          
-          // Generate new picks
-          dailyPicks = await picksService.generateDailyPicks();
-          
-          // Mark that we've generated picks for today
-          schedulerService.markPicksAsGenerated();
-          
-          // Save picks using our persistence service
-          await picksPersistenceService.savePicks(dailyPicks);
-          console.log('New picks saved using persistence service');
-        } catch (generateError) {
-          console.error('Error generating picks:', generateError);
-          setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
+        if (error) {
+          console.error('Supabase fetch error details:', { 
+            message: error.message, 
+            code: error.code, 
+            details: error.details,
+            hint: error.hint
+          });
+          setPicks([]);
           setLoading(false);
           return;
         }
+        
+        // If we have valid picks in Supabase, use them
+        if (data && data.picks && Array.isArray(data.picks) && data.picks.length > 0) {
+          console.log('Found existing picks in Supabase for today:', data.picks.length);
+          console.log('SETTING PICKS:', data.picks);
+          setPicks(data.picks);
+        } else {
+          console.log('NO PICKS FOUND IN SUPABASE, SETTING EMPTY ARRAY');
+          setPicks([]);
+        }
+      } catch (supabaseError) {
+        console.error('Error fetching from Supabase:', supabaseError);
+        setPicks([]);
       }
-      
-      // If we get here, we have valid picks
-      setPicks(dailyPicks);
-      
-      // Initialize flipped state for all cards
-      const initialFlippedState = {};
-      dailyPicks.forEach(pick => {
-        initialFlippedState[pick.id] = false;
-      });
-      setFlippedCards(initialFlippedState);
-      
-      // Get info about next picks
-      setNextPicksInfo(schedulerService.getNextPicksInfo());
-      
-      // Check for results immediately
-      await resultsService.checkResults();
-      
-      // Set loading to false now that we have the picks
-      setLoading(false);
     } catch (error) {
-      console.error('Error fetching picks:', error);
-      setLoading(false);
-      
-      // Display error message - no fallbacks
-      setLoadError(`Error fetching picks: ${error.message}. Please try again later.`);
+      console.error('Unexpected error in fetchPicks:', error);
       setPicks([]);
-      setFlippedCards({});
-      
-      // Set next picks info
-      setNextPicksInfo(schedulerService.getNextPicksInfo());
+    } finally {
+      setLoading(false);
     }
   };
   
-  // Call fetchPicks when component mounts
+  // State for error handling
+  const [loadError, setLoadError] = useState(null);
+  
+  // Fetch picks when component mounts
   useEffect(() => {
     fetchPicks();
-    
-    // Set up periodic refresh to prevent cards from disappearing
-    const refreshInterval = setInterval(async () => {
-      try {
-        // Refresh picks from persistence service every minute
-        const refreshedPicks = await picksPersistenceService.loadPicks();
-        if (refreshedPicks && Array.isArray(refreshedPicks) && refreshedPicks.length > 0) {
-          setPicks(refreshedPicks);
-          console.log('Refreshed picks from persistence service');
-        }
-      } catch (refreshError) {
-        console.error('Error refreshing picks:', refreshError);
-      }
-    }, 60000); // Check every minute
-    
-    // Set up listener for localStorage changes (for when results are updated)
-    const handleStorageChange = (e) => {
-      if (e.key === 'dailyPicks') {
-        try {
-          const updatedPicks = JSON.parse(e.newValue);
-          if (updatedPicks && Array.isArray(updatedPicks)) {
-            setPicks(updatedPicks);
-          }
-        } catch (parseError) {
-          console.error('Error parsing updated picks:', parseError);
-        }
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Cleanup listener and interval when component unmounts
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(refreshInterval);
-    };
   }, []);
-  // The fetchPicks function is already called in the useEffect hook above
   
-  // Autoplay function (disabled - kept for potential future use)
-  const startAutoplay = () => {
-    // Autoplay disabled - cards only change when arrows are clicked
-  };
-
-  // Pause autoplay when user interacts
-  const pauseAutoplay = () => {
-    if (autoplayRef.current) {
-      clearTimeout(autoplayRef.current);
-    }
-  };
-
-  // Resume autoplay
-  const resumeAutoplay = () => {
-    pauseAutoplay();
-    startAutoplay();
-  };
-
-  // Rotate carousel with improved animation
-  const rotateCarousel = (direction) => {
-    // Play a subtle click sound (for better UX)
-    const clickSound = new Audio();
-    clickSound.volume = 0.2;
-    try {
-      clickSound.play().catch(() => {}); // Ignore autoplay errors
-    } catch (e) {}
-    
-    // Animate the transition
-    if (carouselRef.current) {
-      carouselRef.current.style.transition = 'transform 0.3s ease-out';
-    }
-    
-    // Update the active card index
-    setActiveCardIndex(prevIndex => {
-      if (direction === 'next') {
-        return (prevIndex + 1) % picks.length;
-      } else {
-        return (prevIndex - 1 + picks.length) % picks.length;
-      }
-    });
-    
-    // Reset transition after animation completes
-    setTimeout(() => {
-      if (carouselRef.current) {
-        carouselRef.current.style.transition = '';
-      }
-    }, 300);
-  };
-
-  // Handle card flip toggle
-  const toggleFlip = (cardId) => {
-    // Prevent changing active card when flipping
+  // Handle card flipping
+  const flipCard = (id) => {
     setFlippedCards(prev => ({
       ...prev,
-      [cardId]: !prev[cardId]
+      [id]: !prev[id]
     }));
-    
-    // Stop any event propagation that might trigger card rotation
-    // This is especially important for mobile
-    return false;
-  };
-
-  // Get a random response from Gary
-  const getRandomResponse = (responseType) => {
-    try {
-      const responses = GARY_RESPONSES[responseType];
-      if (!responses || !Array.isArray(responses)) {
-        console.error('Invalid responses for type:', responseType);
-        return 'Thanks for your bet!';
-      }
-      return responses[Math.floor(Math.random() * responses.length)];
-    } catch (error) {
-      console.error('Error getting random response:', error);
-      return 'Thanks for your bet!';
-    }
-  };
-
-  // Handle user betting decision
-  const handleDecision = async (pickId, decision) => {
-    console.log(`Button clicked: ${decision} for pick ${pickId}`);
-    
-    // Prevent multiple decisions on the same pick
-    if (userDecisions[pickId]) {
-      console.log('Decision already made for this pick');
-      return;
-    }
-    
-    try {
-      // Create a simpler implementation for now in case the service is causing issues
-      // Update local state immediately for responsive UI
-      setUserDecisions(prev => ({
-        ...prev,
-        [pickId]: decision
-      }));
-      
-      // Save decision to localStorage directly
-      try {
-        const savedDecisions = localStorage.getItem('userPickDecisions') || '{}';
-        const decisions = JSON.parse(savedDecisions);
-        
-        decisions[pickId] = {
-          decision,
-          timestamp: new Date().toISOString(),
-          result: null
-        };
-        
-        localStorage.setItem('userPickDecisions', JSON.stringify(decisions));
-        console.log('Decision saved to localStorage');
-      } catch (localError) {
-        console.error('Error saving to localStorage:', localError);
-      }
-      
-      // Try to use the tracking service as a backup
-      try {
-        // Get current user ID if logged in
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
-        
-        // Save the decision using our tracking service
-        await betTrackingService.saveBetDecision(pickId, decision, userId);
-        console.log('Decision saved via tracking service');
-      } catch (serviceError) {
-        console.error('Error with bet tracking service:', serviceError);
-        // Already saved to localStorage above, so we can continue
-      }
-      
-      // Show toast notification with the appropriate response
-      const response = getRandomResponse(decision);
-      setToastMessage(response);
-      setShowToast(true);
-      
-      // Log the decision
-      console.log(`User ${decision === 'ride' ? 'rode with' : 'faded'} Gary on pick ${pickId}`);
-      
-      // Hide toast after 4 seconds
-      setTimeout(() => {
-        setShowToast(false);
-      }, 4000);
-      
-      // Update user stats if available
-      if (updateUserStats) {
-        updateUserStats({
-          action: decision === 'ride' ? 'rode_with_gary' : 'faded_gary',
-          pickId
-        });
-      }
-    } catch (error) {
-      console.error('Error processing bet decision:', error);
-      setToastMessage('Something went wrong. Please try again.');
-      setShowToast(true);
-      
-      setTimeout(() => {
-        setShowToast(false);
-      }, 3000);
-    }
   };
   
-  // The fetchPicks function is defined above and called in the useEffect hook
+  // Navigation functions
+  const goToPreviousCard = () => {
+    setActiveCardIndex(prevIndex => {
+      if (prevIndex === 0) {
+        return picks.length - 1;
+      } else {
+        return prevIndex - 1;
+      }
+    });
+  };
   
-  // Touch event handlers for mobile swipe
+  const goToNextCard = () => {
+    setActiveCardIndex(prevIndex => {
+      if (prevIndex === picks.length - 1) {
+        return 0;
+      } else {
+        return prevIndex + 1;
+      }
+    });
+  };
+  
+  // Touch event handling
+  const touchStartX = useRef(null);
+  const touchEndX = useRef(null);
+  
   const handleTouchStart = (e) => {
-    touchStartXRef.current = e.touches[0].clientX;
-    setIsSwiping(true);
+    touchStartX.current = e.touches[0].clientX;
   };
   
   const handleTouchMove = (e) => {
-    if (!isSwiping) return;
-    touchEndXRef.current = e.touches[0].clientX;
-    
-    // Optional: add visual feedback during swiping
-    const swipeDiff = touchEndXRef.current - touchStartXRef.current;
-    if (Math.abs(swipeDiff) > 30) {
-      // Prevent default to stop page scrolling when swiping the carousel
-      e.preventDefault();
-    }
+    touchEndX.current = e.touches[0].clientX;
   };
   
   const handleTouchEnd = () => {
-    if (!isSwiping) return;
+    if (!touchStartX.current || !touchEndX.current) return;
     
-    const swipeThreshold = 50; // minimum distance to register as a swipe
-    const swipeDiff = touchEndXRef.current - touchStartXRef.current;
+    const difference = touchStartX.current - touchEndX.current;
     
-    if (swipeDiff > swipeThreshold) {
-      // Swiped right - go to previous card
-      rotateCarousel('prev');
-    } else if (swipeDiff < -swipeThreshold) {
-      // Swiped left - go to next card
-      rotateCarousel('next');
+    if (difference > 50) {
+      // Swipe left, go to next card
+      goToNextCard();
+    } else if (difference < -50) {
+      // Swipe right, go to previous card
+      goToPreviousCard();
     }
     
-    setIsSwiping(false);
+    touchStartX.current = null;
+    touchEndX.current = null;
   };
-
-  // Calculate position class for each card with enhanced positioning
-  const getCardPositionClass = (index) => {
-    // Calculate relative position to the active card in a circular manner
-    const position = (index - activeCardIndex + picks.length) % picks.length;
-    
-    // Enhanced positioning logic for fanned-out display
-    // Center card
-    if (position === 0) return 'card-position-0';
-    
-    // Cards to the right
-    if (position === 1) return 'card-position-1';
-    if (position === 2) return 'card-position-2';
-    if (position === 3) return 'card-position-3';
-    
-    // Cards to the left
-    if (position === picks.length - 1) return 'card-position-6';
-    if (position === picks.length - 2) return 'card-position-5';
-    if (position === picks.length - 3) return 'card-position-4';
-    
-    // Fallback for any other positions to ensure all cards have a position
-    return position < picks.length / 2 ? 'card-position-3' : 'card-position-4';
-  };
-
+  
+  // Render the component
   return (
     <ErrorBoundary>
-      <div className="gary-picks-container">
-        {/* Next picks info */}
-        {nextPicksInfo && (
-          <div className="next-picks-info text-center mb-4 text-sm text-[#d4af37]">
-            <p>
-              {nextPicksInfo.isToday ? 
-                `Today's picks are ready` : 
-                `Next picks will be available ${nextPicksInfo.isTomorrow ? 'tomorrow' : 'on'} ${nextPicksInfo.formattedDate} at ${nextPicksInfo.formattedTime}`
-              }
-            </p>
+      <div className="gary-picks-page">
+        {loading ? (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <div className="loading-text">Loading Gary's Picks...</div>
           </div>
-        )}
-        
-        <div className="gary-carousel">
-          <div className="ambient-glow ambient-glow-1"></div>
-          <div className="ambient-glow ambient-glow-2"></div>
-          
-          {loading ? (
-            <div className="loading-container">
-              <p className="text-center text-[#d4af37] text-xl">Loading Gary's picks...</p>
-              <div className="loader"></div>
+        ) : loadError ? (
+          <div className="error-container">
+            <div className="error-icon">⚠️</div>
+            <div className="error-message">{loadError}</div>
+            <button className="retry-button" onClick={fetchPicks}>
+              Retry
+            </button>
+          </div>
+        ) : picks.length === 0 ? (
+          <div className="no-picks-container">
+            <div className="no-picks-icon">📊</div>
+            <div className="no-picks-message">
+              Gary is analyzing today's games. Check back soon for picks!
             </div>
-          ) : loadError ? (
-            <div className="error-container">
-              <p className="text-center text-[#d4af37] text-xl">{loadError}</p>
-              <p className="text-center text-white text-sm mt-2">Please ensure your API keys are properly configured.</p>
-            </div>
-          ) : picks.length === 0 ? (
-            <div className="error-container">
-              <p className="text-center text-[#d4af37] text-xl">Unable to load picks. Please try again later.</p>
-            </div>
-          ) : (
-            <div className="carousel-container picks-carousel">
-              <div className="carousel-track"
-                ref={carouselRef}
+            {nextPicksInfo && (
+              <div className="next-picks-info">
+                Next picks will be available {nextPicksInfo}
+              </div>
+            )}
+            <button className="refresh-button" onClick={fetchPicks}>
+              Refresh
+            </button>
+          </div>
+        ) : (
+          <div className="gary-picks-container">
+            <div className="carousel-container">
+              <button 
+                className="carousel-arrow left" 
+                onClick={goToPreviousCard}
+                aria-label="Previous pick"
+              >
+                <span>&#10094;</span>
+              </button>
+              
+              <div 
+                className="carousel-cards"
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               >
+                {/* DEBUGGING: Log picks before rendering */}
+                {console.log('RENDER PICKS:', picks)}
+                
+                {/* Render picks */}
                 {picks.map((pick, index) => (
                   <div 
                     key={pick.id}
-                    data-pick-id={pick.id}
-                    className={`pick-card ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.silverCard ? 'silver-card' : ''} ${pick.primeTimeCard ? 'primetime-card' : ''} ${getCardPositionClass(index)} ${flippedCards[pick.id] ? 'pick-card-flipped' : ''}`}
-                    onClick={() => toggleFlip(pick.id)}
+                    className={`pick-card ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
                   >
                     <div className="pick-card-inner">
-                      {/* Front of card */}
                       <div className="pick-card-front">
                         <div className="pick-card-header">
-                          <div className={pick.league === 'PARLAY' ? 'parlay-badge' : pick.primeTimeCard ? 'primetime-badge' : 'pick-card-league'}>
-                            {pick.primeTimeCard ? 'PRIMETIME BONUS PICK' : pick.league}
-                          </div>
-                          {pick.league === 'PARLAY' ? (
-                            <>
-                              <div className="pick-card-matchup">{pick.shortGame || pick.game}</div>
-                              <div className="pick-card-time">{pick.time}</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="pick-card-time">{pick.time}</div>
-                            </>
-                          )}
-                        </div>
-                        
-                        {/* Center content area - can be used for team logos or additional info */}
-                        <div className="pick-card-center-content">
-                          {/* Empty space for now or you can add content here */}
-                        </div>
-                        
-                        {/* Bottom button container */}
-                        <div className="pick-card-bottom">
-                          <button 
-                            className="btn-view-pick"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault(); // Prevent any default action
-                              toggleFlip(pick.id);
-                            }}
-                            data-pick-id={pick.id}
-                          >
-                            View Pick
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Back of card */}
-                      <div className="pick-card-back">
-                        <div className="pick-card-header">
-                          <div className={pick.league === 'PARLAY' ? 'parlay-badge' : pick.primeTimeCard ? 'primetime-badge' : 'pick-card-league'}>
-                            {pick.primeTimeCard ? 'PRIMETIME BONUS PICK' : pick.league}
-                          </div>
-                          <div className="pick-card-matchup">{pick.shortGame || pick.game}</div>
+                          <div className="pick-card-league">{pick.league}</div>
                           <div className="pick-card-time">{pick.time}</div>
+                        </div>
+                        
+                        <div className="pick-card-game">
+                          {pick.league === 'PARLAY' ? 'PARLAY OF THE DAY' : pick.game}
                         </div>
                         
                         {pick.league !== 'PARLAY' ? (
                           <div className="pick-card-content">
                             <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
                             <div className="pick-card-bet">
-                              {/* Format the pick display with odds included */}
-                              {pick.shortPick || 
-                               ((pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) ? 
-                                (() => {
-                                  const odds = pick.odds || pick.moneylineOdds;
-                                  const teamAbbr = picksService.abbreviateTeamName(pick.moneyline);
-                                  return odds ? `${teamAbbr} (${odds})` : teamAbbr;
-                                })() : 
-                               (pick.betType && pick.betType.includes('Spread') && pick.spread) ? 
-                                (() => {
-                                  const parts = pick.spread.split(' ');
-                                  const teamName = parts.slice(0, parts.length - 1).join(' ');
-                                  const number = parts[parts.length - 1];
-                                  const teamAbbr = picksService.abbreviateTeamName(teamName);
-                                  const odds = pick.odds || pick.spreadOdds;
-                                  return odds ? `${teamAbbr} ${number} (${odds})` : `${teamAbbr} ${number}`;
-                                })() :
-                               pick.overUnder ? 
-                                (() => {
-                                  const odds = pick.odds || pick.totalOdds;
-                                  return odds ? `${pick.overUnder} (${odds})` : pick.overUnder;
-                                })() :
-                                (() => {
-                                  const odds = pick.odds;
-                                  return odds ? `${pick.pick || ''} (${odds})` : (pick.pick || `Over ${pick.game.split(' vs ')[0]}`);
-                                })())}                               
+                              {/* PRIORITIZE USING EXISTING shortPick FROM SUPABASE */}
+                              {(() => {
+                                try {
+                                  console.log(`Rendering pick: ${pick.id}, League: ${pick.league}`);
+                                  console.log('Pick data:', pick);
+                                  
+                                  // PRIORITY 1: Use the shortPick directly from Supabase if available
+                                  if (pick.shortPick && typeof pick.shortPick === 'string' && pick.shortPick.trim() !== '') {
+                                    console.log(`Using existing shortPick: ${pick.shortPick}`);
+                                    return pick.shortPick;
+                                  }
+                                  
+                                  // PRIORITY 2: Use the pick field directly
+                                  if (pick.pick && typeof pick.pick === 'string' && pick.pick.trim() !== '') {
+                                    console.log(`Using pick field: ${pick.pick}`);
+                                    return pick.pick;
+                                  }
+                                  
+                                  // PRIORITY 3: For specific bet types, format them consistently
+                                  if (pick.betType && pick.betType.includes('Spread') && pick.spread) {
+                                    return pick.spread;
+                                  } 
+                                  else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
+                                    return `${pick.moneyline} ML`;
+                                  } 
+                                  else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
+                                    return pick.overUnder;
+                                  }
+                                  else if (pick.league === 'PARLAY') {
+                                    return 'PARLAY OF THE DAY';
+                                  }
+                                  
+                                  // Last resort
+                                  return 'NO PICK DATA';
+                                } catch (err) {
+                                  console.error('Error rendering pick:', err);
+                                  // Fallback to any available data
+                                  return pick.shortPick || pick.pick || 'ERROR RENDERING PICK';
+                                }
+                              })()}
                             </div>
                             {pick.result && pick.result !== 'pending' && (
                               <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
@@ -632,191 +318,196 @@ export function RealGaryPicks() {
                               {/* Title removed as requested */}
                               <div className="gary-analysis-content">
                                 {(() => {
-                                  const analysisText = pick.pickDetail || pick.analysis || "Gary is brewing up some expert analysis for this pick. Check back soon!";
-                                  // Split by sentences or natural breaks
-                                  const sentences = analysisText.split(/[.!?]\s+/).filter(s => s.trim().length > 0);
-                                  // Create bullet points from sentences, cap total at 150 chars
-                                  let totalChars = 0;
-                                  const bulletPoints = [];
-                                  
-                                  for (let sentence of sentences) {
-                                    // Clean and trim the sentence
-                                    sentence = sentence.trim();
-                                    // Check if adding this would exceed our limit
-                                    if (totalChars + sentence.length > 150) {
-                                      // If we're about to exceed, truncate and add ellipsis if needed
-                                      const remainingChars = 150 - totalChars;
-                                      if (remainingChars > 3) {
-                                        bulletPoints.push(sentence.substring(0, remainingChars - 3) + '...');
-                                      }
-                                      break;
-                                    }
-                                    
-                                    // Add bullet point and update character count
-                                    bulletPoints.push(sentence);
-                                    totalChars += sentence.length;
+                                  // First try to use garysBullets if available
+                                  if (pick.garysBullets && Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
+                                    return (
+                                      <ul className="gary-bullets">
+                                        {pick.garysBullets.map((bullet, i) => (
+                                          <li key={i}>{bullet}</li>
+                                        ))}
+                                      </ul>
+                                    );
                                   }
                                   
-                                  // If no sentences were found, add a default
-                                  if (bulletPoints.length === 0 && analysisText.length > 0) {
-                                    bulletPoints.push(analysisText.substring(0, 150));
+                                  // Otherwise use the analysis text
+                                  const analysisText = pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.';
+                                  
+                                  // Split into paragraphs if it contains line breaks
+                                  if (analysisText.includes('\n')) {
+                                    return analysisText.split('\n').map((paragraph, i) => (
+                                      <p key={i}>{paragraph}</p>
+                                    ));
                                   }
                                   
-                                  return (
-                                    <ul className="analysis-bullet-list">
-                                      {bulletPoints.map((point, index) => (
-                                        <li key={index}>{point}</li>
-                                      ))}
-                                    </ul>
-                                  );
+                                  // Otherwise just return as a single paragraph
+                                  return <p>{analysisText}</p>;
                                 })()}
                               </div>
                             </div>
                             
-                            <div className="pick-card-actions">
-                              <div className="decision-actions">
-                                {(!pick.result || pick.result === 'pending') ? (
-                                  <>
-                                    <button 
-                                      className="btn-decision btn-ride"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDecision(pick.id, 'ride');
-                                      }}
-                                      disabled={userDecisions[pick.id]}
-                                    >
-                                      Bet with Gary
-                                    </button>
-                                    <button 
-                                      className="btn-decision btn-fade"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDecision(pick.id, 'fade');
-                                      }}
-                                      disabled={userDecisions[pick.id]}
-                                    >
-                                      Fade the Bear
-                                    </button>
-                                  </>
-                                ) : (
-                                  <div className="decision-result">
-                                    {userDecisions[pick.id] === 'ride' ? 
-                                      (pick.result === 'WIN' ? 'You won with Gary! 🎉' : 'Better luck next time with Gary.') :
-                                      userDecisions[pick.id] === 'fade' ? 
-                                        (pick.result === 'LOSS' ? 'Your fade was right! 🎉' : 'Gary was right this time.') :
-                                        'Game concluded.'
-                                    }
-                                  </div>
-                                )}
+                            {/* Confidence Level */}
+                            {pick.confidenceLevel && (
+                              <div className="confidence-level">
+                                <div className="confidence-label">Confidence</div>
+                                <div className="confidence-meter">
+                                  <div 
+                                    className="confidence-fill" 
+                                    style={{ width: `${pick.confidenceLevel}%` }}
+                                  ></div>
+                                </div>
+                                <div className="confidence-value">{pick.confidenceLevel}%</div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         ) : (
-                          /* Parlay of the Day content */
-                          <div className="pick-card-content parlay-content">
-                            <div className="parlay-header">
-                              <div className="pick-card-bet-type">{`${pick.parlayLegs?.length || '3'}-Leg Parlay`}</div>
-                              {pick.parlayOdds && (
-                                <div className="parlay-odds">| Odds: {pick.parlayOdds}</div>
-                              )}
-                            </div>
+                          // Parlay Card Content
+                          <div className="parlay-card-content">
+                            <div className="parlay-card-title">PARLAY OF THE DAY</div>
+                            {pick.parlayOdds && (
+                              <div className="parlay-card-odds">
+                                {pick.parlayOdds.startsWith('+') ? pick.parlayOdds : `+${pick.parlayOdds}`}
+                              </div>
+                            )}
                             
-                            {/* Simplified Parlay Legs Display */}
                             {pick.parlayLegs && pick.parlayLegs.length > 0 && (
                               <div className="parlay-legs">
                                 {pick.parlayLegs.map((leg, legIndex) => (
                                   <div key={legIndex} className="parlay-leg">
-                                    <div className="parlay-leg-bullet">-</div>
-                                    <div className="parlay-leg-pick">{leg.pick}</div>
+                                    <div className="parlay-leg-header">
+                                      <div className="parlay-leg-league">{leg.league}</div>
+                                      <div className="parlay-leg-game">{leg.game}</div>
+                                    </div>
+                                    <div className="parlay-leg-pick">
+                                      {leg.pick || `${leg.team || leg.moneyline} ML ${leg.odds || ''}`}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             )}
                             
-                            {/* No Gary's Analysis for Parlay - removed as requested */}
+                            {/* Gary's Analysis for Parlay */}
+                            <div className="gary-analysis parlay-analysis">
+                              <div className="gary-analysis-content">
+                                {pick.garysAnalysis || pick.analysis || 'Gary has combined these picks for maximum value.'}
+                              </div>
+                            </div>
                             
-                            <div className="pick-card-actions">
-                              <div className="decision-actions">
-                                {(!pick.result || pick.result === 'pending') ? (
-                                  <>
-                                    <button 
-                                      className="btn-decision btn-ride"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDecision(pick.id, 'ride');
-                                      }}
-                                      disabled={userDecisions[pick.id]}
-                                    >
-                                      Bet with Gary
-                                    </button>
-                                    <button 
-                                      className="btn-decision btn-fade"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDecision(pick.id, 'fade');
-                                      }}
-                                      disabled={userDecisions[pick.id]}
-                                    >
-                                      Fade the Bear
-                                    </button>
-                                  </>
-                                ) : (
-                                  <div className="decision-result">
-                                    {userDecisions[pick.id] === 'ride' ? 
-                                      (pick.result === 'WIN' ? 'You won with Gary! 🎉' : 'Better luck next time with Gary.') :
-                                      userDecisions[pick.id] === 'fade' ? 
-                                        (pick.result === 'LOSS' ? 'Your fade was right! 🎉' : 'Gary was right this time.') :
-                                        'Game concluded.'
-                                    }
+                            {/* Confidence Level for Parlay */}
+                            {pick.confidenceLevel && (
+                              <div className="confidence-level">
+                                <div className="confidence-label">Confidence</div>
+                                <div className="confidence-meter">
+                                  <div 
+                                    className="confidence-fill" 
+                                    style={{ width: `${pick.confidenceLevel}%` }}
+                                  ></div>
+                                </div>
+                                <div className="confidence-value">{pick.confidenceLevel}%</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        <div className="pick-card-footer">
+                          <button 
+                            className="flip-button"
+                            onClick={() => flipCard(pick.id)}
+                            aria-label="Flip card"
+                          >
+                            <span>Tap to flip</span>
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="pick-card-back">
+                        <div className="pick-card-back-header">
+                          <img src={gary1} alt="Gary AI" className="gary-avatar" />
+                          <div className="gary-title">Gary's Analysis</div>
+                        </div>
+                        
+                        <div className="pick-card-back-content">
+                          {pick.league !== 'PARLAY' ? (
+                            <>
+                              <div className="pick-summary">
+                                <div className="pick-summary-game">{pick.game}</div>
+                                <div className="pick-summary-pick">{pick.pick}</div>
+                              </div>
+                              
+                              <div className="pick-analysis">
+                                {pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.'}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="parlay-summary">
+                                <div className="parlay-title">PARLAY OF THE DAY</div>
+                                {pick.parlayOdds && (
+                                  <div className="parlay-odds">
+                                    {pick.parlayOdds.startsWith('+') ? pick.parlayOdds : `+${pick.parlayOdds}`}
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Premium lock overlay */}
-                      {!isCardUnlocked(index) && (
-                        <div className="premium-lock-overlay">
-                          <div className="premium-badge">Premium</div>
-                          <h3 className="premium-lock-title">Unlock Gary's Premium Pick</h3>
-                          <p className="premium-lock-desc">Gain access to all of Gary's premium picks with a Pro subscription.</p>
-                          <Link to="/pricing">
-                            <button className="btn-upgrade">Upgrade Now</button>
-                          </Link>
+                              
+                              <div className="parlay-analysis">
+                                {pick.garysAnalysis || pick.analysis || 'Gary has combined these picks for maximum value.'}
+                              </div>
+                              
+                              {pick.parlayLegs && pick.parlayLegs.length > 0 && (
+                                <div className="parlay-legs-detail">
+                                  <div className="parlay-legs-title">Parlay Legs</div>
+                                  {pick.parlayLegs.map((leg, legIndex) => (
+                                    <div key={legIndex} className="parlay-leg-detail">
+                                      <div className="parlay-leg-game">{leg.game}</div>
+                                      <div className="parlay-leg-pick">
+                                        {leg.pick || `${leg.team || leg.moneyline} ML ${leg.odds || ''}`}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                      )}
+                        
+                        <div className="pick-card-back-footer">
+                          <button 
+                            className="flip-button"
+                            onClick={() => flipCard(pick.id)}
+                            aria-label="Flip card back"
+                          >
+                            <span>Tap to flip back</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+              
+              <button 
+                className="carousel-arrow right" 
+                onClick={goToNextCard}
+                aria-label="Next pick"
+              >
+                <span>&#10095;</span>
+              </button>
             </div>
-          )}
-          
-          {/* Carousel navigation */}
-          <button 
-            className="carousel-arrow carousel-arrow-left"
-            onClick={() => rotateCarousel('prev')}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-          
-          <button 
-            className="carousel-arrow carousel-arrow-right"
-            onClick={() => rotateCarousel('next')}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
-        </div>
+            
+            <div className="carousel-dots">
+              {picks.map((_, index) => (
+                <span 
+                  key={index} 
+                  className={`dot ${index === activeCardIndex ? 'active' : ''}`}
+                  onClick={() => setActiveCardIndex(index)}
+                ></span>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* Toast notification */}
         {showToast && (
-          <div className="toast-container">
+          <div className="toast-notification">
             <div className={`toast-message ${userDecisions[Object.keys(userDecisions)[Object.keys(userDecisions).length - 1]]}`}>
               {toastMessage}
             </div>

@@ -111,20 +111,23 @@ export const picksPersistenceService = {
   },
   
   /**
-   * Load picks from the most reliable source (Supabase or localStorage)
-   * @returns {Promise<Array|null>} - Array of picks or null if not found
+   * Load picks from localStorage or Supabase
+   * @returns {Promise<Array>} - Array of picks or empty array if none
    */
   loadPicks: async () => {
     try {
+      console.log('Loading picks from persistence service...');
+      
+      // The Supabase entry has been manually cleared, so new picks will be generated
+      // with the updated formatting
+      
+      // Get the current date in YYYY-MM-DD format
       const today = new Date();
       const dateString = today.toISOString().split('T')[0]; // YYYY-MM-DD
       
-      // Try both sources in parallel for faster loading
-      let supabaseSuccess = false;
-      let supabasePicks = null;
-      
-      // 1. Try to load from Supabase
+      // Try to load from Supabase first (preferred source of truth for multi-user)
       try {
+        // Ensure anonymous session for Supabase access
         const connectionVerified = await ensureAnonymousSession();
         if (connectionVerified) {
           const { data, error } = await supabase
@@ -134,71 +137,41 @@ export const picksPersistenceService = {
             .single();
           
           if (!error && data && data.picks && Array.isArray(data.picks) && data.picks.length > 0) {
-            console.log('Loaded picks from Supabase');
-            supabaseSuccess = true;
-            supabasePicks = data.picks;
-            
-            // Update localStorage for offline access
-            localStorage.setItem('dailyPicksTimestamp', data.updated_at);
-            localStorage.setItem('dailyPicks', JSON.stringify(data.picks));
+            console.log(`Loaded ${data.picks.length} picks from Supabase`);
+            return data.picks;
           } else {
-            console.log('No valid picks found in Supabase');
+            console.log('No valid picks found in Supabase for today');
           }
-        } else {
-          console.warn('Could not verify Supabase connection, skipping database load');
         }
       } catch (supabaseError) {
-        console.error('Error loading from Supabase:', supabaseError);
+        console.error('Error retrieving picks from Supabase:', supabaseError);
       }
       
-      // Return Supabase picks if we got them successfully
-      if (supabaseSuccess) {
-        return supabasePicks;
-      }
-      
-      // 2. If Supabase failed or returned no data, try localStorage
-      const localPicks = localStorage.getItem('dailyPicks');
-      const localTimestamp = localStorage.getItem('dailyPicksTimestamp');
-      
-      if (localPicks && localTimestamp) {
+      // Fall back to localStorage if Supabase fails or has no data
+      const savedPicksJson = localStorage.getItem('dailyPicks');
+      if (savedPicksJson) {
         try {
-          const parsedPicks = JSON.parse(localPicks);
-          const pickDate = new Date(localTimestamp).toISOString().split('T')[0];
-          
-          // Only use local picks if they're from today
-          if (pickDate === dateString && Array.isArray(parsedPicks) && parsedPicks.length > 0) {
-            console.log('Loaded picks from localStorage');
-            return parsedPicks;
-          } else {
-            console.log('Local picks are outdated, not from today');
+          const savedPicks = JSON.parse(savedPicksJson);
+          if (Array.isArray(savedPicks) && savedPicks.length > 0) {
+            console.log(`Loaded ${savedPicks.length} picks from localStorage`);
+            // Also sync these to Supabase to help with persistence
+            try {
+              await picksPersistenceService.savePicks(savedPicks);
+            } catch (syncError) {
+              console.error('Error syncing localStorage picks to Supabase:', syncError);
+            }
+            return savedPicks;
           }
         } catch (parseError) {
-          console.error('Error parsing local picks:', parseError);
+          console.error('Error parsing picks from localStorage:', parseError);
         }
-      } else {
-        console.log('No picks found in localStorage');
       }
       
-      console.log('No valid picks found for today from any source');
-      return null;
+      console.log('No saved picks found in any storage');
+      return [];
     } catch (error) {
-      console.error('Unexpected error loading picks:', error);
-      
-      // Last resort - try localStorage directly without validation
-      try {
-        const localPicks = localStorage.getItem('dailyPicks');
-        if (localPicks) {
-          const parsed = JSON.parse(localPicks);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            console.log('Loaded picks from localStorage as last resort');
-            return parsed;
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing localStorage picks:', e);
-      }
-      
-      return null;
+      console.error('Error loading picks:', error);
+      return [];
     }
   },
   
