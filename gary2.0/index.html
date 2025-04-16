@@ -17,16 +17,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet" />
     <title>Gary A.I. - Sports Handicapping & Betting Picks</title>
     <script>
-      // Force mobile detection - run this before anything else
+      // Mobile detection disabled
       (function() {
-        // Improved mobile detection - explicitly check for mobile devices only
-        var isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-        if (isMobile) {
-          document.documentElement.classList.add('mobile-device');
-          document.documentElement.classList.add('mobile-fix');
-          localStorage.setItem('viewMode', 'mobile');
-          console.log('Mobile device detected - forcing mobile optimizations');
-        }
+        // Completely disabled mobile detection to ensure desktop view always shows
+        var isMobile = false; // Force desktop mode
+        
+        // Remove any existing mobile classes or storage
+        document.documentElement.classList.remove('mobile-device');
+        document.documentElement.classList.remove('mobile-fix');
+        localStorage.removeItem('viewMode');
+        console.log('Mobile detection disabled - forcing desktop view');
       })();
     </script>
     <style>
