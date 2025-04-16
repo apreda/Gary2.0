@@ -23,18 +23,6 @@ import { supabase, ensureAnonymousSession } from '../supabaseClient';
 import { useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useUserPreferences } from '../hooks/useUserPreferences';
-import { useUserBets } from '../hooks/useUserBets';
-import { useUserResults } from '../hooks/useUserResults';
-import { useUserPicks } from '../hooks/useUserPicks';
-import { useUserNotifications } from '../hooks/useUserNotifications';
-import { useUserMessages } from '../hooks/useUserMessages';
-import { useUserFeedback } from '../hooks/useUserFeedback';
-import { useUserPayments } from '../hooks/useUserPayments';
-import { useUserSubscriptions } from '../hooks/useUserSubscriptions';
-import { useUserProfile } from '../hooks/useUserProfile';
-import { useUserSettings } from '../hooks/useUserSettings';
-import { useUserData } from '../hooks/useUserData';
 
 export function RealGaryPicks() {
   // User plan and stats
