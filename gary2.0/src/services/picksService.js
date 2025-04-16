@@ -310,13 +310,37 @@ const picksService = {
       silverCard: pick.silverCard || false
     };
     
+    // Create a local version of the createShortPickText function to avoid circular references
+    const createShortText = (p) => {
+      // For spreads, moneylines, and over/unders
+      if (p.betType.includes('Spread') && p.spread) {
+        // Extract team name from spread and abbreviate it
+        const parts = p.spread.split(' ');
+        const teamName = parts.slice(0, parts.length - 1).join(' ');
+        const number = parts[parts.length - 1];
+        return `${picksService.abbreviateTeamName(teamName)} ${number}`;
+      } else if (p.betType.includes('Moneyline') && p.moneyline) {
+        return picksService.abbreviateTeamName(p.moneyline);
+      } else if (p.betType.includes('Total') && p.overUnder) {
+        // For over/unders, create a shorter format
+        const parts = p.overUnder.split(' ');
+        if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
+          return `${parts[0]} ${parts[parts.length - 1]}`;
+        }
+        return p.overUnder;
+      }
+      
+      // Default case - just return the pick
+      return p.pick || '';
+    };
+    
     // Add shortened version of the pick for display
-    normalizedPick.shortPick = createShortPickText(normalizedPick);
+    normalizedPick.shortPick = createShortText(normalizedPick);
     
     // Abbreviate team names in the game title
     if (normalizedPick.game && normalizedPick.game.includes(' vs ')) {
       const teams = normalizedPick.game.split(' vs ');
-      normalizedPick.shortGame = `${abbreviateTeamName(teams[0])} vs ${abbreviateTeamName(teams[1])}`;
+      normalizedPick.shortGame = `${picksService.abbreviateTeamName(teams[0])} vs ${picksService.abbreviateTeamName(teams[1])}`;
     } else {
       normalizedPick.shortGame = normalizedPick.game;
     }
