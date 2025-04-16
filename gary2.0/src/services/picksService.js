@@ -168,6 +168,33 @@ const picksService = {
   },
   
   /**
+   * Normalize a pick object to ensure it has all required fields for display
+   * @param {Object} pick - Pick object to normalize
+   * @returns {Object} - Normalized pick object
+   */
+  normalizePick: (pick) => {
+    return {
+      id: pick.id || `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      league: pick.league || 'Unknown',
+      game: pick.game || 'Unknown Game',
+      betType: pick.betType || 'Unknown Bet',
+      pick: pick.pick || pick.moneyline || pick.spread || pick.overUnder || 'Unknown Pick',
+      moneyline: pick.moneyline || '',
+      spread: pick.spread || '',
+      overUnder: pick.overUnder || '',
+      time: pick.time || 'Today',
+      analysis: pick.analysis || pick.pickDetail || pick.garysAnalysis || 'Gary is analyzing this pick.',
+      pickDetail: pick.pickDetail || pick.analysis || pick.garysAnalysis || 'Gary is analyzing this pick.',
+      garysAnalysis: pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.',
+      result: pick.result || 'pending',
+      finalScore: pick.finalScore || '',
+      confidenceLevel: pick.confidenceLevel || 75,
+      primeTimeCard: pick.primeTimeCard || false,
+      silverCard: pick.silverCard || false
+    };
+  },
+  
+  /**
    * Generate a daily parlay using existing picks
    * @param {Array} picks - Array of individual picks
    * @returns {Promise<Object>} - Parlay pick object
@@ -698,6 +725,9 @@ const picksService = {
       } catch (error) {
         console.error('Error generating parlay:', error);
       }
+      
+      // 7. Normalize all picks to ensure they have all the required fields for display
+      allPicks = allPicks.map(pick => picksService.normalizePick(pick));
       
       // 7. Log how many real picks we generated - no minimum requirement
       console.log(`Successfully generated ${allPicks.length} real picks. No fallbacks will be used.`);
