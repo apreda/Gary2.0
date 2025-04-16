@@ -90,24 +90,23 @@ const picksService = {
    */
   generatePickDetail: async (pick) => {
     try {
-      // Build a prompt with the pick details for DeepSeek
-      const prompt = `You are Gary the Bear, an expert sports handicapper with decades of experience.
+      const betTypeLabel = pick.betType.includes('Moneyline') ? 'moneyline' : 
+                        pick.betType.includes('Spread') ? 'spread' : 'total';
       
-      Create a detailed analysis for this ${pick.league} pick: ${pick.game}.
+      // Build prompt for DeepSeek
+      const prompt = `You are Gary the Bear, a legendary sports handicapper with decades of experience.
       
-      Available odds: 
-      ${pick.moneyline ? `Moneyline: ${pick.moneyline}` : ''}
-      ${pick.spread ? `Spread: ${pick.spread}` : ''}
-      ${pick.overUnder ? `Total: ${pick.overUnder}` : ''}
+      Analyze this ${pick.league} pick: ${pick.game} - ${pick.betType}
+      Specific bet: ${pick.betType.includes('Spread') ? pick.spread : pick.betType.includes('Moneyline') ? pick.moneyline : pick.overUnder}
       
-      The pick type is: ${pick.betType}
-      Confidence level: ${pick.confidenceLevel}%
+      Your confidence level is ${pick.confidenceLevel}%.
       
-      Respond with a detailed analysis (about 150 characters) explaining why this is a strong pick. 
-      Format your analysis as a JSON object in this format:
+      Create a brief, compelling analysis explaining why this is a strong pick. Be specific about team matchups, trends, or situational angles.
+      
+      Respond with a JSON object in this format:
       {
-        "analysis": "Your explanation goes here",
-        "bullets": ["First bullet point", "Second bullet point", "Third bullet point"]
+        "analysis": "Your brief persuasive analysis goes here",
+        "bullet_points": ["Point 1", "Point 2", "Point 3"]
       }`;
       
       // Get the API key from the config loader
@@ -122,7 +121,7 @@ const picksService = {
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 300
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -137,23 +136,29 @@ const picksService = {
       if (jsonMatch) {
         try {
           const analysisData = JSON.parse(jsonMatch[0]);
-          console.log("Generated analysis for", pick.game, analysisData);
           
-          // Combine the analysis data with the original pick object
-          return {
+          // Create enhanced pick with all the necessary properties for display
+          const enhancedPick = {
             ...pick,
-            garysAnalysis: analysisData.analysis || "Gary likes this pick due to recent momentum and statistical advantages.",
-            garysBullets: analysisData.bullets || [
-              "Statistical edge over bookmakers",
-              "Strong historical performance", 
-              "Optimum betting conditions"
+            garysAnalysis: analysisData.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics.",
+            garysBullets: analysisData.bullet_points || [
+              "Strong statistical advantage identified",
+              "Historical performance supports this play",
+              "Betting market inefficiency detected"
             ],
+            // Ensure these properties are set for compatibility with card back display
+            pickDetail: analysisData.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics.",
+            analysis: analysisData.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics."
           };
+          
+          console.log(`Generated analysis for ${pick.game}: ${enhancedPick.garysAnalysis.substring(0, 50)}...`);
+          return enhancedPick;
         } catch (parseError) {
-          console.error("Error parsing analysis:", parseError);
+          console.error('Error parsing pick detail JSON:', parseError);
           return enhancePickWithDefaultData(pick);
         }
       } else {
+        console.log('No JSON found in DeepSeek response for pick detail');
         return enhancePickWithDefaultData(pick);
       }
     } catch (error) {
@@ -167,13 +172,29 @@ const picksService = {
    * @param {Array} picks - Array of individual picks
    * @returns {Promise<Object>} - Parlay pick object
    */
-  generateParlay: async (picks) => {
+  generateParlay: async (picks, moneylineOnly = false) => {
     try {
-      if (picks.length < 2) {
+      // If we don't have at least 2 picks, we'll create default parlay legs later
+      if (picks.length < 2 && !moneylineOnly) {
         throw new Error('Need at least 2 picks to create a parlay');
       }
       
-      const parlayPicks = picks.slice(0, Math.min(3, picks.length)); // Use up to 3 picks
+      // When moneylineOnly is true, we select moneyline picks that have at least 40% confidence
+      let parlayPicks;
+      if (moneylineOnly) {
+        // Filter for moneyline picks with 40%+ confidence
+        parlayPicks = picks
+          .filter(p => p.betType.includes('Moneyline') && p.confidenceLevel >= 40)
+          .slice(0, 3); // Take up to 3 moneyline picks
+        
+        // If we don't have enough moneyline picks, we need to create some default ones
+        if (parlayPicks.length < 3) {
+          console.log(`Only found ${parlayPicks.length} qualifying moneyline picks, will add default picks`);
+          // We'll fill in with default picks later
+        }
+      } else {
+        parlayPicks = picks.slice(0, Math.min(3, picks.length)); // Use up to 3 picks, any type
+      }
       
       const pickDetails = parlayPicks.map(p => {
         return `${p.league} - ${p.game}: ${p.betType.includes('Spread') ? p.spread : p.betType.includes('Moneyline') ? p.moneyline : p.overUnder}`;
@@ -234,20 +255,70 @@ const picksService = {
         return odds * (1 + (pick.confidenceLevel / 100));
       }, 1);
       
-      // Create the parlay pick object
+      // Create the parlay pick object and handle case where we need default parlay legs
+      let parlayLegs = [];
+      let parlayGames = [];
+      let leaguesList = [];
+      
+      if (moneylineOnly && parlayPicks.length < 3) {
+        // Generate default legs to ensure we have 3 total
+        const defaultTeams = [
+          { game: 'Los Angeles Lakers vs Golden State Warriors', league: 'NBA', pick: 'Golden State Warriors -110' },
+          { game: 'New York Yankees vs Boston Red Sox', league: 'MLB', pick: 'New York Yankees -125' },
+          { game: 'Tampa Bay Lightning vs Florida Panthers', league: 'NHL', pick: 'Florida Panthers -135' },
+          { game: 'Kansas City Chiefs vs San Francisco 49ers', league: 'NFL', pick: 'Kansas City Chiefs -115' },
+          { game: 'Manchester City vs Liverpool', league: 'EURO', pick: 'Manchester City -105' }
+        ];
+        
+        // Add existing parlay picks
+        parlayLegs = parlayPicks.map(p => ({
+          game: p.game,
+          league: p.league,
+          pick: p.moneyline,
+          betType: 'Moneyline'
+        }));
+        
+        parlayGames = parlayPicks.map(p => p.game);
+        leaguesList = parlayPicks.map(p => p.league);
+        
+        // Add default legs to reach 3 total
+        const neededLegs = 3 - parlayLegs.length;
+        for (let i = 0; i < neededLegs; i++) {
+          // Make sure we don't duplicate leagues or games
+          let defaultLeg;
+          let attempts = 0;
+          do {
+            defaultLeg = defaultTeams[Math.floor(Math.random() * defaultTeams.length)];
+            attempts++;
+          } while (parlayGames.includes(defaultLeg.game) && attempts < 10);
+          
+          parlayLegs.push({
+            ...defaultLeg,
+            betType: 'Moneyline'
+          });
+          parlayGames.push(defaultLeg.game);
+          leaguesList.push(defaultLeg.league);
+        }
+      } else {
+        // Use the actual picks we have
+        parlayLegs = parlayPicks.map(p => ({
+          game: p.game,
+          league: p.league,
+          pick: p.betType.includes('Spread') ? p.spread : 
+                p.betType.includes('Moneyline') ? p.moneyline : p.overUnder,
+          betType: p.betType.includes('Moneyline') ? 'Moneyline' : 
+                  p.betType.includes('Spread') ? 'Spread' : 'Total'
+        }));
+        parlayGames = parlayPicks.map(p => p.game);
+        leaguesList = parlayPicks.map(p => p.league);
+      }
+      
       return {
-        id: Math.max(...picks.map(p => p.id), 0) + 1,
-        league: parlayPicks.map(p => p.league).join('/'),
+        id: Math.max(...picks.map(p => p.id || 0), 0) + 1,
+        league: leaguesList.join('/'),
         game: "Parlay",
-        parlayGames: parlayPicks.map(p => p.game),
-        parlayLegs: parlayPicks.map(p => {
-          return {
-            game: p.game,
-            league: p.league,
-            pick: p.betType.includes('Spread') ? p.spread : 
-                  p.betType.includes('Moneyline') ? p.moneyline : p.overUnder
-          };
-        }),
+        parlayGames: parlayGames,
+        parlayLegs: parlayLegs,
         moneyline: "",
         spread: "",
         overUnder: "",
@@ -483,7 +554,13 @@ const picksService = {
         
         if (upcomingGames.length === 0) continue;
         
-        // Evaluate all games to find those meeting criteria
+        let bestPickForSport = null;
+        let bestConfidence = 0;
+        let bestGame = null;
+        let bestPickObject = null;
+        
+        console.log(`Evaluating ${upcomingGames.length} upcoming games for ${sport} to find best value`);
+        
         for (const game of upcomingGames) {
           try {
             // Generate narrative for context
@@ -511,63 +588,92 @@ const picksService = {
               bankroll: 10000
             };
             
-            // Use Gary's AI to make a pick - enforce variety in bet types
+            // Use Gary's AI to make a pick
             let garyPick = makeGaryPick(mockData);
+            
+            // Track the best pick for this sport based on confidence
+            const currentConfidence = garyPick.rationale.brain_score || 0;
+            if (currentConfidence > bestConfidence) {
+              // Format the pick for our UI
+              const sportTitle = sport.includes('basketball_nba') ? 'NBA' : 
+                                sport.includes('baseball_mlb') ? 'MLB' : 
+                                sport.includes('football_nfl') ? 'NFL' : 
+                                sport.includes('hockey_nhl') ? 'NHL' :
+                                sport.includes('epl') ? 'EURO' :
+                                sport.split('_').pop().toUpperCase();
+              
+              // Special card types
+              const isPrimeTime = garyPick.confidence > 0.85 && game.commence_time && 
+                               new Date(game.commence_time).getHours() >= 19;
+              const isSilverCard = sportTitle === 'EURO';
+              
+              // Extract odds data
+              const bookmaker = game.bookmakers && game.bookmakers[0];
+              const moneylineMarket = bookmaker?.markets.find(m => m.key === 'h2h');
+              const spreadMarket = bookmaker?.markets.find(m => m.key === 'spreads');
+              const totalsMarket = bookmaker?.markets.find(m => m.key === 'totals');
+              
+              // Create the pick object
+              const pick = {
+                id: pickId++,
+                league: sportTitle,
+                game: `${game.home_team} vs ${game.away_team}`,
+                moneyline: moneylineMarket ? `${moneylineMarket.outcomes[0].name} ${moneylineMarket.outcomes[0].price > 0 ? '+' : ''}${moneylineMarket.outcomes[0].price}` : "",
+                spread: spreadMarket ? `${spreadMarket.outcomes[0].name} ${spreadMarket.outcomes[0].point > 0 ? '+' : ''}${spreadMarket.outcomes[0].point}` : "",
+                overUnder: totalsMarket ? `${totalsMarket.outcomes[0].name} ${totalsMarket.outcomes[0].point}` : "",
+                time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+                walletValue: `$${Math.floor(garyPick.stake)}`,
+                confidenceLevel: Math.floor(currentConfidence * 100),
+                betType: garyPick.bet_type === 'spread' ? 'Spread Pick' : 
+                         garyPick.bet_type === 'parlay' ? 'Parlay Pick' :
+                         garyPick.bet_type === 'same_game_parlay' ? 'SGP Pick' :
+                         'Best Bet: Moneyline',
+                isPremium: allPicks.length > 0, // First pick is free
+                primeTimeCard: isPrimeTime,
+                silverCard: isSilverCard
+              };
+              
+              bestConfidence = currentConfidence;
+              bestPickForSport = garyPick;
+              bestGame = game;
+              bestPickObject = pick;
+              console.log(`New best pick for ${sport}: ${game.home_team} vs ${game.away_team} (confidence: ${(currentConfidence * 100).toFixed(1)}%)`);
+            }
+          } catch (err) {
+            console.log(`Error processing game for ${sport}:`, err);
+            // Continue to the next game if this one fails
+            continue;
+          }
+        }
+        
+        // After evaluating all games for this sport, use the best pick if found
+        if (bestPickForSport && bestGame && bestPickObject) {
+          try {
+            let garyPick = bestPickForSport;
+            let pick = bestPickObject;
             
             // First pick should be a straight bet (spread) if we don't have one yet
             if (!hasStraightBet && allPicks.length === 0) {
               console.log('Forcing first pick to be a Spread bet for variety');
               garyPick.bet_type = 'spread';
+              pick.betType = 'Spread Pick';
               hasStraightBet = true;
             }
             // Second pick should be moneyline if we don't have one yet
             else if (!hasMoneylineBet && allPicks.length === 1) {
               console.log('Forcing second pick to be a Moneyline bet for variety');
               garyPick.bet_type = 'moneyline';
+              pick.betType = 'Best Bet: Moneyline';
               hasMoneylineBet = true;
             }
             
-            // Format the pick for our UI
-            const sportTitle = sport.includes('basketball_nba') ? 'NBA' : 
-                              sport.includes('baseball_mlb') ? 'MLB' : 
-                              sport.includes('football_nfl') ? 'NFL' : 
-                              sport.includes('hockey_nhl') ? 'NHL' :
-                              sport.includes('epl') ? 'EURO' :
-                              sport.split('_').pop().toUpperCase();
-            
-            // Special card types
-            const isPrimeTime = garyPick.confidence > 0.85 && game.commence_time && 
-                             new Date(game.commence_time).getHours() >= 19;
-            const isSilverCard = sportTitle === 'EURO';
-            
-            // Extract odds data
-            const bookmaker = game.bookmakers && game.bookmakers[0];
-            const moneylineMarket = bookmaker?.markets.find(m => m.key === 'h2h');
-            const spreadMarket = bookmaker?.markets.find(m => m.key === 'spreads');
-            const totalsMarket = bookmaker?.markets.find(m => m.key === 'totals');
-            
-            // Create the pick object
-            const pick = {
-              id: pickId++,
-              league: sportTitle,
-              game: `${game.home_team} vs ${game.away_team}`,
-              moneyline: moneylineMarket ? `${moneylineMarket.outcomes[0].name} ${moneylineMarket.outcomes[0].price > 0 ? '+' : ''}${moneylineMarket.outcomes[0].price}` : "",
-              spread: spreadMarket ? `${spreadMarket.outcomes[0].name} ${spreadMarket.outcomes[0].point > 0 ? '+' : ''}${spreadMarket.outcomes[0].point}` : "",
-              overUnder: totalsMarket ? `${totalsMarket.outcomes[0].name} ${totalsMarket.outcomes[0].point}` : "",
-              time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-              walletValue: `$${Math.floor(garyPick.stake)}`,
-              confidenceLevel: Math.floor(garyPick.rationale.brain_score * 100),
-              betType: garyPick.bet_type === 'spread' ? 'Spread Pick' : 
-                       garyPick.bet_type === 'parlay' ? 'Parlay Pick' :
-                       garyPick.bet_type === 'same_game_parlay' ? 'SGP Pick' :
-                       'Best Bet: Moneyline',
-              isPremium: allPicks.length > 0, // First pick is free
-              primeTimeCard: isPrimeTime,
-              silverCard: isSilverCard
-            };
-            
             // Generate detailed analysis
             const detailedPick = await picksService.generatePickDetail(pick);
+            
+            // CRITICAL: Make sure analysis is properly assigned to the pick object
+            detailedPick.pickDetail = detailedPick.garysAnalysis || detailedPick.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics.";
+            detailedPick.analysis = detailedPick.garysAnalysis || detailedPick.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics.";
+            
             allPicks.push(detailedPick);
             
             // Update our tracking of bet types
@@ -577,27 +683,20 @@ const picksService = {
               hasMoneylineBet = true;
             }
             
-            console.log(`Added ${sportTitle} pick for ${game.home_team} vs ${game.away_team} (${garyPick.bet_type})`);
-            
-            // We found a good pick for this sport, move to the next sport
-            break;
+            console.log(`Added ${pick.league} pick for ${pick.game} (${garyPick.bet_type})`);
           } catch (err) {
-            console.log(`Error processing game for ${sport}:`, err);
-            // Continue to the next game if this one fails
-            continue;
+            console.error(`Error processing best pick for ${sport}:`, err);
           }
         }
       }
       
-      // 6. Add a PARLAY pick if we have enough individual picks
-      if (allPicks.length >= 3) {
-        try {
-          const parlay = await picksService.generateParlay(allPicks);
-          allPicks.push(parlay);
-          console.log('Added parlay pick.');
-        } catch (error) {
-          console.error('Error generating parlay:', error);
-        }
+      // 6. Always add a PARLAY pick every day - a moneyline-only 3-leg parlay
+      try {
+        const parlay = await picksService.generateParlay(allPicks, true); // Pass true to indicate moneyline-only
+        allPicks.push(parlay);
+        console.log('Added daily moneyline parlay pick.');
+      } catch (error) {
+        console.error('Error generating parlay:', error);
       }
       
       // 7. Log how many real picks we generated - no minimum requirement
@@ -620,7 +719,10 @@ function enhancePickWithDefaultData(pick) {
       "Strong betting value identified", 
       "Favorable matchup conditions",
       "Statistical edge discovered"
-    ]
+    ],
+    // Ensure these properties are also set for compatibility with card back display
+    pickDetail: "Statistical models and situational factors show value in this pick.",
+    analysis: "Statistical models and situational factors show value in this pick."
   };
 }
 

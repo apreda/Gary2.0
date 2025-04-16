@@ -18,10 +18,18 @@ export const schedulerService = {
     const lastGen = new Date(lastGenerationTime);
     const now = new Date();
     
-    // Schedule picks generation daily at 10:00 AM EST
+    // Schedule picks generation daily at 8:51 AM today (April 16, 2025), otherwise 10:00 AM
     const today = new Date();
     const targetTime = new Date();
-    targetTime.setHours(10, 0, 0, 0); // 10:00 AM EST
+    
+    // Special case for April 16, 2025 - generate at 9:35 AM
+    const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
+    
+    if (isApril16_2025) {
+      targetTime.setHours(9, 35, 0, 0); // 9:35 AM for April 16, 2025
+    } else {
+      targetTime.setHours(10, 0, 0, 0); // 10:00 AM EST for all other days
+    }
     
     // Log current time and target time for debugging
     console.log('Current time:', now.toLocaleTimeString());
@@ -32,8 +40,13 @@ export const schedulerService = {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Check if it's after 10:00 AM - inclusive of 10:00 AM exactly
-    const isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
+    // Check if it's after target time (9:35 AM on April 16, 2025 or 10:00 AM on other days)
+    let isAfterTargetTime;
+    if (isApril16_2025) {
+      isAfterTargetTime = (currentHour > 9 || (currentHour === 9 && currentMinute >= 35));
+    } else {
+      isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
+    }
     
     // Get the last generation hour and minute
     const lastGenHour = lastGen.getHours();
@@ -51,13 +64,20 @@ export const schedulerService = {
       return true;
     }
     
-    // Normal rule: check if it's a new day and after 10:00 AM EST
+    // Normal rule: check if it's a new day and after the target time
     const isNewDay = lastGen.getDate() !== now.getDate() || 
                      lastGen.getMonth() !== now.getMonth() || 
                      lastGen.getFullYear() !== now.getFullYear();
-    const isAfter10AM = now.getHours() > 10 || (now.getHours() === 10 && now.getMinutes() >= 0); // 10:00 AM EST
     
-    return isNewDay && isAfter10AM;
+    // Check if after target time (9:35 AM on April 16, 2025 or 10:00 AM on other days)
+    let isAfterTargetHour;
+    if (isApril16_2025) {
+      isAfterTargetHour = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() >= 35); // 9:35 AM on April 16
+    } else {
+      isAfterTargetHour = now.getHours() > 10 || (now.getHours() === 10 && now.getMinutes() >= 0); // 10:00 AM EST on other days
+    }
+    
+    return isNewDay && isAfterTargetHour;
   },
   
   /**
@@ -72,8 +92,15 @@ export const schedulerService = {
    * @returns {string} - The scheduled time for new picks (e.g., "10:00 AM")
    */
   getScheduledTime: () => {
-    // Always returns the standard 10:00 AM schedule
-    return "10:00 AM";
+    // Special case for April 16, 2025
+    const today = new Date();
+    const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
+    
+    if (isApril16_2025) {
+      return "9:35 AM";
+    } else {
+      return "10:00 AM";
+    }
   },
   
   /**
@@ -83,9 +110,16 @@ export const schedulerService = {
   getNextPicksInfo: () => {
     const now = new Date();
     
-    // Using standard 10:00 AM schedule
+    // Check if it's April 16, 2025 for special schedule
+    const isApril16_2025 = now.getDate() === 16 && now.getMonth() === 3 && now.getFullYear() === 2025;
+    
+    // Set target time based on date
     let todayTargetTime = new Date(now);
-    todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM
+    if (isApril16_2025) {
+      todayTargetTime.setHours(9, 35, 0, 0); // 9:35 AM on April 16, 2025
+    } else {
+      todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM on other days
+    }
     
     // If it's before the target time today, next picks are at the target time today
     // If it's after the target time today, next picks are at 10am tomorrow
@@ -95,7 +129,7 @@ export const schedulerService = {
     } else {
       const tomorrow10AM = new Date(now);
       tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
-      tomorrow10AM.setHours(10, 0, 0, 0); // Always 10:00 AM for future days
+      tomorrow10AM.setHours(10, 0, 0, 0); // Standard 10:00 AM for future days
       nextPicksTime = tomorrow10AM;
     }
     
