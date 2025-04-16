@@ -19,8 +19,8 @@
     <script>
       // Force mobile detection - run this before anything else
       (function() {
-        // Force mobile detection for iOS Safari
-        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768;
+        // Improved mobile detection - explicitly check for mobile devices only
+        var isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
         if (isMobile) {
           document.documentElement.classList.add('mobile-device');
           document.documentElement.classList.add('mobile-fix');
@@ -94,9 +94,10 @@
           border: 1px solid #d4af37 !important;
         }
         
-        /* Hide carousel arrows */
+        /* Carousel arrows */
         .carousel-control {
-          display: none !important;
+          display: block !important;
+          z-index: 999 !important;
         }
       }
     </style>
