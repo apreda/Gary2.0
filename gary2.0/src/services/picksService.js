@@ -895,7 +895,7 @@ const picksService = {
       console.error('Error generating daily picks:', error);
       throw error; // Propagate the error rather than using fallbacks
     }
-  }
+  },
   /**
    * Abbreviate team names for display purposes
    * @param {string} teamName - Full team name
