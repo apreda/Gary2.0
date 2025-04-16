@@ -2,7 +2,7 @@ import { makeGaryPick } from '../ai/garyEngine';
 import { oddsService } from './oddsService';
 import { configLoader } from './configLoader';
 import axios from 'axios';
-import { supabase } from '../supabaseClient';
+import { supabase, ensureAnonymousSession } from '../supabaseClient';
 
 /**
  * Service for generating and managing Gary's picks
@@ -15,6 +15,9 @@ const picksService = {
    */
   storeDailyPicksInDatabase: async (picks) => {
     try {
+      // Ensure we have an anonymous session for database access
+      await ensureAnonymousSession();
+      
       // Get the current date in YYYY-MM-DD format to use as the ID
       const today = new Date();
       const dateString = today.toISOString().split('T')[0]; // e.g., "2025-04-16"
@@ -68,6 +71,9 @@ const picksService = {
    */
   getDailyPicksFromDatabase: async () => {
     try {
+      // Ensure we have an anonymous session for database access
+      await ensureAnonymousSession();
+      
       // Get the current date in YYYY-MM-DD format
       const today = new Date();
       const dateString = today.toISOString().split('T')[0]; // e.g., "2025-04-16"
@@ -102,6 +108,9 @@ const picksService = {
    */
   checkPicksExistInDatabase: async () => {
     try {
+      // Ensure we have an anonymous session for database access
+      await ensureAnonymousSession();
+      
       const todayDate = new Date();
       const dateString = todayDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
