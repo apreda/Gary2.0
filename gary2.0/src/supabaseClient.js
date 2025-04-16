@@ -6,28 +6,26 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 // Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-// Helper to ensure we have an anonymous session for public operations
+// Helper function to handle database access without requiring authentication
+// This is used since anonymous auth is disabled in Supabase
 export const ensureAnonymousSession = async () => {
-  // Check if we have an active session
-  const { data: { session } } = await supabase.auth.getSession()
-  
-  // If no session exists, sign in anonymously
-  if (!session) {
-    try {
-      console.log('No active session, signing in anonymously...')
-      const { error } = await supabase.auth.signInAnonymously()
-      if (error) {
-        console.error('Error signing in anonymously:', error)
-        return false
-      }
-      console.log('Anonymous sign-in successful')
-      return true
-    } catch (error) {
-      console.error('Failed to create anonymous session:', error)
-      return false
+  // Instead of signing in anonymously, we'll just verify the connection works
+  try {
+    // Test the connection with a simple query to a public table
+    const { error } = await supabase
+      .from('daily_picks')
+      .select('count')
+      .limit(1);
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error verifying Supabase connection:', error);
+      return false;
     }
+    
+    console.log('Supabase connection verified successfully');
+    return true;
+  } catch (error) {
+    console.error('Failed to verify Supabase connection:', error);
+    return false;
   }
-  
-  console.log('Session exists, no need to sign in')
-  return true
 }
