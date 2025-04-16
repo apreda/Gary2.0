@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Force Generate Picks</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8f9fa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+    h1 {
+      color: #d4af37;
+      margin-top: 0;
+    }
+    .button {
+      background-color: #d4af37;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      margin-top: 20px;
+    }
+    .button:hover {
+      background-color: #c4a431;
+    }
+    #status {
+      margin-top: 30px;
+      padding: 15px;
+      border-radius: 4px;
+      display: none;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .info {
+      background-color: #e2e3e5;
+      color: #383d41;
+    }
+    pre {
+      margin-top: 20px;
+      text-align: left;
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow: auto;
+      font-size: 12px;
+    }
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #d4af37;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      display: none;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Gary's Pick Generator</h1>
+    <p>This utility will force generate new MLB picks with proper formatting, regardless of what's already in the database.</p>
+    
+    <button id="generateBtn" class="button">Generate New Picks</button>
+    <div id="loader" class="loader"></div>
+    <div id="status"></div>
+    <pre id="output"></pre>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const generateBtn = document.getElementById('generateBtn');
+      const status = document.getElementById('status');
+      const output = document.getElementById('output');
+      const loader = document.getElementById('loader');
+
+      generateBtn.addEventListener('click', async function() {
+        try {
+          // Show loader and disable button
+          loader.style.display = 'block';
+          generateBtn.disabled = true;
+          status.style.display = 'block';
+          status.className = 'info';
+          status.textContent = 'Processing...';
+          output.textContent = 'Starting pick generation process...\n';
+
+          // Step 1: Clear localStorage
+          localStorage.removeItem('lastPicksGenerationTime');
+          localStorage.removeItem('dailyPicks');
+          output.textContent += '✓ Cleared localStorage cache\n';
+
+          // Step 2: Load Supabase client (from the existing page)
+          output.textContent += 'Accessing Supabase client...\n';
+          
+          // Step 3: Get today's date in YYYY-MM-DD format
+          const today = new Date().toISOString().split('T')[0];
+          output.textContent += `Today's date: ${today}\n`;
+
+          // Step 4: Fetch Supabase client from window
+          if (window.supabase) {
+            output.textContent += '✓ Found Supabase client\n';
+            
+            // Step 5: Delete existing picks for today
+            output.textContent += 'Removing today\'s picks from Supabase...\n';
+            const { error: deleteError } = await window.supabase
+              .from('daily_picks')
+              .delete()
+              .eq('date', today);
+
+            if (deleteError) {
+              output.textContent += `❌ Error deleting picks: ${deleteError.message}\n`;
+            } else {
+              output.textContent += '✓ Successfully removed existing picks\n';
+            }
+
+            // Step A - Check if window.picksService exists
+            if (window.picksService && window.picksService.generateDailyPicks) {
+              output.textContent += '✓ Found picks service, generating new picks...\n';
+              try {
+                const newPicks = await window.picksService.generateDailyPicks();
+                output.textContent += `✓ Generated ${newPicks.length} new picks\n`;
+                
+                // Log MLB picks to verify formatting
+                const mlbPicks = newPicks.filter(p => p.league === 'MLB' && p.betType && p.betType.includes('Moneyline'));
+                if (mlbPicks.length > 0) {
+                  output.textContent += '✓ MLB Moneyline picks with correct formatting:\n';
+                  mlbPicks.forEach(pick => {
+                    output.textContent += `  ${pick.shortGame}: "${pick.shortPick}"\n`;
+                  });
+                }
+                
+                status.className = 'success';
+                status.textContent = 'Success! Picks have been regenerated.';
+                
+                // Prompt for reload
+                setTimeout(() => {
+                  if (confirm('Picks generated successfully! Reload the page to see them?')) {
+                    window.location.reload();
+                  }
+                }, 1000);
+              } catch (genError) {
+                output.textContent += `❌ Error generating picks: ${genError.message}\n`;
+                status.className = 'error';
+                status.textContent = 'Error generating picks. Check console for details.';
+              }
+            } else {
+              // Alternative approach - redirect to RealGaryPicks page with special URL parameter
+              output.textContent += 'Picks service not found in window object.\n';
+              output.textContent += 'Redirecting to main page with force refresh parameter...\n';
+              
+              // Set flag in localStorage to force pick generation
+              localStorage.setItem('forceGeneratePicks', 'true');
+              
+              status.className = 'info';
+              status.textContent = 'Redirecting to main page with force refresh...';
+              
+              // Redirect after a short delay
+              setTimeout(() => {
+                window.location.href = '/real-gary-picks?forcePicks=true&t=' + new Date().getTime();
+              }, 2000);
+            }
+          } else {
+            output.textContent += '❌ Supabase client not found in window object\n';
+            output.textContent += 'Setting localStorage flag and redirecting...\n';
+            
+            // Set flag in localStorage to force pick generation
+            localStorage.setItem('forceGeneratePicks', 'true');
+            
+            status.className = 'info';
+            status.textContent = 'Redirecting to main page with force refresh...';
+            
+            // Redirect after a short delay
+            setTimeout(() => {
+              window.location.href = '/real-gary-picks?forcePicks=true&t=' + new Date().getTime();
+            }, 2000);
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          output.textContent += `❌ Error: ${error.message}\n`;
+          status.className = 'error';
+          status.textContent = 'An error occurred. Check console for details.';
+        } finally {
+          // Re-enable button and hide loader
+          loader.style.display = 'none';
+          generateBtn.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
