@@ -167,16 +167,44 @@ export function formatPickText(pick) {
     
     // MONEYLINES: Team ML Odds (e.g. "KC ML -115")
     else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
-      const odds = pick.odds || pick.moneylineOdds || '';
       // For MLB, format as 'CIN +104' (no 'ML')
       if (pick.league === 'MLB') {
-        // The moneyline field is usually 'Cincinnati Reds +104', so split and extract team name and odds
+        // Extract team name and odds from moneyline
+        // First, try to extract odds from the last part of the pick.moneyline
+        let teamName, oddsPart;
+        
+        // The moneyline value should be in format "Cincinnati Reds +104"
         const mlParts = pick.moneyline.split(' ');
-        const teamName = mlParts.slice(0, mlParts.length - 1).join(' ');
-        const oddsPart = mlParts[mlParts.length - 1];
+        if (mlParts.length > 1) {
+          // Get the last part as potential odds
+          const lastPart = mlParts[mlParts.length - 1];
+          
+          // Check if it looks like odds (+/- format)
+          if (lastPart.startsWith('+') || lastPart.startsWith('-')) {
+            oddsPart = lastPart;
+            teamName = mlParts.slice(0, mlParts.length - 1).join(' ');
+          } else {
+            // If can't detect odds in the moneyline, try to get odds from other fields
+            teamName = pick.moneyline;
+            oddsPart = pick.odds || pick.moneylineOdds || '+100';
+            if (typeof oddsPart === 'number') {
+              oddsPart = oddsPart > 0 ? `+${oddsPart}` : `${oddsPart}`;
+            }
+          }
+        } else {
+          // If moneyline doesn't have spaces, use it as the team name and find odds elsewhere
+          teamName = pick.moneyline;
+          oddsPart = pick.odds || pick.moneylineOdds || '+100';
+          if (typeof oddsPart === 'number') {
+            oddsPart = oddsPart > 0 ? `+${oddsPart}` : `${oddsPart}`;
+          }
+        }
+        
         return `${abbreviateTeamName(teamName)} ${oddsPart}`.trim();
       }
+      
       // For other leagues, keep the 'ML' format
+      const odds = pick.odds || pick.moneylineOdds || '';
       return `${abbreviateTeamName(pick.moneyline)} ML ${formatOdds(odds)}`.trim();
     } 
     

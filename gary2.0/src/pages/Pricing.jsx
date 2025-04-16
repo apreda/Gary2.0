@@ -10,7 +10,7 @@ export function Pricing() {
       <div className="absolute inset-0 z-0 overflow-hidden opacity-20">
         <div className="absolute top-0 -left-40 w-80 h-80 bg-[#d4af37]/10 rounded-full filter blur-[100px]"></div>
         <div className="absolute bottom-40 -right-40 w-80 h-80 bg-[#d4af37]/10 rounded-full filter blur-[100px]"></div>
-        <div className="absolute inset-0 bg-[url('/src/assets/images/grid.png')] bg-repeat opacity-10"></div>
+        <div className="absolute inset-0 bg-[url('/src/assets/images/grid.svg')] bg-repeat opacity-10"></div>
       </div>
       <div className="max-w-7xl mx-auto relative z-10">
         {/* Header Section */}
