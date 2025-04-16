@@ -269,7 +269,16 @@ export function RealGaryPicks() {
         const savedPicks = localStorage.getItem('dailyPicks');
         if (savedPicks && !shouldGenerate) {
           console.log('Using cached picks from localStorage');
-          dailyPicks = JSON.parse(savedPicks);
+          let parsedPicks = JSON.parse(savedPicks);
+          
+          // Fix for existing picks - normalize to ensure they have all required fields
+          parsedPicks = parsedPicks.map(pick => picksService.normalizePick(pick));
+          console.log('Normalized picks data for display');
+          
+          // Save the normalized picks back to localStorage
+          localStorage.setItem('dailyPicks', JSON.stringify(parsedPicks));
+          
+          dailyPicks = parsedPicks;
         } else {
           // Either need to generate new picks or no saves exist
           console.log('Generating new picks...');
