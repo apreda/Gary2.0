@@ -19,6 +19,7 @@ import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
+import { picksPersistenceService } from '../services/picksPersistenceService';
 import { supabase } from '../supabaseClient';
 
 // Constants for Gary's responses
@@ -135,120 +136,143 @@ export function RealGaryPicks() {
   // State for error handling
   const [loadError, setLoadError] = useState(null);
   
-  useEffect(() => {
-    async function fetchPicks() {
-      try {
-        setLoading(true);
-        setLoadError(null); // Reset any previous errors
+  // Define the fetchPicks function
+  const fetchPicks = async () => {
+    try {
+      setLoading(true);
+      setLoadError(null); // Reset any previous errors
+      
+      // Check for environment variables first
+      const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
+      if (!oddsApiKey) {
+        console.error('Missing VITE_ODDS_API_KEY environment variable. Picks cannot be generated.');
+        setLoadError('API key not configured. Please set up your environment variables.');
+        setLoading(false);
+        return;
+      }
+      
+      // Check if we should generate new picks
+      const shouldGenerate = schedulerService.shouldGenerateNewPicks();
+      let dailyPicks;
+      
+      // Try to load existing picks using our persistence service
+      if (!shouldGenerate) {
+        dailyPicks = await picksPersistenceService.loadPicks();
+      }
+      
+      // If we have valid picks and don't need to generate, use them
+      if (dailyPicks && Array.isArray(dailyPicks) && dailyPicks.length > 0 && !shouldGenerate) {
+        console.log('Using existing picks from persistence service');
         
-        // Check for environment variables first
-        const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
-        if (!oddsApiKey) {
-          console.error('Missing VITE_ODDS_API_KEY environment variable. Picks cannot be generated.');
-          setLoadError('API key not configured. Please set up your environment variables.');
-          setLoading(false);
-          return;
-        }
+        // Normalize to ensure all required fields exist
+        dailyPicks = dailyPicks.map(pick => picksService.normalizePick(pick));
+        console.log('Normalized picks data for display');
         
-        // Check if we should generate new picks
-        const shouldGenerate = schedulerService.shouldGenerateNewPicks();
-        let dailyPicks;
-        
-        // First try to get existing picks from localStorage
-        const savedPicks = localStorage.getItem('dailyPicks');
-        if (savedPicks && !shouldGenerate) {
-          console.log('Using cached picks from localStorage');
-          let parsedPicks = JSON.parse(savedPicks);
-          
-          // Fix for existing picks - normalize to ensure they have all required fields
-          parsedPicks = parsedPicks.map(pick => picksService.normalizePick(pick));
-          console.log('Normalized picks data for display');
-          
-          // Save the normalized picks back to localStorage
-          localStorage.setItem('dailyPicks', JSON.stringify(parsedPicks));
-          
-          dailyPicks = parsedPicks;
-        } else {
-          // Either need to generate new picks or no saves exist
-          console.log('Generating new picks...');
-          try {
-            // Check for DeepSeek API key
-            const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-            if (!deepseekApiKey) {
-              console.error('Missing VITE_DEEPSEEK_API_KEY environment variable. Picks cannot be generated.');
-              setLoadError('DeepSeek API key not configured. Please set up your environment variables.');
-              setLoading(false);
-              return;
-            }
-            
-            // Generate new picks
-            dailyPicks = await picksService.generateDailyPicks();
-            
-            // Mark that we've generated picks for today
-            schedulerService.markPicksAsGenerated();
-            
-            // Save picks to localStorage
-            localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
-          } catch (generateError) {
-            console.error('Error generating picks:', generateError);
-            setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
+        // Re-save normalized picks to ensure consistent format
+        await picksPersistenceService.savePicks(dailyPicks);
+      } else {
+        // Generate new picks if needed
+        console.log('Generating new picks...');
+        try {
+          // Check for DeepSeek API key
+          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+          if (!deepseekApiKey) {
+            console.error('Missing VITE_DEEPSEEK_API_KEY environment variable. Picks cannot be generated.');
+            setLoadError('DeepSeek API key not configured. Please set up your environment variables.');
             setLoading(false);
             return;
           }
+          
+          // Generate new picks
+          dailyPicks = await picksService.generateDailyPicks();
+          
+          // Mark that we've generated picks for today
+          schedulerService.markPicksAsGenerated();
+          
+          // Save picks using our persistence service
+          await picksPersistenceService.savePicks(dailyPicks);
+          console.log('New picks saved using persistence service');
+        } catch (generateError) {
+          console.error('Error generating picks:', generateError);
+          setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
+          setLoading(false);
+          return;
         }
-        
-        // If we get here, we have valid picks
-        setPicks(dailyPicks);
-        
-        // Initialize flipped state for all cards
-        const initialFlippedState = {};
-        dailyPicks.forEach(pick => {
-          initialFlippedState[pick.id] = false;
-        });
-        setFlippedCards(initialFlippedState);
-        
-        // Get info about next picks
-        setNextPicksInfo(schedulerService.getNextPicksInfo());
-        
-        // Check for results immediately
-        await resultsService.checkResults();
-        
-        // Set loading to false now that we have the picks
-        setLoading(false);
-        
-        // Set up listener for localStorage changes (for when results are updated)
-        const handleStorageChange = (e) => {
-          if (e.key === 'dailyPicks') {
-            const updatedPicks = JSON.parse(e.newValue);
-            setPicks(updatedPicks);
-          }
-        };
-        
-        window.addEventListener('storage', handleStorageChange);
-        
-        // Cleanup listener when component unmounts
-        return () => window.removeEventListener('storage', handleStorageChange);
-      } catch (error) {
-        console.error('Error fetching picks:', error);
-        setLoading(false);
-        
-        // Display error message - no fallbacks
-        setLoadError(`Error fetching picks: ${error.message}. Please try again later.`);
-        setPicks([]);
-        setFlippedCards({});
-        
-        // Set next picks info
-        setNextPicksInfo(schedulerService.getNextPicksInfo());
       }
+      
+      // If we get here, we have valid picks
+      setPicks(dailyPicks);
+      
+      // Initialize flipped state for all cards
+      const initialFlippedState = {};
+      dailyPicks.forEach(pick => {
+        initialFlippedState[pick.id] = false;
+      });
+      setFlippedCards(initialFlippedState);
+      
+      // Get info about next picks
+      setNextPicksInfo(schedulerService.getNextPicksInfo());
+      
+      // Check for results immediately
+      await resultsService.checkResults();
+      
+      // Set loading to false now that we have the picks
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching picks:', error);
+      setLoading(false);
+      
+      // Display error message - no fallbacks
+      setLoadError(`Error fetching picks: ${error.message}. Please try again later.`);
+      setPicks([]);
+      setFlippedCards({});
+      
+      // Set next picks info
+      setNextPicksInfo(schedulerService.getNextPicksInfo());
     }
-    
-    fetchPicks();
-  }, []);
+  };
   
-  // Fetch picks when component mounts
+  // Call fetchPicks when component mounts
   useEffect(() => {
     fetchPicks();
+    
+    // Set up periodic refresh to prevent cards from disappearing
+    const refreshInterval = setInterval(async () => {
+      try {
+        // Refresh picks from persistence service every minute
+        const refreshedPicks = await picksPersistenceService.loadPicks();
+        if (refreshedPicks && Array.isArray(refreshedPicks) && refreshedPicks.length > 0) {
+          setPicks(refreshedPicks);
+          console.log('Refreshed picks from persistence service');
+        }
+      } catch (refreshError) {
+        console.error('Error refreshing picks:', refreshError);
+      }
+    }, 60000); // Check every minute
+    
+    // Set up listener for localStorage changes (for when results are updated)
+    const handleStorageChange = (e) => {
+      if (e.key === 'dailyPicks') {
+        try {
+          const updatedPicks = JSON.parse(e.newValue);
+          if (updatedPicks && Array.isArray(updatedPicks)) {
+            setPicks(updatedPicks);
+          }
+        } catch (parseError) {
+          console.error('Error parsing updated picks:', parseError);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Cleanup listener and interval when component unmounts
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(refreshInterval);
+    };
   }, []);
+  // The fetchPicks function is already called in the useEffect hook above
   
   // Autoplay function (disabled - kept for potential future use)
   const startAutoplay = () => {
@@ -377,203 +401,7 @@ export function RealGaryPicks() {
     }
   };
   
-  // Fetch picks function
-  const fetchPicks = async () => {
-    try {
-      setLoading(true);
-      setLoadError(null); // Reset any previous errors
-      
-      let dailyPicks;
-      
-      // Step 1: First check if picks exist in Supabase database (shared across all users)
-      console.log('Checking for picks in Supabase database...');
-      try {
-        const dbPicks = await picksService.getDailyPicksFromDatabase();
-        
-        if (dbPicks) {
-          console.log('Found picks in Supabase database - using shared picks');
-          // Normalize the picks to ensure they have all required fields
-          dailyPicks = dbPicks.map(pick => picksService.normalizePick(pick));
-          
-          // Also update local cache
-          localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
-          
-          // Use these shared picks from database and skip further processing
-          console.log('Successfully loaded shared picks from database');
-        } else {
-          console.log('No picks found in database, checking local cache...');
-          
-          // Step 2: If no picks in database, check localStorage
-          const savedPicks = localStorage.getItem('dailyPicks');
-          
-          if (savedPicks) {
-            console.log('Using cached picks from localStorage');
-            let parsedPicks = JSON.parse(savedPicks);
-            
-            // Fix for existing picks - normalize to ensure they have all required fields
-            parsedPicks = parsedPicks.map(pick => picksService.normalizePick(pick));
-            console.log('Normalized picks data for display');
-            
-            // Set picks from cache
-            dailyPicks = parsedPicks;
-          }
-        }
-      } catch (dbError) {
-        console.error('Error retrieving picks from database:', dbError);
-        // If database check fails, continue to try localStorage
-        const savedPicks = localStorage.getItem('dailyPicks');
-        
-        if (savedPicks) {
-          console.log('Using cached picks from localStorage as fallback');
-          dailyPicks = JSON.parse(savedPicks).map(pick => picksService.normalizePick(pick));
-        }
-      }
-      
-      // Step 3: Check if we need to generate new picks based on schedule
-      if (!dailyPicks) {
-        console.log('No picks found in database or localStorage');
-        
-        // Check if it's time to generate new picks
-        const shouldGenerate = schedulerService.shouldGenerateNewPicks();
-        
-        if (shouldGenerate) {
-          // Step 4: Generate new picks
-          console.log('Time to generate new picks...');
-          
-          // Check for required API keys
-          const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
-          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-          
-          if (!oddsApiKey || !deepseekApiKey) {
-            console.error('Missing required API keys. Picks cannot be generated.');
-            setLoadError('API keys not configured. Please set up your environment variables.');
-            setLoading(false);
-            return;
-          }
-          
-          try {
-            // Generate new picks
-            dailyPicks = await picksService.generateDailyPicks();
-            
-            // Mark that we've generated picks for today
-            schedulerService.markPicksAsGenerated();
-            
-            // Save picks to Supabase database for sharing with other users
-            console.log('Storing newly generated picks in Supabase database...');
-            await picksService.storeDailyPicksInDatabase(dailyPicks);
-            console.log('Successfully stored picks in database for sharing across users');
-            
-            // Also save to localStorage as a backup
-            localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
-          } catch (generateError) {
-            console.error('Error generating picks:', generateError);
-            setLoadError(`Error generating picks: ${generateError.message}. No fallbacks will be used.`);
-            setLoading(false);
-            return;
-          }
-        } else {
-          // It's not time to generate picks yet and no existing picks were found
-          console.error('No picks found and not time to generate new ones');
-          setLoadError('No picks available. Please try again later.');
-          setLoading(false);
-          return;
-        }
-      } else if (schedulerService.shouldGenerateNewPicks()) {
-        // We have picks but it's time to generate new ones according to schedule
-        console.log('We have picks but it\'s time to generate new ones');
-        
-        // Check if picks already exist in the database for today before generating
-        const picksExistInDb = await picksService.checkPicksExistInDatabase();
-        
-        if (!picksExistInDb) {
-          console.log('No picks exist in database for today - generating new ones');
-          // Check for required API keys
-          const oddsApiKey = import.meta.env.VITE_ODDS_API_KEY;
-          const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-          
-          if (oddsApiKey && deepseekApiKey) {
-            try {
-              // Generate new picks
-              console.log('Generating fresh picks...');
-              const newPicks = await picksService.generateDailyPicks();
-              
-              // Mark that we've generated picks for today
-              schedulerService.markPicksAsGenerated();
-              
-              // Save to database for sharing
-              await picksService.storeDailyPicksInDatabase(newPicks);
-              
-              // Update local cache
-              localStorage.setItem('dailyPicks', JSON.stringify(newPicks));
-              
-              // Use the new picks
-              dailyPicks = newPicks;
-              console.log('Successfully generated and stored new picks');
-            } catch (error) {
-              console.error('Error generating new picks:', error);
-              // Continue using the existing picks we already loaded
-            }
-          }
-        } else {
-          console.log('Picks already exist in database - retrieving latest version');
-          // Retrieve latest picks from database to ensure we have the most up-to-date version
-          try {
-            const latestPicks = await picksService.getDailyPicksFromDatabase();
-            if (latestPicks) {
-              dailyPicks = latestPicks.map(pick => picksService.normalizePick(pick));
-              localStorage.setItem('dailyPicks', JSON.stringify(dailyPicks));
-            }
-          } catch (error) {
-            console.error('Error retrieving latest picks from database:', error);
-            // Continue using existing picks
-          }
-        }
-      }
-      
-      // If we get here, we have valid picks
-      setPicks(dailyPicks);
-      
-      // Initialize flipped state for all cards
-      const initialFlippedState = {};
-      dailyPicks.forEach(pick => {
-        initialFlippedState[pick.id] = false;
-      });
-      setFlippedCards(initialFlippedState);
-      
-      // Get info about next picks
-      setNextPicksInfo(schedulerService.getNextPicksInfo());
-      
-      // Check for results immediately
-      await resultsService.checkResults();
-      
-      // Set loading to false now that we have the picks
-      setLoading(false);
-      
-      // Set up listener for localStorage changes (for when results are updated)
-      const handleStorageChange = (e) => {
-        if (e.key === 'dailyPicks') {
-          const updatedPicks = JSON.parse(e.newValue);
-          setPicks(updatedPicks);
-        }
-      };
-      
-      window.addEventListener('storage', handleStorageChange);
-      
-      // Cleanup listener when component unmounts
-      return () => window.removeEventListener('storage', handleStorageChange);
-    } catch (error) {
-      console.error('Error fetching picks:', error);
-      setLoading(false);
-      
-      // Display error message - no fallbacks
-      setLoadError(`Error fetching picks: ${error.message}. Please try again later.`);
-      setPicks([]);
-      setFlippedCards({});
-      
-      // Set next picks info
-      setNextPicksInfo(schedulerService.getNextPicksInfo());
-    }
-  };
+  // The fetchPicks function is defined above and called in the useEffect hook
   
   // Touch event handlers for mobile swipe
   const handleTouchStart = (e) => {
