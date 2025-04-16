@@ -28,6 +28,8 @@ export function RealGaryPicks() {
   // User plan and stats
   const { userPlan, updateUserPlan } = useUserPlan();
   const { userStats, updateUserStats } = useUserStats();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   // Log user plan for debugging
   useEffect(() => {
@@ -99,8 +101,36 @@ export function RealGaryPicks() {
           console.log('SETTING PICKS:', data.picks);
           setPicks(data.picks);
         } else {
-          console.log('NO PICKS FOUND IN SUPABASE, SETTING EMPTY ARRAY');
-          setPicks([]);
+          console.log('NO PICKS FOUND IN SUPABASE, GENERATING NEW PICKS...');
+          
+          try {
+            // Clear any potentially cached data
+            localStorage.removeItem('lastPicksGenerationTime');
+            localStorage.removeItem('dailyPicks');
+            
+            // Generate new picks with proper MLB formatting
+            console.log('Generating new picks automatically...');
+            const newPicks = await picksService.generateDailyPicks();
+            console.log(`Generated ${newPicks.length} new picks`);
+            
+            // Mark as generated to prevent scheduler from regenerating
+            schedulerService.markPicksAsGenerated();
+            
+            // Check if we have MLB picks and log them to verify formatting
+            const mlbPicks = newPicks.filter(p => p.league === 'MLB' && p.betType && p.betType.includes('Moneyline'));
+            if (mlbPicks.length > 0) {
+              console.log('MLB Moneyline picks with correct formatting:');
+              mlbPicks.forEach(pick => {
+                console.log(`  ${pick.shortGame}: "${pick.shortPick}"`);
+              });
+            }
+            
+            console.log('Setting newly generated picks...');
+            setPicks(newPicks);
+          } catch (genError) {
+            console.error('Error generating new picks:', genError);
+            setPicks([]);
+          }
         }
       } catch (supabaseError) {
         console.error('Error fetching from Supabase:', supabaseError);
@@ -117,10 +147,81 @@ export function RealGaryPicks() {
   // State for error handling
   const [loadError, setLoadError] = useState(null);
   
-  // Fetch picks when component mounts
+  // Check if we should force generate new picks 
+  const forceGeneratePicks = async () => {
+    console.log('👉 FORCE GENERATING NEW PICKS...');
+    setLoading(true);
+    
+    try {
+      // Step 1: Clear localStorage cache
+      console.log('Clearing localStorage cache...');
+      localStorage.removeItem('lastPicksGenerationTime');
+      localStorage.removeItem('dailyPicks');
+      localStorage.removeItem('forceGeneratePicks'); // Clear the flag
+      
+      // Step 2: Clear today's picks from Supabase
+      console.log('Removing today\'s picks from Supabase...');
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      const { error: deleteError } = await supabase
+        .from('daily_picks')
+        .delete()
+        .eq('date', today);
+        
+      if (deleteError) {
+        console.error('Error deleting existing picks:', deleteError);
+      } else {
+        console.log('Successfully removed existing picks from Supabase');
+      }
+      
+      // Step 3: Generate new picks with proper MLB formatting
+      console.log('Generating new picks...');
+      const newPicks = await picksService.generateDailyPicks();
+      console.log(`Generated ${newPicks.length} new picks`);
+      
+      // Step 4: Set the picks directly in our component
+      setPicks(newPicks);
+      
+      // Step 5: Mark as generated to prevent scheduler from regenerating
+      schedulerService.markPicksAsGenerated();
+      
+      // Check if we have MLB picks and log them to verify formatting
+      const mlbPicks = newPicks.filter(p => p.league === 'MLB' && p.betType && p.betType.includes('Moneyline'));
+      if (mlbPicks.length > 0) {
+        console.log('MLB Moneyline picks with correct formatting:');
+        mlbPicks.forEach(pick => {
+          console.log(`  ${pick.shortGame}: "${pick.shortPick}"`);
+        });
+      }
+      
+      // Remove the force parameter from URL to avoid regenerating on refresh
+      if (location.search.includes('forcePicks=true')) {
+        navigate('/real-gary-picks', { replace: true });
+      }
+      
+      console.log('🎉 New picks successfully generated and stored!');
+      return newPicks;
+    } catch (error) {
+      console.error('Error forcing pick generation:', error);
+      // Fall back to regular fetch if force generation fails
+      fetchPicks();
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Fetch picks when component mounts or check for force parameter
   useEffect(() => {
-    fetchPicks();
-  }, []);
+    const params = new URLSearchParams(location.search);
+    const shouldForceGenerate = params.get('forcePicks') === 'true' || localStorage.getItem('forceGeneratePicks') === 'true';
+    
+    if (shouldForceGenerate) {
+      console.log('Force generation flag detected, regenerating picks...');
+      forceGeneratePicks();
+    } else {
+      fetchPicks();
+    }
+  }, [location]);
   
   // Handle card flipping
   const flipCard = (id) => {
