@@ -371,13 +371,15 @@ export function RealGaryPicks() {
       handleDecision(pickId, decision);
     };
     
-    // Initial fetch of picks
-    fetchPicks();
-    
     return () => {
       // Clean up when component unmounts
       delete window.handleCardDecision;
     };
+  }, []);
+  
+  // Separate effect to fetch picks to avoid scoping issues
+  useEffect(() => {
+    fetchPicks();
   }, []);
   
   // Autoplay function (disabled - kept for potential future use)
