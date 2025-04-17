@@ -14,6 +14,40 @@ import { sportsDataService } from './sportsDataService';
  */
 const picksService = {
   /**
+   * Ensure we have a valid Supabase session for database operations
+   * @returns {Promise<boolean>} - Whether authentication was successful
+   */
+  ensureValidSupabaseSession: async () => {
+    console.log('Ensuring valid Supabase session before database operation...');
+    try {
+      await ensureAnonymousSession();
+      
+      // Verify the session is active
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('Error getting session after ensuring anonymous session:', sessionError);
+        throw new Error('Failed to establish a valid Supabase session');
+      }
+      
+      if (!sessionData?.session?.access_token) {
+        console.error('No valid session token found');
+        // Force a new session creation as fallback
+        const { error: signInError } = await supabase.auth.signInAnonymously();
+        if (signInError) {
+          console.error('Failed emergency session creation:', signInError);
+          throw new Error('Could not create emergency session');
+        }
+        console.log('Created emergency anonymous session');
+      } else {
+        console.log('Valid Supabase session confirmed');
+      }
+      return true;
+    } catch (authError) {
+      console.error('Critical auth error:', authError);
+      throw new Error('Authentication failed, cannot perform database operation');
+    }
+  },
+  /**
    * Store daily picks in database for multi-user access
    * @param {Array} picks - Array of picks to store
    * @returns {Promise<boolean>} - Whether the operation was successful
@@ -50,8 +84,8 @@ const picksService = {
         // Continue anyway
       }
       
-      // Ensure we have an anonymous session for database access
-      await ensureAnonymousSession();
+      // Ensure a valid Supabase session before proceeding
+      await picksService.ensureValidSupabaseSession();
       
       // Get bankroll data to calculate wager amounts
       const bankrollData = await bankrollService.getBankrollData();
@@ -202,59 +236,122 @@ const picksService = {
       
       let result;
       
+      // IMPORTANT: Make sure the picks are properly formed JSON
+      const picksPayload = JSON.parse(JSON.stringify(cleanedPicks));
+      console.log(`Prepared ${picksPayload.length} picks for database storage with proper JSON format`);
+      
       if (existingData) {
         console.log('Found existing record for today, updating...');
-        // Update existing record
-        const { data, error } = await supabase
-          .from('daily_picks')
-          .update({ 
-            picks: cleanedPicks,
-            updated_at: new Date().toISOString()
-          })
-          .eq('date', dateString);
-          
-        if (error) {
-          console.error('Error updating existing record:', error);
-          throw error;
+        // Update existing record - with improved error handling
+        try {
+          const { data, error } = await supabase
+            .from('daily_picks')
+            .update({ 
+              picks: picksPayload,
+              updated_at: new Date().toISOString()
+            })
+            .eq('date', dateString);
+            
+          if (error) {
+            console.error('Error updating existing record:', error);
+            throw error;
+          }
+          console.log('Successfully updated picks in database for', dateString);
+          result = data;
+        } catch (updateError) {
+          console.error('Critical error during update operation:', updateError);
+          throw new Error(`Failed to update picks: ${updateError.message}`);
         }
-        console.log('Successfully updated picks in database for', dateString);
-        result = data;
       } else {
         console.log('No existing record found, creating new entry...');
-        // Create new record
-        const { data, error } = await supabase
-          .from('daily_picks')
-          .insert([
-            { 
-              date: dateString, 
-              picks: cleanedPicks,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }
-          ]);
+        // Create new record with improved error handling
+        try {
+          console.log('Attempting to insert new picks record into Supabase...');
           
-        if (error) {
-          console.error('Error creating new record:', error);
-          throw error;
+          const { data, error } = await supabase
+            .from('daily_picks')
+            .insert([
+              { 
+                date: dateString, 
+                picks: picksPayload,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }
+            ]);
+            
+          if (error) {
+            console.error('Error creating new record:', error);
+            throw error;
+          }
+          console.log('Successfully created new picks in database for', dateString);
+          result = data;
+        } catch (insertError) {
+          console.error('Critical error during insert operation:', insertError);
+          
+          // Last resort - try an upsert operation instead
+          console.log('Attempting upsert as last resort...');
+          try {
+            const { data: upsertData, error: upsertError } = await supabase
+              .from('daily_picks')
+              .upsert([
+                { 
+                  date: dateString, 
+                  picks: picksPayload,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                }
+              ]);
+              
+            if (upsertError) {
+              console.error('Error with upsert fallback:', upsertError);
+              throw upsertError;
+            }
+            console.log('Successfully saved picks using upsert fallback');
+            result = upsertData;
+          } catch (finalError) {
+            console.error('All database operations failed:', finalError);
+            throw new Error('Critical database failure - unable to store picks');
+          }
         }
-        console.log('Successfully created new picks in database for', dateString);
-        result = data;
       }
       
-      // Double-check that the data was actually saved
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('daily_picks')
-        .select('*')
-        .eq('date', dateString)
-        .single();
-        
-      if (verifyError) {
-        console.error('Error verifying data was saved:', verifyError);
-      } else if (!verifyData || !verifyData.picks || verifyData.picks.length === 0) {
-        console.error('Data verification failed - entry exists but picks are missing or empty');
-      } else {
-        console.log('Verification successful - picks are saved in Supabase');
-        console.log('Number of picks saved:', verifyData.picks.length);
+      // Double-check that the data was actually saved with more detailed verification
+      console.log('Performing verification that picks were properly saved...');
+      try {
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('daily_picks')
+          .select('*')
+          .eq('date', dateString)
+          .single();
+          
+        if (verifyError) {
+          console.error('Error verifying data was saved:', verifyError);
+          console.log('Will attempt final verification with alternative query');
+          
+          // Try one more time with a different approach
+          const { data: backupVerify, error: backupError } = await supabase
+            .from('daily_picks')
+            .select('date, picks')
+            .eq('date', dateString);
+            
+          if (backupError || !backupVerify || backupVerify.length === 0) {
+            console.error('Final verification failed:', backupError || 'No data found');
+            throw new Error('Could not verify data was saved to Supabase');
+          }
+          
+          console.log('Final verification successful through backup method');
+          console.log('Number of picks saved:', backupVerify[0]?.picks?.length || 0);
+        } else if (!verifyData || !verifyData.picks || verifyData.picks.length === 0) {
+          console.error('Data verification failed - entry exists but picks are missing or empty');
+          throw new Error('Data verification failed - picks are missing');
+        } else {
+          console.log('Verification successful - picks are saved in Supabase');
+          console.log('Number of picks saved:', verifyData.picks.length);
+          console.log('First pick saved:', JSON.stringify(verifyData.picks[0]));
+        }
+      } catch (verificationError) {
+        console.error('Critical verification error:', verificationError);
+        throw new Error('Cannot confirm picks were saved to database');
       }
       
       return result;
@@ -270,8 +367,8 @@ const picksService = {
    */
   getDailyPicksFromDatabase: async () => {
     try {
-      // Ensure we have an anonymous session for database access
-      await ensureAnonymousSession();
+      // Ensure a valid Supabase session before proceeding
+      await picksService.ensureValidSupabaseSession();
       
       // Get the current date in YYYY-MM-DD format
       const today = new Date();
@@ -307,8 +404,8 @@ const picksService = {
    */
   checkPicksExistInDatabase: async () => {
     try {
-      // Ensure we have an anonymous session for database access
-      await ensureAnonymousSession();
+      // Ensure a valid Supabase session before proceeding
+      await picksService.ensureValidSupabaseSession();
       
       const todayDate = new Date();
       const dateString = todayDate.toISOString().split('T')[0]; // YYYY-MM-DD format
