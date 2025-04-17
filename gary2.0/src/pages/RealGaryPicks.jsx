@@ -483,16 +483,18 @@ export function RealGaryPicks() {
                       
                       <div className="pick-card-back">
                         <div className="pick-card-back-header">
-                          <img src={gary1} alt="Gary AI" className="gary-avatar" />
-                          <div className="gary-title">Gary's Analysis</div>
+                          <div className="pick-card-league">{pick.league}</div>
+                          <div className="pick-card-time">{pick.time}</div>
                         </div>
                         
                         <div className="pick-card-back-content">
                           {pick.league !== 'PARLAY' ? (
                             <>
-                              <div className="pick-summary">
-                                <div className="pick-summary-game">{pick.game}</div>
-                                <div className="pick-summary-pick">
+                              <div className="pick-card-heading">Gary's Analysis</div>
+                              
+                              <div className="pick-card-game-details">
+                                <div className="pick-game">{pick.game}</div>
+                                <div className="pick-selection">
                                   {(() => {
                                     try {
                                       // PRIORITY 1: Use the shortPick directly from Supabase if available
@@ -527,7 +529,7 @@ export function RealGaryPicks() {
                                 </div>
                               </div>
                               
-                              <div className="pick-analysis">
+                              <div className="pick-analysis-content">
                                 {(() => {
                                   // First try to use garysBullets if available
                                   if (pick.garysBullets && Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
@@ -572,8 +574,9 @@ export function RealGaryPicks() {
                             </>
                           ) : (
                             <>
-                              <div className="parlay-summary">
-                                <div className="parlay-title">PARLAY OF THE DAY</div>
+                              <div className="pick-card-heading">PARLAY OF THE DAY</div>
+                              
+                              <div className="parlay-odds-display">
                                 {pick.parlayOdds && (
                                   <div className="parlay-odds">
                                     {pick.parlayOdds.startsWith('+') ? pick.parlayOdds : `+${pick.parlayOdds}`}
@@ -581,17 +584,17 @@ export function RealGaryPicks() {
                                 )}
                               </div>
                               
-                              <div className="parlay-analysis">
-                                {pick.garysAnalysis || pick.analysis || 'Gary has combined these picks for maximum value.'}
+                              <div className="pick-analysis-content">
+                                <p>{pick.garysAnalysis || pick.analysis || 'Gary has combined these picks for maximum value.'}</p>
                               </div>
                               
                               {pick.parlayLegs && pick.parlayLegs.length > 0 && (
-                                <div className="parlay-legs-detail">
-                                  <div className="parlay-legs-title">Parlay Legs</div>
+                                <div className="parlay-legs-container">
+                                  <div className="parlay-legs-heading">Parlay Legs</div>
                                   {pick.parlayLegs.map((leg, legIndex) => (
-                                    <div key={legIndex} className="parlay-leg-detail">
-                                      <div className="parlay-leg-game">{leg.game}</div>
-                                      <div className="parlay-leg-pick">
+                                    <div key={legIndex} className="parlay-leg">
+                                      <div className="leg-game">{leg.game}</div>
+                                      <div className="leg-pick">
                                         {leg.pick || `${leg.team || leg.moneyline} ML ${leg.odds || ''}`}
                                       </div>
                                     </div>
@@ -617,13 +620,13 @@ export function RealGaryPicks() {
                           )}
                         </div>
                         
-                        <div className="pick-card-back-footer">
+                        <div className="pick-card-bottom">
                           <button 
-                            className="flip-button"
+                            className="btn-flip-back"
                             onClick={() => flipCard(pick.id)}
                             aria-label="Flip card back"
                           >
-                            <span>Flip Back</span>
+                            Return to Card
                           </button>
                         </div>
                       </div>
