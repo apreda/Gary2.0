@@ -353,115 +353,115 @@ export function RealGaryPicks() {
                     className={`pick-card card-position-${(index - activeCardIndex + 7) % 7} ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
                   >
                     <div className="pick-card-inner">
-                      <div className="pick-card-front">
-                        <div className="pick-card-header">
-                          <div className="pick-card-league">{pick.league}</div>
-                          <div className="pick-card-time">{pick.time}</div>
-                        </div>
-                        
-                        <div className="pick-card-game">
-                          {pick.league === 'PARLAY' ? 'PARLAY OF THE DAY' : pick.game}
-                        </div>
-                        
-                        {pick.league !== 'PARLAY' ? (
-                          <div className="pick-card-content">
-                            <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
-                            <div className="pick-card-bet">
-                              {/* PRIORITIZE USING EXISTING shortPick FROM SUPABASE */}
-                              {(() => {
-                                try {
-                                  console.log(`Rendering pick: ${pick.id}, League: ${pick.league}`);
-                                  console.log('Pick data:', pick);
-                                  
-                                  // PRIORITY 1: Use the shortPick directly from Supabase if available
-                                  if (pick.shortPick && typeof pick.shortPick === 'string' && pick.shortPick.trim() !== '') {
-                                    console.log(`Using existing shortPick: ${pick.shortPick}`);
-                                    return pick.shortPick;
-                                  }
-                                  
-                                  // PRIORITY 2: Use the pick field directly
-                                  if (pick.pick && typeof pick.pick === 'string' && pick.pick.trim() !== '') {
-                                    console.log(`Using pick field: ${pick.pick}`);
-                                    return pick.pick;
-                                  }
-                                  
-                                  // PRIORITY 3: For specific bet types, format them consistently
-                                  if (pick.betType && pick.betType.includes('Spread') && pick.spread) {
-                                    return pick.spread;
-                                  } 
-                                  else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
-                                    return `${pick.moneyline} ML`;
-                                  } 
-                                  else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
-                                    return pick.overUnder;
-                                  }
-                                  else if (pick.league === 'PARLAY') {
-                                    return 'PARLAY OF THE DAY';
-                                  }
-                                  
-                                  // Last resort
-                                  return 'NO PICK DATA';
-                                } catch (err) {
-                                  console.error('Error rendering pick:', err);
-                                  // Fallback to any available data
-                                  return pick.shortPick || pick.pick || 'ERROR RENDERING PICK';
-                                }
-                              })()}
-                            </div>
-                            {pick.result && pick.result !== 'pending' && (
-                              <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
-                                <div className="result-label">{pick.result === 'WIN' ? '✓ WINNER' : pick.result === 'LOSS' ? '✗ INCORRECT' : 'PUSH'}</div>
-                                {pick.finalScore && <div className="final-score">Final: {pick.finalScore}</div>}
-                              </div>
-                            )}
-                            
-                            {/* Gary's Analysis Section */}
-                            <div className="gary-analysis">
-                              {/* Title removed as requested */}
-                              <div className="gary-analysis-content">
-                                {(() => {
-                                  // First try to use garysBullets if available
-                                  if (pick.garysBullets && Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
-                                    return (
-                                      <ul className="gary-bullets">
-                                        {pick.garysBullets.map((bullet, i) => (
-                                          <li key={i}>{bullet}</li>
-                                        ))}
-                                      </ul>
-                                    );
-                                  }
-                                  
-                                  // Otherwise use the analysis text
-                                  const analysisText = pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.';
-                                  
-                                  // Split into paragraphs if it contains line breaks
-                                  if (analysisText.includes('\n')) {
-                                    return analysisText.split('\n').map((paragraph, i) => (
-                                      <p key={i}>{paragraph}</p>
-                                    ));
-                                  }
-                                  
-                                  // Otherwise just return as a single paragraph
-                                  return <p>{analysisText}</p>;
-                                })()}
-                              </div>
-                            </div>
-                            
-                            {/* Confidence Level */}
+                        <div className="pick-card-front">
+                          <div className="pick-card-header">
+                            <div className="pick-card-league">{pick.league}</div>
+                            <div className="pick-card-time">{pick.time}</div>
+                          </div>
+                          
+                          <div className="pick-card-game">
+                            {pick.league === 'PARLAY' ? 'PARLAY OF THE DAY' : pick.game}
+                          </div>
+                          
+                          <div className="pick-card-center-content">
                             {pick.confidenceLevel && (
                               <div className="confidence-level">
                                 <div className="confidence-label">Confidence</div>
-                                <div className="confidence-meter">
-                                  <div 
-                                    className="confidence-fill" 
-                                    style={{ width: `${pick.confidenceLevel}%` }}
-                                  ></div>
-                                </div>
                                 <div className="confidence-value">{pick.confidenceLevel}%</div>
                               </div>
                             )}
                           </div>
-                        ) : (
+                          
+                          <div className="pick-card-bottom">
+                            <button className="btn-view-pick" onClick={() => flipCard(pick.id)}>
+                              View Pick
+                            </button>
+                          </div>
+                          
+                          {pick.league !== 'PARLAY' ? (
+                            <div className="pick-card-content" style={{display: 'none'}}>
+                              <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
+                              <div className="pick-card-bet">
+                                {(() => {
+                                  try {
+                                    console.log(`Rendering pick: ${pick.id}, League: ${pick.league}`);
+                                    console.log('Pick data:', pick);
+                                    
+                                    // PRIORITY 1: Use the shortPick directly from Supabase if available
+                                    if (pick.shortPick && typeof pick.shortPick === 'string' && pick.shortPick.trim() !== '') {
+                                      console.log(`Using existing shortPick: ${pick.shortPick}`);
+                                      return pick.shortPick;
+                                    }
+                                    
+                                    // PRIORITY 2: Use the pick field directly
+                                    if (pick.pick && typeof pick.pick === 'string' && pick.pick.trim() !== '') {
+                                      console.log(`Using pick field: ${pick.pick}`);
+                                      return pick.pick;
+                                    }
+                                    
+                                    // PRIORITY 3: For specific bet types, format them consistently
+                                    if (pick.betType && pick.betType.includes('Spread') && pick.spread) {
+                                      return pick.spread;
+                                    } 
+                                    else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
+                                      return `${pick.moneyline} ML`;
+                                    } 
+                                    else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
+                                      return pick.overUnder;
+                                    }
+                                    else if (pick.league === 'PARLAY') {
+                                      return 'PARLAY OF THE DAY';
+                                    }
+                                    
+                                    // Last resort
+                                    return 'NO PICK DATA';
+                                  } catch (err) {
+                                    console.error('Error rendering pick:', err);
+                                    // Fallback to any available data
+                                    return pick.shortPick || pick.pick || 'ERROR RENDERING PICK';
+                                  }
+                                })()}
+                              </div>
+                              {pick.result && pick.result !== 'pending' && (
+                                <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
+                                  <div className="result-label">{pick.result === 'WIN' ? '✓ WINNER' : pick.result === 'LOSS' ? '✗ INCORRECT' : 'PUSH'}</div>
+                                  {pick.finalScore && <div className="final-score">Final: {pick.finalScore}</div>}
+                                </div>
+                              )}
+                              
+                              {/* Gary's Analysis Section */}
+                              <div className="gary-analysis">
+                                {/* Title removed as requested */}
+                                <div className="gary-analysis-content">
+                                  {(() => {
+                                    // First try to use garysBullets if available
+                                    if (pick.garysBullets && Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
+                                      return (
+                                        <ul className="gary-bullets">
+                                          {pick.garysBullets.map((bullet, i) => (
+                                            <li key={i}>{bullet}</li>
+                                          ))}
+                                        </ul>
+                                      );
+                                    }
+                                    
+                                    // Otherwise use the analysis text
+                                    const analysisText = pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.';
+                                    
+                                    // Split into paragraphs if it contains line breaks
+                                    if (analysisText.includes('\n')) {
+                                      return analysisText.split('\n').map((paragraph, i) => (
+                                        <p key={i}>{paragraph}</p>
+                                      ));
+                                    }
+                                    
+                                    // Otherwise just return as a single paragraph
+                                    return <p>{analysisText}</p>;
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
                           // Parlay Card Content
                           <div className="parlay-card-content">
                             <div className="parlay-card-title">PARLAY OF THE DAY</div>
@@ -532,11 +532,82 @@ export function RealGaryPicks() {
                             <>
                               <div className="pick-summary">
                                 <div className="pick-summary-game">{pick.game}</div>
-                                <div className="pick-summary-pick">{pick.pick}</div>
+                                <div className="pick-summary-pick">
+                                  {(() => {
+                                    try {
+                                      // PRIORITY 1: Use the shortPick directly from Supabase if available
+                                      if (pick.shortPick && typeof pick.shortPick === 'string' && pick.shortPick.trim() !== '') {
+                                        return pick.shortPick;
+                                      }
+                                      
+                                      // PRIORITY 2: Use the pick field directly
+                                      if (pick.pick && typeof pick.pick === 'string' && pick.pick.trim() !== '') {
+                                        return pick.pick;
+                                      }
+                                      
+                                      // PRIORITY 3: For specific bet types, format them consistently
+                                      if (pick.betType && pick.betType.includes('Spread') && pick.spread) {
+                                        return pick.spread;
+                                      } 
+                                      else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
+                                        return `${pick.moneyline} ML`;
+                                      } 
+                                      else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
+                                        return pick.overUnder;
+                                      }
+                                      
+                                      // Last resort
+                                      return 'NO PICK DATA';
+                                    } catch (err) {
+                                      console.error('Error rendering pick:', err);
+                                      // Fallback to any available data
+                                      return pick.shortPick || pick.pick || 'ERROR RENDERING PICK';
+                                    }
+                                  })()}
+                                </div>
                               </div>
                               
                               <div className="pick-analysis">
-                                {pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.'}
+                                {(() => {
+                                  // First try to use garysBullets if available
+                                  if (pick.garysBullets && Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
+                                    return (
+                                      <ul className="gary-bullets">
+                                        {pick.garysBullets.map((bullet, i) => (
+                                          <li key={i}>{bullet}</li>
+                                        ))}
+                                      </ul>
+                                    );
+                                  }
+                                  
+                                  // Otherwise use the analysis text
+                                  const analysisText = pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.';
+                                  
+                                  // Split into paragraphs if it contains line breaks
+                                  if (analysisText.includes('\n')) {
+                                    return analysisText.split('\n').map((paragraph, i) => (
+                                      <p key={i}>{paragraph}</p>
+                                    ));
+                                  }
+                                  
+                                  // Otherwise just return as a single paragraph
+                                  return <p>{analysisText}</p>;
+                                })()}
+                              </div>
+                              
+                              <div className="decision-buttons">
+                                <button 
+                                  className="btn-bet-with-gary"
+                                  onClick={() => trackUserDecision(pick.id, 'bet', pick.league)}
+                                >
+                                  Bet with Gary
+                                </button>
+                                <button 
+                                  className="btn-fade-the-bear"
+                                  onClick={() => trackUserDecision(pick.id, 'fade', pick.league)}
+                                >
+                                  Fade the Bear
+                                </button>
                               </div>
                             </>
                           ) : (
@@ -567,6 +638,21 @@ export function RealGaryPicks() {
                                   ))}
                                 </div>
                               )}
+                              
+                              <div className="decision-buttons">
+                                <button 
+                                  className="btn-bet-with-gary"
+                                  onClick={() => trackUserDecision(pick.id, 'bet', 'PARLAY')}
+                                >
+                                  Bet with Gary
+                                </button>
+                                <button 
+                                  className="btn-fade-the-bear"
+                                  onClick={() => trackUserDecision(pick.id, 'fade', 'PARLAY')}
+                                >
+                                  Fade the Bear
+                                </button>
+                              </div>
                             </>
                           )}
                         </div>
@@ -577,7 +663,7 @@ export function RealGaryPicks() {
                             onClick={() => flipCard(pick.id)}
                             aria-label="Flip card back"
                           >
-                            <span>Tap to flip back</span>
+                            <span>Flip Back</span>
                           </button>
                         </div>
                       </div>
