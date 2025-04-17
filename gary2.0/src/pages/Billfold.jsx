@@ -4,21 +4,61 @@ import { supabase } from "../supabaseClient";
 import './BillfoldStyle.css';
 import { format } from 'date-fns';
 import billfoldLogo from '../assets/images/billfold1.png';
+import { bankrollService } from '../services/bankrollService';
 
 export function Billfold() {
   const containerRef = useRef(null);
   const [activeBettingFilter, setActiveBettingFilter] = useState('all');
   
-  // Mock data for bankroll stats
-  const [bankrollStats] = useState({
-    currentBankroll: 12458,
+  // Real bankroll data from bankrollService
+  const [bankrollStats, setBankrollStats] = useState({
+    currentBankroll: 10000,
     startingBankroll: 10000,
     monthlyGoal: 30,
-    currentRoi: 18.4,
-    totalBets: 42,
-    winRate: 64,
-    averageBet: 313,
+    currentRoi: 0,
+    totalBets: 0,
+    winRate: 0,
+    averageBet: 0,
   });
+  
+  // Fetch real bankroll data
+  useEffect(() => {
+    const fetchBankrollData = async () => {
+      try {
+        const bankrollData = await bankrollService.getBankrollData();
+        if (bankrollData) {
+          // Calculate various metrics
+          const roi = bankrollData.starting_amount > 0 ? 
+            ((bankrollData.current_amount - bankrollData.starting_amount) / bankrollData.starting_amount) * 100 : 0;
+            
+          // Get betting history
+          const bettingHistory = await bankrollService.getBettingHistory();
+          
+          // Calculate win rate and average bet
+          const totalBets = bettingHistory.length;
+          const wonBets = bettingHistory.filter(bet => bet.status === 'won').length;
+          const winRate = totalBets > 0 ? (wonBets / totalBets) * 100 : 0;
+          const totalWagered = bettingHistory.reduce((sum, bet) => sum + bet.amount, 0);
+          const averageBet = totalBets > 0 ? totalWagered / totalBets : 0;
+          
+          // Update state with real data
+          setBankrollStats({
+            currentBankroll: Math.round(bankrollData.current_amount),
+            startingBankroll: Math.round(bankrollData.starting_amount),
+            monthlyGoal: bankrollData.monthly_goal_percent,
+            currentRoi: parseFloat(roi.toFixed(1)),
+            totalBets,
+            winRate: parseFloat(winRate.toFixed(1)),
+            averageBet: Math.round(averageBet),
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching bankroll data:', error);
+      }
+    };
+    
+    fetchBankrollData();
+  }, []);
 
   // Mock data for sport breakdown
   const [sportsBreakdown] = useState([
@@ -52,8 +92,47 @@ export function Billfold() {
     },
   ]);
 
-  // Mock data for betting log
-  const [bettingLog] = useState([
+  // Real betting history from bankrollService
+  const [bettingLog, setBettingLog] = useState([]);
+  
+  // Fetch real betting history
+  useEffect(() => {
+    const fetchBettingHistory = async () => {
+      try {
+        const history = await bankrollService.getBettingHistory();
+        if (history && Array.isArray(history)) {
+          // Format betting history for display
+          const formattedHistory = history.map(bet => {
+            // Extract data from the bet and associated pick
+            const pick = bet.picks || {};
+            return {
+              date: new Date(bet.placed_date).toISOString().split('T')[0],
+              game: pick.game || 'Unknown Game',
+              bet: pick.shortPick || pick.pick || 'Unknown Bet',
+              odds: bet.odds || 0,
+              stake: bet.amount || 0,
+              payout: bet.status === 'won' ? bet.potential_payout : 0,
+              result: bet.status || 'pending',
+              sport: pick.league || 'Unknown',
+              betType: pick.parlayCard ? 'parlay' : 
+                      (pick.betType?.toLowerCase().includes('spread') ? 'spread' : 
+                       pick.betType?.toLowerCase().includes('total') ? 'over-under' : 'moneyline')
+            };
+          });
+          
+          setBettingLog(formattedHistory);
+        }
+      } catch (error) {
+        console.error('Error fetching betting history:', error);
+        // If error, keep the mock data for display
+      }
+    };
+    
+    fetchBettingHistory();
+  }, []);
+  
+  // Default mock data in case real data isn't available yet
+  const defaultBettingLog = [
     {
       date: "2025-04-13",
       game: "Celtics vs. Bulls",
@@ -168,12 +247,15 @@ export function Billfold() {
 
   // Filter betting log based on active filter
 
+  // Use real betting data if available, otherwise fall back to default mock data
+  const effectiveBettingLog = bettingLog.length > 0 ? bettingLog : defaultBettingLog;
+  
   // Filter betting log based on active filter
-  const filteredBettingLog = bettingLog.filter(bet => {
+  const filteredBettingLog = effectiveBettingLog.filter(bet => {
     if (activeBettingFilter === 'all') return true;
-    if (activeBettingFilter === 'won') return bet.result === 'win';
-    if (activeBettingFilter === 'lost') return bet.result === 'loss';
-    if (activeBettingFilter === 'parlay') return bet.sport === 'PARLAY';
+    if (activeBettingFilter === 'won') return bet.result === 'won' || bet.result === 'win';
+    if (activeBettingFilter === 'lost') return bet.result === 'lost' || bet.result === 'loss';
+    if (activeBettingFilter === 'parlay') return bet.betType === 'parlay' || bet.sport === 'PARLAY';
     return true;
   });
 
