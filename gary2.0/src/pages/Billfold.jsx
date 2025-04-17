@@ -243,9 +243,7 @@ export function Billfold() {
       sport: "PARLAY",
       betType: "parlay"
     }
-  ]);
-
-  // Filter betting log based on active filter
+  ]; // Added semicolon here
 
   // Use real betting data if available, otherwise fall back to default mock data
   const effectiveBettingLog = bettingLog.length > 0 ? bettingLog : defaultBettingLog;
@@ -289,18 +287,20 @@ export function Billfold() {
               </div>
               
               <div className="stat-box">
+                <div className="stat-label">Goal</div>
+                <div className="stat-value percent">+{bankrollStats.monthlyGoal}%</div>
+              </div>
+              
+              <div className="stat-box">
+                <div className="stat-label">ROI</div>
+                <div className={`stat-value percent ${bankrollStats.currentRoi >= 0 ? 'positive' : 'negative'}`}>
+                  {bankrollStats.currentRoi >= 0 ? '+' : ''}{bankrollStats.currentRoi}%
+                </div>
+              </div>
+              
+              <div className="stat-box">
                 <div className="stat-label">Win Rate</div>
-                <div className="stat-value percentage">{bankrollStats.winRate}%</div>
-              </div>
-              
-              <div className="stat-box">
-                <div className="stat-label">Total Bets</div>
-                <div className="stat-value">{bankrollStats.totalBets}</div>
-              </div>
-              
-              <div className="stat-box">
-                <div className="stat-label">Monthly Goal</div>
-                <div className="stat-value percentage">{bankrollStats.monthlyGoal}%</div>
+                <div className="stat-value percent">{bankrollStats.winRate}%</div>
               </div>
               
               <div className="stat-box">
@@ -311,110 +311,121 @@ export function Billfold() {
           </div>
         </div>
       </header>
-      
-      {/* Main content area */}
-      <div className="billfold-content">
-        {/* Sport-by-sport breakdown */}
-        <section className="sport-breakdown">
-          <div className="sport-cards">
-            {sportsBreakdown.map((sport) => (
-              <div className="sport-card" key={sport.name}>
-                <div className="sport-icon">{sport.icon}</div>
-                <div className="sport-name">{sport.name}</div>
-                
-                <div className="sport-stat">
-                  <div className="sport-stat-label">Record</div>
-                  <div className="sport-stat-value">{sport.record}</div>
-                </div>
-                
-                <div className="sport-stat">
-                  <div className="sport-stat-label">Win %</div>
-                  <div className="sport-stat-value">{sport.winRate}%</div>
-                </div>
-                
-                <div className="sport-stat">
-                  <div className="sport-stat-label">ROI</div>
-                  <div className={`sport-stat-value ${sport.roi >= 0 ? 'positive' : 'negative'}`}>
-                    {sport.roi > 0 ? '+' : ''}{sport.roi}%
-                  </div>
-                </div>
+
+      <main className="billfold-main">
+        {/* Monthly goal progress */}
+        <div className="monthly-goal-container">
+          <h2 className="section-title">Monthly Goal Progress</h2>
+          <div className="progress-container">
+            <div className="progress-labels">
+              <span>${new Intl.NumberFormat('en-US').format(bankrollStats.startingBankroll)}</span>
+              <span>Goal: ${new Intl.NumberFormat('en-US').format(bankrollStats.startingBankroll * (1 + bankrollStats.monthlyGoal/100))}</span>
+            </div>
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{ 
+                  width: `${Math.min(100, (bankrollStats.currentBankroll - bankrollStats.startingBankroll) / (bankrollStats.startingBankroll * bankrollStats.monthlyGoal / 100) * 100)}%`,
+                  backgroundColor: bankrollStats.currentRoi >= 0 ? 'var(--gary-green)' : 'var(--gary-red)'
+                }}
+              >
               </div>
-            ))}
-          </div>
-        </section>
-        
-        {/* Betting logbook with scrollable table */}
-        <section className="betting-logbook">
-          <div className="logbook-header">
-            <h2 className="logbook-title">Betting Logbook</h2>
-            
-            <div className="logbook-filters">
-              <button 
-                className={`filter-button ${activeBettingFilter === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveBettingFilter('all')}
-              >
-                All
-              </button>
-              <button 
-                className={`filter-button ${activeBettingFilter === 'won' ? 'active' : ''}`}
-                onClick={() => setActiveBettingFilter('won')}
-              >
-                Won
-              </button>
-              <button 
-                className={`filter-button ${activeBettingFilter === 'lost' ? 'active' : ''}`}
-                onClick={() => setActiveBettingFilter('lost')}
-              >
-                Lost
-              </button>
-              <button 
-                className={`filter-button ${activeBettingFilter === 'parlay' ? 'active' : ''}`}
-                onClick={() => setActiveBettingFilter('parlay')}
-              >
-                Parlays
-              </button>
+            </div>
+            <div className="progress-amount">
+              <span>${new Intl.NumberFormat('en-US').format(bankrollStats.currentBankroll)}</span>
+              <span className={bankrollStats.currentRoi >= 0 ? 'positive' : 'negative'}>
+                {bankrollStats.currentRoi >= 0 ? '+' : ''}{bankrollStats.currentRoi}%
+              </span>
             </div>
           </div>
-          
-          {/* Scrollable table container */}
-          <div className="log-table-container">
-            <table className="log-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Game</th>
-                  <th>Bet</th>
-                  <th>Type</th>
-                  <th>Odds</th>
-                  <th>Stake</th>
-                  <th>Result</th>
-                  <th>Payout</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBettingLog.map((bet, index) => (
-                  <tr key={index}>
-                    <td>{new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</td>
-                    <td>{bet.game}</td>
-                    <td>{bet.bet}</td>
-                    <td>
-                      <span className={`bet-type bet-type-${bet.betType}`}>
-                        {bet.betType}
+        </div>
+
+        {/* Sport-specific stats and betting history */}
+        <div className="statistics-betting-container">
+          {/* Sport breakdown */}
+          <div className="sport-breakdown">
+            <h2 className="section-title">Sport Breakdown</h2>
+            <div className="sport-stats-grid">
+              {sportsBreakdown.map((sport, index) => (
+                <div key={index} className="sport-stat-card">
+                  <div className="sport-icon">{sport.icon}</div>
+                  <div className="sport-name">{sport.name}</div>
+                  <div className="sport-record">{sport.record}</div>
+                  <div className="sport-metrics">
+                    <div className="metric">
+                      <span className="metric-label">Win</span>
+                      <span className="metric-value">{sport.winRate}%</span>
+                    </div>
+                    <div className="metric">
+                      <span className="metric-label">ROI</span>
+                      <span className={`metric-value ${sport.roi >= 0 ? 'positive' : 'negative'}`}>
+                        {sport.roi >= 0 ? '+' : ''}{sport.roi}%
                       </span>
-                    </td>
-                    <td>{bet.odds > 0 ? `+${bet.odds}` : bet.odds}</td>
-                    <td>${new Intl.NumberFormat('en-US').format(bet.stake)}</td>
-                    <td className={`result-${bet.result}`}>
-                      {bet.result.toUpperCase()}
-                    </td>
-                    <td>${new Intl.NumberFormat('en-US').format(bet.payout)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </section>
-      </div>
+
+          {/* Betting history */}
+          <div className="betting-history">
+            <div className="history-header">
+              <h2 className="section-title">Betting History</h2>
+              <div className="filter-buttons">
+                <button 
+                  className={`filter-btn ${activeBettingFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setActiveBettingFilter('all')}
+                >
+                  All
+                </button>
+                <button 
+                  className={`filter-btn ${activeBettingFilter === 'won' ? 'active' : ''}`}
+                  onClick={() => setActiveBettingFilter('won')}
+                >
+                  Won
+                </button>
+                <button 
+                  className={`filter-btn ${activeBettingFilter === 'lost' ? 'active' : ''}`}
+                  onClick={() => setActiveBettingFilter('lost')}
+                >
+                  Lost
+                </button>
+                <button 
+                  className={`filter-btn ${activeBettingFilter === 'parlay' ? 'active' : ''}`}
+                  onClick={() => setActiveBettingFilter('parlay')}
+                >
+                  Parlays
+                </button>
+              </div>
+            </div>
+            
+            <div className="bet-list">
+              {filteredBettingLog.map((bet, index) => (
+                <div 
+                  key={index} 
+                  className={`bet-item ${bet.result === 'win' || bet.result === 'won' ? 'win' : bet.result === 'loss' || bet.result === 'lost' ? 'loss' : 'pending'}`}
+                >
+                  <div className="bet-date">{bet.date}</div>
+                  <div className="bet-game">{bet.game}</div>
+                  <div className="bet-pick">{bet.bet}</div>
+                  <div className="bet-odds">{bet.odds > 0 ? `+${bet.odds}` : bet.odds}</div>
+                  <div className="bet-amount">${bet.stake}</div>
+                  <div className="bet-result">
+                    {bet.result === 'win' || bet.result === 'won' ? (
+                      <span className="result win">+${bet.payout - bet.stake}</span>
+                    ) : bet.result === 'loss' || bet.result === 'lost' ? (
+                      <span className="result loss">-${bet.stake}</span>
+                    ) : (
+                      <span className="result pending">Pending</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
