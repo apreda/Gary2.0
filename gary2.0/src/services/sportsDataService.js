@@ -31,17 +31,20 @@ export const sportsDataService = {
    */
   getTeamData: async (teamName) => {
     try {
+      console.log(`TheSportsDB API: Fetching team data for ${teamName}`);
       const response = await axios.get(
         `${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/searchteams.php?t=${encodeURIComponent(teamName)}`
       );
       
       if (response.data && response.data.teams && response.data.teams.length > 0) {
+        console.log(`TheSportsDB API: Successfully found data for ${teamName}`);
         return response.data.teams[0];
       }
       
+      console.warn(`TheSportsDB API: No team data found for ${teamName}`);
       return null;
     } catch (error) {
-      console.error(`Error fetching team data for ${teamName}:`, error);
+      console.error(`TheSportsDB API: Error fetching team data for ${teamName}:`, error.message);
       return null;
     }
   },
@@ -122,12 +125,14 @@ export const sportsDataService = {
    */
   generateTeamStatsForGame: async (homeTeam, awayTeam, league) => {
     try {
+      console.log(`TheSportsDB API: Generating team stats for ${homeTeam} vs ${awayTeam} (${league})`);
+      
       // Get team data
       const homeTeamData = await sportsDataService.getTeamData(homeTeam);
       const awayTeamData = await sportsDataService.getTeamData(awayTeam);
       
       if (!homeTeamData || !awayTeamData) {
-        console.warn(`Could not find team data for ${homeTeam} and/or ${awayTeam}`);
+        console.error(`TheSportsDB API: Could not find team data for ${homeTeam} and/or ${awayTeam}. This will affect pick quality.`);
         return {
           homeTeamStats: null,
           awayTeamStats: null,
@@ -197,10 +202,12 @@ export const sportsDataService = {
    */
   formatStatsForPrompt: (gameStats) => {
     if (!gameStats || !gameStats.statsAvailable) {
-      return '';
+      console.warn('TheSportsDB API: No stats available to format for DeepSeek prompt.');
+      return 'NOTE: Current team statistics unavailable - using historical data only.';
     }
     
     const { homeTeamStats, awayTeamStats } = gameStats;
+    console.log(`TheSportsDB API: Formatting stats for ${homeTeamStats.name} vs ${awayTeamStats.name}`);
     
     return `
 Current Team Data (April 2025):
