@@ -7,6 +7,7 @@ import { getTeamAbbreviation } from '../utils/teamAbbreviations';
 import { getIndustryAbbreviation } from '../utils/industryTeamAbbreviations';
 import { picksPersistenceService } from './picksPersistenceService';
 import { bankrollService } from './bankrollService';
+import { sportsDataService } from './sportsDataService';
 
 /**
  * Service for generating and managing Gary's picks
@@ -348,11 +349,19 @@ const picksService = {
       const awayOdds = game.bookmakers && game.bookmakers[0]?.markets.find(m => m.key === 'h2h')?.outcomes.find(o => o.name === awayTeam)?.price;
       const pointSpread = game.bookmakers && game.bookmakers[0]?.markets.find(m => m.key === 'spreads')?.outcomes.find(o => o.name === homeTeam)?.point;
       
+      // Get current team stats from SportsDB API
+      const league = sportKey.split('_')[0].toUpperCase();
+      console.log(`Fetching current stats for ${homeTeam} vs ${awayTeam} (${league})`);
+      const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
+      const statsContext = sportsDataService.formatStatsForPrompt(teamStats);
+      
       // Create prompt for DeepSeek
       const prompt = `You are Gary the Bear, an expert sports handicapper with decades of experience. 
       Analyze this upcoming ${sportTitle} game between ${homeTeam} and ${awayTeam}.
       ${homeOdds ? `The moneyline is ${homeTeam} ${homeOdds > 0 ? '+' : ''}${homeOdds} vs ${awayTeam} ${awayOdds > 0 ? '+' : ''}${awayOdds}.` : ''}
       ${pointSpread ? `The spread is ${homeTeam} ${pointSpread > 0 ? '+' : ''}${pointSpread}.` : ''}
+      
+      ${statsContext}
       
       Consider factors like recent form, injuries, matchup history, and betting trends.
       
@@ -417,11 +426,33 @@ const picksService = {
       const betTypeLabel = pick.betType.includes('Moneyline') ? 'moneyline' : 
                         pick.betType.includes('Spread') ? 'spread' : 'total';
       
+      // Extract team names from the game
+      let homeTeam, awayTeam;
+      if (pick.game && pick.game.includes(' vs ')) {
+        [awayTeam, homeTeam] = pick.game.split(' vs ');
+      } else if (pick.game && pick.game.includes(' at ')) {
+        [awayTeam, homeTeam] = pick.game.split(' at ');
+      } else {
+        // If we can't parse the game string, just use default format
+        homeTeam = '';
+        awayTeam = '';
+      }
+      
+      // Get current team stats if we have team names
+      let statsContext = '';
+      if (homeTeam && awayTeam && pick.league) {
+        console.log(`Fetching current stats for pick: ${homeTeam} vs ${awayTeam} (${pick.league})`);
+        const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, pick.league);
+        statsContext = sportsDataService.formatStatsForPrompt(teamStats);
+      }
+      
       // Build prompt for DeepSeek
       const prompt = `You are Gary the Bear, a legendary sports handicapper with decades of experience.
       
       Analyze this ${pick.league} pick: ${pick.game} - ${pick.betType}
       Specific bet: ${pick.betType.includes('Spread') ? pick.spread : pick.betType.includes('Moneyline') ? pick.moneyline : pick.overUnder}
+      
+      ${statsContext}
       
       Your confidence level is ${pick.confidenceLevel}%.
       
