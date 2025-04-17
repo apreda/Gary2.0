@@ -345,7 +345,15 @@ export function RealGaryPicks() {
                             {pick.confidenceLevel && (
                               <div className="confidence-level">
                                 <div className="confidence-label">Confidence</div>
-                                <div className="confidence-value">{pick.confidenceLevel}%</div>
+                                <div className="confidence-value">{pick.confidenceLevel}</div>
+                              </div>
+                            )}
+                            
+                            {/* Display Gary's wager amount */}
+                            {pick.wagerAmount && (
+                              <div className="wager-amount">
+                                <div className="wager-label">Gary's Wager</div>
+                                <div className="wager-value">${pick.wagerAmount.toLocaleString()}</div>
                               </div>
                             )}
                           </div>

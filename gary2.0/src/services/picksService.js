@@ -6,6 +6,7 @@ import { supabase, ensureAnonymousSession } from '../supabaseClient';
 import { getTeamAbbreviation } from '../utils/teamAbbreviations';
 import { getIndustryAbbreviation } from '../utils/industryTeamAbbreviations';
 import { picksPersistenceService } from './picksPersistenceService';
+import { bankrollService } from './bankrollService';
 
 /**
  * Service for generating and managing Gary's picks
@@ -51,10 +52,33 @@ const picksService = {
       // Ensure we have an anonymous session for database access
       await ensureAnonymousSession();
       
+      // Get bankroll data to calculate wager amounts
+      const bankrollData = await bankrollService.getBankrollData();
+      const currentBankroll = bankrollData?.current_amount || 10000;
+      
       // Clean up picks data to ONLY include what's shown on the cards
       const cleanedPicks = picks.map(pick => {
         // For a parlay pick
         if (pick.parlayCard) {
+          // Calculate confidence percentage and appropriate wager for parlay
+          let confidencePercentage = 60; // Default medium confidence
+          if (pick.confidenceLevel === "Very High") confidencePercentage = 75;
+          else if (pick.confidenceLevel === "High") confidencePercentage = 65;
+          else if (pick.confidenceLevel === "Medium") confidencePercentage = 60;
+          else if (pick.confidenceLevel === "Low") confidencePercentage = 50;
+          
+          // Calculate wager - parlays get 0.5% of bankroll regardless of confidence
+          const wagerAmount = Math.max(Math.round((currentBankroll * 0.005) / 5) * 5, 25);
+          
+          // Calculate potential payout based on odds
+          const odds = parseInt(pick.odds || '+350');
+          let potentialPayout = wagerAmount;
+          if (odds > 0) {
+            potentialPayout = wagerAmount + (wagerAmount * odds / 100);
+          } else if (odds < 0) {
+            potentialPayout = wagerAmount + (wagerAmount * 100 / Math.abs(odds));
+          }
+          
           const cleanParlay = {
             id: pick.id,
             league: 'PARLAY',
@@ -63,7 +87,9 @@ const picksService = {
             result: pick.result || 'pending',
             parlayCard: true,
             odds: pick.odds || '+350',  // Include odds if available
-            shortPick: pick.shortPick || 'Parlay of the Day'
+            shortPick: pick.shortPick || 'Parlay of the Day',
+            wagerAmount: wagerAmount,
+            potentialPayout: Math.round(potentialPayout)
           };
           
           // Only include minimal information for parlay legs
@@ -87,6 +113,27 @@ const picksService = {
         }
         
         // For regular picks (single bets)
+        // Calculate confidence percentage based on confidence level
+        let confidencePercentage = 50;
+        if (pick.confidenceLevel === "Very High") confidencePercentage = 80;
+        else if (pick.confidenceLevel === "High") confidencePercentage = 70;
+        else if (pick.confidenceLevel === "Medium") confidencePercentage = 60;
+        else if (pick.confidenceLevel === "Low") confidencePercentage = 50;
+        
+        // Calculate wager amount based on confidence and bankroll
+        const wagerAmount = bankrollService.calculateWagerAmount(confidencePercentage, currentBankroll);
+        
+        // Calculate potential payout based on odds
+        let potentialPayout = wagerAmount;
+        const odds = parseInt(pick.odds || '0');
+        if (odds > 0) {
+          potentialPayout = wagerAmount + (wagerAmount * odds / 100);
+        } else if (odds < 0) {
+          potentialPayout = wagerAmount + (wagerAmount * 100 / Math.abs(odds));
+        } else {
+          potentialPayout = wagerAmount * 2; // Default 2x payout if odds not specified
+        }
+        
         const cleanPick = {
           id: pick.id,
           league: pick.league,
@@ -97,7 +144,9 @@ const picksService = {
           result: pick.result || 'pending',
           primeTimeCard: !!pick.primeTimeCard,
           silverCard: !!pick.silverCard,
-          time: pick.time || ''
+          time: pick.time || '',
+          wagerAmount: wagerAmount,
+          potentialPayout: Math.round(potentialPayout)
         };
         
         // Include odds based on bet type
