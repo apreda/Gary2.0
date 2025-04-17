@@ -473,7 +473,7 @@ export function RealGaryPicks() {
                               </div>
                             )}
                             
-                            {/* Gary's Analysis for Parlay */}
+                            {/* Analysis content for Parlay */}
                             <div className="gary-analysis parlay-analysis">
                               <div className="gary-analysis-content">
                                 {pick.garysAnalysis || pick.analysis || 'Gary has combined these picks for maximum value.'}
@@ -508,10 +508,7 @@ export function RealGaryPicks() {
                         <div className="pick-card-back-content">
                           {pick.league !== 'PARLAY' ? (
                             <>
-                              <div className="pick-card-heading">Gary's Analysis</div>
-                              
                               <div className="pick-card-game-details">
-                                <div className="pick-game">{pick.game}</div>
                                 <div className="pick-selection">
                                   {(() => {
                                     try {
