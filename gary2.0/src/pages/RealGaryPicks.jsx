@@ -350,7 +350,7 @@ export function RealGaryPicks() {
                 {picks.map((pick, index) => (
                   <div 
                     key={pick.id}
-                    className={`pick-card ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
+                    className={`pick-card card-position-${(index - activeCardIndex + 7) % 7} ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
                   >
                     <div className="pick-card-inner">
                       <div className="pick-card-front">
