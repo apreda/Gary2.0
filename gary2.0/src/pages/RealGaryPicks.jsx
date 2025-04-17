@@ -323,7 +323,7 @@ export function RealGaryPicks() {
                     className={`pick-card card-position-${(index - activeCardIndex + 7) % 7} ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
                   >
                     <div className="pick-card-inner">
-                        <div className="pick-card-front">
+                        <div className="pick-card-front" onClick={() => flipCard(pick.id)}>
                           <div className="pick-card-header">
                             <div className="pick-card-league">{pick.league}</div>
                             <div className="pick-card-time">{pick.time}</div>
@@ -483,7 +483,7 @@ export function RealGaryPicks() {
                         {/* No footer on front side - using View Pick button instead */}
                       </div>
                       
-                      <div className="pick-card-back">
+                      <div className="pick-card-back" onClick={() => flipCard(pick.id)}>
                         <div className="pick-card-back-header">
                           <div className="pick-card-league">{pick.league}</div>
                           <div className="pick-card-time">{pick.time}</div>

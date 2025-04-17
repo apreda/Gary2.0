@@ -135,11 +135,11 @@
 
 /* Improve visibility of navigation arrows */
 .gary-picks-container .carousel-arrow {
-  position: absolute !important;
+  position: fixed !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
-  width: 70px !important;
-  height: 70px !important;
+  width: 60px !important;
+  height: 60px !important;
   background: rgba(0, 0, 0, 0.8) !important;
   border-radius: 50% !important;
   border: 3px solid rgba(255, 201, 76, 0.7) !important;
@@ -148,7 +148,7 @@
   justify-content: center !important;
   color: #FFC94C !important;
   font-size: 24px !important;
-  z-index: 110 !important; /* Above all cards */
+  z-index: 999 !important; /* Always on top */
   cursor: pointer !important;
   transition: all 0.3s ease !important;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.4) !important;
@@ -161,12 +161,12 @@
   box-shadow: 0 0 30px rgba(255, 201, 76, 0.3) !important;
 }
 
-.gary-picks-container .carousel-arrow-left {
-  left: 5% !important;
+.gary-picks-container .carousel-arrow.left {
+  left: 20px;
 }
 
-.gary-picks-container .carousel-arrow-right {
-  right: 5% !important;
+.gary-picks-container .carousel-arrow.right {
+  right: 20px;
 }
 
 /* Styling for Parlay of the Day card content */
