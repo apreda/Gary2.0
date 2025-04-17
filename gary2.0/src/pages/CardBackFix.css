@@ -1,0 +1,183 @@
+/* Card Back Fix - Ensure proper styling for card back elements */
+
+/* Card back header */
+.pick-card-back-header {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  border-bottom: 1px solid rgba(255, 201, 76, 0.3);
+}
+
+/* Card back heading */
+.pick-card-heading {
+  font-size: 24px;
+  font-weight: 700;
+  color: #FFC94C;
+  text-align: center;
+  margin: 15px 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Game details */
+.pick-card-game-details {
+  padding: 0 15px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.pick-game {
+  font-size: 16px;
+  color: white;
+  margin-bottom: 5px;
+}
+
+.pick-selection {
+  font-size: 22px;
+  font-weight: 700;
+  color: #FFC94C;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+/* Analysis content */
+.pick-analysis-content {
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.15);
+  margin: 0 10px 15px;
+  border-radius: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.pick-analysis-content p {
+  color: white;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.pick-analysis-content ul.gary-bullets {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.pick-analysis-content ul.gary-bullets li {
+  color: white;
+  font-size: 14px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+/* Decision buttons */
+.decision-buttons {
+  display: flex;
+  gap: 10px;
+  padding: 0 15px 15px;
+}
+
+.btn-bet-with-gary,
+.btn-fade-the-bear {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-bet-with-gary {
+  background: rgba(255, 201, 76, 0.2);
+  color: #FFC94C;
+  border: 1px solid rgba(255, 201, 76, 0.5);
+}
+
+.btn-fade-the-bear {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-bet-with-gary:hover {
+  background: rgba(255, 201, 76, 0.3);
+  border-color: rgba(255, 201, 76, 0.8);
+}
+
+.btn-fade-the-bear:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Return to card button */
+.btn-flip-back {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 80%;
+  margin: 0 auto 15px;
+  display: block;
+}
+
+.btn-flip-back:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Parlay specific styling */
+.parlay-odds-display {
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.parlay-odds {
+  display: inline-block;
+  background: rgba(255, 201, 76, 0.2);
+  color: #FFC94C;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 5px 15px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 201, 76, 0.3);
+}
+
+.parlay-legs-container {
+  padding: 0 15px 15px;
+  margin-bottom: 10px;
+}
+
+.parlay-legs-heading {
+  font-size: 16px;
+  font-weight: 600;
+  color: #FFC94C;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.parlay-leg {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 201, 76, 0.2);
+}
+
+.leg-game {
+  font-size: 13px;
+  color: #ddd;
+  margin-bottom: 4px;
+}
+
+.leg-pick {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}

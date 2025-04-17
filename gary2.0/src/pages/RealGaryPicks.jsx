@@ -7,6 +7,7 @@ import gary1 from '../assets/images/gary1.svg';
 import "./GaryPicksCarousel.css";
 import "./CarouselFix.css";
 import "./CardFlipFix.css";
+import "./CardBackFix.css"; // New styles for card back elements
 import "./ParlayCardFix.css"; // Special fixes for Parlay card
 import "./ButtonFix.css"; // Fix button positioning
 import "./ToastNotification.css"; // Toast notification styles
