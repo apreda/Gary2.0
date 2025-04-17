@@ -351,9 +351,18 @@ const picksService = {
       
       // Get current team stats from SportsDB API
       const league = sportKey.split('_')[0].toUpperCase();
-      console.log(`Fetching current stats for ${homeTeam} vs ${awayTeam} (${league})`);
-      const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
-      const statsContext = sportsDataService.formatStatsForPrompt(teamStats);
+      console.log(`CRITICAL - Fetching current stats for ${homeTeam} vs ${awayTeam} (${league})`);
+      let teamStats;
+      let statsContext = '';
+      
+      try {
+        teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
+        statsContext = sportsDataService.formatStatsForPrompt(teamStats);
+        console.log(`SPORTS DATA SUCCESS: Stats context length: ${statsContext.length} characters`);
+      } catch (statsError) {
+        console.error(`SPORTS DATA ERROR: Failed to get team stats: ${statsError.message}`);
+        statsContext = 'ERROR: Could not retrieve current team statistics. Using historical data only.';
+      }
       
       // Create prompt for DeepSeek
       const prompt = `You are Gary the Bear, an expert sports handicapper with decades of experience. 
@@ -377,11 +386,14 @@ const picksService = {
       const apiKey = await configLoader.getDeepseekApiKey();
       const baseUrl = await configLoader.getDeepseekBaseUrl();
       
+      // Log the prompt with stats context for debugging
+      console.log(`DEEPSEEK PROMPT WITH SPORTS DATA:\n${prompt}`);
+      
       // Call DeepSeek API
       const response = await axios.post(`${baseUrl}/chat/completions`, {
         model: "deepseek-chat",
         messages: [
-          { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks." },
+          { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks. ALWAYS incorporate any current team statistics provided into your analysis." },
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
@@ -441,9 +453,15 @@ const picksService = {
       // Get current team stats if we have team names
       let statsContext = '';
       if (homeTeam && awayTeam && pick.league) {
-        console.log(`Fetching current stats for pick: ${homeTeam} vs ${awayTeam} (${pick.league})`);
-        const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, pick.league);
-        statsContext = sportsDataService.formatStatsForPrompt(teamStats);
+        console.log(`CRITICAL - Fetching current stats for pick: ${homeTeam} vs ${awayTeam} (${pick.league})`);
+        try {
+          const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, pick.league);
+          statsContext = sportsDataService.formatStatsForPrompt(teamStats);
+          console.log(`SPORTS DATA SUCCESS: Stats context for pick detail length: ${statsContext.length} characters`);
+        } catch (statsError) {
+          console.error(`SPORTS DATA ERROR: Failed to get team stats for pick detail: ${statsError.message}`);
+          statsContext = 'ERROR: Could not retrieve current team statistics. Using historical data only.';
+        }
       }
       
       // Build prompt for DeepSeek

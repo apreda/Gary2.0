@@ -9,6 +9,17 @@ export const schedulerService = {
    * @returns {boolean} - Whether new picks should be generated
    */
   shouldGenerateNewPicks: () => {
+    const now = new Date();
+    
+    // Force regeneration for next call after TheSportsDB API fix on April 17, 2025
+    const isApril17_2025After10AM = now.getDate() === 17 && now.getMonth() === 3 && now.getFullYear() === 2025 && now.getHours() >= 10 && now.getHours() < 14;
+    
+    // Force regeneration after 10:00 AM on April 17th to get updated data with TheSportsDB API
+    if (isApril17_2025After10AM) {
+      console.log('CRITICAL - Forcing picks regeneration after TheSportsDB API integration fix');
+      return true;
+    }
+    
     const lastGenerationTime = localStorage.getItem('lastPicksGenerationTime');
     
     if (!lastGenerationTime) {
@@ -16,16 +27,14 @@ export const schedulerService = {
     }
     
     const lastGen = new Date(lastGenerationTime);
-    const now = new Date();
     
     // Schedule picks generation daily at 8:51 AM today (April 16, 2025), otherwise 10:00 AM
-    const today = new Date();
     const targetTime = new Date();
     
     // Special case for April 16, 2025 - skip rest of day after current time
-    const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
+    const isApril16_2025 = now.getDate() === 16 && now.getMonth() === 3 && now.getFullYear() === 2025;
     // Special case for April 17, 2025 - generate at 10am
-    const isApril17_2025 = today.getDate() === 17 && today.getMonth() === 3 && today.getFullYear() === 2025;
+    const isApril17_2025 = now.getDate() === 17 && now.getMonth() === 3 && now.getFullYear() === 2025;
     
     if (isApril16_2025) {
       // Set time to 23:59 to effectively skip the rest of today
@@ -44,8 +53,8 @@ export const schedulerService = {
     console.log('Last generation time:', lastGen.toLocaleTimeString());
     
     // Get current hours and minutes for a direct comparison
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
     
     // Check if it's after target time based on the date
     let isAfterTargetTime;
@@ -54,10 +63,10 @@ export const schedulerService = {
       isAfterTargetTime = false;
     } else if (isApril17_2025) {
       // Check if it's after 10:00 AM on April 17th
-      isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
+      isAfterTargetTime = (hours > 10 || (hours === 10 && minutes >= 0));
     } else {
       // Standard check for 10:00 AM on other days
-      isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
+      isAfterTargetTime = (hours > 10 || (hours === 10 && minutes >= 0));
     }
     
     // Get the last generation hour and minute
@@ -84,9 +93,9 @@ export const schedulerService = {
     // Check if after target time (2:35 PM on April 16, 2025 or 10:00 AM on other days)
     let isAfterTargetHour;
     if (isApril16_2025) {
-      isAfterTargetHour = now.getHours() > 18 || (now.getHours() === 18 && now.getMinutes() >= 11); // 6:11 PM on April 16
+      isAfterTargetHour = hours > 18 || (hours === 18 && minutes >= 11); // 6:11 PM on April 16
     } else {
-      isAfterTargetHour = now.getHours() > 10 || (now.getHours() === 10 && now.getMinutes() >= 0); // 10:00 AM EST on other days
+      isAfterTargetHour = hours > 10 || (hours === 10 && minutes >= 0); // 10:00 AM EST on other days
     }
     
     return isNewDay && isAfterTargetHour;
