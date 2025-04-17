@@ -611,99 +611,18 @@
 /* Responsive and Mobile Touch Optimization */
 
 /* Touch areas for better UX */
+/* Desktop-only track - no touch events or mobile-specific styling */
 .carousel-track {
-  touch-action: pan-y; /* Enable vertical scrolling but capture horizontal swipes */
-  -webkit-overflow-scrolling: touch; /* Smoother scrolling on iOS */
-  user-select: none; /* Prevent text selection during swipes */
+  user-select: none;
+  position: relative;
 }
 
-/* Mobile swipe indicator */
+/* No swipe indicators or other mobile elements */
 .swipe-indicator {
   display: none;
 }
 
-@media (max-width: 1200px) {
-  .pick-card {
-    width: 280px;
-    height: 420px;
-  }
-  
-  .carousel-arrow-left {
-    left: 20px;
-  }
-  
-  .carousel-arrow-right {
-    right: 20px;
-  }
-  
-  /* Adjust card positions for smaller screens */
-  .card-position-1 {
-    transform: translate(25%, -50%) scale(0.9) rotateY(8deg);
-  }
-  
-  .card-position-6 {
-    transform: translate(-125%, -50%) scale(0.9) rotateY(-8deg);
-  }
-}
-
-@media (max-width: 768px) {
-  .pick-card {
-    width: 250px;
-    height: 380px;
-  }
-  
-  .pick-card-bet {
-    font-size: 20px;
-  }
-  
-  .carousel-arrow {
-    width: 40px;
-    height: 40px;
-    opacity: 0.7;
-  }
-  
-  /* More compact positioning for mobile */
-  .card-position-0 {
-    transform: translate(-50%, -50%) scale(1);
-  }
-  
-  .card-position-1 {
-    transform: translate(30%, -50%) scale(0.85) rotateY(8deg);
-    opacity: 0.85;
-  }
-  
-  .card-position-6 {
-    transform: translate(-130%, -50%) scale(0.85) rotateY(-8deg);
-    opacity: 0.85;
-  }
-  
-  /* Hide far cards on mobile */
-  .card-position-2,
-  .card-position-3,
-  .card-position-4,
-  .card-position-5 {
-    opacity: 0.6;
-  }
-  
-  /* Show swipe indicator on mobile */
-  .swipe-indicator {
-    display: block;
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    right: 0;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 12px;
-    animation: pulse 2s infinite;
-  }
-  
-  @keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
-  }
-}
+/* Only standard desktop styling without responsive breakpoints */
 
 /* Parlay card special styling */
 .parlay-card::before {

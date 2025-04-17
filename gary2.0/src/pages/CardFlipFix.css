@@ -20,25 +20,29 @@
     transform: rotateY(180deg);
 }
 
-/* Card front and back positioning */
+/* Card front and back positioning - Desktop Only */
 .pick-card-front, .pick-card-back {
   position: absolute;
   width: 100%;
   height: 100%;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
   border-radius: 16px;
   overflow: hidden;
 }
 
 .pick-card-front {
   z-index: 2;
-  display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .pick-card-back {
   transform: rotateY(180deg);
+  background: linear-gradient(135deg, rgba(61, 51, 6, 0.9), rgba(122, 93, 11, 0.8));
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
