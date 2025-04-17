@@ -11,9 +11,9 @@ import "./ParlayCardFix.css"; // Special fixes for Parlay card
 import "./ButtonFix.css"; // Fix button positioning
 import "./ToastNotification.css"; // Toast notification styles
 import "./RegularCardFix.css"; // Fix font sizing for regular cards
-import "./MobileFixes.css"; // Specific fixes for mobile
 import "./GaryAnalysisFix.css"; // Enhanced styling for Gary's analysis
 import "./AnalysisBulletsFix.css"; // Styling for the bulleted analysis format
+// Note: All mobile-specific CSS and functionality has been removed
 import { picksService } from '../services/picksService';
 import { schedulerService } from '../services/schedulerService';
 import { resultsService } from '../services/resultsService';
