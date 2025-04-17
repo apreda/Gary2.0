@@ -1,4 +1,11 @@
 // ——————————————
+// IMPORTS: Gary's Enhanced Intelligence
+// ——————————————
+import { perplexityService } from '../services/perplexityService';
+import { openaiService } from '../services/openaiService';
+import { sportsDataService } from '../services/sportsDataService';
+
+// ——————————————
 // 1. CONFIG: Gary's Core Models
 // ——————————————
 export const PreferenceModel = {
@@ -123,69 +130,281 @@ export function calculateStake(bankroll, betType, confidence) {
 }
 
 // ——————————————
-// 6. MAIN PICK FUNCTION
+// 6. NEW AI-POWERED GARY ANALYSIS
 // ——————————————
-export function makeGaryPick({
+
+/**
+ * Fetch real-time information about a game using Perplexity API
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {string} league - Sports league
+ * @returns {Promise<string>} - Real-time information about the game
+ */
+export async function fetchRealTimeGameInfo(homeTeam, awayTeam, league) {
+  console.log(`Fetching real-time info for ${awayTeam} @ ${homeTeam} (${league})...`);
+  try {
+    // Get game-specific news and insights
+    const gameNews = await perplexityService.getGameNews(homeTeam, awayTeam, league);
+    
+    // Get team-specific insights for both teams
+    const [homeInsights, awayInsights] = await Promise.all([
+      perplexityService.getTeamInsights(homeTeam, league),
+      perplexityService.getTeamInsights(awayTeam, league)
+    ]);
+    
+    // Format everything into a comprehensive context
+    const realTimeContext = `
+      GAME NEWS AND BETTING TRENDS:
+      ${gameNews || 'No game-specific news available.'}
+
+      ${homeTeam.toUpperCase()} INSIGHTS:
+      ${homeInsights || 'No team-specific insights available.'}
+
+      ${awayTeam.toUpperCase()} INSIGHTS:
+      ${awayInsights || 'No team-specific insights available.'}
+    `;
+    
+    return realTimeContext;
+  } catch (error) {
+    console.error('Error fetching real-time game information:', error);
+    return 'Unable to retrieve real-time information. Analysis will proceed with available data only.';
+  }
+}
+
+/**
+ * Generate detailed game analysis using OpenAI
+ * @param {object} gameData - Game and team data
+ * @param {string} realTimeInfo - Real-time information from Perplexity
+ * @param {object} preferences - Gary's preferences
+ * @returns {Promise<object>} - Generated analysis
+ */
+export async function generateGaryAnalysis(gameData, realTimeInfo, preferences = {}) {
+  try {
+    // Apply Gary's preferences to the analysis prompt
+    const preferenceContext = Object.keys(preferences).length > 0 ? 
+      `Consider these personal preferences in your analysis: ${JSON.stringify(preferences)}` : '';
+    
+    // Get the analysis from OpenAI
+    const analysis = await openaiService.generateGaryAnalysis(gameData, realTimeInfo, {
+      temperature: 0.8,
+      extraContext: preferenceContext
+    });
+    
+    return {
+      fullAnalysis: analysis,
+      success: true
+    };
+  } catch (error) {
+    console.error('Error generating Gary\'s analysis:', error);
+    return {
+      fullAnalysis: 'Unable to generate analysis at this time.',
+      success: false
+    };
+  }
+}
+
+/**
+ * Parse Gary's narrative analysis into structured data
+ * @param {string} analysis - Full text analysis from OpenAI
+ * @returns {object} - Structured data extracted from the analysis
+ */
+export function parseGaryAnalysis(analysis) {
+  try {
+    // Default values in case parsing fails
+    const defaultResult = {
+      pick: null,
+      confidence: 'Medium',
+      betType: 'Moneyline',
+      stake: 0,
+      keyPoints: [],
+      reasoning: ''
+    };
+    
+    if (!analysis) return defaultResult;
+    
+    // Extract confidence level
+    let confidence = 'Medium';
+    if (analysis.includes('Confidence: High') || analysis.includes('CONFIDENCE: HIGH')) {
+      confidence = 'High';
+    } else if (analysis.includes('Confidence: Low') || analysis.includes('CONFIDENCE: LOW')) {
+      confidence = 'Low';
+    }
+    
+    // Extract bet type (assuming it's mentioned clearly)
+    let betType = 'Moneyline'; // Default
+    if (analysis.includes('Spread') || analysis.includes('SPREAD')) {
+      betType = 'Spread';
+    } else if (analysis.includes('Over/Under') || analysis.includes('TOTAL')) {
+      betType = 'Total';
+    } else if (analysis.includes('Parlay') || analysis.includes('PARLAY')) {
+      betType = 'Parlay';
+    }
+    
+    // Extract key points (assuming they're in bullet points)
+    const keyPoints = [];
+    const bulletRegex = /[•\-\*]\s*(.+?)\n/g;
+    let match;
+    while ((match = bulletRegex.exec(analysis)) !== null) {
+      keyPoints.push(match[1].trim());
+    }
+    
+    // Extract pick information (this is just a best effort - actual format may vary)
+    const pickRegex = /[Rr]ecommended [Bb]et:?\s*(.+?)\n/;
+    const pickMatch = pickRegex.exec(analysis);
+    const pick = pickMatch ? pickMatch[1].trim() : null;
+    
+    // Calculate stake based on confidence
+    let stake = 0;
+    if (confidence === 'High') {
+      stake = 300;
+    } else if (confidence === 'Medium') {
+      stake = 200;
+    } else {
+      stake = 100;
+    }
+    
+    return {
+      pick,
+      confidence,
+      betType,
+      stake,
+      keyPoints: keyPoints.length > 0 ? keyPoints : ['No specific key points extracted'],
+      reasoning: analysis
+    };
+  } catch (error) {
+    console.error('Error parsing Gary\'s analysis:', error);
+    return {
+      pick: null,
+      confidence: 'Medium',
+      betType: 'Moneyline',
+      stake: 0,
+      keyPoints: ['Analysis parsing error'],
+      reasoning: analysis || ''
+    };
+  }
+}
+
+// ——————————————
+// 7. ENHANCED MAIN PICK FUNCTION
+// ——————————————
+export async function makeGaryPick({
   gameId,
-  teamKey,
-  playerKeys,
+  homeTeam,
+  awayTeam,
+  league,
   dataMetrics,
   narrative,
   pastPerformance,
   progressToTarget,
   bankroll
 }) {
+  console.log(`Gary is analyzing game ${gameId}: ${awayTeam} @ ${homeTeam}`);
+  
+  // Step 1: Process traditional metrics using original Gary logic (for compatibility)
+  const teamKey = narrative.favoredTeam || homeTeam;
+  const playerKeys = narrative.keyPlayers || [];
+  
   const brain = scoreBrain(dataMetrics);
   const soul = scoreSoul(narrative);
   const pref = scorePreference(teamKey, playerKeys);
   const memory = scoreMemory(pastPerformance);
   const profit = scoreProfit(progressToTarget);
 
-  // composite confidence (weights)
-  const confidence =
+  // Calculate original Gary confidence
+  const baseConfidence = 
     brain * 0.35 +
     soul * 0.20 +
     pref * 0.10 +
     memory * 0.15 +
     profit * 0.20;
-
-  // trap check
-  const trap = trapSafeCheck(dataMetrics.market);
-
-  // gut override?
+    
+  // Step 2: Fetch real-time data using Perplexity
+  const realTimeInfo = await fetchRealTimeGameInfo(homeTeam, awayTeam, league);
+  
+  // Step 3: Get additional sports data if available
+  let enrichedGameData = { ...dataMetrics };
+  try {
+    const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
+    if (teamStats) {
+      enrichedGameData.teamStats = teamStats;
+    }
+  } catch (statsError) {
+    console.error('Error fetching additional sports data:', statsError);
+  }
+  
+  // Step 4: Extract Gary's team preferences for this specific game
+  const gamePreferences = {};
+  if (PreferenceModel.teams[homeTeam]) {
+    gamePreferences.homeTeamPreference = PreferenceModel.teams[homeTeam];
+  }
+  if (PreferenceModel.teams[awayTeam]) {
+    gamePreferences.awayTeamPreference = PreferenceModel.teams[awayTeam];
+  }
+  for (const player of playerKeys) {
+    if (PreferenceModel.players[player]) {
+      if (!gamePreferences.playerPreferences) gamePreferences.playerPreferences = {};
+      gamePreferences.playerPreferences[player] = PreferenceModel.players[player];
+    }
+  }
+  
+  // Step 5: Generate Gary's AI-powered analysis
+  const aiAnalysis = await generateGaryAnalysis(enrichedGameData, realTimeInfo, gamePreferences);
+  
+  // Step 6: Parse the AI analysis into structured data
+  const parsedAnalysis = parseGaryAnalysis(aiAnalysis.fullAnalysis);
+  
+  // Step 7: Blend traditional Gary logic with AI insights
+  const trap = trapSafeCheck(dataMetrics.market || {});
   const gutOverride = shouldGutOverride(brain, soul);
-
-  // final decision status
-  let status = confidence > 0.6 ? "YES" : "NO";
+  
+  // Final decision blends AI confidence with original Gary logic
+  let status = parsedAnalysis.confidence === 'High' ? "YES" : 
+               parsedAnalysis.confidence === 'Medium' ? "MAYBE" : "NO";
+               
+  // Allow gut override to boost status if applicable
   if (gutOverride && soul > 0.7) status = "YES (GUT)";
-
-  // choose bet type & stake
-  const behindPace = progressToTarget < 1;
-  const betType = selectBetType(confidence, behindPace);
-  const stake = betType === "no_bet"
-    ? 0
-    : calculateStake(bankroll, betType, confidence);
-
+  
+  // Let AI determine bet type but use Gary's stake calculation logic
+  const betType = parsedAnalysis.betType || selectBetType(baseConfidence, progressToTarget < 1);
+  
+  // Use the AI-suggested stake, but set a minimum based on original Gary logic
+  let stake = parsedAnalysis.stake;
+  if (status.includes("YES")) {
+    // Ensure stake meets minimum based on original Gary logic
+    const minStake = calculateStake(bankroll, betType, baseConfidence);
+    stake = Math.max(stake, minStake);
+  }
+  
   return {
-    game_id:     gameId,
-    team:        teamKey,
-    bet_type:    betType,
-    line:        dataMetrics.line,
+    game_id: gameId,
+    home_team: homeTeam,
+    away_team: awayTeam,
+    league: league,
+    bet_type: betType,
+    pick: parsedAnalysis.pick,
+    line: dataMetrics.line,
     stake,
     status,
+    confidence: parsedAnalysis.confidence,
     rationale: {
-      brain_score:  brain,
-      soul_score:   soul,
-      bias_boost:   pref,
-      memory_mod:   memory,
-      profit_infl:  profit,
+      brain_score: brain,
+      soul_score: soul,
+      bias_boost: pref,
+      memory_mod: memory,
+      profit_infl: profit,
+      ai_analysis: true
     },
-    trap_safe:    trap,
+    key_points: parsedAnalysis.keyPoints,
+    full_analysis: aiAnalysis.fullAnalysis,
+    trap_safe: trap,
     gut_override: gutOverride,
+    real_time_data_used: !!realTimeInfo,
+    ai_success: aiAnalysis.success,
     emotional_tags: [
       pref > 0.8 && "GaryTeam",
       gutOverride && "GutOverride",
-      narrative.revenge && "RevengeAngle"
+      narrative.revenge && "RevengeAngle",
+      parsedAnalysis.confidence === 'High' && "HighConfidence"
     ].filter(Boolean),
   };
 }
