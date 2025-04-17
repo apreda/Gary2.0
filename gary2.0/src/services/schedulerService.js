@@ -22,13 +22,20 @@ export const schedulerService = {
     const today = new Date();
     const targetTime = new Date();
     
-    // Special case for April 16, 2025 - generate at 5:37 PM
+    // Special case for April 16, 2025 - skip rest of day after current time
     const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
+    // Special case for April 17, 2025 - generate at 10am
+    const isApril17_2025 = today.getDate() === 17 && today.getMonth() === 3 && today.getFullYear() === 2025;
     
     if (isApril16_2025) {
-      targetTime.setHours(18, 11, 0, 0); // 6:11 PM for April 16, 2025
+      // Set time to 23:59 to effectively skip the rest of today
+      targetTime.setHours(23, 59, 0, 0);
+    } else if (isApril17_2025) {
+      // Generate at 10:00 AM on April 17th
+      targetTime.setHours(10, 0, 0, 0);
     } else {
-      targetTime.setHours(10, 0, 0, 0); // 10:00 AM EST for all other days
+      // Standard 10:00 AM for all other days
+      targetTime.setHours(10, 0, 0, 0);
     }
     
     // Log current time and target time for debugging
@@ -40,11 +47,16 @@ export const schedulerService = {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Check if it's after target time (2:35 PM on April 16, 2025 or 10:00 AM on other days)
+    // Check if it's after target time based on the date
     let isAfterTargetTime;
     if (isApril16_2025) {
-      isAfterTargetTime = (currentHour > 18 || (currentHour === 18 && currentMinute >= 11));
+      // Skip the rest of today (April 16) - effectively returns false by setting the target to end of day
+      isAfterTargetTime = false;
+    } else if (isApril17_2025) {
+      // Check if it's after 10:00 AM on April 17th
+      isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
     } else {
+      // Standard check for 10:00 AM on other days
       isAfterTargetTime = (currentHour > 10 || (currentHour === 10 && currentMinute >= 0));
     }
     
@@ -92,12 +104,15 @@ export const schedulerService = {
    * @returns {string} - The scheduled time for new picks (e.g., "10:00 AM")
    */
   getScheduledTime: () => {
-    // Special case for April 16, 2025
+    // Get current date for comparison
     const today = new Date();
     const isApril16_2025 = today.getDate() === 16 && today.getMonth() === 3 && today.getFullYear() === 2025;
+    const isApril17_2025 = today.getDate() === 17 && today.getMonth() === 3 && today.getFullYear() === 2025;
     
     if (isApril16_2025) {
-      return "6:11 PM";
+      return "10:00 AM April 17th, 2025"; // Show tomorrow's time
+    } else if (isApril17_2025) {
+      return "10:00 AM";
     } else {
       return "10:00 AM";
     }
@@ -110,15 +125,23 @@ export const schedulerService = {
   getNextPicksInfo: () => {
     const now = new Date();
     
-    // Check if it's April 16, 2025 for special schedule
+    // Check for special dates
     const isApril16_2025 = now.getDate() === 16 && now.getMonth() === 3 && now.getFullYear() === 2025;
+    const isApril17_2025 = now.getDate() === 17 && now.getMonth() === 3 && now.getFullYear() === 2025;
     
     // Set target time based on date
     let todayTargetTime = new Date(now);
+    
     if (isApril16_2025) {
-      todayTargetTime.setHours(18, 11, 0, 0); // 6:11 PM on April 16, 2025
+      // For April 16th, skip to tomorrow at 10am
+      todayTargetTime.setDate(todayTargetTime.getDate() + 1); // Move to April 17th
+      todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM on April 17th
+    } else if (isApril17_2025) {
+      // For April 17th, use 10:00 AM
+      todayTargetTime.setHours(10, 0, 0, 0);
     } else {
-      todayTargetTime.setHours(10, 0, 0, 0); // 10:00 AM on other days
+      // Standard 10:00 AM for all other days
+      todayTargetTime.setHours(10, 0, 0, 0);
     }
     
     // If it's before the target time today, next picks are at the target time today

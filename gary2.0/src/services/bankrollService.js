@@ -66,22 +66,41 @@ const bankrollService = {
    * @returns {number} - Calculated wager amount
    */
   calculateWagerAmount: (confidence, currentBankroll) => {
-    // Base wager is 1-3% of bankroll depending on confidence
-    let basePercentage;
+    // Gary's strategy: aggressive when confident, cautious when less confident,
+    // with added randomness to vary bet sizes
     
-    if (confidence >= 70) {
-      // High confidence (70-100%) = 3% of bankroll
-      basePercentage = 0.03;
-    } else if (confidence >= 55) {
-      // Medium confidence (55-69%) = 2% of bankroll
-      basePercentage = 0.02;
+    // Base range varies more widely based on confidence
+    let minPercentage, maxPercentage;
+    
+    if (confidence >= 80) {
+      // Very high confidence (80-100%) = 4-8% of bankroll
+      minPercentage = 0.04;
+      maxPercentage = 0.08;
+    } else if (confidence >= 70) {
+      // High confidence (70-79%) = 3-6% of bankroll
+      minPercentage = 0.03;
+      maxPercentage = 0.06;
+    } else if (confidence >= 60) {
+      // Medium-high confidence (60-69%) = 2-4% of bankroll
+      minPercentage = 0.02;
+      maxPercentage = 0.04;
+    } else if (confidence >= 50) {
+      // Medium confidence (50-59%) = 1-2.5% of bankroll
+      minPercentage = 0.01;
+      maxPercentage = 0.025;
     } else {
-      // Lower confidence (below 55%) = 1% of bankroll
-      basePercentage = 0.01;
+      // Lower confidence (below 50%) = 0.5-1.5% of bankroll
+      minPercentage = 0.005;
+      maxPercentage = 0.015;
     }
     
+    // Add some randomness within the confidence range
+    // This makes Gary's betting pattern less predictable and more human-like
+    const randomFactor = Math.random();
+    const percentageToUse = minPercentage + (randomFactor * (maxPercentage - minPercentage));
+    
     // Calculate raw amount
-    let wagerAmount = Math.round(currentBankroll * basePercentage);
+    let wagerAmount = Math.round(currentBankroll * percentageToUse);
     
     // Round to nearest $5 for cleaner numbers
     wagerAmount = Math.round(wagerAmount / 5) * 5;
