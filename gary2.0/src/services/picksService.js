@@ -1,4 +1,6 @@
 import { makeGaryPick } from '../ai/garyEngine';
+import { openaiService } from './openaiService';
+import { perplexityService } from './perplexityService';
 import { oddsService } from './oddsService';
 import { configLoader } from './configLoader';
 import axios from 'axios';
@@ -318,7 +320,7 @@ const picksService = {
     }
   },
   /**
-   * Generate narrative for a game using DeepSeek API
+   * Generate narrative for a game using OpenAI and Perplexity
    * @param {Object} game - Game data from The Odds API
    * @returns {Promise<Object>} - Narrative data for the game
    */
@@ -349,7 +351,7 @@ const picksService = {
         statsContext = 'ERROR: Could not retrieve current team statistics. Using historical data only.';
       }
       
-      // Create prompt for DeepSeek
+      // Create prompt for OpenAI
       const prompt = `You are Gary the Bear, an expert sports handicapper with decades of experience. 
       Analyze this upcoming ${sportTitle} game between ${homeTeam} and ${awayTeam}.
       ${homeOdds ? `The moneyline is ${homeTeam} ${homeOdds > 0 ? '+' : ''}${homeOdds} vs ${awayTeam} ${awayOdds > 0 ? '+' : ''}${awayOdds}.` : ''}
@@ -368,15 +370,15 @@ const picksService = {
       }`;
       
       // Get the API key from the config loader
-      const apiKey = await configLoader.getDeepseekApiKey();
-      const baseUrl = await configLoader.getDeepseekBaseUrl();
+      const apiKey = await configLoader.getOpenaiApiKey();
+      const baseUrl = await configLoader.getOpenaiBaseUrl();
       
       // Log the prompt with stats context for debugging
-      console.log(`DEEPSEEK PROMPT WITH SPORTS DATA:\n${prompt}`);
+      console.log(`OPENAI PROMPT WITH SPORTS DATA:\n${prompt}`);
       
-      // Call DeepSeek API
+      // Call OpenAI API
       const response = await axios.post(`${baseUrl}/chat/completions`, {
-        model: "deepseek-chat",
+        model: "openai-chat",
         messages: [
           { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks. ALWAYS incorporate any current team statistics provided into your analysis." },
           { role: "user", content: prompt }
@@ -400,7 +402,7 @@ const picksService = {
         return narrativeData;
       }
       
-      throw new Error('Could not parse DeepSeek response');
+      throw new Error('Could not parse OpenAI response');
     } catch (error) {
       console.error('Error generating narrative:', error);
       // Return a default narrative if API call fails
@@ -414,113 +416,144 @@ const picksService = {
   },
   
   /**
-   * Generate a detailed pick analysis using DeepSeek
+   * Generate a detailed pick analysis using OpenAI and Perplexity
    * @param {Object} pick - Basic pick data
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {Array} picks - All picks for comparison (optional)
    * @returns {Promise<Object>} - Enhanced pick with detailed analysis
    */
-  generatePickDetail: async (pick) => {
+  generatePickDetail: async (pick, homeTeam, awayTeam, picks = []) => {
+    console.log(`AI-POWERED GARY: Generating detailed analysis for ${pick.betType} pick: ${pick.shortPick}`);
+    
     try {
-      const betTypeLabel = pick.betType.includes('Moneyline') ? 'moneyline' : 
-                        pick.betType.includes('Spread') ? 'spread' : 'total';
+      // STEP 1: Fetch sports data from TheSportsDB
+      const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, pick.league);
+      console.log('Retrieved team statistics from TheSportsDB API');
       
-      // Extract team names from the game
-      let homeTeam, awayTeam;
-      if (pick.game && pick.game.includes(' vs ')) {
-        [awayTeam, homeTeam] = pick.game.split(' vs ');
-      } else if (pick.game && pick.game.includes(' at ')) {
-        [awayTeam, homeTeam] = pick.game.split(' at ');
-      } else {
-        // If we can't parse the game string, just use default format
-        homeTeam = '';
-        awayTeam = '';
+      // STEP 2: Get real-time information using Perplexity API
+      console.log('Fetching real-time information from Perplexity API...');
+      let realTimeInfo = null;
+      try {
+        // Get game-specific news and insights
+        const gameNews = await perplexityService.getGameNews(homeTeam, awayTeam, pick.league);
+        
+        // Get team-specific insights for both teams
+        const [homeInsights, awayInsights] = await Promise.all([
+          perplexityService.getTeamInsights(homeTeam, pick.league),
+          perplexityService.getTeamInsights(awayTeam, pick.league)
+        ]);
+        
+        // Format everything into a comprehensive context
+        realTimeInfo = `
+          GAME NEWS AND BETTING TRENDS:
+          ${gameNews || 'No game-specific news available.'}
+
+          ${homeTeam.toUpperCase()} INSIGHTS:
+          ${homeInsights || 'No team-specific insights available.'}
+
+          ${awayTeam.toUpperCase()} INSIGHTS:
+          ${awayInsights || 'No team-specific insights available.'}
+        `;
+        
+        console.log('Successfully retrieved real-time information from Perplexity API');
+      } catch (perplexityError) {
+        console.error('Error fetching real-time information:', perplexityError);
+        realTimeInfo = 'Unable to retrieve real-time information. Analysis will proceed with available data only.';
       }
       
-      // Get current team stats if we have team names
-      let statsContext = '';
-      if (homeTeam && awayTeam && pick.league) {
-        console.log(`CRITICAL - Fetching current stats for pick: ${homeTeam} vs ${awayTeam} (${pick.league})`);
-        try {
-          const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, pick.league);
-          statsContext = sportsDataService.formatStatsForPrompt(teamStats);
-          console.log(`SPORTS DATA SUCCESS: Stats context for pick detail length: ${statsContext.length} characters`);
-        } catch (statsError) {
-          console.error(`SPORTS DATA ERROR: Failed to get team stats for pick detail: ${statsError.message}`);
-          statsContext = 'ERROR: Could not retrieve current team statistics. Using historical data only.';
+      // STEP 3: Prepare game data for OpenAI
+      const gameData = {
+        homeTeam,
+        awayTeam,
+        league: pick.league,
+        betType: pick.betType,
+        pick: pick.shortPick,
+        odds: pick.odds || 'Not specified',
+        confidence: pick.confidenceLevel || 'Medium',
+        teamStats: teamStats || 'No team statistics available',
+      };
+      
+      // Add bet-specific information
+      if (pick.betType === 'Moneyline') {
+        gameData.selection = pick.moneyline;
+        gameData.betDetails = `${pick.moneyline} to win outright`;
+      } else if (pick.betType === 'Spread') {
+        gameData.selection = pick.spread;
+        gameData.betDetails = `${pick.spread}`;
+      } else if (pick.betType === 'Total') {
+        gameData.selection = pick.overUnder;
+        gameData.betDetails = `Total to go ${pick.overUnder}`;
+      } else if (pick.betType === 'Parlay of the Day') {
+        gameData.betDetails = 'Parlay consisting of multiple legs';
+        gameData.parlayLegs = [];
+        
+        if (pick.parlayLegs && pick.parlayLegs.length > 0) {
+          pick.parlayLegs.forEach((leg, index) => {
+            gameData.parlayLegs.push({
+              game: leg.game,
+              pick: leg.pick,
+              odds: leg.odds || 'odds not specified'
+            });
+          });
         }
       }
       
-      // Build prompt for DeepSeek
-      const prompt = `You are Gary the Bear, a legendary sports handicapper with decades of experience.
+      console.log('Sending analysis request to OpenAI...');
       
-      Analyze this ${pick.league} pick: ${pick.game} - ${pick.betType}
-      Specific bet: ${pick.betType.includes('Spread') ? pick.spread : pick.betType.includes('Moneyline') ? pick.moneyline : pick.overUnder}
-      
-      ${statsContext}
-      
-      Your confidence level is ${pick.confidenceLevel}%.
-      
-      Create a brief, compelling analysis explaining why this is a strong pick. Be specific about team matchups, trends, or situational angles.
-      
-      Respond with a JSON object in this format:
-      {
-        "analysis": "Your brief persuasive analysis goes here",
-        "bullet_points": ["Point 1", "Point 2", "Point 3"]
-      }`;
-      
-      // Get the API key from the config loader
-      const apiKey = await configLoader.getDeepseekApiKey();
-      const baseUrl = await configLoader.getDeepseekBaseUrl();
-      
-      // Call DeepSeek API
-      const response = await axios.post(`${baseUrl}/chat/completions`, {
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks." },
-          { role: "user", content: prompt }
-        ],
+      // STEP 4: Get the analysis from OpenAI
+      const response = await openaiService.generateGaryAnalysis(gameData, realTimeInfo, {
         temperature: 0.7,
-        max_tokens: 300
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        }
+        maxTokens: 1000
       });
       
-      // Parse the response
-      const aiContent = response.data.choices[0].message.content;
-      const jsonMatch = aiContent.match(/\{[\s\S]*\}/); // Extract JSON from response
+      console.log('Received detailed analysis from OpenAI');
       
-      if (jsonMatch) {
-        try {
-          const analysisData = JSON.parse(jsonMatch[0]);
-          
-          // Create enhanced pick with all the necessary properties for display
-          const enhancedPick = {
-            ...pick,
-            garysAnalysis: analysisData.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics.",
-            garysBullets: analysisData.bullet_points || [
-              "Strong statistical advantage identified",
-              "Historical performance supports this play",
-              "Betting market inefficiency detected"
-            ],
-            // Ensure these properties are set for compatibility with card back display
-            pickDetail: analysisData.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics.",
-            analysis: analysisData.analysis || "Gary sees excellent value in this matchup based on his statistical models and proprietary metrics."
-          };
-          
-          console.log(`Generated analysis for ${pick.game}: ${enhancedPick.garysAnalysis.substring(0, 50)}...`);
-          return enhancedPick;
-        } catch (parseError) {
-          console.error('Error parsing pick detail JSON:', parseError);
-          return enhancePickWithDefaultData(pick);
-        }
-      } else {
-        console.log('No JSON found in DeepSeek response for pick detail');
-        return enhancePickWithDefaultData(pick);
+      // STEP 5: Extract bullet points from the response
+      const bulletPoints = [];
+      const bulletRegex = /[\u2022\-\*]\s*(.+?)(?=[\n\u2022\-\*]|$)/g;
+      let match;
+      while ((match = bulletRegex.exec(response)) !== null) {
+        bulletPoints.push(match[1].trim());
       }
+      
+      // If no bullet points were found, check for numbered points
+      if (bulletPoints.length === 0) {
+        const numberedRegex = /\d+\.\s*(.+?)(?=[\n\d+\.]|$)/g;
+        while ((match = numberedRegex.exec(response)) !== null) {
+          bulletPoints.push(match[1].trim());
+        }
+      }
+      
+      // Ensure we have at least 3 bullet points
+      while (bulletPoints.length < 3) {
+        bulletPoints.push([
+          "Historical data supports this selection",
+          "Recent performance trends align with our model",
+          "Key matchup advantages create betting value"
+        ][bulletPoints.length]);
+      }
+      
+      // Keep only the top 5 bullet points if there are too many
+      const topBullets = bulletPoints.slice(0, 5);
+      
+      // STEP 6: Update the pick object with the analysis
+      const updatedPick = {
+        ...pick,
+        garysAnalysis: response,
+        garysBullets: topBullets,
+        aiPowered: true,
+        realTimeDataUsed: !!realTimeInfo,
+        // Ensure these properties are set for compatibility with card back display
+        pickDetail: response,
+        analysis: response
+      };
+      
+      return updatedPick;
     } catch (error) {
-      console.error('Error generating pick detail:', error);
+      console.error('Error in AI-powered analysis:', error);
+      
+      // Provide a fallback analysis if AI fails
       return enhancePickWithDefaultData(pick);
     }
   },
