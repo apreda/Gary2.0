@@ -265,34 +265,7 @@ export function RealGaryPicks() {
     });
   };
   
-  // Touch event handling
-  const touchStartX = useRef(null);
-  const touchEndX = useRef(null);
-  
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-  
-  const handleTouchMove = (e) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
-  
-  const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return;
-    
-    const difference = touchStartX.current - touchEndX.current;
-    
-    if (difference > 50) {
-      // Swipe left, go to next card
-      goToNextCard();
-    } else if (difference < -50) {
-      // Swipe right, go to previous card
-      goToPreviousCard();
-    }
-    
-    touchStartX.current = null;
-    touchEndX.current = null;
-  };
+  // Desktop-only implementation - no mobile touch handlers
   
   // Render the component
   return (
@@ -337,12 +310,7 @@ export function RealGaryPicks() {
                 <span>&#10094;</span>
               </button>
               
-              <div 
-                className="carousel-cards"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              >
+              <div className="carousel-cards">
                 {/* DEBUGGING: Log picks before rendering */}
                 {console.log('RENDER PICKS:', picks)}
                 
@@ -510,15 +478,7 @@ export function RealGaryPicks() {
                           </div>
                         )}
                         
-                        <div className="pick-card-footer">
-                          <button 
-                            className="flip-button"
-                            onClick={() => flipCard(pick.id)}
-                            aria-label="Flip card"
-                          >
-                            <span>Tap to flip</span>
-                          </button>
-                        </div>
+                        {/* No footer on front side - using View Pick button instead */}
                       </div>
                       
                       <div className="pick-card-back">
