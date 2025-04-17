@@ -101,6 +101,19 @@ export function RealGaryPicks() {
           console.log('SETTING PICKS:', data.picks);
           setPicks(data.picks);
         } else {
+          // Check if we're actually querying the right table structure
+          console.log('Checking Supabase table structure...');
+          const { data: tableData, error: tableError } = await supabase
+            .from('daily_picks')
+            .select('*')
+            .limit(1);
+            
+          if (tableError) {
+            console.error('Error querying Supabase table:', tableError);
+          } else {
+            console.log('Supabase table structure sample:', tableData);
+          }
+          
           console.log('NO PICKS FOUND IN SUPABASE, GENERATING NEW PICKS...');
           
           try {
