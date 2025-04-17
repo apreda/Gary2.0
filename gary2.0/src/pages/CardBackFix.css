@@ -17,10 +17,11 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* Game details */
+/* Game details - adjusted after removing team names */
 .pick-card-game-details {
   padding: 0 15px;
-  margin-bottom: 15px;
+  margin-top: 20px;
+  margin-bottom: 5px;
   text-align: center;
 }
 
@@ -31,22 +32,23 @@
 }
 
 .pick-selection {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: #FFC94C;
-  padding: 8px;
+  padding: 12px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
-  margin-top: 8px;
+  margin: 0 auto;
+  max-width: calc(100% - 20px);
 }
 
-/* Analysis content */
+/* Analysis content - adjusted for better spacing after removing team names */
 .pick-analysis-content {
   padding: 15px;
   background: rgba(0, 0, 0, 0.15);
-  margin: 0 10px 15px;
+  margin: 15px 10px 15px;
   border-radius: 8px;
-  max-height: 140px;
+  max-height: 180px; /* Increased height since we removed team names */
   overflow-y: auto;
 }
 

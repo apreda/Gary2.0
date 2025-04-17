@@ -111,8 +111,8 @@
 .btn-view-pick {
   width: 100%;
   background: rgba(255, 201, 76, 0.2);
-  color: #FFC94C;
-  border: 1px solid rgba(255, 201, 76, 0.5);
+  color: white;
+  border: 2px solid rgba(255, 201, 76, 0.5);
   border-radius: 8px;
   padding: 12px;
   font-size: 16px;
@@ -144,7 +144,7 @@
 
 .silver-card .btn-view-pick {
   background: rgba(192, 192, 192, 0.2);
-  color: #c0c0c0;
+  color: white;
   border-color: rgba(192, 192, 192, 0.5);
 }
 
@@ -192,4 +192,5 @@
 
 .parlay-card .btn-view-pick {
   background: rgba(255, 201, 76, 0.25);
+  color: white;
 }
