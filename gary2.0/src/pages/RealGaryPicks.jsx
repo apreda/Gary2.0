@@ -239,11 +239,19 @@ export function RealGaryPicks() {
   }, [location]);
   
   // Handle card flipping
-  const flipCard = (id) => {
-    setFlippedCards(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+  const flipCard = (id, event) => {
+    if (event) {
+      event.stopPropagation();
+    }
+    console.log(`Flipping card ${id}. Current state:`, flippedCards[id] ? 'flipped' : 'not flipped');
+    setFlippedCards(prev => {
+      const newState = {
+        ...prev,
+        [id]: !prev[id]
+      };
+      console.log('New flipped state:', newState);
+      return newState;
+    });
   };
   
   // Navigation functions
@@ -323,7 +331,7 @@ export function RealGaryPicks() {
                     className={`pick-card card-position-${(index - activeCardIndex + 7) % 7} ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
                   >
                     <div className="pick-card-inner">
-                        <div className="pick-card-front" onClick={() => flipCard(pick.id)}>
+                        <div className="pick-card-front" onClick={(e) => flipCard(pick.id, e)}>
                           <div className="pick-card-header">
                             <div className="pick-card-league">{pick.league}</div>
                             <div className="pick-card-time">{pick.time}</div>
@@ -343,7 +351,7 @@ export function RealGaryPicks() {
                           </div>
                           
                           <div className="pick-card-bottom">
-                            <button className="btn-view-pick" onClick={() => flipCard(pick.id)}>
+                            <button className="btn-view-pick" onClick={(e) => flipCard(pick.id, e)}>
                               View Pick
                             </button>
                           </div>
@@ -483,7 +491,7 @@ export function RealGaryPicks() {
                         {/* No footer on front side - using View Pick button instead */}
                       </div>
                       
-                      <div className="pick-card-back" onClick={() => flipCard(pick.id)}>
+                      <div className="pick-card-back" onClick={(e) => flipCard(pick.id, e)}>
                         <div className="pick-card-back-header">
                           <div className="pick-card-league">{pick.league}</div>
                           <div className="pick-card-time">{pick.time}</div>
@@ -625,7 +633,7 @@ export function RealGaryPicks() {
                         <div className="pick-card-bottom">
                           <button 
                             className="btn-flip-back"
-                            onClick={() => flipCard(pick.id)}
+                            onClick={(e) => flipCard(pick.id, e)}
                             aria-label="Flip card back"
                           >
                             Return to Card
