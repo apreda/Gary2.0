@@ -37,43 +37,43 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
     return 'bg-gradient-to-b from-[#111111] to-[#222222] text-white';
   };
   
-  // Construct the front content
+  // Construct the front content with gold/black styling
   const frontContent = (
     <div className={`card-front w-full h-full rounded-xl overflow-hidden transition-all duration-300 ${isActive ? 'scale-100' : 'scale-95 opacity-90'}`}>
       {/* Card Header with League Badge */}
-      <div className={`card-header ${getGradientClass()} p-4 relative premium-header`}>
+      <div className="card-header bg-gradient-to-b from-[#111111] to-[#222222] p-4 relative premium-header border-b border-[#d4af37]/30">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent gold-accent-line"></div>
         <div className="flex justify-between items-start">
           <div>
-            <div className="inline-block bg-white text-black font-bold py-1 px-3 rounded-full text-xs uppercase tracking-wider shadow-md">
+            <div className="inline-block bg-[#d4af37] text-black font-bold py-1 px-3 rounded-full text-xs uppercase tracking-wider shadow-md">
               {pick.league}
             </div>
-            <div className="text-sm mt-2 opacity-80">{pick.time}</div>
+            <div className="text-sm mt-2 text-white opacity-80">{pick.time || 'Today'}</div>
           </div>
           <div className="flex flex-col items-end premium-confidence">
-            <div className="text-sm font-medium">Confidence</div>
+            <div className="text-sm font-medium text-white">Confidence</div>
             <div className="text-xl font-bold text-[#d4af37] gold-text">{pick.confidenceLevel || 75}%</div>
           </div>
         </div>
       </div>
       
       {/* Card Body */}
-      <div className="card-body bg-gradient-to-b from-[#111111] to-[#222222] text-white p-4 premium-card-body">
-        <div className="mb-3 pick-team-container">
-          <div className="text-xl font-bold mb-1 text-[#d4af37] gold-text">{pick.pickTeam}</div>
-          <div className="pick-details text-sm text-gray-300">{pick.betType || 'Moneyline'}</div>
+      <div className="card-body bg-gradient-to-b from-[#111111] to-[#222222] text-white p-5 premium-card-body">
+        <div className="mb-4 pick-team-container">
+          <div className="text-2xl font-bold mb-1 text-[#d4af37] gold-text">{pick.pickTeam || 'Team Pick'}</div>
+          <div className="pick-details text-sm text-white">{pick.betType || 'Moneyline'}</div>
         </div>
         
-        <div className="border-t border-[#d4af37]/30 pt-3 mb-4 pick-info-divider">
-          <div className="text-xl font-bold mb-2 text-[#d4af37] gold-text premium-pick">{pick.shortPick || pick.pickDetail}</div>
-          <div className="text-sm text-gray-300 mb-3 line-clamp-3 pick-analysis-preview">
-            {pick.pickDetail || pick.analysis?.substring(0, 100)}...
+        <div className="border-t border-[#d4af37]/30 pt-4 mb-5 pick-info-divider">
+          <div className="text-xl font-bold mb-3 text-[#d4af37] gold-text premium-pick">{pick.shortPick || pick.pickDetail || 'Bet on Team to win'}</div>
+          <div className="text-sm text-white mb-4 pick-analysis-preview">
+            {pick.analysis?.substring(0, 120) || "Gary's analysis will appear here when you flip the card..."}...
           </div>
         </div>
         
-        <div className="flex justify-center">
+        <div className="flex justify-center mt-auto">
           <button 
-            className="bg-[#d4af37] hover:bg-[#c9a535] text-black font-bold py-2 px-6 rounded-full shadow-md transform hover:scale-105 transition-all duration-300"
+            className="bg-[#d4af37] hover:bg-[#c9a535] text-black font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-all duration-300"
             onClick={(e) => {
               e.stopPropagation();
               onFlip && onFlip();
@@ -86,11 +86,11 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
     </div>
   );
   
-  // Construct the back content
+  // Construct the back content - Gary's analysis with gold/black theme
   const backContent = (
-    <div className="card-back w-full h-full bg-white shadow-xl rounded-xl border border-gray-200 overflow-hidden transition-all">
+    <div className="card-back w-full h-full bg-[#111111] shadow-xl rounded-xl border border-[#d4af37]/30 overflow-hidden transition-all">
       {/* Back Header */}
-      <div className="bg-[#111111] text-white p-4 relative">
+      <div className="bg-gradient-to-r from-[#111111] via-[#222222] to-[#111111] text-white p-4 relative border-b border-[#d4af37]/30">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent"></div>
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-bold flex items-center">
@@ -101,7 +101,7 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
               e.stopPropagation();
               onFlip && onFlip();
             }}
-            className="py-2 px-4 bg-gray-800 hover:bg-black text-[#d4af37] rounded-lg transition ml-2"
+            className="py-2 px-4 bg-[#222222] hover:bg-black text-[#d4af37] rounded-lg transition ml-2 border border-[#d4af37]/30"
           >
             ✕
           </button>
@@ -109,19 +109,28 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
       </div>
       
       {/* Analysis Content */}
-      <div className="p-5">
+      <div className="p-5 bg-[#111111] text-white">
         <div className="mb-5">
-          <p className="text-gray-800 mb-4 leading-relaxed">{pick.analysis || pick.garysAnalysis}</p>
+          <p className="text-gray-200 mb-4 leading-relaxed">{pick.analysis || pick.garysAnalysis || "Gary's detailed analysis of this pick will help you understand why it's a strong betting opportunity based on team performances, trends, and key statistics."}</p>
           
-          <div className="bg-gray-50 p-4 rounded-lg border border-[#d4af37] mt-4">
-            <h4 className="font-bold mb-3 text-[#111111] flex items-center">
+          <div className="bg-[#222222] p-4 rounded-lg border border-[#d4af37]/30 mt-4">
+            <h4 className="font-bold mb-3 text-[#d4af37] flex items-center">
               <span className="text-[#d4af37] mr-2">★</span>Key Factors
             </h4>
             <ul className="space-y-2">
-              {(pick.garysBullets || []).map((bullet, i) => (
+              {(pick.garysBullets && pick.garysBullets.length > 0) ? pick.garysBullets.map((bullet, i) => (
                 <li key={i} className="flex items-start">
                   <span className="text-[#d4af37] mr-2">•</span>
-                  <span className="text-gray-700">{bullet}</span>
+                  <span className="text-gray-300">{bullet}</span>
+                </li>
+              )) : [
+                "Team's recent performance suggests strong momentum",
+                "Historical matchup statistics favor this pick",
+                "Key player availability creates an advantage"
+              ].map((bullet, i) => (
+                <li key={i} className="flex items-start">
+                  <span className="text-[#d4af37] mr-2">•</span>
+                  <span className="text-gray-300">{bullet}</span>
                 </li>
               ))}
             </ul>
@@ -131,8 +140,8 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
         {/* Action Buttons */}
         <div className="flex justify-center space-x-3 mt-6">
           <button 
-            className={`py-2 px-6 rounded-full shadow-md font-bold transform hover:translate-y-[-2px] transition-all ${userDecision === 'bet' 
-              ? 'bg-green-100 text-green-700 border border-green-500' 
+            className={`py-3 px-6 rounded-full shadow-lg font-bold transform hover:translate-y-[-2px] transition-all ${userDecision === 'bet' 
+              ? 'bg-[#1e4620] text-[#7bea84] border border-[#7bea84]/50' 
               : 'bg-[#d4af37] hover:bg-[#c9a535] text-black'}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -144,7 +153,7 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
           </button>
           
           <button 
-            className="py-2 px-4 bg-[#d4af37] hover:bg-[#c9a535] text-black rounded-lg transition"
+            className="py-3 px-5 bg-[#333333] hover:bg-[#444444] text-white rounded-lg transition border border-[#d4af37]/30"
             onClick={(e) => {
               e.stopPropagation();
               // Handle skip logic
