@@ -201,7 +201,7 @@ export const picksPersistenceService = {
         }
       }
       
-      // If not in localStorage, check Supabase
+      // Check Supabase for today's picks
       try {
         const connectionVerified = await ensureAnonymousSession();
         if (connectionVerified) {
@@ -212,9 +212,9 @@ export const picksPersistenceService = {
             .from('daily_picks')
             .select('id')
             .eq('date', dateString)
-            .single();
+            .limit(1);
           
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             console.log('Picks exist in Supabase for today');
             return true;
           }
