@@ -927,7 +927,7 @@ const picksService = {
           
           try {
             console.log(`Trying to get additional picks from ${additionalSport}...`);
-            const games = await oddsService.getOddsForSport(additionalSport);
+            const games = await oddsService.getOdds(additionalSport);
             
             if (games && games.length > 0) {
               const upcomingGames = games.filter(game => {
@@ -988,11 +988,14 @@ const picksService = {
           }
         }
         
-        // STRICT POLICY: If we still don't have enough picks after trying all sports, throw an error
-        if (allPicks.length < REQUIRED_PICKS) {
-          console.error(`ERROR: Only generated ${allPicks.length} picks, but ${REQUIRED_PICKS} are required.`);
-          throw new Error(`Unable to generate the required ${REQUIRED_PICKS} picks. Only generated ${allPicks.length}. ` +
+        // Modified policy: Accept between 3-5 picks
+        const MIN_REQUIRED = 3;
+        if (allPicks.length < MIN_REQUIRED) {
+          console.error(`ERROR: Only generated ${allPicks.length} picks, but minimum ${MIN_REQUIRED} are required.`);
+          throw new Error(`Unable to generate the minimum ${MIN_REQUIRED} picks. Only generated ${allPicks.length}. ` +
                         `Please try again later when more games are available.`);
+        } else {
+          console.log(`Successfully generated ${allPicks.length} picks, which is sufficient (min: ${MIN_REQUIRED}, target: ${REQUIRED_PICKS}).`);
         }
       }
       
