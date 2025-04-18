@@ -189,4 +189,6 @@ const openaiServiceInstance = {
 
 // Initialize and then export the service
 openaiServiceInstance.init();
+
+export { openaiServiceInstance as openaiService };
 export default openaiServiceInstance;
