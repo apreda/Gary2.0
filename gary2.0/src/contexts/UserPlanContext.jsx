@@ -14,7 +14,7 @@ export const UserPlanProvider = ({ children }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data, error } = await supabase
-          .from('profiles')
+          .from('users')
           .select('plan')
           .eq('id', user.id)
           .single();
