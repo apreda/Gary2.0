@@ -4,6 +4,7 @@
  */
 import axios from 'axios';
 import { apiCache } from '../utils/apiCache';
+import { requestQueue } from '../utils/requestQueue';
 
 const openaiServiceInstance = {
   /**
@@ -55,8 +56,9 @@ const openaiServiceInstance = {
       return cachedResponse;
     }
     
-    // If no cached response, make the API call with retry logic
-    return await this._makeOpenAIRequestWithRetry(prompt, options, cacheKey);
+    // If no cached response, add the request to the queue
+    // This ensures we're only making one request at a time to avoid rate limits
+    return await requestQueue.enqueue(() => this._makeOpenAIRequestWithRetry(prompt, options, cacheKey));
   },
   
   /**
@@ -180,16 +182,11 @@ const openaiServiceInstance = {
             // Wait for the backoff period
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
             
+            // Increase the delay between requests in the queue to avoid rate limits
+            requestQueue.setRequestDelay(3000 * (retryCount + 1));
+            
             // Try again with an incremented retry count
             return await this._makeOpenAIRequestWithRetry(prompt, options, cacheKey, retryCount + 1);
-          }
-          
-          // Look for a fallback cached response with similar prompt
-          // This helps during heavy rate limiting by returning a "close enough" response
-          const similarResponses = this._findSimilarCachedResponse(prompt);
-          if (similarResponses) {
-            console.log('Using similar cached response due to rate limiting');
-            return similarResponses;
           }
         }
       }
@@ -206,17 +203,6 @@ const openaiServiceInstance = {
    * @param {object} options - Additional options for the analysis
    * @returns {Promise<string>} - Gary's detailed analysis
    */
-  /**
-   * Find a similar cached response when exact match isn't available
-   * @private
-   */
-  _findSimilarCachedResponse: function(prompt) {
-    // For simplicity, this is a placeholder implementation
-    // A more sophisticated approach would use semantic similarity
-    // For now, we'll just return null
-    return null;
-  },
-  
   generateGaryAnalysis: async function(gameData, newsData, options = {}) {
     try {
       // Prepare a detailed system prompt defining Gary's persona and expertise
