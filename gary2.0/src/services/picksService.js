@@ -914,7 +914,7 @@ const picksService = {
                 overUnder: totalsMarket ? `${totalsMarket.outcomes[0].name} ${totalsMarket.outcomes[0].point}` : "",
                 time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
                 walletValue: `$${Math.floor(garyPick.stake)}`,
-                confidenceLevel: Math.floor(currentConfidence * 10), // Scale to 0-100 display range based on 0-10 brain_score
+                confidenceLevel: Math.floor(currentConfidence * 10), // Scale to 0-100 display range based on momentum
                 betType: garyPick.bet_type === 'spread' ? 'Spread Pick' : 
                          garyPick.bet_type === 'parlay' ? 'Parlay Pick' :
                          garyPick.bet_type === 'same_game_parlay' ? 'SGP Pick' :

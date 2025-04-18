@@ -19,7 +19,7 @@ export const UserStatsProvider = ({ children }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data, error } = await supabase
-          .from('profiles')
+          .from('users')
           .select('stats')
           .eq('id', user.id)
           .single();
@@ -60,7 +60,7 @@ export const UserStatsProvider = ({ children }) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase
-        .from('profiles')
+        .from('users')
         .update({ stats })
         .eq('id', user.id);
     }

@@ -37,10 +37,11 @@ export const picksPersistenceService = {
         console.log('Attempting to save picks for date:', dateString);
         
         // Check if entry for today exists
+        // Use PostgreSQL date format with quotes to ensure correct handling
         const { data: existingData, error: checkError } = await supabase
           .from('daily_picks')
           .select('*')
-          .eq('date', dateString)
+          .filter('date', 'eq', dateString)
           .single();
         
         if (checkError && checkError.code !== 'PGRST116') {
@@ -133,7 +134,7 @@ export const picksPersistenceService = {
           const { data, error } = await supabase
             .from('daily_picks')
             .select('*')
-            .eq('date', dateString)
+            .filter('date', 'eq', dateString)
             .single();
           
           if (!error && data && data.picks && Array.isArray(data.picks) && data.picks.length > 0) {
@@ -211,7 +212,7 @@ export const picksPersistenceService = {
           const { data, error } = await supabase
             .from('daily_picks')
             .select('id')
-            .eq('date', dateString)
+            .filter('date', 'eq', dateString)
             .limit(1);
           
           if (!error && data && data.length > 0) {
@@ -250,7 +251,7 @@ export const picksPersistenceService = {
       await supabase
         .from('daily_picks')
         .delete()
-        .eq('date', dateString);
+        .filter('date', 'eq', dateString);
         
       console.log('Picks data cleared successfully');
       return true;
