@@ -40,7 +40,7 @@
   backface-visibility: hidden;
   border-radius: 0.75rem;
   overflow: hidden;
-  background: white;
+  background: linear-gradient(to bottom, #111111, #222222);
 }
 
 .card-back {
@@ -49,6 +49,7 @@
 
 /* Card header (top section) */
 .card-header {
+  color: white;
   height: 80px;
   padding: 1rem;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
@@ -88,11 +89,12 @@
 
 .parlay-card .card-badge {
   background-color: #111;
-  color: white;
+  color: #d4af37;
 }
 
 /* Card Content */
 .card-content {
+  color: #d4af37;
   padding: 1.25rem;
 }
 
