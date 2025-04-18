@@ -389,40 +389,54 @@ const picksService = {
         "rationale": string (brief 1-2 sentence analysis of the matchup)
       }`;
       
-      // Get the API key from the config loader
-      const apiKey = await configLoader.getOpenaiApiKey();
-      const baseUrl = await configLoader.getOpenaiBaseUrl();
-      
       // Log the prompt with stats context for debugging
       console.log(`OPENAI PROMPT WITH SPORTS DATA:\n${prompt}`);
       
-      // Call OpenAI API
-      const response = await axios.post(`${baseUrl}/chat/completions`, {
-        model: "gpt-4-0125-preview",
-        messages: [
-          { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks. ALWAYS incorporate any current team statistics provided into your analysis." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+      // Use our openaiService instead of direct API calls to avoid authentication issues
+      const messages = [
+        { 
+          role: "system", 
+          content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks. ALWAYS incorporate any current team statistics provided into your analysis." 
+        },
+        { 
+          role: "user", 
+          content: prompt 
         }
+      ];
+      
+      // Call OpenAI using our service that has the API key already configured
+      const responseText = await openaiService.generateResponse(messages, {
+        temperature: 0.7,
+        maxTokens: 500,
+        model: "gpt-4-0125-preview"
       });
       
-      // Parse the response
-      const aiContent = response.data.choices[0].message.content;
-      const jsonMatch = aiContent.match(/\{[\s\S]*\}/); // Extract JSON from response
-      
-      if (jsonMatch) {
-        const narrativeData = JSON.parse(jsonMatch[0]);
-        console.log("Generated narrative for", game.home_team, "vs", game.away_team, narrativeData);
-        return narrativeData;
+      // Process the response text
+      if (responseText) {
+        console.log(`OPENAI RESPONSE: ${responseText.substring(0, 150)}...`);
+        
+        try {
+          // Try to parse the JSON response
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/); // Extract JSON
+          if (jsonMatch) {
+            const narrativeData = JSON.parse(jsonMatch[0]);
+            console.log('Successfully parsed narrative data:', narrativeData);
+            return narrativeData;
+          }
+        } catch (parseError) {
+          console.error('Error parsing JSON from OpenAI response:', parseError);
+          // Fall back to default
+        }
       }
       
-      throw new Error('Could not parse OpenAI response');
+      console.error('Failed to generate or parse valid narrative from OpenAI');
+      // Return a default narrative if API call fails
+      return {
+        revenge: Math.random() > 0.8,
+        superstition: Math.random() > 0.9,
+        momentum: 0.3 + Math.random() * 0.6,
+        rationale: `${game.home_team} vs ${game.away_team} is a game where Gary's edge metrics see value.`
+      };
     } catch (error) {
       console.error('Error generating narrative:', error);
       // Return a default narrative if API call fails
