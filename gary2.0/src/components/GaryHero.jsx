@@ -50,28 +50,31 @@ export function GaryHero() {
 
   return (
     <section 
-      className="relative w-full overflow-hidden min-h-[85vh] flex items-center bg-black"
+      className="relative w-full overflow-hidden min-h-[85vh] flex items-center"
       ref={heroRef}
+      style={{background: '#111111', zIndex: 1}}
     >
       {/* Dimensional Background with Strong Depth */}
-      <div className="dimension-bg" style={{ backgroundColor: '#111' }}>
-        <div className="left-wall side-wall" style={{ opacity: 0.8, background: 'linear-gradient(to right, #1a1a1a, transparent)' }}></div>
-        <div className="right-wall side-wall" style={{ opacity: 0.8, background: 'linear-gradient(to left, #1a1a1a, transparent)' }}></div>
+      <div className="dimension-bg" style={{ backgroundColor: '#111111' }}>
+        <div className="left-wall side-wall" style={{ opacity: 0.5, background: 'linear-gradient(to right, #1a1a1a, transparent)' }}></div>
+        <div className="right-wall side-wall" style={{ opacity: 0.5, background: 'linear-gradient(to left, #1a1a1a, transparent)' }}></div>
       </div>
       
-      {/* Additional depth elements */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/40 z-[1]"></div>
-      <div className="absolute bottom-0 left-0 right-0 h-[200px] bg-gradient-to-t from-black to-transparent z-[1]"></div>
-      <div className="absolute top-0 left-0 right-0 h-[100px] bg-gradient-to-b from-black to-transparent z-[1]"></div>
+      {/* Reduced overlay opacity to prevent black overlay issues */}
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/20" style={{zIndex: 1}}></div>
+      <div className="absolute bottom-0 left-0 right-0 h-[100px] bg-gradient-to-t from-black/40 to-transparent" style={{zIndex: 1}}></div>
+      <div className="absolute top-0 left-0 right-0 h-[60px] bg-gradient-to-b from-black/30 to-transparent" style={{zIndex: 1}}></div>
       
-      {/* Gary Logo - Reduced by 5% from previous size and moved down by 1 inch */}
+      {/* Gary Logo with improved positioning and z-index */}
       <div className="absolute inset-0 flex items-center justify-center" style={{ 
-        zIndex: 2,
-        transform: 'translate(288px, 48px)', // Moved down by 1 inch (96px)
+        zIndex: 40, /* Much higher z-index to ensure visibility above all elements */
+        transform: 'translate(288px, 0px)', /* Adjusted position to avoid being cut off */
+        pointerEvents: 'none', /* Ensure it doesn't block interactions */
+        background: 'none !important', /* Force transparent background */
       }}>
-        <div className="relative w-[746px] h-[746px]"> {/* Reduced by 5% from 785px to 746px */}
+        <div className="relative w-[746px] h-[746px]" style={{ background: 'none !important' }}> 
           {/* Outer gold glow */}
-          <div className="absolute inset-0">
+          <div className="absolute inset-0" style={{ background: 'none !important' }}>
             <img 
               src={garyLogo} 
               alt="" 
@@ -79,12 +82,14 @@ export function GaryHero() {
               style={{
                 filter: 'blur(24px) sepia(1) saturate(2.4) brightness(1.16)',
                 opacity: 0.24,
+                background: 'none !important',
+                position: 'relative', /* Ensure proper stacking */
               }}
             />
           </div>
           
           {/* Middle gold glow */}
-          <div className="absolute inset-0">
+          <div className="absolute inset-0" style={{ background: 'none !important' }}>
             <img 
               src={garyLogo} 
               alt="" 
@@ -92,12 +97,14 @@ export function GaryHero() {
               style={{
                 filter: 'blur(12px) sepia(1) saturate(3.2) brightness(1.24)',
                 opacity: 0.36,
+                background: 'none !important',
+                position: 'relative', /* Ensure proper stacking */
               }}
             />
           </div>
           
           {/* Main visible image */}
-          <div className="absolute inset-0">
+          <div className="absolute inset-0" style={{ background: 'none !important' }}>
             <img 
               src={garyLogo} 
               alt="Gary AI" 
@@ -105,6 +112,9 @@ export function GaryHero() {
               style={{
                 filter: 'drop-shadow(0 0 16px rgba(212, 175, 55, 0.64)) drop-shadow(0 0 8px rgba(212, 175, 55, 0.48))',
                 opacity: 1,
+                background: 'none !important',
+                position: 'relative', /* Ensure proper stacking */
+                zIndex: 25, /* Make sure the main logo is on top */
               }}
             />
           </div>
