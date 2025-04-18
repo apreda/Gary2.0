@@ -6,7 +6,7 @@ import axios from 'axios';
 export const sportsDataService = {
   // API configuration - Using our own proxy to avoid CORS issues
   API_BASE_URL: '/api/sportsdb',
-  API_KEY: '943802', // Using the paid tier API key
+  API_KEY: import.meta.env?.VITE_SPORTSDB_API_KEY || '943802', // Using the environment variable
   
   /**
    * Convert league names to TheSportsDB format
