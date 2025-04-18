@@ -35,7 +35,7 @@ const openaiServiceInstance = {
   /**
    * Preferred model for Gary's analysis
    */
-  DEFAULT_MODEL: 'gpt-3.5-turbo', // Using a widely available model for compatibility
+  DEFAULT_MODEL: 'gpt-3.5-turbo-0125', // Using a specific version to avoid 404 errors
   
   /**
    * Generates a response from OpenAI based on the provided prompt
@@ -110,7 +110,7 @@ const openaiServiceInstance = {
           console.error('Current API key (first 5 chars):', this.API_KEY ? (this.API_KEY.substring(0, 5) + '...') : 'No API key found');
         } else if (error.response.status === 404) {
           console.error('Model not found. The specified model may not exist or you may not have access to it.');
-          console.error('Current model being used:', requestOptions?.model || this.DEFAULT_MODEL);
+          console.error('Current model being used:', options?.model || this.DEFAULT_MODEL);
         } else if (error.response.status === 429) {
           console.error('Rate limit exceeded or quota exceeded for your API key.');
         }
