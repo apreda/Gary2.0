@@ -977,7 +977,10 @@ const picksService = {
             };
             
             console.log(`Successfully generated Gary's pick for ${pick.game}`);
-            return pick;
+            
+            // Add this pick to our collection rather than returning it
+            allPicks.push(pick);
+            console.log(`Added pick #${allPicks.length}/${REQUIRED_PICKS} for ${league}`);
             
           } catch (analysisError) {
             console.error('Error generating Gary analysis:', analysisError);
@@ -986,7 +989,7 @@ const picksService = {
             console.error('Gary Engine Error Details:', JSON.stringify(analysisError));
             
             // Fallback to basic pick if Gary engine analysis fails
-            return {
+            const fallbackPick = {
               id: pickId,
               league: league,
               game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
@@ -1013,21 +1016,17 @@ const picksService = {
                 'Statistical analysis supports this selection'
               ]
             };
+            
+            // Add fallback pick to our collection
+            allPicks.push(fallbackPick);
+            console.log(`Added fallback pick #${allPicks.length}/${REQUIRED_PICKS} for ${league}`);
           }
           
-          // Add the newly generated pick to our collection
-          console.log('Raw pick data:', pick);
-          
-          // Ensure it's a valid pick object
-          if (pick && typeof pick === 'object') {
-            allPicks.push(pick);
-            console.log(`Added real pick for ${pick.game} (${pick.league}). Total picks: ${allPicks.length}`);
-          } else {
-            console.error('Invalid pick object received:', pick);
+          // Check if we have enough picks to exit the sport loop
+          if (allPicks.length >= REQUIRED_PICKS) {
+            console.log(`Reached required number of picks (${REQUIRED_PICKS}), breaking out of sport loop`);
+            break;
           }
-          
-          // Log the full picks array
-          console.log('Current picks array:', JSON.stringify(allPicks));
           
           // If we have 5 picks, we're done
           if (allPicks.length >= REQUIRED_PICKS) {
