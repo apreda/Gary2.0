@@ -17,11 +17,9 @@ export const picksPersistenceService = {
         return false;
       }
 
-      // 1. Save to localStorage with timestamp (Always works as fallback)
+      // No longer using localStorage to ensure consistent behavior across all devices
       const timestamp = new Date().toISOString();
-      localStorage.setItem('dailyPicksTimestamp', timestamp);
-      localStorage.setItem('dailyPicks', JSON.stringify(picks));
-      console.log('Picks saved to localStorage successfully');
+      console.log('Skipping localStorage - using only Supabase for universal access');
       
       // 2. Try to save to Supabase for multi-user sharing
       try {
@@ -29,7 +27,7 @@ export const picksPersistenceService = {
         const connectionVerified = await ensureAnonymousSession();
         if (!connectionVerified) {
           console.warn('Supabase connection could not be verified, skipping database save');
-          return true; // Still return success because localStorage worked
+          return false; // Return failure since we no longer use localStorage as fallback
         }
         
         const today = new Date();
@@ -63,7 +61,7 @@ export const picksPersistenceService = {
             
           if (updateError) {
             console.error('Error updating picks in Supabase:', updateError);
-            return true; // Still return success because localStorage worked
+            return false; // Return failure since we no longer use localStorage as fallback
           }
         } else {
           // Create new entry
@@ -81,7 +79,7 @@ export const picksPersistenceService = {
             
           if (insertError) {
             console.error('Error inserting picks in Supabase:', insertError);
-            return true; // Still return success because localStorage worked
+            return false; // Return failure since we no longer use localStorage as fallback
           }
         }
         
@@ -148,25 +146,8 @@ export const picksPersistenceService = {
         console.error('Error retrieving picks from Supabase:', supabaseError);
       }
       
-      // Fall back to localStorage if Supabase fails or has no data
-      const savedPicksJson = localStorage.getItem('dailyPicks');
-      if (savedPicksJson) {
-        try {
-          const savedPicks = JSON.parse(savedPicksJson);
-          if (Array.isArray(savedPicks) && savedPicks.length > 0) {
-            console.log(`Loaded ${savedPicks.length} picks from localStorage`);
-            // Also sync these to Supabase to help with persistence
-            try {
-              await picksPersistenceService.savePicks(savedPicks);
-            } catch (syncError) {
-              console.error('Error syncing localStorage picks to Supabase:', syncError);
-            }
-            return savedPicks;
-          }
-        } catch (parseError) {
-          console.error('Error parsing picks from localStorage:', parseError);
-        }
-      }
+      // No longer using localStorage fallback - we only rely on Supabase
+      // This ensures consistent behavior across all devices and browsers
       
       console.log('No saved picks found in any storage');
       return [];
@@ -182,25 +163,8 @@ export const picksPersistenceService = {
    */
   picksExistForToday: async () => {
     try {
-      // First check localStorage since it's faster
-      const localPicks = localStorage.getItem('dailyPicks');
-      const localTimestamp = localStorage.getItem('dailyPicksTimestamp');
-      
-      if (localPicks && localTimestamp) {
-        try {
-          const parsedPicks = JSON.parse(localPicks);
-          const today = new Date();
-          const dateString = today.toISOString().split('T')[0];
-          const pickDate = new Date(localTimestamp).toISOString().split('T')[0];
-          
-          if (pickDate === dateString && Array.isArray(parsedPicks) && parsedPicks.length > 0) {
-            console.log('Picks exist in localStorage for today');
-            return true;
-          }
-        } catch (parseError) {
-          console.error('Error parsing local picks during existence check:', parseError);
-        }
-      }
+      // No longer checking localStorage - only using Supabase
+      // This ensures consistent behavior across all devices
       
       // Check Supabase for today's picks
       try {
@@ -239,9 +203,8 @@ export const picksPersistenceService = {
    */
   clearPicksData: async () => {
     try {
-      // Clear localStorage
-      localStorage.removeItem('dailyPicks');
-      localStorage.removeItem('dailyPicksTimestamp');
+      // No longer using localStorage
+      // Only clearing Supabase data
       
       // Clear Supabase entry for today
       await ensureAnonymousSession();
