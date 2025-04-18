@@ -401,7 +401,7 @@ export function RealGaryPicks() {
         ) : (
           visiblePicks.length > 0 ? (
             <div className="pick-card-container gary-picks-container" style={{backgroundColor: '#111111'}}>
-              <h2 className="gary-picks-title">Gary's Premium Pick</h2>
+              <h2 className="gary-picks-title">Gary's Picks</h2>
               <div className="carousel-container">
                 {console.log('Rendering carousel with picks:', visiblePicks)}
                 {console.log('Active card index:', activeCardIndex)}
