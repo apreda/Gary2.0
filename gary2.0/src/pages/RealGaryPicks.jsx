@@ -1,33 +1,32 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
-import { useUserStats } from "../hooks/useUserStats";
-import { useUserPlan } from "../hooks/useUserPlan";
-import ErrorBoundary from "../components/ErrorBoundary";
-import gary1 from '../assets/images/gary1.svg';
-import "./GaryPicksCarousel.css";
-import "./CarouselFix.css";
-import "./CardFlipFix.css";
-import "./CardFrontFix.css"; // New styles for card front elements
-import "./CardBackFix.css"; // New styles for card back elements
-// Parlay feature removed
-import "./ButtonFix.css"; // Fix button positioning
-import "./ToastNotification.css"; // Toast notification styles
-import "./RegularCardFix.css"; // Fix font sizing for regular cards
-import "./GaryAnalysisFix.css"; // Enhanced styling for Gary's analysis
-import "./AnalysisBulletsFix.css"; // Styling for the bulleted analysis format
-// Note: All mobile-specific CSS and functionality has been removed
+/**
+ * RealGaryPicks component
+ * Displays Gary's daily betting picks
+ */
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../supabaseClient';
+import { useSwipeable } from 'react-swipeable';
+import { useUserPlan } from '../contexts/UserPlanContext';
+import { useUserStats } from '../contexts/UserStatsContext';
 import { picksService } from '../services/picksService';
-import { schedulerService } from '../services/schedulerService';
-import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
+import { schedulerService } from '../services/schedulerService';
 import { picksPersistenceService } from '../services/picksPersistenceService';
-import { supabase, ensureAnonymousSession } from '../supabaseClient';
-import { useLocation } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 
-export function RealGaryPicks() {
-  // User plan and stats
+// Components
+import PickCard from '../components/PickCard';
+import PremiumUpsell from '../components/PremiumUpsell';
+import BetTrackerModal from '../components/BetTrackerModal';
+import Toast from '../components/Toast';
+import FreePicksLimit from '../components/FreePicksLimit';
+import LoadingState from '../components/LoadingState';
+import HeaderNav from '../components/HeaderNav';
+
+// Styles
+import '../styles/RealGaryPicks.css';
+
+function RealGaryPicks() {
+  // Access user plan context
   const { userPlan, updateUserPlan } = useUserPlan();
   const { userStats, updateUserStats } = useUserStats();
   const location = useLocation();
@@ -41,6 +40,7 @@ export function RealGaryPicks() {
   // State for picks - NO fallbacks, only real data
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [flippedCards, setFlippedCards] = useState({});
   const [showBetTracker, setShowBetTracker] = useState(false);
@@ -51,163 +51,133 @@ export function RealGaryPicks() {
   const [showToast, setShowToast] = useState(false);
   const [userDecisions, setUserDecisions] = useState({});
   const [nextPicksInfo, setNextPicksInfo] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Define the fetchPicks function - NO FALLBACKS, only real data from Supabase
-  const fetchPicks = async () => {
+  // Define the loadPicks function - NO FALLBACKS, only real data from Supabase
+  const loadPicks = async () => {
+    setIsLoading(true);
     try {
       setLoading(true);
       setLoadError(null); // Reset any previous errors
       
-      console.log('Starting fetchPicks with NO FALLBACKS');
+      // Check if there are picks for today in Supabase
+      console.log('Checking Supabase for today\'s picks...');
       
-      // Ensure we have an active Supabase connection
-      console.log('Verifying Supabase connection...');
-      try {
-        // First ensure we have a valid anonymous session
-        await ensureAnonymousSession();
-      } catch (authError) {
-        console.error('Error verifying Supabase connection:', authError);
-      }
-      
-      // Get today's date for the query
+      // Format today's date as YYYY-MM-DD for consistent querying
       const today = new Date();
-      const dateString = today.toISOString().split('T')[0];
-      console.log('Fetching picks for date:', dateString);
+      const formattedDate = today.toISOString().split('T')[0];
+      console.log(`Looking for picks with date=${formattedDate}`);
       
       try {
-        // Query Supabase for today's picks
         const { data, error } = await supabase
           .from('daily_picks')
           .select('*')
-          .eq('date', dateString)
-          .maybeSingle();
-        
-        // DEBUGGING: Log the raw response from Supabase
-        console.log('FETCHED FROM SUPABASE:', data, error);
-        
+          .eq('date', formattedDate);
+          
         if (error) {
-          console.error('Supabase fetch error details:', { 
-            message: error.message, 
-            code: error.code, 
-            details: error.details,
-            hint: error.hint
-          });
-          setPicks([]);
-          setLoading(false);
-          return;
+          console.error('Error fetching picks from Supabase:', error);
+          throw new Error(`Supabase query error: ${error.message}`);
         }
         
-        // If we have valid picks in Supabase, use them
-        if (data && data.picks && Array.isArray(data.picks) && data.picks.length > 0) {
-          // Filter out any PARLAY picks - Parlay of the Day feature has been removed
-          const filteredPicks = data.picks.filter(pick => pick.league !== 'PARLAY');
-          console.log(`Loaded ${filteredPicks.length} picks from Supabase after filtering out Parlay picks.`);
-          console.log('Found existing picks in Supabase for today:', data.picks.length);
-          setPicks(filteredPicks);
-          setLoading(false);
-        } else {
-          // Check if we're actually querying the right table structure
-          console.log('Checking Supabase table structure...');
-          const { data: tableData, error: tableError } = await supabase
-            .from('daily_picks')
-            .select('*')
-            .limit(1);
-            
-          if (tableError) {
-            console.error('Error querying Supabase table:', tableError);
+        if (data && data.length > 0) {
+          console.log(`Found ${data.length} picks in Supabase for today!`);
+          
+          // For each pick in the database result, we need to extract the picks array from the JSON
+          let allPicks = [];
+          
+          // Loop through each row (usually just one)
+          data.forEach(row => {
+            if (row.picks && Array.isArray(row.picks)) {
+              console.log(`Row has ${row.picks.length} picks`);
+              allPicks = [...allPicks, ...row.picks];
+            } else if (row.picks) {
+              try {
+                // Try to parse if it's a string
+                const parsedPicks = JSON.parse(row.picks);
+                if (Array.isArray(parsedPicks)) {
+                  console.log(`Parsed ${parsedPicks.length} picks from JSON string`);
+                  allPicks = [...allPicks, ...parsedPicks];
+                }
+              } catch (e) {
+                console.error('Error parsing picks JSON:', e);
+              }
+            }
+          });
+          
+          if (allPicks.length > 0) {
+            console.log('Setting picks data from Supabase...');
+            setPicks(allPicks);
+            setLoading(false);
+            setIsLoading(false);
+            return;
           } else {
-            console.log('Supabase table structure sample:', tableData);
+            console.log('No valid picks found in Supabase data');
+          }
+        } else {
+          // No picks found for today in Supabase
+          console.log('No picks found in Supabase for today');
+          
+          // Check if there are stored picks from a previous generation attempt
+          const storedPicks = await picksPersistenceService.loadPicks();
+          if (storedPicks && storedPicks.length > 0) {
+            console.log(`Found ${storedPicks.length} stored picks from a previous generation attempt`);
+            setPicks(storedPicks);
+            setLoading(false);
+            setIsLoading(false);
+            return;
           }
           
-          console.log('NO PICKS FOUND IN SUPABASE, GENERATING NEW PICKS...');
+          console.log('Generating new picks...');
           
           try {
-            // Clear any potentially cached data
-            localStorage.removeItem('lastPicksGenerationTime');
-            localStorage.removeItem('dailyPicks');
-            
-            // Check if there are stored picks from a previous generation attempt
-            const storedPicks = await picksPersistenceService.loadPicks();
-            if (storedPicks && storedPicks.length > 0) {
-              console.log(`Found ${storedPicks.length} stored picks from a previous generation attempt`);
-              setPicksData(storedPicks);
-              setIsLoading(false);
-              return;
-            }
-            
-            // Show loading state and generate picks
-            setIsLoading(true);
-            console.log('Generating new picks automatically...');
-            
-            // Set a timeout to load Supabase picks after 10 seconds if generation is taking too long
-            // This helps prevent rate limit issues during initial page load
-            setTimeout(async () => {
-              const dbPicks = await picksService.getTodaysPicks();
-              if (dbPicks && dbPicks.length > 0 && isLoading) {
-                console.log(`Found ${dbPicks.length} picks in Supabase while waiting for generation`);
-                setPicksData(dbPicks);
-                setIsLoading(false);
-              }
-            }, 10000);
-            
-            // Generate new picks with proper MLB formatting
+            // Generate new picks
             const newPicks = await picksService.generateDailyPicks();
             console.log(`Generated ${newPicks.length} new picks`);
+            
+            // Store the generated picks
+            setPicks(newPicks);
             
             // Mark as generated to prevent scheduler from regenerating
             schedulerService.markPicksAsGenerated();
             
-            // Check if we have MLB picks and log them to verify formatting
-            const mlbPicks = newPicks.filter(p => p.league === 'MLB' && p.betType && p.betType.includes('Moneyline'));
-            if (mlbPicks.length > 0) {
-              console.log('MLB Moneyline picks with correct formatting:');
-              mlbPicks.forEach(pick => {
-                console.log(`  ${pick.shortGame}: "${pick.shortPick}"`);
-              });
-            }
-            
-            console.log('Setting newly generated picks...');
-            setPicks(newPicks);
+            setLoading(false);
+            setIsLoading(false);
           } catch (genError) {
             console.error('Error generating new picks:', genError);
-            setPicks([]);
+            setLoadError('Unable to generate new picks. Please try again later.');
+            setLoading(false);
+            setIsLoading(false);
           }
         }
       } catch (supabaseError) {
-        console.error('Error fetching from Supabase:', supabaseError);
-        setPicks([]);
+        console.error('Error accessing Supabase:', supabaseError);
+        setLoadError('Unable to access picks database. Please try again later.');
+        setLoading(false);
+        setIsLoading(false);
       }
     } catch (error) {
-      console.error('Unexpected error in fetchPicks:', error);
-      setPicks([]);
-    } finally {
+      console.error('Error in loadPicks:', error);
+      setLoadError('An unexpected error occurred. Please try again later.');
       setLoading(false);
+      setIsLoading(false);
     }
   };
   
-  // State for error handling
-  const [loadError, setLoadError] = useState(null);
-  
-  // Check if we should force generate new picks 
+  // Force regenerate picks (used when user clicks force refresh button)
   const forceGeneratePicks = async () => {
-    console.log('👉 FORCE GENERATING NEW PICKS...');
-    setLoading(true);
-    
     try {
-      // Step 1: Clear localStorage cache
-      console.log('Clearing localStorage cache...');
-      localStorage.removeItem('lastPicksGenerationTime');
-      localStorage.removeItem('dailyPicks');
-      localStorage.removeItem('forceGeneratePicks'); // Clear the flag
+      setLoading(true);
+      setLoadError(null);
       
-      // Step 2: Clear today's picks from Supabase
+      // Delete today's picks from Supabase first
       console.log('Removing today\'s picks from Supabase...');
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0];
       
       const { error: deleteError } = await supabase
         .from('daily_picks')
         .delete()
-        .eq('date', today);
+        .eq('date', formattedDate);
         
       if (deleteError) {
         console.error('Error deleting existing picks:', deleteError);
@@ -215,25 +185,15 @@ export function RealGaryPicks() {
         console.log('Successfully removed existing picks from Supabase');
       }
       
-      // Step 3: Generate new picks with proper MLB formatting
-      console.log('Generating new picks...');
+      // Generate brand new picks
+      console.log('Generating fresh picks...');
       const newPicks = await picksService.generateDailyPicks();
-      console.log(`Generated ${newPicks.length} new picks`);
       
-      // Step 4: Set the picks directly in our component
+      // Set the picks in state for display
       setPicks(newPicks);
       
-      // Step 5: Mark as generated to prevent scheduler from regenerating
+      // Mark as generated in the scheduler
       schedulerService.markPicksAsGenerated();
-      
-      // Check if we have MLB picks and log them to verify formatting
-      const mlbPicks = newPicks.filter(p => p.league === 'MLB' && p.betType && p.betType.includes('Moneyline'));
-      if (mlbPicks.length > 0) {
-        console.log('MLB Moneyline picks with correct formatting:');
-        mlbPicks.forEach(pick => {
-          console.log(`  ${pick.shortGame}: "${pick.shortPick}"`);
-        });
-      }
       
       // Remove the force parameter from URL to avoid regenerating on refresh
       if (location.search.includes('forcePicks=true')) {
@@ -244,8 +204,8 @@ export function RealGaryPicks() {
       return newPicks;
     } catch (error) {
       console.error('Error forcing pick generation:', error);
-      // Fall back to regular fetch if force generation fails
-      fetchPicks();
+      // Try regular loading if force generation fails
+      loadPicks();
     } finally {
       setLoading(false);
     }
@@ -260,354 +220,225 @@ export function RealGaryPicks() {
       console.log('Force generation flag detected, regenerating picks...');
       forceGeneratePicks();
     } else {
-      fetchPicks();
+      loadPicks();
     }
   }, [location]);
   
   // Handle card flipping
-  const flipCard = (id, event) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    console.log(`Flipping card ${id}. Current state:`, flippedCards[id] ? 'flipped' : 'not flipped');
-    setFlippedCards(prev => {
-      const newState = {
-        ...prev,
-        [id]: !prev[id]
+  const handleCardFlip = (pickId) => {
+    setFlippedCards((prev) => ({
+      ...prev,
+      [pickId]: !prev[pickId]
+    }));
+  };
+  
+  // Navigate to previous pick
+  const handlePrevPick = () => {
+    setActiveCardIndex((prev) => Math.max(0, prev - 1));
+  };
+  
+  // Navigate to next pick
+  const handleNextPick = () => {
+    setActiveCardIndex((prev) => Math.min(picks.length - 1, prev + 1));
+  };
+  
+  // Swipe handlers for mobile
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => handleNextPick(),
+    onSwipedRight: () => handlePrevPick(),
+    preventDefaultTouchmoveEvent: true,
+    trackMouse: false
+  });
+  
+  // Open bet tracker
+  const openBetTracker = (pick) => {
+    setBetAmount('');
+    setBetType(pick.betType || 'Standard');
+    setBetOdds(pick.odds || '-110');
+    setShowBetTracker(true);
+  };
+  
+  // Close bet tracker
+  const closeBetTracker = () => {
+    setShowBetTracker(false);
+  };
+  
+  // Save bet
+  const saveBet = async (pickId, decision, notes = '') => {
+    try {
+      // Validate bet amount
+      if (decision === 'bet' && (!betAmount || isNaN(parseFloat(betAmount)) || parseFloat(betAmount) <= 0)) {
+        setToastMessage('Please enter a valid bet amount');
+        setShowToast(true);
+        return;
+      }
+      
+      const currentPick = picks.find(p => p.id === pickId);
+      if (!currentPick) {
+        console.error('Pick not found for ID:', pickId);
+        return;
+      }
+      
+      // Format the bet info
+      const betInfo = {
+        id: `${pickId}-${Date.now()}`,
+        pickId,
+        date: new Date().toISOString(),
+        game: currentPick.game,
+        league: currentPick.league,
+        pick: currentPick.shortPick || currentPick.game,
+        type: betType,
+        odds: betOdds,
+        amount: decision === 'bet' ? parseFloat(betAmount) : 0,
+        decision,
+        notes,
+        status: 'pending', // pending, won, lost
+        garysConfidence: currentPick.confidenceLevel || 75
       };
-      console.log('New flipped state:', newState);
-      return newState;
-    });
-  };
-  
-  // Navigation functions
-  const goToPreviousCard = () => {
-    setActiveCardIndex(prevIndex => {
-      if (prevIndex === 0) {
-        return picks.length - 1;
-      } else {
-        return prevIndex - 1;
+      
+      // Save to bet tracking service
+      await betTrackingService.addBet(betInfo);
+      
+      // Update user stats if tracking a bet
+      if (decision === 'bet') {
+        updateUserStats({
+          ...userStats,
+          totalBetAmount: (userStats.totalBetAmount || 0) + parseFloat(betAmount),
+          totalBets: (userStats.totalBets || 0) + 1
+        });
       }
-    });
+      
+      // Update local state to reflect decision
+      setUserDecisions({
+        ...userDecisions,
+        [pickId]: decision
+      });
+      
+      // Show success toast
+      setToastMessage(decision === 'bet' ? 'Bet tracked successfully!' : 'Pick skipped');
+      setShowToast(true);
+      
+      // Close bet tracker
+      setShowBetTracker(false);
+    } catch (error) {
+      console.error('Error saving bet:', error);
+      setToastMessage('Error saving bet. Please try again.');
+      setShowToast(true);
+    }
   };
   
-  const goToNextCard = () => {
-    setActiveCardIndex(prevIndex => {
-      if (prevIndex === picks.length - 1) {
-        return 0;
-      } else {
-        return prevIndex + 1;
-      }
-    });
-  };
+  // Format the page title based on available picks
+  let pageTitle = 'Gary\'s Picks';
+  if (picks.length > 0) {
+    const leagues = [...new Set(picks.map(pick => pick.league))].join(', ');
+    pageTitle = `Gary's ${leagues} Picks`;
+  }
   
-  // Desktop-only implementation - no mobile touch handlers
+  // Generate header indicators
+  const indicators = picks.map((_, index) => ({
+    active: index === activeCardIndex,
+    isPrime: picks[index]?.primeTimeCard
+  }));
   
-  // Render the component
+  // Filter for visible picks based on user's plan
+  const visiblePicks = picks.slice(0, 6); // All users can see the first 6 picks
+  
+  // Check if we need to show the upsell
+  const showUpsell = userPlan !== 'premium' && picks.length > 6;
+  
+  // Check if we've reached the free picks limit
+  const reachedFreeLimit = activeCardIndex >= 2 && userPlan !== 'premium';
+  
   return (
-    <ErrorBoundary>
-      <div className="gary-picks-page">
+    <div className="real-gary-picks">
+      <HeaderNav title={pageTitle} indicators={indicators} />
+      
+      <div className="picks-container" {...swipeHandlers}>
         {loading ? (
-          <div className="loading-container">
-            <div className="loading-spinner"></div>
-            <div className="loading-text">Loading Gary's Picks...</div>
-          </div>
+          <LoadingState />
         ) : loadError ? (
-          <div className="error-container">
-            <div className="error-icon">⚠️</div>
-            <div className="error-message">{loadError}</div>
-            <button className="retry-button" onClick={fetchPicks}>
-              Retry
-            </button>
-          </div>
-        ) : picks.length === 0 ? (
-          <div className="no-picks-container">
-            <div className="no-picks-icon">📊</div>
-            <div className="no-picks-message">
-              Gary is analyzing today's games. Check back soon for picks!
-            </div>
-            {nextPicksInfo && (
-              <div className="next-picks-info">
-                Next picks will be available {nextPicksInfo}
-              </div>
-            )}
-            <button className="refresh-button" onClick={fetchPicks}>
-              Refresh
-            </button>
+          <div className="error-state">
+            <p>{loadError}</p>
+            <button onClick={() => loadPicks()}>Try Again</button>
           </div>
         ) : (
-          <div className="gary-picks-container">
-            <div className="carousel-container">
-              <button 
-                className="carousel-arrow left" 
-                onClick={goToPreviousCard}
-                aria-label="Previous pick"
-              >
-                <span>&#10094;</span>
-              </button>
-              
-              <div className="carousel-cards">
-                {/* DEBUGGING: Log picks before rendering */}
-                {console.log('RENDER PICKS:', picks)}
-                
-                {/* Render picks */}
-                {picks.map((pick, index) => (
-                  <div 
-                    key={pick.id}
-                    className={`pick-card card-position-${(index - activeCardIndex + 7) % 7} ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
-                  >
-                    <div className="pick-card-inner">
-                        <div className="pick-card-front" onClick={(e) => flipCard(pick.id, e)}>
-                          <div className="pick-card-header">
-                            <div className="pick-card-league">{pick.league}</div>
-                            <div className="pick-card-time">{pick.time}</div>
-                          </div>
-                          
-                          <div className="pick-card-game">
-                            {pick.game || 'Game Not Available'}
-                          </div>
-                          
-                          <div className="pick-card-center-content">
-                            {pick.confidenceLevel && (
-                              <div className="confidence-level">
-                                <div className="confidence-label">Confidence</div>
-                                <div className="confidence-value">{pick.confidenceLevel}</div>
-                              </div>
-                            )}
-                            
-                            {/* Display Gary's wager amount */}
-                            {pick.wagerAmount && (
-                              <div className="wager-amount">
-                                <div className="wager-label">Gary's Wager</div>
-                                <div className="wager-value">${pick.wagerAmount.toLocaleString()}</div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="pick-card-bottom">
-                            <button className="btn-view-pick" onClick={(e) => flipCard(pick.id, e)}>
-                              View Pick
-                            </button>
-                          </div>
-                          
-                          <div className="pick-card-content" style={{display: 'none'}}>
-                              <div className="pick-card-bet-type">Gary's Pick</div>
-                              <div className="pick-card-bet">
-                                {(() => {
-                                  try {
-                                    console.log(`Rendering pick: ${pick.id}, League: ${pick.league}`);
-                                    console.log('Pick data:', pick);
-                                    
-                                    // PRIORITY 1: Use the shortPick directly from Supabase if available
-                                    if (pick.shortPick && typeof pick.shortPick === 'string' && pick.shortPick.trim() !== '') {
-                                      console.log(`Using existing shortPick: ${pick.shortPick}`);
-                                      return pick.shortPick;
-                                    }
-                                    
-                                    // PRIORITY 2: Use the pick field directly
-                                    if (pick.pick && typeof pick.pick === 'string' && pick.pick.trim() !== '') {
-                                      console.log(`Using pick field: ${pick.pick}`);
-                                      return pick.pick;
-                                    }
-                                    
-                                    // PRIORITY 3: For specific bet types, format them consistently
-                                    if (pick.betType && pick.betType.includes('Spread') && pick.spread) {
-                                      return pick.spread;
-                                    } 
-                                    else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
-                                      return `${pick.moneyline} ML`;
-                                    } 
-                                    else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
-                                      return pick.overUnder;
-                                    }
-                                    
-                                    // Last resort
-                                    return 'NO PICK DATA';
-                                  } catch (err) {
-                                    console.error('Error rendering pick:', err);
-                                    // Fallback to any available data
-                                    return pick.shortPick || pick.pick || 'ERROR RENDERING PICK';
-                                  }
-                                })()}
-                              </div>
-                              {pick.result && pick.result !== 'pending' && (
-                                <div className={`pick-result ${pick.result === 'WIN' ? 'win' : pick.result === 'LOSS' ? 'loss' : 'push'}`}>
-                                  <div className="result-label">{pick.result === 'WIN' ? '✓ WINNER' : pick.result === 'LOSS' ? '✗ INCORRECT' : 'PUSH'}</div>
-                                  {pick.finalScore && <div className="final-score">Final: {pick.finalScore}</div>}
-                                </div>
-                              )}
-                              
-                              {/* Gary's Analysis Section */}
-                              <div className="gary-analysis">
-                                {/* Title removed as requested */}
-                                <div className="gary-analysis-content">
-                                  {(() => {
-                                    // First try to use garysBullets if available
-                                    if (pick.garysBullets && Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
-                                      return (
-                                        <ul className="gary-bullets">
-                                          {pick.garysBullets.map((bullet, i) => (
-                                            <li key={i}>{bullet}</li>
-                                          ))}
-                                        </ul>
-                                      );
-                                    }
-                                    
-                                    // Otherwise use the analysis text
-                                    const analysisText = pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.';
-                                    
-                                    // Split into paragraphs if it contains line breaks
-                                    if (analysisText.includes('\n')) {
-                                      return analysisText.split('\n').map((paragraph, i) => (
-                                        <p key={i}>{paragraph}</p>
-                                      ));
-                                    }
-                                    
-                                    // Otherwise just return as a single paragraph
-                                    return <p>{analysisText}</p>;
-                                  })()}
-                                </div>
-                              </div>
-                            </div>
-                        
-                        {/* No footer on front side - using View Pick button instead */}
-                      </div>
-                      
-                      <div className="pick-card-back" onClick={(e) => flipCard(pick.id, e)}>
-                        <div className="pick-card-back-header">
-                          <div className="pick-card-league">{pick.league}</div>
-                          <div className="pick-card-time">{pick.time}</div>
-                        </div>
-                        
-                        <div className="pick-card-back-content">
-                            <>
-                              <div className="pick-card-game-details">
-                                <div className="pick-selection">
-                                  {(() => {
-                                    try {
-                                      // PRIORITY 1: Use the shortPick directly from Supabase if available
-                                      if (pick.shortPick && typeof pick.shortPick === 'string' && pick.shortPick.trim() !== '') {
-                                        return pick.shortPick;
-                                      }
-                                      
-                                      // PRIORITY 2: Use the pick field directly
-                                      if (pick.pick && typeof pick.pick === 'string' && pick.pick.trim() !== '') {
-                                        return pick.pick;
-                                      }
-                                      
-                                      // PRIORITY 3: For specific bet types, format them consistently
-                                      if (pick.betType && pick.betType.includes('Spread') && pick.spread) {
-                                        return pick.spread;
-                                      } 
-                                      else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
-                                        return `${pick.moneyline} ML`;
-                                      } 
-                                      else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
-                                        return pick.overUnder;
-                                      }
-                                      
-                                      // Last resort
-                                      return 'NO PICK DATA';
-                                    } catch (err) {
-                                      console.error('Error rendering pick:', err);
-                                      // Fallback to any available data
-                                      return pick.shortPick || pick.pick || 'ERROR RENDERING PICK';
-                                    }
-                                  })()}
-                                </div>
-                              </div>
-                              
-                              <div className="pick-analysis-content">
-                                {(() => {
-                                  // First try to use garysBullets if available
-                                  if (pick.garysBullets && Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
-                                    return (
-                                      <ul className="gary-bullets">
-                                        {pick.garysBullets.map((bullet, i) => (
-                                          <li key={i}>{bullet}</li>
-                                        ))}
-                                      </ul>
-                                    );
-                                  }
-                                  
-                                  // Otherwise use the analysis text
-                                  const analysisText = pick.garysAnalysis || pick.analysis || pick.pickDetail || 'Gary is analyzing this pick.';
-                                  
-                                  // Split into paragraphs if it contains line breaks
-                                  if (analysisText.includes('\n')) {
-                                    return analysisText.split('\n').map((paragraph, i) => (
-                                      <p key={i}>{paragraph}</p>
-                                    ));
-                                  }
-                                  
-                                  // Otherwise just return as a single paragraph
-                                  return <p>{analysisText}</p>;
-                                })()}
-                              </div>
-                              
-                              <div className="decision-buttons">
-                                <button 
-                                  className="btn-bet-with-gary"
-                                  onClick={() => trackUserDecision(pick.id, 'bet', pick.league)}
-                                >
-                                  Bet with Gary
-                                </button>
-                                <button 
-                                  className="btn-fade-the-bear"
-                                  onClick={() => trackUserDecision(pick.id, 'fade', pick.league)}
-                                >
-                                  Fade the Bear
-                                </button>
-                              </div>
-                            </>
-                        </div>
-                        
-                        <div className="pick-card-bottom">
-                          <button 
-                            className="btn-flip-back"
-                            onClick={(e) => flipCard(pick.id, e)}
-                            aria-label="Flip card back"
-                          >
-                            Return to Card
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <button 
-                className="carousel-arrow right" 
-                onClick={goToNextCard}
-                aria-label="Next pick"
-              >
-                <span>&#10095;</span>
-              </button>
-            </div>
-            
-            <div className="carousel-dots">
-              {picks.map((_, index) => (
-                <span 
-                  key={index} 
-                  className={`dot ${index === activeCardIndex ? 'active' : ''}`}
-                  onClick={() => setActiveCardIndex(index)}
-                ></span>
+          visiblePicks.length > 0 ? (
+            <div className="pick-card-container">
+              {visiblePicks.map((pick, index) => (
+                <PickCard
+                  key={pick.id}
+                  pick={pick}
+                  isActive={index === activeCardIndex}
+                  isFlipped={flippedCards[pick.id]}
+                  onFlip={() => handleCardFlip(pick.id)}
+                  onTrackBet={() => openBetTracker(pick)}
+                  userDecision={userDecisions[pick.id]}
+                />
               ))}
+              
+              {reachedFreeLimit && activeCardIndex > 2 && (
+                <FreePicksLimit onBack={() => setActiveCardIndex(0)} />
+              )}
+              
+              {!reachedFreeLimit && (
+                <div className="pick-navigation">
+                  <button
+                    className={`prev-pick ${activeCardIndex === 0 ? 'disabled' : ''}`}
+                    onClick={handlePrevPick}
+                    disabled={activeCardIndex === 0}
+                  >
+                    &lt;
+                  </button>
+                  <span className="pick-counter">
+                    {activeCardIndex + 1} / {visiblePicks.length}
+                  </span>
+                  <button
+                    className={`next-pick ${activeCardIndex === visiblePicks.length - 1 ? 'disabled' : ''}`}
+                    onClick={handleNextPick}
+                    disabled={activeCardIndex === visiblePicks.length - 1}
+                  >
+                    &gt;
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="no-picks">
+              <p>No picks available for today yet. Check back soon!</p>
+              <button onClick={forceGeneratePicks}>Generate Picks Now</button>
+            </div>
+          )
         )}
         
-        {/* Toast notification */}
-        {showToast && (
-          <div className="toast-notification">
-            <div className={`toast-message ${userDecisions[Object.keys(userDecisions)[Object.keys(userDecisions).length - 1]]}`}>
-              {toastMessage}
-            </div>
-          </div>
+        {showUpsell && (
+          <PremiumUpsell picksCount={picks.length} />
         )}
       </div>
-    </ErrorBoundary>
+      
+      {showBetTracker && (
+        <BetTrackerModal
+          onClose={closeBetTracker}
+          onSave={(decision, notes) => saveBet(picks[activeCardIndex].id, decision, notes)}
+          amount={betAmount}
+          onAmountChange={(e) => setBetAmount(e.target.value)}
+          betType={betType}
+          odds={betOdds}
+        />
+      )}
+      
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          onClose={() => setShowToast(false)}
+        />
+      )}
+      
+      {nextPicksInfo && (
+        <div className="next-picks-info">
+          <p>{nextPicksInfo}</p>
+        </div>
+      )}
+    </div>
   );
 }
 
