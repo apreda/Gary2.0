@@ -10,11 +10,8 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
     return null;
   }
   
-  // Determine card type based on pick properties
-  let cardType = 'regular';
-  if (pick.primeTimeCard) cardType = 'primetime';
-  if (pick.goldCard) cardType = 'parlay';
-  if (pick.league === 'PARLAY') cardType = 'parlay';
+  // Force primetime card type for all picks to ensure gold/black styling
+  let cardType = 'primetime';
   
   // Get gradient classes based on card type
   const getGradientClass = () => {
@@ -44,15 +41,15 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
       </div>
       
       {/* Card Body */}
-      <div className="card-body bg-white p-4">
+      <div className="card-body bg-gradient-to-b from-[#111111] to-[#222222] text-white p-4">
         <div className="mb-3">
-          <div className="text-lg font-bold mb-1">{pick.game}</div>
-          <div className="text-sm text-gray-600">{pick.betType || 'Moneyline'}</div>
+          <div className="text-xl font-bold mb-1 text-[#d4af37]">{pick.pickTeam}</div>
+          <div className="pick-details text-sm text-gray-300">{pick.betType || 'Moneyline'}</div>
         </div>
         
-        <div className="border-t border-gray-200 pt-3 mb-4">
-          <div className="text-xl font-bold mb-2 text-black">{pick.shortPick || pick.pickDetail}</div>
-          <div className="text-sm text-gray-700 mb-3 line-clamp-3">
+        <div className="border-t border-[#d4af37]/30 pt-3 mb-4">
+          <div className="text-xl font-bold mb-2 text-[#d4af37]">{pick.shortPick || pick.pickDetail}</div>
+          <div className="text-sm text-gray-300 mb-3 line-clamp-3">
             {pick.pickDetail || pick.analysis?.substring(0, 100)}...
           </div>
         </div>
@@ -87,7 +84,7 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
               e.stopPropagation();
               onFlip && onFlip();
             }}
-            className="text-gray-400 hover:text-white w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+            className="py-2 px-4 bg-gray-800 hover:bg-black text-[#d4af37] rounded-lg transition ml-2"
           >
             ✕
           </button>
@@ -99,7 +96,7 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
         <div className="mb-5">
           <p className="text-gray-800 mb-4 leading-relaxed">{pick.analysis || pick.garysAnalysis}</p>
           
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mt-4">
+          <div className="bg-gray-50 p-4 rounded-lg border border-[#d4af37] mt-4">
             <h4 className="font-bold mb-3 text-[#111111] flex items-center">
               <span className="text-[#d4af37] mr-2">★</span>Key Factors
             </h4>
@@ -130,9 +127,7 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
           </button>
           
           <button 
-            className={`py-2 px-6 rounded-full shadow-md font-bold transform hover:translate-y-[-2px] transition-all ${userDecision === 'skip' 
-              ? 'bg-gray-100 text-gray-600 border border-gray-400' 
-              : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+            className="py-2 px-4 bg-[#d4af37] hover:bg-[#c9a535] text-black rounded-lg transition"
             onClick={(e) => {
               e.stopPropagation();
               // Handle skip logic
