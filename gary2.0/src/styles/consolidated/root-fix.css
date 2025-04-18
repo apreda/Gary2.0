@@ -1,51 +1,135 @@
 /**
- * ROOT BACKGROUND FIX
+ * ULTIMATE ROOT BACKGROUND FIX
  * 
- * This file ensures that the dark background is applied to ALL layers of the DOM hierarchy
- * to prevent white backgrounds from peeking through.
+ * This file ensures that the dark background is applied to EVERY SINGLE layer of the DOM hierarchy
+ * to absolutely prevent any white backgrounds from peeking through under any circumstances.
  */
 
-/* Target ALL key elements in the DOM hierarchy to ensure consistent background */
+/* Force dark mode at the document level */
+:root {
+  background-color: #111111 !important;
+  color-scheme: dark !important;
+}
+
+/* Universal selector to catch ALL elements */
+* {
+  background-color: #111111 !important;
+}
+
+/* HTML and body must be black */
 html, 
-body, 
+body {
+  background-color: #111111 !important;
+  color: white !important;
+  min-height: 100vh !important;
+  overflow-x: hidden !important;
+}
+
+/* React root containers */
 #root, 
-#app, 
-.App, 
+#app,
+.App,
+#__next,
+#gatsby-focus-wrapper,
+div[role="main"],
+div[id*="root"],
+div[class*="root"],
+[data-reactroot] {
+  background-color: #111111 !important;
+  min-height: 100vh !important;
+}
+
+/* Gary-specific containers */
 .real-gary-picks,
 .pick-card-container,
 .picks-container,
 .carousel-container,
-.carousel-track {
-  background-color: #111111 !important; /* Force black background */
-  color: white;
+.carousel-track,
+.loading-state,
+.error-state,
+.navbar,
+.header-nav {
+  background-color: #111111 !important;
+  color: white !important;
 }
 
-/* Target any possible containers */
-div[class*="container"],
-main,
-section,
-article {
+/* Generic containers that might be used */
+main, header, footer, section, article, aside, nav,
+div, span, p, h1, h2, h3, h4, h5, h6,
+ul, ol, li, table, tr, td, th {
   background-color: #111111 !important;
 }
 
-/* Target Suspense fallback which could show white */
-.suspense-fallback {
+/* Absolutely all container classes */
+[class*="container"],
+[class*="wrapper"],
+[class*="layout"],
+[class*="page"],
+[class*="view"],
+[class*="screen"],
+[class*="panel"],
+[class*="modal"],
+[class*="popup"],
+[class*="dialog"],
+[class*="overlay"],
+[class*="drawer"] {
   background-color: #111111 !important;
 }
 
-/* Ensure no white backgrounds in flex containers */
-.flex,
-.flex-1,
-.flex-grow,
-[class*="flex-col"],
-[class*="flex-row"] {
+/* All flex/grid containers */
+.flex, .flex-1, .flex-grow, .flex-auto,
+[class*="flex"],
+[class*="grid"],
+[style*="display: flex"],
+[style*="display:flex"],
+[style*="display: grid"],
+[style*="display:grid"] {
   background-color: #111111 !important;
 }
 
-/* Fix for theme toggle issues */
-:root,
-:root.dark,
-.dark-theme {
+/* React-specific styling */
+.suspense-fallback,
+[data-reactid],
+[data-testid] {
   background-color: #111111 !important;
-  color-scheme: dark !important; /* Force dark color scheme */
+}
+
+/* Force dark theme on commonly used framework classes */
+.dark-theme,
+.theme-dark,
+[data-theme="dark"],
+.dark-mode,
+.darkmode {
+  background-color: #111111 !important;
+  color-scheme: dark !important;
+}
+
+/* Loading elements */
+.loading-message,
+.loading-spinner,
+.spinner,
+[class*="loading"],
+[class*="spinner"] {
+  background-color: #111111 !important;
+  color: #d4af37 !important;
+}
+
+/* Fix button colors to maintain visibility */
+button, .button, [role="button"] {
+  background-color: #d4af37 !important;
+  color: #111111 !important;
+}
+
+/* Override any attempts to set background via inline styles */
+[style*="background"] {
+  background-color: #111111 !important;
+  background-image: none !important;
+}
+
+/* Fix for absolutely positioned elements */
+[style*="position: absolute"],
+[style*="position:absolute"],
+[style*="position: fixed"],
+[style*="position:fixed"] {
+  background-color: #111111 !important;
 }
