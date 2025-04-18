@@ -126,8 +126,31 @@ export function RealGaryPicks() {
             localStorage.removeItem('lastPicksGenerationTime');
             localStorage.removeItem('dailyPicks');
             
-            // Generate new picks with proper MLB formatting
+            // Check if there are stored picks from a previous generation attempt
+            const storedPicks = await picksPersistenceService.loadPicks();
+            if (storedPicks && storedPicks.length > 0) {
+              console.log(`Found ${storedPicks.length} stored picks from a previous generation attempt`);
+              setPicksData(storedPicks);
+              setIsLoading(false);
+              return;
+            }
+            
+            // Show loading state and generate picks
+            setIsLoading(true);
             console.log('Generating new picks automatically...');
+            
+            // Set a timeout to load Supabase picks after 10 seconds if generation is taking too long
+            // This helps prevent rate limit issues during initial page load
+            setTimeout(async () => {
+              const dbPicks = await picksService.getTodaysPicks();
+              if (dbPicks && dbPicks.length > 0 && isLoading) {
+                console.log(`Found ${dbPicks.length} picks in Supabase while waiting for generation`);
+                setPicksData(dbPicks);
+                setIsLoading(false);
+              }
+            }, 10000);
+            
+            // Generate new picks with proper MLB formatting
             const newPicks = await picksService.generateDailyPicks();
             console.log(`Generated ${newPicks.length} new picks`);
             
