@@ -3,6 +3,7 @@
  * Provides Gary's analysis and betting recommendations
  */
 import axios from 'axios';
+import { apiCache } from '../utils/apiCache';
 
 const openaiServiceInstance = {
   /**
@@ -44,6 +45,43 @@ const openaiServiceInstance = {
    * @returns {Promise<string>} - The generated response
    */
   generateResponse: async function(prompt, options = {}) {
+    // Create a cache key based on the prompt and options
+    const cacheKey = this._createCacheKey(prompt, options);
+    
+    // Check if we have a cached response
+    const cachedResponse = apiCache.get(cacheKey);
+    if (cachedResponse) {
+      console.log('Using cached OpenAI response');
+      return cachedResponse;
+    }
+    
+    // If no cached response, make the API call with retry logic
+    return await this._makeOpenAIRequestWithRetry(prompt, options, cacheKey);
+  },
+  
+  /**
+   * Creates a cache key from prompt and options
+   * @private
+   */
+  _createCacheKey: function(prompt, options) {
+    let promptString;
+    if (Array.isArray(prompt)) {
+      promptString = JSON.stringify(prompt);
+    } else {
+      promptString = prompt;
+    }
+    
+    return `openai_${options.model || this.DEFAULT_MODEL}_${Buffer.from(promptString).toString('base64').substring(0, 100)}`;
+  },
+  
+  /**
+   * Makes an OpenAI request with retry logic for rate limiting
+   * @private
+   */
+  _makeOpenAIRequestWithRetry: async function(prompt, options = {}, cacheKey, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 1000 * (2 ** retryCount); // Exponential backoff
+    
     try {
       console.log('Generating response from OpenAI...');
       
@@ -92,6 +130,14 @@ const openaiServiceInstance = {
       if (response.data && response.data.choices && response.data.choices.length > 0) {
         const result = response.data.choices[0].message.content;
         console.log('Successfully generated response from OpenAI');
+        
+        // Cache the successful response
+        if (cacheKey) {
+          // Cache less creative content (lower temperature) for longer
+          const cacheTtl = options.temperature < 0.5 ? 86400 : 3600; // 24 hours or 1 hour
+          apiCache.set(cacheKey, result, cacheTtl);
+        }
+        
         return result;
       } else {
         console.error('Invalid response format from OpenAI API:', response.data);
@@ -108,11 +154,32 @@ const openaiServiceInstance = {
         if (error.response.status === 401) {
           console.error('API Key Authentication Error. Check your API key is valid and has not expired.');
           console.error('Current API key (first 5 chars):', this.API_KEY ? (this.API_KEY.substring(0, 5) + '...') : 'No API key found');
+          return null; // No point retrying with invalid credentials
         } else if (error.response.status === 404) {
           console.error('Model not found. The specified model may not exist or you may not have access to it.');
           console.error('Current model being used:', options?.model || this.DEFAULT_MODEL);
+          return null; // No point retrying with an invalid model
         } else if (error.response.status === 429) {
           console.error('Rate limit exceeded or quota exceeded for your API key.');
+          
+          // Retry logic for rate limiting
+          if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying OpenAI request in ${RETRY_DELAY_MS}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+            
+            // Wait for the backoff period
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            
+            // Try again with an incremented retry count
+            return await this._makeOpenAIRequestWithRetry(prompt, options, cacheKey, retryCount + 1);
+          }
+          
+          // Look for a fallback cached response with similar prompt
+          // This helps during heavy rate limiting by returning a "close enough" response
+          const similarResponses = this._findSimilarCachedResponse(prompt);
+          if (similarResponses) {
+            console.log('Using similar cached response due to rate limiting');
+            return similarResponses;
+          }
         }
       }
       
@@ -128,6 +195,17 @@ const openaiServiceInstance = {
    * @param {object} options - Additional options for the analysis
    * @returns {Promise<string>} - Gary's detailed analysis
    */
+  /**
+   * Find a similar cached response when exact match isn't available
+   * @private
+   */
+  _findSimilarCachedResponse: function(prompt) {
+    // For simplicity, this is a placeholder implementation
+    // A more sophisticated approach would use semantic similarity
+    // For now, we'll just return null
+    return null;
+  },
+  
   generateGaryAnalysis: async function(gameData, newsData, options = {}) {
     try {
       // Prepare a detailed system prompt defining Gary's persona and expertise
