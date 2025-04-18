@@ -132,10 +132,18 @@ export function RealGaryPicks() {
           try {
             // Generate new picks
             const newPicks = await picksService.generateDailyPicks();
-            console.log(`Generated ${newPicks.length} new picks`);
+            console.log(`Generated ${newPicks ? newPicks.length : 0} new picks`);
+            console.log('Pick data details:', JSON.stringify(newPicks).substring(0, 200) + '...');
             
-            // Store the generated picks
-            setPicks(newPicks);
+            // Ensure newPicks is an array before setting state
+            if (newPicks && Array.isArray(newPicks) && newPicks.length > 0) {
+              // Store the generated picks
+              setPicks(newPicks);
+              console.log('Successfully set picks in state. Picks count:', newPicks.length);
+            } else {
+              console.error('Error: Invalid picks data received', newPicks);
+              setLoadError('Unable to display picks data. Please try again later.');
+            }
             
             // Mark as generated to prevent scheduler from regenerating
             schedulerService.markPicksAsGenerated();
@@ -341,7 +349,9 @@ export function RealGaryPicks() {
   }));
   
   // Filter for visible picks based on user's plan
-  const visiblePicks = picks.slice(0, 6); // All users can see the first 6 picks
+  console.log('Current picks state:', picks && picks.length ? `${picks.length} picks available` : 'No picks available');
+  // Ensure picks is an array before slicing
+  const visiblePicks = Array.isArray(picks) ? picks.slice(0, 6) : []; // All users can see the first 6 picks
   
   // Check if we need to show the upsell
   const showUpsell = userPlan !== 'premium' && picks.length > 6;
@@ -364,17 +374,24 @@ export function RealGaryPicks() {
         ) : (
           visiblePicks.length > 0 ? (
             <div className="pick-card-container">
-              {visiblePicks.map((pick, index) => (
-                <PickCard
-                  key={pick.id}
-                  pick={pick}
-                  isActive={index === activeCardIndex}
-                  isFlipped={flippedCards[pick.id]}
-                  onFlip={() => handleCardFlip(pick.id)}
-                  onTrackBet={() => openBetTracker(pick)}
-                  userDecision={userDecisions[pick.id]}
-                />
-              ))}
+              {visiblePicks.map((pick, index) => {
+                // Validate each pick has the required data
+                if (!pick || !pick.id) {
+                  console.error('Invalid pick data:', pick);
+                  return null;
+                }
+                return (
+                  <PickCard
+                    key={pick.id}
+                    pick={pick}
+                    isActive={index === activeCardIndex}
+                    isFlipped={flippedCards[pick.id]}
+                    onFlip={() => handleCardFlip(pick.id)}
+                    onTrackBet={() => openBetTracker(pick)}
+                    userDecision={userDecisions[pick.id]}
+                  />
+                );
+              })}
               
               {reachedFreeLimit && activeCardIndex > 2 && (
                 <FreePicksLimit onBack={() => setActiveCardIndex(0)} />
