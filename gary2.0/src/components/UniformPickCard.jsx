@@ -4,7 +4,7 @@ import React from 'react';
  * UniformPickCard - A standardized card component for Pick, Primetime, and Parlay cards
  */
 const UniformPickCard = ({ 
-  cardType = 'regular', // 'regular', 'primetime', or 'parlay'
+  cardType = 'primetime', // Force primetime for gold/black design
   title,
   badge,
   imageUrl,
@@ -15,30 +15,16 @@ const UniformPickCard = ({
   onFlip,
   children
 }) => {
-  // Determine background color based on card type
+  // Determine background color based on card type - forcing dark styling
   const getBgColor = () => {
-    switch(cardType) {
-      case 'primetime':
-        return 'bg-gradient-to-b from-[#111111] to-[#222222]';
-      case 'parlay':
-        return 'bg-gradient-to-b from-[#c9a535] to-[#d4af37]';
-      case 'regular':
-      default:
-        return 'bg-gradient-to-b from-[#e6e6e6] to-[#f0f0f0]';
-    }
+    // Force primetime dark styling
+    return 'bg-gradient-to-b from-[#111111] to-[#222222]';
   };
 
-  // Determine text color based on card type
+  // Determine text color based on card type - forcing light text for dark background
   const getTextColor = () => {
-    switch(cardType) {
-      case 'primetime':
-        return 'text-white';
-      case 'parlay':
-        return 'text-black';
-      case 'regular':
-      default:
-        return 'text-gray-800';
-    }
+    // Force white text for dark background
+    return 'text-white';
   };
 
   // Badge style
