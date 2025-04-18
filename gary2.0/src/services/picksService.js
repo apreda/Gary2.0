@@ -803,7 +803,8 @@ const picksService = {
       // 4. Get odds for selected sports
       const batchOdds = await oddsService.getBatchOdds(prioritizedSports);
       
-      // 5. Process each sport and select games
+      // 5. Process each sport and select games - but do it sequentially with delays
+      // to avoid hitting rate limits with too many parallel API calls
       let allPicks = [];
       let pickId = 1;
       
@@ -811,7 +812,17 @@ const picksService = {
       let hasStraightBet = false;
       let hasMoneylineBet = false;
       
-      for (const sport of prioritizedSports) {
+      // Process sports sequentially rather than in parallel to avoid rate limits
+      console.log(`Processing ${prioritizedSports.length} sports sequentially to avoid rate limits...`);
+      
+      for (let i = 0; i < prioritizedSports.length; i++) {
+        const sport = prioritizedSports[i];
+        
+        // Add a delay between processing different sports to avoid rate limits
+        if (i > 0) {
+          console.log(`Waiting 3 seconds before processing ${sport} to avoid rate limits...`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
         const sportOdds = batchOdds[sport] || [];
         console.log(`Retrieved ${sportOdds.length} games for ${sport}`);
         
@@ -964,6 +975,17 @@ const picksService = {
           } catch (err) {
             console.error(`Error processing best pick for ${sport}:`, err);
           }
+        }
+      }
+      
+      // Store picks in Supabase as soon as we have them, without waiting for any additional processing
+      if (allPicks.length > 0) {
+        try {
+          console.log('Saving initial picks to Supabase database for immediate access...');
+          await picksService.storeDailyPicksInDatabase(allPicks);
+          console.log('Successfully stored initial picks in Supabase database');
+        } catch (storageError) {
+          console.error('Error storing initial picks in database:', storageError);
         }
       }
       
