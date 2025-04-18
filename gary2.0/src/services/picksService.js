@@ -878,10 +878,29 @@ const picksService = {
             // Use Gary's AI to make a pick
             let garyPick = makeGaryPick(mockData);
             
-            // Track the best pick for this sport based on momentum (0-1 scale)
-            // Convert momentum to a 0-10 scale for compatibility with existing code
-            const momentumValue = garyPick.rationale.momentum || 0;
-            const currentConfidence = momentumValue * 10; // Convert 0-1 to 0-10 scale
+            // Track the best pick for this sport based on confidence
+            // Handle all possible response structures from the garyEngine
+            // This makes the code resilient to changes in the response format
+            let currentConfidence = 0;
+            
+            // Try different possible confidence fields in the response
+            if (garyPick.rationale) {
+              if (typeof garyPick.rationale.brain_score === 'number') {
+                // Use brain_score directly (already 0-10 scale)
+                currentConfidence = garyPick.rationale.brain_score;
+              } else if (typeof garyPick.rationale.momentum === 'number') {
+                // Convert momentum (0-1 scale) to 0-10 scale
+                currentConfidence = garyPick.rationale.momentum * 10;
+              } else if (typeof garyPick.confidence === 'string') {
+                // Handle string confidence values
+                currentConfidence = garyPick.confidence === 'High' ? 8 :
+                                  garyPick.confidence === 'Medium' ? 6 : 4;
+              }
+            } else if (typeof garyPick.confidence === 'string') {
+              // Fall back to top-level confidence if rationale doesn't exist
+              currentConfidence = garyPick.confidence === 'High' ? 8 :
+                               garyPick.confidence === 'Medium' ? 6 : 4;
+            }
             
             // Consider all picks, but still track best confidence for ranking purposes
             // We want Gary to always make picks regardless of confidence level
@@ -1084,9 +1103,31 @@ const picksService = {
                                 sport.includes('epl') ? 'EURO' :
                                 sport.split('_').pop().toUpperCase();
                                 
-              // Use momentum as confidence, but lower confidence since this is a fallback pick
-              const momentumValue = garyPick.rationale.momentum || 0;
-              const pickConfidence = momentumValue * 10; // Convert 0-1 to 0-10 scale
+              // Extract confidence from any available source in the response
+              // This makes the code resilient to changes in the API response format
+              let pickConfidence = 0;
+              
+              // Try different possible confidence fields in the response
+              if (garyPick.rationale) {
+                if (typeof garyPick.rationale.brain_score === 'number') {
+                  // Use brain_score directly (already 0-10 scale)
+                  pickConfidence = garyPick.rationale.brain_score;
+                } else if (typeof garyPick.rationale.momentum === 'number') {
+                  // Convert momentum (0-1 scale) to 0-10 scale
+                  pickConfidence = garyPick.rationale.momentum * 10;
+                } else if (typeof garyPick.confidence === 'string') {
+                  // Handle string confidence values
+                  pickConfidence = garyPick.confidence === 'High' ? 8 :
+                                 garyPick.confidence === 'Medium' ? 6 : 4;
+                }
+              } else if (typeof garyPick.confidence === 'string') {
+                // Fall back to top-level confidence if rationale doesn't exist
+                pickConfidence = garyPick.confidence === 'High' ? 8 :
+                              garyPick.confidence === 'Medium' ? 6 : 4;
+              }
+              
+              // Since this is a fallback pick, lower the confidence slightly
+              pickConfidence = Math.max(5, pickConfidence * 0.9); // Ensure at least 5 (moderate confidence)
               
               // Just use basic spread bet type for additional picks
               const betType = allPicks.length % 2 === 0 ? 'spread' : 'moneyline';
