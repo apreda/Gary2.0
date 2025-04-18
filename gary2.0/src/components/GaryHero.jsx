@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/dimensional.css';
-// Import the gary_logo.svg from assets directory
-import garyLogo from '../assets/images/gary_logo.svg';
+// Import the correct Gary logo image
+import garyLogo from '../assets/images/gary4.svg';
 
 export function GaryHero() {
   const [isVisible, setIsVisible] = useState(false);
@@ -65,7 +65,7 @@ export function GaryHero() {
       <div className="absolute bottom-0 left-0 right-0 h-[100px] bg-gradient-to-t from-black/40 to-transparent" style={{zIndex: 1}}></div>
       <div className="absolute top-0 left-0 right-0 h-[60px] bg-gradient-to-b from-black/30 to-transparent" style={{zIndex: 1}}></div>
       
-      {/* Gary Logo with improved positioning and z-index */}
+      {/* Gary Logo (gary4.svg) with improved positioning and z-index */}
       <div className="absolute inset-0 flex items-center justify-center" style={{ 
         zIndex: 40, /* Much higher z-index to ensure visibility above all elements */
         transform: 'translate(288px, 0px)', /* Adjusted position to avoid being cut off */
