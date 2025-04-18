@@ -9,7 +9,7 @@ import "./CarouselFix.css";
 import "./CardFlipFix.css";
 import "./CardFrontFix.css"; // New styles for card front elements
 import "./CardBackFix.css"; // New styles for card back elements
-import "./ParlayCardFix.css"; // Special fixes for Parlay card
+// Parlay feature removed
 import "./ButtonFix.css"; // Fix button positioning
 import "./ToastNotification.css"; // Toast notification styles
 import "./RegularCardFix.css"; // Fix font sizing for regular cards
@@ -99,9 +99,12 @@ export function RealGaryPicks() {
         
         // If we have valid picks in Supabase, use them
         if (data && data.picks && Array.isArray(data.picks) && data.picks.length > 0) {
+          // Filter out any PARLAY picks - Parlay of the Day feature has been removed
+          const filteredPicks = data.picks.filter(pick => pick.league !== 'PARLAY');
+          console.log(`Loaded ${filteredPicks.length} picks from Supabase after filtering out Parlay picks.`);
           console.log('Found existing picks in Supabase for today:', data.picks.length);
-          console.log('SETTING PICKS:', data.picks);
-          setPicks(data.picks);
+          setPicks(filteredPicks);
+          setLoading(false);
         } else {
           // Check if we're actually querying the right table structure
           console.log('Checking Supabase table structure...');
@@ -395,9 +398,6 @@ export function RealGaryPicks() {
                                     else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
                                       return pick.overUnder;
                                     }
-                                    else if (pick.league === 'PARLAY') {
-                                      return 'PARLAY OF THE DAY';
-                                    }
                                     
                                     // Last resort
                                     return 'NO PICK DATA';
@@ -588,50 +588,7 @@ export function RealGaryPicks() {
                               </div>
                             </>
                           ) : (
-                            <>
-                              <div className="pick-card-heading">PARLAY OF THE DAY</div>
-                              
-                              <div className="parlay-odds-display">
-                                {pick.parlayOdds && (
-                                  <div className="parlay-odds">
-                                    {pick.parlayOdds.startsWith('+') ? pick.parlayOdds : `+${pick.parlayOdds}`}
-                                  </div>
-                                )}
-                              </div>
-                              
-                              <div className="pick-analysis-content">
-                                <p>{pick.garysAnalysis || pick.analysis || 'Gary has combined these picks for maximum value.'}</p>
-                              </div>
-                              
-                              {pick.parlayLegs && pick.parlayLegs.length > 0 && (
-                                <div className="parlay-legs-container">
-                                  <div className="parlay-legs-heading">Parlay Legs</div>
-                                  {pick.parlayLegs.map((leg, legIndex) => (
-                                    <div key={legIndex} className="parlay-leg">
-                                      <div className="leg-game">{leg.game}</div>
-                                      <div className="leg-pick">
-                                        {leg.pick || `${leg.team || leg.moneyline} ML ${leg.odds || ''}`}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              
-                              <div className="decision-buttons">
-                                <button 
-                                  className="btn-bet-with-gary"
-                                  onClick={() => trackUserDecision(pick.id, 'bet', 'PARLAY')}
-                                >
-                                  Bet with Gary
-                                </button>
-                                <button 
-                                  className="btn-fade-the-bear"
-                                  onClick={() => trackUserDecision(pick.id, 'fade', 'PARLAY')}
-                                >
-                                  Fade the Bear
-                                </button>
-                              </div>
-                            </>
+                            <></>
                           )}
                         </div>
                         

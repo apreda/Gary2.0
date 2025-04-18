@@ -4,11 +4,25 @@
  */
 import axios from 'axios';
 
-export const openaiService = {
+const openaiServiceInstance = {
   /**
    * The OpenAI API key (loaded from environment variables)
    */
-  API_KEY: import.meta.env?.VITE_OPENAI_API_KEY || '',
+  API_KEY: '',
+  
+  /**
+   * Initialize the API key from environment variables
+   */
+  init: function() {
+    const apiKey = import.meta.env?.VITE_OPENAI_API_KEY;
+    if (!apiKey) {
+      console.error('OpenAI API key not found in environment variables');
+    } else {
+      console.log('OpenAI API key loaded successfully from environment variables');
+      this.API_KEY = apiKey;
+    }
+    return this;
+  },
   
   /**
    * Base URL for OpenAI API
@@ -159,7 +173,7 @@ export const openaiService = {
       const messages = [systemPrompt, userPrompt];
       
       // Generate the analysis
-      const analysis = await openaiService.generateResponse(messages, {
+      const analysis = await openaiServiceInstance.generateResponse(messages, {
         temperature: options.temperature || 0.8,
         maxTokens: options.maxTokens || 1500,
         model: options.model || 'gpt-4-0125-preview'
@@ -173,4 +187,6 @@ export const openaiService = {
   }
 };
 
-export default openaiService;
+// Initialize and then export the service
+openaiServiceInstance.init();
+export default openaiServiceInstance;
