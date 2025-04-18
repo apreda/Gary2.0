@@ -1,5 +1,32 @@
-/* RealGaryPicks.css */
+/* RealGaryPicks.css - Consolidated version */
 
+/* Base layout for the page */
+.real-gary-picks {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #111111;
+  color: white;
+}
+
+.picks-container {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background-color: #111111;
+}
+
+.pick-card-container {
+  width: 100%;
+  max-width: 600px;
+  position: relative;
+}
+
+/* 3D Card Animation with more pronounced depth */
 .perspective-1000 {
   perspective: 1000px;
 }
@@ -16,7 +43,6 @@
   transform: rotateY(180deg);
 }
 
-/* 3D Card Animation with more pronounced depth */
 .card-container {
   perspective: 1200px;
 }
@@ -31,6 +57,16 @@
 
 .card-inner.is-flipped {
   transform: rotateY(180deg);
+}
+
+/* Pick title styling */
+.gary-picks-title {
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  color: #d4af37;
+  margin-bottom: 24px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 .card-front, 

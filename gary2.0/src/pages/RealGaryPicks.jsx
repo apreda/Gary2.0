@@ -22,10 +22,7 @@ import FreePicksLimit from '../components/FreePicksLimit';
 import LoadingState from '../components/LoadingState';
 import HeaderNav from '../components/HeaderNav';
 
-// Styles
-import '../styles/RealGaryPicks.css';
-
-// Import all Fix CSS files to ensure consistent gold/black styling
+// Import Fix CSS files ONLY (no duplicates) to ensure the locked-in gold/black design
 import './CardFrontFix.css';
 import './CardBackFix.css';
 import './CardFlipFix.css';
@@ -35,6 +32,7 @@ import './CarouselFix.css';
 import './GaryAnalysisFix.css';
 import './ParlayCardFix.css';
 import './RegularCardFix.css';
+import './NavigationFix.css';
 
 export function RealGaryPicks() {
   // Access user plan context
@@ -388,7 +386,7 @@ export function RealGaryPicks() {
   const reachedFreeLimit = activeCardIndex >= 2 && userPlan !== 'premium';
   
   return (
-    <div className="real-gary-picks" style={{backgroundColor: '#111111', color: 'white', minHeight: '100vh'}}>
+    <div className="real-gary-picks dark-theme gold-accent">
       <HeaderNav title={pageTitle} indicators={indicators} />
       
       <div className="picks-container" {...swipeHandlers}>
@@ -404,31 +402,41 @@ export function RealGaryPicks() {
             <div className="pick-card-container gary-picks-container">
               <h2 className="gary-picks-title">Gary's Premium Pick</h2>
               <div className="carousel-container">
-              {console.log('Rendering carousel with picks:', visiblePicks)}
-              {console.log('Active card index:', activeCardIndex)}
-              {visiblePicks.map((pick, index) => {
-                // Validate each pick has the required data
-                if (!pick || !pick.id) {
-                  console.error('Invalid pick data:', pick);
-                  return null;
-                }
-                console.log(`Rendering pick card ${index}:`, pick.id, 'isActive:', index === activeCardIndex);
+                {console.log('Rendering carousel with picks:', visiblePicks)}
+                {console.log('Active card index:', activeCardIndex)}
                 
-                // Only render the active card
-                if (index !== activeCardIndex) return null;
-                
-                return (
-                  <PickCard
-                    key={pick.id}
-                    pick={pick}
-                    isActive={true}
-                    isFlipped={flippedCards[pick.id] || false}
-                    onFlip={() => handleCardFlip(pick.id)}
-                    onTrackBet={() => openBetTracker(pick)}
-                    userDecision={userDecisions[pick.id] || null}
-                  />
-                );
-              })}
+                {/* Render all cards to achieve the fanned-out effect */}
+                <div className="carousel-track">
+                  {visiblePicks.map((pick, index) => {
+                    // Validate each pick has the required data
+                    if (!pick || !pick.id) {
+                      console.error('Invalid pick data:', pick);
+                      return null;
+                    }
+                    
+                    // Calculate the relative position for this card (-3 to +3 range)
+                    const relativePosition = index - activeCardIndex;
+                    // Map to the CSS position classes (0=center, 1-3=right, 4-6=left)
+                    const positionClass = relativePosition === 0 ? 0 : 
+                                          relativePosition > 0 ? relativePosition : 
+                                          7 + relativePosition; // 6, 5, 4 for -1, -2, -3
+                    
+                    console.log(`Rendering pick card ${index} with position class ${positionClass}`);
+                    
+                    return (
+                      <div key={pick.id} className={`pick-card card-position-${positionClass}`}>
+                        <PickCard
+                          pick={pick}
+                          isActive={index === activeCardIndex}
+                          isFlipped={flippedCards[pick.id] || false}
+                          onFlip={() => handleCardFlip(pick.id)}
+                          onTrackBet={() => openBetTracker(pick)}
+                          userDecision={userDecisions[pick.id] || null}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
               
               {reachedFreeLimit && activeCardIndex > 2 && (
@@ -436,26 +444,26 @@ export function RealGaryPicks() {
               )}
               
               {!reachedFreeLimit && (
-                <div className="pick-navigation">
+                <div className="pick-navigation premium-navigation">
                   <button
                     onClick={handlePrevPick}
-                    className={`prev-pick ${activeCardIndex === 0 ? 'disabled' : ''}`}
+                    className={`prev-pick premium-button ${activeCardIndex === 0 ? 'disabled' : ''}`}
                     disabled={activeCardIndex === 0}
                   >
                     <span className="nav-arrow">&laquo;</span> Previous
                   </button>
-                  <div className="pick-indicators">
+                  <div className="pick-indicators premium-indicators">
                     {visiblePicks.map((_, idx) => (
                       <span 
                         key={idx} 
-                        className={`pick-indicator ${idx === activeCardIndex ? 'active' : ''}`}
+                        className={`pick-indicator ${idx === activeCardIndex ? 'active gold-indicator' : ''}`}
                         onClick={() => setActiveCardIndex(idx)}
                       />
                     ))}
                   </div>
                   <button
                     onClick={handleNextPick}
-                    className={`next-pick ${activeCardIndex === visiblePicks.length - 1 ? 'disabled' : ''}`}
+                    className={`next-pick premium-button ${activeCardIndex === visiblePicks.length - 1 ? 'disabled' : ''}`}
                     disabled={activeCardIndex === visiblePicks.length - 1}
                   >
                     Next <span className="nav-arrow">&raquo;</span>

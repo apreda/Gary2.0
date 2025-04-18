@@ -28,22 +28,21 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
     image: pick.image || 'missing'
   });
   
-  // Force primetime card type for all picks to ensure gold/black styling
+  // Force primetime card type for all picks to ensure CONSISTENT gold/black styling
   let cardType = 'primetime';
   
-  // Get gradient classes based on card type
+  // Get gradient classes based on card type - ensuring the dark/gold theme
   const getGradientClass = () => {
-    if (cardType === 'primetime') return 'bg-gradient-to-b from-[#111111] to-[#222222] text-white';
-    if (cardType === 'parlay') return 'bg-gradient-to-b from-[#d4af37] to-[#c9a535] text-black';
-    return 'bg-gradient-to-b from-[#f9f9f9] to-[#e0e0e0] text-gray-900';
+    // Always return primetime dark/gold styling regardless of card type
+    return 'bg-gradient-to-b from-[#111111] to-[#222222] text-white';
   };
   
   // Construct the front content
   const frontContent = (
     <div className={`card-front w-full h-full rounded-xl overflow-hidden transition-all duration-300 ${isActive ? 'scale-100' : 'scale-95 opacity-90'}`}>
       {/* Card Header with League Badge */}
-      <div className={`card-header ${getGradientClass()} p-4 relative`}>
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent"></div>
+      <div className={`card-header ${getGradientClass()} p-4 relative premium-header`}>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent gold-accent-line"></div>
         <div className="flex justify-between items-start">
           <div>
             <div className="inline-block bg-white text-black font-bold py-1 px-3 rounded-full text-xs uppercase tracking-wider shadow-md">
@@ -51,23 +50,23 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
             </div>
             <div className="text-sm mt-2 opacity-80">{pick.time}</div>
           </div>
-          <div className="flex flex-col items-end">
+          <div className="flex flex-col items-end premium-confidence">
             <div className="text-sm font-medium">Confidence</div>
-            <div className="text-xl font-bold text-[#d4af37]">{pick.confidenceLevel || 75}%</div>
+            <div className="text-xl font-bold text-[#d4af37] gold-text">{pick.confidenceLevel || 75}%</div>
           </div>
         </div>
       </div>
       
       {/* Card Body */}
-      <div className="card-body bg-gradient-to-b from-[#111111] to-[#222222] text-white p-4">
-        <div className="mb-3">
-          <div className="text-xl font-bold mb-1 text-[#d4af37]">{pick.pickTeam}</div>
+      <div className="card-body bg-gradient-to-b from-[#111111] to-[#222222] text-white p-4 premium-card-body">
+        <div className="mb-3 pick-team-container">
+          <div className="text-xl font-bold mb-1 text-[#d4af37] gold-text">{pick.pickTeam}</div>
           <div className="pick-details text-sm text-gray-300">{pick.betType || 'Moneyline'}</div>
         </div>
         
-        <div className="border-t border-[#d4af37]/30 pt-3 mb-4">
-          <div className="text-xl font-bold mb-2 text-[#d4af37]">{pick.shortPick || pick.pickDetail}</div>
-          <div className="text-sm text-gray-300 mb-3 line-clamp-3">
+        <div className="border-t border-[#d4af37]/30 pt-3 mb-4 pick-info-divider">
+          <div className="text-xl font-bold mb-2 text-[#d4af37] gold-text premium-pick">{pick.shortPick || pick.pickDetail}</div>
+          <div className="text-sm text-gray-300 mb-3 line-clamp-3 pick-analysis-preview">
             {pick.pickDetail || pick.analysis?.substring(0, 100)}...
           </div>
         </div>
