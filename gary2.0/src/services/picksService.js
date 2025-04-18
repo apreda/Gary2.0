@@ -867,9 +867,10 @@ const picksService = {
             // Use Gary's AI to make a pick
             let garyPick = makeGaryPick(mockData);
             
-            // Track the best pick for this sport based on confidence
+            // Track the best pick for this sport based on confidence (0-10 scale)
             const currentConfidence = garyPick.rationale.brain_score || 0;
-            if (currentConfidence > bestConfidence) {
+            // Only consider picks with a brain_score of 6 or higher
+            if (currentConfidence >= 6 && currentConfidence > bestConfidence) {
               // Format the pick for our UI
               const sportTitle = sport.includes('basketball_nba') ? 'NBA' : 
                                 sport.includes('baseball_mlb') ? 'MLB' : 
@@ -878,8 +879,8 @@ const picksService = {
                                 sport.includes('epl') ? 'EURO' :
                                 sport.split('_').pop().toUpperCase();
               
-              // Special card types
-              const isPrimeTime = garyPick.confidence > 0.85 && game.commence_time && 
+              // Special card types - using 8.5 threshold on 0-10 scale
+              const isPrimeTime = garyPick.confidence > 8.5 && game.commence_time && 
                                new Date(game.commence_time).getHours() >= 19;
               const isSilverCard = sportTitle === 'EURO';
               
@@ -899,7 +900,7 @@ const picksService = {
                 overUnder: totalsMarket ? `${totalsMarket.outcomes[0].name} ${totalsMarket.outcomes[0].point}` : "",
                 time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
                 walletValue: `$${Math.floor(garyPick.stake)}`,
-                confidenceLevel: Math.floor(currentConfidence * 100),
+                confidenceLevel: Math.floor(currentConfidence * 10), // Scale to 0-100 display range based on 0-10 brain_score
                 betType: garyPick.bet_type === 'spread' ? 'Spread Pick' : 
                          garyPick.bet_type === 'parlay' ? 'Parlay Pick' :
                          garyPick.bet_type === 'same_game_parlay' ? 'SGP Pick' :
