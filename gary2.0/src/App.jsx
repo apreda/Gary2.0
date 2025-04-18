@@ -15,13 +15,12 @@ import { HowItWorks } from "./pages/HowItWorks";
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
-const AdminTools = lazy(() => import('./pages/AdminTools'));
 
 
 import { SignIn } from "./pages/SignIn";
 import { SignOut } from "./pages/SignOut";
 import { Checkout } from "./pages/Checkout";
-import { Parlays } from "./pages/Parlays";
+// Parlays feature removed
 import BetCardProfile from "./pages/BetCardProfile";
 // Chat with Gary feature removed
 import { UserDashboard } from "./components/UserDashboard";
@@ -105,7 +104,7 @@ function AppContent() {
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signout" element={<SignOut />} />
               <Route path="/checkout" element={<Checkout />} />
-              <Route path="/parlays" element={<Parlays />} />
+              {/* Parlays feature removed */}
               <Route path="/betcard" element={
                 session ? <BetCardProfile /> : <Navigate to="/signin" replace />
               } />
@@ -114,7 +113,6 @@ function AppContent() {
               } />
               {/* Admin routes */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
-              <Route path="/admin/tools" element={<AdminTools />} />
             </Routes>
           </Suspense>
         </div>
