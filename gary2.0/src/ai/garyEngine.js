@@ -184,6 +184,16 @@ export async function fetchRealTimeGameInfo(homeTeam, awayTeam, league) {
  */
 export async function generateGaryAnalysis(gameData, realTimeInfo, preferences = {}) {
   try {
+    // Validate gameData to ensure we have the necessary properties
+    if (!gameData || (gameData.homeTeam === undefined && gameData.awayTeam === undefined)) {
+      console.log('Warning: gameData missing critical team information');
+      // Add fallback values to ensure the function continues
+      gameData = gameData || {};
+      gameData.homeTeam = gameData.homeTeam || 'Home Team';
+      gameData.awayTeam = gameData.awayTeam || 'Away Team';
+      gameData.league = gameData.league || 'Unknown League';
+    }
+    
     // Apply Gary's preferences to the analysis prompt
     const preferenceContext = Object.keys(preferences).length > 0 ? 
       `Consider these personal preferences in your analysis: ${JSON.stringify(preferences)}` : '';
@@ -323,17 +333,33 @@ export async function makeGaryPick({
     profit * 0.20;
     
   // Step 2: Fetch real-time data using Perplexity
-  const realTimeInfo = await fetchRealTimeGameInfo(homeTeam, awayTeam, league);
+  // Add validation to prevent undefined values from being passed
+  let realTimeInfo = null;
+  if (homeTeam && awayTeam && league) {
+    console.log(`Fetching real-time data for validated teams: ${awayTeam} @ ${homeTeam} (${league})`);
+    realTimeInfo = await fetchRealTimeGameInfo(homeTeam, awayTeam, league);
+  } else {
+    console.log(`Missing team or league data. Using default analysis without real-time data.`);
+    realTimeInfo = 'No real-time data available due to missing team information.';
+  }
   
   // Step 3: Get additional sports data if available
   let enrichedGameData = { ...dataMetrics };
   try {
-    const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
-    if (teamStats) {
-      enrichedGameData.teamStats = teamStats;
+    // Add validation to ensure we have valid team names and league
+    if (homeTeam && awayTeam && league) {
+      console.log(`Fetching sports data for: ${homeTeam} vs ${awayTeam} (${league})`);
+      const teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
+      if (teamStats) {
+        enrichedGameData.teamStats = teamStats;
+      }
+    } else {
+      console.log('Skipping sports data fetch due to missing team or league information');
+      enrichedGameData.teamStats = 'No team stats available due to missing team information';
     }
   } catch (statsError) {
     console.error('Error fetching additional sports data:', statsError);
+    enrichedGameData.statsError = true;
   }
   
   // Step 4: Extract Gary's team preferences for this specific game
