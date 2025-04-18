@@ -4,9 +4,9 @@ import axios from 'axios';
  * Service for fetching and processing sports data from TheSportsDB API
  */
 export const sportsDataService = {
-  // API configuration
-  API_BASE_URL: 'https://www.thesportsdb.com/api/v1/json',
-  API_KEY: '3', // Free tier API key for development (replace with premium key in production)
+  // API configuration - Using our own proxy to avoid CORS issues
+  API_BASE_URL: '/api/sportsdb',
+  API_KEY: '943802', // Using the paid tier API key
   
   /**
    * Convert league names to TheSportsDB format
@@ -32,17 +32,20 @@ export const sportsDataService = {
   getTeamData: async (teamName) => {
     try {
       console.log(`TheSportsDB API: Fetching team data for ${teamName}`);
-      const response = await axios.get(
-        `${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/searchteams.php?t=${encodeURIComponent(teamName)}`
-      );
+      // Use our proxy API to avoid CORS issues
+      const response = await axios.get(`${sportsDataService.API_BASE_URL}`, {
+        params: { 
+          endpoint: 'searchteams.php',
+          t: teamName 
+        }
+      });
       
       if (response.data && response.data.teams && response.data.teams.length > 0) {
-        console.log(`TheSportsDB API: Successfully found data for ${teamName}`);
         return response.data.teams[0];
+      } else {
+        console.log(`TheSportsDB API: No data found for team: ${teamName}`);
+        return null;
       }
-      
-      console.warn(`TheSportsDB API: No team data found for ${teamName}`);
-      return null;
     } catch (error) {
       console.error(`TheSportsDB API: Error fetching team data for ${teamName}:`, error.message);
       return null;
@@ -54,19 +57,24 @@ export const sportsDataService = {
    * @param {string} teamId - Team ID from TheSportsDB
    * @returns {Promise<Array>} - Last 5 events
    */
-  getTeamLastEvents: async (teamId) => {
+  getTeamLastEvents: async (teamId, limit = 5) => {
     try {
-      const response = await axios.get(
-        `${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/eventslast.php?id=${teamId}`
-      );
+      // Use our proxy API to avoid CORS issues
+      const response = await axios.get(`${sportsDataService.API_BASE_URL}`, {
+        params: { 
+          endpoint: 'eventslast.php',
+          id: teamId 
+        }
+      });
       
       if (response.data && response.data.results) {
-        return response.data.results;
+        return response.data.results.slice(0, limit); // Return only the specified number of events
+      } else {
+        console.log(`TheSportsDB API: No recent events found for team ID: ${teamId}`);
+        return [];
       }
-      
-      return [];
     } catch (error) {
-      console.error(`Error fetching last events for team ${teamId}:`, error);
+      console.error(`TheSportsDB API: Error fetching recent events for team ID ${teamId}:`, error.message);
       return [];
     }
   },
@@ -101,9 +109,13 @@ export const sportsDataService = {
   getLeagueStandings: async (leagueName) => {
     try {
       const mappedLeague = sportsDataService.mapLeagueToSportsDBFormat(leagueName);
-      const response = await axios.get(
-        `${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/lookuptable.php?l=${encodeURIComponent(mappedLeague)}`
-      );
+      // Use our proxy API to avoid CORS issues
+      const response = await axios.get(`${sportsDataService.API_BASE_URL}`, {
+        params: { 
+          endpoint: 'lookuptable.php',
+          l: mappedLeague 
+        }
+      });
       
       if (response.data && response.data.table) {
         return response.data.table;
@@ -111,7 +123,7 @@ export const sportsDataService = {
       
       return [];
     } catch (error) {
-      console.error(`Error fetching standings for ${leagueName}:`, error);
+      console.error(`TheSportsDB API: Error fetching standings for ${leagueName}:`, error.message);
       return [];
     }
   },
