@@ -40,13 +40,13 @@ const openaiServiceInstance = {
    * @param {object} options - Additional options for the request
    * @returns {Promise<string>} - The generated response
    */
-  generateResponse: async (prompt, options = {}) => {
+  generateResponse: async function(prompt, options = {}) {
     try {
       console.log('Generating response from OpenAI...');
       
       // Default options
       const defaultOptions = {
-        model: openaiService.DEFAULT_MODEL,
+        model: openaiServiceInstance.DEFAULT_MODEL,
         temperature: 0.8,   // Higher value for more creative responses
         maxTokens: 1500,    // Generous length for detailed analysis
         topP: 0.9,
@@ -67,7 +67,7 @@ const openaiServiceInstance = {
       
       // Make request to OpenAI API
       const response = await axios.post(
-        openaiService.API_BASE_URL,
+        this.API_BASE_URL,
         {
           model: requestOptions.model,
           messages: messages,
@@ -79,7 +79,7 @@ const openaiServiceInstance = {
         },
         {
           headers: {
-            'Authorization': `Bearer ${openaiService.API_KEY}`,
+            'Authorization': `Bearer ${this.API_KEY}`,
             'Content-Type': 'application/json'
           }
         }
@@ -114,7 +114,7 @@ const openaiServiceInstance = {
    * @param {object} options - Additional options for the analysis
    * @returns {Promise<string>} - Gary's detailed analysis
    */
-  generateGaryAnalysis: async (gameData, newsData, options = {}) => {
+  generateGaryAnalysis: async function(gameData, newsData, options = {}) {
     try {
       // Prepare a detailed system prompt defining Gary's persona and expertise
       const systemPrompt = {
@@ -173,7 +173,7 @@ const openaiServiceInstance = {
       const messages = [systemPrompt, userPrompt];
       
       // Generate the analysis
-      const analysis = await openaiServiceInstance.generateResponse(messages, {
+      const analysis = await this.generateResponse(messages, {
         temperature: options.temperature || 0.8,
         maxTokens: options.maxTokens || 1500,
         model: options.model || 'gpt-4-0125-preview'
