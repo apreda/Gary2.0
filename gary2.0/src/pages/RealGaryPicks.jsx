@@ -121,23 +121,44 @@ export function RealGaryPicks() {
           
           try {
             // Generate new picks
+            console.log('About to call generateDailyPicks()');
             const newPicks = await picksService.generateDailyPicks();
-            console.log(`Generated ${newPicks ? newPicks.length : 0} new picks`);
-            console.log('Pick data details:', JSON.stringify(newPicks).substring(0, 200) + '...');
+            console.log('Raw result from generateDailyPicks:', newPicks);
             
-            // Ensure newPicks is an array before setting state
-            if (newPicks && Array.isArray(newPicks)) {
-              if (newPicks.length > 0) {
-                // Store the generated picks
-                setPicks(newPicks);
-                console.log('Successfully set picks in state. Picks count:', newPicks.length);
+            // Force it to be an array if we got something
+            let picksArray = [];
+            
+            if (newPicks) {
+              if (Array.isArray(newPicks)) {
+                console.log(`Successfully received array of ${newPicks.length} picks`);
+                picksArray = newPicks;
+              } else if (typeof newPicks === 'object') {
+                // If we got a single pick object, wrap it in an array
+                console.log('Received a single pick object, converting to array');
+                picksArray = [newPicks];
               } else {
-                console.error('Error: Generated picks array is empty');
-                setLoadError('No picks available. Please try again later when more games are available.');
+                console.error('Unknown data format received:', newPicks);
+              }
+            }
+            
+            // Now handle the picks array
+            console.log(`Final picks array has ${picksArray.length} items:`, picksArray);
+            
+            if (picksArray.length > 0) {
+              // Validate that each pick has the required properties
+              const validPicks = picksArray.filter(pick => 
+                pick && pick.id && pick.game && pick.league && pick.shortPick);
+                
+              if (validPicks.length > 0) {
+                setPicks(validPicks);
+                console.log('Successfully set picks in state. Valid picks count:', validPicks.length);
+              } else {
+                console.error('Error: No valid picks found in array');
+                setLoadError('No valid picks available. Please try again later.');
               }
             } else {
-              console.error('Error: Invalid picks data received', newPicks);
-              setLoadError('Unable to display picks data. Please try again later.');
+              console.error('Error: No picks data received');
+              setLoadError('No picks available. Please try again later when more games are available.');
             }
             
             // Mark as generated to prevent scheduler from regenerating

@@ -4,9 +4,9 @@ import axios from 'axios';
  * Service for fetching and processing sports data from TheSportsDB API
  */
 export const sportsDataService = {
-  // API configuration - Using our own proxy to avoid CORS issues
-  API_BASE_URL: '/api/sportsdb',
-  API_KEY: import.meta.env?.VITE_SPORTSDB_API_KEY || '943802', // Using the environment variable
+  // API configuration - Using direct API access with public key for reliability
+  API_BASE_URL: 'https://www.thesportsdb.com/api/v1/json',
+  API_KEY: '3', // Using the free tier public key (documented as reliable for production)
   
   /**
    * Convert league names to TheSportsDB format
@@ -32,10 +32,9 @@ export const sportsDataService = {
   getTeamData: async (teamName) => {
     try {
       console.log(`TheSportsDB API: Fetching team data for ${teamName}`);
-      // Use our proxy API to avoid CORS issues
-      const response = await axios.get(`${sportsDataService.API_BASE_URL}`, {
+      // Direct API call for better reliability in production
+      const response = await axios.get(`${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/searchteams.php`, {
         params: { 
-          endpoint: 'searchteams.php',
           t: teamName 
         }
       });
@@ -59,10 +58,9 @@ export const sportsDataService = {
    */
   getTeamLastEvents: async (teamId, limit = 5) => {
     try {
-      // Use our proxy API to avoid CORS issues
-      const response = await axios.get(`${sportsDataService.API_BASE_URL}`, {
+      // Direct API call for better reliability in production
+      const response = await axios.get(`${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/eventslast.php`, {
         params: { 
-          endpoint: 'eventslast.php',
           id: teamId 
         }
       });
@@ -109,10 +107,9 @@ export const sportsDataService = {
   getLeagueStandings: async (leagueName) => {
     try {
       const mappedLeague = sportsDataService.mapLeagueToSportsDBFormat(leagueName);
-      // Use our proxy API to avoid CORS issues
-      const response = await axios.get(`${sportsDataService.API_BASE_URL}`, {
+      // Direct API call for better reliability in production
+      const response = await axios.get(`${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/lookuptable.php`, {
         params: { 
-          endpoint: 'lookuptable.php',
           l: mappedLeague 
         }
       });
