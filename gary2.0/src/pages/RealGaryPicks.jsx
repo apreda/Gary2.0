@@ -331,7 +331,7 @@ export function RealGaryPicks() {
                 {picks.map((pick, index) => (
                   <div 
                     key={pick.id}
-                    className={`pick-card card-position-${(index - activeCardIndex + 7) % 7} ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.league === 'PARLAY' ? 'parlay-card' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
+                    className={`pick-card card-position-${(index - activeCardIndex + 7) % 7} ${index === activeCardIndex ? 'active' : ''} ${flippedCards[pick.id] ? 'flipped' : ''} ${pick.primeTimeCard ? 'prime-time-card' : ''} ${pick.silverCard ? 'silver-card' : ''}`}
                   >
                     <div className="pick-card-inner">
                         <div className="pick-card-front" onClick={(e) => flipCard(pick.id, e)}>
@@ -341,7 +341,7 @@ export function RealGaryPicks() {
                           </div>
                           
                           <div className="pick-card-game">
-                            {pick.league === 'PARLAY' ? 'PARLAY OF THE DAY' : pick.game}
+                            {pick.game || 'Game Not Available'}
                           </div>
                           
                           <div className="pick-card-center-content">
@@ -367,9 +367,8 @@ export function RealGaryPicks() {
                             </button>
                           </div>
                           
-                          {pick.league !== 'PARLAY' ? (
-                            <div className="pick-card-content" style={{display: 'none'}}>
-                              <div className="pick-card-bet-type">{pick.league === 'PARLAY' ? pick.betType : "Gary's Pick"}</div>
+                          <div className="pick-card-content" style={{display: 'none'}}>
+                              <div className="pick-card-bet-type">Gary's Pick</div>
                               <div className="pick-card-bet">
                                 {(() => {
                                   try {
@@ -447,54 +446,6 @@ export function RealGaryPicks() {
                                 </div>
                               </div>
                             </div>
-                          ) : (
-                          // Parlay Card Content
-                          <div className="parlay-card-content">
-                            <div className="parlay-card-title">PARLAY OF THE DAY</div>
-                            {pick.parlayOdds && (
-                              <div className="parlay-card-odds">
-                                {pick.parlayOdds.startsWith('+') ? pick.parlayOdds : `+${pick.parlayOdds}`}
-                              </div>
-                            )}
-                            
-                            {pick.parlayLegs && pick.parlayLegs.length > 0 && (
-                              <div className="parlay-legs">
-                                {pick.parlayLegs.map((leg, legIndex) => (
-                                  <div key={legIndex} className="parlay-leg">
-                                    <div className="parlay-leg-header">
-                                      <div className="parlay-leg-league">{leg.league}</div>
-                                      <div className="parlay-leg-game">{leg.game}</div>
-                                    </div>
-                                    <div className="parlay-leg-pick">
-                                      {leg.pick || `${leg.team || leg.moneyline} ML ${leg.odds || ''}`}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            
-                            {/* Analysis content for Parlay */}
-                            <div className="gary-analysis parlay-analysis">
-                              <div className="gary-analysis-content">
-                                {pick.garysAnalysis || pick.analysis || 'Gary has combined these picks for maximum value.'}
-                              </div>
-                            </div>
-                            
-                            {/* Confidence Level for Parlay */}
-                            {pick.confidenceLevel && (
-                              <div className="confidence-level">
-                                <div className="confidence-label">Confidence</div>
-                                <div className="confidence-meter">
-                                  <div 
-                                    className="confidence-fill" 
-                                    style={{ width: `${pick.confidenceLevel}%` }}
-                                  ></div>
-                                </div>
-                                <div className="confidence-value">{pick.confidenceLevel}%</div>
-                              </div>
-                            )}
-                          </div>
-                        )}
                         
                         {/* No footer on front side - using View Pick button instead */}
                       </div>
@@ -506,7 +457,6 @@ export function RealGaryPicks() {
                         </div>
                         
                         <div className="pick-card-back-content">
-                          {pick.league !== 'PARLAY' ? (
                             <>
                               <div className="pick-card-game-details">
                                 <div className="pick-selection">
@@ -587,9 +537,6 @@ export function RealGaryPicks() {
                                 </button>
                               </div>
                             </>
-                          ) : (
-                            <></>
-                          )}
                         </div>
                         
                         <div className="pick-card-bottom">
