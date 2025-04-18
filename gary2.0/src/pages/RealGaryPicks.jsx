@@ -390,22 +390,32 @@ export function RealGaryPicks() {
           </div>
         ) : (
           visiblePicks.length > 0 ? (
-            <div className="pick-card-container">
+            <div className="pick-card-container" style={{position: 'relative', minHeight: '500px'}}>
+              {console.log('Rendering carousel with picks:', visiblePicks)}
+              {console.log('Active card index:', activeCardIndex)}
               {visiblePicks.map((pick, index) => {
                 // Validate each pick has the required data
                 if (!pick || !pick.id) {
                   console.error('Invalid pick data:', pick);
                   return null;
                 }
+                console.log(`Rendering pick card ${index}:`, pick.id, 'isActive:', index === activeCardIndex);
                 return (
                   <PickCard
                     key={pick.id}
                     pick={pick}
                     isActive={index === activeCardIndex}
-                    isFlipped={flippedCards[pick.id]}
+                    isFlipped={flippedCards[pick.id] || false}
                     onFlip={() => handleCardFlip(pick.id)}
                     onTrackBet={() => openBetTracker(pick)}
-                    userDecision={userDecisions[pick.id]}
+                    userDecision={userDecisions[pick.id] || null}
+                    style={{
+                      display: index === activeCardIndex ? 'block' : 'none',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%'
+                    }}
                   />
                 );
               })}
