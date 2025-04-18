@@ -776,19 +776,19 @@ const picksService = {
         console.log('Raw sports data sample:', JSON.stringify(sportsList.slice(0, 3)));
       }
       
-      // 3. Prioritize popular sports that are currently in season
+      // 3. Focus only on NBA, MLB, and NHL for now as requested
       const sportPriority = [
         'basketball_nba', 
-        'basketball_ncaab',
         'baseball_mlb', 
-        'americanfootball_nfl',
-        'americanfootball_ncaaf',
-        'icehockey_nhl',
-        'soccer_epl',
-        'soccer_uefa_champs_league',
-        'soccer_spain_la_liga',
-        'soccer_italy_serie_a'
+        'icehockey_nhl'
       ];
+      
+      // Filter the active sports to ONLY include NBA, MLB, and NHL
+      activeSports = activeSports.filter(sport => [
+        'basketball_nba', 
+        'baseball_mlb', 
+        'icehockey_nhl'
+      ].includes(sport));
       
       // Sort sports by priority and take top 5 (to allow for up to 5 regular picks)
       const prioritizedSports = activeSports.sort((a, b) => {
