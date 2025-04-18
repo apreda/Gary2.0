@@ -22,6 +22,9 @@ import FreePicksLimit from '../components/FreePicksLimit';
 import LoadingState from '../components/LoadingState';
 import HeaderNav from '../components/HeaderNav';
 
+// Import root fix CSS FIRST to ensure dark background at all DOM levels
+import '../styles/consolidated/root-fix.css';
+
 // Import Fix CSS files ONLY (no duplicates) to ensure the locked-in gold/black design
 import './CardFrontFix.css';
 import './CardBackFix.css';
