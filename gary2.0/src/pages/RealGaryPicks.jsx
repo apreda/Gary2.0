@@ -25,6 +25,17 @@ import HeaderNav from '../components/HeaderNav';
 // Styles
 import '../styles/RealGaryPicks.css';
 
+// Import all Fix CSS files to ensure consistent gold/black styling
+import './CardFrontFix.css';
+import './CardBackFix.css';
+import './CardFlipFix.css';
+import './ButtonFix.css';
+import './AnalysisBulletsFix.css';
+import './CarouselFix.css';
+import './GaryAnalysisFix.css';
+import './ParlayCardFix.css';
+import './RegularCardFix.css';
+
 export function RealGaryPicks() {
   // Access user plan context
   const { userPlan, updateUserPlan } = useUserPlan();
@@ -377,7 +388,7 @@ export function RealGaryPicks() {
   const reachedFreeLimit = activeCardIndex >= 2 && userPlan !== 'premium';
   
   return (
-    <div className="real-gary-picks">
+    <div className="real-gary-picks" style={{backgroundColor: '#111111', color: 'white', minHeight: '100vh'}}>
       <HeaderNav title={pageTitle} indicators={indicators} />
       
       <div className="picks-container" {...swipeHandlers}>
