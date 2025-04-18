@@ -126,10 +126,15 @@ export function RealGaryPicks() {
             console.log('Pick data details:', JSON.stringify(newPicks).substring(0, 200) + '...');
             
             // Ensure newPicks is an array before setting state
-            if (newPicks && Array.isArray(newPicks) && newPicks.length > 0) {
-              // Store the generated picks
-              setPicks(newPicks);
-              console.log('Successfully set picks in state. Picks count:', newPicks.length);
+            if (newPicks && Array.isArray(newPicks)) {
+              if (newPicks.length > 0) {
+                // Store the generated picks
+                setPicks(newPicks);
+                console.log('Successfully set picks in state. Picks count:', newPicks.length);
+              } else {
+                console.error('Error: Generated picks array is empty');
+                setLoadError('No picks available. Please try again later when more games are available.');
+              }
             } else {
               console.error('Error: Invalid picks data received', newPicks);
               setLoadError('Unable to display picks data. Please try again later.');
