@@ -174,11 +174,8 @@ const picksService = {
         
         console.log('STORAGE FIX: Initial entry created successfully');
         
-        // Save picks to localStorage as backup
-        console.log('Saving picks to localStorage as backup...');
-        localStorage.setItem('dailyPicks', JSON.stringify(cleanedPicks));
-        localStorage.setItem('dailyPicksTimestamp', timestamp);
-        localStorage.setItem('dailyPicksDate', currentDateString);
+        // No longer saving to localStorage to ensure consistent behavior across all devices
+        console.log('Skipping localStorage - ensuring all data is stored only in Supabase for universal access');
         
         // STEP 2: Try to perform a separate operation to save the picks data
         // We could try multiple approaches here, but at minimum we've created the record

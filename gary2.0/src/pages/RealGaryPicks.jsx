@@ -212,7 +212,8 @@ export function RealGaryPicks() {
   // Fetch picks when component mounts or check for force parameter
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const shouldForceGenerate = params.get('forcePicks') === 'true' || localStorage.getItem('forceGeneratePicks') === 'true';
+    // Using only URL parameters, not localStorage, to ensure consistency across all devices
+    const shouldForceGenerate = params.get('forcePicks') === 'true';
     
     if (shouldForceGenerate) {
       console.log('Force generation flag detected, regenerating picks...');
