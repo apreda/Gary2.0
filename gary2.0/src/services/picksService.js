@@ -458,6 +458,21 @@ const picksService = {
    * @returns {Promise<Object>} - Enhanced pick with detailed analysis
    */
   generatePickDetail: async (pick, homeTeam, awayTeam, picks = []) => {
+    // Extract home and away team from the pick object if not provided
+    if (!homeTeam || !awayTeam) {
+      try {
+        // Extract teams from the game property e.g. "Atlanta Hawks vs Miami Heat"
+        if (pick && pick.game) {
+          const gameParts = pick.game.split(' vs ');
+          if (gameParts.length === 2) {
+            homeTeam = homeTeam || gameParts[0].trim();
+            awayTeam = awayTeam || gameParts[1].trim();
+          }
+        }
+      } catch (parseError) {
+        console.warn('Could not parse team names from pick data:', parseError);
+      }
+    }
     console.log(`AI-POWERED GARY: Generating detailed analysis for ${pick.betType} pick: ${pick.shortPick}`);
     
     try {
@@ -479,14 +494,18 @@ const picksService = {
         ]);
         
         // Format everything into a comprehensive context
+        // Adding null checks to prevent errors with undefined variables
+        const homeTeamName = homeTeam || 'HOME TEAM';
+        const awayTeamName = awayTeam || 'AWAY TEAM';
+        
         realTimeInfo = `
           GAME NEWS AND BETTING TRENDS:
           ${gameNews || 'No game-specific news available.'}
 
-          ${homeTeam.toUpperCase()} INSIGHTS:
+          ${homeTeamName.toUpperCase()} INSIGHTS:
           ${homeInsights || 'No team-specific insights available.'}
 
-          ${awayTeam.toUpperCase()} INSIGHTS:
+          ${awayTeamName.toUpperCase()} INSIGHTS:
           ${awayInsights || 'No team-specific insights available.'}
         `;
         
