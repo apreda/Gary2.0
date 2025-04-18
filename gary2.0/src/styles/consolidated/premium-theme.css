@@ -1,0 +1,18 @@
+/**
+ * GARY 2.0 - PREMIUM THEME
+ * 
+ * Master CSS file that imports all consolidated style files
+ * This provides a single source of truth for the gold/black premium styling
+ */
+
+/* Import Design System (colors, typography, shared components) */
+@import './design-system.css';
+
+/* Import Pick Card styles (front, back, flip animations) */
+@import './pick-cards.css';
+
+/* Import Carousel styles (fanned-out card display) */
+@import './carousel.css';
+
+/* Import Page Layouts (RealGaryPicks and other page structures) */
+@import './page-layouts.css';
