@@ -71,7 +71,18 @@ const openaiServiceInstance = {
       promptString = prompt;
     }
     
-    return `openai_${options.model || this.DEFAULT_MODEL}_${Buffer.from(promptString).toString('base64').substring(0, 100)}`;
+    // Create a hash from the prompt string (browser-compatible)
+    const hashPrompt = (str) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return hash.toString(36); // Convert to base36 for shorter strings
+    };
+    
+    return `openai_${options.model || this.DEFAULT_MODEL}_${hashPrompt(promptString)}`;
   },
   
   /**
