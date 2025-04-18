@@ -41,17 +41,24 @@
   font-size: 16px;
   cursor: pointer;
   transition: background-color 0.2s;
+  font-weight: bold;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.2);
 }
 
 .prev-pick:hover,
 .next-pick:hover {
   background-color: #c9a535;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
 .prev-pick.disabled,
 .next-pick.disabled {
-  background-color: #ccc;
+  background-color: #333;
+  color: #777;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .error-state {
@@ -126,4 +133,86 @@
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Premium title styling */
+.gary-picks-title {
+  color: #d4af37;
+  font-size: 28px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 25px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  letter-spacing: 1px;
+}
+
+/* Pick indicators styling */
+.pick-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 10px;
+}
+
+.pick-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #555;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.pick-indicator.active {
+  background-color: #d4af37;
+  transform: scale(1.2);
+}
+
+/* Pick navigation layout */
+.pick-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  margin: 25px auto 0;
+}
+
+/* Arrow styling */
+.nav-arrow {
+  display: inline-block;
+  margin: 0 4px;
+}
+
+/* Container styling */
+.gary-picks-container {
+  background-color: #111111;
+  border-radius: 12px;
+  border: 1px solid #d4af37;
+  padding: 30px;
+  max-width: 800px;
+  margin: 0 auto;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  position: relative;
+  overflow: hidden;
+  min-height: 600px;
+}
+
+/* Add a subtle gold pattern to the background */
+.gary-picks-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: linear-gradient(135deg, #d4af37 25%, transparent 25%),
+                    linear-gradient(225deg, #d4af37 25%, transparent 25%),
+                    linear-gradient(45deg, #d4af37 25%, transparent 25%),
+                    linear-gradient(315deg, #d4af37 25%, transparent 25%);
+  background-position: 10px 0, 10px 0, 0 0, 0 0;
+  background-size: 20px 20px;
+  background-repeat: repeat;
+  opacity: 0.03;
+  z-index: 0;
 }
