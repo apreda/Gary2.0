@@ -29,6 +29,7 @@ import { ToastProvider } from "./components/ui/ToastProvider";
 import FontLoader from "./components/FontLoader";
 import "./assets/css/animations.css";
 import "./styles/base.css";
+import "./styles/consolidated/root-fix.css"; // Import root-fix to ensure consistent dark background
 
 function AppContent() {
   const location = useLocation();

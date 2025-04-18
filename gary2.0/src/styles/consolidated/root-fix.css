@@ -1,0 +1,51 @@
+/**
+ * ROOT BACKGROUND FIX
+ * 
+ * This file ensures that the dark background is applied to ALL layers of the DOM hierarchy
+ * to prevent white backgrounds from peeking through.
+ */
+
+/* Target ALL key elements in the DOM hierarchy to ensure consistent background */
+html, 
+body, 
+#root, 
+#app, 
+.App, 
+.real-gary-picks,
+.pick-card-container,
+.picks-container,
+.carousel-container,
+.carousel-track {
+  background-color: #111111 !important; /* Force black background */
+  color: white;
+}
+
+/* Target any possible containers */
+div[class*="container"],
+main,
+section,
+article {
+  background-color: #111111 !important;
+}
+
+/* Target Suspense fallback which could show white */
+.suspense-fallback {
+  background-color: #111111 !important;
+}
+
+/* Ensure no white backgrounds in flex containers */
+.flex,
+.flex-1,
+.flex-grow,
+[class*="flex-col"],
+[class*="flex-row"] {
+  background-color: #111111 !important;
+}
+
+/* Fix for theme toggle issues */
+:root,
+:root.dark,
+.dark-theme {
+  background-color: #111111 !important;
+  color-scheme: dark !important; /* Force dark color scheme */
+}
