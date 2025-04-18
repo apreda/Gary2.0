@@ -408,7 +408,7 @@ const picksService = {
       const responseText = await openaiService.generateResponse(messages, {
         temperature: 0.7,
         maxTokens: 500,
-        model: "gpt-4-0125-preview"
+        model: openaiService.DEFAULT_MODEL // Use the default model instead of hard-coding
       });
       
       // Process the response text
