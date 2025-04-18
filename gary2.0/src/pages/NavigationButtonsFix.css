@@ -1,0 +1,122 @@
+/* Gold Navigation Buttons Fix - restore the original styling */
+
+/* Standard button base styling with increased specificity */
+html body .pick-navigation .prev-pick, 
+html body .pick-navigation .next-pick,
+html body .premium-button,
+.prev-pick, 
+.next-pick,
+.premium-button {
+  background-color: #d4af37 !important;
+  color: #111111 !important; 
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 10px 20px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+/* Button hover effects */
+html body .pick-navigation .prev-pick:hover, 
+html body .pick-navigation .next-pick:hover,
+html body .premium-button:hover,
+.prev-pick:hover, 
+.next-pick:hover,
+.premium-button:hover {
+  background-color: #e5c158 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Button active/press effects */
+html body .pick-navigation .prev-pick:active, 
+html body .pick-navigation .next-pick:active,
+html body .premium-button:active,
+.prev-pick:active, 
+.next-pick:active,
+.premium-button:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Disabled button styles */
+html body .pick-navigation .prev-pick.disabled, 
+html body .pick-navigation .next-pick.disabled,
+html body .premium-button.disabled,
+.prev-pick.disabled, 
+.next-pick.disabled,
+.premium-button.disabled {
+  background-color: #8c7729 !important;
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Navigation arrow styling */
+.nav-arrow {
+  font-size: 18px !important;
+  font-weight: bold !important;
+  margin: 0 4px !important;
+}
+
+/* Pick indicators styling */
+.pick-indicators {
+  display: flex !important;
+  gap: 8px !important;
+  margin: 0 10px !important;
+}
+
+.pick-indicator {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  background-color: #333333 !important;
+  border: 1px solid rgba(212, 175, 55, 0.5) !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+}
+
+.pick-indicator.active,
+.gold-indicator {
+  background-color: #d4af37 !important;
+  transform: scale(1.2) !important;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.6) !important;
+}
+
+/* Navigation container */
+.pick-navigation {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  margin-top: 20px !important;
+  padding: 10px !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Premium navigation specific styles */
+.premium-navigation {
+  background-color: rgba(17, 17, 17, 0.8) !important;
+  border-radius: 8px !important;
+  padding: 15px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(212, 175, 55, 0.2) !important;
+}
+
+.premium-indicators .pick-indicator {
+  width: 14px !important;
+  height: 14px !important;
+}

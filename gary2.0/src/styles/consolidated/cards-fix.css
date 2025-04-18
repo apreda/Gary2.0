@@ -1,0 +1,155 @@
+/**
+ * Comprehensive card styling fix to ensure proper gold/black rendering
+ * This consolidates all card-related styling and forces the dark theme
+ */
+
+/* Force dark background on all card elements */
+.pick-card,
+.card-container,
+.card-inner,
+.card-front,
+.card-back,
+.pick-card-wrapper,
+.gary-picks-container,
+.pick-card-container {
+  background-color: #111111 !important;
+  color: white !important;
+}
+
+/* Ensure borders are properly rendered */
+.card-front, 
+.card-back {
+  border: 1px solid rgba(212, 175, 55, 0.3) !important;
+  box-shadow: 
+    0 10px 15px -3px rgba(0, 0, 0, 0.2),
+    0 4px 6px -2px rgba(0, 0, 0, 0.1),
+    0 0 10px rgba(212, 175, 55, 0.15) !important;
+}
+
+/* Ensure gold accents are visible */
+.gold-accent-line,
+.card-front .absolute.top-0.left-0.w-full.h-1,
+.card-back .absolute.top-0.left-0.w-full.h-1 {
+  background: linear-gradient(to right, transparent, #d4af37, transparent) !important;
+  height: 2px !important;
+  opacity: 1 !important;
+}
+
+/* Fix text colors */
+.gold-text,
+.text-\[\#d4af37\],
+.gary-picks-title,
+.premium-pick,
+.pick-team-container .text-2xl {
+  color: #d4af37 !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Fix badge styling */
+.bg-\[\#d4af37\] {
+  background-color: #d4af37 !important;
+  color: black !important;
+  border: none !important;
+}
+
+/* Fix buttons */
+button.bg-\[\#d4af37\] {
+  background-color: #d4af37 !important;
+  color: black !important;
+  font-weight: bold !important;
+  transition: all 0.3s ease !important;
+}
+
+button.bg-\[\#d4af37\]:hover {
+  background-color: #e5c158 !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Fix dividers */
+.border-\[\#d4af37\]\/30,
+.border-t {
+  border-color: rgba(212, 175, 55, 0.3) !important;
+  opacity: 1 !important;
+}
+
+/* Fix images and logos */
+.card-front img,
+.card-back img,
+.pick-card-wrapper img {
+  filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.5)) !important;
+  z-index: 10 !important;
+}
+
+/* Fix card flipping */
+.pick-card-wrapper .relative {
+  perspective: 1500px !important;
+  transform-style: preserve-3d !important;
+}
+
+.pick-card-wrapper .relative > div {
+  transition: transform 0.8s ease !important;
+  transform-style: preserve-3d !important;
+}
+
+/* Fix content visibility */
+.card-front *,
+.card-back * {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Fix z-index issues */
+.card-front,
+.card-back {
+  z-index: 5 !important;
+}
+
+.gary-picks-container {
+  z-index: 10 !important;
+}
+
+/* Ensure proper backface visibility */
+.pick-card-wrapper [style*="backface-visibility"] {
+  -webkit-backface-visibility: hidden !important;
+  backface-visibility: hidden !important;
+}
+
+/* Fix card hover effects */
+.card-front:hover,
+.card-back:hover {
+  box-shadow: 
+    0 15px 25px -5px rgba(0, 0, 0, 0.2),
+    0 10px 10px -5px rgba(0, 0, 0, 0.1),
+    0 0 15px rgba(212, 175, 55, 0.25) !important;
+}
+
+/* Fix background gradients */
+.bg-gradient-to-b.from-\[\#111111\].to-\[\#222222\] {
+  background: linear-gradient(to bottom, #111111, #222222) !important;
+}
+
+/* Force dark theme on all content elements */
+.pick-card-wrapper * {
+  background-color: transparent;
+}
+
+.gary-picks-container .carousel-container {
+  background-color: #111111 !important;
+}
+
+/* Ensure team logo container has proper styling */
+.w-full.h-48.bg-gradient-to-b.from-\[\#111111\].to-\[\#222222\] {
+  background: linear-gradient(to bottom, #111111, #1d1d1d) !important;
+  position: relative !important;
+}
+
+.w-full.h-48.bg-gradient-to-b.from-\[\#111111\].to-\[\#222222\]:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.1), transparent 70%) !important;
+  opacity: 0.5 !important;
+}

@@ -2,7 +2,7 @@
  * RealGaryPicks component
  * Displays Gary's daily betting picks
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useSwipeable } from 'react-swipeable';
@@ -25,6 +25,9 @@ import HeaderNav from '../components/HeaderNav';
 // Import root fix CSS FIRST to ensure dark background at all DOM levels
 import '../styles/consolidated/root-fix.css';
 
+// Import our comprehensive card fix to ensure gold/black design
+import '../styles/consolidated/cards-fix.css';
+
 // Import Fix CSS files ONLY (no duplicates) to ensure the locked-in gold/black design
 import './CardFrontFix.css';
 import './CardBackFix.css';
@@ -35,7 +38,29 @@ import './CarouselFix.css';
 import './GaryAnalysisFix.css';
 import './ParlayCardFix.css';
 import './RegularCardFix.css';
+
+// Import the updated NavigationButtonsFix for gold buttons
+import './NavigationButtonsFix.css';
 import './NavigationFix.css';
+
+// Utility to validate and fix pick data
+function validatePickData(pick) {
+  if (!pick) return null;
+  
+  return {
+    id: pick.id || `pick-${Date.now()}`,
+    game: pick.game || 'Game information unavailable',
+    league: pick.league || 'SPORT',
+    pickTeam: pick.pickTeam || 'Team Pick',
+    betType: pick.betType || 'Moneyline',
+    shortPick: pick.shortPick || 'Pick details unavailable',
+    confidenceLevel: pick.confidenceLevel || 75,
+    analysis: pick.analysis || "Gary's analysis will appear here when you flip the card...",
+    garysBullets: pick.garysBullets || [],
+    time: pick.time || 'Today',
+    ...(pick || {})
+  };
+}
 
 export function RealGaryPicks() {
   // Access user plan context
@@ -59,16 +84,19 @@ export function RealGaryPicks() {
   const [betAmount, setBetAmount] = useState('');
   const [betType, setBetType] = useState('');
   const [betOdds, setBetOdds] = useState('');
+  const [currentBetPick, setCurrentBetPick] = useState(null);
+  const [betTrackedPickId, setBetTrackedPickId] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
-  const [userDecisions, setUserDecisions] = useState({});
-  const [nextPicksInfo, setNextPicksInfo] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [userDecisions, setUserDecisions] = useState({}); // Track user decisions on each pick
   
+  // Ref to track component mount state
+  const isMounted = useRef(true);
+
   // Define the loadPicks function - NO FALLBACKS, only real data from Supabase
   const loadPicks = async () => {
-    setIsLoading(true);
     try {
+      if (!isMounted.current) return;
       setLoading(true);
       setLoadError(null); // Reset any previous errors
       
@@ -91,40 +119,12 @@ export function RealGaryPicks() {
           throw new Error(`Supabase query error: ${error.message}`);
         }
         
-        if (data && data.length > 0) {
-          console.log(`Found ${data.length} picks in Supabase for today!`);
-          
-          // For each pick in the database result, we need to extract the picks array from the JSON
-          let allPicks = [];
-          
-          // Loop through each row (usually just one)
-          data.forEach(row => {
-            if (row.picks && Array.isArray(row.picks)) {
-              console.log(`Row has ${row.picks.length} picks`);
-              allPicks = [...allPicks, ...row.picks];
-            } else if (row.picks) {
-              try {
-                // Try to parse if it's a string
-                const parsedPicks = JSON.parse(row.picks);
-                if (Array.isArray(parsedPicks)) {
-                  console.log(`Parsed ${parsedPicks.length} picks from JSON string`);
-                  allPicks = [...allPicks, ...parsedPicks];
-                }
-              } catch (e) {
-                console.error('Error parsing picks JSON:', e);
-              }
-            }
-          });
-          
-          if (allPicks.length > 0) {
-            console.log('Setting picks data from Supabase...');
-            setPicks(allPicks);
-            setLoading(false);
-            setIsLoading(false);
-            return;
-          } else {
-            console.log('No valid picks found in Supabase data');
-          }
+        if (Array.isArray(data) && data.length > 0) {
+          console.log(`Loaded ${data.length} picks from database:`, data[0]);
+          // Validate and fix pick data
+          const validatedPicks = data.map(pick => validatePickData(pick)).filter(Boolean);
+          // Set picks with the real data
+          setPicks(validatedPicks);
         } else {
           // No picks found for today in Supabase - always generate new picks
           console.log('No picks found in Supabase for today - generating new picks...');
@@ -177,25 +177,21 @@ export function RealGaryPicks() {
             schedulerService.markPicksAsGenerated();
             
             setLoading(false);
-            setIsLoading(false);
           } catch (genError) {
             console.error('Error generating new picks:', genError);
             setLoadError('Unable to generate new picks. Please try again later.');
             setLoading(false);
-            setIsLoading(false);
           }
         }
       } catch (supabaseError) {
         console.error('Error accessing Supabase:', supabaseError);
         setLoadError('Unable to access picks database. Please try again later.');
         setLoading(false);
-        setIsLoading(false);
       }
     } catch (error) {
       console.error('Error in loadPicks:', error);
       setLoadError('An unexpected error occurred. Please try again later.');
       setLoading(false);
-      setIsLoading(false);
     }
   };
   
@@ -249,18 +245,20 @@ export function RealGaryPicks() {
   
   // Fetch picks when component mounts or check for force parameter
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    // Using only URL parameters, not localStorage, to ensure consistency across all devices
-    const shouldForceGenerate = params.get('forcePicks') === 'true';
+    isMounted.current = true;
+    loadPicks();
     
-    if (shouldForceGenerate) {
-      console.log('Force generation flag detected, regenerating picks...');
-      forceGeneratePicks();
-    } else {
-      loadPicks();
-    }
-  }, [location]);
-  
+    // Force dark background
+    document.body.style.backgroundColor = '#111111';
+    document.documentElement.style.backgroundColor = '#111111';
+    
+    // Cleanup function
+    return () => {
+      isMounted.current = false;
+      // Any cleanup needed when unmounting
+    };
+  }, []);
+
   // Handle card flipping
   const handleCardFlip = (pickId) => {
     setFlippedCards((prev) => ({
@@ -389,10 +387,10 @@ export function RealGaryPicks() {
   const reachedFreeLimit = activeCardIndex >= 2 && userPlan !== 'premium';
   
   return (
-    <div className="real-gary-picks dark-theme gold-accent">
+    <div className="real-gary-picks dark-theme gold-accent" style={{backgroundColor: '#111111', color: 'white'}}>
       <HeaderNav title={pageTitle} indicators={indicators} />
       
-      <div className="picks-container" {...swipeHandlers}>
+      <div className="picks-container" {...swipeHandlers} style={{backgroundColor: '#111111'}}>
         {loading ? (
           <LoadingState />
         ) : loadError ? (
@@ -402,7 +400,7 @@ export function RealGaryPicks() {
           </div>
         ) : (
           visiblePicks.length > 0 ? (
-            <div className="pick-card-container gary-picks-container">
+            <div className="pick-card-container gary-picks-container" style={{backgroundColor: '#111111'}}>
               <h2 className="gary-picks-title">Gary's Premium Pick</h2>
               <div className="carousel-container">
                 {console.log('Rendering carousel with picks:', visiblePicks)}
@@ -426,15 +424,18 @@ export function RealGaryPicks() {
                     
                     console.log(`Rendering pick card ${index} with position class ${positionClass}`);
                     
+                    // Ensure pick data is valid using our utility
+                    const validPick = validatePickData(pick);
+                    
                     return (
-                      <div key={pick.id} className={`pick-card card-position-${positionClass}`}>
+                      <div key={validPick.id} className={`pick-card card-position-${positionClass}`} style={{backgroundColor: '#111111'}}>
                         <PickCard
-                          pick={pick}
+                          pick={validPick}
                           isActive={index === activeCardIndex}
-                          isFlipped={flippedCards[pick.id] || false}
-                          onFlip={() => handleCardFlip(pick.id)}
-                          onTrackBet={() => openBetTracker(pick)}
-                          userDecision={userDecisions[pick.id] || null}
+                          isFlipped={flippedCards[validPick.id] || false}
+                          onFlip={() => handleCardFlip(validPick.id)}
+                          onTrackBet={() => openBetTracker(validPick)}
+                          userDecision={userDecisions[validPick.id] || null}
                         />
                       </div>
                     );
@@ -447,20 +448,55 @@ export function RealGaryPicks() {
               )}
               
               {!reachedFreeLimit && (
-                <div className="pick-navigation premium-navigation">
+                <div className="pick-navigation premium-navigation" style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginTop: '20px',
+                    padding: '10px',
+                    width: '100%',
+                    maxWidth: '600px',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                    backgroundColor: 'rgba(17, 17, 17, 0.8)',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                    border: '1px solid rgba(212, 175, 55, 0.2)'
+                  }}>
                   <button
                     onClick={handlePrevPick}
                     className={`prev-pick premium-button ${activeCardIndex === 0 ? 'disabled' : ''}`}
                     disabled={activeCardIndex === 0}
+                    style={{
+                      backgroundColor: '#d4af37',
+                      color: '#111111',
+                      fontWeight: 'bold',
+                      border: 'none',
+                      padding: '10px 20px',
+                      borderRadius: '4px',
+                      cursor: activeCardIndex === 0 ? 'not-allowed' : 'pointer',
+                      opacity: activeCardIndex === 0 ? 0.6 : 1
+                    }}
                   >
                     <span className="nav-arrow">&laquo;</span> Previous
                   </button>
-                  <div className="pick-indicators premium-indicators">
+                  <div className="pick-indicators premium-indicators" style={{ display: 'flex', gap: '8px', margin: '0 10px' }}>
                     {visiblePicks.map((_, idx) => (
                       <span 
                         key={idx} 
                         className={`pick-indicator ${idx === activeCardIndex ? 'active gold-indicator' : ''}`}
                         onClick={() => setActiveCardIndex(idx)}
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: idx === activeCardIndex ? '#d4af37' : '#333333',
+                          border: '1px solid rgba(212, 175, 55, 0.5)',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease',
+                          transform: idx === activeCardIndex ? 'scale(1.2)' : 'scale(1)',
+                          boxShadow: idx === activeCardIndex ? '0 0 8px rgba(212, 175, 55, 0.6)' : 'none'
+                        }}
                       />
                     ))}
                   </div>
@@ -468,6 +504,16 @@ export function RealGaryPicks() {
                     onClick={handleNextPick}
                     className={`next-pick premium-button ${activeCardIndex === visiblePicks.length - 1 ? 'disabled' : ''}`}
                     disabled={activeCardIndex === visiblePicks.length - 1}
+                    style={{
+                      backgroundColor: '#d4af37',
+                      color: '#111111',
+                      fontWeight: 'bold',
+                      border: 'none',
+                      padding: '10px 20px',
+                      borderRadius: '4px',
+                      cursor: activeCardIndex === visiblePicks.length - 1 ? 'not-allowed' : 'pointer',
+                      opacity: activeCardIndex === visiblePicks.length - 1 ? 0.6 : 1
+                    }}
                   >
                     Next <span className="nav-arrow">&raquo;</span>
                   </button>
@@ -505,11 +551,7 @@ export function RealGaryPicks() {
         />
       )}
       
-      {nextPicksInfo && (
-        <div className="next-picks-info">
-          <p>{nextPicksInfo}</p>
-        </div>
-      )}
+      {/* Removed nextPicksInfo since we're not using it in this version */}
     </div>
   );
 }
