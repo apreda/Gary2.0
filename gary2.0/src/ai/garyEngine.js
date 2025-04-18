@@ -153,14 +153,18 @@ export async function fetchRealTimeGameInfo(homeTeam, awayTeam, league) {
     ]);
     
     // Format everything into a comprehensive context
+    // Add null checks for team names before calling toUpperCase()
+    const safeHomeTeam = homeTeam || 'HOME TEAM';
+    const safeAwayTeam = awayTeam || 'AWAY TEAM';
+    
     const realTimeContext = `
       GAME NEWS AND BETTING TRENDS:
       ${gameNews || 'No game-specific news available.'}
 
-      ${homeTeam.toUpperCase()} INSIGHTS:
+      ${safeHomeTeam.toUpperCase()} INSIGHTS:
       ${homeInsights || 'No team-specific insights available.'}
 
-      ${awayTeam.toUpperCase()} INSIGHTS:
+      ${safeAwayTeam.toUpperCase()} INSIGHTS:
       ${awayInsights || 'No team-specific insights available.'}
     `;
     

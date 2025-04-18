@@ -164,24 +164,44 @@ const picksService = {
           // This ensures the picks are at least available locally
           await picksPersistenceService.savePicks(cleanedPicks);
           
-          // Method 2: Attempt to add a picks_text column via update to store JSON data
+          // Method 2: Update the actual picks column with the picks data
           try {
-            const picksJson = JSON.stringify(cleanedPicks);
-            const { error: textError } = await supabase
+            console.log('STORAGE FIX: Updating the picks column with actual picks data');
+            const { error: updateError } = await supabase
               .from('daily_picks')
               .update({
-                picks_text: picksJson,
-                picks_count: cleanedPicks.length,
+                picks: cleanedPicks,  // This is the critical fix - update the actual picks column
                 updated_at: new Date().toISOString()
               })
               .eq('date', currentDateString);
               
-            if (!textError) {
-              console.log('STORAGE FIX: Successfully stored picks text data');
+            if (!updateError) {
+              console.log('STORAGE FIX: Successfully updated picks column with all picks data');
+            } else {
+              console.error('Failed to update picks column:', updateError);
+              
+              // Fallback: Try to store as text (in case the JSON handling is causing issues)
+              try {
+                const picksJson = JSON.stringify(cleanedPicks);
+                const { error: textError } = await supabase
+                  .from('daily_picks')
+                  .update({
+                    picks_text: picksJson,
+                    picks_count: cleanedPicks.length,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('date', currentDateString);
+                  
+                if (!textError) {
+                  console.log('STORAGE FIX: Successfully stored picks text data as fallback');
+                }
+              } catch (textErr) {
+                console.warn('Could not store picks as text:', textErr);
+              }
             }
-          } catch (textErr) {
-            console.warn('Could not store picks as text:', textErr);
-            // This is just an additional attempt, not critical
+          } catch (updateErr) {
+            console.error('Error updating picks column:', updateErr);
+            // Try fallback with text storage
           }
           
           console.log('STORAGE FIX: Multiple backup approaches implemented');
@@ -378,7 +398,7 @@ const picksService = {
       
       // Call OpenAI API
       const response = await axios.post(`${baseUrl}/chat/completions`, {
-        model: "openai-chat",
+        model: "gpt-4-0125-preview",
         messages: [
           { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks. ALWAYS incorporate any current team statistics provided into your analysis." },
           { role: "user", content: prompt }
