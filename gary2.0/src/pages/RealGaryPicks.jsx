@@ -401,8 +401,9 @@ export function RealGaryPicks() {
           </div>
         ) : (
           visiblePicks.length > 0 ? (
-            <div className="pick-card-container" style={{minHeight: '500px', position: 'relative', border: '1px solid #d4af37', padding: '20px'}}>
-              <h2 style={{color: '#d4af37', marginBottom: '20px'}}>Gary's Pick of the Day</h2>
+            <div className="pick-card-container gary-picks-container">
+              <h2 className="gary-picks-title">Gary's Premium Pick</h2>
+              <div className="carousel-container">
               {console.log('Rendering carousel with picks:', visiblePicks)}
               {console.log('Active card index:', activeCardIndex)}
               {visiblePicks.map((pick, index) => {
@@ -428,14 +429,7 @@ export function RealGaryPicks() {
                   />
                 );
               })}
-              
-              {/* Fallback message if card doesn't render */}
-              {visiblePicks.length > 0 && (
-                <div style={{position: 'absolute', bottom: '20px', width: '100%', textAlign: 'center'}}>
-                  <p style={{color: '#d4af37'}}>Pick ID: {visiblePicks[activeCardIndex]?.id || 'Unknown'}</p>
-                  <p style={{color: 'white', marginTop: '10px'}}>Game: {visiblePicks[activeCardIndex]?.game || 'Unknown game'}</p>
-                </div>
-              )}
+              </div>
               
               {reachedFreeLimit && activeCardIndex > 2 && (
                 <FreePicksLimit onBack={() => setActiveCardIndex(0)} />
@@ -444,21 +438,27 @@ export function RealGaryPicks() {
               {!reachedFreeLimit && (
                 <div className="pick-navigation">
                   <button
-                    className={`prev-pick ${activeCardIndex === 0 ? 'disabled' : ''}`}
                     onClick={handlePrevPick}
+                    className={`prev-pick ${activeCardIndex === 0 ? 'disabled' : ''}`}
                     disabled={activeCardIndex === 0}
                   >
-                    &lt;
+                    <span className="nav-arrow">&laquo;</span> Previous
                   </button>
-                  <span className="pick-counter">
-                    {activeCardIndex + 1} / {visiblePicks.length}
-                  </span>
+                  <div className="pick-indicators">
+                    {visiblePicks.map((_, idx) => (
+                      <span 
+                        key={idx} 
+                        className={`pick-indicator ${idx === activeCardIndex ? 'active' : ''}`}
+                        onClick={() => setActiveCardIndex(idx)}
+                      />
+                    ))}
+                  </div>
                   <button
-                    className={`next-pick ${activeCardIndex === visiblePicks.length - 1 ? 'disabled' : ''}`}
                     onClick={handleNextPick}
+                    className={`next-pick ${activeCardIndex === visiblePicks.length - 1 ? 'disabled' : ''}`}
                     disabled={activeCardIndex === visiblePicks.length - 1}
                   >
-                    &gt;
+                    Next <span className="nav-arrow">&raquo;</span>
                   </button>
                 </div>
               )}
