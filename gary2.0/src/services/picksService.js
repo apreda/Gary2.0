@@ -859,37 +859,148 @@ const picksService = {
         
         // Generate a pick for this game
         try {
-          const pick = {
-            id: `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            league: sport.includes('basketball') ? 'NBA' : 
-                    sport.includes('baseball') ? 'MLB' : 
-                    sport.includes('hockey') ? 'NHL' : 'Sports',
-            game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
-            betType: 'Moneyline',
-            shortPick: `${selectedGame.home_team} ML`,
-            moneyline: `${selectedGame.home_team} -110`,
-            spread: `${selectedGame.home_team} -3.5`,
-            overUnder: 'OVER 220.5',
-            time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-            walletValue: '$75',
-            confidenceLevel: 75,
-            isPremium: allPicks.length > 0,
-            primeTimeCard: false,
-            silverCard: false,
-            imageUrl: `/logos/${sport.includes('basketball') ? 'basketball' : 
-                           sport.includes('baseball') ? 'baseball' : 
-                           sport.includes('hockey') ? 'hockey' : 'sports'}.svg`,
-            pickDetail: `${selectedGame.home_team} has a statistical advantage in this matchup against ${selectedGame.away_team}.`,
-            analysis: `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
-            garysBullets: [
-              `${selectedGame.home_team} has shown strong performance in recent games`,
-              'Current odds present good betting value',
-              'Statistical analysis supports this selection'
-            ]
-          };
+          // Basic pick data
+          const pickId = `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          const league = sport.includes('basketball') ? 'NBA' : 
+                       sport.includes('baseball') ? 'MLB' : 
+                       sport.includes('hockey') ? 'NHL' : 
+                       sport.includes('soccer') ? 'Soccer' : 'Sports';
           
-          allPicks.push(pick);
-          console.log(`Added real pick for ${pick.game} (${pick.league})`);
+          // Get detailed analysis from OpenAI for this pick
+          console.log(`Generating detailed analysis for ${selectedGame.away_team} @ ${selectedGame.home_team}...`);
+          
+          try {
+            // Get team stats if available
+            let teamStats = "";
+            
+            try {
+              if (sportsDataService) {
+                const homeTeamStats = await sportsDataService.getTeamStats(selectedGame.home_team);
+                const awayTeamStats = await sportsDataService.getTeamStats(selectedGame.away_team);
+                
+                if (homeTeamStats && awayTeamStats) {
+                  teamStats = `\nHome Team (${selectedGame.home_team}) Stats: ${JSON.stringify(homeTeamStats)}\n`;
+                  teamStats += `Away Team (${selectedGame.away_team}) Stats: ${JSON.stringify(awayTeamStats)}\n`;
+                }
+              }
+            } catch (statsError) {
+              console.warn('Error fetching team stats, proceeding without them:', statsError);
+            }
+            
+            // Create prompt for OpenAI
+            const prompt = `You are Gary, a professional sports bettor. Analyze this game: ${selectedGame.away_team} @ ${selectedGame.home_team} in the ${league}.\n`+
+                          `Game Time: ${new Date(selectedGame.commence_time).toLocaleString()}\n`+
+                          `${teamStats}\n`+
+                          `Provide your betting analysis in the following format:\n`+
+                          `1. A short 1-sentence pick recommendation\n`+
+                          `2. A 2-paragraph detailed analysis\n`+
+                          `3. Three bullet points highlighting key factors\n`+
+                          `4. A confidence rating between 65-95`;  
+            
+            // Call OpenAI API
+            const openAIResponse = await openaiService.getCompletion(prompt);
+            
+            // Parse the response
+            const shortPickMatch = openAIResponse.match(/pick recommendation:?\s*(.+?)(?:\n|$)/i) || 
+                                   openAIResponse.match(/(.+?)(?:\n|$)/);
+            const analysisMatch = openAIResponse.match(/detailed analysis:?\s*(.+?)(?=\n\d\.|\n\*|\nBullet|\nConfidence|$)/is) || 
+                                  openAIResponse.match(/(.+?)(?=\n\d\.|\n\*|\nBullet|\nConfidence|$)/is);
+            const bulletMatch = openAIResponse.match(/(?:bullet points|key factors):?\s*(.+?)(?=\nConfidence|$)/is) || 
+                               openAIResponse.match(/\*\s*(.+?)\n\*\s*(.+?)\n\*\s*(.+?)(?=\n|$)/is);
+            const confidenceMatch = openAIResponse.match(/confidence:?\s*(\d+)/i) || 
+                                   openAIResponse.match(/(\d{2})%/) || 
+                                   { 1: "75" };
+            
+            // Extract bullets
+            let bullets = [];
+            if (bulletMatch && bulletMatch[0]) {
+              const bulletText = bulletMatch[0];
+              bullets = bulletText.match(/\*\s*(.+)/g)?.map(b => b.replace(/^\*\s*/, '')) || 
+                       bulletText.split(/\n/)?.filter(b => b.trim().length > 0).map(b => b.replace(/^\d+\.\s*/, '').replace(/^\*\s*/, ''));
+            }
+            
+            // Default bullets if none found
+            if (!bullets || bullets.length < 3) {
+              bullets = [
+                `${selectedGame.home_team} has shown strong performance in recent games`,
+                'Current odds present good betting value',
+                'Statistical analysis supports this selection'
+              ];
+            }
+            
+            // Limit to 3 bullets
+            bullets = bullets.slice(0, 3);
+            
+            // Extract confidence level (65-95)
+            let confidenceLevel = parseInt(confidenceMatch[1], 10);
+            confidenceLevel = Math.max(65, Math.min(95, confidenceLevel)); // Keep between 65-95
+            
+            // Create the complete pick object with analysis
+            const pick = {
+              id: pickId,
+              league: league,
+              game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
+              betType: 'Moneyline',
+              shortPick: shortPickMatch && shortPickMatch[1] ? shortPickMatch[1].trim() : `${selectedGame.home_team} ML`,
+              moneyline: `${selectedGame.home_team} -110`,
+              spread: `${selectedGame.home_team} -3.5`,
+              overUnder: 'OVER 220.5',
+              time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+              walletValue: '$75',
+              confidenceLevel: confidenceLevel,
+              isPremium: allPicks.length > 0,
+              primeTimeCard: false,
+              silverCard: false,
+              imageUrl: `/logos/${sport.includes('basketball') ? 'basketball' : 
+                             sport.includes('baseball') ? 'baseball' : 
+                             sport.includes('hockey') ? 'hockey' : 
+                             sport.includes('soccer') ? 'soccer' : 'sports'}.svg`,
+              pickDetail: shortPickMatch && shortPickMatch[1] ? shortPickMatch[1].trim() : `${selectedGame.home_team} has a statistical advantage in this matchup against ${selectedGame.away_team}.`,
+              analysis: analysisMatch && analysisMatch[1] ? analysisMatch[1].trim() : `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
+              garysAnalysis: analysisMatch && analysisMatch[1] ? analysisMatch[1].trim() : `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
+              garysBullets: bullets
+            };
+            
+            console.log(`Successfully generated AI analysis for ${pick.game}`);
+            return pick;
+            
+          } catch (analysisError) {
+            console.error('Error generating AI analysis:', analysisError);
+            
+            // Fallback to basic pick if AI analysis fails
+            return {
+              id: pickId,
+              league: league,
+              game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
+              betType: 'Moneyline',
+              shortPick: `${selectedGame.home_team} ML`,
+              moneyline: `${selectedGame.home_team} -110`,
+              spread: `${selectedGame.home_team} -3.5`,
+              overUnder: 'OVER 220.5',
+              time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+              walletValue: '$75',
+              confidenceLevel: 75,
+              isPremium: allPicks.length > 0,
+              primeTimeCard: false,
+              silverCard: false,
+              imageUrl: `/logos/${sport.includes('basketball') ? 'basketball' : 
+                             sport.includes('baseball') ? 'baseball' : 
+                             sport.includes('hockey') ? 'hockey' : 'sports'}.svg`,
+              pickDetail: `${selectedGame.home_team} has a statistical advantage in this matchup against ${selectedGame.away_team}.`,
+              analysis: `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
+              garysAnalysis: `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
+              garysBullets: [
+                `${selectedGame.home_team} has shown strong performance in recent games`,
+                'Current odds present good betting value',
+                'Statistical analysis supports this selection'
+              ]
+            };
+          }
+          
+          // Get the pick with analysis and add it to our collection
+          const analysedPick = await pick;
+          allPicks.push(analysedPick);
+          console.log(`Added real pick for ${analysedPick.game} (${analysedPick.league})`);
           
           // If we have 5 picks, we're done
           if (allPicks.length >= REQUIRED_PICKS) {
