@@ -36,7 +36,7 @@ const openaiServiceInstance = {
   /**
    * Preferred model for Gary's analysis
    */
-  DEFAULT_MODEL: 'gpt-3.5-turbo-0125', // Using a specific version to avoid 404 errors
+  DEFAULT_MODEL: 'gpt-3.5-turbo', // Using the standard model name which always points to the latest version
   
   /**
    * Generates a response from OpenAI based on the provided prompt
