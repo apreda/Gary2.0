@@ -35,7 +35,7 @@ const openaiServiceInstance = {
   /**
    * Preferred model for Gary's analysis
    */
-  DEFAULT_MODEL: 'gpt-4-0125-preview', // Using the most advanced model for best sports analysis
+  DEFAULT_MODEL: 'gpt-3.5-turbo', // Using a widely available model for compatibility
   
   /**
    * Generates a response from OpenAI based on the provided prompt
@@ -104,10 +104,15 @@ const openaiServiceInstance = {
       if (error.response && error.response.data) {
         console.error('OpenAI API error details:', error.response.data);
         
-        // Better debugging for API key issues
+        // Better debugging for different error types
         if (error.response.status === 401) {
           console.error('API Key Authentication Error. Check your API key is valid and has not expired.');
-          console.error('Current API key (first 5 chars):', this.API_KEY.substring(0, 5) + '...');
+          console.error('Current API key (first 5 chars):', this.API_KEY ? (this.API_KEY.substring(0, 5) + '...') : 'No API key found');
+        } else if (error.response.status === 404) {
+          console.error('Model not found. The specified model may not exist or you may not have access to it.');
+          console.error('Current model being used:', requestOptions?.model || this.DEFAULT_MODEL);
+        } else if (error.response.status === 429) {
+          console.error('Rate limit exceeded or quota exceeded for your API key.');
         }
       }
       
@@ -185,7 +190,7 @@ const openaiServiceInstance = {
       const analysis = await this.generateResponse(messages, {
         temperature: options.temperature || 0.8,
         maxTokens: options.maxTokens || 1500,
-        model: options.model || 'gpt-4-0125-preview'
+        model: options.model || this.DEFAULT_MODEL
       });
       
       return analysis;
