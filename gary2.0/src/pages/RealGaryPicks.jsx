@@ -390,7 +390,8 @@ export function RealGaryPicks() {
           </div>
         ) : (
           visiblePicks.length > 0 ? (
-            <div className="pick-card-container">
+            <div className="pick-card-container" style={{minHeight: '500px', position: 'relative', border: '1px solid #d4af37', padding: '20px'}}>
+              <h2 style={{color: '#d4af37', marginBottom: '20px'}}>Gary's Pick of the Day</h2>
               {console.log('Rendering carousel with picks:', visiblePicks)}
               {console.log('Active card index:', activeCardIndex)}
               {visiblePicks.map((pick, index) => {
@@ -416,6 +417,14 @@ export function RealGaryPicks() {
                   />
                 );
               })}
+              
+              {/* Fallback message if card doesn't render */}
+              {visiblePicks.length > 0 && (
+                <div style={{position: 'absolute', bottom: '20px', width: '100%', textAlign: 'center'}}>
+                  <p style={{color: '#d4af37'}}>Pick ID: {visiblePicks[activeCardIndex]?.id || 'Unknown'}</p>
+                  <p style={{color: 'white', marginTop: '10px'}}>Game: {visiblePicks[activeCardIndex]?.game || 'Unknown game'}</p>
+                </div>
+              )}
               
               {reachedFreeLimit && activeCardIndex > 2 && (
                 <FreePicksLimit onBack={() => setActiveCardIndex(0)} />
