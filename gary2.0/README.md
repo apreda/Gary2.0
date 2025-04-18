@@ -1,11 +1,14 @@
-# React + Vite
+# Gary 2.0 - Sports Betting Analysis Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Gary 2.0 is a sophisticated sports betting analysis platform powered by AI. The system leverages real-time sports data and advanced AI models to generate high-quality betting picks across multiple sports leagues.
 
-Currently, two official plugins are available:
+## Key Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Daily automated picks generation for NBA, NFL, MLB, NHL, and Soccer leagues
+- Real-time sports statistics integration via TheSportsDB API
+- AI-powered analysis using OpenAI GPT models
+- User-friendly interface with detailed pick cards
+- Comprehensive bet tracking capabilities
 
 ## Expanding the ESLint configuration
 
