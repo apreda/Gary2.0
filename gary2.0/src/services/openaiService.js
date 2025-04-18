@@ -8,7 +8,7 @@ const openaiServiceInstance = {
   /**
    * The OpenAI API key (loaded from environment variables)
    */
-  API_KEY: '',
+  API_KEY: import.meta.env?.VITE_OPENAI_API_KEY || '',
   
   /**
    * Initialize the API key from environment variables
@@ -19,6 +19,9 @@ const openaiServiceInstance = {
       console.error('OpenAI API key not found in environment variables');
     } else {
       console.log('OpenAI API key loaded successfully from environment variables');
+      // Mask the API key for security when logging (only showing first 5 chars)
+      const maskedKey = apiKey.substring(0, 5) + '...' + apiKey.substring(apiKey.length - 4);
+      console.log(`API Key (masked): ${maskedKey}`);
       this.API_KEY = apiKey;
     }
     return this;
@@ -100,6 +103,12 @@ const openaiServiceInstance = {
       // If there's an error with the API key or quota, log it for debugging
       if (error.response && error.response.data) {
         console.error('OpenAI API error details:', error.response.data);
+        
+        // Better debugging for API key issues
+        if (error.response.status === 401) {
+          console.error('API Key Authentication Error. Check your API key is valid and has not expired.');
+          console.error('Current API key (first 5 chars):', this.API_KEY.substring(0, 5) + '...');
+        }
       }
       
       // Return null to indicate failure, the caller should handle this case
