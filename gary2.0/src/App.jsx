@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, Link, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { BetCardProfileProvider } from './contexts/BetCardProfileContext';
+import { UserPlanProvider } from './contexts/UserPlanContext';
+import { UserStatsProvider } from './contexts/UserStatsContext';
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Navbar } from "./components/Navbar";
 import { Home } from "./pages/Home";
@@ -126,12 +128,16 @@ export default function App() {
   return (
     <Router>
       <AuthProvider>
-        <BetCardProfileProvider>
-          <ToastProvider>
-            <FontLoader />
-            <AppContent />
-          </ToastProvider>
-        </BetCardProfileProvider>
+        <UserPlanProvider>
+          <UserStatsProvider>
+            <BetCardProfileProvider>
+              <ToastProvider>
+                <FontLoader />
+                <AppContent />
+              </ToastProvider>
+            </BetCardProfileProvider>
+          </UserStatsProvider>
+        </UserPlanProvider>
       </AuthProvider>
     </Router>
   );
