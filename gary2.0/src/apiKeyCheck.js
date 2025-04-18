@@ -1,4 +1,5 @@
 // API Key Check utilities - Non-JSX version
+// Modified to NEVER show on regular user pages
 
 // Helper function to create DOM elements with proper styling
 const createStyledElement = (type, props = {}, children = []) => {
@@ -6,6 +7,10 @@ const createStyledElement = (type, props = {}, children = []) => {
   
   // Apply styles
   if (props.style) {
+    // Ensure any background is set to transparent/dark to match site theme
+    if (props.style.background && !props.style.background.includes('#111')) {
+      props.style.background = '#111111';
+    }
     Object.assign(element.style, props.style);
   }
   
@@ -116,15 +121,16 @@ const createApiKeyCheckUI = (container) => {
   
   // Build the UI
   const buildUI = () => {
-    // Main container
+    // Main container - ensure dark background
     const mainDiv = createStyledElement('div', {
       style: {
         maxWidth: '600px',
         margin: '40px auto',
         padding: '20px',
-        background: '#222',
+        background: '#111111',
         borderRadius: '8px',
-        border: '2px solid #FFC94C'
+        border: '2px solid #FFC94C',
+        color: 'white'
       }
     });
     
@@ -151,10 +157,11 @@ const createApiKeyCheckUI = (container) => {
     // Odds API section
     const oddsApiDiv = createStyledElement('div', {
       style: {
-        background: '#333',
+        background: '#222222',
         padding: '15px',
         borderRadius: '4px',
-        marginBottom: '20px'
+        marginBottom: '20px',
+        color: 'white'
       }
     });
     
@@ -204,9 +211,10 @@ const createApiKeyCheckUI = (container) => {
     // DeepSeek API section
     const deepseekApiDiv = createStyledElement('div', {
       style: {
-        background: '#333',
+        background: '#222222',
         padding: '15px',
-        borderRadius: '4px'
+        borderRadius: '4px',
+        color: 'white'
       }
     });
     
@@ -280,10 +288,20 @@ const createApiKeyCheckUI = (container) => {
 
 // Export a factory function that can be used where React components are expected
 const ApiKeyCheck = () => {
+  // Only run in admin context to prevent affecting regular user pages
+  const isAdminPage = window.location.pathname.includes('/admin');
+  
   // This is a stub component that will be initialized with DOM manipulation
-  // when it's mounted to the DOM
+  // when it's mounted to the DOM - but ONLY on admin pages
   return {
-    mount: (container) => createApiKeyCheckUI(container)
+    mount: (container) => {
+      // Only create the UI if we're on an admin page
+      if (isAdminPage) {
+        return createApiKeyCheckUI(container);
+      }
+      console.log('ApiKeyCheck disabled on non-admin pages');
+      return null;
+    }
   };
 };
 

@@ -2,6 +2,8 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './styles/base.css'
+// Import error prevention CSS to ensure no white backgrounds appear
+import './styles/consolidated/error-prevention.css'
 
 // Preload fonts
 const fontUrls = [
