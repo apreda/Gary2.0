@@ -756,8 +756,8 @@ const picksService = {
   
   /**
    * Generate daily picks for all available sports
-   * STRICTLY NO FALLBACKS POLICY - will throw errors rather than use mock data
-   * @returns {Promise<Array>} - Array of daily picks
+   * STRICT NO-FALLBACKS POLICY: Will throw errors rather than use mock data
+   * @returns {Promise<Array>} - Array of daily picks based only on real API data
    */
   generateDailyPicks: async () => {
     try {
@@ -814,6 +814,9 @@ const picksService = {
       // 5. Process each sport and select games - do it sequentially to avoid rate limits
       let allPicks = [];
       const REQUIRED_PICKS = 5; // We need exactly 5 picks
+      
+      // Create a set to track which sports we've already processed
+      const processedSports = new Set();
       
       // Process sports sequentially rather than in parallel to avoid rate limits
       console.log(`Processing ${prioritizedSports.length} sports sequentially to avoid rate limits...`);
@@ -915,15 +918,12 @@ const picksService = {
           'soccer_france_ligue_one'
         ];
         
-        // Track sports we've already processed to avoid duplicates
-        const processedSportsList = new Set(prioritizedSports);
-        
         // Try each sport until we have enough picks
         for (const additionalSport of otherSportOptions) {
           if (allPicks.length >= REQUIRED_PICKS) break;
           
           // Skip sports we've already processed
-          if (processedSportsList.has(additionalSport)) continue;
+          if (processedSports.has(additionalSport)) continue;
           
           try {
             console.log(`Trying to get additional picks from ${additionalSport}...`);
@@ -982,7 +982,7 @@ const picksService = {
               }
             }
             
-            processedSportsList.add(additionalSport);
+            processedSports.add(additionalSport);
           } catch (error) {
             console.error(`Error getting picks from ${additionalSport}:`, error);
           }
