@@ -1,0 +1,87 @@
+.premium-upsell {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 24px;
+  margin: 16px 0;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.upsell-content {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.premium-upsell h3 {
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 20px;
+}
+
+.premium-upsell p {
+  color: #666;
+  margin-bottom: 24px;
+  font-size: 16px;
+}
+
+.feature-list {
+  list-style-type: none;
+  padding: 0;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.feature-list li {
+  padding: 8px 0;
+  position: relative;
+  padding-left: 30px;
+  color: #444;
+}
+
+.feature-list li:before {
+  content: "✓";
+  color: #4caf50;
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+
+.upgrade-button {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.upgrade-button:hover {
+  background-color: #388e3c;
+}
+
+@media (max-width: 600px) {
+  .premium-upsell {
+    padding: 16px;
+  }
+  
+  .premium-upsell h3 {
+    font-size: 18px;
+  }
+  
+  .premium-upsell p {
+    font-size: 14px;
+  }
+  
+  .feature-list li {
+    font-size: 14px;
+  }
+  
+  .upgrade-button {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+}

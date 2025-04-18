@@ -1,0 +1,85 @@
+.free-picks-limit {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 24px;
+  margin: 16px 0;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.limit-content {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.free-picks-limit h3 {
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 20px;
+}
+
+.free-picks-limit p {
+  color: #666;
+  margin-bottom: 24px;
+  font-size: 16px;
+}
+
+.limit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+}
+
+.upgrade-button {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.upgrade-button:hover {
+  background-color: #388e3c;
+}
+
+.back-button {
+  background-color: transparent;
+  color: #2196f3;
+  border: 1px solid #2196f3;
+  border-radius: 4px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-button:hover {
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+@media (max-width: 600px) {
+  .free-picks-limit {
+    padding: 16px;
+  }
+  
+  .free-picks-limit h3 {
+    font-size: 18px;
+  }
+  
+  .free-picks-limit p {
+    font-size: 14px;
+  }
+  
+  .upgrade-button,
+  .back-button {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+}
