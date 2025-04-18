@@ -25,7 +25,7 @@ import HeaderNav from '../components/HeaderNav';
 // Styles
 import '../styles/RealGaryPicks.css';
 
-function RealGaryPicks() {
+export function RealGaryPicks() {
   // Access user plan context
   const { userPlan, updateUserPlan } = useUserPlan();
   const { userStats, updateUserStats } = useUserStats();
@@ -442,4 +442,4 @@ function RealGaryPicks() {
   );
 }
 
-export default RealGaryPicks;
+// Export changed to named export above
