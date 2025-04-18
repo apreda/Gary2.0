@@ -129,7 +129,7 @@ export const sportsDataService = {
   },
   
   /**
-   * Generate comprehensive team stats for use in DeepSeek prompts
+   * Generate comprehensive team stats for use in OpenAI prompts
    * @param {string} homeTeam - Home team name
    * @param {string} awayTeam - Away team name
    * @param {string} league - League name
@@ -208,13 +208,13 @@ export const sportsDataService = {
   },
   
   /**
-   * Format team stats for DeepSeek prompt
+   * Format team stats for OpenAI prompt
    * @param {Object} gameStats - Team stats object from generateTeamStatsForGame
-   * @returns {string} - Formatted stats string for DeepSeek prompt
+   * @returns {string} - Formatted stats string for OpenAI prompt
    */
   formatStatsForPrompt: (gameStats) => {
     if (!gameStats || !gameStats.statsAvailable) {
-      console.warn('TheSportsDB API: No stats available to format for DeepSeek prompt.');
+      console.warn('TheSportsDB API: No stats available to format for OpenAI prompt.');
       return 'NOTE: Current team statistics unavailable - using historical data only.';
     }
     
