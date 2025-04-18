@@ -616,181 +616,9 @@ const picksService = {
   },
   
   /**
-   * Generate a daily parlay using existing picks
-   * @param {Array} picks - Array of individual picks
-   * @returns {Promise<Object>} - Parlay pick object
+   * [REMOVED] Generate a daily parlay feature
+   * This feature has been removed as requested
    */
-  generateParlay: async (picks, moneylineOnly = false) => {
-    try {
-      // If we don't have at least 2 picks, we'll create default parlay legs later
-      if (picks.length < 2 && !moneylineOnly) {
-        throw new Error('Need at least 2 picks to create a parlay');
-      }
-      
-      // When moneylineOnly is true, we select moneyline picks that have at least 40% confidence
-      let parlayPicks;
-      if (moneylineOnly) {
-        // Filter for moneyline picks with 40%+ confidence
-        parlayPicks = picks
-          .filter(p => p.betType.includes('Moneyline') && p.confidenceLevel >= 40)
-          .slice(0, 3); // Take up to 3 moneyline picks
-        
-        // If we don't have enough moneyline picks, we need to create some default ones
-        if (parlayPicks.length < 3) {
-          console.log(`Only found ${parlayPicks.length} qualifying moneyline picks, will add default picks`);
-          // We'll fill in with default picks later
-        }
-      } else {
-        parlayPicks = picks.slice(0, Math.min(3, picks.length)); // Use up to 3 picks, any type
-      }
-      
-      const pickDetails = parlayPicks.map(p => {
-        return `${p.league} - ${p.game}: ${p.betType.includes('Spread') ? p.spread : p.betType.includes('Moneyline') ? p.moneyline : p.overUnder}`;
-      }).join('\n');
-      
-      // Build a prompt for DeepSeek
-      const prompt = `You are Gary the Bear, an expert sports handicapper with decades of experience.
-      
-      Create a compelling parlay analysis for these picks:
-      ${pickDetails}
-      
-      Respond with a brief analysis (about 100 characters) explaining why this parlay has value. 
-      Format your analysis as a JSON object:
-      {
-        "analysis": "Your explanation goes here",
-        "parlayName": "A catchy name for this parlay"
-      }`;
-      
-      // Get the API key from the config loader
-      const apiKey = await configLoader.getDeepseekApiKey();
-      const baseUrl = await configLoader.getDeepseekBaseUrl();
-      
-      // Call DeepSeek API
-      const response = await axios.post(`${baseUrl}/chat/completions`, {
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 300
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        }
-      });
-      
-      // Parse the response
-      const aiContent = response.data.choices[0].message.content;
-      const jsonMatch = aiContent.match(/\{[\s\S]*\}/); // Extract JSON from response
-      
-      let parlayName = "Gary's Power Parlay";
-      let analysis = "This parlay combines my highest conviction plays into one high-value ticket.";
-      
-      if (jsonMatch) {
-        try {
-          const parlayData = JSON.parse(jsonMatch[0]);
-          parlayName = parlayData.parlayName || parlayName;
-          analysis = parlayData.analysis || analysis;
-        } catch (parseError) {
-          console.error("Error parsing parlay data:", parseError);
-        }
-      }
-      
-      // Calculate odds (simplified)
-      const parlayOdds = parlayPicks.reduce((odds, pick) => {
-        return odds * (1 + (pick.confidenceLevel / 100));
-      }, 1);
-      
-      // Create the parlay pick object and handle case where we need default parlay legs
-      let parlayLegs = [];
-      let parlayGames = [];
-      let leaguesList = [];
-      
-      if (moneylineOnly && parlayPicks.length < 3) {
-        // Generate default legs to ensure we have 3 total
-        const defaultTeams = [
-          { game: 'Los Angeles Lakers vs Golden State Warriors', league: 'NBA', pick: 'Golden State Warriors -110' },
-          { game: 'New York Yankees vs Boston Red Sox', league: 'MLB', pick: 'New York Yankees -125' },
-          { game: 'Tampa Bay Lightning vs Florida Panthers', league: 'NHL', pick: 'Florida Panthers -135' },
-          { game: 'Kansas City Chiefs vs San Francisco 49ers', league: 'NFL', pick: 'Kansas City Chiefs -115' },
-          { game: 'Manchester City vs Liverpool', league: 'EURO', pick: 'Manchester City -105' }
-        ];
-        
-        // Add existing parlay picks
-        parlayLegs = parlayPicks.map(p => ({
-          game: p.game,
-          league: p.league,
-          pick: p.moneyline,
-          betType: 'Moneyline'
-        }));
-        
-        parlayGames = parlayPicks.map(p => p.game);
-        leaguesList = parlayPicks.map(p => p.league);
-        
-        // Add default legs to reach 3 total
-        const neededLegs = 3 - parlayLegs.length;
-        for (let i = 0; i < neededLegs; i++) {
-          // Make sure we don't duplicate leagues or games
-          let defaultLeg;
-          let attempts = 0;
-          do {
-            defaultLeg = defaultTeams[Math.floor(Math.random() * defaultTeams.length)];
-            attempts++;
-          } while (parlayGames.includes(defaultLeg.game) && attempts < 10);
-          
-          parlayLegs.push({
-            ...defaultLeg,
-            betType: 'Moneyline'
-          });
-          parlayGames.push(defaultLeg.game);
-          leaguesList.push(defaultLeg.league);
-        }
-      } else {
-        // Use the actual picks we have
-        parlayLegs = parlayPicks.map(p => ({
-          game: p.game,
-          league: p.league,
-          pick: p.betType.includes('Spread') ? p.spread : 
-                p.betType.includes('Moneyline') ? p.moneyline : p.overUnder,
-          betType: p.betType.includes('Moneyline') ? 'Moneyline' : 
-                  p.betType.includes('Spread') ? 'Spread' : 'Total'
-        }));
-        parlayGames = parlayPicks.map(p => p.game);
-        leaguesList = parlayPicks.map(p => p.league);
-      }
-      
-      return {
-        id: Math.max(...picks.map(p => p.id || 0), 0) + 1,
-        league: leaguesList.join('/'),
-        game: "Parlay",
-        parlayGames: parlayGames,
-        parlayLegs: parlayLegs,
-        moneyline: "",
-        spread: "",
-        overUnder: "",
-        walletValue: `$${Math.floor(500 + Math.random() * 500)}`,
-        confidenceLevel: Math.floor(65 + Math.random() * 15),
-        betType: "Parlay Pick",
-        isPremium: true,
-        primeTimeCard: true,
-        goldCard: true,
-        silverCard: false,
-        garysAnalysis: analysis,
-        garysBullets: [
-          "Combined statistical advantages",
-          "Correlated outcomes", 
-          "Maximum value opportunity"
-        ],
-        parlayName: parlayName,
-        parlayOdds: `+${Math.floor(parlayOdds * 100)}`
-      };
-    } catch (error) {
-      console.error('Error generating parlay:', error);
-      throw error;
-    }
-  },
   
   /**
    * Get fallback picks in case API calls fail
@@ -1138,19 +966,12 @@ const picksService = {
         }
       }
       
-      // 6. Always add a PARLAY pick every day - a moneyline-only 3-leg parlay
-      try {
-        const parlay = await picksService.generateParlay(allPicks, true); // Pass true to indicate moneyline-only
-        allPicks.push(parlay);
-        console.log('Added daily moneyline parlay pick.');
-      } catch (error) {
-        console.error('Error generating parlay:', error);
-      }
+      // [REMOVED] Parlay feature has been removed as requested
       
       // 7. Add a primetime pick (choose the best pick and mark it as primetime)
       try {
         // Find the highest confidence pick that isn't already a primetime pick
-        const regularPicks = allPicks.filter(pick => pick.league !== 'PARLAY' && !pick.primeTimeCard);
+        const regularPicks = allPicks.filter(pick => !pick.primeTimeCard);
         if (regularPicks.length > 0) {
           // Sort by confidence (descending)
           regularPicks.sort((a, b) => b.confidenceLevel - a.confidenceLevel);
