@@ -5,10 +5,28 @@ import UniformPickCard from './UniformPickCard';
  * PickCard component - Adapts pick data for UniformPickCard using the established design system
  */
 const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision }) => {
+  // Add detailed debugging
+  console.log('PickCard received data:', {
+    pick,
+    pickId: pick?.id,
+    isActive,
+    isFlipped
+  });
+  
   if (!pick || !pick.id) {
     console.error('Invalid pick data:', pick);
     return null;
   }
+  
+  // Check all required props for rendering
+  console.log('Pick properties check:', {
+    game: pick.game,
+    league: pick.league,
+    pickTeam: pick.pickTeam,
+    betType: pick.betType || 'Moneyline',
+    shortPick: pick.shortPick,
+    image: pick.image || 'missing'
+  });
   
   // Force primetime card type for all picks to ensure gold/black styling
   let cardType = 'primetime';
