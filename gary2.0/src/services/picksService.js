@@ -878,9 +878,12 @@ const picksService = {
             // Use Gary's AI to make a pick
             let garyPick = makeGaryPick(mockData);
             
-            // Track the best pick for this sport based on confidence (0-10 scale)
-            const currentConfidence = garyPick.rationale.brain_score || 0;
-            // Only consider picks with a brain_score of 6 or higher
+            // Track the best pick for this sport based on momentum (0-1 scale)
+            // Convert momentum to a 0-10 scale for compatibility with existing code
+            const momentumValue = garyPick.rationale.momentum || 0;
+            const currentConfidence = momentumValue * 10; // Convert 0-1 to 0-10 scale
+            
+            // Only consider picks with a converted confidence of 6 or higher
             if (currentConfidence >= 6 && currentConfidence > bestConfidence) {
               // Format the pick for our UI
               const sportTitle = sport.includes('basketball_nba') ? 'NBA' : 
