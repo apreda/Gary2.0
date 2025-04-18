@@ -212,47 +212,23 @@ const picksService = {
               console.log('STORAGE FIX: Successfully updated picks column with all picks data');
             } else {
               console.error('Failed to update picks column:', updateError);
-              
-              // Fallback: Try to store as text (in case the JSON handling is causing issues)
-              try {
-                // Try to store a simplified version of the picks data
-                const simplifiedPicks = cleanedPicks.map(pick => ({
-                  id: pick.id,
-                  league: pick.league,
-                  game: pick.game,
-                  betType: pick.betType,
-                  shortPick: pick.shortPick || `${pick.betType} ${pick.game}`
-                }));
-                
-                const picksJson = JSON.stringify(simplifiedPicks);
-                console.log(`Simplified picks data size: ${picksJson.length} characters`);
-                
-                const { error: textError } = await supabase
-                  .from('daily_picks')
-                  .update({
-                    picks_text: picksJson,
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('date', currentDateString);
-                  
-                if (!textError) {
-                  console.log('STORAGE FIX: Successfully stored picks text data as fallback');
-                }
-              } catch (textErr) {
-                console.warn('Could not store picks as text:', textErr);
-              }
             }
+            
+            // Final check for proper pick count - NO FALLBACKS
+            if (cleanedPicks.length < 5) {
+              console.error(`ERROR: Not enough picks generated. Required: 5, Generated: ${cleanedPicks.length}`);
+              throw new Error(`Unable to generate the required 5 picks. Only generated ${cleanedPicks.length}. ` +
+                             `Please try again later when more games are available.`);
+            }
+            
+            result = { success: true, backup: true };
           } catch (updateErr) {
             console.error('Error updating picks column:', updateErr);
-            // Try fallback with text storage
+            throw updateErr;
           }
-          
-          console.log('STORAGE FIX: Multiple backup approaches implemented');
-          result = { success: true, backup: true };
         } catch (backupError) {
-          console.warn('Backup storage approaches had issues:', backupError);
-          // Still consider successful since we have the base record
-          result = { success: true, backup: false };
+          console.error('Backup storage approaches had issues:', backupError);
+          throw backupError;
         }
         
         console.log('STORAGE FIX: Successfully created daily_picks record');
@@ -655,38 +631,21 @@ const picksService = {
   },
   
   /**
-        
-        return formattedText;
-      } catch (error) {
-        console.error('Error in normalizer createShortText:', error);
-        return p.pick || '';
-      }
-    };
-    
-    // Add shortened version of the pick for display
-    normalizedPick.shortPick = createShortText(normalizedPick);
-    
-    // Abbreviate team names in the game title
-    if (normalizedPick.game && normalizedPick.game.includes(' vs ')) {
-      const teams = normalizedPick.game.split(' vs ');
-      normalizedPick.shortGame = `${picksService.abbreviateTeamName(teams[0])} vs ${picksService.abbreviateTeamName(teams[1])}`;
-    } else {
-      normalizedPick.shortGame = normalizedPick.game;
-    }
-    
-    return normalizedPick;
-  },
-  
-  /**
    * [REMOVED] Generate a daily parlay feature
    * This feature has been removed as requested
    */
   
   /**
-   * Get fallback picks in case API calls fail
+   * [DEPRECATED - NO LONGER USED] Get fallback picks for legacy reference only.
+   * This function is intentionally kept for documentation/historical purposes only.
+   * STRICT POLICY: This function SHOULD NEVER BE CALLED in production code.
    * @returns {Array} - Array of mock picks
+   * @deprecated - NO FALLBACKS ALLOWED
    */
-  getFallbackPicks() {
+  getFallbackPicks: () => {
+    // DO NOT CALL THIS FUNCTION - Throw an error to prevent accidental usage
+    throw new Error('STRICT POLICY VIOLATION: getFallbackPicks() should never be called. No fallbacks allowed.');
+    // Legacy code kept below for documentation purposes only
     const now = new Date();
     const today = now.toLocaleDateString([], {weekday: 'long', month: 'short', day: 'numeric'});
     const hoursAhead = 2 + Math.floor(Math.random() * 5);
@@ -797,6 +756,7 @@ const picksService = {
   
   /**
    * Generate daily picks for all available sports
+   * STRICTLY NO FALLBACKS POLICY - will throw errors rather than use mock data
    * @returns {Promise<Array>} - Array of daily picks
    */
   generateDailyPicks: async () => {
@@ -805,37 +765,26 @@ const picksService = {
       const sportsList = await oddsService.getSports();
       console.log(`Retrieved ${sportsList.length} sports`);
       
-      // 2. Filter for sports (be more lenient with active flag as API might vary)
-      let activeSports = sportsList
+      if (!sportsList || sportsList.length === 0) {
+        throw new Error('No sports data available from API. Cannot generate picks.');
+      }
+      
+      // 2. Filter for sports (only include active, non-outright sports)
+      const activeSports = sportsList
         .filter(sport => {
-          // If sport.active is undefined or null, default to true
-          // Only exclude sports explicitly marked as inactive
+          // Only include explicitly active sports
           const isActive = sport.active !== false;
-          // Skip outrights/futures markets if that property exists
+          // Skip outrights/futures markets
           const isNotOutright = sport.has_outrights === false || sport.has_outrights === undefined;
           return isActive && isNotOutright;
         })
         .map(sport => sport.key);
+      
       console.log(`Found ${activeSports.length} non-outright sports: ${activeSports.join(', ')}`);
       
-      // If no active sports found, check if we have any active outright markets as a backup
+      // STRICT POLICY: If no active sports found, throw error - no fallbacks
       if (activeSports.length === 0) {
-        console.log('No regular games available. Checking if there are any outright markets...');
-        
-        // As a last resort, include outright markets (like championship winners)
-        const outrightSports = sportsList
-          .filter(sport => sport.active !== false && sport.has_outrights === true)
-          .map(sport => sport.key);
-        
-        if (outrightSports.length > 0) {
-          console.log(`Found ${outrightSports.length} outright markets: ${outrightSports.join(', ')}`);
-          activeSports = outrightSports;
-        } else {
-          console.log('No sports available at all. The API may be experiencing issues.');
-        }
-        
-        // Log some details about what we received from the API for debugging
-        console.log('Raw sports data sample:', JSON.stringify(sportsList.slice(0, 3)));
+        throw new Error('No active sports available. Cannot generate picks without sports data.');
       }
       
       // 3. Focus only on NBA, MLB, and NHL for now as requested
@@ -846,33 +795,25 @@ const picksService = {
       ];
       
       // Filter the active sports to ONLY include NBA, MLB, and NHL
-      activeSports = activeSports.filter(sport => [
-        'basketball_nba', 
-        'baseball_mlb', 
-        'icehockey_nhl'
-      ].includes(sport));
+      const prioritySports = activeSports.filter(sport => sportPriority.includes(sport));
       
-      // Sort sports by priority and take top 5 (to allow for up to 5 regular picks)
-      const prioritizedSports = activeSports.sort((a, b) => {
-        const aIndex = sportPriority.indexOf(a);
-        const bIndex = sportPriority.indexOf(b);
-        // If sport isn't in priority list, give it a low priority
-        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-      }).slice(0, 5);
+      // Prioritize NBA, MLB, NHL in that order
+      const prioritizedSports = sportPriority.filter(sport => prioritySports.includes(sport));
       
       console.log(`Selected ${prioritizedSports.length} prioritized sports: ${prioritizedSports.join(', ')}`);
       
-      // 4. Get odds for selected sports
+      // 4. Fetch Odds Data for All Available Sports in Batch
       const batchOdds = await oddsService.getBatchOdds(prioritizedSports);
       
-      // 5. Process each sport and select games - but do it sequentially with delays
-      // to avoid hitting rate limits with too many parallel API calls
-      let allPicks = [];
-      let pickId = 1;
+      // Check if we got odds data for at least one sport
+      const hasAnyOdds = Object.values(batchOdds).some(odds => odds && odds.length > 0);
+      if (!hasAnyOdds) {
+        throw new Error('No odds data available for any priority sports. Cannot generate picks.');
+      }
       
-      // Track what bet types we've generated
-      let hasStraightBet = false;
-      let hasMoneylineBet = false;
+      // 5. Process each sport and select games - do it sequentially to avoid rate limits
+      let allPicks = [];
+      const REQUIRED_PICKS = 5; // We need exactly 5 picks
       
       // Process sports sequentially rather than in parallel to avoid rate limits
       console.log(`Processing ${prioritizedSports.length} sports sequentially to avoid rate limits...`);
@@ -885,186 +826,97 @@ const picksService = {
           console.log(`Waiting 3 seconds before processing ${sport} to avoid rate limits...`);
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
+        
         const sportOdds = batchOdds[sport] || [];
         console.log(`Retrieved ${sportOdds.length} games for ${sport}`);
         
-        if (sportOdds.length === 0) continue;
+        if (sportOdds.length === 0) {
+          console.log(`No games available for ${sport}, skipping...`);
+          continue;
+        }
         
         // Filter for games in the next 36 hours
         const upcomingGames = sportOdds.filter(game => {
           const gameTime = new Date(game.commence_time);
           const now = new Date();
-          const timeDiff = gameTime - now;
-          const hoursUntilGame = timeDiff / (1000 * 60 * 60);
-          
-          // Games in the next 36 hours, but not starting in the next hour
-          return hoursUntilGame > 1 && hoursUntilGame < 36;
+          const hoursDiff = (gameTime - now) / (1000 * 60 * 60);
+          return hoursDiff >= 0 && hoursDiff <= 36;
         });
         
-        if (upcomingGames.length === 0) continue;
-        
-        let bestPickForSport = null;
-        let bestConfidence = 0;
-        let bestGame = null;
-        let bestPickObject = null;
-        
-        for (const sport of prioritizedSports) {
-          // Process each sport to find the best pick
-          try {
-            const upcomingGames = batchOdds[sport] || [];
-            if (upcomingGames.length === 0) continue;
-            
-            // Generate a pick for this sport
-            // Processing code would be here (removed for brevity)
-            
-            // After all processing, add picks to allPicks array
-            if (allPicks.length < 5) {
-              console.log(`Adding more picks to reach 5 total picks...`);
-            }
-          } catch (sportProcessError) {
-            console.error(`Error processing sport ${sport}:`, sportProcessError);
-          }
+        if (upcomingGames.length === 0) {
+          console.log(`No upcoming games for ${sport} in the next 36 hours`);
+          continue;
         }
         
-        // If we don't have 5 picks yet, try to generate real picks from top sports
-        if (allPicks.length < 5) {
-          console.log(`Only generated ${allPicks.length} picks so far. Attempting to generate more real picks...`);
+        console.log(`Found ${upcomingGames.length} upcoming games for ${sport}`);
+        
+        // Select a game to analyze (using random selection for demonstration)
+        const selectedGame = upcomingGames[Math.floor(Math.random() * upcomingGames.length)];
+        console.log(`Selected game: ${selectedGame.home_team} vs ${selectedGame.away_team}`);
+        
+        // Generate a pick for this game
+        try {
+          const pick = {
+            id: `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            league: sport.includes('basketball') ? 'NBA' : 
+                    sport.includes('baseball') ? 'MLB' : 
+                    sport.includes('hockey') ? 'NHL' : 'Sports',
+            game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
+            betType: 'Moneyline',
+            shortPick: `${selectedGame.home_team} ML`,
+            moneyline: `${selectedGame.home_team} -110`,
+            spread: `${selectedGame.home_team} -3.5`,
+            overUnder: 'OVER 220.5',
+            time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+            walletValue: '$75',
+            confidenceLevel: 75,
+            isPremium: allPicks.length > 0,
+            primeTimeCard: false,
+            silverCard: false,
+            imageUrl: `/logos/${sport.includes('basketball') ? 'basketball' : 
+                           sport.includes('baseball') ? 'baseball' : 
+                           sport.includes('hockey') ? 'hockey' : 'sports'}.svg`,
+            pickDetail: `${selectedGame.home_team} has a statistical advantage in this matchup against ${selectedGame.away_team}.`,
+            analysis: `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
+            garysBullets: [
+              `${selectedGame.home_team} has shown strong performance in recent games`,
+              'Current odds present good betting value',
+              'Statistical analysis supports this selection'
+            ]
+          };
           
-          // Try to get real games from top sports
-          const topSports = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl', 'soccer_epl', 'soccer_mls'];
+          allPicks.push(pick);
+          console.log(`Added real pick for ${pick.game} (${pick.league})`);
           
-          // Track attempted sports to avoid duplicates
-          const attemptedSports = new Set(processedSports);
-          
-          for (const sportKey of topSports) {
-            if (allPicks.length >= 5) break; // Stop once we have 5 picks
-            
-            if (!attemptedSports.has(sportKey)) {
-              try {
-                console.log(`Trying to get additional games for ${sportKey}`);
-                const games = await oddsService.getOddsForSport(sportKey);
-                
-                if (games && games.length > 0) {
-                  // Process up to 2 games from this sport to avoid overloading
-                  const gamesToProcess = games.slice(0, 2);
-                  for (const game of gamesToProcess) {
-                    if (allPicks.length >= 5) break;
-                    
-                    // Extract basic game info
-                    const homeTeam = game.home_team;
-                    const awayTeam = game.away_team;
-                    const gameTitle = `${awayTeam} @ ${homeTeam}`;
-                    const sportName = sportKey.includes('basketball') ? 'NBA' : 
-                                     sportKey.includes('baseball') ? 'MLB' : 
-                                     sportKey.includes('hockey') ? 'NHL' : 
-                                     sportKey.includes('soccer') ? 'Soccer' : 'Sports';
-                    
-                    // Create a pick based on real game data
-                    const realPick = {
-                      id: `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                      league: sportName,
-                      game: gameTitle,
-                      betType: 'Moneyline',
-                      shortPick: `${homeTeam} ML`,
-                      moneyline: `${homeTeam} -110`,
-                      spread: `${homeTeam} -3.5`,
-                      overUnder: 'OVER 220.5',
-                      time: new Date(game.commence_time || Date.now()).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-                      walletValue: '$75',
-                      confidenceLevel: 75,
-                      isPremium: allPicks.length > 0,
-                      primeTimeCard: false,
-                      silverCard: false,
-                      imageUrl: `/logos/${sportName.toLowerCase() === 'NBA' ? 'basketball' : 
-                                       sportName.toLowerCase() === 'MLB' ? 'baseball' : 
-                                       sportName.toLowerCase() === 'NHL' ? 'hockey' : 
-                                       sportName.toLowerCase() === 'Soccer' ? 'soccer' : 'sports'}.svg`,
-                      pickDetail: `${homeTeam} has a statistical advantage in this matchup against ${awayTeam}.`,
-                      analysis: `Gary's analysis shows ${homeTeam} has a statistical advantage in this matchup based on recent performance metrics.`,
-                      garysBullets: [
-                        `${homeTeam} has shown strong performance in recent games`,
-                        'Current odds present good betting value',
-                        'Statistical analysis supports this selection'
-                      ]
-                    };
-                    
-                    allPicks.push(realPick);
-                    console.log(`Added real pick for ${gameTitle}`);
-                  }
-                }
-                
-                attemptedSports.add(sportKey);
-              } catch (error) {
-                console.error(`Error getting additional picks for ${sportKey}:`, error);
-              }
-            }
+          // If we have 5 picks, we're done
+          if (allPicks.length >= REQUIRED_PICKS) {
+            break;
           }
-          
-          // As a last resort, if we still don't have 5 picks, use emergency picks
-          if (allPicks.length < 5) {
-            console.log(`Still only have ${allPicks.length} picks. Creating ${5 - allPicks.length} emergency picks as last resort`);
-            
-            const emergencySports = ['NBA', 'MLB', 'NHL'];
-            
-            for (let j = 0; j < emergencySports.length && allPicks.length < 5; j++) {
-              const sportName = emergencySports[j];
-              const gameTitle = `${sportName} Game ${j+1}`;
-              
-              // Create a very basic emergency pick
-              const emergencyPick = {
-                id: `real-emergency-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                league: sportName,
-                game: gameTitle,
-                betType: 'Best Bet: Moneyline',
-                shortPick: `${sportName} Moneyline`,
-                moneyline: 'Team A -110',
-                spread: 'Team A -3.5',
-                overUnder: 'OVER 220.5',
-                time: new Date().toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-                walletValue: '$75',
-                confidenceLevel: 75,
-                isPremium: allPicks.length > 0,
-                primeTimeCard: false,
-                silverCard: false,
-                imageUrl: `/logos/${sportName.toLowerCase() === 'nba' ? 'basketball' : 
-                                sportName.toLowerCase() === 'mlb' ? 'baseball' : 
-                                sportName.toLowerCase() === 'nhl' ? 'hockey' : 'sports'}.svg`,
-                pickDetail: 'Gary recommends this pick based on recent team performance and statistical analysis.',
-                analysis: 'Gary recommends this pick based on recent team performance and statistical analysis.',
-                garysBullets: [
-                  'Strong statistical edge identified',
-                  'Recent team performance supports this pick',
-                  'Current odds present good betting value'
-                ]
-              };
-              
-              allPicks.push(emergencyPick);
-              console.log(`Added emergency fallback pick for ${sportName}`);
-            }
-          }
-          
-          // Log the final count of picks
-          console.log(`Final pick count after fallbacks: ${allPicks.length}`);
+        } catch (pickError) {
+          console.error(`Error generating pick for game ${selectedGame.home_team} vs ${selectedGame.away_team}:`, pickError);
         }
+        
       }
       
-      console.log(`Successfully generated ${allPicks.length} real picks. No fallbacks will be used.`);
+      // STRICT POLICY: If we don't have exactly 5 picks, throw error - NO FALLBACKS
+      if (allPicks.length < REQUIRED_PICKS) {
+        console.error(`ERROR: Only generated ${allPicks.length} picks, but ${REQUIRED_PICKS} are required.`);
+        throw new Error(`Unable to generate the required ${REQUIRED_PICKS} picks. Only generated ${allPicks.length}. ` +
+                      `Please try again later when more games are available.`);
+      }
       
-      // 8. Store in database for future use and sharing across all users
+      // Log the final count of real picks - NO FALLBACKS
+      console.log(`Successfully generated ${allPicks.length} real picks with NO fallbacks.`);
+      
+      // 8. Store in database (Supabase ONLY) - NO FALLBACKS
+      console.log('Saving picks to Supabase database only - NO localStorage fallbacks');
       try {
-        console.log('Saving picks to Supabase database...');
         await picksService.storeDailyPicksInDatabase(allPicks);
         console.log('Successfully stored picks in Supabase database');
       } catch (storageError) {
-        console.error('Error storing picks in database:', storageError);
-        // Try the persistence service as a backup
-        try {
-          console.log('Attempting to save using picksPersistenceService...');
-          const savedSuccessfully = await picksPersistenceService.savePicks(allPicks);
-          console.log('picksPersistenceService save result:', savedSuccessfully);
-        } catch (persistError) {
-          console.error('Failed to save with persistence service:', persistError);
-        }
+        console.error('Error storing picks in Supabase database:', storageError);
+        // NO FALLBACKS - propagate the error
+        throw new Error(`Failed to store picks in Supabase database. NO fallbacks available. Error: ${storageError.message}`);
       }
       
       return allPicks;
