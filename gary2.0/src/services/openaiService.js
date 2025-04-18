@@ -8,7 +8,7 @@ export const openaiService = {
   /**
    * The OpenAI API key (loaded from environment variables)
    */
-  API_KEY: import.meta.env?.VITE_OPENAI_API_KEY || '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',
+  API_KEY: import.meta.env?.VITE_OPENAI_API_KEY || '',
   
   /**
    * Base URL for OpenAI API
