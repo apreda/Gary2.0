@@ -1,0 +1,217 @@
+/**
+ * GARY 2.0 - CONSOLIDATED PICK CARDS STYLING
+ * 
+ * This file contains all styles related to pick cards:
+ * - Card front and back styling
+ * - Card flip animation
+ * - Premium card variants
+ * - Card content layout
+ */
+
+/* Card dimensions and base properties */
+.pick-card {
+  position: relative;
+  width: 300px;
+  height: 420px;
+  margin: 0 auto;
+  perspective: 1200px;
+}
+
+/* Card Container and 3D transformation */
+.card-container {
+  perspective: 1200px;
+}
+
+.card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.8s, box-shadow 0.3s;
+  transform-style: preserve-3d;
+}
+
+.card-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+/* Card Front & Back Shared Properties */
+.card-front, 
+.card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.card-back {
+  transform: rotateY(180deg);
+}
+
+/* Premium Card Front */
+.pick-card-front {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, rgba(61, 51, 6, 0.9), rgba(122, 93, 11, 0.8));
+  border-radius: 16px;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Card Header */
+.pick-card-header,
+.premium-header {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.pick-card-league,
+.league-badge {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFC94C;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.pick-card-time {
+  font-size: 16px;
+  color: white;
+  opacity: 0.9;
+}
+
+/* Premium confidence rating */
+.premium-confidence {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.gold-text {
+  color: #d4af37 !important;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Game information */
+.pick-card-game,
+.game-matchup {
+  font-size: 16px;
+  color: white;
+  text-align: center;
+  padding: 15px;
+  line-height: 1.4;
+  margin-bottom: 0;
+  flex-grow: 0;
+}
+
+/* Card Body Content */
+.pick-card-center-content,
+.premium-card-body {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.pick-team-container {
+  margin-bottom: 12px;
+}
+
+.pick-info-divider {
+  border-top: 1px solid rgba(212, 175, 55, 0.3);
+  padding-top: 12px;
+  margin-bottom: 16px;
+}
+
+/* Premium Card Back */
+.pick-card-back-header {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  border-bottom: 1px solid rgba(255, 201, 76, 0.3);
+}
+
+.pick-card-heading {
+  font-size: 24px;
+  font-weight: 700;
+  color: #FFC94C;
+  text-align: center;
+  margin: 15px 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.pick-card-game-details {
+  padding: 0 15px;
+  margin-top: 20px;
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+.pick-game {
+  font-size: 16px;
+  color: white;
+  margin-bottom: 5px;
+}
+
+.pick-selection {
+  font-size: 24px;
+  font-weight: 700;
+  color: #FFC94C;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  margin: 0 auto;
+  max-width: calc(100% - 20px);
+}
+
+/* Analysis Content */
+.pick-analysis-content,
+.pick-analysis-preview {
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.15);
+  margin: 15px 10px 15px;
+  border-radius: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* Gary's Analysis Bullets */
+.gary-analysis-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 15px 0;
+}
+
+.gary-analysis-bullets li {
+  position: relative;
+  padding-left: 25px;
+  margin-bottom: 10px;
+  color: white;
+}
+
+.gary-analysis-bullets li:before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background-color: #d4af37;
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(212, 175, 55, 0.5);
+}
+
+/* Card actions */
+.card-actions {
+  padding: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
