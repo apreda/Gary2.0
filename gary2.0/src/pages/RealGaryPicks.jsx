@@ -114,19 +114,9 @@ export function RealGaryPicks() {
             console.log('No valid picks found in Supabase data');
           }
         } else {
-          // No picks found for today in Supabase
-          console.log('No picks found in Supabase for today');
-          
-          // Check if there are stored picks from a previous generation attempt
-          const storedPicks = await picksPersistenceService.loadPicks();
-          if (storedPicks && storedPicks.length > 0) {
-            console.log(`Found ${storedPicks.length} stored picks from a previous generation attempt`);
-            setPicks(storedPicks);
-            setLoading(false);
-            setIsLoading(false);
-            return;
-          }
-          
+          // No picks found for today in Supabase - always generate new picks
+          console.log('No picks found in Supabase for today - generating new picks...');
+          // Skip localStorage checks entirely and always generate fresh picks
           console.log('Generating new picks...');
           
           try {
