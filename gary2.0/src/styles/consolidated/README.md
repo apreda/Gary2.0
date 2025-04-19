@@ -8,7 +8,7 @@ The CSS has been organized into four main files:
 
 1. **design-system.css** - Core design system with colors, typography, and shared components
 2. **pick-cards.css** - All styles related to pick cards (front, back, flip animations)
-3. **carousel.css** - Styles for the premium fanned-out carousel display
+3. **premium-carousel.css** - Styles for the premium fanned-out carousel display
 4. **page-layouts.css** - Page-specific layouts, including RealGaryPicks
 
 ## Implementation Guide

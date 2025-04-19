@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import PickCard from "./PickCard";
-
+import '../styles/consolidated/premium-carousel.css';
 
 export function GarysPicks({ plan }) {
   const [visiblePicks, setVisiblePicks] = useState([]);
@@ -153,24 +153,19 @@ export function GarysPicks({ plan }) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-      {visiblePicks.map((pick) => {
-        // Robust validation: skip blank/invalid picks
-        if (!pick || !pick.id) return null;
-        const isFlipped = flippedCards[pick.id] || false;
-        const userDecision = userChoices[pick.id] || null;
-
-        return (
-          <PickCard
-            key={pick.id}
-            pick={pick}
-            isFlipped={isFlipped}
-            onFlip={() => toggleFlip(pick.id)}
-            userDecision={userDecision}
-            onTrackBet={() => {}}
-          />
-        );
-      })}
+    <div className="center-carousel">
+      <div className="center-carousel-inner">
+        {visiblePicks.map((pick) => {
+          // Robust validation: skip blank/invalid picks
+          if (!pick || !pick.id) return null;
+          return (
+            <PickCard
+              key={pick.id}
+              pick={pick}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

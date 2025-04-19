@@ -6,7 +6,7 @@
    ```css
    @import './design-system.css';
    @import './pick-cards.css';
-   @import './carousel.css';
+   @import './premium-carousel.css';
    @import './page-layouts.css';
    ```
 

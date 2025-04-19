@@ -9,10 +9,10 @@
 @import './design-system.css';
 
 /* Import Pick Card styles (front, back, flip animations) */
-@import './pick-cards.css';
+
 
 /* Import Carousel styles (fanned-out card display) */
-@import './carousel.css';
+@import './premium-carousel.css';
 
 /* Import Page Layouts (RealGaryPicks and other page structures) */
 @import './page-layouts.css';
