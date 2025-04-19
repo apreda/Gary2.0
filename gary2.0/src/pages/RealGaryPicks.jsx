@@ -585,5 +585,3 @@ export function RealGaryPicks() {
     </div>
   );
 }
-
-// Export changed to named export above
