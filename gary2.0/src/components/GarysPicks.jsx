@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import UniformPickCard from "./UniformPickCard";
+import PickCard from "./PickCard";
 
 
 export function GarysPicks({ plan }) {
@@ -15,52 +15,79 @@ export function GarysPicks({ plan }) {
     const fetchUserAndChoices = async () => {
       setLoading(true);
       setError(null);
+      let localUserId = null;
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        const id = userData?.user?.id;
+        // 1. Try to fetch the user
+        let userData, id;
+        try {
+          const userRes = await supabase.auth.getUser();
+          userData = userRes.data;
+          id = userData?.user?.id;
+          console.log('Supabase userData:', userData);
+          console.log('Supabase user id:', id);
+        } catch (userErr) {
+          console.error('Error fetching user:', userErr);
+        }
         if (!id) {
-          setError("You must be logged in to view picks.");
-          setLoading(false);
-          return;
-        }
-        setUserId(id);
-
-        // Fetch user choices
-        const { data: existingPicks, error: picksError } = await supabase
-          .from("user_picks")
-          .select("pick_id, decision")
-          .eq("user_id", id);
-        if (picksError) {
-          setError("Failed to fetch your picks. Please try again later.");
+          setUserId(null);
+          setUserChoices({});
+          console.log('No user authenticated, proceeding in read-only mode.');
         } else {
-          const mapped = {};
-          existingPicks.forEach((pick) => {
-            mapped[pick.pick_id] = pick.decision;
-          });
-          setUserChoices(mapped);
-        }
-
-        // Fetch real picks from Supabase (replace with your actual picks table/logic)
-        const { data: picks, error: picksFetchError } = await supabase
-          .from("picks")
-          .select("id, game, pick, logic")
-          .order("id", { ascending: true });
-        if (picksFetchError) {
-          setError("Failed to fetch picks. Please try again later.");
-          setVisiblePicks([]);
-        } else if (!picks || picks.length === 0) {
-          setError("No picks available today. Check back soon!");
-          setVisiblePicks([]);
-        } else {
-          if (plan === "pro") {
-            setVisiblePicks(picks);
-          } else if (plan === "free") {
-            setVisiblePicks(picks.slice(0, 1));
-          } else {
-            setVisiblePicks([]);
+          setUserId(id);
+          // 2. Fetch user choices if logged in
+          try {
+            const { data: existingPicks, error: picksError } = await supabase
+              .from("user_picks")
+              .select("pick_id, decision")
+              .eq("user_id", id);
+            if (picksError) {
+              console.error('Failed to fetch your picks:', picksError);
+              setError("Failed to fetch your picks. Please try again later.");
+              setUserChoices({});
+            } else if (existingPicks) {
+              const mapped = {};
+              existingPicks.forEach((pick) => {
+                mapped[pick.pick_id] = pick.decision;
+              });
+              setUserChoices(mapped);
+            }
+          } catch (choicesErr) {
+            console.error('Error fetching user choices:', choicesErr);
+            setUserChoices({});
           }
         }
+
+        // 3. Fetch picks regardless of user state
+        try {
+          const { data: picks, error: picksFetchError } = await supabase
+            .from("daily_picks")
+            .select("id, game, pick, logic")
+            .order("id", { ascending: true });
+          console.log('Fetched daily_picks data:', picks);
+          if (picksFetchError) {
+            console.error('Failed to fetch picks:', picksFetchError);
+            setError("Failed to fetch picks. Please try again later.");
+            setVisiblePicks([]);
+          } else if (!picks || picks.length === 0) {
+            setError("No picks available today. Check back soon!");
+            setVisiblePicks([]);
+          } else {
+            console.log(`Fetched ${picks.length} picks from Supabase.`);
+            if (plan === "pro") {
+              setVisiblePicks(picks);
+            } else if (plan === "free") {
+              setVisiblePicks(picks.slice(0, 1));
+            } else {
+              setVisiblePicks([]);
+            }
+          }
+        } catch (picksErr) {
+          console.error('Error fetching picks:', picksErr);
+          setError("An error occurred fetching picks.");
+          setVisiblePicks([]);
+        }
       } catch (e) {
+        console.error('Unexpected error in fetchUserAndChoices:', e);
         setError("An unexpected error occurred. Please refresh the page.");
         setVisiblePicks([]);
       } finally {
@@ -110,58 +137,18 @@ export function GarysPicks({ plan }) {
     <div className="max-w-5xl mx-auto mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
       {visiblePicks.map((pick) => {
         // Robust validation: skip blank/invalid picks
-        if (!pick || !pick.id || !pick.game || !pick.pick || !pick.logic) return null;
+        if (!pick || !pick.id) return null;
         const isFlipped = flippedCards[pick.id] || false;
         const userDecision = userChoices[pick.id] || null;
 
         return (
-          <UniformPickCard
+          <PickCard
             key={pick.id}
-            title={pick.game}
-            badge={userDecision ? (userDecision === 'ride' ? 'RIDE' : 'FADE') : 'GOLDEN PICK'}
-            imageUrl={"/logos/default.svg"}
-            content={
-              <>
-                <p className="text-gray-300 text-base mb-4">
-                  Gary Says: <span className="font-semibold text-[#d4af37]">{pick.pick}</span>
-                </p>
-                {userDecision ? (
-                  <p className="text-green-400 font-semibold">
-                    You already chose to {userDecision} this pick
-                  </p>
-                ) : (
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleChoice(pick.id, "ride");
-                      }}
-                      className="bg-[#d4af37] text-black px-4 py-1 rounded font-bold hover:bg-[#c9a535]"
-                    >
-                      Ride with Gary
-                    </button>
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleChoice(pick.id, "fade");
-                      }}
-                      className="bg-gray-800 text-white px-4 py-1 rounded font-bold hover:bg-gray-700"
-                    >
-                      Fade 🪤
-                    </button>
-                  </div>
-                )}
-              </>
-            }
-            backContent={
-              <div className="p-6">
-                <h3 className="text-lg font-bold mb-2 text-[#d4af37]">Gary’s Logic</h3>
-                <p className="text-sm text-gray-200">{pick.logic}</p>
-              </div>
-            }
+            pick={pick}
             isFlipped={isFlipped}
             onFlip={() => toggleFlip(pick.id)}
-            isLocked={false}
+            userDecision={userDecision}
+            onTrackBet={() => {}}
           />
         );
       })}
