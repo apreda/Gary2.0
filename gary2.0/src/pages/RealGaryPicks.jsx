@@ -373,37 +373,6 @@ export function RealGaryPicks() {
               console.error('Error: No picks data received');
               setLoadError('No picks available. Please try again later when more games are available.');
             }
-            
-            // Mark as generated to prevent scheduler from regenerating
-            schedulerService.markPicksAsGenerated();
-            
-            setLoading(false);
-          } catch (genError) {
-            console.error('Error generating new picks:', genError);
-            setLoadError('Unable to generate new picks. Please try again later.');
-            setLoading(false);
-          }
-        }
-      } catch (supabaseError) {
-        console.error('Error accessing Supabase:', supabaseError);
-        setLoadError('Unable to access picks database. Please try again later.');
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error in loadPicks:', error);
-      setLoadError('An unexpected error occurred. Please try again later.');
-      setLoading(false);
-    }
-  };
-  
-  // Force regenerate picks (used when user clicks force refresh button)
-  const forceGeneratePicks = async () => {
-    try {
-      setLoading(true);
-      setPicks([]); // Clear picks state before force-generating new picks
-      setLoadError(null);
-      
-      // Delete today's picks from Supabase first
       console.log('Removing today\'s picks from Supabase...');
       const today = new Date();
       const formattedDate = today.toISOString().split('T')[0];
