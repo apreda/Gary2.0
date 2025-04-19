@@ -325,44 +325,6 @@ export function RealGaryPicks() {
     </div>
   );
 }
-      
-      // Format today's date as YYYY-MM-DD for consistent querying
-      const today = new Date();
-      const formattedDate = today.toISOString().split('T')[0];
-      console.log(`Looking for picks with date=${formattedDate}`);
-      
-      try {
-        const { data, error } = await supabase
-          .from('daily_picks')
-          .select('*')
-          .eq('date', formattedDate);
-          
-        if (error) {
-          console.error('Error fetching picks from Supabase:', error);
-          throw new Error(`Supabase query error: ${error.message}`);
-        }
-        
-        if (Array.isArray(data) && data.length > 0) {
-          // Extract the picks array from the first row
-          const picksArray = Array.isArray(data[0].picks) ? data[0].picks : [];
-          console.log(`Loaded ${picksArray.length} picks from database row:`, picksArray);
-
-          // Validate and fix pick data
-          const validatedPicks = picksArray.map(pick => validatePickData(pick)).filter(Boolean);
-
-          // Check for duplicate IDs
-          const ids = validatedPicks.map(p => p.id);
-          const hasDuplicates = ids.length !== new Set(ids).size;
-          if (hasDuplicates) {
-            console.error('Duplicate pick IDs detected:', ids);
-          }
-
-          setPicks(validatedPicks);
-        } else {
-          // No picks found for today in Supabase - always generate new picks
-          console.log('No picks found in Supabase for today - generating new picks...');
-          // Skip localStorage checks entirely and always generate fresh picks
-          console.log('Generating new picks...');
           
           try {
             // Generate new picks
