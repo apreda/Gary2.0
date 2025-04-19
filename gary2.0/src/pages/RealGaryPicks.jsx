@@ -45,10 +45,12 @@ import './NavigationFix.css';
 
 // Utility to validate and fix pick data
 function validatePickData(pick) {
-  if (!pick) return null;
-  
+  if (!pick || !pick.id) {
+    console.error('validatePickData: Pick missing valid id:', pick);
+    return null;
+  }
   return {
-    id: pick.id || `pick-${Date.now()}`,
+    id: pick.id,
     game: pick.game || 'Game information unavailable',
     league: pick.league || 'SPORT',
     pickTeam: pick.pickTeam || 'Team Pick',
@@ -63,6 +65,21 @@ function validatePickData(pick) {
 }
 
 export function RealGaryPicks() {
+  // ...all hooks and logic remain unchanged...
+
+  // (existing hooks, useEffect, handlers, etc.)
+
+  // --- START OF RENDER ---
+  return (
+    <div className="real-gary-picks-isolation">
+      {/* Render header, nav, and main picks UI as before */}
+      {/* Example: */}
+      <HeaderNav />
+      {/* Add your main RealGaryPicks UI here, e.g., carousel, PickCards, etc. */}
+      {/* ...existing JSX rendering logic from before... */}
+    </div>
+  );
+}
   // Access user plan context
   const { userPlan, updateUserPlan } = useUserPlan();
   const { userStats, updateUserStats } = useUserStats();
@@ -99,6 +116,7 @@ export function RealGaryPicks() {
       if (!isMounted.current) return;
       setLoading(true);
       setLoadError(null); // Reset any previous errors
+      setPicks([]); // Clear picks state before loading new picks
       
       // Check if there are picks for today in Supabase
       console.log('Checking Supabase for today\'s picks...');
@@ -120,10 +138,20 @@ export function RealGaryPicks() {
         }
         
         if (Array.isArray(data) && data.length > 0) {
-          console.log(`Loaded ${data.length} picks from database:`, data[0]);
+          // Extract the picks array from the first row
+          const picksArray = Array.isArray(data[0].picks) ? data[0].picks : [];
+          console.log(`Loaded ${picksArray.length} picks from database row:`, picksArray);
+
           // Validate and fix pick data
-          const validatedPicks = data.map(pick => validatePickData(pick)).filter(Boolean);
-          // Set picks with the real data
+          const validatedPicks = picksArray.map(pick => validatePickData(pick)).filter(Boolean);
+
+          // Check for duplicate IDs
+          const ids = validatedPicks.map(p => p.id);
+          const hasDuplicates = ids.length !== new Set(ids).size;
+          if (hasDuplicates) {
+            console.error('Duplicate pick IDs detected:', ids);
+          }
+
           setPicks(validatedPicks);
         } else {
           // No picks found for today in Supabase - always generate new picks
@@ -162,6 +190,12 @@ export function RealGaryPicks() {
                 pick && pick.id && pick.game && pick.league && pick.shortPick);
                 
               if (validPicks.length > 0) {
+                // Check for duplicate IDs
+                const ids = validPicks.map(p => p.id);
+                const hasDuplicates = ids.length !== new Set(ids).size;
+                if (hasDuplicates) {
+                  console.error('Duplicate pick IDs detected during generation:', ids);
+                }
                 setPicks(validPicks);
                 console.log('Successfully set picks in state. Valid picks count:', validPicks.length);
               } else {
@@ -199,6 +233,7 @@ export function RealGaryPicks() {
   const forceGeneratePicks = async () => {
     try {
       setLoading(true);
+      setPicks([]); // Clear picks state before force-generating new picks
       setLoadError(null);
       
       // Delete today's picks from Supabase first
