@@ -105,8 +105,6 @@ export function RealGaryPicks() {
   );
 }
 
-  // Define the loadPicks function - NO FALLBACKS, only real data from Supabase
-  const loadPicks = async () => {
     try {
       if (!isMounted.current) return;
       setLoading(true);
