@@ -609,8 +609,6 @@ export function RealGaryPicks() {
           onClose={() => setShowToast(false)}
         />
       )}
-      
-      {/* Removed nextPicksInfo since we're not using it in this version */}
     </div>
   );
 }
