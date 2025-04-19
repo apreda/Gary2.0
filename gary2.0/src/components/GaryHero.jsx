@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/dimensional.css';
-// Import the correct Gary logo image
-import garyLogo from '../assets/images/gary4.svg';
 
 export function GaryHero() {
   const [isVisible, setIsVisible] = useState(false);
@@ -60,66 +58,9 @@ export function GaryHero() {
         <div className="right-wall side-wall" style={{ opacity: 0.5, background: 'linear-gradient(to left, #1a1a1a, transparent)' }}></div>
       </div>
       
-      {/* Reduced overlay opacity to prevent black overlay issues */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/20" style={{zIndex: 1}}></div>
-      <div className="absolute bottom-0 left-0 right-0 h-[100px] bg-gradient-to-t from-black/40 to-transparent" style={{zIndex: 1}}></div>
-      <div className="absolute top-0 left-0 right-0 h-[60px] bg-gradient-to-b from-black/30 to-transparent" style={{zIndex: 1}}></div>
+      {/* Removed potentially obstructing overlay elements */}
       
-      {/* Gary Logo (gary4.svg) with improved positioning and z-index */}
-      <div className="absolute inset-0 flex items-center justify-center" style={{ 
-        zIndex: 40, /* Much higher z-index to ensure visibility above all elements */
-        transform: 'translate(288px, 0px)', /* Adjusted position to avoid being cut off */
-        pointerEvents: 'none', /* Ensure it doesn't block interactions */
-        background: 'none !important', /* Force transparent background */
-      }}>
-        <div className="relative w-[746px] h-[746px]" style={{ background: 'none !important' }}> 
-          {/* Outer gold glow */}
-          <div className="absolute inset-0" style={{ background: 'none !important' }}>
-            <img 
-              src={garyLogo} 
-              alt="" 
-              className="w-full h-full object-contain"
-              style={{
-                filter: 'blur(24px) sepia(1) saturate(2.4) brightness(1.16)',
-                opacity: 0.24,
-                background: 'none !important',
-                position: 'relative', /* Ensure proper stacking */
-              }}
-            />
-          </div>
-          
-          {/* Middle gold glow */}
-          <div className="absolute inset-0" style={{ background: 'none !important' }}>
-            <img 
-              src={garyLogo} 
-              alt="" 
-              className="w-full h-full object-contain"
-              style={{
-                filter: 'blur(12px) sepia(1) saturate(3.2) brightness(1.24)',
-                opacity: 0.36,
-                background: 'none !important',
-                position: 'relative', /* Ensure proper stacking */
-              }}
-            />
-          </div>
-          
-          {/* Main visible image */}
-          <div className="absolute inset-0" style={{ background: 'none !important' }}>
-            <img 
-              src={garyLogo} 
-              alt="Gary AI" 
-              className="w-full h-full object-contain"
-              style={{
-                filter: 'drop-shadow(0 0 16px rgba(212, 175, 55, 0.64)) drop-shadow(0 0 8px rgba(212, 175, 55, 0.48))',
-                opacity: 1,
-                background: 'none !important',
-                position: 'relative', /* Ensure proper stacking */
-                zIndex: 25, /* Make sure the main logo is on top */
-              }}
-            />
-          </div>
-        </div>
-      </div>
+      {/* Gary Logo has been removed as requested */}
       
       {/* Content Container */}
       <div 
