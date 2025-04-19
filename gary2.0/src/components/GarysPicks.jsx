@@ -59,26 +59,45 @@ export function GarysPicks({ plan }) {
 
         // 3. Fetch picks regardless of user state
         try {
-          const { data: picks, error: picksFetchError } = await supabase
+          // Fetch the most recent daily_picks row
+          const { data: dailyRows, error: picksFetchError } = await supabase
             .from("daily_picks")
-            .select("id, game, pick, logic")
-            .order("id", { ascending: true });
-          console.log('Fetched daily_picks data:', picks);
+            .select("id, picks, date, created_at")
+            .order("date", { ascending: false })
+            .limit(1);
+          console.log('Fetched daily_picks row:', dailyRows);
           if (picksFetchError) {
             console.error('Failed to fetch picks:', picksFetchError);
             setError("Failed to fetch picks. Please try again later.");
             setVisiblePicks([]);
-          } else if (!picks || picks.length === 0) {
+          } else if (!dailyRows || dailyRows.length === 0) {
             setError("No picks available today. Check back soon!");
             setVisiblePicks([]);
           } else {
-            console.log(`Fetched ${picks.length} picks from Supabase.`);
-            if (plan === "pro") {
-              setVisiblePicks(picks);
-            } else if (plan === "free") {
-              setVisiblePicks(picks.slice(0, 1));
-            } else {
+            // Parse the picks array from the first row
+            let picksArr = [];
+            try {
+              // picks may be already parsed as JSON or as a string
+              const picksRaw = dailyRows[0].picks;
+              picksArr = Array.isArray(picksRaw) ? picksRaw : JSON.parse(picksRaw);
+            } catch (jsonErr) {
+              console.error("Failed to parse picks JSON:", jsonErr);
+              setError("Error parsing picks data. Please contact support.");
               setVisiblePicks([]);
+              return;
+            }
+            if (!Array.isArray(picksArr) || picksArr.length === 0) {
+              setError("No picks available today. Check back soon!");
+              setVisiblePicks([]);
+            } else {
+              console.log(`Loaded ${picksArr.length} picks from daily_picks.`);
+              if (plan === "pro") {
+                setVisiblePicks(picksArr);
+              } else if (plan === "free") {
+                setVisiblePicks(picksArr.slice(0, 1));
+              } else {
+                setVisiblePicks([]);
+              }
             }
           }
         } catch (picksErr) {

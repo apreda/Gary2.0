@@ -20,12 +20,17 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
   
   // Check all required props for rendering
   console.log('Pick properties check:', {
+    id: pick.id,
     game: pick.game,
     league: pick.league,
-    pickTeam: pick.pickTeam,
-    betType: pick.betType || 'Moneyline',
+    spread: pick.spread,
+    betType: pick.betType,
     shortPick: pick.shortPick,
-    image: pick.image || 'missing'
+    pickDetail: pick.pickDetail,
+    imageUrl: pick.imageUrl,
+    analysis: pick.analysis,
+    confidenceLevel: pick.confidenceLevel,
+    garysBullets: pick.garysBullets
   });
   
   // Force primetime card type for all picks to ensure CONSISTENT gold/black styling
@@ -60,12 +65,12 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
       {/* Card Body */}
       <div className="card-body bg-gradient-to-b from-[#111111] to-[#222222] text-white p-5 premium-card-body">
         <div className="mb-4 pick-team-container">
-          <div className="text-2xl font-bold mb-1 text-[#d4af37] gold-text">{pick.pickTeam || 'Team Pick'}</div>
-          <div className="pick-details text-sm text-white">{pick.betType || 'Moneyline'}</div>
+          <div className="text-2xl font-bold mb-1 text-[#d4af37] gold-text">{pick.game || 'Matchup'}</div>
+          <div className="pick-details text-sm text-white">{pick.spread || pick.betType || 'Spread / Moneyline'}</div>
         </div>
         
         <div className="border-t border-[#d4af37]/30 pt-4 mb-5 pick-info-divider">
-          <div className="text-xl font-bold mb-3 text-[#d4af37] gold-text premium-pick">{pick.shortPick || pick.pickDetail || 'Bet on Team to win'}</div>
+          <div className="text-xl font-bold mb-3 text-[#d4af37] gold-text premium-pick">{pick.shortPick || pick.pickDetail || pick.betType || 'Pick Details'}</div>
           <div className="text-sm text-white mb-4 pick-analysis-preview">
             {pick.analysis?.substring(0, 120) || "Gary's analysis will appear here when you flip the card..."}...
           </div>
@@ -174,9 +179,9 @@ const PickCard = ({ pick, isActive, isFlipped, onFlip, onTrackBet, userDecision 
     <div className={`pick-card-wrapper ${displayClass} w-full transition-all duration-500`}>
       <UniformPickCard
         cardType={cardType}
-        title={pick.shortPick || `${pick.league} Pick`}
-        badge={pick.league}
-        imageUrl={pick.imageUrl || `/logos/${pick.league.toLowerCase()}.svg`}
+        title={pick.game || pick.shortPick || `${pick.league} Pick`}
+        badge={pick.league || 'Pick'}
+        imageUrl={pick.imageUrl || `/logos/${(pick.league||'default').toLowerCase()}.svg`}
         content={frontContent}
         backContent={backContent}
         isFlipped={isFlipped}
