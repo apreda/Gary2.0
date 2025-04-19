@@ -135,64 +135,10 @@ function RealGaryPicks() {
           </div>
         ) : (
           <>
-            <div className="carousel-track" style={{
-              position: 'relative',
-              width: '100%',
-              height: '500px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              pointerEvents: 'none',
-            }}>
-              {[currentIndex - 1, currentIndex, currentIndex + 1].map((i, idx) => {
-                if (i < 0 || i >= picks.length) return null;
-                const offset = i - currentIndex;
-                const pick = picks[i];
-                let left = '50%';
-                let translateX = 0;
-                let zIndex = 5;
-                let scale = 0.92;
-                let opacity = 1;
-                if (offset === 0) {
-                  zIndex = 10;
-                  scale = 1;
-                  opacity = 1;
-                  translateX = '-50%';
-                } else if (offset === -1) {
-                  zIndex = 5;
-                  scale = 0.92;
-                  opacity = 1;
-                  translateX = '-150%';
-                } else if (offset === 1) {
-                  zIndex = 5;
-                  scale = 0.92;
-                  opacity = 1;
-                  translateX = '50%';
-                }
-                return (
-                  <div
-                    key={pick.id}
-                    className="pick-card"
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left,
-                      width: 320,
-                      height: 396,
-                      background: 'linear-gradient(120deg, #fffbe6 5%, #ffe066 25%, #FFD700 60%, #FFC94C 100%)',
-                      borderRadius: '1.25rem',
-                      boxShadow: '0 0 64px 16px #FFD70066',
-                      transform: `translate(${translateX}, -50%) scale(${scale})`,
-                      zIndex,
-                      opacity,
-                      transition: 'transform 0.5s cubic-bezier(.77,0,.18,1), opacity 0.4s, z-index 0s',
-                      pointerEvents: zIndex === 10 ? 'auto' : 'none',
-                    }}
-                  >
-                    <PickCard pick={pick} />
-                  </div>
-                );
-              })}
+            <div className="flex justify-center items-center min-h-[70vh] w-full gap-8">
+              {picks.map((pick, idx) => (
+                <PickCard key={pick.id} pick={pick} />
+              ))}
             </div>
             {picks.length > 1 && (
               <>

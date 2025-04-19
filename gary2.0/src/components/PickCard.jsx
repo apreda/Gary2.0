@@ -1,14 +1,17 @@
 import React from 'react';
+import FlipCard from './FlipCard';
 import '../styles/consolidated/premium-carousel.css';
 import '../styles/consolidated/design-system.css';
 
 /**
- * PickCard - Premium Gold Static Card (matches provided image)
+ * PickCard - Premium Gold Card with Flip
  */
 export default function PickCard({ pick }) {
   if (!pick) return null;
   const [homeTeam, awayTeam] = pick.matchup?.split(' vs ') || [pick.matchup, ''];
-  return (
+
+  // Front content (gold card)
+  const frontContent = (
     <div className="relative w-96 h-[27rem] bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-3xl shadow-2xl border-4 border-black flex flex-col items-center justify-between p-8 gold-card-static">
       {/* VIEW PICK Button */}
       <button className="absolute left-1/2 -translate-x-1/2 -top-7 px-8 py-2 rounded-xl shadow-lg bg-yellow-200 text-black font-bold text-lg border border-black tracking-wide z-10 gold-card-btn">
@@ -27,5 +30,20 @@ export default function PickCard({ pick }) {
         </div>
       </div>
     </div>
+  );
+
+  // Back content (analysis/stats/placeholder)
+  const backContent = (
+    <div className="relative w-96 h-[27rem] bg-gradient-to-br from-yellow-300 to-yellow-700 rounded-3xl shadow-2xl border-4 border-black flex flex-col items-center justify-center p-8 gold-card-static">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-yellow-900 mb-4">Analysis</h2>
+        <p className="text-lg text-black font-semibold mb-2">{pick.analysis || 'No analysis available for this pick.'}</p>
+        {/* Add more stats or info here if available */}
+      </div>
+    </div>
+  );
+
+  return (
+    <FlipCard frontContent={frontContent} backContent={backContent} />
   );
 }
