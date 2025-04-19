@@ -65,12 +65,46 @@ function validatePickData(pick) {
 }
 
 export function RealGaryPicks() {
-  // ...all hooks and logic remain unchanged...
-
-  // (existing hooks, useEffect, handlers, etc.)
-
+  // Access user plan context
+  const { userPlan, updateUserPlan } = useUserPlan();
+  const { userStats, updateUserStats } = useUserStats();
+  const location = useLocation();
+  const navigate = useNavigate();
   
+  // Log user plan for debugging
+  useEffect(() => {
+    console.log("RealGaryPicks - Current user plan:", userPlan);
+  }, [userPlan]);
+  
+  // State for picks - NO fallbacks, only real data
+  const [picks, setPicks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const [flippedCards, setFlippedCards] = useState({});
+  const [showBetTracker, setShowBetTracker] = useState(false);
+  const [betAmount, setBetAmount] = useState('');
+  const [betType, setBetType] = useState('');
+  const [betOdds, setBetOdds] = useState('');
+  const [currentBetPick, setCurrentBetPick] = useState(null);
+  const [betTrackedPickId, setBetTrackedPickId] = useState(null);
+  const [toastMessage, setToastMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const [userDecisions, setUserDecisions] = useState({}); // Track user decisions on each pick
+  
+  // Ref to track component mount state
+  const isMounted = useRef(true);
+
+  // ... (all other logic, handlers, loadPicks, etc. go here) ...
+
+  // The main return block goes here (copy the full return JSX)
+  return (
+    <div className="real-gary-picks-isolation">
+      {/* ...the full RealGaryPicks UI JSX as before... */}
+    </div>
+  );
 }
+
   // Access user plan context
   const { userPlan, updateUserPlan } = useUserPlan();
   const { userStats, updateUserStats } = useUserStats();
