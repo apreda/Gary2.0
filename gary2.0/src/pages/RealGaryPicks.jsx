@@ -48,12 +48,10 @@ function RealGaryPicks() {
 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') {
-          // No picks for today, generate new ones
-          const { data: freshPicks, error: genError } = await supabase
-            .rpc('generate_daily_picks', { target_date: today });
-
-          if (genError) throw genError;
-          setPicks(freshPicks?.picks || []);
+          // No picks for today, generate new ones via picksService
+          const generatedPicks = await picksService.generateDailyPicks();
+          await picksService.storeDailyPicksInDatabase(generatedPicks);
+          setPicks(generatedPicks || []);
         } else {
           throw fetchError;
         }
