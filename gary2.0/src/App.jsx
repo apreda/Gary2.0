@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, Link, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { BetCardProfileProvider } from './contexts/BetCardProfileContext';
 import { UserPlanProvider } from './contexts/UserPlanContext';
@@ -7,7 +7,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { Navbar } from "./components/Navbar";
 import { Home } from "./pages/Home";
 import { MeetGary } from "./pages/MeetGary";
-import { RealGaryPicks } from "./pages/RealGaryPicks";
+import RealGaryPicks from "./pages/RealGaryPicks";
 import { Pricing } from "./pages/Pricing";
 import { Billfold } from "./pages/Billfold";
 import { Leaderboard } from "./pages/Leaderboard";

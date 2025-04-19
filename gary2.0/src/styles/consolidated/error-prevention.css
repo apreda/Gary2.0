@@ -1,66 +1,20 @@
-/**
- * ERROR PREVENTION STYLING
- * 
- * This file prevents white backgrounds, error overlays, and other visual disruptions
- * that could interrupt the user experience. It ensures a consistent dark theme
- * regardless of API errors or other issues.
- */
-
-/* Target specific elements that might create white overlays */
-html::before,
-body::before,
-#root::before,
-[class*="overlay"],
-[class*="modal"],
-[id*="error"],
-[class*="error"],
-[id*="api"],
-[class*="api"],
-[id*="key"],
-[class*="key"] {
-  background-color: transparent !important;
+/* error-prevention.css: Ensures dark background and prevents white flashes */
+:root, html, body {
+  background: #18181b !important;
+  color-scheme: dark;
 }
 
-/* Ensure all content is visible regardless of API errors */
-#root,
-#root > *,
-.App,
-.App > *,
-.real-gary-picks,
-[class*="container"],
-[class*="content"],
-[class*="wrapper"] {
-  visibility: visible !important;
-  opacity: 1 !important;
-  display: block !important;
-  background-color: #111111 !important;
+body {
+  background-color: #18181b !important;
+  color: #fff;
+  min-height: 100vh;
 }
 
-/* Force everything to have the dark background and be visible */
+#root, #app {
+  background: transparent;
+}
+
+/* Prevent background color flashes on route changes or hydration */
 * {
   background-color: inherit;
-}
-
-/* Remove any white rectangles that might be created by error handlers */
-[style*="background: white"],
-[style*="background-color: white"],
-[style*="background: #fff"],
-[style*="background-color: #fff"],
-[style*="background: rgb(255, 255, 255)"],
-[style*="background-color: rgb(255, 255, 255)"] {
-  background: #111111 !important;
-  background-color: #111111 !important;
-  color: white !important;
-}
-
-/* Handle API key error elements specifically */
-[id*="api-key-error"],
-[class*="api-key-error"],
-[id*="apiKeyError"],
-[class*="apiKeyError"],
-[id*="api-error"],
-[class*="api-error"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
 }

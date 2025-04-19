@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import garyLogo from '../assets/images/gary3.png';
 import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
-import '../styles/gritty-theme.css';
 import '../styles/dimensional.css';
 import { FlipCard } from '../components/FlipCard';
 

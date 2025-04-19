@@ -14,9 +14,8 @@ import garyPromo from '../assets/images/Gary_Promo.png';
 // Using public path for gary-bear-logo.svg
 import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
-import '../styles/gritty-theme.css';
 import '../styles/dimensional.css';
-import './GaryPicksCarousel.css';
+import '../styles/consolidated/premium-carousel.css';
 import GaryHero from '../components/GaryHero';
 
 // Recent Winners Feed Component
@@ -160,9 +159,9 @@ function Home() {
       <GaryHero />
       
       {/* Gary's Winning System Section with Hot Pick Card */}
-      <section className="py-16 bg-[#111] mt-0 border-t-0 relative overflow-hidden">
+      <section className="pt-2 pb-8 bg-[#111] -mt-40 border-t-0 relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center mb-12">
+          <div className="text-center mb-8">
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
               <span className="text-[#d4af37]">The Bear's Brain</span>
             </h2>

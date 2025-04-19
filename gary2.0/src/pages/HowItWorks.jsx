@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import '../assets/css/animations.css';
-import '../styles/gritty-theme.css';
 import '../styles/dimensional.css';
 import garyImage from '../assets/images/gary1.svg';
 
