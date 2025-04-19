@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
+import UniformPickCard from "./UniformPickCard";
 
 
 export function GarysPicks({ plan }) {
@@ -94,62 +95,78 @@ export function GarysPicks({ plan }) {
     }));
   };
 
+  // Error or loading state
+  if (loading) {
+    return <div className="text-center text-white mt-10">Loading Gary's Picks...</div>;
+  }
+  if (error) {
+    return <div className="text-center text-red-500 mt-10">{error}</div>;
+  }
+  if (!visiblePicks || visiblePicks.length === 0) {
+    return <div className="text-center text-gray-400 mt-10">No picks available today. Check back soon!</div>;
+  }
+
   return (
     <div className="max-w-5xl mx-auto mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
       {visiblePicks.map((pick) => {
-        const isFlipped = flippedCards[pick.id];
+        // Robust validation: skip blank/invalid picks
+        if (!pick || !pick.id || !pick.game || !pick.pick || !pick.logic) return null;
+        const isFlipped = flippedCards[pick.id] || false;
+        const userDecision = userChoices[pick.id] || null;
 
         return (
-          <div
+          <UniformPickCard
             key={pick.id}
-            className="perspective"
-            onClick={() => toggleFlip(pick.id)}
-          >
-            <div className={`card ${isFlipped ? "flipped" : ""}`}>
-              {/* Front Side */}
-              <div className="card-front">
-                <h3 className="text-xl font-bold mb-2">{pick.game}</h3>
-                <p className="text-gray-700 text-sm mb-4">
-                  Gary Says: <span className="font-semibold">{pick.pick}</span>
+            title={pick.game}
+            badge={userDecision ? (userDecision === 'ride' ? 'RIDE' : 'FADE') : 'GOLDEN PICK'}
+            imageUrl={"/logos/default.svg"}
+            content={
+              <>
+                <p className="text-gray-300 text-base mb-4">
+                  Gary Says: <span className="font-semibold text-[#d4af37]">{pick.pick}</span>
                 </p>
-                {userChoices[pick.id] ? (
-                  <p className="text-green-700 font-semibold">
-                    You already chose to {userChoices[pick.id]} this pick
+                {userDecision ? (
+                  <p className="text-green-400 font-semibold">
+                    You already chose to {userDecision} this pick
                   </p>
                 ) : (
                   <div className="flex gap-3 justify-center">
                     <button
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         handleChoice(pick.id, "ride");
                       }}
-                      className="bg-blue-600 text-white px-4 py-1 rounded"
+                      className="bg-[#d4af37] text-black px-4 py-1 rounded font-bold hover:bg-[#c9a535]"
                     >
                       Ride with Gary
                     </button>
                     <button
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         handleChoice(pick.id, "fade");
                       }}
-                      className="bg-gray-800 text-white px-4 py-1 rounded"
+                      className="bg-gray-800 text-white px-4 py-1 rounded font-bold hover:bg-gray-700"
                     >
                       Fade 🪤
                     </button>
                   </div>
                 )}
-              </div>
-
-              {/* Back Side */}
-              <div className="card-back">
-                <h3 className="text-lg font-bold mb-2">Gary’s Logic</h3>
+              </>
+            }
+            backContent={
+              <div className="p-6">
+                <h3 className="text-lg font-bold mb-2 text-[#d4af37]">Gary’s Logic</h3>
                 <p className="text-sm text-gray-200">{pick.logic}</p>
               </div>
-            </div>
-          </div>
+            }
+            isFlipped={isFlipped}
+            onFlip={() => toggleFlip(pick.id)}
+            isLocked={false}
+          />
         );
       })}
     </div>
   );
 }
+
 
