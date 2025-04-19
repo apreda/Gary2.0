@@ -69,16 +69,7 @@ export function RealGaryPicks() {
 
   // (existing hooks, useEffect, handlers, etc.)
 
-  // --- START OF RENDER ---
-  return (
-    <div className="real-gary-picks-isolation">
-      {/* Render header, nav, and main picks UI as before */}
-      {/* Example: */}
-      <HeaderNav />
-      {/* Add your main RealGaryPicks UI here, e.g., carousel, PickCards, etc. */}
-      {/* ...existing JSX rendering logic from before... */}
-    </div>
-  );
+  
 }
   // Access user plan context
   const { userPlan, updateUserPlan } = useUserPlan();
