@@ -105,36 +105,6 @@ export function RealGaryPicks() {
   );
 }
 
-  // Access user plan context
-  const { userPlan, updateUserPlan } = useUserPlan();
-  const { userStats, updateUserStats } = useUserStats();
-  const location = useLocation();
-  const navigate = useNavigate();
-  
-  // Log user plan for debugging
-  useEffect(() => {
-    console.log("RealGaryPicks - Current user plan:", userPlan);
-  }, [userPlan]);
-  
-  // State for picks - NO fallbacks, only real data
-  const [picks, setPicks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
-  const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const [flippedCards, setFlippedCards] = useState({});
-  const [showBetTracker, setShowBetTracker] = useState(false);
-  const [betAmount, setBetAmount] = useState('');
-  const [betType, setBetType] = useState('');
-  const [betOdds, setBetOdds] = useState('');
-  const [currentBetPick, setCurrentBetPick] = useState(null);
-  const [betTrackedPickId, setBetTrackedPickId] = useState(null);
-  const [toastMessage, setToastMessage] = useState('');
-  const [showToast, setShowToast] = useState(false);
-  const [userDecisions, setUserDecisions] = useState({}); // Track user decisions on each pick
-  
-  // Ref to track component mount state
-  const isMounted = useRef(true);
-
   // Define the loadPicks function - NO FALLBACKS, only real data from Supabase
   const loadPicks = async () => {
     try {
