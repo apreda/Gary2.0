@@ -70,13 +70,6 @@ export function RealGaryPicks() {
   const { userStats, updateUserStats } = useUserStats();
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // Log user plan for debugging
-  useEffect(() => {
-    console.log("RealGaryPicks - Current user plan:", userPlan);
-  }, [userPlan]);
-  
-  // State for picks - NO fallbacks, only real data
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -90,28 +83,248 @@ export function RealGaryPicks() {
   const [betTrackedPickId, setBetTrackedPickId] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
-  const [userDecisions, setUserDecisions] = useState({}); // Track user decisions on each pick
-  
-  // Ref to track component mount state
+  const [userDecisions, setUserDecisions] = useState({});
   const isMounted = useRef(true);
 
-  // ... (all other logic, handlers, loadPicks, etc. go here) ...
+  // Fetch picks from Supabase or generate new
+  const loadPicks = async () => {
+    try {
+      if (!isMounted.current) return;
+      setLoading(true);
+      setLoadError(null);
+      setPicks([]);
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('daily_picks')
+        .select('*')
+        .eq('date', formattedDate);
+      if (error) {
+        setLoadError('Unable to fetch picks.');
+        setLoading(false);
+        return;
+      }
+      if (Array.isArray(data) && data.length > 0) {
+        const picksArray = Array.isArray(data[0].picks) ? data[0].picks : [];
+        const validatedPicks = picksArray.map(pick => validatePickData(pick)).filter(Boolean);
+        setPicks(validatedPicks);
+      } else {
+        // Generate new picks
+        try {
+          const newPicks = await picksService.generateDailyPicks();
+          let picksArray = [];
+          if (Array.isArray(newPicks)) {
+            picksArray = newPicks;
+          } else if (typeof newPicks === 'object') {
+            picksArray = [newPicks];
+          }
+          const validPicks = picksArray.filter(pick => pick && pick.id && pick.game && pick.league && pick.shortPick);
+          setPicks(validPicks);
+        } catch (genError) {
+          setLoadError('Unable to generate picks.');
+        }
+      }
+      setLoading(false);
+    } catch (error) {
+      setLoadError('An unexpected error occurred.');
+      setLoading(false);
+    }
+  };
 
-  // The main return block goes here (copy the full return JSX)
+  // Force generate picks
+  const forceGeneratePicks = async () => {
+    try {
+      setLoading(true);
+      setPicks([]);
+      setLoadError(null);
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0];
+      await supabase.from('daily_picks').delete().eq('date', formattedDate);
+      const newPicks = await picksService.generateDailyPicks();
+      setPicks(Array.isArray(newPicks) ? newPicks : [newPicks]);
+      schedulerService.markPicksAsGenerated();
+      if (location.search.includes('forcePicks=true')) {
+        navigate('/real-gary-picks', { replace: true });
+      }
+    } catch {
+      loadPicks();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    isMounted.current = true;
+    loadPicks();
+    document.body.style.backgroundColor = '#111111';
+    document.documentElement.style.backgroundColor = '#111111';
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const handleCardFlip = (pickId) => {
+    setFlippedCards((prev) => ({ ...prev, [pickId]: !prev[pickId] }));
+  };
+  const handlePrevPick = () => setActiveCardIndex((prev) => Math.max(0, prev - 1));
+  const handleNextPick = () => setActiveCardIndex((prev) => Math.min(picks.length - 1, prev + 1));
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => handleNextPick(),
+    onSwipedRight: () => handlePrevPick(),
+    preventDefaultTouchmoveEvent: true,
+    trackMouse: false
+  });
+  const openBetTracker = (pick) => {
+    setBetAmount('');
+    setBetType(pick.betType || 'Standard');
+    setBetOdds(pick.odds || '-110');
+    setShowBetTracker(true);
+  };
+  const closeBetTracker = () => setShowBetTracker(false);
+  const saveBet = async (pickId, decision, notes = '') => {
+    try {
+      if (decision === 'bet' && (!betAmount || isNaN(parseFloat(betAmount)) || parseFloat(betAmount) <= 0)) {
+        setToastMessage('Please enter a valid bet amount');
+        setShowToast(true);
+        return;
+      }
+      const currentPick = picks.find(p => p.id === pickId);
+      if (!currentPick) return;
+      const betInfo = {
+        id: `${pickId}-${Date.now()}`,
+        pickId,
+        date: new Date().toISOString(),
+        game: currentPick.game,
+        league: currentPick.league,
+        pick: currentPick.shortPick || currentPick.game,
+        type: betType,
+        odds: betOdds,
+        amount: decision === 'bet' ? parseFloat(betAmount) : 0,
+        decision,
+        notes,
+        status: 'pending',
+        garysConfidence: currentPick.confidenceLevel || 75
+      };
+      await betTrackingService.addBet(betInfo);
+      if (decision === 'bet') {
+        updateUserStats({
+          ...userStats,
+          totalBetAmount: (userStats.totalBetAmount || 0) + parseFloat(betAmount),
+          totalBets: (userStats.totalBets || 0) + 1
+        });
+      }
+      setUserDecisions({ ...userDecisions, [pickId]: decision });
+      setToastMessage(decision === 'bet' ? 'Bet tracked successfully!' : 'Pick skipped');
+      setShowToast(true);
+      setShowBetTracker(false);
+    } catch (error) {
+      setToastMessage('Error saving bet. Please try again.');
+      setShowToast(true);
+    }
+  };
+
+  let pageTitle = "Gary's Picks";
+  if (picks.length > 0) {
+    const leagues = [...new Set(picks.map(pick => pick.league))].join(', ');
+    pageTitle = `Gary's ${leagues} Picks`;
+  }
+  const indicators = picks.map((_, index) => ({
+    active: index === activeCardIndex,
+    isPrime: picks[index]?.primeTimeCard
+  }));
+  const visiblePicks = Array.isArray(picks) ? picks.slice(0, 6) : [];
+  const showUpsell = userPlan !== 'premium' && picks.length > 6;
+  const reachedFreeLimit = activeCardIndex >= 2 && userPlan !== 'premium';
+
   return (
-    <div className="real-gary-picks-isolation">
-      {/* ...the full RealGaryPicks UI JSX as before... */}
+    <div className="real-gary-picks dark-theme gold-accent" style={{backgroundColor: '#111111', color: 'white'}}>
+      <HeaderNav title={pageTitle} indicators={indicators} />
+      <div className="picks-container" {...swipeHandlers} style={{backgroundColor: '#111111'}}>
+        {loading ? (
+          <LoadingState />
+        ) : loadError ? (
+          <div className="error-state">
+            <p>{loadError}</p>
+            <button onClick={() => loadPicks()}>Try Again</button>
+          </div>
+        ) : (
+          visiblePicks.length > 0 ? (
+            <div className="pick-card-container gary-picks-container" style={{backgroundColor: '#111111'}}>
+              <h2 className="gary-picks-title">Gary's Picks</h2>
+              <div className="carousel-container">
+                <div className="carousel-track">
+                  {visiblePicks.map((pick, index) => (
+                    <PickCard
+                      key={pick.id}
+                      pick={pick}
+                      flipped={!!flippedCards[pick.id]}
+                      onFlip={() => handleCardFlip(pick.id)}
+                      isActive={index === activeCardIndex}
+                      onBet={() => openBetTracker(pick)}
+                      decision={userDecisions[pick.id]}
+                    />
+                  ))}
+                </div>
+                <div className="carousel-nav">
+                  <button
+                    onClick={handlePrevPick}
+                    className={`prev-pick premium-button ${activeCardIndex === 0 ? 'disabled' : ''}`}
+                    disabled={activeCardIndex === 0}
+                    style={{backgroundColor: '#d4af37', color: '#111111', fontWeight: 'bold', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: activeCardIndex === 0 ? 'not-allowed' : 'pointer', opacity: activeCardIndex === 0 ? 0.6 : 1}}
+                  >
+                    <span className="nav-arrow">&laquo;</span> Previous
+                  </button>
+                  <div className="pick-indicators premium-indicators" style={{ display: 'flex', gap: '8px', margin: '0 10px' }}>
+                    {visiblePicks.map((_, idx) => (
+                      <span 
+                        key={idx} 
+                        className={`pick-indicator ${idx === activeCardIndex ? 'active gold-indicator' : ''}`}
+                        onClick={() => setActiveCardIndex(idx)}
+                        style={{width: '12px', height: '12px', borderRadius: '50%', backgroundColor: idx === activeCardIndex ? '#d4af37' : '#333333', border: '1px solid rgba(212, 175, 55, 0.5)', cursor: 'pointer', transition: 'all 0.3s ease', transform: idx === activeCardIndex ? 'scale(1.2)' : 'scale(1)', boxShadow: idx === activeCardIndex ? '0 0 8px rgba(212, 175, 55, 0.6)' : 'none'}}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleNextPick}
+                    className={`next-pick premium-button ${activeCardIndex === visiblePicks.length - 1 ? 'disabled' : ''}`}
+                    disabled={activeCardIndex === visiblePicks.length - 1}
+                    style={{backgroundColor: '#d4af37', color: '#111111', fontWeight: 'bold', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: activeCardIndex === visiblePicks.length - 1 ? 'not-allowed' : 'pointer', opacity: activeCardIndex === visiblePicks.length - 1 ? 0.6 : 1}}
+                  >
+                    Next <span className="nav-arrow">&raquo;</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="no-picks">
+              <p>No picks available for today yet. Check back soon!</p>
+              <button onClick={forceGeneratePicks}>Generate Picks Now</button>
+            </div>
+          )
+        )}
+        {showUpsell && (
+          <PremiumUpsell picksCount={picks.length} />
+        )}
+      </div>
+      {showBetTracker && (
+        <BetTrackerModal
+          onClose={closeBetTracker}
+          onSave={(decision, notes) => saveBet(picks[activeCardIndex].id, decision, notes)}
+          amount={betAmount}
+          onAmountChange={(e) => setBetAmount(e.target.value)}
+          betType={betType}
+          odds={betOdds}
+        />
+      )}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 }
-
-      if (!isMounted.current) return;
-      setLoading(true);
-      setLoadError(null); // Reset any previous errors
-      setPicks([]); // Clear picks state before loading new picks
-      
-      // Check if there are picks for today in Supabase
-      console.log('Checking Supabase for today\'s picks...');
       
       // Format today's date as YYYY-MM-DD for consistent querying
       const today = new Date();
