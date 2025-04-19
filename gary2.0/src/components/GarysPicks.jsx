@@ -1,51 +1,72 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
-const mockPicks = [
-  { id: 1, game: "Pacers vs Knicks", pick: "Pacers +4.5", logic: "Gary likes the matchup and recent form." },
-  { id: 2, game: "Yankees vs Red Sox", pick: "Yankees ML", logic: "East Coast vibes, bullpen advantage." },
-  { id: 3, game: "Bengals vs Browns", pick: "Bengals -3.5", logic: "Joe Burrow at home? Come on." }
-];
 
 export function GarysPicks({ plan }) {
   const [visiblePicks, setVisiblePicks] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userChoices, setUserChoices] = useState({});
   const [flippedCards, setFlippedCards] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchUserAndChoices = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const id = userData?.user?.id;
-      if (!id) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const id = userData?.user?.id;
+        if (!id) {
+          setError("You must be logged in to view picks.");
+          setLoading(false);
+          return;
+        }
+        setUserId(id);
 
-      setUserId(id);
+        // Fetch user choices
+        const { data: existingPicks, error: picksError } = await supabase
+          .from("user_picks")
+          .select("pick_id, decision")
+          .eq("user_id", id);
+        if (picksError) {
+          setError("Failed to fetch your picks. Please try again later.");
+        } else {
+          const mapped = {};
+          existingPicks.forEach((pick) => {
+            mapped[pick.pick_id] = pick.decision;
+          });
+          setUserChoices(mapped);
+        }
 
-      const { data: existingPicks, error } = await supabase
-        .from("user_picks")
-        .select("pick_id, decision")
-        .eq("user_id", id);
-
-      if (error) {
-        console.error("Failed to fetch picks:", error.message);
-      } else {
-        const mapped = {};
-        existingPicks.forEach((pick) => {
-          mapped[pick.pick_id] = pick.decision;
-        });
-        setUserChoices(mapped);
+        // Fetch real picks from Supabase (replace with your actual picks table/logic)
+        const { data: picks, error: picksFetchError } = await supabase
+          .from("picks")
+          .select("id, game, pick, logic")
+          .order("id", { ascending: true });
+        if (picksFetchError) {
+          setError("Failed to fetch picks. Please try again later.");
+          setVisiblePicks([]);
+        } else if (!picks || picks.length === 0) {
+          setError("No picks available today. Check back soon!");
+          setVisiblePicks([]);
+        } else {
+          if (plan === "pro") {
+            setVisiblePicks(picks);
+          } else if (plan === "free") {
+            setVisiblePicks(picks.slice(0, 1));
+          } else {
+            setVisiblePicks([]);
+          }
+        }
+      } catch (e) {
+        setError("An unexpected error occurred. Please refresh the page.");
+        setVisiblePicks([]);
+      } finally {
+        setLoading(false);
       }
     };
-
     fetchUserAndChoices();
-
-    if (plan === "pro") {
-      setVisiblePicks(mockPicks);
-    } else if (plan === "free") {
-      setVisiblePicks(mockPicks.slice(0, 1));
-    } else {
-      setVisiblePicks([]);
-    }
   }, [plan]);
 
   const handleChoice = async (pickId, decision) => {
