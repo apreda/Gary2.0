@@ -105,7 +105,6 @@ export function RealGaryPicks() {
   );
 }
 
-    try {
       if (!isMounted.current) return;
       setLoading(true);
       setLoadError(null); // Reset any previous errors
