@@ -115,12 +115,12 @@ export function GaryHero() {
                 >
                   Get Today's Picks
                 </Link>
-                <Link 
-                  to="/how-it-works" 
-                  className="btn-secondary py-3 px-8 rounded-lg font-bold"
+                <button 
+                  onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="inline-block bg-transparent border border-[#d4af37] text-white font-semibold py-3 px-8 rounded-full hover:bg-[#d4af37]/10 transition duration-300 text-lg"
                 >
-                  How It Works
-                </Link>
+                  How it Works
+                </button>
               </div>
             </div>
           </div>
