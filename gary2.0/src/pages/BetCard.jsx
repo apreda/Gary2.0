@@ -3,10 +3,15 @@ import { supabase } from "../supabaseClient";
 import { BetHistory } from "../components/BetHistory";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { useToast } from "../components/ui/ToastProvider";
-import { useAuth } from "../components/ui/AuthProvider";
+import { useAuth } from "../contexts/AuthContext";
 import { motion } from "framer-motion";
 
-export function BetCard() {
+/**
+ * BetCard - Displays user betting stats and history.
+ * @param {object} props
+ * @param {any} [props.reloadKey] - Optional key that forces BetCard to reload data when changed.
+ */
+export function BetCard({ reloadKey }) {
   const [stats, setStats] = useState(null);
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +19,7 @@ export function BetCard() {
   const showToast = useToast();
 
   useEffect(() => {
+    console.log('[BetCard] useEffect triggered', { reloadKey, user });
     if (!user) {
       showToast('Please sign in to view your BetCard', 'info');
       return;
@@ -102,7 +108,7 @@ export function BetCard() {
     }
 
     fetchUserData();
-  }, [user, showToast]);
+  }, [user, showToast, reloadKey]);
 
   if (loading) return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6">
