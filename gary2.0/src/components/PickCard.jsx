@@ -46,6 +46,6 @@ export default function PickCard({ pick }) {
   );
 
   return (
-    <FlipCard frontContent={frontContent} backContent={backContent} />
+    <FlipCard className="w-96 h-[27rem]" frontContent={frontContent} backContent={backContent} />
   );
 }
