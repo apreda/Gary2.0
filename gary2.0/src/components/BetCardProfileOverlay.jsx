@@ -1,67 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
-import { FaTimes, FaFire, FaSnowflake } from 'react-icons/fa';
+import { FaFire, FaSnowflake } from 'react-icons/fa';
+import { useUserStats } from '../hooks/useUserStats';
 
 // Baseball card style overlay for BetCard Profile
 export default function BetCardProfileOverlay({ isOpen, onClose }) {
-  const [betTracking, setBetTracking] = useState({
-    betsWithGary: 0,
-    betsAgainstGary: 0,
-    totalBets: 0,
-    correctDecisions: 0,
-    currentStreak: 0,
-    picks: []
-  });
-  const [loading, setLoading] = useState(true);
-
-  // Load betting history from localStorage on component mount
-  useEffect(() => {
-    if (isOpen) {
-      // Load betting history from localStorage if available
-      const savedBetTracking = localStorage.getItem('garyBetTracking');
-      if (savedBetTracking) {
-        setBetTracking(JSON.parse(savedBetTracking));
-      }
-      setLoading(false);
-    }
-  }, [isOpen]);
+  const { stats, loading, error } = useUserStats();
 
   // Calculate percentages
-  const winRate = betTracking.totalBets > 0
-    ? Math.round((betTracking.correctDecisions / betTracking.totalBets) * 100)
-    : 0;
-    
-  const ridePercentage = betTracking.totalBets > 0
-    ? Math.round((betTracking.betsWithGary / betTracking.totalBets) * 100)
-    : 0;
-    
-  const fadePercentage = betTracking.totalBets > 0
-    ? Math.round((betTracking.betsAgainstGary / betTracking.totalBets) * 100)
-    : 0;
+  const totalBets = stats?.stats?.totalPicks || 0;
+  const winRate = totalBets > 0 ? Math.round(((stats?.stats?.winCount || 0) / totalBets) * 100) : 0;
+  const ridePercentage = totalBets > 0 ? Math.round(((stats?.stats?.rideCount || 0) / totalBets) * 100) : 0;
+  const fadePercentage = totalBets > 0 ? Math.round(((stats?.stats?.fadeCount || 0) / totalBets) * 100) : 0;
 
-  // Handle escape key to close overlay
-  useEffect(() => {
-    const handleEsc = (event) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    
-    if (isOpen) {
-      document.addEventListener('keydown', handleEsc);
-    }
-    
-    return () => {
-      document.removeEventListener('keydown', handleEsc);
-    };
-  }, [isOpen, onClose]);
 
   // Return null if not open
   if (!isOpen) return null;
 
   // Get streak display with emoji and color
   const getStreakDisplay = () => {
-    const streak = betTracking.currentStreak;
+    const streak = stats?.stats?.currentStreak || 0;
     if (streak > 0) {
       return (
         <div className="flex items-center">
@@ -80,17 +38,38 @@ export default function BetCardProfileOverlay({ isOpen, onClose }) {
     return <span className="text-gray-400">0</span>;
   };
 
-  // Calculate username or default
-  const username = localStorage.getItem('username') || 'Bettor';
-  
-  // Create random avatar based on username
+  // Avatar and username from Supabase/email
+  const username = stats?.username || 'Bettor';
   const avatarSeed = username.toLowerCase().replace(/[^a-z0-9]/g, '');
   const avatarUrl = `https://i.pravatar.cc/150?u=${avatarSeed}`;
 
   // Determine if user is primarily "Ride with Gary" or "Fade the Bear"
-  const primaryStrategy = betTracking.betsWithGary >= betTracking.betsAgainstGary 
-    ? "RIDES WITH GARY" 
+  const primaryStrategy = (stats?.stats?.rideCount || 0) >= (stats?.stats?.fadeCount || 0)
+    ? "RIDES WITH GARY"
     : "FADES THE BEAR";
+
+  // Loading state
+  if (loading) {
+    return createPortal(
+      <div className="fixed inset-0 flex items-center justify-center z-50 px-4" style={{backgroundColor: 'rgba(0,0,0,0.75)'}}>
+        <div className="bg-[#111] rounded-xl shadow-2xl p-10 flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#d4af37] mb-4"></div>
+          <div className="text-[#d4af37]">Loading your stats...</div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+  if (error) {
+    return createPortal(
+      <div className="fixed inset-0 flex items-center justify-center z-50 px-4" style={{backgroundColor: 'rgba(0,0,0,0.75)'}}>
+        <div className="bg-[#111] rounded-xl shadow-2xl p-10 flex flex-col items-center">
+          <div className="text-red-500 font-bold">Error loading stats: {error}</div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   // Portal the overlay to body
   return createPortal(
@@ -154,7 +133,7 @@ export default function BetCardProfileOverlay({ isOpen, onClose }) {
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs text-[#d4af37]">WIN RATE</span>
                   <span className="text-xs text-[#d4af37]">
-                    RECORD: {betTracking.correctDecisions}-{betTracking.totalBets - betTracking.correctDecisions}
+                    RECORD: {(stats?.stats?.winCount || 0)}-{(stats?.stats?.lossCount || 0)}
                   </span>
                 </div>
                 <div className="h-6 bg-[#111] rounded-md border border-[#d4af37]/30 flex items-center px-2">
@@ -173,14 +152,14 @@ export default function BetCardProfileOverlay({ isOpen, onClose }) {
                 <div className="bg-[#111]/70 rounded-lg p-3 border border-[#d4af37]/20">
                   <div className="text-xs text-[#d4af37] mb-1">BET WITH GARY</div>
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold">{betTracking.betsWithGary}</span>
+                    <span className="text-lg font-bold">{stats?.stats?.rideCount || 0}</span>
                     <span className="text-sm text-gray-400">{ridePercentage}%</span>
                   </div>
                 </div>
                 <div className="bg-[#111]/70 rounded-lg p-3 border border-[#333]/50">
                   <div className="text-xs text-gray-400 mb-1">FADE THE BEAR</div>
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold">{betTracking.betsAgainstGary}</span>
+                    <span className="text-lg font-bold">{stats?.stats?.fadeCount || 0}</span>
                     <span className="text-sm text-gray-400">{fadePercentage}%</span>
                   </div>
                 </div>
@@ -190,7 +169,7 @@ export default function BetCardProfileOverlay({ isOpen, onClose }) {
               <div className="bg-[#111]/70 rounded-lg p-3 border border-[#333]/50 mb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">TOTAL DECISIONS</span>
-                  <span className="text-lg font-bold">{betTracking.totalBets}</span>
+                  <span className="text-lg font-bold">{totalBets}</span>
                 </div>
               </div>
             </div>
