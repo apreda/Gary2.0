@@ -1,19 +1,28 @@
 import React, { useState } from 'react';
 import '../styles/consolidated/premium-carousel.css';
 
-export function FlipCard({ frontContent, backContent, className = '', initialFlipped = false, flipOnClick = true }) {
-  const [isFlipped, setIsFlipped] = useState(initialFlipped);
+export function FlipCard({ frontContent, backContent, className = '', initialFlipped = false, flipOnClick = true, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
+  const [internalFlipped, setInternalFlipped] = useState(initialFlipped);
+  const isControlled = typeof controlledFlipped === 'boolean' && typeof setControlledFlipped === 'function';
+  const isFlipped = isControlled ? controlledFlipped : internalFlipped;
+  const setIsFlipped = isControlled ? setControlledFlipped : setInternalFlipped;
 
   const handleFlip = () => {
     if (flipOnClick) {
-      setIsFlipped(!isFlipped);
+      setIsFlipped(f => !f);
     }
   };
 
   return (
     <div 
       className={`flip-card-container ${className}`}
-      onClick={handleFlip}
+      onClick={e => {
+        // Prevent flipping if the click originated from a button or interactive element
+        if (
+          e.target.closest('button, a, input, [tabindex], .no-flip')
+        ) return;
+        handleFlip();
+      }}
     >
       <div 
         className={`flip-card ${isFlipped ? 'rotate-y-180' : ''}`}
