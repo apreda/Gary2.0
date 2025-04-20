@@ -8,6 +8,49 @@
   position: relative;
 }
 
+/* Vertically center carousel and add spacing */
+.carousel-outer-center {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+}
+
+.carousel-card-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 30rem;
+  gap: 2.5rem;
+}
+
+@media (max-width: 900px) {
+  .carousel-outer-center {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+  .carousel-card-center {
+    min-height: 22rem;
+    gap: 1.2rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .carousel-outer-center {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .carousel-card-center {
+    min-height: 15rem;
+    gap: 0.5rem;
+  }
+}
+
+
 /* PickCard Styles (from PickCard.jsx inline styles) */
 .pick-card {
   width: 282px;
