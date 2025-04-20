@@ -10,7 +10,14 @@ import { supabase } from '../supabaseClient';
 /**
  * PickCard - Premium Gold Card with Flip
  */
-export default function PickCard({ pick, showToast: showToastFromProps }) {
+/**
+ * PickCard - Premium Gold Card with Flip
+ * @param {object} props
+ * @param {object} props.pick - The pick data to display.
+ * @param {function} [props.showToast] - Optional toast function for notifications.
+ * @param {function} [props.onDecisionMade] - Optional callback fired after a decision is made (bet or fade), receives (decision, pick) as arguments.
+ */
+export default function PickCard({ pick, showToast: showToastFromProps, onDecisionMade }) {
   const { user } = useAuth();
   const showToast = showToastFromProps || useToast();
   const [decision, setDecision] = useState(null); // user's decision for this pick
@@ -43,11 +50,14 @@ export default function PickCard({ pick, showToast: showToastFromProps }) {
 
   // --- Handlers ---
   const handleUserDecision = async (userDecision) => {
+    console.log('[PickCard] handleUserDecision called', { userDecision, pick });
     if (!user) {
+      console.log('[PickCard] Not logged in');
       showToast('You must be logged in to make a pick.', 'error');
       return;
     }
     if (decision) {
+      console.log('[PickCard] Already made decision:', decision);
       showToast('You have already made your choice for this pick.', 'info');
       return;
     }
@@ -60,19 +70,27 @@ export default function PickCard({ pick, showToast: showToastFromProps }) {
           decision: userDecision
         }
       ]);
+      console.log('[PickCard] Supabase insert result', { error });
       if (error) {
         showToast('Failed to save your pick. Please try again.', 'error');
       } else {
         setDecision(userDecision);
+        if (typeof onDecisionMade === 'function') {
+          onDecisionMade(userDecision, pick);
+        }
         if (userDecision === 'bet') {
+          console.log('[PickCard] showToast: Bet with Gary');
           showToast('You bet with Gary! Good luck! 🍀', 'success');
         } else if (userDecision === 'fade') {
+          console.log('[PickCard] showToast: Fade the Bear');
           showToast('You faded the Bear! Bold move! 🐻', 'success');
         } else {
+          console.log('[PickCard] showToast: Decision saved');
           showToast('Decision saved!', 'success');
         }
       }
     } catch (e) {
+      console.log('[PickCard] Exception', e);
       showToast('An unexpected error occurred. Please try again.', 'error');
     } finally {
       setLoading(false);

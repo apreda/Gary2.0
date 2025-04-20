@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUserStats } from "../hooks/useUserStats";
 import { useUserPlan } from "../hooks/useUserPlan";
 import PickCard from '../components/PickCard';
+import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +19,8 @@ import { picksPersistenceService } from '../services/picksPersistenceService';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 
 function RealGaryPicks() {
+  // ...existing code...
+  const [reloadKey, setReloadKey] = useState(0);
   const { userPlan } = useUserPlan();
 
   // State for picks and UI
@@ -93,6 +96,22 @@ function RealGaryPicks() {
     ? `Gary's ${[...new Set(visiblePicks.map(function(p) { return p.league; }))].join(', ')} Picks`
     : "Gary's Picks";
 
+  /**
+   * Handler called when a user makes a bet/fade decision in PickCard.
+   * Triggers reload of picks/user stats and logs for debugging.
+   */
+  const handleDecisionMade = (decision, pick) => {
+    console.log('[RealGaryPicks] handleDecisionMade', { decision, pick });
+    // Reload picks if necessary
+    loadPicks();
+    // Increment reloadKey to force BetCard to reload
+    setReloadKey(prev => {
+      const newKey = prev + 1;
+      console.log('[RealGaryPicks] reloadKey incremented', newKey);
+      return newKey;
+    });
+  };
+
   // Function to handle bet tracking
   const handleTrackBet = (pickId) => {
     setUserDecisions(prev => ({
@@ -153,7 +172,12 @@ function RealGaryPicks() {
             <div className="carousel-outer-center flex flex-col justify-center items-center min-h-[70vh] w-full py-12 mt-[7vh] md:mt-[10vh] lg:mt-[12vh]">
               <div className="carousel-card-center flex justify-center items-center w-full" style={{ minHeight: '30rem' }}>
                 {picks.length > 0 && (
-                  <PickCard key={picks[currentIndex].id} pick={picks[currentIndex]} showToast={showToast} />
+                  <PickCard
+                    key={picks[currentIndex].id}
+                    pick={picks[currentIndex]}
+                    showToast={showToast}
+                    onDecisionMade={handleDecisionMade}
+                  />
                 )}
               </div>
             </div>
@@ -179,6 +203,9 @@ function RealGaryPicks() {
           </>
         )}
       </div>
+
+      {/* Ensure BetCard reloads when reloadKey changes */}
+      <BetCard reloadKey={reloadKey} />
 
       {showBetTracker && activePick && (
         <BetTrackerModal
