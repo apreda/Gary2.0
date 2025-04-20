@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUserStats } from "../hooks/useUserStats";
 import { useUserPlan } from "../hooks/useUserPlan";
 import PickCard from '../components/PickCard';
+import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -37,8 +38,9 @@ function RealGaryPicks() {
   // State for bet tracking
   const [showBetTracker, setShowBetTracker] = useState(false);
   const [activePick, setActivePick] = useState(null);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
+  // Toast notification system
+  const showToast = useToast();
 
   // Load picks from Supabase
   const loadPicks = async () => {
@@ -151,7 +153,7 @@ function RealGaryPicks() {
             <div className="carousel-outer-center flex flex-col justify-center items-center min-h-[70vh] w-full py-12 mt-[7vh] md:mt-[10vh] lg:mt-[12vh]">
               <div className="carousel-card-center flex justify-center items-center w-full" style={{ minHeight: '30rem' }}>
                 {picks.length > 0 && (
-                  <PickCard key={picks[currentIndex].id} pick={picks[currentIndex]} />
+                  <PickCard key={picks[currentIndex].id} pick={picks[currentIndex]} showToast={showToast} />
                 )}
               </div>
             </div>
@@ -185,12 +187,7 @@ function RealGaryPicks() {
           onSave={handleSaveBet}
         />
       )}
-      {showToast && (
-        <Toast
-          message={toastMessage}
-          onClose={() => setShowToast(false)}
-        />
-      )}
+
     </div>
   );
 }

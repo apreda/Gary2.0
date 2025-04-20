@@ -10,9 +10,9 @@ import { supabase } from '../supabaseClient';
 /**
  * PickCard - Premium Gold Card with Flip
  */
-export default function PickCard({ pick }) {
+export default function PickCard({ pick, showToast: showToastFromProps }) {
   const { user } = useAuth();
-  const showToast = useToast();
+  const showToast = showToastFromProps || useToast();
   const [decision, setDecision] = useState(null); // user's decision for this pick
   const [loading, setLoading] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -64,10 +64,13 @@ export default function PickCard({ pick }) {
         showToast('Failed to save your pick. Please try again.', 'error');
       } else {
         setDecision(userDecision);
-        showToast(
-          userDecision === 'bet' ? 'You bet with Gary!' : 'You faded the Bear!',
-          'success'
-        );
+        if (userDecision === 'bet') {
+          showToast('You bet with Gary! Good luck! 🍀', 'success');
+        } else if (userDecision === 'fade') {
+          showToast('You faded the Bear! Bold move! 🐻', 'success');
+        } else {
+          showToast('Decision saved!', 'success');
+        }
       }
     } catch (e) {
       showToast('An unexpected error occurred. Please try again.', 'error');
