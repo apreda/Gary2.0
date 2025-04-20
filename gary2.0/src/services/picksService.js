@@ -64,34 +64,43 @@ const picksService = {
 
       // Extract only the essential pick data for UI display and Supabase storage
       const cleanedPicks = picks.map(pick => {
-        // Extract only the properties needed for display in pick cards
-        const essentialPickData = {
-          id: pick.id,
-          league: pick.league,
-          game: pick.game,
-          betType: pick.betType,
-          shortPick: pick.shortPick,
-          moneyline: pick.moneyline,
-          spread: pick.spread,
-          overUnder: pick.overUnder,
-          time: pick.time,
-          walletValue: pick.walletValue,
-          confidenceLevel: pick.confidenceLevel,
-          isPremium: pick.isPremium,
-          primeTimeCard: pick.primeTimeCard,
-          silverCard: pick.silverCard,
-          // Include analysis for card flip
-          pickDetail: pick.pickDetail || pick.analysis,
-          analysis: pick.analysis,
-          // Include bullet points for display
-          garysBullets: Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 5) : [],
-          // Include image URL if available
-          imageUrl: pick.imageUrl || `/logos/${pick.league?.toLowerCase().replace('nba', 'basketball').replace('mlb', 'baseball').replace('nhl', 'hockey')}.svg`
-        };
-        
-        // Remove any remaining circular references or functions
-        return JSON.parse(JSON.stringify(essentialPickData));
-      });
+  // Format shortPick as 'Team name + Pick' (e.g. 'Celtics -3.5')
+  let shortPickFormatted = '';
+  if (pick.betType && pick.betType.toLowerCase().includes('spread') && pick.spread) {
+    // e.g. 'Celtics -3.5'
+    shortPickFormatted = pick.spread;
+  } else if (pick.betType && pick.betType.toLowerCase().includes('moneyline') && pick.moneyline) {
+    // e.g. 'Celtics ML' or 'Celtics -110'
+    shortPickFormatted = pick.moneyline;
+  } else if (pick.betType && pick.betType.toLowerCase().includes('total') && pick.overUnder) {
+    // e.g. 'OVER 220.5'
+    shortPickFormatted = pick.overUnder;
+  } else {
+    shortPickFormatted = pick.shortPick || '';
+  }
+
+  // Only keep essential properties, removing imageUrl, silverCard, pickDetail
+  const essentialPickData = {
+    id: pick.id,
+    league: pick.league,
+    game: pick.game,
+    betType: pick.betType,
+    shortPick: shortPickFormatted,
+    moneyline: pick.moneyline,
+    spread: pick.spread,
+    overUnder: pick.overUnder,
+    time: pick.time,
+    walletValue: pick.walletValue,
+    confidenceLevel: pick.confidenceLevel,
+    isPremium: pick.isPremium,
+    primeTimeCard: pick.primeTimeCard,
+    analysis: pick.analysis,
+    garysBullets: Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 5) : []
+  };
+
+  // Remove any remaining circular references or functions
+  return JSON.parse(JSON.stringify(essentialPickData));
+});
 
       console.log(`Successfully cleaned ${cleanedPicks.length} picks for database storage`);
       
@@ -950,15 +959,45 @@ const picksService = {
             const confidenceRating = fullAnalysis.confidenceScore || 75;
             
             // Generate the final pick object
-            const pick = {
+            // --- Extract real market values from odds API response ---
+let realMoneyline = '';
+let realSpread = '';
+let realOverUnder = '';
+if (selectedGame.markets && Array.isArray(selectedGame.markets)) {
+  // Moneyline (h2h)
+  const h2hMarket = selectedGame.markets.find(m => m.key === 'h2h');
+  if (h2hMarket && h2hMarket.outcomes && h2hMarket.outcomes.length >= 2) {
+    const homeOutcome = h2hMarket.outcomes.find(o => o.name === selectedGame.home_team);
+    if (homeOutcome) {
+      realMoneyline = `${selectedGame.home_team} ${homeOutcome.price > 0 ? '+' : ''}${homeOutcome.price}`;
+    }
+  }
+  // Spread
+  const spreadMarket = selectedGame.markets.find(m => m.key === 'spreads');
+  if (spreadMarket && spreadMarket.outcomes && spreadMarket.outcomes.length >= 2) {
+    const homeSpread = spreadMarket.outcomes.find(o => o.name === selectedGame.home_team);
+    if (homeSpread) {
+      realSpread = `${selectedGame.home_team} ${homeSpread.point > 0 ? '+' : ''}${homeSpread.point} (${homeSpread.price > 0 ? '+' : ''}${homeSpread.price})`;
+    }
+  }
+  // Over/Under (totals)
+  const totalsMarket = selectedGame.markets.find(m => m.key === 'totals');
+  if (totalsMarket && totalsMarket.outcomes && totalsMarket.outcomes.length >= 2) {
+    const overOutcome = totalsMarket.outcomes.find(o => o.name.toLowerCase().includes('over'));
+    if (overOutcome) {
+      realOverUnder = `OVER ${overOutcome.point} (${overOutcome.price > 0 ? '+' : ''}${overOutcome.price})`;
+    }
+  }
+}
+const pick = {
               id: pickId,
               league: league,
               game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
               betType: fullAnalysis.betType || 'Moneyline',
               shortPick: shortPick,
-              moneyline: `${selectedGame.home_team} -110`,
-              spread: `${selectedGame.home_team} -3.5`,
-              overUnder: 'OVER 220.5',
+              moneyline: realMoneyline,
+              spread: realSpread,
+              overUnder: realOverUnder,
               time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
               walletValue: `$${fullAnalysis.stakeAmount || 75}`,
               confidenceLevel: confidenceRating,
