@@ -1,0 +1,57 @@
+.gold-card-premium {
+  position: relative;
+}
+.gold-card-premium::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  right: 10%;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle at center, #fff8dc55, transparent);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+.text-league {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: #6b6b6b;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.text-matchup {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #fefefe;
+  text-shadow: 0 2px 8px #FFD70088, 0 1.5px 0 #fff8dc, 0 0.5px 0 #333;
+}
+.text-timestamp {
+  font-size: 0.9rem;
+  color: #222222;
+  text-shadow: 0 1px 2px #fff8dc99;
+}
+.gold-btn-premium {
+  background: linear-gradient(to bottom, #FFF8DC, #FFD700);
+  border: 1px solid #e5c100;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: all 0.3s ease-in-out;
+}
+.gold-btn-premium:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+.shiny-effect {
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: -100px; }
+  100% { background-position: 300px; }
+}

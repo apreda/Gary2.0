@@ -148,10 +148,12 @@ function RealGaryPicks() {
           </div>
         ) : (
           <>
-            <div className="flex justify-center items-center min-h-[70vh] w-full gap-8">
-              {picks.map((pick, idx) => (
-                <PickCard key={pick.id} pick={pick} />
-              ))}
+            <div className="carousel-outer-center flex flex-col justify-center items-center min-h-[70vh] w-full py-12 mt-[7vh] md:mt-[10vh] lg:mt-[12vh]">
+              <div className="carousel-card-center flex justify-center items-center w-full" style={{ minHeight: '30rem' }}>
+                {picks.length > 0 && (
+                  <PickCard key={picks[currentIndex].id} pick={picks[currentIndex]} />
+                )}
+              </div>
             </div>
             {picks.length > 1 && (
               <>
