@@ -26,6 +26,13 @@ function RealGaryPicks() {
   const [flippedCardId, setFlippedCardId] = useState(null);
   const [userDecisions, setUserDecisions] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Debug logs for troubleshooting
+  useEffect(() => {
+    console.log('[RealGaryPicks] picks:', picks);
+    console.log('[RealGaryPicks] loading:', loading);
+    console.log('[RealGaryPicks] error:', error);
+  }, [picks, loading, error]);
   
   // State for bet tracking
   const [showBetTracker, setShowBetTracker] = useState(false);
@@ -44,7 +51,15 @@ function RealGaryPicks() {
         .from('daily_picks')
         .select('picks')
         .eq('date', today)
-        .single();
+        .maybeSingle(); // Use maybeSingle to avoid 406 errors
+      console.log('Supabase fetch result:', { data, fetchError });
+
+      // Parse picks column if it's a string
+      let picksArray = [];
+      if (data && data.picks) {
+        picksArray = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
+      }
+      console.log('Parsed picksArray:', picksArray);
 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') {
@@ -56,7 +71,7 @@ function RealGaryPicks() {
           throw fetchError;
         }
       } else {
-        setPicks(data?.picks || []);
+        setPicks(picksArray);
       }
     } catch (err) {
       console.error('Error loading picks:', err);

@@ -7,8 +7,10 @@ import '../styles/consolidated/design-system.css';
  * PickCard - Premium Gold Card with Flip
  */
 export default function PickCard({ pick }) {
+  console.log('[PickCard] received pick:', pick);
   if (!pick) return null;
-  const [homeTeam, awayTeam] = pick.matchup?.split(' vs ') || [pick.matchup, ''];
+  // Use the real pick.game field, split on ' @ ' for Away @ Home
+  const [awayTeam, homeTeam] = pick.game?.split(' @ ') || [pick.game, ''];
 
   // Front content (gold card)
   const frontContent = (
