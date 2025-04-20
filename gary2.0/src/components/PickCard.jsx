@@ -1,17 +1,87 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/consolidated/gold-card-premium.css';
 import FlipCard from './FlipCard';
 import '../styles/consolidated/premium-carousel.css';
 import '../styles/consolidated/design-system.css';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from './ui/ToastProvider';
+import { supabase } from '../supabaseClient';
 
 /**
  * PickCard - Premium Gold Card with Flip
  */
 export default function PickCard({ pick }) {
-  console.log('[PickCard] received pick:', pick);
+  const { user } = useAuth();
+  const showToast = useToast();
+  const [decision, setDecision] = useState(null); // user's decision for this pick
+  const [loading, setLoading] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  useEffect(() => {
+    setDecision(null); // Reset on pick change
+    setIsFlipped(false);
+  }, [pick?.id]);
+
+  useEffect(() => {
+    // On mount, check if user already made a decision for this pick
+    const fetchDecision = async () => {
+      if (!user || !pick?.id) return;
+      const { data, error } = await supabase
+        .from('user_picks')
+        .select('decision')
+        .eq('user_id', user.id)
+        .eq('pick_id', pick.id)
+        .maybeSingle();
+      if (data && data.decision) setDecision(data.decision);
+    };
+    fetchDecision();
+    // eslint-disable-next-line
+  }, [user, pick?.id]);
+
   if (!pick) return null;
-  // Use the real pick.game field, split on ' @ ' for Away @ Home
   const [awayTeam, homeTeam] = pick.game?.split(' @ ') || [pick.game, ''];
+
+  // --- Handlers ---
+  const handleUserDecision = async (userDecision) => {
+    if (!user) {
+      showToast('You must be logged in to make a pick.', 'error');
+      return;
+    }
+    if (decision) {
+      showToast('You have already made your choice for this pick.', 'info');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('user_picks').insert([
+        {
+          user_id: user.id,
+          pick_id: pick.id,
+          decision: userDecision
+        }
+      ]);
+      if (error) {
+        showToast('Failed to save your pick. Please try again.', 'error');
+      } else {
+        setDecision(userDecision);
+        showToast(
+          userDecision === 'bet' ? 'You bet with Gary!' : 'You faded the Bear!',
+          'success'
+        );
+      }
+    } catch (e) {
+      showToast('An unexpected error occurred. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFlip = () => setIsFlipped(f => !f);
+  const handleViewPick = e => {
+    e.stopPropagation(); // Prevent parent flip
+    setIsFlipped(true);
+  };
+
 
   // Front content (gold card)
   const frontContent = (
@@ -70,7 +140,9 @@ export default function PickCard({ pick }) {
           boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
           letterSpacing: '0.09em',
           transition: 'all 0.3s ease-in-out',
-        }}>
+        }}
+        onClick={handleViewPick}
+        >
           VIEW PICK
         </button>
       </div>
@@ -123,31 +195,52 @@ export default function PickCard({ pick }) {
         )}
         {/* Action Buttons */}
         <div className="flex flex-row gap-2 justify-center mb-1 w-full">
-          <button className="flex-1 py-2 rounded-full font-bold text-xs tracking-widest focus:outline-none transition-all duration-150" style={{
-            background: '#fff8dc',
-            color: '#C5B358',
-            border: '1.2px solid #fff',
-            letterSpacing: '0.09em',
-            boxShadow: 'none',
-          }}>
-            Bet with Gary
+          <button
+            className={`flex-1 py-2 rounded-full font-bold text-xs tracking-widest focus:outline-none transition-all duration-150 ${decision === 'bet' ? 'bg-green-200 border-green-500' : ''}`}
+            style={{
+              background: decision === 'bet' ? '#d4f5dd' : '#fff8dc',
+              color: '#C5B358',
+              border: '1.2px solid #fff',
+              letterSpacing: '0.09em',
+              boxShadow: 'none',
+              opacity: decision ? (decision === 'bet' ? 1 : 0.5) : 1,
+              cursor: decision ? 'not-allowed' : 'pointer',
+            }}
+            disabled={!!decision || loading}
+            onClick={() => handleUserDecision('bet')}
+          >
+            {decision === 'bet' ? 'Bet Placed' : 'Bet with Gary'}
           </button>
-          <button className="flex-1 py-2 rounded-full font-bold text-xs tracking-widest focus:outline-none transition-all duration-150" style={{
-            background: '#fff',
-            color: '#C5B358',
-            border: '1.2px solid #fff8dc',
-            letterSpacing: '0.09em',
-            boxShadow: 'none',
-          }}>
-            Fade the Bear
+          <button
+            className={`flex-1 py-2 rounded-full font-bold text-xs tracking-widest focus:outline-none transition-all duration-150 ${decision === 'fade' ? 'bg-red-200 border-red-500' : ''}`}
+            style={{
+              background: decision === 'fade' ? '#ffeaea' : '#fff',
+              color: '#C5B358',
+              border: '1.2px solid #fff8dc',
+              letterSpacing: '0.09em',
+              boxShadow: 'none',
+              opacity: decision ? (decision === 'fade' ? 1 : 0.5) : 1,
+              cursor: decision ? 'not-allowed' : 'pointer',
+            }}
+            disabled={!!decision || loading}
+            onClick={() => handleUserDecision('fade')}
+          >
+            {decision === 'fade' ? 'Faded!' : 'Fade the Bear'}
           </button>
         </div>
-
       </div>
     </div>
   );
 
   return (
-    <FlipCard className="w-72 h-[27rem]" frontContent={frontContent} backContent={backContent} />
+    <FlipCard
+      className="w-72 h-[27rem]"
+      frontContent={frontContent}
+      backContent={backContent}
+      initialFlipped={false}
+      flipOnClick={false}
+      isFlipped={isFlipped}
+      setIsFlipped={setIsFlipped}
+    />
   );
 }
