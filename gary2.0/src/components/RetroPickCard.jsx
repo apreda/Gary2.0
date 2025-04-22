@@ -262,14 +262,14 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       {/* Wallet Value Row */}
       <div style={{
         position: 'absolute',
-        top: '3.25rem',
+        top: '4.25rem',
         right: '0.9rem',
         color: colors.secondary,
         fontWeight: 'bold',
-        fontSize: '1.1rem',
+        fontSize: '2.2rem',
         zIndex: 3
       }}>
-        <span style={{ color: '#FFD700' }}>{safePick.walletValue}</span>
+        <span style={{ color: '#00B300' }}>{safePick.walletValue}</span>
       </div>
       
       {/* Gary Emblem from image file - adjusted size and position */}
