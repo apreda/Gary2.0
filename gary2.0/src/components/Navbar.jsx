@@ -37,16 +37,16 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="fixed top-6 left-1/2 z-50 w-full max-w-[90vw] md:max-w-[75vw] -translate-x-1/2 rounded-full bg-gradient-to-br from-black/90 via-zinc-900/80 to-black/80 border border-[#bfa142]/20 px-6 py-3 backdrop-blur-2xl shadow-md shadow-[#bfa14222] flex justify-between items-center text-white">
+    <header className="fixed top-3 left-1/2 z-50 w-full max-w-[90vw] md:max-w-[75vw] -translate-x-1/2 rounded-full bg-gradient-to-br from-black/90 via-zinc-900/80 to-black/80 border border-[#bfa142]/20 px-4 py-2 backdrop-blur-2xl shadow-sm shadow-[#bfa14222] flex justify-between items-center text-white">
       {/* Logo and Left Nav Links */}
       <div className="flex items-center space-x-6">
-        <Link to="/" className="text-xl font-bold text-[#d4af37] flex items-center group">
-          <span className="text-[#d4af37] text-xl tracking-tight font-light">GARY</span>
-          <span className="text-white text-xl tracking-wide font-bold">A.I.</span>
+        <Link to="/" className="text-lg font-bold text-[#d4af37] flex items-center group">
+          <span className="text-[#d4af37] text-lg tracking-tight font-light">GARY</span>
+          <span className="text-white text-lg tracking-wide font-bold">A.I.</span>
         </Link>
         
         {/* Desktop Navigation Links */}
-        <div className="hidden md:flex items-center space-x-6 text-sm font-light tracking-wide">
+        <div className="hidden md:flex items-center space-x-4 text-xs font-light tracking-wide">
           {filteredNavItems.map((item) => (
             item.action ? (
               <button
@@ -83,7 +83,7 @@ export function Navbar() {
             </Link>
             <Link 
               to="/pricing" 
-              className="rounded-full bg-black px-4 py-2 text-sm font-semibold text-[#d4af37] shadow hover:bg-zinc-900 transition border border-[#d4af37]/40"
+              className="rounded-full bg-black px-3 py-1.5 text-xs font-semibold text-[#d4af37] shadow hover:bg-zinc-900 transition border border-[#d4af37]/40"
               onClick={() => setActiveLink("/pricing")}
             >
               Upgrade
@@ -99,7 +99,7 @@ export function Navbar() {
             </button>
             <Link 
               to="/signout" 
-              className="rounded-full bg-zinc-800 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-zinc-700 transition border border-zinc-700"
+              className="rounded-full bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-zinc-700 transition border border-zinc-700"
               onClick={() => setActiveLink("/signout")}
             >
               Sign Out
