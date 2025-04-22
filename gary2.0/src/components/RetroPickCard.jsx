@@ -255,11 +255,21 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <div className="flex items-center gap-4">
-          <span>{league}</span>
-          <span style={{ color: '#FFD700', fontWeight: 'bold' }}>{safePick.walletValue}</span>
-        </div>
+        <span>{league}</span>
         <span style={{ fontSize: '0.95rem' }}>{formattedTime}</span>
+      </div>
+
+      {/* Wallet Value Row */}
+      <div style={{
+        position: 'absolute',
+        top: '3.25rem',
+        right: '0.9rem',
+        color: colors.secondary,
+        fontWeight: 'bold',
+        fontSize: '1.1rem',
+        zIndex: 3
+      }}>
+        <span style={{ color: '#FFD700' }}>{safePick.walletValue}</span>
       </div>
       
       {/* Gary Emblem from image file - adjusted size and position */}
