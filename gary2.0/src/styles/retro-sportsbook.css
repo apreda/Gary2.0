@@ -1,0 +1,306 @@
+/* Retro Sportsbook Styling */
+:root {
+  --retro-cream: #FFF8E1;
+  --retro-orange: #FF6B35;
+  --retro-green: #4CAF50;
+  --retro-blue: #1976D2;
+  --retro-yellow: #FFC107;
+  --retro-red: #F44336;
+  --retro-navy: #0D47A1;
+  --retro-brown: #8B4513;
+  --retro-gold: #D4AF37;
+  --retro-black: #212121;
+}
+
+/* Vegas Sportsbook Background */
+.vegas-sportsbook-bg {
+  background-color: var(--retro-black);
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),
+    url('/noise.svg');
+  position: relative;
+  overflow: hidden;
+}
+
+/* Simulated CRT Scanlines */
+.crt-scanlines::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    linear-gradient(
+      to bottom,
+      transparent 50%,
+      rgba(0, 0, 0, 0.05) 50%
+    );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.3;
+}
+
+/* Vegas Neon Glow */
+.neon-glow {
+  text-shadow: 
+    0 0 5px rgba(255, 255, 255, 0.8),
+    0 0 10px currentColor,
+    0 0 20px currentColor;
+}
+
+.neon-box {
+  box-shadow: 
+    0 0 5px rgba(255, 255, 255, 0.8),
+    0 0 10px currentColor,
+    0 0 20px currentColor;
+}
+
+/* Retro Card Container */
+.retro-card-container {
+  perspective: 1000px;
+}
+
+.retro-card {
+  transform-style: preserve-3d;
+  transition: transform 0.6s;
+}
+
+/* Retro Scoreboard */
+.retro-scoreboard {
+  background-color: var(--retro-black);
+  color: var(--retro-cream);
+  border: 3px solid var(--retro-gold);
+  border-radius: 8px;
+  padding: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.scoreboard-header {
+  background-color: var(--retro-gold);
+  color: var(--retro-black);
+  padding: 0.4rem;
+  margin: -0.75rem -0.75rem 0.75rem -0.75rem;
+  border-bottom: 2px solid var(--retro-brown);
+  text-align: center;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+}
+
+/* Ticker Tape Animation */
+.ticker-tape {
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+  padding: 6px 0;
+  background-color: var(--retro-black);
+  border-top: 2px solid var(--retro-gold);
+  z-index: 50;
+}
+
+.ticker-tape-content {
+  display: inline-block;
+  animation: ticker 25s linear infinite;
+  padding-right: 50px; /* Space between repetitions */
+}
+
+@keyframes ticker {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Card Grid Layout */
+.retro-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+  padding: 1rem;
+  margin-bottom: 2.5rem; /* Space for ticker tape */
+}
+
+/* Casino Carpet Pattern Background */
+.casino-carpet-bg {
+  background-color: #1a1a2e;
+  background-image: 
+    radial-gradient(var(--retro-gold) 2px, transparent 2px),
+    radial-gradient(var(--retro-red) 2px, transparent 2px);
+  background-size: 60px 60px;
+  background-position: 0 0, 30px 30px;
+  opacity: 0.1;
+}
+
+/* Vintage Paper Texture */
+.vintage-paper {
+  background-color: var(--retro-cream);
+  background-image: url('/noise.svg');
+  background-blend-mode: multiply;
+  position: relative;
+}
+
+.vintage-paper::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+
+/* Retro Button Styles */
+.retro-button {
+  background-color: var(--retro-cream);
+  color: var(--retro-black);
+  border: 2px solid var(--retro-black);
+  border-radius: 4px;
+  padding: 0.4rem 1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.85rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.8);
+}
+
+.retro-button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 rgba(0,0,0,0.8);
+}
+
+.retro-button:active {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.8);
+}
+
+/* Retro Tabs */
+.retro-tabs {
+  display: flex;
+  border-bottom: 3px solid var(--retro-gold);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.retro-tab {
+  padding: 0.5rem 1rem;
+  background-color: var(--retro-black);
+  color: var(--retro-cream);
+  border: 2px solid var(--retro-gold);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  margin-right: 2px;
+  font-weight: bold;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retro-tab.active {
+  background-color: var(--retro-gold);
+  color: var(--retro-black);
+  position: relative;
+  z-index: 1;
+}
+
+.retro-tab:hover:not(.active) {
+  background-color: rgba(212, 175, 55, 0.2);
+}
+
+/* Ambient Flicker Animation */
+.ambient-flicker {
+  animation: flicker 5s infinite alternate;
+}
+
+@keyframes flicker {
+  0%, 18%, 22%, 25%, 53%, 57%, 100% {
+    opacity: 1;
+  }
+  20%, 24%, 55% {
+    opacity: 0.8;
+  }
+}
+
+/* Parlay Card Styling */
+.parlay-card {
+  background-color: var(--retro-cream);
+  border: 4px solid var(--retro-red);
+  border-radius: 8px;
+  padding: 0.75rem;
+  position: relative;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  margin-bottom: 3rem; /* Space for ticker */
+}
+
+.parlay-header {
+  background-color: var(--retro-red);
+  color: var(--retro-cream);
+  margin: -0.75rem -0.75rem 0.75rem -0.75rem;
+  padding: 0.4rem;
+  text-align: center;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.parlay-leg {
+  border-bottom: 1px dashed var(--retro-black);
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+}
+
+.parlay-odds {
+  font-weight: bold;
+  color: var(--retro-red);
+  font-size: 1.25rem;
+  text-align: center;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border: 2px solid var(--retro-red);
+  border-radius: 4px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .retro-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    padding: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  
+  .neon-glow {
+    text-shadow: 0 0 3px rgba(255, 255, 255, 0.8), 0 0 5px currentColor;
+  }
+}
+
+@media (max-width: 480px) {
+  .retro-card-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 0.5rem;
+  }
+  
+  .retro-tab {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  
+  .ticker-tape {
+    padding: 4px 0;
+  }
+  
+  /* Add padding to bottom of page content to make room for ticker */
+  .vegas-sportsbook-bg {
+    padding-bottom: 2.5rem;
+  }
+}

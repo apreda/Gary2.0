@@ -2,13 +2,32 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUserStats } from "../hooks/useUserStats";
 import { useUserPlan } from "../hooks/useUserPlan";
-import PickCard from '../components/PickCard';
+import RetroPickCard from '../components/RetroPickCard';
 import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
 
 // Import styles
+import '../styles/retro-sportsbook.css';
+
+// Gary/ESPN assets for background
+import espn02 from '../assets/images/espn-02.png';
+import espn03 from '../assets/images/espn-03.png';
+import espn04 from '../assets/images/espn-04.png';
+import espn05 from '../assets/images/espn-05.png';
+import espn06 from '../assets/images/espn-06.png';
+import Gary20 from '../assets/images/Gary20.png';
+import pic3 from '../assets/images/pic3.png';
+
+import color1 from '../assets/images/color1.png';
+import color4 from '../assets/images/color4.png';
+import color6 from '../assets/images/color6.png';
+
+
+import color2 from '../assets/images/color2.png';
+import color9 from '../assets/images/color9.png';
+import vegas1 from '../assets/images/vegas1.png';
 
 // Import services
 import { picksService } from '../services/picksService';
@@ -19,24 +38,18 @@ import { picksPersistenceService } from '../services/picksPersistenceService';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 
 function RealGaryPicks() {
-  // ...existing code...
+  const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
   const { userPlan } = useUserPlan();
+  const navigate = useNavigate();
 
   // State for picks and UI
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [flippedCardId, setFlippedCardId] = useState(null);
-  const [userDecisions, setUserDecisions] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  // Debug logs for troubleshooting
-  useEffect(() => {
-    console.log('[RealGaryPicks] picks:', picks);
-    console.log('[RealGaryPicks] loading:', loading);
-    console.log('[RealGaryPicks] error:', error);
-  }, [picks, loading, error]);
+  const [activeTab, setActiveTab] = useState('today');
+  const [parlayCard, setParlayCard] = useState(null);
   
   // State for bet tracking
   const [showBetTracker, setShowBetTracker] = useState(false);
@@ -44,6 +57,13 @@ function RealGaryPicks() {
 
   // Toast notification system
   const showToast = useToast();
+  
+  // Debug logs for troubleshooting
+  useEffect(() => {
+    console.log('[RealGaryPicks] picks:', picks);
+    console.log('[RealGaryPicks] loading:', loading);
+    console.log('[RealGaryPicks] error:', error);
+  }, [picks, loading, error]);
 
   // Load picks from Supabase
   const loadPicks = async () => {
@@ -149,72 +169,187 @@ function RealGaryPicks() {
   };
 
   return (
-    <div className="picks-page-container">
+    <div style={{ position: 'relative', minHeight: '100vh', width: '100vw', overflow: 'hidden' }}>
+      {/* Expansive, retro-tech layered background */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 0,
+          pointerEvents: 'none',
+          background: 'radial-gradient(ellipse at 50% 40%, #232326 60%, #18181b 100%)',
+        }}
+      >
+        {/* CRT grid overlay */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'url("/crt-grid.png"), repeating-linear-gradient(0deg,rgba(255,215,0,0.09) 0 2px,transparent 2px 36px), repeating-linear-gradient(90deg,rgba(255,215,0,0.09) 0 2px,transparent 2px 36px)',
+          opacity: 0.22,
+          mixBlendMode: 'screen',
+        }} />
+        {/* ESPN collage, blurred and low opacity for depth */}
+        <img src={espn02} alt="espn02" style={{ position: 'absolute', top: 'calc(5% - 192px)', left: '5%', width: '22vw', opacity: 0.24, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
+        <img src={espn03} alt="espn03" style={{ position: 'absolute', top: '20%', right: '10%', width: '18vw', opacity: 0.22, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
+        <img src={espn04} alt="espn04" style={{ position: 'absolute', bottom: '10%', left: '10%', width: '27vw', opacity: 0.26, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
+        <img src={espn05} alt="espn05" style={{ position: 'absolute', top: '40%', left: '20%', width: '15vw', opacity: 0.22, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
+        <img src={espn06} alt="espn06" style={{ position: 'absolute', bottom: '20%', right: '20%', width: '18vw', opacity: 0.23, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
+        {/* Additional creative collage images */}
+        <img src={pic3} alt="pic3" style={{ position: 'absolute', top: '30%', left: '40%', width: '9vw', opacity: 0.23, filter: 'blur(0.8px) saturate(1.1)', zIndex: 1 }} />
+                <img src={color1} alt="color1" style={{ position: 'absolute', top: '10%', right: '25%', width: '8vw', opacity: 0.24, filter: 'blur(0.8px)', zIndex: 1 }} />
+        <img src={color4} alt="color4" style={{ position: 'absolute', bottom: '25%', left: '15%', width: '7vw', opacity: 0.25, filter: 'blur(0.8px)', zIndex: 1 }} />
+        <img src={color6} alt="color6" style={{ position: 'absolute', top: '50%', left: '30%', width: '9vw', opacity: 0.23, filter: 'blur(0.8px)', zIndex: 1 }} />
+        {/* New collage images, spaced out */}
 
-      <div className="carousel-container gary-picks-container">
-        {loading ? (
-          <div className="loading-state">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#d4af37]" />
-            <p className="text-white mt-4">Loading Gary's Picks...</p>
-          </div>
-        ) : error ? (
-          <div className="error-state">
-            <p className="text-red-500">{error}</p>
-            <button onClick={loadPicks} className="btn-primary">Try Again</button>
-          </div>
-        ) : picks.length === 0 ? (
-          <div className="no-picks">
-            <p>No picks available for today.</p>
-            <button onClick={loadPicks} className="btn-primary">Generate Picks</button>
-          </div>
-        ) : (
-          <>
-            <div className="carousel-outer-center flex flex-col justify-center items-center min-h-[70vh] w-full py-12 mt-[7vh] md:mt-[10vh] lg:mt-[12vh]">
-              <div className="carousel-card-center flex justify-center items-center w-full" style={{ minHeight: '30rem' }}>
-                {picks.length > 0 && (
-                  <PickCard
-                    key={picks[currentIndex].id}
-                    pick={picks[currentIndex]}
-                    showToast={showToast}
-                    onDecisionMade={handleDecisionMade}
-                  />
-                )}
-              </div>
-            </div>
-            {picks.length > 1 && (
-              <>
-                <button className="carousel-arrow carousel-arrow-left" onClick={prevPick} aria-label="Previous pick">
-                  <span>‹</span>
-                </button>
-                <button className="carousel-arrow carousel-arrow-right" onClick={nextPick} aria-label="Next pick">
-                  <span>›</span>
-                </button>
-              </>
-            )}
-            <div className="carousel-nav">
-              {picks.map((_, index) => (
-                <div
-                  key={index}
-                  className={`carousel-nav-item ${currentIndex === index ? 'active' : ''}`}
-                  onClick={() => setCurrentIndex(index)}
-                />
-              ))}
-            </div>
-          </>
-        )}
+        <img src={color2} alt="color2" style={{ position: 'absolute', top: '60%', right: '40%', width: '9vw', opacity: 0.23, filter: 'blur(0.8px)', zIndex: 1 }} />
+        <img src={color9} alt="color9" style={{ position: 'absolute', bottom: '10%', left: '35%', width: '9vw', opacity: 0.24, filter: 'blur(0.8px)', zIndex: 1 }} />
+        <img src={vegas1} alt="vegas1" style={{ position: 'absolute', top: '45%', left: '12%', width: '12vw', opacity: 0.23, filter: 'blur(0.8px)', zIndex: 1 }} />
+        {/* Gary mascot/logo watermarks */}
+        <img src={Gary20} alt="Gary20" style={{ position: 'absolute', top: '20%', left: '50%', width: '12vw', opacity: 0.12, filter: 'blur(0.2px)', zIndex: 1 }} />
+        {/* Vignette for depth */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse at 50% 40%, transparent 65%, #18181b 100%)',
+          opacity: 0.35,
+          zIndex: 2,
+          pointerEvents: 'none',
+        }} />
       </div>
-
-      {/* Ensure BetCard reloads when reloadKey changes */}
-      <BetCard reloadKey={reloadKey} />
-
-      {showBetTracker && activePick && (
-        <BetTrackerModal
-          pick={activePick}
-          onClose={() => setShowBetTracker(false)}
-          onSave={handleSaveBet}
-        />
-      )}
-
+      {/* Main content, zIndex: 2 */}
+      <div className="w-full flex flex-col items-center justify-center py-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
+        <>
+          {loading ? (
+            <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
+              <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+                <h3 className="font-bold text-black">LOADING...</h3>
+              </div>
+              <p className="text-yellow-500 mb-4">Please wait while we load the picks...</p>
+            </div>
+          ) : error ? (
+            <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
+              <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+                <h3 className="font-bold text-black">ERROR</h3>
+              </div>
+              <p className="text-red-500 mb-4">{error}</p>
+              <button 
+                onClick={loadPicks} 
+                className="px-4 py-2 font-bold uppercase text-black rounded" 
+                style={{ backgroundColor: '#ffc107', border: '2px solid black' }}
+              >
+                GENERATE NEW PICKS
+              </button>
+            </div>
+          ) : picks.length === 0 ? (
+            null
+          ) : (
+            <div>
+              {activeTab === 'today' && (
+                <div className="mb-12">
+                  {/* Desktop View - Card Grid */}
+                  <div className="hidden md:block">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4 mb-8">
+                      {picks.map((pick, index) => (
+                        <RetroPickCard
+                          key={pick.id}
+                          pick={pick}
+                          showToast={showToast}
+                          onDecisionMade={handleDecisionMade}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {/* Mobile View - Card Carousel */}
+                  <div className="md:hidden">
+                    <div className="flex justify-center mb-6">
+                      <RetroPickCard
+                        key={picks[currentIndex].id}
+                        pick={picks[currentIndex]}
+                        showToast={showToast}
+                        onDecisionMade={handleDecisionMade}
+                      />
+                    </div>
+                    {/* Navigation Controls */}
+                    <div className="flex justify-center items-center gap-4">
+                      <button 
+                        className="px-4 py-2 font-bold text-sm uppercase bg-yellow-600 text-black rounded" 
+                        onClick={prevPick}
+                        disabled={picks.length <= 1}
+                        style={{ border: '2px solid black' }}
+                      >
+                        ← PREV
+                      </button>
+                      <span className="font-bold" style={{ color: '#ffc107' }}>{currentIndex + 1} / {picks.length}</span>
+                      <button 
+                        className="px-4 py-2 font-bold text-sm uppercase bg-yellow-600 text-black rounded" 
+                        onClick={nextPick}
+                        disabled={picks.length <= 1}
+                        style={{ border: '2px solid black' }}
+                      >
+                        NEXT →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'parlay' && (
+                <div className="max-w-2xl mx-auto mb-12">
+                  <div className="bg-yellow-50 rounded-lg border-4 border-red-600 overflow-hidden">
+                    <div className="bg-red-600 text-white py-2 px-4 text-center">
+                      <h2 className="text-2xl font-bold">GARY'S PARLAY OF THE DAY</h2>
+                    </div>
+                    <div className="p-4">
+                      {picks.slice(0, 3).map((pick, index) => (
+                        <div key={index} className="py-2 border-b border-dashed border-gray-400 mb-2">
+                          <div className="flex justify-between items-center">
+                            <div className="font-bold">{index + 1}. {pick.shortPick}</div>
+                            <div>{pick.odds}</div>
+                          </div>
+                          <div className="text-sm text-gray-700 mt-1">{pick.game}</div>
+                        </div>
+                      ))}
+                      <div className="text-center font-bold text-xl text-red-600 p-3 mt-2 border-2 border-red-600 rounded">
+                        PARLAY ODDS: +{650 + Math.floor(Math.random() * 350)}
+                      </div>
+                      <div className="mt-6 flex justify-center">
+                        <button className="px-6 py-3 bg-red-600 text-white font-bold uppercase rounded-full border-2 border-black hover:bg-red-700 transition-colors">
+                          PLACE PARLAY BET
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'history' && (
+                <div className="mx-auto max-w-4xl mb-12" style={{ backgroundColor: '#121212', border: '3px solid #d4af37', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ backgroundColor: '#d4af37', padding: '8px', textAlign: 'center' }}>
+                    <h2 className="text-xl font-bold text-black">YOUR BETTING HISTORY</h2>
+                  </div>
+                  {user ? (
+                    <div className="p-4" style={{ backgroundColor: '#f5f5dc' }}>
+                      <BetCard reloadKey={reloadKey} />
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="mb-4" style={{ color: '#ffc107' }}>LOGIN TO VIEW YOUR BETTING HISTORY</p>
+                      <button 
+                        onClick={() => navigate('/login')} 
+                        className="px-4 py-2 font-bold uppercase rounded"
+                        style={{ backgroundColor: '#ffc107', color: 'black', border: '2px solid black' }}
+                      >
+                        LOGIN NOW
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      </div>
     </div>
   );
 }

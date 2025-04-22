@@ -1,3 +1,4 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { BetCardProfileProvider } from './contexts/BetCardProfileContext';
@@ -15,6 +16,8 @@ import { HowItWorks } from "./pages/HowItWorks";
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
+// Demo component - dynamically loaded for Vite compatibility
+const RetroPickCardDemoLazy = lazy(() => import('./pages/RetroPickCardDemo'));
 
 
 import { SignIn } from "./pages/SignIn";
@@ -110,6 +113,12 @@ function AppContent() {
               } />
               <Route path="/dashboard" element={
                 session ? <UserDashboard /> : <Navigate to="/signin" replace />
+              } />
+              {/* Demo route for RetroPickCard */}
+              <Route path="/retro-demo" element={
+                <Suspense fallback={<div className="flex h-96 items-center justify-center"><div className="animate-pulse text-gray-600 dark:text-gray-300">Loading...</div></div>}>
+                  <RetroPickCardDemoLazy />
+                </Suspense>
               } />
               {/* Admin routes */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />

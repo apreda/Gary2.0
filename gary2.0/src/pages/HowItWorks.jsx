@@ -139,7 +139,22 @@ export function HowItWorks() {
   }, []);
 
   return (
-    <div className="bg-black min-h-screen overflow-x-hidden">
+    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
+  {/* GaryHero-style immersive background */}
+  <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+    {/* Subtle cream/white haze gradients */}
+    <div className="absolute inset-0 bg-gradient-to-b from-[#f7f4ed]/20 via-transparent to-transparent" />
+    <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-br from-[#fffbe9]/15 via-transparent to-transparent" />
+    {/* Faint cream highlight behind main content */}
+    <div className="absolute bottom-24 left-0 w-full h-24 bg-gradient-to-t from-[#f7f4ed]/15 via-transparent to-transparent blur-2xl opacity-60" />
+    {/* Gold vignette corners */}
+    <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#d4af37]/10 blur-3xl" />
+    <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#d4af37]/10 blur-3xl" />
+    {/* Subtle grid/noise overlay */}
+    <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
+    {/* Radial vignette for cinematic depth */}
+    <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#18181b]/80 to-black/95 opacity-95" />
+  </div>
       {/* Hero Section */}
       <section className="relative pt-24 pb-16 px-4 md:px-8 overflow-hidden">
         <div className="max-w-7xl mx-auto text-center">
