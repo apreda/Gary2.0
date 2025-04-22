@@ -999,7 +999,15 @@ const pick = {
               spread: realSpread,
               overUnder: realOverUnder,
               time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-              walletValue: `$${fullAnalysis.stakeAmount || 75}`,
+              // Calculate wallet value based on bankroll and confidence
+              walletValue: async () => {
+                const bankrollData = await bankrollService.getBankrollData();
+                const wagerAmount = bankrollService.calculateWagerAmount(
+                  fullAnalysis.confidenceLevel || 75,
+                  bankrollData.current_amount
+                );
+                return `$${wagerAmount}`;
+              },
               confidenceLevel: confidenceRating,
               isPremium: allPicks.length > 0,
               primeTimeCard: hasRevenge || hasSuperstition, // Make it a prime time card if it has special factors
@@ -1037,7 +1045,15 @@ const pick = {
               spread: `${selectedGame.home_team} -3.5`,
               overUnder: 'OVER 220.5',
               time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-              walletValue: '$75',
+              // Calculate wallet value based on bankroll and confidence
+              walletValue: async () => {
+                const bankrollData = await bankrollService.getBankrollData();
+                const wagerAmount = bankrollService.calculateWagerAmount(
+                  75, // Default confidence level
+                  bankrollData.current_amount
+                );
+                return `$${wagerAmount}`;
+              },
               confidenceLevel: 75,
               isPremium: allPicks.length > 0,
               primeTimeCard: false,
@@ -1133,7 +1149,15 @@ const pick = {
                     spread: `${game.home_team} -3.5`,
                     overUnder: 'OVER 220.5',
                     time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-                    walletValue: '$75',
+                    // Calculate wallet value based on bankroll and confidence
+              walletValue: async () => {
+                const bankrollData = await bankrollService.getBankrollData();
+                const wagerAmount = bankrollService.calculateWagerAmount(
+                  75, // Default confidence level
+                  bankrollData.current_amount
+                );
+                return `$${wagerAmount}`;
+              },
                     confidenceLevel: 75,
                     isPremium: allPicks.length > 0,
                     primeTimeCard: false,
