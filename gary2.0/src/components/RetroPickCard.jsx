@@ -42,10 +42,12 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       const homeTeam = gameParts[1];
       const awayTeam = gameParts[0];
       
-      // Use the team that matches the pick's side
-      const targetTeam = pick.shortPick?.toLowerCase().includes(homeTeam.toLowerCase()) ? homeTeam : awayTeam;
+      // Extract the team name from shortPick (e.g., "Bet on the Indiana Pacers to win")
+      const shortPickTeamMatch = pick.shortPick.match(/Bet on the ([^.]+) to win/);
+      const pickedTeam = shortPickTeamMatch ? shortPickTeamMatch[1] : '';
       
-      // Use mapping if available, otherwise take first 3 letters and uppercase them
+      // Find the matching team and get its abbreviation
+      const targetTeam = pickedTeam || (pick.shortPick?.toLowerCase().includes(homeTeam.toLowerCase()) ? homeTeam : awayTeam);
       team = teamMappings[targetTeam] || targetTeam.slice(0, 3).toUpperCase();
     }
     
