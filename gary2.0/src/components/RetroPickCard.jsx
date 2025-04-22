@@ -44,7 +44,9 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       
       // Use the team that matches the pick's side
       const targetTeam = pick.shortPick?.toLowerCase().includes(homeTeam.toLowerCase()) ? homeTeam : awayTeam;
-      team = teamMappings[targetTeam] || targetTeam;
+      
+      // Use mapping if available, otherwise take first 3 letters and uppercase them
+      team = teamMappings[targetTeam] || targetTeam.slice(0, 3).toUpperCase();
     }
     
     // Format based on bet type
