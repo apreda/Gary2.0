@@ -64,38 +64,40 @@ const picksService = {
 
       // Extract only the essential pick data for UI display and Supabase storage
       const cleanedPicks = picks.map(pick => {
-  // Format shortPick as 'Team name + Pick' (e.g. 'Celtics -3.5')
-  let shortPickFormatted = '';
-  if (pick.betType && pick.betType.toLowerCase().includes('spread') && pick.spread) {
-    // e.g. 'Celtics -3.5'
-    shortPickFormatted = pick.spread;
-  } else if (pick.betType && pick.betType.toLowerCase().includes('moneyline') && pick.moneyline) {
-    // e.g. 'Celtics ML' or 'Celtics -110'
-    shortPickFormatted = pick.moneyline;
-  } else if (pick.betType && pick.betType.toLowerCase().includes('total') && pick.overUnder) {
-    // e.g. 'OVER 220.5'
-    shortPickFormatted = pick.overUnder;
-  } else {
-    shortPickFormatted = pick.shortPick || '';
-  }
+        // Format shortPick as 'TEAM BET_TYPE ODDS' (e.g. 'BOS ML -110' or 'BOS -3.5 -110')
+        let shortPickFormatted = '';
+        const teamAbbrev = picksService.abbreviateTeamName(pick.team || '', true);
 
-  // Only keep essential properties, removing imageUrl, silverCard, pickDetail
-  const essentialPickData = {
-    id: pick.id,
-    league: pick.league,
-    game: pick.game,
-    betType: pick.betType,
-    shortPick: shortPickFormatted,
-    moneyline: pick.moneyline,
-    spread: pick.spread,
-    overUnder: pick.overUnder,
-    time: pick.time,
-    walletValue: pick.walletValue,
-    confidenceLevel: pick.confidenceLevel,
-    isPremium: pick.isPremium,
-    primeTimeCard: pick.primeTimeCard,
-    analysis: pick.analysis,
-    garysBullets: Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 5) : []
+        if (pick.betType && pick.betType.toLowerCase().includes('spread') && pick.spread) {
+          // Format: TEAM SPREAD ODDS (e.g. 'BOS -3.5 -110')
+          shortPickFormatted = `${teamAbbrev} ${pick.spread} ${pick.odds || '-110'}`;
+        } else if (pick.betType && pick.betType.toLowerCase().includes('moneyline')) {
+          // Format: TEAM ML ODDS (e.g. 'BOS ML -110')
+          shortPickFormatted = `${teamAbbrev} ML ${pick.odds || '-110'}`;
+        } else if (pick.betType && pick.betType.toLowerCase().includes('total') && pick.overUnder) {
+          // Format: O/U TOTAL ODDS (e.g. 'O 220.5 -110')
+          const overUnder = pick.betType.toLowerCase().includes('over') ? 'O' : 'U';
+          shortPickFormatted = `${overUnder} ${pick.overUnder} ${pick.odds || '-110'}`;
+        } else {
+          shortPickFormatted = pick.shortPick || '';
+        }
+
+        // Only keep essential properties, removing imageUrl, silverCard, pickDetail
+        const essentialPickData = {
+          id: pick.id,
+          league: pick.league,
+          game: pick.game,
+          betType: pick.betType,
+          shortPick: shortPickFormatted,
+          moneyline: pick.moneyline,
+          spread: pick.spread,
+          overUnder: pick.overUnder,
+          odds: pick.odds,
+          time: pick.time,
+          walletValue: pick.walletValue,
+          confidenceLevel: pick.confidenceLevel,
+          analysis: pick.analysis,
+          garysBullets: Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 5) : []
   };
 
   // Remove any remaining circular references or functions
@@ -999,15 +1001,18 @@ const pick = {
               spread: realSpread,
               overUnder: realOverUnder,
               time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+              // Get odds from the API response
+              odds: selectedGame.bookmakers?.[0]?.markets?.find(m => 
+                m.key === (betType === 'Moneyline' ? 'h2h' : betType === 'Spread' ? 'spreads' : 'totals')
+              )?.outcomes?.[0]?.price?.toString() || '-110',
               // Calculate wallet value based on bankroll and confidence
-              walletValue: async () => {
+              walletValue: `$${await (async () => {
                 const bankrollData = await bankrollService.getBankrollData();
-                const wagerAmount = bankrollService.calculateWagerAmount(
+                return bankrollService.calculateWagerAmount(
                   fullAnalysis.confidenceLevel || 75,
                   bankrollData.current_amount
                 );
-                return `$${wagerAmount}`;
-              },
+              })()}`,
               confidenceLevel: confidenceRating,
               isPremium: allPicks.length > 0,
               primeTimeCard: hasRevenge || hasSuperstition, // Make it a prime time card if it has special factors
@@ -1045,15 +1050,16 @@ const pick = {
               spread: `${selectedGame.home_team} -3.5`,
               overUnder: 'OVER 220.5',
               time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+              // Get default odds
+              odds: '-110',
               // Calculate wallet value based on bankroll and confidence
-              walletValue: async () => {
+              walletValue: `$${await (async () => {
                 const bankrollData = await bankrollService.getBankrollData();
-                const wagerAmount = bankrollService.calculateWagerAmount(
+                return bankrollService.calculateWagerAmount(
                   75, // Default confidence level
                   bankrollData.current_amount
                 );
-                return `$${wagerAmount}`;
-              },
+              })()}`,
               confidenceLevel: 75,
               isPremium: allPicks.length > 0,
               primeTimeCard: false,
@@ -1149,15 +1155,16 @@ const pick = {
                     spread: `${game.home_team} -3.5`,
                     overUnder: 'OVER 220.5',
                     time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
+                    // Get default odds
+                    odds: '-110',
                     // Calculate wallet value based on bankroll and confidence
-              walletValue: async () => {
-                const bankrollData = await bankrollService.getBankrollData();
-                const wagerAmount = bankrollService.calculateWagerAmount(
-                  75, // Default confidence level
-                  bankrollData.current_amount
-                );
-                return `$${wagerAmount}`;
-              },
+                    walletValue: `$${await (async () => {
+                      const bankrollData = await bankrollService.getBankrollData();
+                      return bankrollService.calculateWagerAmount(
+                        75, // Default confidence level
+                        bankrollData.current_amount
+                      );
+                    })()}`,
                     confidenceLevel: 75,
                     isPremium: allPicks.length > 0,
                     primeTimeCard: false,
