@@ -11,6 +11,19 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
  * Implements the 1980s Vegas / retro sports card design for Gary 2.0
  */
 export default function RetroPickCard({ pick, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
+  // Format game title to show only team names (e.g., "GRIZZLIES @ THUNDER")
+  function formatGameTitle(game) {
+    if (!game) return '';
+    
+    // Split into away and home teams
+    const [awayTeam, homeTeam] = game.split('@').map(team => team.trim());
+    
+    // Extract team names (everything after the last space)
+    const awayName = awayTeam.split(' ').pop();
+    const homeName = homeTeam.split(' ').pop();
+    
+    return `${awayName} @ ${homeName}`;
+  }
   console.log("RetroPickCard pick prop:", pick);
 
   // Format shortPick to show as 'TEAM BET_VALUE ODDS' (e.g., 'BOS ML -110' or 'BOS +6.5 -110')
@@ -395,7 +408,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         boxShadow: '0 -2px 8px #bfa14222',
         textTransform: 'uppercase',
       }}>
-        {safePick.game}
+        {formatGameTitle(safePick.game)}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
