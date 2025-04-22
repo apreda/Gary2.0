@@ -399,7 +399,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         background: colors.primary,
         color: colors.secondary,
         fontWeight: 700,
-        fontSize: '1.02rem',
+        fontSize: '1.275rem', // Increased by 25% from 1.02rem
         letterSpacing: '0.08em',
         textAlign: 'center',
         padding: '0.7rem 0', // Increased size
