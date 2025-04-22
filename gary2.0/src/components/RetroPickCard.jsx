@@ -10,13 +10,13 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
  * RetroPickCard - Combines backend logic with retro sports card styling
  * Implements the 1980s Vegas / retro sports card design for Gary 2.0
  */
-export default function RetroPickCard({ pick, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
+export default function RetroPickCard({ pick = {}, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
   const { user } = useAuth();
   const showToast = showToastFromProps || useToast();
   const [decision, setDecision] = useState(null);
   const [loading, setLoading] = useState(false);
   const [internalFlipped, setInternalFlipped] = useState(false);
-  
+
   // Handle controlled vs uncontrolled flip state
   const isControlled = typeof controlledFlipped === 'boolean' && typeof setControlledFlipped === 'function';
   const isFlipped = isControlled ? controlledFlipped : internalFlipped;
@@ -27,32 +27,116 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     primary: '#bfa142', // main gold
     secondary: '#e5d3c4', // off-white
     accent: '#232326', // navy/black accent
-    border: '#d4af37' // brighter gold
+    border: '#d4af37', // brighter gold
+    success: '#10B981', // Green
+    error: '#EF4444', // Red
   };
+
+  // Ensure there's always a valid pick object with default values
+  const defaultPick = {
+    id: pick?.id || `temp-${Date.now()}`,
+    league: 'MLB',
+    game: 'LAD @ NYM',
+    time: '10:10 PM ET',
+    shortPick: 'LAD ML -115',
+    odds: '-115',
+    confidence: '85%',
+    garysBullets: [
+      'Strong statistical edge found',
+      'Team has favorable matchup',
+      'Value on the moneyline',
+    ],
+    analysis: 'Data analysis reveals strong value on this pick.'
+  };
+
+  // Use spread operator to combine defaults with provided pick
+  const safePick = { ...defaultPick, ...pick };
+
+  // Format the shortPick to match desired format (Team + Odds)
+  // If shortPick is in verbose format like "Bet on the Los Angeles Lakers to win.", convert it to "LAL -135"
+  const formatPickDisplay = (pick) => {
+    // If the pick already has the right format (like "LAL -135"), use it
+    if (pick.shortPick && (/^[A-Z]{2,3}\s[+-]\d+$/.test(pick.shortPick) || /^[A-Z]{2,3}\sML\s[+-]\d+$/.test(pick.shortPick))) {
+      return pick.shortPick;
+    }
+    
+    // For moneyline bets, extract team and format as "TEAM -ODDS"
+    if (pick.betType === 'Moneyline' && pick.shortPick && pick.shortPick.includes('Bet on the')) {
+      // Extract team name from "Bet on the [Team] to win."
+      const teamMatch = pick.shortPick.match(/Bet on the ([\w\s]+) to win/i);
+      if (teamMatch && teamMatch[1]) {
+        const teamName = teamMatch[1];
+        // Abbreviate team name based on league standards
+        let abbreviation = '';
+        
+        // Simple abbreviation logic - use first 3 letters or look for common teams
+        const commonTeams = {
+          'Los Angeles Lakers': 'LAL',
+          'Minnesota Twins': 'MIN',
+          'Chicago White Sox': 'CWS',
+          'Washington Capitals': 'WSH',
+          'Montréal Canadiens': 'MTL',
+          'Manchester City': 'MCI',
+          'Arsenal': 'ARS',
+          'Crystal Palace': 'CRY',
+          'Aston Villa': 'AVL',
+          'Minnesota Timberwolves': 'MIN'
+        };
+        
+        abbreviation = commonTeams[teamName] || teamName.split(' ').map(word => word[0]).join('');
+        
+        // Get odds from moneyline field if available
+        const odds = pick.moneyline ? pick.moneyline.match(/[+-]\d+/) : null;
+        return `${abbreviation} ${odds ? odds[0] : 'ML'}`;
+      }
+    }
+    
+    // Default: return original shortPick
+    return pick.shortPick;
+  };
+  
+  // Format confidence from confidenceLevel if needed
+  const formatConfidence = (pick) => {
+    if (pick.confidence && typeof pick.confidence === 'string' && pick.confidence.includes('%')) {
+      return pick.confidence; // Already formatted as "85%"
+    }
+    if (pick.confidenceLevel && typeof pick.confidenceLevel === 'number') {
+      return `${pick.confidenceLevel}%`;
+    }
+    return pick.confidence || '75%';
+  };
+
+  // Apply formatting to safePick
+  safePick.shortPick = formatPickDisplay(safePick);
+  safePick.confidence = formatConfidence(safePick);
+
+  // Default league and time if not provided
+  const league = safePick.league || 'MLB';
+  // Format time in 12-hour format if not provided (10:10 PM ET)
+  const formattedTime = safePick.time || '10:10 PM ET';
 
   // Reset state when pick changes
   useEffect(() => {
     setDecision(null);
     setIsFlipped(false);
-  }, [pick?.id]);
+  }, [safePick.id]);
 
   // Check if user already made a decision for this pick
   useEffect(() => {
     const fetchDecision = async () => {
-      if (!user || !pick?.id) return;
+      if (!user || !safePick.id) return;
       const { data } = await supabase
         .from('user_picks')
         .select('decision')
         .eq('user_id', user.id)
-        .eq('pick_id', pick.id)
+        .eq('pick_id', safePick.id)
         .maybeSingle();
       if (data?.decision) setDecision(data.decision);
     };
     fetchDecision();
-  }, [user, pick?.id]);
+  }, [user, safePick.id]);
 
-  if (!pick) return null;
-  const league = pick.league || 'MLB';
+  if (!safePick) return null;
 
   // --- User Decision Handler ---
   const handleUserDecision = async (userDecision) => {
@@ -69,7 +153,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       const { error } = await supabase.from('user_picks').insert([
         {
           user_id: user.id,
-          pick_id: pick.id,
+          pick_id: safePick.id,
           decision: userDecision
         }
       ]);
@@ -78,7 +162,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       } else {
         setDecision(userDecision);
         if (typeof onDecisionMade === 'function') {
-          onDecisionMade(userDecision, pick);
+          onDecisionMade(userDecision, safePick);
         }
         if (userDecision === 'bet') {
           showToast('You bet with Gary! Good luck! 🍀', 'success');
@@ -131,9 +215,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         alignItems: 'center'
       }}>
         <span>{league}</span>
-        {pick.time && (
-          <span style={{ fontSize: '0.95rem' }}>{pick.time}</span>
-        )}
+        <span style={{ fontSize: '0.95rem' }}>{formattedTime}</span>
       </div>
       
       {/* Gary Emblem from image file - adjusted size and position */}
@@ -177,7 +259,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           boxShadow: '0 2px 12px rgba(191,161,66,0.15)',
           whiteSpace: 'nowrap', // Ensures text stays on one line
         }}>
-          {pick.shortPick}
+          {safePick.shortPick}
         </div>
       </div>
       
@@ -194,8 +276,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       }}>
         {/* BET Button - Gold with Black Font */}
         <button 
-          onClick={() => handleUserDecision('bet')}
-          disabled={!!decision || loading}
+          onClick={() => safePick.id ? handleUserDecision('bet') : null}
+          disabled={!!decision || loading || !safePick.id}
           style={{
             backgroundColor: colors.primary,
             color: '#000',
@@ -218,8 +300,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         
         {/* FADE Button - Black with Gold Font */}
         <button 
-          onClick={() => handleUserDecision('fade')}
-          disabled={!!decision || loading}
+          onClick={() => safePick.id ? handleUserDecision('fade') : null}
+          disabled={!!decision || loading || !safePick.id}
           style={{
             backgroundColor: '#18181b',
             color: colors.primary,
@@ -259,7 +341,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         boxShadow: '0 -2px 8px #bfa14222',
         textTransform: 'uppercase',
       }}>
-        {pick.game || 'LAD @ NYM'}
+        {safePick.game}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
@@ -338,8 +420,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       
       {/* Odds and Confidence */}
       <div style={{ width: '100%', textAlign: 'center', margin: '0.5rem 0 1rem 0' }}>
-        <span style={{ fontWeight: 900, marginRight: 16, color: '#000' }}>{pick.odds ? `Odds: ${pick.odds}` : ''}</span>
-        <span style={{ fontWeight: 700, color: '#000' }}>{pick.confidence ? `Conf: ${pick.confidence}` : ''}</span>
+        <span style={{ fontWeight: 900, marginRight: 16, color: '#000' }}>{`Odds: ${safePick.odds || safePick.moneyline || 'N/A'}`}</span>
+        <span style={{ fontWeight: 700, color: '#000' }}>{`Conf: ${safePick.confidence}`}</span>
       </div>
       
       {/* Scouting Report Bullets - Expanded to bottom */}
@@ -353,40 +435,14 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         overflowY: 'auto',
         fontFamily: 'Orbitron, Segoe UI, Arial, sans-serif',
       }}>
-        {Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0 ? (
-          <ul className="list-none text-left mx-auto" style={{ 
-            maxWidth: '98%', 
-            fontFamily: 'Orbitron, Segoe UI, Arial, sans-serif', 
-            fontSize: '1.04rem', 
-            lineHeight: 1.6, 
-            color: colors.accent, 
-            paddingLeft: 0 
-          }}>
-            {pick.garysBullets.map((bullet, idx) => (
-              <li key={idx} className="mb-2" style={{
-                color: colors.accent,
-                fontWeight: 600,
-                display: 'block',
-                paddingLeft: 0,
-                background: idx % 2 === 0 ? 'rgba(191,161,66,0.07)' : 'transparent',
-                borderRadius: 5,
-                padding: '0.25rem 0.6rem',
-                marginBottom: 4,
-              }}>
-                <span style={{ 
-                  color: '#b22222', 
-                  fontWeight: 900, 
-                  marginRight: 10, 
-                  fontSize: '1.2em', 
-                  verticalAlign: 'middle' 
-                }}>•</span>
-                {bullet}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="italic text-gray-500">No details available.</div>
-        )}
+        {safePick.garysBullets?.map((bullet, index) => (
+          <div key={index} style={{ margin: '0.4rem 0', display: 'flex', alignItems: 'flex-start' }}>
+            <span style={{ color: colors.primary, marginRight: '0.5rem', fontSize: '1.2rem' }}>•</span>
+            <p style={{ margin: 0, fontSize: '0.8rem', lineHeight: '1.1rem', fontWeight: 500, color: '#181818' }}>
+              {bullet}
+            </p>
+          </div>
+        ))}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
@@ -432,10 +488,6 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     @keyframes glint {
       0% { background-position: 0% 0%; }
       100% { background-position: 200% 200%; }
-    }
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 36px 8px rgba(191,161,66,0.28), inset 0 0 15px rgba(191,161,66,0.12); }
-      50% { box-shadow: 0 0 36px 12px rgba(191,161,66,0.32), inset 0 0 25px rgba(191,161,66,0.18); }
     }
   `;
   if (typeof document !== 'undefined' && !document.getElementById('retro-card-animations')) {
