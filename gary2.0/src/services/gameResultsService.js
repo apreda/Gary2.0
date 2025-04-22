@@ -8,6 +8,110 @@ import axios from 'axios';
  */
 const gameResultsService = {
   /**
+   * Insert a new game result
+   * @param {Object} result - Game result data
+   * @returns {Promise<Object>} - Inserted game result
+   */
+  insertGameResult: async (result) => {
+    try {
+      const { data, error } = await supabase
+        .from('game_results')
+        .insert({
+          pick_id: result.pick_id,
+          game_date: result.game_date,
+          league: result.league,
+          result: result.result,
+          final_score: result.final_score
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error inserting game result:', error);
+      return { success: false, error };
+    }
+  },
+
+  /**
+   * Get all game results
+   * @param {Object} filters - Optional filters (date range, league, etc)
+   * @returns {Promise<Array>} - List of game results
+   */
+  getGameResults: async (filters = {}) => {
+    try {
+      let query = supabase
+        .from('game_results')
+        .select(`
+          *,
+          picks:daily_picks!pick_id(*)
+        `);
+
+      // Apply filters
+      if (filters.startDate) {
+        query = query.gte('game_date', filters.startDate);
+      }
+      if (filters.endDate) {
+        query = query.lte('game_date', filters.endDate);
+      }
+      if (filters.league) {
+        query = query.eq('league', filters.league);
+      }
+      if (filters.result) {
+        query = query.eq('result', filters.result);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error fetching game results:', error);
+      return { success: false, error };
+    }
+  },
+
+  /**
+   * Get game results summary (win/loss record, ROI, etc)
+   * @param {Object} filters - Optional filters
+   * @returns {Promise<Object>} - Summary statistics
+   */
+  getResultsSummary: async (filters = {}) => {
+    try {
+      const { data: results, error } = await gameResultsService.getGameResults(filters);
+      
+      if (error) throw error;
+
+      const summary = {
+        total: results.length,
+        wins: results.filter(r => r.result === 'won').length,
+        losses: results.filter(r => r.result === 'lost').length,
+        pushes: results.filter(r => r.result === 'push').length,
+        pending: results.filter(r => !r.result).length
+      };
+
+      // Calculate win rate and ROI
+      summary.winRate = summary.total > 0 ? 
+        (summary.wins / (summary.total - summary.pending - summary.pushes)) * 100 : 0;
+
+      // Get bankroll data for ROI calculation
+      const bankrollData = await bankrollService.getBankrollHistory(filters);
+      if (bankrollData.success) {
+        const startingAmount = bankrollData.data[0]?.amount || 10000;
+        const currentAmount = bankrollData.data[bankrollData.data.length - 1]?.amount || startingAmount;
+        summary.roi = ((currentAmount - startingAmount) / startingAmount) * 100;
+      }
+
+      return { success: true, data: summary };
+    } catch (error) {
+      console.error('Error getting results summary:', error);
+      return { success: false, error };
+    }
+  },
+
+
+  /**
    * Update results for completed games and adjust bankroll accordingly
    * @returns {Promise<Object>} - Results of the update operation
    */
@@ -63,26 +167,46 @@ const gameResultsService = {
           const betResult = gameResultsService.evaluateBetResult(pick, gameResult);
           const finalResult = betResult.won ? 'won' : 'lost';
           
-          // Update wager status
-          const { error: updateError } = await supabase
-            .from('wagers')
-            .update({ 
-              status: finalResult,
-              result_date: new Date().toISOString()
-            })
-            .eq('id', wager.id);
+          try {
+            // Update wager status and insert game result
+            const [wagerUpdate, resultInsert] = await Promise.all([
+              supabase
+                .from('wagers')
+                .update({ 
+                  status: finalResult,
+                  result_date: new Date().toISOString()
+                })
+                .eq('id', wager.id),
+              gameResultsService.insertGameResult({
+                pick_id: pick.id,
+                game_date: pick.game_date || wager.placed_date,
+                league: pick.league,
+                result: finalResult,
+                final_score: `${gameResult.scores.home} - ${gameResult.scores.away}`
+              })
+            ]);
+
+            if (wagerUpdate.error) {
           
-          if (updateError) {
-            console.error(`Error updating wager ${wager.id}:`, updateError);
+              console.error(`Error updating wager ${wager.id}:`, wagerUpdate.error);
+              continue;
+            }
+
+            if (resultInsert.error) {
+              console.error(`Error inserting game result for pick ${pick.id}:`, resultInsert.error);
+              // Don't continue here - wager was already updated
+            }
+          
+            // Update bankroll
+            await bankrollService.updateBankrollForWager(
+              wager.id, 
+              finalResult, 
+              finalResult === 'won' ? wager.potential_payout : wager.amount
+            );
+          } catch (error) {
+            console.error(`Error processing wager ${wager.id}:`, error);
             continue;
           }
-          
-          // Update bankroll
-          await bankrollService.updateBankrollForWager(
-            wager.id, 
-            finalResult, 
-            finalResult === 'won' ? wager.potential_payout : wager.amount
-          );
           
           updatedWagers.push({
             id: wager.id,

@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useGaryAnalytics } from "../hooks/useGaryAnalytics";
 import { supabase } from "../supabaseClient";
-// import './BillfoldStyle.css';
-import { format } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 import billfoldLogo from '../assets/images/billfold1.png';
 import { bankrollService } from '../services/bankrollService';
+import { gameResultsService } from '../services/gameResultsService';
 
 export function Billfold() {
   const containerRef = useRef(null);
@@ -22,6 +22,39 @@ export function Billfold() {
   });
   
   // Fetch real bankroll data
+  // Fetch real sports breakdown
+  useEffect(() => {
+    const fetchSportsBreakdown = async () => {
+      try {
+        // Get results for each sport
+        const sports = ['NBA', 'MLB', 'NFL', 'NHL'];
+        const sportStats = [];
+
+        for (const sport of sports) {
+          const results = await gameResultsService.getResultsSummary({ league: sport });
+          if (results.success && results.data) {
+            sportStats.push({
+              name: sport,
+              icon: sport === 'NBA' ? '🏀' : 
+                    sport === 'MLB' ? '⚾' :
+                    sport === 'NFL' ? '🏈' :
+                    sport === 'NHL' ? '🏒' : '🎯',
+              record: `${results.data.wins}-${results.data.losses}${results.data.pushes ? `-${results.data.pushes}` : ''}`,
+              winRate: parseFloat((results.data.winRate || 0).toFixed(1)),
+              roi: parseFloat((results.data.roi || 0).toFixed(1))
+            });
+          }
+        }
+
+        setSportsBreakdown(sportStats);
+      } catch (error) {
+        console.error('Error fetching sports breakdown:', error);
+      }
+    };
+
+    fetchSportsBreakdown();
+  }, []);
+
   useEffect(() => {
     const fetchBankrollData = async () => {
       try {
@@ -60,77 +93,46 @@ export function Billfold() {
     fetchBankrollData();
   }, []);
 
-  // Mock data for sport breakdown
-  const [sportsBreakdown] = useState([
-    {
-      name: "NBA",
-      icon: "🏀",
-      record: "21-11",
-      winRate: 65.6,
-      roi: 14.7,
-    },
-    {
-      name: "MLB",
-      icon: "⚾",
-      record: "17-13",
-      winRate: 56.7,
-      roi: 9.2,
-    },
-    {
-      name: "NFL",
-      icon: "🏈",
-      record: "8-4",
-      winRate: 66.6,
-      roi: 18.1,
-    },
-    {
-      name: "NHL",
-      icon: "🏒",
-      record: "5-2",
-      winRate: 71.4,
-      roi: 22.3,
-    },
-  ]);
-
-  // Real betting history from bankrollService
-  const [bettingLog, setBettingLog] = useState([]);
+  // Real sport breakdown from game results
+  const [sportsBreakdown, setSportsBreakdown] = useState([]);
   
-  // Fetch real betting history
+  // Real betting history from game results
+  const [bettingLog, setBettingLog] = useState([]);
+
+  // Fetch betting history
   useEffect(() => {
     const fetchBettingHistory = async () => {
       try {
-        const history = await bankrollService.getBettingHistory();
-        if (history && Array.isArray(history)) {
-          // Format betting history for display
-          const formattedHistory = history.map(bet => {
-            // Extract data from the bet and associated pick
-            const pick = bet.picks || {};
-            return {
-              date: new Date(bet.placed_date).toISOString().split('T')[0],
-              game: pick.game || 'Unknown Game',
-              bet: pick.shortPick || pick.pick || 'Unknown Bet',
-              odds: bet.odds || 0,
-              stake: bet.amount || 0,
-              payout: bet.status === 'won' ? bet.potential_payout : 0,
-              result: bet.status || 'pending',
-              sport: pick.league || 'Unknown',
-              betType: pick.parlayCard ? 'parlay' : 
-                      (pick.betType?.toLowerCase().includes('spread') ? 'spread' : 
-                       pick.betType?.toLowerCase().includes('total') ? 'over-under' : 'moneyline')
-            };
-          });
-          
+        // Get game results with picks data
+        const results = await gameResultsService.getGameResults({
+          startDate: format(subMonths(new Date(), 1), 'yyyy-MM-dd'),
+          endDate: format(new Date(), 'yyyy-MM-dd')
+        });
+
+        if (results.success && results.data) {
+          const formattedHistory = results.data.map(result => ({
+            date: format(new Date(result.game_date), 'yyyy-MM-dd'),
+            game: result.picks?.game || 'Unknown Game',
+            bet: result.picks?.shortPick || result.picks?.pick || 'Unknown Bet',
+            odds: result.picks?.odds || 0,
+            stake: result.picks?.walletValue?.replace('$', '') || 0,
+            payout: result.result === 'won' ? 
+              parseFloat(result.picks?.walletValue?.replace('$', '')) * (Math.abs(result.picks?.odds) / 100) : 0,
+            result: result.result || 'pending',
+            sport: result.league || 'Unknown',
+            betType: result.picks?.betType?.toLowerCase() || 'moneyline'
+          }));
+
           setBettingLog(formattedHistory);
         }
       } catch (error) {
         console.error('Error fetching betting history:', error);
-        // If error, keep the mock data for display
       }
     };
-    
+
     fetchBettingHistory();
   }, []);
-  
+
   // Default mock data in case real data isn't available yet
   const defaultBettingLog = [
     {
