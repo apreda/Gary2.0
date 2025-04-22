@@ -6,6 +6,123 @@ const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 /**
  * Service for fetching data from The Odds API
  */
+// Bet analysis helper functions
+const analyzeBettingMarkets = (game) => {
+  if (!game || !game.bookmakers || !Array.isArray(game.bookmakers)) {
+    return null;
+  }
+
+  const markets = {
+    spreads: analyzeSpreadMarket(game.bookmakers),
+    totals: analyzeTotalsMarket(game.bookmakers),
+    moneyline: analyzeMoneylineMarket(game.bookmakers)
+  };
+
+  return findBestOpportunity(markets);
+};
+
+const analyzeSpreadMarket = (bookmakers) => {
+  const opportunities = [];
+
+  bookmakers.forEach(bookmaker => {
+    const spreadMarket = bookmaker.markets.find(m => m.key === 'spreads');
+    if (!spreadMarket) return;
+
+    spreadMarket.outcomes.forEach(outcome => {
+      opportunities.push({
+        type: 'spread',
+        team: outcome.name,
+        point: outcome.point,
+        odds: outcome.price,
+        bookmaker: bookmaker.key
+      });
+    });
+  });
+
+  return findBestInMarket(opportunities, 'spread');
+};
+
+const analyzeTotalsMarket = (bookmakers) => {
+  const opportunities = [];
+
+  bookmakers.forEach(bookmaker => {
+    const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
+    if (!totalsMarket) return;
+
+    totalsMarket.outcomes.forEach(outcome => {
+      opportunities.push({
+        type: 'total',
+        position: outcome.name,
+        point: outcome.point,
+        odds: outcome.price,
+        bookmaker: bookmaker.key
+      });
+    });
+  });
+
+  return findBestInMarket(opportunities, 'total');
+};
+
+const analyzeMoneylineMarket = (bookmakers) => {
+  const opportunities = [];
+
+  bookmakers.forEach(bookmaker => {
+    const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
+    if (!h2hMarket) return;
+
+    h2hMarket.outcomes.forEach(outcome => {
+      opportunities.push({
+        type: 'moneyline',
+        team: outcome.name,
+        odds: outcome.price,
+        bookmaker: bookmaker.key
+      });
+    });
+  });
+
+  return findBestInMarket(opportunities, 'moneyline');
+};
+
+const findBestInMarket = (opportunities, marketType) => {
+  if (opportunities.length === 0) return null;
+
+  const withMetrics = opportunities.map(opp => ({
+    ...opp,
+    ev: calculateExpectedValue(opp),
+    roi: calculateROI(opp)
+  }));
+
+  return withMetrics.sort((a, b) => (b.roi + b.ev) - (a.roi + a.ev))[0];
+};
+
+const findBestOpportunity = (markets) => {
+  const opportunities = Object.values(markets).filter(Boolean);
+  if (opportunities.length === 0) return null;
+
+  return opportunities.sort((a, b) => {
+    const aScore = a.ev * 0.6 + a.roi * 0.4;
+    const bScore = b.ev * 0.6 + b.roi * 0.4;
+    return bScore - aScore;
+  })[0];
+};
+
+const calculateExpectedValue = (opportunity) => {
+  const impliedProb = opportunity.odds > 0 
+    ? 100 / (opportunity.odds + 100)
+    : -opportunity.odds / (-opportunity.odds + 100);
+  
+  const edge = 0.02;
+  return (1 + edge) * impliedProb;
+};
+
+const calculateROI = (opportunity) => {
+  const impliedProb = opportunity.odds > 0 
+    ? 100 / (opportunity.odds + 100)
+    : -opportunity.odds / (-opportunity.odds + 100);
+  
+  return (1 / impliedProb) - 1;
+};
+
 export const oddsService = {
   /**
    * Get list of available sports
