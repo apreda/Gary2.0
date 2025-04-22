@@ -1058,47 +1058,9 @@ const pick = {
             // Log the specific error for debugging
             console.error('Gary Engine Error Details:', JSON.stringify(analysisError));
             
-            // Fallback to basic pick if Gary engine analysis fails
-            const fallbackPick = {
-              id: pickId,
-              league: league,
-              game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
-              betType: 'Moneyline',
-              shortPick: `${selectedGame.home_team} ML`,
-              moneyline: `${selectedGame.home_team} -110`,
-              spread: `${selectedGame.home_team} -3.5`,
-              overUnder: 'OVER 220.5',
-              time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-              // Get default odds
-              odds: '-110',
-              // Calculate wallet value based on bankroll and confidence
-              walletValue: `$${await (async () => {
-                const bankrollData = await bankrollService.getBankrollData();
-                return bankrollService.calculateWagerAmount(
-                  75, // Default confidence level
-                  bankrollData.current_amount
-                );
-              })()}`,
-              confidenceLevel: 75,
-              isPremium: allPicks.length > 0,
-              primeTimeCard: false,
-              silverCard: false,
-              imageUrl: `/logos/${sport.includes('basketball') ? 'basketball' : 
-                             sport.includes('baseball') ? 'baseball' : 
-                             sport.includes('hockey') ? 'hockey' : 'sports'}.svg`,
-              pickDetail: `${selectedGame.home_team} has a statistical advantage in this matchup against ${selectedGame.away_team}.`,
-              analysis: `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
-              garysAnalysis: `Gary's analysis shows ${selectedGame.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
-              garysBullets: [
-                `${selectedGame.home_team} has shown strong performance in recent games`,
-                'Current odds present good betting value',
-                'Statistical analysis supports this selection'
-              ]
-            };
-            
-            // Add fallback pick to our collection
-            allPicks.push(fallbackPick);
-            console.log(`Added fallback pick #${allPicks.length}/${REQUIRED_PICKS} for ${league}`);
+            // STRICT NO-FALLBACKS POLICY: If Gary's analysis fails, we fail the entire pick generation
+            console.error('CRITICAL: Gary\'s analysis engine failed. Cannot generate pick without proper analysis.');
+            throw new Error('Gary\'s analysis engine failed to generate proper pick analysis.');
           }
           
           // Check if we have enough picks to exit the sport loop
@@ -1117,111 +1079,10 @@ const pick = {
         
       }
       
-      // Add additional picks from other sports if needed to reach 5 picks
+      // STRICT NO-FALLBACKS POLICY: If we don't have enough picks from priority sports, we fail
       if (allPicks.length < REQUIRED_PICKS) {
-        console.log(`Only generated ${allPicks.length} picks so far. Need ${REQUIRED_PICKS - allPicks.length} more...`);
-        
-        // Try to get additional picks from other sports not in the priority list
-        const otherSportOptions = [
-          'soccer_epl',
-          'soccer_usa_mls',
-          'baseball_mlb',
-          'basketball_nba',
-          'icehockey_nhl',
-          'soccer_spain_la_liga',
-          'soccer_italy_serie_a',
-          'soccer_germany_bundesliga',
-          'soccer_france_ligue_one'
-        ];
-        
-        // Try each sport until we have enough picks
-        for (const additionalSport of otherSportOptions) {
-          if (allPicks.length >= REQUIRED_PICKS) break;
-          
-          // Skip sports we've already processed
-          if (processedSports.has(additionalSport)) continue;
-          
-          try {
-            console.log(`Trying to get additional picks from ${additionalSport}...`);
-            const games = await oddsService.getOdds(additionalSport);
-            
-            if (games && games.length > 0) {
-              const upcomingGames = games.filter(game => {
-                const gameTime = new Date(game.commence_time);
-                const now = new Date();
-                const hoursDiff = (gameTime - now) / (1000 * 60 * 60);
-                return hoursDiff >= 0 && hoursDiff <= 36;
-              });
-              
-              if (upcomingGames.length > 0) {
-                console.log(`Found ${upcomingGames.length} upcoming games for ${additionalSport}`);
-                
-                // Add up to 2 picks from this sport
-                for (let i = 0; i < Math.min(2, upcomingGames.length) && allPicks.length < REQUIRED_PICKS; i++) {
-                  const game = upcomingGames[i];
-                  const sportName = additionalSport.includes('basketball') ? 'NBA' : 
-                                   additionalSport.includes('baseball') ? 'MLB' : 
-                                   additionalSport.includes('hockey') ? 'NHL' : 
-                                   additionalSport.includes('soccer') ? 'Soccer' : 'Sports';
-                  
-                  const pick = {
-                    id: `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                    league: sportName,
-                    game: `${game.away_team} @ ${game.home_team}`,
-                    betType: 'Moneyline',
-                    shortPick: `${game.home_team} ML`,
-                    moneyline: `${game.home_team} -110`,
-                    spread: `${game.home_team} -3.5`,
-                    overUnder: 'OVER 220.5',
-                    time: new Date(game.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-                    // Get default odds
-                    odds: '-110',
-                    // Calculate wallet value based on bankroll and confidence
-                    walletValue: `$${await (async () => {
-                      const bankrollData = await bankrollService.getBankrollData();
-                      return bankrollService.calculateWagerAmount(
-                        75, // Default confidence level
-                        bankrollData.current_amount
-                      );
-                    })()}`,
-                    confidenceLevel: 75,
-                    isPremium: allPicks.length > 0,
-                    primeTimeCard: false,
-                    silverCard: false,
-                    imageUrl: `/logos/${sportName.toLowerCase() === 'NBA' ? 'basketball' : 
-                                     sportName.toLowerCase() === 'MLB' ? 'baseball' : 
-                                     sportName.toLowerCase() === 'NHL' ? 'hockey' : 
-                                     sportName.toLowerCase() === 'Soccer' ? 'soccer' : 'sports'}.svg`,
-                    pickDetail: `${game.home_team} has a statistical advantage in this matchup against ${game.away_team}.`,
-                    analysis: `Gary's analysis shows ${game.home_team} has a statistical advantage in this matchup based on recent performance metrics.`,
-                    garysBullets: [
-                      `${game.home_team} has shown strong performance in recent games`,
-                      'Current odds present good betting value',
-                      'Statistical analysis supports this selection'
-                    ]
-                  };
-                  
-                  allPicks.push(pick);
-                  console.log(`Added real pick for ${pick.game} (${pick.league})`);
-                }
-              }
-            }
-            
-            processedSports.add(additionalSport);
-          } catch (error) {
-            console.error(`Error getting picks from ${additionalSport}:`, error);
-          }
-        }
-        
-        // Modified policy: Accept between 3-5 picks
-        const MIN_REQUIRED = 3;
-        if (allPicks.length < MIN_REQUIRED) {
-          console.error(`ERROR: Only generated ${allPicks.length} picks, but minimum ${MIN_REQUIRED} are required.`);
-          throw new Error(`Unable to generate the minimum ${MIN_REQUIRED} picks. Only generated ${allPicks.length}. ` +
-                        `Please try again later when more games are available.`);
-        } else {
-          console.log(`Successfully generated ${allPicks.length} picks, which is sufficient (min: ${MIN_REQUIRED}, target: ${REQUIRED_PICKS}).`);
-        }
+        console.error(`CRITICAL: Only generated ${allPicks.length} picks from priority sports. Need exactly ${REQUIRED_PICKS}.`);
+        throw new Error(`Failed to generate required number of picks (${REQUIRED_PICKS}) from priority sports. Please try again later when more games are available.`);
       }
       
       // Log the final count of real picks - NO FALLBACKS
