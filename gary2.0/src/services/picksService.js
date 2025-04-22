@@ -9,6 +9,8 @@ import { getTeamAbbreviation, getIndustryAbbreviation } from '../utils/teamAbbre
 import { picksPersistenceService } from './picksPersistenceService';
 import { bankrollService } from './bankrollService';
 import { sportsDataService } from './sportsDataService';
+const betAnalysisService = require('./betAnalysisService');
+const { formatShortPick } = require('./pickGenerationService');
 
 /**
  * Service for generating and managing Gary's picks
@@ -901,9 +903,12 @@ const picksService = {
             // Determine key players for this game
             const keyPlayers = [];
             
-            // Calculate odds value metrics
-            const marketValue = Math.random(); // How much value in the current line
-            const expectedValue = Math.random(); // Expected value calculation
+            // Analyze all betting markets using our new service
+            const bettingAnalysis = await betAnalysisService.analyzeBettingMarkets(selectedGame);
+            
+            // Calculate market value and expected value from the best betting opportunity
+            const marketValue = bettingAnalysis ? bettingAnalysis.roi : Math.random();
+            const expectedValue = bettingAnalysis ? bettingAnalysis.ev : Math.random();
             
             console.log(`🏀 GARY'S FULL ANALYSIS FACTORS:`);
             console.log(`Game ID: ${gameId}`);
@@ -916,8 +921,9 @@ const picksService = {
             console.log(`Gut Trust Factor: ${(gutSuccessRate * 100).toFixed(1)}%`);
             console.log(`Progress to Monthly Target: ${(progressToTarget * 100).toFixed(1)}%`);
             
-            // Now call the comprehensive Gary pick analysis function
+            // Now call the comprehensive Gary pick analysis function with all betting options
             const fullAnalysis = await makeGaryPick({
+              bettingMarkets: bettingAnalysis, // Pass all analyzed markets
               gameId,
               homeTeam: selectedGame.home_team,
               awayTeam: selectedGame.away_team,
@@ -995,14 +1001,14 @@ const pick = {
               id: pickId,
               league: league,
               game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
-              betType: fullAnalysis.betType || 'Moneyline',
-              shortPick: shortPick,
+              betType: bettingAnalysis?.type || fullAnalysis.betType || 'Moneyline',
+              shortPick: bettingAnalysis ? formatShortPick(bettingAnalysis) : shortPick,
               moneyline: realMoneyline,
               spread: realSpread,
               overUnder: realOverUnder,
               time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-              // Get odds from the API response
-              odds: selectedGame.bookmakers?.[0]?.markets?.find(m => 
+              // Get odds directly from our betting analysis
+              odds: bettingAnalysis?.odds?.toString() || selectedGame.bookmakers?.[0]?.markets?.find(m => 
                 m.key === (betType === 'Moneyline' ? 'h2h' : betType === 'Spread' ? 'spreads' : 'totals')
               )?.outcomes?.[0]?.price?.toString() || '-110',
               // Calculate wallet value based on bankroll and confidence
