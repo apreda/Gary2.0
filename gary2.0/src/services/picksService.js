@@ -9,8 +9,21 @@ import { getTeamAbbreviation, getIndustryAbbreviation } from '../utils/teamAbbre
 import { picksPersistenceService } from './picksPersistenceService';
 import { bankrollService } from './bankrollService';
 import { sportsDataService } from './sportsDataService';
-const betAnalysisService = require('./betAnalysisService');
-const { formatShortPick } = require('./pickGenerationService');
+// Helper function to format pick summary based on betting analysis
+const formatShortPick = (analysis) => {
+  if (!analysis) return '';
+
+  switch (analysis.type) {
+    case 'spread':
+      return `${analysis.team} ${analysis.point > 0 ? '+' : ''}${analysis.point}`;
+    case 'total':
+      return `${analysis.position.toUpperCase()} ${analysis.point}`;
+    case 'moneyline':
+      return `${analysis.team} ML`;
+    default:
+      return '';
+  }
+};
 
 /**
  * Service for generating and managing Gary's picks
@@ -903,8 +916,8 @@ const picksService = {
             // Determine key players for this game
             const keyPlayers = [];
             
-            // Analyze all betting markets using our new service
-            const bettingAnalysis = await betAnalysisService.analyzeBettingMarkets(selectedGame);
+            // Analyze all betting markets using odds service
+            const bettingAnalysis = await oddsService.analyzeBettingMarkets(selectedGame);
             
             // Calculate market value and expected value from the best betting opportunity
             const marketValue = bettingAnalysis ? bettingAnalysis.roi : Math.random();
