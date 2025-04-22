@@ -86,16 +86,27 @@ function RealGaryPicks() {
       }
       console.log('Parsed picksArray:', picksArray);
 
-      if (fetchError) {
-        if (fetchError.code === 'PGRST116') {
-          // No picks for today, generate new ones via picksService
+      // Check if we have picks either from database error or empty array
+      if (fetchError || !picksArray.length) {
+        console.log('No picks found in database. Generating new picks...');
+        try {
+          // Generate new picks using our 3-layer system
           const generatedPicks = await picksService.generateDailyPicks();
+          console.log('Successfully generated new picks:', generatedPicks);
+          
+          // Store the new picks in Supabase
           await picksService.storeDailyPicksInDatabase(generatedPicks);
+          console.log('Successfully stored new picks in database');
+          
+          // Update state with new picks
           setPicks(generatedPicks || []);
-        } else {
-          throw fetchError;
+        } catch (genError) {
+          console.error('Error generating picks:', genError);
+          throw new Error('Failed to generate new picks: ' + genError.message);
         }
       } else {
+        // We have picks from the database
+        console.log('Using picks from database:', picksArray);
         setPicks(picksArray);
       }
     } catch (err) {
