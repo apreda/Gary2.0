@@ -255,7 +255,10 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <span>{league}</span>
+        <div className="flex items-center gap-4">
+          <span>{league}</span>
+          <span style={{ color: '#FFD700', fontWeight: 'bold' }}>{safePick.walletValue}</span>
+        </div>
         <span style={{ fontSize: '0.95rem' }}>{formattedTime}</span>
       </div>
       
