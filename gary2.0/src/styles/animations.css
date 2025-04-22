@@ -44,6 +44,24 @@
   100% { transform: rotate(0deg); }
 }
 
+/* Gold Flicker effect */
+@keyframes goldFlicker {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px #bfa14255); }
+  10% { opacity: 0.96; filter: drop-shadow(0 0 12px #ffe28a88); }
+  20% { opacity: 1; filter: drop-shadow(0 0 8px #bfa14299); }
+  30% { opacity: 0.98; filter: drop-shadow(0 0 10px #bfa14266); }
+  40% { opacity: 1; filter: drop-shadow(0 0 7px #ffe28a44); }
+  50% { opacity: 0.97; filter: drop-shadow(0 0 14px #bfa142aa); }
+  60% { opacity: 1; filter: drop-shadow(0 0 8px #bfa14288); }
+  70% { opacity: 0.99; filter: drop-shadow(0 0 9px #ffe28a66); }
+  80% { opacity: 1; filter: drop-shadow(0 0 6px #bfa14255); }
+  90% { opacity: 0.98; filter: drop-shadow(0 0 12px #ffe28a99); }
+}
+
+.animate-goldFlicker {
+  animation: goldFlicker 2.8s infinite linear;
+}
+
 /* Shine effect */
 @keyframes shine {
   from {

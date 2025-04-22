@@ -37,7 +37,7 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="fixed top-6 left-1/2 z-50 w-full max-w-5xl -translate-x-1/2 rounded-full bg-zinc-900/80 px-6 py-3 backdrop-blur-lg shadow-md flex justify-between items-center text-white">
+    <header className="fixed top-6 left-1/2 z-50 w-full max-w-[90vw] md:max-w-[75vw] -translate-x-1/2 rounded-full bg-gradient-to-br from-black/90 via-zinc-900/80 to-black/80 border border-[#bfa142]/20 px-6 py-3 backdrop-blur-2xl shadow-md shadow-[#bfa14222] flex justify-between items-center text-white">
       {/* Logo and Left Nav Links */}
       <div className="flex items-center space-x-6">
         <Link to="/" className="text-xl font-bold text-[#d4af37] flex items-center group">

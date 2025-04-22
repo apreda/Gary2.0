@@ -1,325 +1,35 @@
-/* Gary's Picks Carousel - Premium Dark Theme */
-
-.picks-page-container {
-  background: linear-gradient(to bottom, #0B0B0B, #1B1B1B);
-  min-height: 100vh;
-  width: 100%;
-  overflow-x: hidden;
-  position: relative;
-}
-
-/* Vertically center carousel and add spacing */
-.carousel-outer-center {
-  min-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding-top: 3rem;
-  padding-bottom: 3rem;
-}
-
-.carousel-card-center {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  min-height: 30rem;
-  gap: 2.5rem;
-}
-
-@media (max-width: 900px) {
-  .carousel-outer-center {
-    padding-top: 1.5rem;
-    padding-bottom: 1.5rem;
-  }
-  .carousel-card-center {
-    min-height: 22rem;
-    gap: 1.2rem;
-  }
-}
-
-@media (max-width: 600px) {
-  .carousel-outer-center {
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-  }
-  .carousel-card-center {
-    min-height: 15rem;
-    gap: 0.5rem;
-  }
-}
-
-
-/* PickCard Styles (from PickCard.jsx inline styles) */
-.pick-card {
-  width: 282px;
-  height: 396px;
-  border-radius: 18px;
-  border: 3px solid #FFD700;
-  background: linear-gradient(135deg, #FFD700 0%, #FFEA70 35%, #FFD700 100%);
-  box-shadow: 0 0 40px 8px rgba(255, 215, 0, 0.35), 0 0 0 8px rgba(255, 215, 0, 0.18);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-  font-size: 1.1em;
-  font-weight: 600;
-  position: relative;
-  overflow: hidden;
-}
-.pick-card-league {
-  width: 100%;
-  text-align: center;
-  margin-top: 24px;
-  margin-bottom: 12px;
-  font-size: 22px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 1px;
-  text-shadow: 0 1px 8px #FFD70099;
-}
-.pick-card-matchup {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #fff;
-}
-.pick-card-bettype {
-  font-size: 16px;
-  font-weight: 500;
-  color: #FFD700;
-  margin-bottom: 10px;
-}
-.pick-card-time {
-  font-size: 14px;
-  color: #fff;
-  opacity: 0.85;
-  margin-bottom: 20px;
-}
-.pick-card-analysis {
-  background: rgba(255,255,255,0.08);
-  border-radius: 10px;
-  padding: 12px;
-  width: 90%;
-  color: #fff;
-  font-size: 13px;
-  font-style: italic;
-  min-height: 60px;
-  box-shadow: 0 0 8px #FFD70022;
-}
-
-/* FlipCard Styles (from FlipCard.jsx classNames) */
-.flip-card-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  perspective: 1000px;
-}
+/* Premium Carousel Styles */
 .flip-card {
+  perspective: 1000px;
+  width: 100%;
+  height: 100%;
+}
+
+.flip-card-inner {
   position: relative;
   width: 100%;
   height: 100%;
-  transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  text-align: center;
+  transition: transform 0.6s;
   transform-style: preserve-3d;
 }
-.rotate-y-180 {
+
+.flip-card.flipped .flip-card-inner {
   transform: rotateY(180deg);
 }
-.flip-card-front,
-.flip-card-back {
+
+.flip-card-front, .flip-card-back {
   position: absolute;
   width: 100%;
   height: 100%;
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
+
 .flip-card-back {
   transform: rotateY(180deg);
-}
-
-/* Flip indicator styles */
-.flip-indicator {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.1);
-  transition: opacity 0.3s;
-  opacity: 0.3;
-  cursor: pointer;
-}
-.flip-indicator.active {
-  opacity: 0.5;
-}
-.flip-indicator:hover {
-  opacity: 0.8;
-}
-
-/* Carousel navigation and navigation button styles (merged) */
-.carousel-nav {
-  position: absolute;
-  bottom: 40px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  z-index: 10;
-}
-.carousel-nav-item {
-  width: 30px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  background: #222;
-  border: 1px solid #FFC94C;
-  opacity: 0.7;
-}
-.carousel-nav-item.active {
-  background: #FFC94C;
-  width: 40px;
-  opacity: 1;
-}
-.carousel-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 60px;
-  height: 60px;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 50%;
-  border: 2px solid rgba(255, 201, 76, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #FFC94C;
-  z-index: 40;
-  transition: all 0.3s ease;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
-}
-.carousel-arrow:hover {
-  background: rgba(0, 0, 0, 0.8);
-  border-color: rgba(255, 201, 76, 0.8);
-  transform: translateY(-50%) scale(1.1);
-  box-shadow: 0 0 25px rgba(255, 201, 76, 0.2);
-}
-.carousel-arrow-left {
-  left: 10%;
-}
-.carousel-arrow-right {
-  right: 10%;
-}
-
-.pick-navigation button {
-  background: #FFC94C;
-  color: #222;
-  border: none;
-  border-radius: 6px;
-  font-weight: 700;
-  padding: 10px 28px;
-  font-size: 1rem;
-  margin: 0 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-}
-.pick-navigation button:disabled {
-  background: #bfa13e;
-  color: #888;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-.pick-navigation button:hover:not(:disabled) {
-  background: #ffe08a;
-  color: #000;
-  box-shadow: 0 4px 18px rgba(255, 201, 76, 0.15);
-}
-.pick-indicators {
-  display: flex;
-  gap: 8px;
-  margin: 0 10px;
-}
-.pick-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #333;
-  border: 1px solid #FFC94C;
-  cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
-}
-.pick-indicator.active, .pick-indicator.gold-indicator {
-  background: #FFC94C;
-  box-shadow: 0 0 10px #FFC94C99;
-}
-
-/* Card positions in carousel */
-.card-position-0 {
-  transform: translateX(0) scale(1.1);
-  z-index: 3;
-  opacity: 0.95;
-}
-.card-position-1 {
-  transform: translate(76%, -50%) scale(0.9);
-  left: 50%;
-  z-index: 25;
-  opacity: 0.95;
-}
-.card-position-2 {
-  transform: translate(129%, -50%) scale(0.8);
-  left: 50%;
-  z-index: 20;
-  opacity: 0.85;
-}
-.card-position-3 {
-  transform: translate(167%, -50%) scale(0.7);
-  left: 50%;
-  z-index: 15;
-  opacity: 0.7;
-}
-.card-position-4 {
-  transform: translate(-243%, -50%) scale(0.7);
-  left: 50%;
-  z-index: 15;
-  opacity: 0.7;
-}
-.card-position-5 {
-  transform: translate(-205%, -50%) scale(0.8);
-  left: 50%;
-  z-index: 20;
-  opacity: 0.85;
-}
-.card-position-6 {
-  transform: translate(-152%, -50%) scale(0.9);
-  left: 50%;
-  z-index: 25;
-  opacity: 0.95;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .carousel-arrow-left {
-    left: 20px;
-  }
-  .carousel-arrow-right {
-    right: 20px;
-  }
-}
-@media (max-width: 768px) {
-  .carousel-arrow {
-    width: 40px;
-    height: 40px;
-  }
 }

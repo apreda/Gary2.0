@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import '../styles/consolidated/premium-carousel.css';
 
 export function FlipCard({ frontContent, backContent, className = '', initialFlipped = false, flipOnClick = true, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
   const [internalFlipped, setInternalFlipped] = useState(initialFlipped);
@@ -15,7 +14,12 @@ export function FlipCard({ frontContent, backContent, className = '', initialFli
 
   return (
     <div 
-      className={`flip-card-container ${className}`}
+      className={`${className}`}
+      style={{
+        perspective: '1000px',
+        width: '100%',
+        height: '100%'
+      }}
       onClick={e => {
         // Prevent flipping if the click originated from a button or interactive element
         if (
@@ -25,27 +29,74 @@ export function FlipCard({ frontContent, backContent, className = '', initialFli
       }}
     >
       <div 
-        className={`flip-card ${isFlipped ? 'rotate-y-180' : ''}`}
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          textAlign: 'center',
+          transition: 'transform 0.6s',
+          transformStyle: 'preserve-3d',
+          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+        }}
       >
         {/* Front side */}
-        <div className="flip-card-front">
+        <div style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
           {frontContent}
         </div>
         {/* Back side */}
-        <div className="flip-card-back">
+        <div style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          transform: 'rotateY(180deg)'
+        }}>
           {backContent}
         </div>
       </div>
       {/* Small flip indicator */}
       <div 
-        className={`flip-indicator${isFlipped ? ' active' : ''}`}
+        style={{
+          position: 'absolute',
+          bottom: '10px',
+          right: '10px',
+          zIndex: 10,
+          cursor: 'pointer',
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          color: 'white',
+          borderRadius: '50%',
+          width: '24px',
+          height: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
         onClick={e => {
           e.stopPropagation();
           setIsFlipped(!isFlipped);
         }}
       >
         <svg 
-          className={`w-4 h-4 ${isFlipped ? 'rotate-180' : ''}`} 
+          style={{
+            width: '16px',
+            height: '16px',
+            transform: isFlipped ? 'rotate(180deg)' : 'rotate(0deg)'
+          }}
           fill="none" 
           strokeLinecap="round" 
           strokeLinejoin="round" 
