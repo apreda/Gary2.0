@@ -83,8 +83,24 @@ function RealGaryPicks() {
       let picksArray = [];
       if (data && data.picks) {
         picksArray = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
+        
+        // Ensure each pick has necessary fields for RetroPickCard
+        picksArray = picksArray.map(pick => {
+          // Set shortPick if missing (required by RetroPickCard)
+          if (!pick.shortPick && pick.team) {
+            pick.shortPick = `${pick.team} ${pick.betType || 'ML'} ${pick.odds || ''}`;
+          }
+          
+          // Add a default confidence value if missing
+          if (!pick.confidence && !pick.confidenceLevel) {
+            pick.confidenceLevel = 75;
+          }
+          
+          console.log('Enhanced pick for rendering:', pick);
+          return pick;
+        });
       }
-      console.log('Parsed picksArray:', picksArray);
+      console.log('Parsed and enhanced picksArray:', picksArray);
 
       // Check if we have picks either from database error or empty array
       if (fetchError || !picksArray.length) {
@@ -260,48 +276,18 @@ function RealGaryPicks() {
             <div>
               {activeTab === 'today' && (
                 <div className="mb-12">
-                  {/* Desktop View - Card Grid */}
-                  <div className="hidden md:block">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4 mb-8">
+                  {/* Responsive Grid for All Devices - Shows all cards side by side */}
+                  <div className="pt-20 px-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 place-items-center">
                       {picks.map((pick, index) => (
-                        <RetroPickCard
-                          key={pick.id}
-                          pick={pick}
-                          showToast={showToast}
-                          onDecisionMade={handleDecisionMade}
-                        />
+                        <div key={pick.id}>
+                          <RetroPickCard
+                            pick={pick}
+                            showToast={showToast}
+                            onDecisionMade={handleDecisionMade}
+                          />
+                        </div>
                       ))}
-                    </div>
-                  </div>
-                  {/* Mobile View - Card Carousel */}
-                  <div className="md:hidden">
-                    <div className="flex justify-center mb-6">
-                      <RetroPickCard
-                        key={picks[currentIndex].id}
-                        pick={picks[currentIndex]}
-                        showToast={showToast}
-                        onDecisionMade={handleDecisionMade}
-                      />
-                    </div>
-                    {/* Navigation Controls */}
-                    <div className="flex justify-center items-center gap-4">
-                      <button 
-                        className="px-4 py-2 font-bold text-sm uppercase bg-yellow-600 text-black rounded" 
-                        onClick={prevPick}
-                        disabled={picks.length <= 1}
-                        style={{ border: '2px solid black' }}
-                      >
-                        ← PREV
-                      </button>
-                      <span className="font-bold" style={{ color: '#ffc107' }}>{currentIndex + 1} / {picks.length}</span>
-                      <button 
-                        className="px-4 py-2 font-bold text-sm uppercase bg-yellow-600 text-black rounded" 
-                        onClick={nextPick}
-                        disabled={picks.length <= 1}
-                        style={{ border: '2px solid black' }}
-                      >
-                        NEXT →
-                      </button>
                     </div>
                   </div>
                 </div>

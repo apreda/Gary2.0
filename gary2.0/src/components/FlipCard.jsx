@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export function FlipCard({ frontContent, backContent, className = '', initialFlipped = false, flipOnClick = true, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
+export function FlipCard({ frontContent, backContent, className = '', style = {}, cardStyle = {}, initialFlipped = false, flipOnClick = true, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
   const [internalFlipped, setInternalFlipped] = useState(initialFlipped);
   const isControlled = typeof controlledFlipped === 'boolean' && typeof setControlledFlipped === 'function';
   const isFlipped = isControlled ? controlledFlipped : internalFlipped;
@@ -18,7 +18,8 @@ export function FlipCard({ frontContent, backContent, className = '', initialFli
       style={{
         perspective: '1000px',
         width: '100%',
-        height: '100%'
+        height: '100%',
+        ...style
       }}
       onClick={e => {
         // Prevent flipping if the click originated from a button or interactive element
@@ -36,7 +37,8 @@ export function FlipCard({ frontContent, backContent, className = '', initialFli
           textAlign: 'center',
           transition: 'transform 0.6s',
           transformStyle: 'preserve-3d',
-          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+          ...cardStyle
         }}
       >
         {/* Front side */}
