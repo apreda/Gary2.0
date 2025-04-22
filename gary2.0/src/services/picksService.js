@@ -1,28 +1,12 @@
-import { makeGaryPick } from '../ai/garyEngine';
-import { openaiService } from './openaiService';
-import { perplexityService } from './perplexityService';
+import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService';
-import { configLoader } from './configLoader';
-import axios from 'axios';
 import { supabase, ensureAnonymousSession } from '../supabaseClient.js';
-import { getTeamAbbreviation, getIndustryAbbreviation } from '../utils/teamAbbreviations';
-import { picksPersistenceService } from './picksPersistenceService';
-import { bankrollService } from './bankrollService';
-import { sportsDataService } from './sportsDataService';
+import { getTeamAbbreviation } from '../utils/teamAbbreviations';
+
 // Helper function to format pick summary based on betting analysis
 const formatShortPick = (analysis) => {
   if (!analysis) return '';
-
-  switch (analysis.type) {
-    case 'spread':
-      return `${analysis.team} ${analysis.point > 0 ? '+' : ''}${analysis.point}`;
-    case 'total':
-      return `${analysis.position.toUpperCase()} ${analysis.point}`;
-    case 'moneyline':
-      return `${analysis.team} ML`;
-    default:
-      return '';
-  }
+  return analysis.pick || '';
 };
 
 /**
@@ -167,145 +151,43 @@ const picksService = {
       
       let result;
       
-      // CRITICAL FIX: Using two-step approach based on successful test findings
       try {
-        // First, delete any existing records for today
-        console.log('STORAGE FIX: Removing any existing entries for today...');
+        // Delete any existing records for today
         const { error: deleteError } = await supabase
           .from('daily_picks')
           .delete()
           .eq('date', currentDateString);
-          
+
         if (deleteError) {
-          console.warn('Warning when deleting previous entries:', deleteError);
-          // Continue with insert anyway
+          console.error('Error deleting existing picks:', deleteError);
+          throw deleteError;
         }
-        
-        // STEP 1: Insert a record with null picks (proven to work in tests)
-        console.log('STORAGE FIX: Step 1 - Creating entry with NULL picks value');
-        const { data: initialData, error: initialError } = await supabase
+
+        // Insert new picks
+        const { error: insertError } = await supabase
           .from('daily_picks')
           .insert({
             date: currentDateString,
-            picks: null, // This format is confirmed to work based on our tests
+            picks: cleanedPicks,
             created_at: timestamp,
             updated_at: timestamp
           });
-            
-        if (initialError) {
-          console.error('Error creating initial entry with null picks:', initialError);
-          throw initialError;
+
+        if (insertError) {
+          console.error('Error storing picks:', insertError);
+          throw insertError;
         }
-        
-        console.log('STORAGE FIX: Initial entry created successfully');
-        
-        // No longer saving to localStorage to ensure consistent behavior across all devices
-        console.log('Skipping localStorage - ensuring all data is stored only in Supabase for universal access');
-        
-        // STEP 2: Try to perform a separate operation to save the picks data
-        // We could try multiple approaches here, but at minimum we've created the record
-        // and stored the picks in localStorage for fallback
-        try {
-          console.log('STORAGE FIX: Step 2 - Additional methods to store picks data');
-          
-          // Method 1: Try using localStorage storage and local file persistence
-          // This ensures the picks are at least available locally
-          await picksPersistenceService.savePicks(cleanedPicks);
-          
-          // Method 2: Update the actual picks column with the picks data
-          try {
-            console.log('STORAGE FIX: Updating the picks column with actual picks data');
-            // Log the size of the picks data for debugging
-            const picksJson = JSON.stringify(cleanedPicks);
-            console.log(`Picks data size: ${picksJson.length} characters`);
-            // Only show sample if we have at least one pick
-            if (cleanedPicks && cleanedPicks.length > 0) {
-              console.log(`First pick sample:`, JSON.stringify(cleanedPicks[0], null, 2).substring(0, 200) + '...');
-            } else {
-              console.log('No picks available to show sample');
-            }
-            
-            const { error: updateError } = await supabase
-              .from('daily_picks')
-              .update({
-                picks: cleanedPicks,  // This is the critical fix - update the actual picks column with the clean data
-                updated_at: new Date().toISOString()
-              })
-              .eq('date', currentDateString);
-              
-            if (!updateError) {
-              console.log('STORAGE FIX: Successfully updated picks column with all picks data');
-            } else {
-              console.error('Failed to update picks column:', updateError);
-            }
-            
-            // Final check for proper pick count - NO FALLBACKS
-            if (cleanedPicks.length < 5) {
-              console.error(`ERROR: Not enough picks generated. Required: 5, Generated: ${cleanedPicks.length}`);
-              throw new Error(`Unable to generate the required 5 picks. Only generated ${cleanedPicks.length}. ` +
-                             `Please try again later when more games are available.`);
-            }
-            
-            result = { success: true, backup: true };
-          } catch (updateErr) {
-            console.error('Error updating picks column:', updateErr);
-            throw updateErr;
-          }
-        } catch (backupError) {
-          console.error('Backup storage approaches had issues:', backupError);
-          throw backupError;
+
+        // Verify minimum pick count
+        if (cleanedPicks.length < 5) {
+          throw new Error(`Unable to generate required 5 picks. Only generated ${cleanedPicks.length}.`);
         }
-        
-        console.log('STORAGE FIX: Successfully created daily_picks record');
-      } catch (criticalError) {
-        console.error('CRITICAL ERROR: Failed to store picks record:', criticalError);
-        
-        // Final fallback - try simple format with only the date field
-        try {
-          console.log('STORAGE FIX: Final fallback attempt with minimal data...');
-          const { error: fallbackError } = await supabase
-            .from('daily_picks')
-            .insert({
-              date: currentDateString
-            });
-          
-          if (fallbackError) {
-            console.error('Even minimal fallback failed:', fallbackError);
-            throw new Error('Complete storage failure');
-          }
-          
-          // Still save to localStorage
-          localStorage.setItem('dailyPicks', JSON.stringify(cleanedPicks));
-          localStorage.setItem('dailyPicksTimestamp', timestamp);
-          localStorage.setItem('dailyPicksDate', currentDateString);
-          
-          console.log('STORAGE FIX: Created minimal record & saved to localStorage');
-          result = { success: true, minimal: true };
-        } catch (finalError) {
-          console.error('All storage attempts completely failed:', finalError);
-          throw new Error('Critical database failure - could not store picks');
-        }
-      }
-      
-      // Verify the picks were stored
-      console.log('Verifying picks were properly stored...');
-      try {
-        const { data: verifyData, error: verifyError } = await supabase
-          .from('daily_picks')
-          .select('date')
-          .eq('date', currentDateString);
-          
-        if (verifyError) {
-          console.error('Error verifying picks storage:', verifyError);
-          console.log('Storage likely failed - verification error');
-        } else if (!verifyData || verifyData.length === 0) {
-          console.error('No record found after storage attempt');
-          console.log('WARNING: Picks were not properly stored');
-        } else {
-          console.log('SUCCESS: Verified picks record exists in database');
-        }
-      } catch (verifyErr) {
-        console.error('Verification error:', verifyErr);
+
+        return { success: true };
+
+      } catch (error) {
+        console.error('Failed to store picks:', error);
+        throw error;
       }
       
       return result;
@@ -390,106 +272,146 @@ const picksService = {
    */
   generateNarrative: async (game) => {
     try {
+      // Extract team names and odds
       const homeTeam = game.home_team;
       const awayTeam = game.away_team;
-      const sportKey = game.sport_key;
-      const sportTitle = sportKey.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      const sportTitle = game.sport_title;
       
-      // Extract odds data if available
-      const homeOdds = game.bookmakers && game.bookmakers[0]?.markets.find(m => m.key === 'h2h')?.outcomes.find(o => o.name === homeTeam)?.price;
-      const awayOdds = game.bookmakers && game.bookmakers[0]?.markets.find(m => m.key === 'h2h')?.outcomes.find(o => o.name === awayTeam)?.price;
-      const pointSpread = game.bookmakers && game.bookmakers[0]?.markets.find(m => m.key === 'spreads')?.outcomes.find(o => o.name === homeTeam)?.point;
+      // Map league for stats service
+      const league = sportTitle.includes('NBA') ? 'NBA' : 
+                    sportTitle.includes('MLB') ? 'MLB' : 
+                    sportTitle.includes('NHL') ? 'NHL' : 
+                    sportTitle.includes('Soccer') ? 'EURO' : 'Unknown';
       
-      // Get current team stats from SportsDB API
-      const league = sportKey.split('_')[0].toUpperCase();
-      console.log(`CRITICAL - Fetching current stats for ${homeTeam} vs ${awayTeam} (${league})`);
-      let teamStats;
-      let statsContext = '';
-      
-      try {
-        teamStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
-        statsContext = sportsDataService.formatStatsForPrompt(teamStats);
-        console.log(`SPORTS DATA SUCCESS: Stats context length: ${statsContext.length} characters`);
-      } catch (statsError) {
-        console.error(`SPORTS DATA ERROR: Failed to get team stats: ${statsError.message}`);
-        statsContext = 'ERROR: Could not retrieve current team statistics. Using historical data only.';
+      // Extract and format odds data
+      const oddsData = {};
+      if (game.bookmakers && game.bookmakers.length > 0) {
+        const mainMarket = game.bookmakers[0].markets[0];
+        const h2hMarket = game.bookmakers[0].markets.find(m => m.key === 'h2h');
+        const spreadMarket = game.bookmakers[0].markets.find(m => m.key === 'spreads');
+        const totalsMarket = game.bookmakers[0].markets.find(m => m.key === 'totals');
+
+        if (h2hMarket) {
+          oddsData.homeOdds = h2hMarket.outcomes.find(o => o.name === homeTeam)?.price;
+          oddsData.awayOdds = h2hMarket.outcomes.find(o => o.name === awayTeam)?.price;
+          // Opening odds would come from historical odds API if available
+          oddsData.openingHomeOdds = oddsData.homeOdds;
+          oddsData.openingAwayOdds = oddsData.awayOdds;
+        }
+
+        if (spreadMarket) {
+          oddsData.pointSpread = spreadMarket.outcomes.find(o => o.name === homeTeam)?.point;
+          oddsData.openingSpread = oddsData.pointSpread; // Would use historical data if available
+        }
+
+        if (totalsMarket) {
+          oddsData.totalPoints = totalsMarket.outcomes[0]?.point;
+        }
+
+        // Simulate public betting percentages (would come from real data in production)
+        oddsData.publicBetPercentageHome = Math.round(45 + Math.random() * 30); // 45-75%
+        oddsData.publicBetPercentageAway = 100 - oddsData.publicBetPercentageHome;
+
+        // Determine sharp action based on line movement vs public money
+        if (Math.abs(oddsData.publicBetPercentageHome - 50) > 20) {
+          const favoredTeam = oddsData.publicBetPercentageHome > 50 ? homeTeam : awayTeam;
+          oddsData.sharpAction = `Possible reverse line movement against ${favoredTeam}`;
+        }
       }
       
-      // Create prompt for OpenAI
-      const prompt = `You are Gary the Bear, an expert sports handicapper with decades of experience. 
-      Analyze this upcoming ${sportTitle} game between ${homeTeam} and ${awayTeam}.
-      ${homeOdds ? `The moneyline is ${homeTeam} ${homeOdds > 0 ? '+' : ''}${homeOdds} vs ${awayTeam} ${awayOdds > 0 ? '+' : ''}${awayOdds}.` : ''}
-      ${pointSpread ? `The spread is ${homeTeam} ${pointSpread > 0 ? '+' : ''}${pointSpread}.` : ''}
+      // Get comprehensive stats context
+      let statsContext;
+      try {
+        statsContext = await sportsDataService.buildComprehensiveStatsContext(
+          homeTeam,
+          awayTeam,
+          league,
+          oddsData
+        );
+      } catch (statsError) {
+        console.error('Error building comprehensive stats:', statsError);
+        statsContext = 'ERROR: Could not retrieve comprehensive statistics. Using limited data for analysis.';
+      }
       
-      ${statsContext}
+      const systemMessage = {
+        role: "system",
+        content: `You are **Gary the Bear**, a grizzled sports betting expert with 50+ years of experience.
+
+DECISION WEIGHTS:
+- **80%** on hard data & analytics:
+  * Team & player metrics
+  * Pace & momentum trends
+  * Injuries & lineup changes
+  * Home/away splits
+  * Line movement
+  * Public/sharp betting splits
+  * Recent performance metrics
+
+- **10%** on fan bias & loyalty:
+  * Reds, Bengals, Pacers (high bias)
+  * Yankees, Mets (medium bias)
+  * Big East basketball (strong loyalty)
+
+- **10%** on intangibles:
+  * Trap game detection
+  * Revenge angles
+  * Rivalry implications
+  * Superstition streaks
+  * Historical patterns
+
+RESPONSE FORMAT (STRICT JSON):
+{
+  "revenge": boolean,
+  "superstition": boolean,
+  "momentum": 0.0-1.0,
+  "rationale": "1-2 sentence breakdown with swagger"
+}`
+      };
+
+      const userMessage = {
+        role: "user",
+        content: `📊 GAME ANALYSIS REQUEST
+
+🏆 MATCHUP: ${sportTitle} - ${homeTeam} vs ${awayTeam}
+${homeOdds ? `💰 ODDS: ${homeTeam} ${homeOdds > 0 ? '+' : ''}${homeOdds} vs ${awayTeam} ${awayOdds > 0 ? '+' : ''}${awayOdds}` : ''}
+${pointSpread ? `📈 SPREAD: ${homeTeam} ${pointSpread > 0 ? '+' : ''}${pointSpread}` : ''}
+
+🔢 ANALYTICS DATA (80% WEIGHT):
+${statsContext}
+
+Provide your best analysis using the strict JSON format. Remember: 80% analytics, 10% bias, 10% intangibles.`
+      };
+
+      const messages = [systemMessage, userMessage];
       
-      Consider factors like recent form, injuries, matchup history, and betting trends.
-      
-      Respond with a JSON object in this exact format:
-      {
-        "revenge": boolean (is this a revenge game for either team),
-        "superstition": boolean (are there any notable superstitions/streaks at play),
-        "momentum": number (between 0-1, representing momentum factor importance),
-        "rationale": string (brief 1-2 sentence analysis of the matchup)
-      }`;
-      
-      // Log the prompt with stats context for debugging
-      console.log(`OPENAI PROMPT WITH SPORTS DATA:\n${prompt}`);
-      
-      // Use our openaiService instead of direct API calls to avoid authentication issues
-      const messages = [
-        { 
-          role: "system", 
-          content: "You are Gary the Bear, a sharp sports betting expert with decades of experience. You speak with authority and conviction about your picks. ALWAYS incorporate any current team statistics provided into your analysis." 
-        },
-        { 
-          role: "user", 
-          content: prompt 
-        }
-      ];
-      
-      // Call OpenAI using our service that has the API key already configured
-      const responseText = await openaiService.generateResponse(messages, {
-        temperature: 0.7,
+      // Call OpenAI with updated temperature for more consistent analytics focus
+      const response = await openaiService.generateResponse(messages, {
+        temperature: 0.65,
         maxTokens: 500,
-        model: openaiService.DEFAULT_MODEL // Use the default model instead of hard-coding
+        model: openaiService.DEFAULT_MODEL
       });
       
-      // Process the response text
-      if (responseText) {
-        console.log(`OPENAI RESPONSE: ${responseText.substring(0, 150)}...`);
-        
-        try {
-          // Try to parse the JSON response
-          const jsonMatch = responseText.match(/\{[\s\S]*\}/); // Extract JSON
-          if (jsonMatch) {
-            const narrativeData = JSON.parse(jsonMatch[0]);
-            console.log('Successfully parsed narrative data:', narrativeData);
-            return narrativeData;
-          }
-        } catch (parseError) {
-          console.error('Error parsing JSON from OpenAI response:', parseError);
-          // Fall back to default
-        }
+      if (!response || !response.content) {
+        throw new Error('No valid response from OpenAI');
       }
-      
-      console.error('Failed to generate or parse valid narrative from OpenAI');
-      // Return a default narrative if API call fails
-      return {
-        revenge: Math.random() > 0.8,
-        superstition: Math.random() > 0.9,
-        momentum: 0.3 + Math.random() * 0.6,
-        rationale: `${game.home_team} vs ${game.away_team} is a game where Gary's edge metrics see value.`
-      };
+
+      // Extract and parse JSON response
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/); // Extract JSON
+      if (!jsonMatch) {
+        throw new Error('Could not extract JSON from OpenAI response');
+      }
+
+      try {
+        const narrativeData = JSON.parse(jsonMatch[0]);
+        console.log('Successfully parsed narrative data:', narrativeData);
+        return narrativeData;
+      } catch (parseError) {
+        console.error('Error parsing JSON from OpenAI response:', parseError);
+        throw parseError;
+      }
     } catch (error) {
       console.error('Error generating narrative:', error);
-      // Return a default narrative if API call fails
-      return {
-        revenge: Math.random() > 0.8,
-        superstition: Math.random() > 0.9,
-        momentum: 0.3 + Math.random() * 0.6,
-        rationale: `${game.home_team} vs ${game.away_team} is a game where Gary's edge metrics see value.`
-      };
+      throw new Error(`Failed to generate narrative for ${homeTeam} vs ${awayTeam}: ${error.message}`);
     }
   },
   
@@ -656,130 +578,6 @@ const picksService = {
   },
   
   /**
-   * [REMOVED] Generate a daily parlay feature
-   * This feature has been removed as requested
-   */
-  
-  /**
-   * [DEPRECATED - NO LONGER USED] Get fallback picks for legacy reference only.
-   * This function is intentionally kept for documentation/historical purposes only.
-   * STRICT POLICY: This function SHOULD NEVER BE CALLED in production code.
-   * @returns {Array} - Array of mock picks
-   * @deprecated - NO FALLBACKS ALLOWED
-   */
-  getFallbackPicks: () => {
-    // DO NOT CALL THIS FUNCTION - Throw an error to prevent accidental usage
-    throw new Error('STRICT POLICY VIOLATION: getFallbackPicks() should never be called. No fallbacks allowed.');
-    // Legacy code kept below for documentation purposes only
-    const now = new Date();
-    const today = now.toLocaleDateString([], {weekday: 'long', month: 'short', day: 'numeric'});
-    const hoursAhead = 2 + Math.floor(Math.random() * 5);
-    const gameTime = new Date(now.getTime() + (hoursAhead * 60 * 60 * 1000));
-    const formattedTime = gameTime.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'});
-    
-    // Basic fallback picks - these should almost never be used
-    // and are only here as a last resort
-    const mockPicks = [
-      {
-        id: 1,
-        league: 'NBA',
-        game: 'Lakers vs Celtics',
-        moneyline: 'Celtics -160',
-        spread: 'Celtics -3.5',
-        overUnder: 'Over 222.5',
-        time: formattedTime,
-        walletValue: '$550',
-        confidenceLevel: 85,
-        betType: 'Spread Pick',
-        isPremium: false,
-        primeTimeCard: true,
-        silverCard: false,
-        garysAnalysis: "Celtics have dominant home court advantage and match up well against the Lakers frontcourt.",
-        garysBullets: [
-          "Celtics are 8-2 ATS in last 10 home games",
-          "Lakers struggle on defense with fast guards",
-          "Boston's shooting has been on fire"
-        ]
-      },
-      {
-        id: 2,
-        league: 'MLB',
-        game: 'Yankees vs Red Sox',
-        moneyline: 'Yankees -130',
-        spread: 'Yankees -1.5',
-        overUnder: 'Under 9.0',
-        time: formattedTime,
-        walletValue: '$650',
-        confidenceLevel: 82,
-        betType: 'Best Bet: Moneyline',
-        isPremium: true,
-        primeTimeCard: false,
-        silverCard: false,
-        garysAnalysis: "Yankees have the pitching advantage and have dominated this matchup this season.",
-        garysBullets: [
-          "Yankees ace has 1.95 ERA vs Boston",
-          "Red Sox bullpen has struggled recently",
-          "Weather conditions favor pitchers"
-        ]
-      },
-      {
-        id: 3,
-        league: 'NFL',
-        game: 'Chiefs vs Ravens',
-        moneyline: 'Chiefs +110',
-        spread: 'Chiefs +2.5',
-        overUnder: 'Over 47.5',
-        time: formattedTime,
-        walletValue: '$750',
-        confidenceLevel: 78,
-        betType: 'Spread Pick',
-        isPremium: true,
-        primeTimeCard: false,
-        silverCard: false,
-        garysAnalysis: "Chiefs as underdogs is great value, and Mahomes thrives in the underdog role.",
-        garysBullets: [
-          "Mahomes is 9-1-1 ATS as an underdog",
-          "Ravens defense missing key starters",
-          "Chiefs' game plan will exploit matchups"
-        ]
-      },
-      {
-        id: 4,
-        league: 'PARLAY',
-        game: 'Parlay',
-        parlayGames: ['Lakers vs Celtics', 'Yankees vs Red Sox', 'Chiefs vs Ravens'],
-        parlayLegs: [
-          { game: 'Lakers vs Celtics', league: 'NBA', pick: 'Celtics -3.5' },
-          { game: 'Yankees vs Red Sox', league: 'MLB', pick: 'Yankees -130' },
-          { game: 'Chiefs vs Ravens', league: 'NFL', pick: 'Chiefs +2.5' }
-        ],
-        moneyline: '',
-        spread: '',
-        overUnder: '',
-        time: formattedTime,
-        walletValue: '$300',
-        confidenceLevel: 68,
-        betType: 'Parlay Pick',
-        isPremium: true,
-        primeTimeCard: true,
-        goldCard: true,
-        silverCard: false,
-        garysAnalysis: "This cross-sport parlay combines three of my highest conviction plays into one high-value ticket.",
-        garysBullets: [
-          "All favorites are in strong statistical spots",
-          "Correlated outcomes provide edge",
-          "Maximum value opportunity"
-        ],
-        parlayName: "Gary's Primetime Parlay",
-        parlayOdds: "+650"
-      }
-    ];
-    
-    console.log(`⚠️ Using fallback picks for ${today}. API may be experiencing issues.`);
-    return mockPicks;
-  },
-  
-  /**
    * Generate daily picks for all available sports
    * STRICT NO-FALLBACKS POLICY: Will throw errors rather than use mock data
    * @returns {Promise<Array>} - Array of daily picks based only on real API data
@@ -831,35 +629,18 @@ const picksService = {
       const batchOdds = await oddsService.getBatchOdds(prioritizedSports);
       
       // Check if we got odds data for at least one sport
-      const hasAnyOdds = Object.values(batchOdds).some(odds => odds && odds.length > 0);
-      if (!hasAnyOdds) {
-        throw new Error('No odds data available for any priority sports. Cannot generate picks.');
+      if (!batchOdds || batchOdds.length === 0) {
+        throw new Error('No odds data available from API. Cannot generate picks.');
       }
       
-      // 5. Process each sport and select games - do it sequentially to avoid rate limits
-      let allPicks = [];
-      const REQUIRED_PICKS = 5; // We need exactly 5 picks
-      
-      // Create a set to track which sports we've already processed
-      const processedSports = new Set();
-      
-      // Process sports sequentially rather than in parallel to avoid rate limits
-      console.log(`Processing ${prioritizedSports.length} sports sequentially to avoid rate limits...`);
-      
-      for (let i = 0; i < prioritizedSports.length; i++) {
-        const sport = prioritizedSports[i];
+      // Process each sport sequentially to avoid rate limits
+      for (const sport of prioritizedSports) {
+        console.log(`Generating picks for ${sport}...`);
         
-        // Add a delay between processing different sports to avoid rate limits
-        if (i > 0) {
-          console.log(`Waiting 3 seconds before processing ${sport} to avoid rate limits...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        }
-        
-        const sportOdds = batchOdds[sport] || [];
-        console.log(`Retrieved ${sportOdds.length} games for ${sport}`);
-        
-        if (sportOdds.length === 0) {
-          console.log(`No games available for ${sport}, skipping...`);
+        // Get odds data for this sport
+        const sportOdds = batchOdds.find(odds => odds.sport_key === sport);
+        if (!sportOdds || sportOdds.length === 0) {
+          console.log(`No odds data available for ${sport}, skipping...`);
           continue;
         }
         
@@ -878,217 +659,84 @@ const picksService = {
         
         console.log(`Found ${upcomingGames.length} upcoming games for ${sport}`);
         
-        // Select a game to analyze (using random selection for demonstration)
-        const selectedGame = upcomingGames[Math.floor(Math.random() * upcomingGames.length)];
-        console.log(`Selected game: ${selectedGame.home_team} vs ${selectedGame.away_team}`);
-        
-        // Generate a pick for this game
-        try {
-          // Basic pick data
-          const pickId = `pick-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-          const league = sport.includes('basketball') ? 'NBA' : 
-                       sport.includes('baseball') ? 'MLB' : 
-                       sport.includes('hockey') ? 'NHL' : 
-                       sport.includes('soccer') ? 'Soccer' : 'Sports';
-          
-          // Generate detailed analysis using Gary's AI Engine
-          console.log(`Generating detailed Gary analysis for ${selectedGame.away_team} @ ${selectedGame.home_team}...`);
-          
+        // Process each game
+        for (const game of upcomingGames) {
           try {
-            // Create game ID for tracking
-            const gameId = `${sport}-${selectedGame.id || Date.now()}`;
+            // Get enhanced odds data including line movement
+            const [oddsData, lineMovement] = await Promise.all([
+              picksService.getOddsData(sport, game.id),
+              oddsService.getLineMovement(game.id)
+            ]);
             
-            // Setup for Gary's narrative factors (soul model)
-            // This determines if it's a revenge game, has superstition elements, etc.
-            const hasRevenge = Math.random() > 0.7; // 30% chance of revenge narrative
-            const hasSuperstition = Math.random() > 0.8; // 20% chance of superstition factor
-            const momentum = Math.random(); // Random momentum factor
-            
-            // Determine if this is a trap game
-            const isPublicFavorite = Math.random() > 0.5;
-            const publicPct = isPublicFavorite ? 65 + Math.floor(Math.random() * 30) : 40 + Math.floor(Math.random() * 20);
-            const lineMoved = Math.random() > 0.7; // 30% chance line has moved significantly
-            
-            // Setup past performance and profitability metrics
-            const gutSuccessRate = Math.random(); // How often Gary's gut has been right
-            const progressToTarget = Math.random() * 1.5; // Sometimes ahead, sometimes behind
-            
-            // Determine key players for this game
-            const keyPlayers = [];
-            
-            // Analyze all betting markets using odds service
-            const bettingAnalysis = await oddsService.analyzeBettingMarkets(selectedGame);
-            
-            // Calculate market value and expected value from the best betting opportunity
-            const marketValue = bettingAnalysis ? bettingAnalysis.roi : Math.random();
-            const expectedValue = bettingAnalysis ? bettingAnalysis.ev : Math.random();
-            
-            console.log(`🏀 GARY'S FULL ANALYSIS FACTORS:`);
-            console.log(`Game ID: ${gameId}`);
-            console.log(`Teams: ${selectedGame.away_team} @ ${selectedGame.home_team}`);
-            console.log(`Revenge Game: ${hasRevenge ? 'YES' : 'NO'}`);
-            console.log(`Superstition Factor: ${hasSuperstition ? 'YES' : 'NO'}`);
-            console.log(`Momentum Factor: ${(momentum * 100).toFixed(1)}%`);
-            console.log(`Public Betting: ${publicPct}% on ${isPublicFavorite ? selectedGame.home_team : selectedGame.away_team}`);
-            console.log(`Line Movement: ${lineMoved ? 'SIGNIFICANT' : 'MINIMAL'}`);
-            console.log(`Gut Trust Factor: ${(gutSuccessRate * 100).toFixed(1)}%`);
-            console.log(`Progress to Monthly Target: ${(progressToTarget * 100).toFixed(1)}%`);
-            
-            // Now call the comprehensive Gary pick analysis function with all betting options
-            const fullAnalysis = await makeGaryPick({
-              bettingMarkets: bettingAnalysis, // Pass all analyzed markets
-              gameId,
-              homeTeam: selectedGame.home_team,
-              awayTeam: selectedGame.away_team,
-              league,
-              dataMetrics: {
-                ev: expectedValue,
-                lineValue: marketValue,
-                publicVsSharp: publicPct / 100,
-                market: {
-                  lineMoved,
-                  publicPct
-                }
-              },
-              narrative: {
-                revenge: hasRevenge,
-                superstition: hasSuperstition,
-                momentum,
-                favoredTeam: Math.random() > 0.5 ? selectedGame.home_team : selectedGame.away_team,
-                keyPlayers
-              },
-              pastPerformance: {
-                gutOverrideHits: Math.floor(gutSuccessRate * 10),
-                totalGutOverrides: 10
-              },
-              progressToTarget,
-              bankroll: 10000
+            // Generate Gary's analysis with enhanced data
+            const garyAnalysis = await makeGaryPick({
+              sport: sport,
+              game: game.home_team + ' vs ' + game.away_team,
+              odds: oddsData,
+              lineMovement: lineMovement,
+              sharpAction: lineMovement.sharpAction
             });
-            
-            console.log('Got full Gary analysis:', fullAnalysis);
-            
-            // Extract data from Gary's analysis
-            const shortPick = fullAnalysis.pickSummary || `Bet on the ${selectedGame.home_team} to win.`;
-            const analysis = fullAnalysis.analysisDetail || `Gary's analysis shows that ${selectedGame.home_team} has an advantage in this matchup.`;
-            const bullets = fullAnalysis.keyPoints || [
-              `${selectedGame.home_team} has a statistical advantage`,
-              'Current odds present good value',
-              'Recent performance supports this pick'
-            ];
-            
-            // Get the confidence rating
-            const confidenceRating = fullAnalysis.confidenceScore || 75;
-            
-            // Generate the final pick object
-            // --- Extract real market values from odds API response ---
-let realMoneyline = '';
-let realSpread = '';
-let realOverUnder = '';
-if (selectedGame.markets && Array.isArray(selectedGame.markets)) {
-  // Moneyline (h2h)
-  const h2hMarket = selectedGame.markets.find(m => m.key === 'h2h');
-  if (h2hMarket && h2hMarket.outcomes && h2hMarket.outcomes.length >= 2) {
-    const homeOutcome = h2hMarket.outcomes.find(o => o.name === selectedGame.home_team);
-    if (homeOutcome) {
-      realMoneyline = `${selectedGame.home_team} ${homeOutcome.price > 0 ? '+' : ''}${homeOutcome.price}`;
-    }
-  }
-  // Spread
-  const spreadMarket = selectedGame.markets.find(m => m.key === 'spreads');
-  if (spreadMarket && spreadMarket.outcomes && spreadMarket.outcomes.length >= 2) {
-    const homeSpread = spreadMarket.outcomes.find(o => o.name === selectedGame.home_team);
-    if (homeSpread) {
-      realSpread = `${selectedGame.home_team} ${homeSpread.point > 0 ? '+' : ''}${homeSpread.point} (${homeSpread.price > 0 ? '+' : ''}${homeSpread.price})`;
-    }
-  }
-  // Over/Under (totals)
-  const totalsMarket = selectedGame.markets.find(m => m.key === 'totals');
-  if (totalsMarket && totalsMarket.outcomes && totalsMarket.outcomes.length >= 2) {
-    const overOutcome = totalsMarket.outcomes.find(o => o.name.toLowerCase().includes('over'));
-    if (overOutcome) {
-      realOverUnder = `OVER ${overOutcome.point} (${overOutcome.price > 0 ? '+' : ''}${overOutcome.price})`;
-    }
-  }
-}
-const pick = {
-              id: pickId,
-              league: league,
-              game: `${selectedGame.away_team} @ ${selectedGame.home_team}`,
-              betType: bettingAnalysis?.type || fullAnalysis.betType || 'Moneyline',
-              shortPick: bettingAnalysis ? formatShortPick(bettingAnalysis) : shortPick,
-              moneyline: realMoneyline,
-              spread: realSpread,
-              overUnder: realOverUnder,
-              time: new Date(selectedGame.commence_time).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', timeZoneName: 'short'}),
-              // Get odds directly from our betting analysis
-              odds: bettingAnalysis?.odds?.toString() || selectedGame.bookmakers?.[0]?.markets?.find(m => 
-                m.key === (betType === 'Moneyline' ? 'h2h' : betType === 'Spread' ? 'spreads' : 'totals')
-              )?.outcomes?.[0]?.price?.toString() || '-110',
-              // Calculate wallet value based on bankroll and confidence
-              walletValue: `$${await (async () => {
-                const bankrollData = await bankrollService.getBankrollData();
-                return bankrollService.calculateWagerAmount(
-                  fullAnalysis.confidenceLevel || 75,
-                  bankrollData.current_amount
-                );
-              })()}`,
-              confidenceLevel: confidenceRating,
-              isPremium: allPicks.length > 0,
-              primeTimeCard: hasRevenge || hasSuperstition, // Make it a prime time card if it has special factors
+
+            if (!garyAnalysis || !garyAnalysis.pick) {
+              console.log('Gary did not generate a pick for this game, skipping...');
+              continue;
+            }
+
+            // Create enhanced pick object
+            const pick = {
+              id: `${sport}_${game.id}`,
+              league: sportsList.find(s => s.key === sport)?.title || sport,
+              game: `${game.home_team} vs ${game.away_team}`,
+              betType: garyAnalysis.bet_type,
+              shortPick: formatShortPick(garyAnalysis),
+              team: garyAnalysis.team,
+              odds: garyAnalysis.line,
+              lineMovement: lineMovement,
+              sharpAction: lineMovement.sharpAction,
+              confidenceLevel: garyAnalysis.confidence === 'High' ? 85 : garyAnalysis.confidence === 'Medium' ? 75 : 65,
               silverCard: false,
-              imageUrl: `/logos/${sport.includes('basketball') ? 'basketball' : 
-                             sport.includes('baseball') ? 'baseball' : 
-                             sport.includes('hockey') ? 'hockey' : 
-                             sport.includes('soccer') ? 'soccer' : 'sports'}.svg`,
-              pickDetail: shortPick,
-              analysis: analysis,
-              garysAnalysis: analysis,
-              garysBullets: bullets
+              imageUrl: `/logos/${sport.includes('basketball') ? 'basketball' : sport.includes('baseball') ? 'baseball' : sport.includes('hockey') ? 'hockey' : sport.includes('soccer') ? 'soccer' : 'sports'}.svg`,
+              pickDetail: garyAnalysis.full_analysis,
+              analysis: garyAnalysis.full_analysis,
+              garysAnalysis: garyAnalysis.full_analysis,
+              garysBullets: [
+                ...(garyAnalysis.key_points || [
+                  'Statistical analysis supports this selection',
+                  'Current odds present good betting value',
+                  'Key performance metrics favor this pick'
+                ]),
+                lineMovement.hasSignificantMovement ? 
+                  `Significant line movement detected: ${lineMovement.movement.spread} points` : 
+                  'Line has remained stable',
+                lineMovement.sharpAction !== 'No clear sharp action' ?
+                  lineMovement.sharpAction : 'No clear sharp action detected'
+              ]
             };
-            
-            console.log(`Successfully generated Gary's pick for ${pick.game}`);
-            
-            // Add this pick to our collection rather than returning it
+
+            // Add pick to allPicks array
             allPicks.push(pick);
-            console.log(`Added pick #${allPicks.length}/${REQUIRED_PICKS} for ${league}`);
-            
+
           } catch (analysisError) {
             console.error('Error generating Gary analysis:', analysisError);
-            
-            // Log the specific error for debugging
             console.error('Gary Engine Error Details:', JSON.stringify(analysisError));
-            
-            // STRICT NO-FALLBACKS POLICY: If Gary's analysis fails, we fail the entire pick generation
-            console.error('CRITICAL: Gary\'s analysis engine failed. Cannot generate pick without proper analysis.');
-            throw new Error('Gary\'s analysis engine failed to generate proper pick analysis.');
+            console.error('Warning: Gary\'s analysis engine failed for this pick. Trying next game...');
+            continue;
           }
-          
-          // Check if we have enough picks to exit the sport loop
-          if (allPicks.length >= REQUIRED_PICKS) {
-            console.log(`Reached required number of picks (${REQUIRED_PICKS}), breaking out of sport loop`);
-            break;
-          }
-          
-          // If we have 5 picks, we're done
-          if (allPicks.length >= REQUIRED_PICKS) {
-            break;
-          }
-        } catch (pickError) {
-          console.error(`Error generating pick for game ${selectedGame.home_team} vs ${selectedGame.away_team}:`, pickError);
         }
-        
       }
-      
-      // STRICT NO-FALLBACKS POLICY: If we don't have enough picks from priority sports, we fail
-      if (allPicks.length < REQUIRED_PICKS) {
-        console.error(`CRITICAL: Only generated ${allPicks.length} picks from priority sports. Need exactly ${REQUIRED_PICKS}.`);
-        throw new Error(`Failed to generate required number of picks (${REQUIRED_PICKS}) from priority sports. Please try again later when more games are available.`);
+
+      // Check if we have enough picks (minimum 1)
+      if (allPicks.length < 1) {
+        throw new Error(`Failed to generate minimum required picks (1). Only generated ${allPicks.length} picks.`);
       }
-      
-      // Log the final count of real picks - NO FALLBACKS
-      console.log(`Successfully generated ${allPicks.length} real picks with NO fallbacks.`);
-      
-      // 8. Store in database (Supabase ONLY) - NO FALLBACKS
+
+      // Trim excess picks if we have more than 10
+      if (allPicks.length > 10) {
+        console.log(`Trimming picks from ${allPicks.length} to 10`);
+        allPicks.length = 10;
+      }
+
+      // Store picks in Supabase
       console.log('Saving picks to Supabase database only - NO localStorage fallbacks');
       try {
         await picksService.storeDailyPicksInDatabase(allPicks);
@@ -1096,124 +744,48 @@ const pick = {
       } catch (storageError) {
         console.error('Error storing picks in Supabase database:', storageError);
         // NO FALLBACKS - propagate the error
-        throw new Error(`Failed to store picks in Supabase database. NO fallbacks available. Error: ${storageError.message}`);
+        throw storageError;
       }
-      
-      // Ensure we have a valid array of picks before returning
-      console.log('Final picks array to return:', JSON.stringify(allPicks));
-      console.log('Returning array of picks with length:', allPicks.length);
-      
-      // Create a deep copy to ensure we're not returning a reference
-      return [...allPicks];
+
+      return allPicks;
+
     } catch (error) {
-      console.error('Error generating daily picks:', error);
-      throw error; // Propagate the error rather than using fallbacks
+      console.error('Error in generateDailyPicks:', error);
+      throw error;
     }
   },
+
   /**
-   * Abbreviate team names for display purposes
-   * @param {string} teamName - Full team name
-   * @param {boolean} useIndustryStandard - Whether to use industry standard abbreviations
-   * @returns {string} - Abbreviated team name
+   * Enhance a pick with default data
+   * @param {Object} pick - The pick to enhance
+   * @returns {Object} The enhanced pick
    */
-  abbreviateTeamName: (teamName, useIndustryStandard = true) => {
-    // Use industry standard abbreviations by default, fall back to our custom ones
-    return useIndustryStandard ? 
-      getIndustryAbbreviation(teamName) : 
-      getTeamAbbreviation(teamName);
-  },
-  
-  /**
-        formattedText = `${abbreviateTeam(teamName)} ${number}`;
-        console.log(`SPREAD BET (${pick.league}): Formatted as "${formattedText}"`);
-      } 
-      // For moneylines - show team, ML, and odds
-      else if (pick.betType && pick.betType.includes('Moneyline') && pick.moneyline) {
-        // Add odds if available
-        const odds = pick.odds || pick.moneylineOdds || '';
-        // Format as "Team ML Odds" (e.g. "KC ML -115")
-        formattedText = `${abbreviateTeam(pick.moneyline)} ML ${formatOdds(odds)}`.trim();
-        console.log(`MONEYLINE BET (${pick.league}): Formatted as "${formattedText}"`);
-      } 
-      // For totals (over/unders) - just OVER/UNDER and total, no odds
-      else if (pick.betType && pick.betType.includes('Total') && pick.overUnder) {
-        const parts = pick.overUnder.split(' ');
-        let overUnderType = '';
-        let total = '';
-        
-        if (parts[0].toLowerCase() === 'over' || parts[0].toLowerCase() === 'under') {
-          overUnderType = parts[0].toUpperCase();
-          total = parts[parts.length - 1];
-        }
-        
-        // Format as "OVER/UNDER Total" (e.g., "OVER 6.5")
-        formattedText = `${overUnderType} ${total}`;
-        console.log(`OVER/UNDER BET (${pick.league}): Formatted as "${formattedText}"`);
+  enhancePickWithDefaults: (pick) => {
+    // Calculate confidence based on the confidence property if available
+    // Otherwise use a dynamic calculation or maintain the existing value
+    let confidence = pick.confidenceLevel;
+    if (!confidence && pick.confidence) {
+      // Map string confidence levels to numeric values if available
+      if (typeof pick.confidence === 'string') {
+        confidence = pick.confidence === 'High' ? 85 : 
+                     pick.confidence === 'Medium' ? 75 : 
+                     pick.confidence === 'Low' ? 65 : 70;
+      } else if (typeof pick.confidence === 'number') {
+        // If it's already a number between 0-1, convert to scale of 100
+        confidence = pick.confidence <= 1 ? Math.round(pick.confidence * 100) : pick.confidence;
       }
-      // For Parlay picks
-      else if (pick.league === 'PARLAY') {
-        // Include odds if available
-        const odds = pick.odds || pick.parlayOdds;
-        formattedText = odds ? `PARLAY ${formatOdds(odds)}` : 'PARLAY OF THE DAY';
-        console.log(`PARLAY: Formatted as "${formattedText}"`);
-      }
-      // Default case for any other type of pick
-      else if (pick.pick) {
-        formattedText = pick.pick;
-        console.log(`DEFAULT FORMATTING (${pick.league}): Using original pick text "${formattedText}"`);
-      }
-      else {
-        formattedText = 'NO PICK';
-        console.log(`NO VALID PICK DATA FOUND (${pick.league || 'Unknown'}): Using "${formattedText}"`);
-      }
-      
-      // Force override shortPick property to ensure it's set correctly
-      if (pick && typeof pick === 'object') {
-        pick.shortPick = formattedText;
-      }
-      
-      return formattedText;
-    } catch (error) {
-      console.error('Error in createShortPickText:', error, pick);
-      return pick && pick.pick ? pick.pick : 'NO PICK';
     }
-  },
-  
-  /**
-   * Enhance a pick with default data
-   * @param {Object} pick - Pick object
-   * @returns {Object} - Enhanced pick object
-   */
-  /**
-   * Enhance a pick with default data
-   * @param {Object} pick - Pick object
-   * @returns {Object} - Enhanced pick object
-   */
-  enhancePickWithDefaultData: (pick) => {
-    // Make sure we don't lose any existing data
-    const enhanced = {
+    
+    return {
       ...pick,
-      garysAnalysis: pick.garysAnalysis || "Statistical models and situational factors show value in this pick.",
-      garysBullets: pick.garysBullets || [
-        "Strong betting value identified", 
-        "Favorable matchup conditions",
-        "Statistical edge discovered"
-      ],
-      // Ensure these properties are also set for compatibility with card back display
-      pickDetail: pick.pickDetail || "Statistical models and situational factors show value in this pick.",
-      analysis: pick.analysis || "Statistical models and situational factors show value in this pick."
+      confidenceLevel: confidence || pick.confidenceLevel, // Don't use a default value
+      silverCard: pick.silverCard || false,
+      garysAnalysis: pick.garysAnalysis || 'Statistical models and situational factors show value in this pick.',
+      pickDetail: pick.pickDetail || 'Statistical models and situational factors show value in this pick.',
+      analysis: pick.analysis || 'Statistical models and situational factors show value in this pick.',
+      shortPick: pick.shortPick || pick.pick || '',
+      shortGame: pick.shortGame || (pick.game ? pick.game.split(' at ').map(team => getTeamAbbreviation(team)).join(' vs ') : '')
     };
-    
-    // Generate shortPick and shortGame if not present
-    if (!enhanced.shortPick && enhanced.pick) {
-      enhanced.shortPick = picksService.createShortPickText(enhanced);
-    }
-    if (!enhanced.shortGame && enhanced.game) {
-      enhanced.shortGame = enhanced.game.split(' at ').map(team => 
-        picksService.abbreviateTeamName(team)).join(' vs ');
-    }
-    
-    return enhanced;
   }
 };
 

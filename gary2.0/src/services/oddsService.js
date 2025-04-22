@@ -164,46 +164,29 @@ export const oddsService = {
    */
   getOdds: async (sport) => {
     try {
-      // Get the API key from the config loader
       const apiKey = await configLoader.getOddsApiKey();
-      
-      // Check if API key is missing
       if (!apiKey) {
-        throw new Error('API Key is missing. Please check your environment variables.');
+        console.error('⚠️ ODDS API KEY IS MISSING - This will cause picks generation to fail');
+        throw new Error('API key is required for The Odds API');
       }
-      
-      // Check if it's a futures market (contains "winner" in the key)
-      const isFuturesMarket = sport.includes('winner');
-      
-      // Different endpoints and params for game odds vs futures
-      const endpoint = `https://api.the-odds-api.com/v4/sports/${sport}/odds`;
-      
-      const params = isFuturesMarket
-        ? {
-            apiKey: apiKey,
-            regions: 'us',
-            oddsFormat: 'american'
-          }
-        : {
-            apiKey: apiKey,
-            regions: 'us',
-            markets: 'spreads,totals,h2h',
-            oddsFormat: 'american'
-          };
-      
-      console.log(`🔍 Fetching odds for ${sport} from: ${endpoint}`);
-      
-      const response = await axios.get(endpoint, { params });
-      console.log(`✅ Retrieved ${response.data.length} games for ${sport}`);
+      const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
+        params: {
+          apiKey,
+          regions: 'us',
+          markets: 'h2h,spreads,totals',
+          oddsFormat: 'american',
+          bookmakers: 'fanduel,draftkings,betmgm,caesars'
+        }
+      });
       return response.data;
     } catch (error) {
       console.error(`❌ Error fetching odds for ${sport}:`, error.response?.data || error.message);
-      throw new Error(`Failed to fetch odds for ${sport}: ${error.response?.data?.message || error.message}`);
+      throw error;
     }
   },
 
   /**
-   * Get batch odds for multiple sports
+   * Get odds for multiple sports
    * @param {Array<string>} sports - Array of sport keys
    * @returns {Promise<Object>} - Object with sports as keys and odds data as values
    */
@@ -237,38 +220,143 @@ export const oddsService = {
           : [];
       });
       
-      // Check if we got any valid data at all
-      const hasAnyValidData = Object.values(batchOdds).some(odds => odds.length > 0);
-      if (!hasAnyValidData) {
-        throw new Error('Failed to get odds for any sports. Check API key and network connection.');
-      }
-      
       return batchOdds;
     } catch (error) {
-      console.error('❌ Error fetching batch odds:', error.message);
+      console.error('❌ Error fetching batch odds:', error);
       throw error;
     }
   },
 
   /**
-   * Get events for a specific sport
-   * @param {string} sport - Sport key (e.g., 'basketball_nba')
-   * @returns {Promise<Array>} List of upcoming events
+   * Get upcoming games with comprehensive odds data
+   * @param {string} sport - Sport key
+   * @param {Object} options - Request options
+   * @returns {Promise<Object>} Upcoming games with odds
    */
-  getEvents: async (sport) => {
+  getUpcomingGames: async (sport = 'upcoming', options = {}) => {
     try {
-      // Get the API key from the config loader
       const apiKey = await configLoader.getOddsApiKey();
-      
-      const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/scores`, {
+      if (!apiKey) {
+        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch upcoming games');
+        throw new Error('API key is required for The Odds API');
+      }
+      const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
         params: {
-          apiKey: apiKey
+          apiKey,
+          regions: options.regions || 'us',
+          markets: options.markets || 'h2h,spreads,totals',
+          oddsFormat: options.oddsFormat || 'american',
+          bookmakers: options.bookmakers || 'fanduel,draftkings,betmgm,caesars'
         }
       });
       return response.data;
     } catch (error) {
-      console.error(`Error fetching events for ${sport}:`, error);
+      console.error('Error fetching upcoming games:', error);
       throw error;
     }
+  },
+
+  /**
+   * Get historical odds data for an event
+   * @param {string} eventId - Event ID
+   * @param {Object} options - Request options
+   * @returns {Promise<Object>} Historical odds data
+   */
+  getHistoricalOdds: async (eventId, options = {}) => {
+    try {
+      const apiKey = await configLoader.getOddsApiKey();
+      if (!apiKey) {
+        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch historical odds');
+        throw new Error('API key is required for The Odds API');
+      }
+      const response = await axios.get(`${ODDS_API_BASE_URL}/sports/historical-odds/${eventId}`, {
+        params: {
+          apiKey,
+          regions: options.regions || 'us',
+          markets: options.markets || 'h2h,spreads,totals',
+          oddsFormat: options.oddsFormat || 'american',
+          bookmakers: options.bookmakers || 'fanduel,draftkings,betmgm,caesars'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching historical odds:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get all available sports
+   * @returns {Promise<Array>} List of available sports
+   */
+  getAllSports: async () => {
+    try {
+      const apiKey = await configLoader.getOddsApiKey();
+      if (!apiKey) {
+        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch all sports');
+        throw new Error('API key is required for The Odds API');
+      }
+      const response = await axios.get(`${ODDS_API_BASE_URL}/sports`, {
+        params: { apiKey }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching all sports:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get line movement data for a specific event
+   * @param {string} eventId - Event ID
+   * @returns {Promise<Object>} Line movement analysis
+   */
+  getLineMovement: async (eventId) => {
+    try {
+      const historical = await oddsService.getHistoricalOdds(eventId);
+      return oddsService.analyzeLineMovement(historical);
+    } catch (error) {
+      console.error('Error analyzing line movement:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Analyze line movement from historical data
+   * @param {Object} historicalData - Historical odds data
+   * @returns {Object} Line movement analysis
+   */
+  analyzeLineMovement: (historicalData) => {
+    if (!historicalData || !historicalData.odds || historicalData.odds.length === 0) {
+      return {
+        hasSignificantMovement: false,
+        movement: 0,
+        sharpAction: 'No clear sharp action detected',
+        publicPercentages: { home: 50, away: 50 }
+      };
+    }
+
+    const odds = historicalData.odds;
+    const firstOdds = odds[0];
+    const lastOdds = odds[odds.length - 1];
+
+    const movement = {
+      spread: (lastOdds.spread?.point || 0) - (firstOdds.spread?.point || 0),
+      moneyline: {
+        home: (lastOdds.h2h?.[0] || 0) - (firstOdds.h2h?.[0] || 0),
+        away: (lastOdds.h2h?.[1] || 0) - (firstOdds.h2h?.[1] || 0)
+      }
+    };
+
+    const hasSignificantMovement = Math.abs(movement.spread) >= 2 || 
+      Math.abs(movement.moneyline.home) >= 20 ||
+      Math.abs(movement.moneyline.away) >= 20;
+
+    return {
+      hasSignificantMovement,
+      movement,
+      sharpAction: hasSignificantMovement ? 'Significant sharp action detected' : 'No clear sharp action',
+      timestamp: new Date().toISOString()
+    };
   }
 };

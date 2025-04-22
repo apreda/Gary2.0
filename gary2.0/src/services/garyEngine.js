@@ -1,9 +1,9 @@
 // ——————————————
 // IMPORTS: Gary's Enhanced Intelligence
 // ——————————————
-import { perplexityService } from '../services/perplexityService';
-import { openaiService } from '../services/openaiService';
-import { sportsDataService } from '../services/sportsDataService';
+import { perplexityService } from './perplexityService';
+import { openaiService } from './openaiService';
+import { sportsDataService } from './sportsDataService';
 
 // ——————————————
 // 1. CONFIG: Gary's Core Models
@@ -16,12 +16,6 @@ export const PreferenceModel = {
     NYY_Yankees: { bias: 0.7, historical_wins: true, trust_in_big_moments: true },
     NYM_Mets: { bias: 0.6, emotional_connection: "underdog love" },
     BigEast_Basketball: { bias: 0.75, gritty_teams: true, tourney_momentum: true },
-  },
-  players: {
-    Dennis_Rodman: { bias: 1.0, override_defense: true, vibe_multiplier: 2.0 },
-    Lance_Stephenson: { bias: 0.95, hometown_bonus: true, vibe_multiplier: 1.8 },
-    Magic_Johnson: { bias: 0.9, big_moment_boost: true },
-    Larry_Bird: { bias: 0.9, cold_weather_bonus: true, clutch_multiplier: 1.5 },
   },
   preferences: {
     east_coast_bias: 0.75,
@@ -141,37 +135,50 @@ export function calculateStake(bankroll, betType, confidence) {
  * @returns {Promise<string>} - Real-time information about the game
  */
 export async function fetchRealTimeGameInfo(homeTeam, awayTeam, league) {
-  console.log(`Fetching real-time info for ${awayTeam} @ ${homeTeam} (${league})...`);
   try {
-    // Get game-specific news and insights
-    const gameNews = await perplexityService.getGameNews(homeTeam, awayTeam, league);
+    if (!homeTeam || !awayTeam || !league) {
+      console.error('Missing required parameters for fetchRealTimeGameInfo');
+      return null;
+    }
     
-    // Get team-specific insights for both teams
-    const [homeInsights, awayInsights] = await Promise.all([
-      perplexityService.getTeamInsights(homeTeam, league),
-      perplexityService.getTeamInsights(awayTeam, league)
-    ]);
+    console.log(`Fetching real-time info for ${awayTeam} @ ${homeTeam} (${league})`);
     
-    // Format everything into a comprehensive context
-    // Add null checks for team names before calling toUpperCase()
-    const safeHomeTeam = homeTeam || 'HOME TEAM';
-    const safeAwayTeam = awayTeam || 'AWAY TEAM';
-    
-    const realTimeContext = `
-      GAME NEWS AND BETTING TRENDS:
-      ${gameNews || 'No game-specific news available.'}
-
-      ${safeHomeTeam.toUpperCase()} INSIGHTS:
-      ${homeInsights || 'No team-specific insights available.'}
-
-      ${safeAwayTeam.toUpperCase()} INSIGHTS:
-      ${awayInsights || 'No team-specific insights available.'}
+    const query = `
+      Provide the most current and comprehensive information about the upcoming ${league} game between ${homeTeam} (home) and ${awayTeam} (away).
+      
+      Include ALL of the following:
+      1. Pitcher scratch updates and starting pitcher changes (if applicable for ${league})
+      2. Recent storylines, headlines, and breaking news for both teams
+      3. Recent trades, lineup news, and roster changes
+      4. Detailed match-up analysis comparing strengths and weaknesses
+      5. Game breakdown including key player matchups and tactical considerations
+      6. Injury reports and player availability updates
+      7. Recent form and performance trends for both teams
+      8. Relevant betting line movements
+      9. Weather conditions that might affect game play
+      10. Historical matchup data between these teams
+      
+      Focus on information that would be valuable for making informed betting decisions.
+      Keep it factual and data-driven. Include specific statistics where available.
+      Prioritize any BREAKING NEWS from the last 24 hours that could significantly impact the game.        
     `;
     
-    return realTimeContext;
+    const realTimeInfo = await perplexityService.fetchRealTimeInfo(query, {
+      model: 'sonar-pro',
+      temperature: 0.3, // Lower temperature for factual responses
+      maxTokens: 1500   // Increased token limit for more comprehensive information
+    });
+    
+    if (!realTimeInfo) {
+      console.warn('Failed to get real-time information from Perplexity API. Using fallback data.');
+      return null;
+    }
+    
+    console.log('Successfully retrieved real-time game information');
+    return realTimeInfo;
   } catch (error) {
     console.error('Error fetching real-time game information:', error);
-    return 'Unable to retrieve real-time information. Analysis will proceed with available data only.';
+    return null;
   }
 }
 
@@ -184,35 +191,116 @@ export async function fetchRealTimeGameInfo(homeTeam, awayTeam, league) {
  */
 export async function generateGaryAnalysis(gameData, realTimeInfo, preferences = {}) {
   try {
-    // Validate gameData to ensure we have the necessary properties
-    if (!gameData || (gameData.homeTeam === undefined && gameData.awayTeam === undefined)) {
-      console.log('Warning: gameData missing critical team information');
-      // Add fallback values to ensure the function continues
-      gameData = gameData || {};
-      gameData.homeTeam = gameData.homeTeam || 'Home Team';
-      gameData.awayTeam = gameData.awayTeam || 'Away Team';
-      gameData.league = gameData.league || 'Unknown League';
-    }
+    console.log('Generating Gary\'s detailed analysis with OpenAI...');
     
-    // Apply Gary's preferences to the analysis prompt
-    const preferenceContext = Object.keys(preferences).length > 0 ? 
-      `Consider these personal preferences in your analysis: ${JSON.stringify(preferences)}` : '';
+    const { odds, lineMovement, sport, game } = gameData || {};
     
-    // Get the analysis from OpenAI
-    const analysis = await openaiService.generateGaryAnalysis(gameData, realTimeInfo, {
-      temperature: 0.8,
-      extraContext: preferenceContext
+    // Get enhanced stats if available
+    let teamStats = gameData.teamStats || '';
+    let statsText = typeof teamStats === 'string' ? teamStats : JSON.stringify(teamStats, null, 2);
+    
+    // Format line movement data
+    const lineMovementText = lineMovement ? 
+      `Line Movement: ${JSON.stringify(lineMovement, null, 2)}` : 
+      'No line movement data available';
+    
+    // Format the odds data
+    const oddsText = odds ? 
+      `Odds Data: ${JSON.stringify(odds, null, 2)}` : 
+      'No odds data available';
+    
+    // Get preferences for teams
+    const preferencesText = Object.keys(preferences).length > 0 ? 
+      `Gary's Preferences: ${JSON.stringify(preferences, null, 2)}` : 
+      'No specific team preferences';
+
+    // Using the exact system message format specified
+    const systemMessage = {
+      role: "system",
+      content: `
+You are **Gary the Bear**, a grizzled, old-school sports betting expert with 50+ years of experience.  
+You're known for:
+1. **Picking winners**, not favorites.
+2. Using a battle-tested system that blends deep analytics with instinct.
+3. Speaking with blunt, confident swagger.
+
+Here's how you operate:
+- You analyze full-team stats, recent performance, and matchup trends
+- You use injury reports, pace, usage, home/away splits, and **momentum** to evaluate real advantages
+- You spot traps using line movement and sharp/public split
+- You recognize revenge spots, rivalries, and superstition streaks
+- You factor in fatigue, rest days, emotional games, and locker room vibes
+- You trust your gut — but only when the numbers back it up
+- You lean slightly toward your favorite teams: Reds, Bengals, Pacers, Yankees, Mets, and Big East basketball
+
+**IMPORTANT:**  
+> 80% of Gary's decision should be based on real stats, analytics, and matchup data — including momentum.  
+You never guess. You only trust your gut after the data earns it.
+
+**You NEVER chase favorites or avoid big dogs. If your system says a +350 underdog is the right side, you hammer it.**
+
+RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
+\`\`\`json
+{
+  "pick": "e.g., Bulls ML / Celtics -4.5 / OVER 222",
+  "type": "spread | moneyline | total",
+  "confidence": 0.0–1.0,
+  "trapAlert": true|false,
+  "revenge": true|false,
+  "superstition": true|false,
+  "momentum": 0.0–1.0,
+  "rationale": "1–2 sentence breakdown. Data-backed, but with Gary's swagger."
+}
+\`\`\`
+`
+    };
+    
+    // Create user prompt with all the game data
+    const userPrompt = {
+      role: 'user',
+      content: `Analyze this upcoming ${sport || ''} game: ${game || ''}
+
+${oddsText}
+
+${lineMovementText}
+
+${statsText}
+
+REAL-TIME DATA:
+${realTimeInfo || 'No real-time data available'}
+
+${preferencesText}
+
+Remember to follow the decision weights:
+- **80%** on hard data & stats (team & player metrics, pace, injuries, home/away splits, momentum, line movement, public/sharp splits)  
+- **10%** on fan bias (Reds, Bengals, Pacers, Yankees, Mets, Big East hoops)  
+- **10%** on trap detection, revenge angles, and superstition streaks
+
+Provide your betting analysis in the exact JSON format specified.`
+    };
+    
+    // Generate analysis from OpenAI using the specified prompt format
+    const analysis = await openaiService.generateResponse([systemMessage, userPrompt], {
+      temperature: 0.7,
+      maxTokens: 1500
     });
     
+    if (!analysis) {
+      throw new Error('Failed to generate analysis from OpenAI');
+    }
+    
+    // Return success result with full analysis
     return {
-      fullAnalysis: analysis,
-      success: true
+      success: true,
+      fullAnalysis: analysis
     };
   } catch (error) {
     console.error('Error generating Gary\'s analysis:', error);
+    
+    // Return failure result with error message
     return {
-      fullAnalysis: 'Unable to generate analysis at this time.',
-      success: false
+      success: false,
+      fullAnalysis: `Gary's analysis engine encountered an error: ${error.message}`
     };
   }
 }

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { oddsService } from './oddsService';
 
 /**
  * Service for fetching and processing sports data from TheSportsDB API
@@ -211,7 +212,7 @@ export const sportsDataService = {
    */
   formatStatsForPrompt: (gameStats) => {
     if (!gameStats || !gameStats.statsAvailable) {
-      console.warn('TheSportsDB API: No stats available to format for OpenAI prompt.');
+      console.warn('TheSportsDB API: No stats available for OpenAI prompt.');
       return 'NOTE: Current team statistics unavailable - using historical data only.';
     }
     
@@ -219,16 +220,90 @@ export const sportsDataService = {
     console.log(`TheSportsDB API: Formatting stats for ${homeTeamStats.name} vs ${awayTeamStats.name}`);
     
     return `
-Current Team Data (April 2025):
-- ${homeTeamStats.name}: ${homeTeamStats.recentForm.form} 
+📊 TEAM PERFORMANCE (LAST 5 GAMES)
+- ${homeTeamStats.name}: ${homeTeamStats.recentForm.form}
 - ${awayTeamStats.name}: ${awayTeamStats.recentForm.form}
 
-${homeTeamStats.name} plays at ${homeTeamStats.stadium}. 
+🏟️ VENUE
+${homeTeamStats.name} plays at ${homeTeamStats.stadium}.
 ${awayTeamStats.name} will be the visiting team.
 
-Team Insights:
+🔍 TEAM INSIGHTS
 ${homeTeamStats.description?.substring(0, 100)}...
 ${awayTeamStats.description?.substring(0, 100)}...
 `;
+  },
+
+  /**
+   * Build comprehensive stats context for OpenAI prompt
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} league - League name
+   * @param {Object} oddsData - Current odds and line data
+   * @returns {Promise<string>} - Formatted comprehensive stats context
+   */
+  buildComprehensiveStatsContext: async (homeTeam, awayTeam, league, oddsData) => {
+    try {
+      // Get team stats from TheSportsDB
+      const gameStats = await sportsDataService.generateTeamStatsForGame(homeTeam, awayTeam, league);
+      
+      // Get current odds and line data
+      const {
+        homeOdds = 'N/A',
+        awayOdds = 'N/A',
+        pointSpread = 'N/A',
+        totalPoints = 'N/A',
+        openingHomeOdds = 'N/A',
+        openingAwayOdds = 'N/A',
+        openingSpread = 'N/A',
+        publicBetPercentageHome = 50,
+        publicBetPercentageAway = 50,
+        lineMovement = 'No significant movement',
+        sharpAction = 'No clear sharp action detected'
+      } = oddsData || {};
+
+      // Format line movement description
+      const lineMovementDescription = lineMovement === 'No significant movement' ? 
+        lineMovement : 
+        `Line moved from ${openingSpread} to ${pointSpread}`;
+
+      return `
+🔢 ODDS & LINE DATA
+- Opening Moneyline: ${openingHomeOdds}, ${openingAwayOdds}
+- Current Moneyline: ${homeOdds}, ${awayOdds}
+- Opening Spread: ${openingSpread}
+- Current Spread: ${pointSpread}
+- Over/Under Total: ${totalPoints}
+- Line Movement: ${lineMovementDescription}
+- Public Bets: ${publicBetPercentageHome}% on ${homeTeam}, ${publicBetPercentageAway}% on ${awayTeam}
+- Sharp Money: ${sharpAction}
+
+${gameStats.statsAvailable ? `📊 TEAM PERFORMANCE (LAST 5 GAMES)
+- ${homeTeam}: ${gameStats.homeTeamStats.recentForm.form}
+- ${awayTeam}: ${gameStats.awayTeamStats.recentForm.form}
+
+🏟️ VENUE INFO
+- Home: ${gameStats.homeTeamStats.stadium} (${homeTeam})
+- Away: ${gameStats.awayTeamStats.name} traveling
+
+🔍 TEAM INSIGHTS
+${gameStats.homeTeamStats.description?.substring(0, 100)}...
+${gameStats.awayTeamStats.description?.substring(0, 100)}...` : 'No current team statistics available'}
+
+🌡️ MOMENTUM CHECK
+- Line Movement Analysis: ${Math.abs(parseFloat(openingSpread || 0) - parseFloat(pointSpread || 0)) > 1 ? 'Significant line movement detected' : 'Stable line'}
+- Public vs Sharp: ${Math.abs(publicBetPercentageHome - 50) > 20 ? 'Heavy public lean detected' : 'Balanced action'}
+- Sharp Action: ${sharpAction}
+
+🧠 GARY'S ANALYTICS FOCUS (80% WEIGHT)
+- Line value vs public perception
+- Recent team performance trends
+- Sharp money indicators
+- Home/Away splits and matchup history
+`;
+    } catch (error) {
+      console.error('Error building comprehensive stats context:', error);
+      return 'Error: Could not build comprehensive stats context. Using limited data for analysis.';
+    }
   }
 };
