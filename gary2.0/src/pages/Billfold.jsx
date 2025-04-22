@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { format } from 'date-fns';
 import billfoldLogo from '../assets/images/billfold1.png';
+import '../styles/BillfoldStyle.css';
 
 export function Billfold() {
   const [bankrollStats, setBankrollStats] = useState({
