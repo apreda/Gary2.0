@@ -238,7 +238,6 @@ export function Billfold() {
       {/* Charts - Full width with no padding */}
       <div className="col-span-12 mb-6 w-full px-0">
         <BillfoldCharts 
-          equityHistory={stats.equityHistory} 
           sportPerformance={stats.sportPerformance}
           betTypePerformance={stats.betTypePerformance}
         />
