@@ -18,78 +18,22 @@ const TagIcon = () => (
 );
 
 export default function BillfoldCharts({ 
-  equityHistory = [], 
   sportPerformance = [], 
   betTypePerformance = [] 
 }) {
   // Ensure we have data to display
-  const hasEquityData = equityHistory && equityHistory.length > 0;
   const hasSportData = sportPerformance && sportPerformance.length > 0;
   const hasBetTypeData = betTypePerformance && betTypePerformance.length > 0;
   return (
-    // Simple stacked layout, full width for both charts
-    <div className="w-full mb-8 space-y-6">
-      {/* Equity Curve Chart - Full Width */}
-      <motion.div 
-        className="w-full bg-surface rounded-xl shadow-lg overflow-hidden"
-        initial={{ opacity: 0, y: 10 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ delay: 0.1 }} 
-        whileHover={{ scale: 1.01 }}
-      >
-        <div className="px-4 py-3 border-b border-gray-800">
-          <h3 className="text-2xl font-bold text-white">Equity Curve</h3>
-        </div>
-        <div className="p-2">
-          <div style={{ width: '100%', height: '280px' }}>
-            {!hasEquityData ? (
-              <div className="flex items-center justify-center h-full w-full text-gray-400">
-                No equity data available
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={equityHistory} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#9CA3AF" 
-                  tick={{ fontSize: 12, fontWeight: 600 }}
-                  height={30}
-                />
-                <YAxis 
-                  domain={['auto', 'auto']} 
-                  stroke="#9CA3AF" 
-                  tick={{ fontSize: 12, fontWeight: 600 }} 
-                  width={40}
-                />
-                <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#374151' }} />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  name="Bankroll" 
-                  stroke="#2563EB" 
-                  strokeWidth={3} 
-                  dot={false} 
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={30} 
-                  iconSize={14} 
-                  wrapperStyle={{ fontSize: 14, color: '#fff', paddingTop: 10 }} 
-                />
-              </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-      </motion.div>
-
+    // Horizontal layout on larger screens, vertical on mobile
+    <div className="w-full mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* Sport Performance Chart */}
       <motion.div
         className="w-full bg-surface rounded-xl overflow-hidden shadow-lg"
         whileHover={{ scale: 1.01, boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)' }}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.1 }}
       >
         <div className="px-4 py-3 border-b border-gray-800">
           <h3 className="text-2xl font-bold text-white flex items-center">
@@ -102,7 +46,7 @@ export default function BillfoldCharts({
               No sport data available
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height={380}>
               <BarChart
                 layout="vertical"
                 data={sportPerformance}
@@ -131,11 +75,11 @@ export default function BillfoldCharts({
 
       {/* Bet Type Performance Chart */}
       <motion.div
-        className="w-full bg-surface rounded-xl overflow-hidden shadow-lg mt-6"
+        className="w-full bg-surface rounded-xl overflow-hidden shadow-lg"
         whileHover={{ scale: 1.01, boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)' }}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.2 }}
       >
         <div className="px-4 py-3 border-b border-gray-800">
           <h3 className="text-2xl font-bold text-white flex items-center">
@@ -148,7 +92,7 @@ export default function BillfoldCharts({
               No bet type data available
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height={380}>
               <BarChart
                 layout="vertical"
                 data={betTypePerformance}
