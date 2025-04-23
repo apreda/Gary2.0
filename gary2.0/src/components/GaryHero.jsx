@@ -3,63 +3,47 @@ import { Link } from 'react-router-dom';
 import '../styles/dimensional.css';
 import garyLogo from '../assets/images/gary4.svg';
 import Gary20 from '../assets/images/Gary20.png';
+import newspaperBg from '../assets/images/newspaper.png';
 
 export function GaryHero() {
   return (
-    <div className="relative flex flex-col justify-center items-center min-h-screen w-full px-4 py-20 bg-gradient-to-br from-black via-black to-black overflow-hidden">
+    <div className="relative flex flex-col justify-center items-center min-h-screen w-full px-4 py-20 overflow-hidden">
+      {/* Newspaper background */}
+      <div className="absolute inset-0 z-0" style={{
+        backgroundImage: `url(${newspaperBg})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        filter: "brightness(0.9) contrast(1.2) sepia(0.15)",
+        opacity: 0.9
+      }}></div>
+      
+      {/* Gradient overlay for better readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/65 to-black/80 z-0"></div>
+      <div className="absolute inset-0 bg-black opacity-40 z-0"></div>
       {/* Gary20 image top left */}
       <img src={Gary20} alt="Gary 2.0" className="absolute top-4 left-4 w-24 h-auto z-30" />
-      {/* Expansive, layered backgrounds for depth */}
-      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        {/* Subtle black haze gradients */}
-        <div className="absolute inset-0 bg-black" />
-        <div className="absolute top-0 left-0 w-full h-1/3 bg-black" />
+      {/* Gold vignette accents for depth */}
+      <div className="pointer-events-none absolute inset-0 z-1" aria-hidden="true">
         {/* Gold vignette corners */}
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#bfa142]/20 blur-3xl opacity-30" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#bfa142]/20 blur-3xl opacity-30" />
-        {/* Subtle grid/noise overlay removed for clean hero background */}
-        {/* Digital grid overlays for extra depth */}
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-0 mix-blend-soft-light" />
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5 scale-150 mix-blend-soft-light" />
-        {/* Animated ambient radial gradient for subtle flicker */}
-        <div className="absolute inset-0 pointer-events-none animate-heroGlow z-0" style={{background: 'radial-gradient(ellipse at 70% 20%, rgba(0,0,0,0.07) 0%, transparent 70%)'}} />
-        <div className="absolute inset-0 pointer-events-none animate-heroGlow z-0" style={{background: 'radial-gradient(ellipse at 70% 20%, rgba(191,161,66,0.07) 0%, transparent 70%)'}} />
-        {/* Faint top vignette for cinematic highlight, now more subtle */}
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#e5d3c4]/15 via-transparent to-transparent z-20 pointer-events-none" />
-        {/* Radial vignette for cinematic depth, now deeper */}
-        <div className="absolute inset-0 bg-gradient-radial from-black/90 via-black/99 to-black/100 opacity-100" />
-        {/* Cinematic landscape/mountains silhouettes */}
-        {/* Distant, extra-faded mountain layer */}
-        <svg className="absolute bottom-0 left-0 w-full h-40 md:h-52 lg:h-64 xl:h-72 z-0" viewBox="0 0 1440 320" fill="none" xmlns="http://www.w3.org/2000/svg" style={{filter:'blur(5px)', opacity:0.3}} aria-hidden="true">
-          <defs>
-            <linearGradient id="mountainGradient2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#bfa142" stopOpacity="0.06" />
-              <stop offset="100%" stopColor="#18181b" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
-          <path d="M0,200 Q120,180 240,200 Q360,220 480,180 Q600,140 720,180 Q840,220 960,200 Q1080,180 1200,200 Q1320,220 1440,180 L1440,320 L0,320 Z" fill="url(#mountainGradient2)" />
-        </svg>
-        {/* Main mountain layer */}
-        <svg className="absolute bottom-0 left-0 w-full h-48 md:h-60 lg:h-72 xl:h-80 z-10" viewBox="0 0 1440 320" fill="none" xmlns="http://www.w3.org/2000/svg" style={{filter:'blur(2px)'}} aria-hidden="true">
-          <defs>
-            <linearGradient id="mountainGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#bfa142" stopOpacity="0.12" />
-              <stop offset="100%" stopColor="#18181b" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
-          <path d="M0,240 L120,210 Q180,200 240,220 Q320,240 400,200 Q480,160 560,200 Q640,240 720,220 Q800,200 880,220 Q960,240 1040,210 Q1120,180 1200,210 Q1280,240 1440,200 L1440,320 L0,320 Z" fill="url(#mountainGradient)" />
-        </svg>
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#bfa142]/20 blur-3xl opacity-20" />
+        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#bfa142]/20 blur-3xl opacity-20" />
       </div>
 
       {/* Hero Content Centered */}
       <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-3xl mx-auto text-center mt-6">
-        <div className="inline-block px-4 py-2 mb-4 border border-[#bfa142]/60 text-[#bfa142] text-base md:text-lg rounded-full tracking-widest uppercase bg-black/60 backdrop-blur-xl font-semibold shadow-lg glass-card">
-          Sports Handicapping 2.0
+        {/* Newspaper-style headline banner */}
+        <div className="w-full max-w-lg bg-[#bfa142] py-1 mb-2 transform -rotate-1">
+          <p className="uppercase text-black font-bold tracking-wide text-center text-sm md:text-base">SPORTS INSIDER EXTRA EDITION</p>
         </div>
+        
 
-        <h1 className="text-6xl md:text-8xl font-extrabold mb-12 text-white leading-tight drop-shadow-lg">
-          <span className="block">Make Smarter</span>
-          <span className="block text-[#bfa142] text-6xl md:text-8xl">Sports Bets</span>
+
+        <h1 className="font-extrabold mb-8 text-white leading-tight drop-shadow-lg">
+          <span className="block text-6xl md:text-8xl font-serif italic">MAKE SMARTER</span>
+          <div className="w-full h-1 bg-[#bfa142] my-2"></div>
+          <span className="block text-[#bfa142] text-6xl md:text-8xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
+          <div className="w-full h-1 bg-[#bfa142] my-2"></div>
+          <span className="block text-white text-lg mt-1 font-bold tracking-widest">THE WINNING EDGE SINCE 2025</span>
         </h1>
 
         <div className="flex flex-col sm:flex-row gap-8 justify-center mb-10 w-full items-center">
@@ -77,9 +61,7 @@ export function GaryHero() {
           </Link>
         </div>
 
-        <p className="text-base md:text-lg text-[#bfa142] mt-4 max-w-2xl mx-auto bg-black/60 border border-[#bfa142]/60 backdrop-blur-xl rounded-xl px-4 py-3 shadow-lg glass-card animate-goldFlicker">
-          Gary A.I. blends sports data, fan insight, and machine learning for picks that win.
-        </p>
+
 
       </div>
     </div>
