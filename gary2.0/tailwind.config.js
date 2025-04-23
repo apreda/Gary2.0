@@ -1,4 +1,5 @@
 import forms from '@tailwindcss/forms'
+import typography from '@tailwindcss/typography'
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -37,6 +38,11 @@ export default {
           900: '#2b2507',
           950: '#161203',
         },
+        primary: '#2563EB',
+        bg: '#1F2937',
+        surface: '#111827',
+        positive: '#10B981',
+        negative: '#EF4444',
       },
       scale: {
         '98': '0.98',
@@ -44,6 +50,12 @@ export default {
       },
       animation: {
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'fade-in': 'fadeIn 0.4s ease-out both',
+        'chart-draw': 'chartDraw 1s ease-in-out both',
+      },
+      keyframes: {
+        fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
+        chartDraw: { '0%': { strokeDashoffset: 1000 }, '100%': { strokeDashoffset: 0 } },
       },
       fontFamily: {
         sans: ['Inter var', 'sans-serif'],
@@ -54,5 +66,5 @@ export default {
       },
     },
   },
-  plugins: [forms],
+  plugins: [forms, typography],
 }

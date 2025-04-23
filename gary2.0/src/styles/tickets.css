@@ -1,0 +1,11 @@
+/* Clean styling for ticket content */
+/* No forcing, simple class-based styling */
+
+/* Button text colors */
+.current-plan-button {
+  color: white;
+}
+
+.select-plan-button {
+  color: black;
+}
