@@ -112,12 +112,70 @@ export function Billfold() {
         const winRate = totalBets > 0 ? (wonBets / totalBets) * 100 : 0;
         const record = `${wonBets}-${lostBets}`;
 
+        // Process data for sport performance chart
+        const sportStats = {};
+        data.forEach(bet => {
+          if (!bet.sport) return;
+          
+          if (!sportStats[bet.sport]) {
+            sportStats[bet.sport] = { wins: 0, losses: 0 };
+          }
+          
+          if (bet.status === 'won') {
+            sportStats[bet.sport].wins++;
+          } else if (bet.status === 'lost') {
+            sportStats[bet.sport].losses++;
+          }
+        });
+
+        // Convert to array format for chart
+        const sportPerformance = Object.keys(sportStats).map(sport => ({
+          sport,
+          wins: sportStats[sport].wins,
+          losses: sportStats[sport].losses,
+          total: sportStats[sport].wins + sportStats[sport].losses
+        }));
+
+        // Sort by total number of bets descending
+        sportPerformance.sort((a, b) => b.total - a.total);
+
+        // Process data for bet type performance chart
+        const betTypeStats = {};
+        data.forEach(bet => {
+          if (!bet.bet_type) return;
+          
+          const betType = bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1);
+          
+          if (!betTypeStats[betType]) {
+            betTypeStats[betType] = { wins: 0, losses: 0 };
+          }
+          
+          if (bet.status === 'won') {
+            betTypeStats[betType].wins++;
+          } else if (bet.status === 'lost') {
+            betTypeStats[betType].losses++;
+          }
+        });
+
+        // Convert to array format for chart
+        const betTypePerformance = Object.keys(betTypeStats).map(betType => ({
+          betType,
+          wins: betTypeStats[betType].wins,
+          losses: betTypeStats[betType].losses,
+          total: betTypeStats[betType].wins + betTypeStats[betType].losses
+        }));
+
+        // Sort by total number of bets descending
+        betTypePerformance.sort((a, b) => b.total - a.total);
+
         setBankrollStats(prevStats => ({
           ...prevStats,
           totalBets,
           winRate: parseFloat(winRate.toFixed(1)),
           averageBet: Math.round(averageBet),
-          record, // Add the win-loss record
+          record,
+          sportPerformance,
+          betTypePerformance
         }));
       } catch (error) {
         console.error('Error fetching betting history:', error);
@@ -139,11 +197,14 @@ export function Billfold() {
     winLoss: `${bankrollStats.winRate}%`,
     equityHistory: [
       { date: '2025-04-01', value: 10000 },
-      { date: '2025-04-02', value: 10200 },
-      { date: '2025-04-03', value: 9900 },
-      { date: '2025-04-04', value: 10500 },
-      { date: '2025-04-05', value: 11000 },
+      { date: '2025-04-07', value: 11200 },
+      { date: '2025-04-14', value: 10800 },
+      { date: '2025-04-21', value: 12500 },
     ],
+    // Using real processed data for sports performance
+    sportPerformance: bankrollStats.sportPerformance || [],
+    // Using real processed data for bet type performance
+    betTypePerformance: bankrollStats.betTypePerformance || [],
     confidenceBuckets: [
       { range: 0.9, count: 12 },
       { range: 0.8, count: 18 },
@@ -176,7 +237,11 @@ export function Billfold() {
       <div className="col-span-12 my-2 border-t border-gray-800"></div>
       {/* Charts - Full width with no padding */}
       <div className="col-span-12 mb-6 w-full px-0">
-        <BillfoldCharts equityHistory={stats.equityHistory} confidenceBuckets={stats.confidenceBuckets} sportBreakdown={stats.sportBreakdown} />
+        <BillfoldCharts 
+          equityHistory={stats.equityHistory} 
+          sportPerformance={stats.sportPerformance}
+          betTypePerformance={stats.betTypePerformance}
+        />
       </div>
       <div className="col-span-12 my-2 border-t border-gray-800"></div>
       {/* Betting History Table */}

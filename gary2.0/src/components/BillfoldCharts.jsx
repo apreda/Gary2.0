@@ -1,18 +1,31 @@
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend, LabelList } from 'recharts';
 import { motion } from 'framer-motion';
 
-// Inline SVG icon to avoid build dependency issues
-const PieChartIcon = () => (
+// Inline SVG icons to avoid build dependency issues
+const ChartIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-    <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+    <rect x="3" y="3" width="18" height="18" rx="2"/>
+    <path d="M3 9h18"/>
+    <path d="M9 21V9"/>
   </svg>
 );
 
-export default function BillfoldCharts({ equityHistory = [], confidenceBuckets = [], sportBreakdown = [] }) {
+const TagIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/>
+    <path d="M7 7h.01"/>
+  </svg>
+);
+
+export default function BillfoldCharts({ 
+  equityHistory = [], 
+  sportPerformance = [], 
+  betTypePerformance = [] 
+}) {
   // Ensure we have data to display
   const hasEquityData = equityHistory && equityHistory.length > 0;
-  const hasSportData = sportBreakdown && sportBreakdown.length > 0;
+  const hasSportData = sportPerformance && sportPerformance.length > 0;
+  const hasBetTypeData = betTypePerformance && betTypePerformance.length > 0;
   return (
     // Simple stacked layout, full width for both charts
     <div className="w-full mb-8 space-y-6">
@@ -70,57 +83,95 @@ export default function BillfoldCharts({ equityHistory = [], confidenceBuckets =
         </div>
       </motion.div>
 
-      {/* Sport Breakdown Chart - Full Width */}
-      <motion.div 
-        className="w-full bg-surface rounded-xl shadow-lg overflow-hidden"
-        initial={{ opacity: 0, y: 10 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ delay: 0.2 }} 
-        whileHover={{ scale: 1.01 }}
+      {/* Sport Performance Chart */}
+      <motion.div
+        className="w-full bg-surface rounded-xl overflow-hidden shadow-lg"
+        whileHover={{ scale: 1.01, boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)' }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
       >
         <div className="px-4 py-3 border-b border-gray-800">
           <h3 className="text-2xl font-bold text-white flex items-center">
-            <span className="mr-2 text-primary"><PieChartIcon /></span>Sport Breakdown
+            <span className="mr-2 text-primary"><ChartIcon /></span>Performance by Sport
           </h3>
         </div>
         <div className="p-2">
-          <div style={{ width: '100%', height: '280px' }}>
-            {!hasSportData ? (
-              <div className="flex items-center justify-center h-full w-full text-gray-400">
-                No sports breakdown data available
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsPieChart margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
-                <Pie 
-                  data={sportBreakdown} 
-                  dataKey="count" 
-                  nameKey="sport" 
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  innerRadius={0}
-                  labelLine={false}
-                  label={false}
-                >
-                  {sportBreakdown.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.color || '#2563EB'} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#374151' }}/>
-                <Legend 
-                  layout="horizontal"
-                  verticalAlign="bottom"
-                  align="center"
-                  iconSize={14}
-                  iconType="circle"
-                  formatter={(value) => <span style={{color: '#fff', fontSize: '14px', fontWeight: 600}}>{value}</span>}
-                  wrapperStyle={{ fontSize: 14, color: '#fff', paddingTop: 5 }}
+          {!hasSportData ? (
+            <div className="h-60 flex items-center justify-center text-gray-400">
+              No sport data available
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart
+                layout="vertical"
+                data={sportPerformance}
+                margin={{ top: 20, right: 30, left: 75, bottom: 5 }}
+              >
+                <XAxis type="number" domain={[0, 'dataMax']} />
+                <YAxis type="category" dataKey="sport" width={70} />
+                <Tooltip 
+                  formatter={(value, name) => [
+                    name === 'wins' ? `${value} wins` : `${value} losses`, 
+                    name === 'wins' ? 'Wins' : 'Losses'
+                  ]}
                 />
-              </RechartsPieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+                <Legend />
+                <Bar dataKey="wins" stackId="a" fill="#38b2ac" name="Wins">
+                  <LabelList dataKey="wins" position="insideRight" fill="#fff" />
+                </Bar>
+                <Bar dataKey="losses" stackId="a" fill="#e53e3e" name="Losses">
+                  <LabelList dataKey="losses" position="insideRight" fill="#fff" />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Bet Type Performance Chart */}
+      <motion.div
+        className="w-full bg-surface rounded-xl overflow-hidden shadow-lg mt-6"
+        whileHover={{ scale: 1.01, boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)' }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <div className="px-4 py-3 border-b border-gray-800">
+          <h3 className="text-2xl font-bold text-white flex items-center">
+            <span className="mr-2 text-primary"><TagIcon /></span>Performance by Bet Type
+          </h3>
+        </div>
+        <div className="p-2">
+          {!hasBetTypeData ? (
+            <div className="h-60 flex items-center justify-center text-gray-400">
+              No bet type data available
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart
+                layout="vertical"
+                data={betTypePerformance}
+                margin={{ top: 20, right: 30, left: 95, bottom: 5 }}
+              >
+                <XAxis type="number" domain={[0, 'dataMax']} />
+                <YAxis type="category" dataKey="betType" width={90} />
+                <Tooltip 
+                  formatter={(value, name) => [
+                    name === 'wins' ? `${value} wins` : `${value} losses`, 
+                    name === 'wins' ? 'Wins' : 'Losses'
+                  ]}
+                />
+                <Legend />
+                <Bar dataKey="wins" stackId="a" fill="#4299e1" name="Wins">
+                  <LabelList dataKey="wins" position="insideRight" fill="#fff" />
+                </Bar>
+                <Bar dataKey="losses" stackId="a" fill="#e53e3e" name="Losses">
+                  <LabelList dataKey="losses" position="insideRight" fill="#fff" />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </motion.div>
     </div>
