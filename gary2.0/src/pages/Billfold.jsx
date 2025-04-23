@@ -106,15 +106,18 @@ export function Billfold() {
 
         const totalBets = data.length;
         const wonBets = data.filter(bet => bet.status === 'won').length;
+        const lostBets = data.filter(bet => bet.status === 'lost').length;
         const totalWagered = data.reduce((sum, bet) => sum + bet.amount, 0);
         const averageBet = totalBets > 0 ? totalWagered / totalBets : 0;
         const winRate = totalBets > 0 ? (wonBets / totalBets) * 100 : 0;
+        const record = `${wonBets}-${lostBets}`;
 
         setBankrollStats(prevStats => ({
           ...prevStats,
           totalBets,
           winRate: parseFloat(winRate.toFixed(1)),
           averageBet: Math.round(averageBet),
+          record, // Add the win-loss record
         }));
       } catch (error) {
         console.error('Error fetching betting history:', error);
@@ -128,11 +131,11 @@ export function Billfold() {
     activeBettingFilter === 'all' ? true : bet.status === activeBettingFilter
   );
 
-  // Example mock data for demonstration (replace with real fetched data)
+  // Using real data from Supabase queries
   const stats = {
     bankroll: bankrollStats.currentBankroll,
     roi: bankrollStats.currentRoi,
-    rideFade: 60, // Placeholder
+    record: bankrollStats.record || '0-0', // Real win-loss record from wagers
     winLoss: `${bankrollStats.winRate}%`,
     equityHistory: [
       { date: '2025-04-01', value: 10000 },

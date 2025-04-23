@@ -43,8 +43,8 @@ export default function BillfoldKPI({ stats = {} }) {
       textColor: "text-blue-400"
     },
     {
-      label: "Ride vs Fade",
-      value: stats.rideFade || '0-0',
+      label: "Record",
+      value: stats.record || '0-0',
       icon: <PieChartIcon />,
       bg: "from-purple-600/20 to-purple-400/10",
       border: "border-purple-500/20",
