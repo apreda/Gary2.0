@@ -1,6 +1,27 @@
 // Using styled divs instead of Card components
-import { DollarSign, TrendingUp, PieChart as PieIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+// Inline SVG icons to avoid build dependency issues
+const DollarSignIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="2" x2="12" y2="22"></line>
+    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+  </svg>
+);
+
+const TrendingUpIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+    <polyline points="17 6 23 6 23 12"></polyline>
+  </svg>
+);
+
+const PieChartIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+    <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+  </svg>
+);
 
 export default function BillfoldKPI({ stats = {} }) {
   // Define KPIs using the stats prop with fallbacks for missing data
@@ -8,7 +29,7 @@ export default function BillfoldKPI({ stats = {} }) {
     {
       label: "Current Bankroll",
       value: stats.bankroll || '$0',
-      icon: <DollarSign className="w-5 h-5" />,
+      icon: <DollarSignIcon />,
       bg: "from-green-600/20 to-green-400/10",
       border: "border-green-500/20",
       textColor: "text-green-400"
@@ -16,7 +37,7 @@ export default function BillfoldKPI({ stats = {} }) {
     {
       label: "ROI",
       value: stats.roi || '0%',
-      icon: <TrendingUp className="w-5 h-5" />,
+      icon: <TrendingUpIcon />,
       bg: "from-blue-600/20 to-blue-400/10",
       border: "border-blue-500/20",
       textColor: "text-blue-400"
@@ -24,7 +45,7 @@ export default function BillfoldKPI({ stats = {} }) {
     {
       label: "Ride vs Fade",
       value: stats.rideFade || '0-0',
-      icon: <PieIcon className="w-5 h-5" />,
+      icon: <PieChartIcon />,
       bg: "from-purple-600/20 to-purple-400/10",
       border: "border-purple-500/20",
       textColor: "text-purple-400"
@@ -32,7 +53,7 @@ export default function BillfoldKPI({ stats = {} }) {
     {
       label: "Win / Loss",
       value: stats.winLoss || '0-0',
-      icon: <TrendingUp className="w-5 h-5" />,
+      icon: <TrendingUpIcon />,
       bg: "from-amber-600/20 to-amber-400/10",
       border: "border-amber-500/20",
       textColor: "text-amber-400"

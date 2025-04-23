@@ -1,5 +1,12 @@
-import { TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+// Inline SVG icon to avoid build dependency issues
+const TrendingUpIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+    <polyline points="17 6 23 6 23 12"></polyline>
+  </svg>
+);
 
 // Placeholder filter controls (to be replaced with headlessui/react and date picker integration)
 // This component is used internally only
@@ -34,7 +41,7 @@ export default function BillfoldPicksTable({ picks = [] }) {
   return (
     <div className="bg-surface p-4 md:p-6 rounded-xl shadow-lg w-full">
       {/* Responsive, more padding, and visual polish */}
-      <h3 className="text-xl md:text-2xl mb-4 flex items-center font-bold text-white tracking-tight"><TrendingUp className="mr-2 text-primary"/>Recent Picks</h3>
+      <h3 className="text-xl md:text-2xl mb-4 flex items-center font-bold text-white tracking-tight"><span className="mr-2 text-primary"><TrendingUpIcon /></span>Recent Picks</h3>
       <Filters />
       <div className="overflow-x-auto mt-2 border-t border-gray-800 pt-4 pb-1">
         {!hasPicks ? (

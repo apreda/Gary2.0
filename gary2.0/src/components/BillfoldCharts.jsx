@@ -1,6 +1,13 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts';
 import { motion } from 'framer-motion';
-import { PieChart as PieIcon } from 'lucide-react';
+
+// Inline SVG icon to avoid build dependency issues
+const PieChartIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+    <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+  </svg>
+);
 
 export default function BillfoldCharts({ equityHistory = [], confidenceBuckets = [], sportBreakdown = [] }) {
   // Ensure we have data to display
@@ -73,7 +80,7 @@ export default function BillfoldCharts({ equityHistory = [], confidenceBuckets =
       >
         <div className="px-4 py-3 border-b border-gray-800">
           <h3 className="text-2xl font-bold text-white flex items-center">
-            <PieIcon className="mr-2 text-primary"/>Sport Breakdown
+            <span className="mr-2 text-primary"><PieChartIcon /></span>Sport Breakdown
           </h3>
         </div>
         <div className="p-2">
