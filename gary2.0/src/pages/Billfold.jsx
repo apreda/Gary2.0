@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { format } from 'date-fns';
-import billfoldLogo from '../assets/images/billfold1.png';
 import '../styles/BillfoldStyle.css';
+import BillfoldKPI from '../components/BillfoldKPI.jsx';
+import BillfoldCharts from '../components/BillfoldCharts.jsx';
+import BillfoldPicksTable from '../components/BillfoldPicksTable.jsx';
 
 export function Billfold() {
   const [bankrollStats, setBankrollStats] = useState({
@@ -127,117 +128,58 @@ export function Billfold() {
     activeBettingFilter === 'all' ? true : bet.status === activeBettingFilter
   );
 
+  // Example mock data for demonstration (replace with real fetched data)
+  const stats = {
+    bankroll: bankrollStats.currentBankroll,
+    roi: bankrollStats.currentRoi,
+    rideFade: 60, // Placeholder
+    winLoss: `${bankrollStats.winRate}%`,
+    equityHistory: [
+      { date: '2025-04-01', value: 10000 },
+      { date: '2025-04-02', value: 10200 },
+      { date: '2025-04-03', value: 9900 },
+      { date: '2025-04-04', value: 10500 },
+      { date: '2025-04-05', value: 11000 },
+    ],
+    confidenceBuckets: [
+      { range: 0.9, count: 12 },
+      { range: 0.8, count: 18 },
+      { range: 0.7, count: 8 },
+      { range: 0.6, count: 6 },
+    ],
+    sportBreakdown: [
+      { sport: 'NBA', count: 14, color: '#2563EB' },
+      { sport: 'MLB', count: 10, color: '#10B981' },
+      { sport: 'NHL', count: 8, color: '#F59E42' },
+      { sport: 'NFL', count: 6, color: '#EF4444' },
+    ],
+    recentPicks: bettingLog.slice(0, 10).map(bet => ({
+      date: bet.placed_date ? new Date(bet.placed_date).toLocaleDateString() : '',
+      away: bet.picks?.away || '',
+      home: bet.picks?.home || '',
+      pick: bet.picks?.pick || '',
+      confidence: bet.confidence || 0.7,
+      won: bet.status === 'won',
+    })),
+  };
+
   return (
-    <div className="billfold-container">
-      <header className="billfold-header">
-        <img src={billfoldLogo} alt="Billfold Logo" className="billfold-logo" />
-        <h1>Gary's Billfold</h1>
-      </header>
-      <main className="billfold-main">
-        <section className="bankroll-stats">
-          <h2>Bankroll Overview</h2>
-          <div className="stats-grid">
-            <div className="stat-item">
-              <span className="stat-label">Current Bankroll:</span>
-              <span className="stat-value">${bankrollStats.currentBankroll}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Starting Bankroll:</span>
-              <span className="stat-value">${bankrollStats.startingBankroll}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Monthly Goal:</span>
-              <span className="stat-value">{bankrollStats.monthlyGoal}%</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Current ROI:</span>
-              <span className="stat-value">{bankrollStats.currentRoi}%</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Total Bets:</span>
-              <span className="stat-value">{bankrollStats.totalBets}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Win Rate:</span>
-              <span className="stat-value">{bankrollStats.winRate}%</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Average Bet:</span>
-              <span className="stat-value">${bankrollStats.averageBet}</span>
-            </div>
-          </div>
-        </section>
-        <section className="sport-breakdown">
-          <h2>Sport Breakdown</h2>
-          <div className="sport-stats-grid">
-            {sportsBreakdown.map((sport, index) => (
-              <div key={index} className="sport-stat-card">
-                <div className="sport-icon">{sport.icon}</div>
-                <div className="sport-name">{sport.name}</div>
-                <div className="sport-record">{sport.record}</div>
-                <div className="sport-metrics">
-                  <div className="metric">
-                    <span className="metric-label">Win</span>
-                    <span className="metric-value">{sport.winRate}%</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-label">ROI</span>
-                    <span className={`metric-value ${sport.roi >= 0 ? 'positive' : 'negative'}`}>
-                      {sport.roi >= 0 ? '+' : ''}{sport.roi}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="betting-history">
-          <h2>Betting History</h2>
-          <div className="filter-buttons">
-            <button 
-              className={`filter-btn ${activeBettingFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveBettingFilter('all')}
-            >
-              All
-            </button>
-            <button 
-              className={`filter-btn ${activeBettingFilter === 'won' ? 'active' : ''}`}
-              onClick={() => setActiveBettingFilter('won')}
-            >
-              Won
-            </button>
-            <button 
-              className={`filter-btn ${activeBettingFilter === 'lost' ? 'active' : ''}`}
-              onClick={() => setActiveBettingFilter('lost')}
-            >
-              Lost
-            </button>
-          </div>
-          <div className="bet-list">
-            {filteredBettingLog.map((bet, index) => (
-              <div 
-                key={index} 
-                className={`bet-item ${bet.status === 'won' ? 'win' : bet.status === 'lost' ? 'loss' : 'pending'}`}
-              >
-                <div className="bet-date">{format(new Date(bet.placed_date), 'yyyy-MM-dd')}</div>
-                <div className="bet-game">{bet.picks?.game || 'Unknown Game'}</div>
-                <div className="bet-pick">{bet.picks?.pick || 'Unknown Pick'}</div>
-                <div className="bet-odds">{bet.odds > 0 ? `+${bet.odds}` : bet.odds}</div>
-                <div className="bet-amount">${bet.amount}</div>
-                <div className="bet-result">
-                  {bet.status === 'won' ? (
-                    <span className="result win">+${bet.potential_payout - bet.amount}</span>
-                  ) : bet.status === 'lost' ? (
-                    <span className="result loss">-${bet.amount}</span>
-                  ) : (
-                    <span className="result pending">Pending</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </main>
+    <div className="pt-24 pb-12 px-0 max-w-full mx-auto min-h-screen text-white grid grid-cols-12 gap-4 bg-gradient-to-br from-[#10141b] via-[#1e2330] to-[#21243b]">
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#10141b] via-[#1e2330] to-[#21243b] opacity-90"></div>
+      {/* KPI Cards */}
+      <div className="col-span-12 mb-2">
+        <BillfoldKPI stats={stats} />
+      </div>
+      <div className="col-span-12 my-2 border-t border-gray-800"></div>
+      {/* Charts - Full width with no padding */}
+      <div className="col-span-12 mb-6 w-full px-0">
+        <BillfoldCharts equityHistory={stats.equityHistory} confidenceBuckets={stats.confidenceBuckets} sportBreakdown={stats.sportBreakdown} />
+      </div>
+      <div className="col-span-12 my-2 border-t border-gray-800"></div>
+      {/* Betting History Table */}
+      <div className="col-span-12">
+        <BillfoldPicksTable picks={stats.recentPicks} />
+      </div>
     </div>
   );
 }
