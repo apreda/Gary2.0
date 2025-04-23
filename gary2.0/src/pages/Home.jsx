@@ -15,7 +15,6 @@ import garyPromo from '../assets/images/Gary_Promo.png';
 import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
-import '../styles/consolidated/premium-carousel.css';
 import GaryHero from '../components/GaryHero';
 
 // Recent Winners Feed Component
@@ -211,53 +210,57 @@ function Home() {
               Experience the power of Gary A.I.'s handicapping system
             </p>
             {/* Features Row */}
-            <div className="flex flex-col lg:flex-row lg:flex-nowrap flex-wrap gap-8 w-full justify-center items-stretch mb-10 overflow-visible">
-  {/* Feature cards and Recent Winners grid layout */}
-  <div className="w-full flex flex-col lg:flex-row gap-8 justify-center items-start mt-12 lg:mt-0 relative z-10">
-    {/* Feature Cards Grid */}
-    <div className="flex flex-row flex-wrap justify-center items-stretch w-full relative z-30 gap-4 md:gap-6 lg:gap-2 xl:gap-4 px-2 md:px-4">
-      {/* Data Aware */}
-      <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center min-w-[210px] max-w-[260px] w-full relative z-30 hover:z-50 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 group">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
-        <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" /></svg>
-        <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Data Aware</h3>
-        <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Understands deep analytics, but that's just the start.</p>
-      </div>
-      {/* Fan Brain */}
-      <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center min-w-[210px] max-w-[260px] w-full relative z-30 hover:z-50 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 -ml-12 group">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
-        <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 14c-2.21 0-4-1.79-4-4 0-2.21 1.79-4 4-4s4 1.79 4 4c0 2.21-1.79 4-4 4zm0 2c2.67 0 8 1.34 8 4v2H4v-2c0-2.66 5.33-4 8-4z" /></svg>
-        <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Fan Brain</h3>
-        <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Reads team loyalty, emotional bias, and fan storylines to spot hidden angles.</p>
-      </div>
-      {/* Narrative Tracker */}
-      <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center min-w-[210px] max-w-[260px] w-full relative z-30 hover:z-50 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 -ml-12 group">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
-        <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2M12 12v.01M12 16h.01" /></svg>
-        <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Narrative Tracker</h3>
-        <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Uncovers hidden motivations and emotional weights that move the lines.</p>
-      </div>
-      {/* Street Smart */}
-      <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center min-w-[210px] max-w-[260px] w-full relative z-30 hover:z-50 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 -ml-12 group">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
-        <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.24 7.76a6 6 0 11-8.48 8.48M9 13h6M9 17h6" /></svg>
-        <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Street Smart</h3>
-        <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Old-school instincts meet AI precision to sniff out real betting value.</p>
-      </div>
-      {/* Three-Layered Core */}
-      <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center min-w-[210px] max-w-[260px] w-full relative z-30 hover:z-50 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 -ml-12 group">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
-        <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="7" strokeOpacity=".4" /><circle cx="12" cy="12" r="11" strokeOpacity=".2" /></svg>
-        <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Three-Layered Core</h3>
-        <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Sports Odds & Stats, Real-Time Storylines, and Reasoning Engine—Gary's secret sauce.</p>
-      </div>
-    </div>
-  </div>
+            <div className="flex flex-col lg:flex-row justify-center items-stretch mb-10 w-full">
+              {/* Main Content Container */}
+              <div className="w-full max-w-5xl mx-auto">
+                {/* Feature Cards Grid - Improved layout with no overlapping */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center px-4 py-2">
+                  {/* Data Aware */}
+                  <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center w-full max-w-[260px] h-full relative z-30 hover:z-40 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 group">
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
+                    <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" /></svg>
+                    <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Data Aware</h3>
+                    <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Understands deep analytics, but that's just the start.</p>
+                  </div>
+                  
+                  {/* Fan Brain */}
+                  <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center w-full max-w-[260px] h-full relative z-30 hover:z-40 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 group">
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
+                    <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 14c-2.21 0-4-1.79-4-4 0-2.21 1.79-4 4-4s4 1.79 4 4c0 2.21-1.79 4-4 4zm0 2c2.67 0 8 1.34 8 4v2H4v-2c0-2.66 5.33-4 8-4z" /></svg>
+                    <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Fan Brain</h3>
+                    <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Reads team loyalty, emotional bias, and fan storylines to spot hidden angles.</p>
+                  </div>
+                  
+                  {/* Narrative Tracker */}
+                  <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center w-full max-w-[260px] h-full relative z-30 hover:z-40 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 group">
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
+                    <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2M12 12v.01M12 16h.01" /></svg>
+                    <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Narrative Tracker</h3>
+                    <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Uncovers hidden motivations and emotional weights that move the lines.</p>
+                  </div>
+                  
+                  {/* Street Smart */}
+                  <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center w-full max-w-[260px] h-full relative z-30 hover:z-40 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 group md:col-start-1 lg:col-auto">
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
+                    <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.24 7.76a6 6 0 11-8.48 8.48M9 13h6M9 17h6" /></svg>
+                    <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Street Smart</h3>
+                    <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Old-school instincts meet AI precision to sniff out real betting value.</p>
+                  </div>
+                  
+                  {/* Three-Layered Core */}
+                  <div className="glass-card p-6 rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 hover:scale-105 transition-all duration-300 animate-goldFlicker flex flex-col items-center w-full max-w-[260px] h-full relative z-30 hover:z-40 hover:shadow-2xl hover:ring-2 hover:ring-[#bfa142]/60 group md:col-start-2 lg:col-auto">
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#bfa142]/5 to-transparent rounded-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
+                    <svg className="w-10 h-10 mb-3 text-[#d4af37] group-hover:text-[#f7e9c2] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5"><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="7" strokeOpacity=".4" /><circle cx="12" cy="12" r="11" strokeOpacity=".2" /></svg>
+                    <h3 className="text-lg font-bold text-[#bfa142] mb-2 drop-shadow tracking-wide group-hover:text-[#f7e9c2] transition-colors">Three-Layered Core</h3>
+                    <p className="text-[#f7e9c2]/90 text-center text-base leading-snug tracking-wide">Sports Odds & Stats, Real-Time Storylines, and Reasoning Engine—Gary's secret sauce.</p>
+                  </div>
+                </div>
+              </div>
 
-  {/* Recent Winners - always on top, never overlapping cards */}
-  <div className="glass-card w-full lg:min-w-[320px] lg:max-w-[340px] min-h-[234px] max-h-[334px] p-5 flex flex-col justify-between rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 animate-goldFlicker mt-8 lg:mt-0 flex-shrink-0 relative z-50 lg:ml-4" style={{marginLeft: '0', transform: 'none', ...(window.innerWidth >= 1024 ? {marginLeft: '1in'} : {})}}>
-    <RecentWinnersFeed />
-  </div>
+              {/* Recent Winners - now properly positioned without overlap */}
+              <div className="glass-card w-full max-w-[340px] min-h-[234px] p-5 flex flex-col justify-between rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 animate-goldFlicker mt-8 lg:mt-0 flex-shrink-0 relative z-50 mx-auto lg:mx-0 lg:ml-6">
+                <RecentWinnersFeed />
+              </div>
             </div>
           </div>
         </section>
