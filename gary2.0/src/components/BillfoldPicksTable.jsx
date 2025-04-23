@@ -1,6 +1,5 @@
 import { TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
-import PropTypes from 'prop-types';
 
 // Placeholder filter controls (to be replaced with headlessui/react and date picker integration)
 // This component is used internally only
@@ -83,16 +82,4 @@ export default function BillfoldPicksTable({ picks = [] }) {
   );
 }
 
-// Prop validation
-BillfoldPicksTable.propTypes = {
-  picks: PropTypes.arrayOf(
-    PropTypes.shape({
-      date: PropTypes.string,
-      away: PropTypes.string,
-      home: PropTypes.string,
-      pick: PropTypes.string,
-      confidence: PropTypes.number,
-      won: PropTypes.bool
-    })
-  )
-};
+

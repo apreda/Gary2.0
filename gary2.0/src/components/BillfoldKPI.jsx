@@ -1,7 +1,6 @@
 // Using styled divs instead of Card components
 import { DollarSign, TrendingUp, PieChart as PieIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
-import PropTypes from 'prop-types';
 
 export default function BillfoldKPI({ stats = {} }) {
   // Define KPIs using the stats prop with fallbacks for missing data
@@ -64,13 +63,3 @@ export default function BillfoldKPI({ stats = {} }) {
     </div>
   );
 }
-
-// Prop type validation
-BillfoldKPI.propTypes = {
-  stats: PropTypes.shape({
-    bankroll: PropTypes.string,
-    roi: PropTypes.string,
-    rideFade: PropTypes.string,
-    winLoss: PropTypes.string
-  })
-};
