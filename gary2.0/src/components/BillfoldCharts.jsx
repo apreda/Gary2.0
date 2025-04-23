@@ -1,7 +1,6 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts';
 import { motion } from 'framer-motion';
 import { PieChart as PieIcon } from 'lucide-react';
-import PropTypes from 'prop-types';
 
 export default function BillfoldCharts({ equityHistory = [], confidenceBuckets = [], sportBreakdown = [] }) {
   // Ensure we have data to display
@@ -120,21 +119,3 @@ export default function BillfoldCharts({ equityHistory = [], confidenceBuckets =
     </div>
   );
 }
-
-// Prop type validation
-BillfoldCharts.propTypes = {
-  equityHistory: PropTypes.arrayOf(
-    PropTypes.shape({
-      date: PropTypes.string.isRequired,
-      value: PropTypes.number.isRequired
-    })
-  ),
-  confidenceBuckets: PropTypes.array,
-  sportBreakdown: PropTypes.arrayOf(
-    PropTypes.shape({
-      sport: PropTypes.string.isRequired,
-      count: PropTypes.number.isRequired,
-      color: PropTypes.string
-    })
-  )
-};
