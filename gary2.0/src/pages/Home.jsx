@@ -220,7 +220,7 @@ function Home() {
               <span>APRIL 23, 2025</span>
             </div>
             
-            <p className="text-lg md:text-xl text-[#444444] mb-10 text-center max-w-2xl px-4 py-3 font-serif leading-relaxed">
+            <p className="text-gray-500 font-serif leading-relaxed mb-10 text-center max-w-2xl px-4 py-3">
               Experience the revolutionary handicapping system that's changing the game for sports bettors everywhere—powered by the most advanced AI in the industry.
             </p>
             {/* Features as newspaper columns */}
@@ -272,12 +272,7 @@ function Home() {
               </div>
             </div>
 
-            {/* Recent Winners */}
-            <div className="w-full mt-6 mb-10 flex justify-center">
-              <div className="glass-card w-full max-w-[340px] min-h-[234px] p-5 flex flex-col justify-between rounded-xl border border-[#bfa142] ring-1 ring-[#bfa142]/30 shadow-xl backdrop-blur-xl bg-gradient-to-b from-black/90 to-black/70 animate-goldFlicker relative z-50">
-                <RecentWinnersFeed />
-              </div>
-            </div>
+
           </div>
         </section>
       </div>
