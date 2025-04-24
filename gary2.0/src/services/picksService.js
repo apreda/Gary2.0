@@ -637,8 +637,8 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
       for (const sport of prioritizedSports) {
         console.log(`Generating picks for ${sport}...`);
         
-        // Get odds data for this sport
-        const sportOdds = batchOdds.find(odds => odds.sport_key === sport);
+        // Get odds data for this sport - batchOdds is an object with sport keys, not an array
+        const sportOdds = batchOdds[sport];
         if (!sportOdds || sportOdds.length === 0) {
           console.log(`No odds data available for ${sport}, skipping...`);
           continue;
