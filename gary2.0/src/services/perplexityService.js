@@ -36,9 +36,22 @@ export const perplexityService = {
       const requestOptions = { ...defaultOptions, ...options };
       
       try {
+        console.log('📤 Making direct API call to Perplexity API');
+        
+        // Check if we should use the proxy endpoint (when available) or direct API call
+        const useProxy = typeof import.meta.env?.VITE_USE_API_PROXY !== 'undefined' 
+          ? import.meta.env.VITE_USE_API_PROXY === 'true'
+          : false;
+        
+        const apiUrl = useProxy 
+          ? '/api/proxy/perplexity' // Path to Netlify/Vercel serverless function
+          : perplexityService.API_BASE_URL;
+          
+        console.log(`Using ${useProxy ? 'proxy endpoint' : 'direct API call'} for Perplexity: ${apiUrl}`);
+        
         // Make request to Perplexity API with additional error handling
         const response = await axios.post(
-          perplexityService.API_BASE_URL,
+          apiUrl,
           {
             model: requestOptions.model,
             messages: [{ role: 'user', content: query }],
@@ -50,7 +63,7 @@ export const perplexityService = {
               'Authorization': `Bearer ${perplexityService.API_KEY}`,
               'Content-Type': 'application/json'
             },
-            timeout: 10000 // 10 second timeout
+            timeout: 30000 // Increased to 30 second timeout for more reliability
           }
         );
         
@@ -65,9 +78,22 @@ export const perplexityService = {
           throw new Error('Invalid response format from Perplexity API');
         }
       } catch (apiError) {
-        console.error('API call to Perplexity failed:', apiError.message);
-        // No fallbacks - propagate the error
-        throw apiError;
+        console.error('❌ API call to Perplexity failed:', apiError.message);
+        
+        // Enhanced error handling with retry for timeout errors
+        if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout')) {
+          console.log('⚠️ Request timed out. This might be due to CORS restrictions or network issues.');
+          console.log('💡 Consider setting up a server-side proxy to avoid CORS issues.');
+          
+          throw new Error('Perplexity API request timed out. Please check your network connection or API proxy settings.');
+        } else if (apiError.response && apiError.response.status === 429) {
+          throw new Error('Perplexity API rate limit exceeded. Please try again later.');
+        } else if (apiError.response && apiError.response.status === 401) {
+          throw new Error('Invalid Perplexity API key. Please check your environment variables.');
+        } else {
+          // No fallbacks - propagate the error with enhanced message
+          throw new Error(`Perplexity API error: ${apiError.message}`);
+        }
       }
     } catch (error) {
       console.error('Error in fetchRealTimeInfo:', error);
