@@ -44,7 +44,7 @@ export const perplexityService = {
           : false;
         
         const apiUrl = useProxy 
-          ? '/api/proxy/perplexity' // Path to Netlify/Vercel serverless function
+          ? '/api/proxy/perplexity' // Path to Vercel API route
           : perplexityService.API_BASE_URL;
           
         console.log(`Using ${useProxy ? 'proxy endpoint' : 'direct API call'} for Perplexity: ${apiUrl}`);
