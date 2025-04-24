@@ -1,5 +1,6 @@
-import { makeGaryPick } from './garyEngine.js';
+import { makeGaryPick, fetchRealTimeGameInfo } from './garyEngine.js';
 import { oddsService } from './oddsService';
+import { sportsDataService } from './sportsDataService';
 import { supabase, ensureAnonymousSession } from '../supabaseClient.js';
 import { getTeamAbbreviation } from '../utils/teamAbbreviations';
 
@@ -690,6 +691,27 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
             // Get bankroll data or use default
             const bankrollData = { current_amount: 10000 };
             
+            // Fix data structure to match what garyEngine.generateGaryAnalysis expects
+            const gameData = {
+              odds: oddsData,
+              lineMovement: lineMovement,
+              sport: sport,
+              game: `${game.home_team} vs ${game.away_team}`,
+              teamStats: await sportsDataService.generateTeamStatsForGame(game.home_team, game.away_team, sport)
+            };
+            
+            // Get real-time data from Perplexity
+            let realTimeInfo = 'No real-time data available';
+            try {
+              // Only fetch real-time data if we have valid team names
+              if (game.home_team && game.away_team) {
+                console.log(`Fetching real-time data for: ${game.home_team} vs ${game.away_team}`);
+                realTimeInfo = await fetchRealTimeGameInfo(game.home_team, game.away_team, sport);
+              }
+            } catch (rtError) {
+              console.error('Error fetching real-time info:', rtError);
+            }
+            
             // Generate Gary's analysis with enhanced data
             const garyAnalysis = await makeGaryPick({
               gameId: game.id,
@@ -704,7 +726,10 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
               narrative: narrative,
               pastPerformance: { gutOverrideHits: 1, totalGutOverrides: 2 },  // Default past performance
               progressToTarget: 0.5,  // Default progress
-              bankroll: bankrollData.current_amount
+              bankroll: bankrollData.current_amount,
+              // Add these new fields required by garyEngine
+              gameData: gameData,
+              realTimeInfo: realTimeInfo
             });
 
             if (!garyAnalysis || !garyAnalysis.pick) {
