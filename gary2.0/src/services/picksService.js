@@ -398,12 +398,14 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
         model: openaiService.DEFAULT_MODEL
       });
       
-      if (!response || !response.content) {
+      if (!response) {
         throw new Error('No valid response from OpenAI');
       }
+      
+      console.log('OpenAI response received:', typeof response, response?.substring ? response.substring(0, 100) + '...' : 'Invalid response');
 
       // Extract and parse JSON response
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/); // Extract JSON
+      const jsonMatch = response.match(/\{[\s\S]*\}/); // Extract JSON
       if (!jsonMatch) {
         throw new Error('Could not extract JSON from OpenAI response');
       }
