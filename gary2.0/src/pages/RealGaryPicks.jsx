@@ -86,18 +86,40 @@ function RealGaryPicks() {
         
         // Ensure each pick has necessary fields for RetroPickCard
         picksArray = picksArray.map(pick => {
-          // Set shortPick if missing (required by RetroPickCard)
-          if (!pick.shortPick && pick.team) {
-            pick.shortPick = `${pick.team} ${pick.betType || 'ML'} ${pick.odds || ''}`;
+          const enhancedPick = {...pick};
+
+          // Handle shortPick format - RetroPickCard expects this property
+          // Convert from shortPickStr if needed
+          if (!enhancedPick.shortPick) {
+            if (enhancedPick.shortPickStr) {
+              enhancedPick.shortPick = enhancedPick.shortPickStr;
+            } else if (enhancedPick.team) {
+              enhancedPick.shortPick = `${enhancedPick.team} ${enhancedPick.betType || 'ML'} ${enhancedPick.odds || '-110'}`;
+            }
           }
           
-          // Add a default confidence value if missing
-          if (!pick.confidence && !pick.confidenceLevel) {
-            pick.confidenceLevel = 75;
+          // Make sure we have a game property
+          if (!enhancedPick.game && enhancedPick.gameStr) {
+            enhancedPick.game = enhancedPick.gameStr;
           }
           
-          console.log('Enhanced pick for rendering:', pick);
-          return pick;
+          // Ensure confidence value exists
+          if (!enhancedPick.confidence && enhancedPick.confidenceLevel) {
+            enhancedPick.confidence = enhancedPick.confidenceLevel;
+          } else if (!enhancedPick.confidenceLevel && enhancedPick.confidence) {
+            enhancedPick.confidenceLevel = enhancedPick.confidence;
+          } else if (!enhancedPick.confidence && !enhancedPick.confidenceLevel) {
+            enhancedPick.confidence = 75;
+            enhancedPick.confidenceLevel = 75;
+          }
+          
+          // Make sure bulletPoints is available for display
+          if (!enhancedPick.bulletPoints && enhancedPick.garysBullets) {
+            enhancedPick.bulletPoints = enhancedPick.garysBullets;
+          }
+          
+          console.log('Enhanced pick for rendering:', enhancedPick);
+          return enhancedPick;
         });
       }
       console.log('Parsed and enhanced picksArray:', picksArray);
