@@ -687,8 +687,17 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       
       {/* Odds and Confidence */}
       <div style={{ width: '100%', textAlign: 'center', margin: '0.5rem 0 1rem 0' }}>
-        <span style={{ fontWeight: '900', marginRight: 16, color: '#000' }}>{`Odds: ${safePick.odds || safePick.moneyline || 'N/A'}`}</span>
-        <span style={{ fontWeight: '700', color: '#000' }}>{`Conf: ${safePick.confidence}`}</span>
+        <span style={{ fontWeight: '900', marginRight: 16, color: '#000' }}>
+          {`Odds: ${typeof safePick.odds === 'string' ? safePick.odds : 
+            (typeof safePick.odds === 'number' ? safePick.odds.toString() : 
+            (typeof safePick.moneyline === 'string' ? safePick.moneyline : 
+            (typeof safePick.moneyline === 'number' ? safePick.moneyline.toString() : 'N/A')))}`}
+        </span>
+        <span style={{ fontWeight: '700', color: '#000' }}>
+          {`Conf: ${typeof safePick.confidence === 'string' ? safePick.confidence : 
+            (typeof safePick.confidence === 'number' ? safePick.confidence + '%' : 
+            (typeof safePick.confidenceLevel === 'number' ? safePick.confidenceLevel + '%' : '75%'))}`}
+        </span>
       </div>
       
       {/* Scouting Report Bullets - Expanded to bottom */}
@@ -703,14 +712,22 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         fontFamily: 'Orbitron, Segoe UI, Arial, sans-serif',
         maxHeight: 'calc(100% - 8rem)',
       }}>
-        {safePick.garysBullets?.map((bullet, index) => (
-          <div key={index} style={{ margin: '0.4rem 0', display: 'flex', alignItems: 'flex-start' }}>
-            <span style={{ color: colors.primary, marginRight: '0.5rem', fontSize: '1.2rem' }}>•</span>
-            <p style={{ margin: 0, fontSize: '0.8rem', lineHeight: '1.1rem', fontWeight: 500, color: '#181818' }}>
-              {bullet}
-            </p>
-          </div>
-        ))}
+        {/* Use bulletPoints if available, fall back to garysBullets with safe rendering */}
+        {(safePick.bulletPoints || safePick.garysBullets || []).map((bullet, index) => {
+          // Ensure bullet is a string to prevent [object Object] display
+          const bulletText = typeof bullet === 'string' ? bullet : 
+            (bullet && typeof bullet.toString === 'function' ? bullet.toString() : 
+            'Analysis bullet point');
+            
+          return (
+            <div key={index} style={{ margin: '0.4rem 0', display: 'flex', alignItems: 'flex-start' }}>
+              <span style={{ color: colors.primary, marginRight: '0.5rem', fontSize: '1.2rem' }}>•</span>
+              <p style={{ margin: 0, fontSize: '0.8rem', lineHeight: '1.1rem', fontWeight: 500, color: '#181818' }}>
+                {bulletText}
+              </p>
+            </div>
+          );
+        })}
       </div>
       
       {/* Gary's Pick */}
@@ -718,7 +735,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         <div style={{ backgroundColor: 'rgba(191,161,66,0.2)', padding: '0.25rem 0.5rem', borderRadius: '0.3rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#222' }}>GARY'S PICK:</span>
           <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: colors.accent, letterSpacing: '0.05rem' }}>
-            {safePick.formattedPick}
+            {/* Use shortPickStr if available, or fall back through other possible property names */}
+            {safePick.shortPickStr || safePick.shortPick || safePick.formattedPick || 'ML ML -110'}
           </span>
         </div>
       </div>
