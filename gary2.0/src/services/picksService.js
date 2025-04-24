@@ -412,7 +412,7 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
       }
     } catch (error) {
       console.error('Error generating narrative:', error);
-      throw new Error(`Failed to generate narrative for ${homeTeam} vs ${awayTeam}: ${error.message}`);
+      throw new Error(`Failed to generate narrative for game: ${error.message}`);
     }
   },
   
@@ -692,24 +692,48 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
             const bankrollData = { current_amount: 10000 };
             
             // Fix data structure to match what garyEngine.generateGaryAnalysis expects
+            let teamStats = null;
+            try {
+              // Try to get team stats but handle failures gracefully
+              teamStats = await sportsDataService.generateTeamStatsForGame(game.home_team, game.away_team, sport);
+              console.log('Successfully retrieved team stats');
+            } catch (statsError) {
+              console.error('Error retrieving team stats, continuing with basic data:', statsError.message);
+              // Create a simple stats object to avoid complete failure
+              teamStats = {
+                message: `Stats unavailable due to API limits`,
+                basicInfo: {
+                  homeTeam: game.home_team,
+                  awayTeam: game.away_team,
+                  sport: sport
+                }
+              };
+            }
+            
             const gameData = {
               odds: oddsData,
               lineMovement: lineMovement,
               sport: sport,
               game: `${game.home_team} vs ${game.away_team}`,
-              teamStats: await sportsDataService.generateTeamStatsForGame(game.home_team, game.away_team, sport)
+              teamStats: teamStats
             };
             
-            // Get real-time data from Perplexity
-            let realTimeInfo = 'No real-time data available';
+            // Get real-time data from Perplexity with enhanced error handling
+            let realTimeInfo = '';
             try {
               // Only fetch real-time data if we have valid team names
               if (game.home_team && game.away_team) {
                 console.log(`Fetching real-time data for: ${game.home_team} vs ${game.away_team}`);
                 realTimeInfo = await fetchRealTimeGameInfo(game.home_team, game.away_team, sport);
+                console.log('Successfully retrieved real-time data from Perplexity');
+              } else {
+                console.warn('Missing team names, cannot fetch real-time data');
+                realTimeInfo = 'Team names not available for real-time data lookup';
               }
             } catch (rtError) {
               console.error('Error fetching real-time info:', rtError);
+              // Provide basic information about the game that can still be useful for analysis
+              realTimeInfo = `Basic game information: ${game.home_team} vs ${game.away_team} in ${sport}. Real-time data unavailable due to service limitations.`;
             }
             
             // Generate Gary's analysis with enhanced data
