@@ -465,25 +465,26 @@ const gameResultsService = {
 // Add method to bankrollService to update bankroll for a wager
 bankrollService.updateBankrollForWager = async (wagerId, result, amount) => {
   try {
-    // Get current bankroll
-    const bankrollData = await bankrollService.getBankrollData();
-    if (!bankrollData) return false;
+    // Use hardcoded bankroll data
+    const defaultAmount = 10000;
     
-    // Calculate new bankroll amount
-    let newAmount = bankrollData.current_amount;
-    
-    if (result === 'won') {
-      // Add winnings to bankroll (not including original stake)
-      newAmount += amount;
-    } else {
-      // Subtract loss from bankroll
-      newAmount -= amount;
+    // Just update the wager status without touching bankroll
+    // This avoids any references to the bankroll table
+    const { error: updateError } = await supabase
+      .from('wagers')
+      .update({
+        status: result === 'won' ? 'won' : 'lost',
+        result_date: new Date().toISOString()
+      })
+      .eq('id', wagerId);
+      
+    if (updateError) {
+      console.error('Error updating wager status:', updateError);
+      return false;
     }
     
-    // Skip bankroll table update since it doesn't exist
-    console.log(`Bankroll would be updated to ${newAmount} (but skipping since bankroll table doesn't exist)`);
-    
-    // No error check needed since we're not making the database call
+    // Log what would have happened to bankroll without updating the table
+    console.log(`Wager ${wagerId} updated to ${result}. Bankroll update skipped (no bankroll table)`);
     
     return true;
   } catch (err) {
