@@ -5,9 +5,9 @@ import { oddsService } from './oddsService';
  * Service for fetching and processing sports data from TheSportsDB API
  */
 export const sportsDataService = {
-  // API configuration - Using direct API access with public key for reliability
+  // API configuration - Using direct API access with paid API key for enhanced reliability
   API_BASE_URL: 'https://www.thesportsdb.com/api/v1/json',
-  API_KEY: '3', // Using the free tier public key (documented as reliable for production)
+  API_KEY: import.meta.env?.VITE_THESPORTSDB_API_KEY || '3', // Use environment variable or fall back to free tier
   
   /**
    * Convert league names to TheSportsDB format
