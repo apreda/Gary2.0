@@ -129,8 +129,9 @@ const picksService = {
       // Check if a record already exists for today
       console.log(`Checking if picks record already exists for ${currentDateString}...`);
       
-      // Convert picks to string to avoid jsonb function issues
-      const picksAsString = JSON.stringify(cleanedPicks);
+      // The error 'cannot get array length of a scalar' suggests we need to maintain the array format
+      // Let's ensure our picks is properly formatted as a JSONB array
+      console.log('Ensuring picks are properly formatted as a JSONB array...');
       
       // First try the delete approach (which was working before)
       try {
@@ -141,7 +142,7 @@ const picksService = {
           .eq('date', currentDateString);
           
         if (deleteError) {
-          console.log('Note: Could not delete existing record, will try upsert instead:', deleteError);
+          console.log('Note: Could not delete existing record:', deleteError);
           // Continue with insert anyway
         } else {
           console.log('Successfully deleted any existing picks for today');
@@ -150,15 +151,21 @@ const picksService = {
         console.log('Delete operation failed, continuing with insert:', deleteErr);
       }
       
-      // Now insert the new record - use a string for picks to avoid jsonb processing
-      console.log('Inserting picks as plain text to avoid PostgreSQL function issues');
+      // Now insert the new record - using a proper JSONB array
+      console.log('Inserting picks with specific format to avoid PostgreSQL errors');
       
       try {
+        // Explicitly ensure we're sending an array of objects
+        if (!Array.isArray(cleanedPicks)) {
+          console.error('Picks is not an array, this will cause database errors');
+          throw new Error('Picks must be an array for database storage');
+        }
+        
         const { error: insertError } = await supabase
           .from('daily_picks')
           .insert({
             date: currentDateString,
-            picks: picksAsString, // Store as string to avoid jsonb function issues
+            picks: cleanedPicks, // Use the array directly as Supabase will handle the JSONB conversion
             created_at: timestamp,
             updated_at: timestamp
           });
