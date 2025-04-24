@@ -13,16 +13,27 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
 export default function RetroPickCard({ pick, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
   // Format game title to show only team names (e.g., "GRIZZLIES @ THUNDER")
   function formatGameTitle(game) {
-    if (!game) return '';
+    if (!game) return 'TBD @ TBD';
     
-    // Split into away and home teams
-    const [awayTeam, homeTeam] = game.split('@').map(team => team.trim());
-    
-    // Extract team names (everything after the last space)
-    const awayName = awayTeam.split(' ').pop();
-    const homeName = homeTeam.split(' ').pop();
-    
-    return `${awayName} @ ${homeName}`;
+    try {
+      // Split into away and home teams
+      const parts = game.split('@');
+      if (parts.length < 2) {
+        return game; // Return original if it doesn't have the expected format
+      }
+      
+      const awayTeam = parts[0].trim();
+      const homeTeam = parts[1].trim();
+      
+      // Extract team names (everything after the last space)
+      const awayName = awayTeam.split(' ').pop() || 'AWAY';
+      const homeName = homeTeam.split(' ').pop() || 'HOME';
+      
+      return `${awayName} @ ${homeName}`;
+    } catch (error) {
+      console.error('Error formatting game title:', error);
+      return 'GAME TBD';
+    }
   }
   console.log("RetroPickCard pick prop:", pick);
 
@@ -30,8 +41,12 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
   function getFormattedShortPick(pick) {
     console.log("Formatting pick:", pick);
     
+    if (!pick) {
+      return 'UNKNOWN PICK';
+    }
+    
     // Extract team abbreviation
-    let team = '';
+    let team = 'TBD';
     if (pick.game) {
       const teamMappings = {
         'Boston Celtics': 'BOS',
@@ -50,18 +65,36 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         'Orlando Magic': 'ORL',
       };
       
-      // Parse from game info (e.g., "Away @ Home")
-      const gameParts = pick.game.split('@').map(part => part.trim());
-      const homeTeam = gameParts[1];
-      const awayTeam = gameParts[0];
-      
-      // Extract the team name from shortPick (e.g., "Bet on the Indiana Pacers to win")
-      const shortPickTeamMatch = pick.shortPick.match(/Bet on the ([^.]+) to win/);
-      const pickedTeam = shortPickTeamMatch ? shortPickTeamMatch[1] : '';
-      
-      // Find the matching team and get its abbreviation
-      const targetTeam = pickedTeam || (pick.shortPick?.toLowerCase().includes(homeTeam.toLowerCase()) ? homeTeam : awayTeam);
-      team = teamMappings[targetTeam] || targetTeam.slice(0, 3).toUpperCase();
+      try {
+        // Parse from game info (e.g., "Away @ Home")
+        const gameParts = pick.game.split('@').map(part => part.trim());
+        const homeTeam = gameParts[1] || '';
+        const awayTeam = gameParts[0] || '';
+        
+        // Extract the team name from shortPick (e.g., "Bet on the Indiana Pacers to win")
+        let pickedTeam = '';
+        if (pick.shortPick) {
+          const shortPickTeamMatch = pick.shortPick.match(/Bet on the ([^.]+) to win/);
+          pickedTeam = shortPickTeamMatch ? shortPickTeamMatch[1] : '';
+        }
+        
+        // Find the matching team and get its abbreviation
+        let targetTeam = pickedTeam;
+        if (!targetTeam && pick.shortPick && homeTeam && awayTeam) {
+          // Safely check if homeTeam string is in the shortPick
+          const shortPickLower = pick.shortPick.toLowerCase();
+          const homeTeamLower = homeTeam.toLowerCase();
+          const awayTeamLower = awayTeam.toLowerCase();
+          targetTeam = shortPickLower.includes(homeTeamLower) ? homeTeam : awayTeam;
+        } else if (!targetTeam) {
+          targetTeam = homeTeam || awayTeam;
+        }
+        
+        team = teamMappings[targetTeam] || (targetTeam ? targetTeam.slice(0, 3).toUpperCase() : 'TBD');
+      } catch (error) {
+        console.error('Error processing game data:', error);
+        team = 'ERR';
+      }
     }
     
     // Format based on bet type
@@ -154,6 +187,13 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
   const safePick = {
     ...pick,
     id: pick?.id || `temp-${Date.now()}`,
+    shortPick: pick?.shortPick || '',
+    game: pick?.game || '',
+    betType: pick?.betType || '',
+    spread: pick?.spread || '',
+    overUnder: pick?.overUnder || '',
+    odds: pick?.odds || '-110',
+    moneyline: pick?.moneyline || '',
     garysBullets: pick?.garysBullets || [
       'Statistical analysis supports this selection',
       'Current odds present good betting value',
@@ -163,8 +203,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     confidence: pick?.confidence || (pick?.confidenceLevel ? `${pick.confidenceLevel}%` : '75%')
   };
 
-  // Apply formatting to safePick
-  safePick.shortPick = getFormattedShortPick(safePick);
+  // Apply formatting to safePick - store the formatted version as a new property to avoid overwriting original
+  safePick.formattedPick = getFormattedShortPick(safePick);
 
   // Default league and time if not provided
   const league = safePick.league || 'MLB';
@@ -326,7 +366,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           boxShadow: '0 2px 12px rgba(191,161,66,0.15)',
           whiteSpace: 'nowrap', // Ensures text stays on one line
         }}>
-          {getFormattedShortPick(safePick)}
+          {safePick.formattedPick}
         </div>
       </div>
       
@@ -518,7 +558,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         <div style={{ backgroundColor: 'rgba(191,161,66,0.2)', padding: '0.25rem 0.5rem', borderRadius: '0.3rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#222' }}>GARY'S PICK:</span>
           <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: colors.accent, letterSpacing: '0.05rem' }}>
-            {getFormattedShortPick(safePick)}
+            {safePick.formattedPick}
           </span>
         </div>
       </div>
