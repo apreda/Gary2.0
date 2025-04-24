@@ -930,10 +930,13 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
         }
       }
 
-      // Trim excess picks if we have more than 10
-      if (allPicks.length > 10) {
-        console.log(`Trimming picks from ${allPicks.length} to 10`);
-        allPicks.length = 10;
+      // Sort picks by confidence level (highest to lowest)
+      allPicks.sort((a, b) => (b.confidenceLevel || 0) - (a.confidenceLevel || 0));
+      
+      // Limit picks to a maximum of 6, prioritizing picks with highest confidence
+      if (allPicks.length > 6) {
+        console.log(`Limiting picks from ${allPicks.length} to 6 based on confidence level`);
+        allPicks.length = 6;
       }
 
       // Store picks in Supabase
