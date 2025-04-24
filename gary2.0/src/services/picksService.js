@@ -629,7 +629,7 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
       const batchOdds = await oddsService.getBatchOdds(prioritizedSports);
       
       // Check if we got odds data for at least one sport
-      if (!batchOdds || batchOdds.length === 0) {
+      if (!batchOdds || Object.keys(batchOdds).length === 0) {
         throw new Error('No odds data available from API. Cannot generate picks.');
       }
       
