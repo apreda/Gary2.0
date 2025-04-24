@@ -3,7 +3,7 @@
 import axios from 'axios';
 
 // Configure axios with appropriate defaults
-axios.defaults.timeout = 25000; // 25 second timeout for all requests
+axios.defaults.timeout = 58000; // 58 second timeout since Vercel Pro supports up to 60s
 
 // Enable CORS for all origins
 export default async function handler(req, res) {
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
-          timeout: 20000 // Reduced to 20 second timeout to avoid Vercel's 10s function limit
+          timeout: 58000 // Vercel Pro supports up to 60s execution time
         }
       );
       
