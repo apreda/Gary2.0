@@ -99,7 +99,7 @@ const picksService = {
       await picksService.ensureValidSupabaseSession();
       
       // Get available sports list
-      const sportsList = await oddsService.getSportsList();
+      const sportsList = await oddsService.getSports();
       console.log(`Got ${sportsList.length} sports`);
       
       // Array to hold all generated picks
