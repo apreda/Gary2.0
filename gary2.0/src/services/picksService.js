@@ -385,6 +385,18 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
 
       const messages = [systemMessage, userMessage];
       
+      // Check if openaiService is available, if not return a simplified response
+      if (typeof openaiService === 'undefined') {
+        console.warn('OpenAI service not available for narrative generation, using simplified approach');
+        return {
+          favoredTeam: homeTeam,
+          keyPlayers: [],
+          momentum: 0.5,
+          revenge: false,
+          superstition: false
+        };
+      }
+      
       // Call OpenAI with updated temperature for more consistent analytics focus
       const response = await openaiService.generateResponse(messages, {
         temperature: 0.65,
