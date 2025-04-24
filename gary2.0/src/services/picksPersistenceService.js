@@ -6,7 +6,7 @@ import { supabase, ensureAnonymousSession } from '../supabaseClient';
 
 export const picksPersistenceService = {
   /**
-   * Save picks to both localStorage and Supabase
+   * Save picks to Supabase database
    * @param {Array} picks - Array of picks to store
    * @returns {Promise<boolean>} - Whether the operation was successful
    */
@@ -17,9 +17,8 @@ export const picksPersistenceService = {
         return false;
       }
 
-      // No longer using localStorage to ensure consistent behavior across all devices
+      // Store in Supabase for universal access across all devices
       const timestamp = new Date().toISOString();
-      console.log('Skipping localStorage - using only Supabase for universal access');
       
       // 2. Try to save to Supabase for multi-user sharing
       try {
@@ -44,8 +43,7 @@ export const picksPersistenceService = {
         
         if (checkError && checkError.code !== 'PGRST116') {
           console.error('Error checking for existing data:', checkError);
-          // Continue with localStorage only
-          return true;
+          return false; // Cannot proceed without Supabase
         }
         
         if (existingData) {
@@ -101,7 +99,7 @@ export const picksPersistenceService = {
         return true;
       } catch (supabaseError) {
         console.error('Error saving to Supabase:', supabaseError);
-        return true; // Still return success because localStorage worked
+        return false; // Cannot proceed without Supabase
       }
     } catch (error) {
       console.error('Error saving picks:', error);
@@ -110,7 +108,7 @@ export const picksPersistenceService = {
   },
   
   /**
-   * Load picks from localStorage or Supabase
+   * Load picks from Supabase database
    * @returns {Promise<Array>} - Array of picks or empty array if none
    */
   loadPicks: async () => {
@@ -146,8 +144,7 @@ export const picksPersistenceService = {
         console.error('Error retrieving picks from Supabase:', supabaseError);
       }
       
-      // No longer using localStorage fallback - we only rely on Supabase
-      // This ensures consistent behavior across all devices and browsers
+      // We only rely on Supabase for data consistency across all devices
       
       console.log('No saved picks found in any storage');
       return [];
@@ -163,8 +160,7 @@ export const picksPersistenceService = {
    */
   picksExistForToday: async () => {
     try {
-      // No longer checking localStorage - only using Supabase
-      // This ensures consistent behavior across all devices
+      // Only using Supabase for data consistency across all devices
       
       // Check Supabase for today's picks
       try {
@@ -203,8 +199,7 @@ export const picksPersistenceService = {
    */
   clearPicksData: async () => {
     try {
-      // No longer using localStorage
-      // Only clearing Supabase data
+      // Clear Supabase data
       
       // Clear Supabase entry for today
       await ensureAnonymousSession();
