@@ -3,7 +3,10 @@
 import axios from 'axios';
 
 // Configure axios with appropriate defaults
-axios.defaults.timeout = 58000; // 58 second timeout since Vercel Pro supports up to 60s
+axios.defaults.timeout = 20000; // Limit to 20 seconds to avoid Vercel Edge Network timeout issues
+
+// Cache for successful API responses - keep in memory as this is a serverless function
+const RESPONSE_CACHE = new Map();
 
 // Enable CORS for all origins
 export default async function handler(req, res) {
@@ -27,6 +30,27 @@ export default async function handler(req, res) {
   console.log('✅ Perplexity proxy received a valid POST request');
 
   try {
+        // Generate cache key based on request body with sensitive parts removed
+    const generateCacheKey = (body) => {
+      const { messages, model, temperature } = body || {};
+      return JSON.stringify({
+        model,
+        temperature,
+        messages: messages?.map(m => ({ role: m.role, content_hash: m.content?.substring(0, 100) || '' }))
+      });
+    };
+    
+    // Create cache key from the request
+    const cacheKey = generateCacheKey(req.body);
+    
+    // Check cache first
+    if (RESPONSE_CACHE.has(cacheKey)) {
+      console.log('✅ Cache hit! Returning cached response for this query');
+      res.setHeader('X-Cache', 'HIT');
+      res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes
+      return res.status(200).json(RESPONSE_CACHE.get(cacheKey));
+    }
+    
     // Get the API key from environment variables - check both with and without VITE_ prefix
     const apiKey = process.env.VITE_PERPLEXITY_API_KEY || process.env.PERPLEXITY_API_KEY;
     
@@ -52,16 +76,26 @@ export default async function handler(req, res) {
       console.log('🕒 Starting Perplexity API request with truncated prompt length:', 
         req.body?.messages?.[0]?.content?.length || 'unknown');
 
+      // Use the fastest available model for sports data
+      const optimizedBody = {
+        ...req.body,
+        model: 'sonar-small-online', // Use the fastest model to avoid timeouts
+        max_tokens: Math.min(req.body.max_tokens || 1000, 500), // Limit output size
+        temperature: Math.min(req.body.temperature || 0.7, 0.5), // Lower temperature for faster, more factual responses
+      };
+      
+      console.log('🔄 Using optimized parameters for faster responses');
+      
       // Make the request to Perplexity API with shorter timeout
       const response = await axios.post(
         'https://api.perplexity.ai/chat/completions',
-        req.body,
+        optimizedBody,
         {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
-          timeout: 58000 // Vercel Pro supports up to 60s execution time
+          timeout: 15000 // Shorter timeout for faster responses
         }
       );
       
@@ -69,8 +103,18 @@ export default async function handler(req, res) {
       console.log('📊 Response status:', response.status);
       console.log('📊 Response has data:', !!response.data);
 
-      // Return the response from Perplexity - add a shorter cache hint
-      res.setHeader('Cache-Control', 'public, max-age=120'); // Cache for 2 minutes to reduce load
+      // Cache the response for future requests
+      RESPONSE_CACHE.set(cacheKey, response.data);
+      
+      // Clean up cache if it gets too large
+      if (RESPONSE_CACHE.size > 100) {
+        const keysIterator = RESPONSE_CACHE.keys();
+        RESPONSE_CACHE.delete(keysIterator.next().value); // Remove oldest entry
+      }
+      
+      // Return the response from Perplexity with caching headers
+      res.setHeader('X-Cache', 'MISS');
+      res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
       return res.status(200).json(response.data);
     } catch (apiError) {
       // Special handling for timeout errors

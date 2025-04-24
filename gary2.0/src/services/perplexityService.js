@@ -25,11 +25,24 @@ export const perplexityService = {
     try {
       console.log(`Fetching real-time information: "${query}"`);
       
+      // Create a more concise, focused query
+      let optimizedQuery = query;
+      if (query.length > 150) {
+        // Extract team names for very focused query
+        const teamMatch = query.match(/between ([\w\s]+) and ([\w\s]+)/i);
+        if (teamMatch && teamMatch.length >= 3) {
+          const sportMatch = query.match(/(basketball|baseball|icehockey|soccer|football)_(\w+)/i);
+          const sport = sportMatch ? sportMatch[0] : '';
+          optimizedQuery = `${sport} ${teamMatch[1]} vs ${teamMatch[2]}: key injuries, form, betting trends. Brief factual analysis only.`;
+          console.log(`🔥 Optimized query: ${optimizedQuery}`);
+        }
+      }
+      
       // Default options
       const defaultOptions = {
-        model: 'sonar-pro', // Using Sonar Pro for best real-time search capabilities
-        temperature: 0.7,    // Default temperature for balanced responses
-        maxTokens: 800       // Reasonable length for search results
+        model: 'sonar-small-online', // Using smaller model for faster responses
+        temperature: 0.3,           // Lower temperature for more factual, faster responses
+        maxTokens: 250              // Shorter output length for faster generation
       };
       
       // Merge default options with provided options
@@ -49,13 +62,14 @@ export const perplexityService = {
           
         console.log(`Using ${useProxy ? 'proxy endpoint' : 'direct API call'} for Perplexity: ${apiUrl}`);
         
-        // With Perplexity Pro, we can use full-length queries
-        // Make request to Perplexity API with additional error handling
+        // Use optimized query for faster responses
+        console.log(`Original query length: ${query.length} chars | Optimized length: ${optimizedQuery.length} chars`);
+        // Make request with optimized query
         const response = await axios.post(
           apiUrl,
           {
-            model: requestOptions.model || 'sonar-pro', // Use Perplexity Pro model
-            messages: [{ role: 'user', content: query }],
+            model: requestOptions.model || 'sonar-small-online', // Use faster model
+            messages: [{ role: 'user', content: optimizedQuery }],
             temperature: requestOptions.temperature,
             max_tokens: requestOptions.maxTokens
           },
@@ -115,12 +129,7 @@ export const perplexityService = {
    */
   getGameNews: async (homeTeam, awayTeam, league) => {
     try {
-      const query = `
-        Give me the latest news, stats, team updates, player injuries, and betting trends for the upcoming 
-        ${league} game between ${homeTeam} and ${awayTeam}. 
-        Focus on information that would be relevant for betting purposes and provide only facts, not opinions.
-        Include the most recent team performance and any breaking news in the last 24 hours.
-      `;
+      const query = `${league} ${homeTeam} vs ${awayTeam}: key injuries, recent form, betting trends, last 5 games. Factual only, no opinions.`;
       
       return await perplexityService.fetchRealTimeInfo(query, {
         model: 'sonar-pro',
@@ -141,12 +150,7 @@ export const perplexityService = {
    */
   getTeamInsights: async (teamName, league) => {
     try {
-      const query = `
-        Give me detailed insights about ${teamName} in the ${league}. 
-        Include their current form, recent game results, key player statistics, injury reports,
-        coaching strategies, and any other factors that would be relevant for sports betting.
-        Focus on objective data and statistics from the most recent games and practices.
-      `;
+      const query = `${league} ${teamName}: current form, injuries, betting trends, last 5 games performance. Brief facts only.`;
       
       return await perplexityService.fetchRealTimeInfo(query, {
         model: 'sonar-pro',
