@@ -13,18 +13,26 @@ const openaiServiceInstance = {
   API_KEY: import.meta.env?.VITE_OPENAI_API_KEY || '',
   
   /**
+   * Flag to indicate if initialization was successful
+   */
+  initialized: false,
+  
+  /**
    * Initialize the API key from environment variables
    */
   init: function() {
     const apiKey = import.meta.env?.VITE_OPENAI_API_KEY;
     if (!apiKey) {
-      console.error('OpenAI API key not found in environment variables');
+      console.error('❌ CRITICAL ERROR: OpenAI API key not found in environment variables');
+      console.error('❌ Gary requires a valid OpenAI API key to function - please check your .env file');
+      this.initialized = false;
     } else {
-      console.log('OpenAI API key loaded successfully from environment variables');
+      console.log('✅ OpenAI API key loaded successfully from environment variables');
       // Mask the API key for security when logging (only showing first 5 chars)
       const maskedKey = apiKey.substring(0, 5) + '...' + apiKey.substring(apiKey.length - 4);
-      console.log(`API Key (masked): ${maskedKey}`);
+      console.log(`🔑 API Key (masked): ${maskedKey}`);
       this.API_KEY = apiKey;
+      this.initialized = true;
     }
     return this;
   },
@@ -46,6 +54,12 @@ const openaiServiceInstance = {
    * @returns {Promise<string>} - The generated response
    */
   generateResponse: async function(prompt, options = {}) {
+    // Check if OpenAI API key is initialized
+    if (!this.initialized || !this.API_KEY) {
+      console.error('❌ Cannot generate response: OpenAI API key not initialized');
+      throw new Error('OpenAI API key not initialized - add VITE_OPENAI_API_KEY to your environment');
+    }
+    
     // Create a cache key based on the prompt and options
     const cacheKey = this._createCacheKey(prompt, options);
     
@@ -55,6 +69,8 @@ const openaiServiceInstance = {
       console.log('Using cached OpenAI response');
       return cachedResponse;
     }
+    
+    console.log(`📤 Sending request to OpenAI with model: ${options.model || this.DEFAULT_MODEL}`);
     
     // If no cached response, add the request to the queue
     // This ensures we're only making one request at a time to avoid rate limits
@@ -157,27 +173,26 @@ const openaiServiceInstance = {
         return null;
       }
     } catch (error) {
-      console.error('Error generating response from OpenAI:', error);
+      console.error('❌ Error generating response from OpenAI:', error);
       
       // If there's an error with the API key or quota, log it for debugging
       if (error.response && error.response.data) {
-        console.error('OpenAI API error details:', error.response.data);
+        console.error('❌ OpenAI API error details:', error.response.data);
         
         // Better debugging for different error types
         if (error.response.status === 401) {
-          console.error('API Key Authentication Error. Check your API key is valid and has not expired.');
-          console.error('Current API key (first 5 chars):', this.API_KEY ? (this.API_KEY.substring(0, 5) + '...') : 'No API key found');
-          return null; // No point retrying with invalid credentials
+          console.error('❌ API Key Authentication Error: Your API key is invalid or has expired');
+          console.error('🔑 Current API key (first 5 chars):', this.API_KEY ? (this.API_KEY.substring(0, 5) + '...') : 'No API key found');
+          throw new Error('OpenAI API key is invalid - please check your environment settings');
         } else if (error.response.status === 404) {
-          console.error('Model not found. The specified model may not exist or you may not have access to it.');
-          console.error('Current model being used:', options?.model || this.DEFAULT_MODEL);
-          return null; // No point retrying with an invalid model
+          console.error(`❌ Model not found: The model '${options?.model || this.DEFAULT_MODEL}' may not exist or you may not have access`);
+          throw new Error(`Model '${options?.model || this.DEFAULT_MODEL}' not found - please check your model settings`);
         } else if (error.response.status === 429) {
-          console.error('Rate limit exceeded or quota exceeded for your API key.');
+          console.error('⚠️ Rate limit exceeded or quota exceeded for your API key');
           
           // Retry logic for rate limiting
           if (retryCount < MAX_RETRIES) {
-            console.log(`Retrying OpenAI request in ${RETRY_DELAY_MS}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+            console.log(`⏱️ Retrying OpenAI request in ${RETRY_DELAY_MS}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
             
             // Wait for the backoff period
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
@@ -187,12 +202,16 @@ const openaiServiceInstance = {
             
             // Try again with an incremented retry count
             return await this._makeOpenAIRequestWithRetry(prompt, options, cacheKey, retryCount + 1);
+          } else {
+            throw new Error('OpenAI API rate limit exceeded and retry attempts exhausted');
           }
+        } else {
+          throw new Error(`OpenAI API error: ${error.response.status} - ${error.response.data.error?.message || 'Unknown error'}`);
         }
+      } else {
+        // Network or other errors
+        throw new Error(`OpenAI service error: ${error.message}`);
       }
-      
-      // Return null to indicate failure, the caller should handle this case
-      return null;
     }
   },
   
