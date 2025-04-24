@@ -9,11 +9,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get the API key from environment variables
-    const apiKey = process.env.PERPLEXITY_API_KEY;
+    // Get the API key from environment variables - check both with and without VITE_ prefix
+    const apiKey = process.env.VITE_PERPLEXITY_API_KEY || process.env.PERPLEXITY_API_KEY;
     
     if (!apiKey) {
-      console.error('PERPLEXITY_API_KEY environment variable is not set');
+      console.error('Neither VITE_PERPLEXITY_API_KEY nor PERPLEXITY_API_KEY environment variable is set');
       return res.status(500).json({ error: 'API key not configured on server' });
     }
 
