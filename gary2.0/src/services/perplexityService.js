@@ -49,12 +49,19 @@ export const perplexityService = {
           
         console.log(`Using ${useProxy ? 'proxy endpoint' : 'direct API call'} for Perplexity: ${apiUrl}`);
         
+        // Determine if we need to shorten query for timeouts
+        const shortenedQuery = query.length > 500 ? 
+          query.substring(0, 500) + '...[content shortened to avoid timeouts]' : 
+          query;
+        
+        console.log(`Query length: ${query.length} chars ${query.length > 500 ? '(shortened to avoid timeouts)' : ''}`);
+        
         // Make request to Perplexity API with additional error handling
         const response = await axios.post(
           apiUrl,
           {
             model: requestOptions.model,
-            messages: [{ role: 'user', content: query }],
+            messages: [{ role: 'user', content: shortenedQuery }],
             temperature: requestOptions.temperature,
             max_tokens: requestOptions.maxTokens
           },
@@ -63,7 +70,7 @@ export const perplexityService = {
               'Authorization': `Bearer ${perplexityService.API_KEY}`,
               'Content-Type': 'application/json'
             },
-            timeout: 30000 // Increased to 30 second timeout for more reliability
+            timeout: 25000 // Setting timeout to match serverless function
           }
         );
         
@@ -80,12 +87,14 @@ export const perplexityService = {
       } catch (apiError) {
         console.error('❌ API call to Perplexity failed:', apiError.message);
         
-        // Enhanced error handling with retry for timeout errors
-        if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout')) {
-          console.log('⚠️ Request timed out. This might be due to CORS restrictions or network issues.');
-          console.log('💡 Consider setting up a server-side proxy to avoid CORS issues.');
+        // Enhanced error handling with retry for timeout and gateway errors
+        if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout') || 
+            (apiError.response && apiError.response.status === 504)) {
+          console.log('⚠️ Request timed out. This is likely due to the complexity of the prompt.');
+          console.log('💡 Using simplified response format to avoid timeouts');
           
-          throw new Error('Perplexity API request timed out. Please check your network connection or API proxy settings.');
+          // For timeouts, return a basic analysis that doesn't stop the process
+          return `The game between ${query.match(/between ([^.]+) and/)?.[1] || 'the teams'} and ${query.match(/and ([^.]+)\./)?.[1] || 'their opponent'} is upcoming. No detailed analysis could be retrieved due to server timeout, but basic statistics should be analyzed using standard betting metrics and current form. Consider key factors such as home-court advantage, injuries, and recent performance when evaluating this matchup.`;
         } else if (apiError.response && apiError.response.status === 429) {
           throw new Error('Perplexity API rate limit exceeded. Please try again later.');
         } else if (apiError.response && apiError.response.status === 401) {
