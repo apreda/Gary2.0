@@ -64,6 +64,7 @@ const picksService = {
       }
 
       // Extract only the essential pick data for UI display and Supabase storage
+      // Be extremely selective about what we store to minimize database size
       const cleanedPicks = picks.map(pick => {
         // Format shortPick as 'TEAM BET_TYPE ODDS' (e.g. 'BOS ML -110' or 'BOS -3.5 -110')
         let shortPickFormatted = '';
@@ -83,24 +84,25 @@ const picksService = {
           shortPickFormatted = pick.shortPick || '';
         }
 
-        // Only keep essential properties, removing imageUrl, silverCard, pickDetail
+        // MINIMAL DATA ONLY: Keep only the essential data needed for UI display
+        // This significantly reduces the size of the data stored in Supabase
         const essentialPickData = {
-          id: pick.id,
-          league: pick.league,
-          game: pick.game,
-          betType: pick.betType,
-          shortPick: shortPickFormatted,
-          moneyline: pick.moneyline,
-          spread: pick.spread,
-          overUnder: pick.overUnder,
-          odds: pick.odds,
-          time: pick.time,
-          walletValue: pick.walletValue,
-          confidenceLevel: pick.confidenceLevel,
-          analysis: pick.analysis,
-          garysBullets: Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 5) : []
-  };
-
+          id: pick.id,                      // Required for reference
+          league: pick.league,              // League info (NBA, MLB, etc)
+          game: pick.game,                  // Game matchup
+          betType: pick.betType,            // Type of bet
+          shortPick: shortPickFormatted,    // Formatted short pick
+          odds: pick.odds,                  // Betting odds
+          confidenceLevel: pick.confidenceLevel, // Confidence percentage
+          garysBullets: Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 5) : [] // Limited to 5 bullets max
+        };
+        
+        // Only add these fields if they're actually needed and present
+        if (pick.spread) essentialPickData.spread = pick.spread;
+        if (pick.overUnder) essentialPickData.overUnder = pick.overUnder;
+        if (pick.moneyline) essentialPickData.moneyline = pick.moneyline;
+        if (pick.time) essentialPickData.time = pick.time;
+        
         // Remove any remaining circular references or functions
         return JSON.parse(JSON.stringify(essentialPickData));
       });
