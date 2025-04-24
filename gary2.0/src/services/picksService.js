@@ -584,6 +584,8 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
    */
   generateDailyPicks: async () => {
     try {
+      // Initialize array for storing generated picks
+      const allPicks = [];
       // 1. Get sports list from The Odds API
       const sportsList = await oddsService.getSports();
       console.log(`Retrieved ${sportsList.length} sports`);
@@ -663,8 +665,9 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
         for (const game of upcomingGames) {
           try {
             // Get enhanced odds data including line movement
+            // Use oddsService instead of non-existent picksService.getOddsData
             const [oddsData, lineMovement] = await Promise.all([
-              picksService.getOddsData(sport, game.id),
+              oddsService.getUpcomingGames(sport, { eventId: game.id }),
               oddsService.getLineMovement(game.id)
             ]);
             
