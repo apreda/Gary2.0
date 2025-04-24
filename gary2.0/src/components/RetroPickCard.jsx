@@ -11,17 +11,26 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
  * Implements the 1980s Vegas / retro sports card design for Gary 2.0
  */
 export default function RetroPickCard({ pick, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
-  // Format game title to show only team names (e.g., "GRIZZLIES @ THUNDER")
+  // Format game title to show only team names (e.g., "PISTONS @ KNICKS")
   function formatGameTitle(game) {
     if (!game) return 'TBD @ TBD';
     
     try {
       // Split into away and home teams
-      const parts = game.split('@');
+      const parts = game.split(' vs ');
       if (parts.length < 2) {
-        return game; // Return original if it doesn't have the expected format
+        // Try alternate separator formats
+        const atParts = game.split('@');
+        if (atParts.length >= 2) {
+          parts[0] = atParts[0].trim();
+          parts[1] = atParts[1].trim();
+        } else {
+          return game; // Return original if it doesn't have the expected format
+        }
       }
       
+      // Get only the last word in the team name (typically the mascot/nickname)
+      // This handles formats like "Milwaukee Bucks" -> "Bucks"
       const awayTeam = parts[0].trim();
       const homeTeam = parts[1].trim();
       
@@ -29,7 +38,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       const awayName = awayTeam.split(' ').pop() || 'AWAY';
       const homeName = homeTeam.split(' ').pop() || 'HOME';
       
-      return `${awayName} @ ${homeName}`;
+      return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
     } catch (error) {
       console.error('Error formatting game title:', error);
       return 'GAME TBD';
@@ -45,56 +54,160 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       return 'UNKNOWN PICK';
     }
     
+    // If pick.shortPick already contains the formatted pick (TEAM BET_TYPE ODDS),
+    // return it directly instead of trying to reformat
+    if (pick.shortPick && 
+        typeof pick.shortPick === 'string' && 
+        /^[A-Z]{3}\s+(ML|[+-]\d+\.?\d*|O|U)\s+[-+]\d+$/.test(pick.shortPick)) {
+      return pick.shortPick;
+    }
+    
     // Extract team abbreviation
     let team = 'TBD';
-    if (pick.game) {
-      const teamMappings = {
-        'Boston Celtics': 'BOS',
-        'Chicago Bulls': 'CHI',
-        'Miami Heat': 'MIA',
-        'Golden State Warriors': 'GSW',
-        'Los Angeles Lakers': 'LAL',
-        'Chicago Cubs': 'CHC',
-        'Los Angeles Dodgers': 'LAD',
-        'Washington Capitals': 'WSH',
-        'Montréal Canadiens': 'MTL',
-        'Manchester City': 'MCI',
-        'Arsenal': 'ARS',
-        'Crystal Palace': 'CRY',
-        'Aston Villa': 'AVL',
-        'Orlando Magic': 'ORL',
-      };
-      
-      try {
-        // Parse from game info (e.g., "Away @ Home")
-        const gameParts = pick.game.split('@').map(part => part.trim());
-        const homeTeam = gameParts[1] || '';
-        const awayTeam = gameParts[0] || '';
-        
-        // Extract the team name from shortPick (e.g., "Bet on the Indiana Pacers to win")
-        let pickedTeam = '';
-        if (pick.shortPick) {
-          const shortPickTeamMatch = pick.shortPick.match(/Bet on the ([^.]+) to win/);
-          pickedTeam = shortPickTeamMatch ? shortPickTeamMatch[1] : '';
-        }
-        
-        // Find the matching team and get its abbreviation
-        let targetTeam = pickedTeam;
-        if (!targetTeam && pick.shortPick && homeTeam && awayTeam) {
-          // Safely check if homeTeam string is in the shortPick
-          const shortPickLower = pick.shortPick.toLowerCase();
-          const homeTeamLower = homeTeam.toLowerCase();
-          const awayTeamLower = awayTeam.toLowerCase();
-          targetTeam = shortPickLower.includes(homeTeamLower) ? homeTeam : awayTeam;
-        } else if (!targetTeam) {
-          targetTeam = homeTeam || awayTeam;
-        }
-        
-        team = teamMappings[targetTeam] || (targetTeam ? targetTeam.slice(0, 3).toUpperCase() : 'TBD');
-      } catch (error) {
-        console.error('Error processing game data:', error);
-        team = 'ERR';
+    // Comprehensive mapping of NBA teams
+    const nbaTeamMappings = {
+      'Boston Celtics': 'BOS',
+      'Brooklyn Nets': 'BKN',
+      'New York Knicks': 'NYK',
+      'Philadelphia 76ers': 'PHI',
+      'Toronto Raptors': 'TOR',
+      'Chicago Bulls': 'CHI',
+      'Cleveland Cavaliers': 'CLE',
+      'Detroit Pistons': 'DET',
+      'Indiana Pacers': 'IND',
+      'Milwaukee Bucks': 'MIL',
+      'Atlanta Hawks': 'ATL',
+      'Charlotte Hornets': 'CHA',
+      'Miami Heat': 'MIA',
+      'Orlando Magic': 'ORL',
+      'Washington Wizards': 'WAS',
+      'Denver Nuggets': 'DEN',
+      'Minnesota Timberwolves': 'MIN',
+      'Oklahoma City Thunder': 'OKC',
+      'Portland Trail Blazers': 'POR',
+      'Utah Jazz': 'UTA',
+      'Golden State Warriors': 'GSW',
+      'Los Angeles Clippers': 'LAC',
+      'Los Angeles Lakers': 'LAL',
+      'Phoenix Suns': 'PHX',
+      'Sacramento Kings': 'SAC',
+      'Dallas Mavericks': 'DAL',
+      'Houston Rockets': 'HOU',
+      'Memphis Grizzlies': 'MEM',
+      'New Orleans Pelicans': 'NOP',
+      'San Antonio Spurs': 'SAS'
+    };
+    
+    // Handle shortened forms of team names
+    Object.entries(nbaTeamMappings).forEach(([fullName, abbr]) => {
+      // Get team nickname (last part of name)
+      const nickname = fullName.split(' ').pop();
+      if (nickname && !nbaTeamMappings[nickname]) {
+        nbaTeamMappings[nickname] = abbr;
       }
+    });
+    
+    // For MLB, NHL and other sports, you can add more mappings
+    const teamMappings = {
+      ...nbaTeamMappings,
+      // MLB teams
+      'Chicago Cubs': 'CHC',
+      'Chicago White Sox': 'CWS',
+      'Los Angeles Dodgers': 'LAD',
+      'New York Yankees': 'NYY',
+      // NHL teams
+      'Washington Capitals': 'WSH',
+      'Montréal Canadiens': 'MTL',
+      // Soccer teams
+      'Manchester City': 'MCI',
+      'Arsenal': 'ARS',
+      'Crystal Palace': 'CRY',
+      'Aston Villa': 'AVL',
+    };
+    
+    try {
+      // Direct access to team if it's already in the pick object
+      if (pick.team && typeof pick.team === 'string') {
+        const directTeam = pick.team.trim();
+        team = teamMappings[directTeam] || directTeam.slice(0, 3).toUpperCase();
+      } 
+      // Try to extract from game info
+      else if (pick.game) {
+        // Try different delimiters: vs, at, @
+        let gameParts = [];
+        if (pick.game.includes(' vs ')) {
+          gameParts = pick.game.split(' vs ').map(part => part.trim());
+        } else if (pick.game.includes('@')) {
+          gameParts = pick.game.split('@').map(part => part.trim());
+        } else if (pick.game.includes(' at ')) {
+          gameParts = pick.game.split(' at ').map(part => part.trim());
+        }
+
+        if (gameParts.length >= 2) {
+          const homeTeam = gameParts[1] || '';
+          const awayTeam = gameParts[0] || '';
+          
+          // Try to determine which team is being bet on
+          let targetTeam = '';
+          
+          // 1. If we have explicit pick info in the object, use that
+          if (pick.team) {
+            targetTeam = pick.team;
+          }
+          // 2. If the shortPick contains identifiable team info, extract it
+          else if (pick.shortPick && typeof pick.shortPick === 'string') {
+            // Look for patterns in the shortPick
+            const shortPickLower = pick.shortPick.toLowerCase();
+            const homeTeamLower = homeTeam.toLowerCase();
+            const awayTeamLower = awayTeam.toLowerCase();
+            
+            // Check if shortPick contains team names
+            if (shortPickLower.includes(homeTeamLower)) {
+              targetTeam = homeTeam;
+            } else if (shortPickLower.includes(awayTeamLower)) {
+              targetTeam = awayTeam;
+            }
+            // Try to match the nickname/mascot part only
+            else {
+              const homeNickname = homeTeam.split(' ').pop().toLowerCase();
+              const awayNickname = awayTeam.split(' ').pop().toLowerCase();
+              
+              if (shortPickLower.includes(homeNickname)) {
+                targetTeam = homeTeam;
+              } else if (shortPickLower.includes(awayNickname)) {
+                targetTeam = awayTeam;
+              }
+            }
+          }
+          
+          // 3. If still no target team, default to home team
+          if (!targetTeam) {
+            targetTeam = homeTeam;
+          }
+          
+          // Get abbreviation or create one
+          team = teamMappings[targetTeam] || '';
+          
+          // If no match in mappings, create abbreviation from team name
+          if (!team) {
+            // First try just the last part of the name (nickname/mascot)
+            const nicknamePart = targetTeam.split(' ').pop() || '';
+            team = teamMappings[nicknamePart] || '';
+            
+            // If still no abbreviation, generate one
+            if (!team) {
+              team = targetTeam.split(' ').map(word => word[0]).join('').toUpperCase();
+              // If that didn't work, use first 3 letters
+              if (!team || team.length < 2) {
+                team = targetTeam.slice(0, 3).toUpperCase();
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error processing team data:', error);
+      team = 'TBD';
     }
     
     // Format based on bet type
@@ -113,12 +226,55 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     } else if (betType.includes('under')) {
       const total = pick.overUnder || '';
       formattedPick = `${team} U ${total}`;
+    } else if (betType.includes('total')) {
+      // Handle general total bets (over/under)
+      const total = pick.overUnder || '';
+      const overUnder = betType.includes('over') ? 'O' : 'U';
+      formattedPick = `${team} ${overUnder} ${total}`;
     } else {
-      formattedPick = `${team} ML`; // Default to ML if no bet type specified
+      // If no specific bet type is found, check if we can extract from shortPick
+      if (pick.shortPick && typeof pick.shortPick === 'string') {
+        const shortPick = pick.shortPick.toUpperCase();
+        if (shortPick.includes('ML') || shortPick.includes('MONEYLINE')) {
+          formattedPick = `${team} ML`;
+        } else if (shortPick.includes('OVER') || shortPick.includes(' O ')) {
+          const total = pick.overUnder || ''; 
+          formattedPick = `${team} O ${total}`;
+        } else if (shortPick.includes('UNDER') || shortPick.includes(' U ')) {
+          const total = pick.overUnder || '';
+          formattedPick = `${team} U ${total}`;
+        } else if (shortPick.includes('+') || shortPick.includes('-')) {
+          // Try to extract spread value from shortPick
+          const spreadMatch = shortPick.match(/[+-]\d+(\.\d+)?/);
+          const spreadValue = spreadMatch ? spreadMatch[0] : '';
+          formattedPick = `${team} ${spreadValue}`;
+        } else {
+          formattedPick = `${team} ML`; // Default to ML
+        }
+      } else {
+        formattedPick = `${team} ML`; // Default to ML if no bet type specified
+      }
     }
     
     // Add odds if available
-    const odds = pick.odds || '-110';
+    let odds = '';
+    if (pick.odds && typeof pick.odds === 'string') {
+      odds = pick.odds;
+    } else if (pick.odds && typeof pick.odds === 'number') {
+      odds = pick.odds.toString();
+    } else if (pick.moneyline && typeof pick.moneyline === 'string') {
+      odds = pick.moneyline;
+    } else if (pick.moneyline && typeof pick.moneyline === 'number') {
+      odds = pick.moneyline.toString();
+    } else {
+      odds = '-110'; // Default odds
+    }
+    
+    // Clean odds format
+    if (!odds.startsWith('+') && !odds.startsWith('-')) {
+      odds = parseInt(odds) > 0 ? `+${odds}` : odds;
+    }
+    
     return `${formattedPick} ${odds}`;
   }
 
@@ -194,6 +350,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     overUnder: pick?.overUnder || '',
     odds: pick?.odds || '-110',
     moneyline: pick?.moneyline || '',
+    team: pick?.team || '',
     garysBullets: pick?.garysBullets || [
       'Statistical analysis supports this selection',
       'Current odds present good betting value',
@@ -205,6 +362,9 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
 
   // Apply formatting to safePick - store the formatted version as a new property to avoid overwriting original
   safePick.formattedPick = getFormattedShortPick(safePick);
+  
+  // Format game display (convert to "AWAY @ HOME" format with team nicknames only)
+  safePick.formattedGame = formatGameTitle(safePick.game);
 
   // Default league and time if not provided
   const league = safePick.league || 'MLB';
@@ -448,7 +608,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         boxShadow: '0 -2px 8px #bfa14222',
         textTransform: 'uppercase',
       }}>
-        {formatGameTitle(safePick.game)}
+        {safePick.formattedGame}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
