@@ -2,6 +2,9 @@
 // This avoids CORS issues in browser environments
 import axios from 'axios';
 
+// Configure axios with appropriate defaults
+axios.defaults.timeout = 25000; // 25 second timeout for all requests
+
 // Enable CORS for all origins
 export default async function handler(req, res) {
   // Set CORS headers
@@ -46,7 +49,10 @@ export default async function handler(req, res) {
     console.log('📤 Forwarding request to Perplexity API...');
     
     try {
-      // Make the request to Perplexity API
+      console.log('🕒 Starting Perplexity API request with truncated prompt length:', 
+        req.body?.messages?.[0]?.content?.length || 'unknown');
+
+      // Make the request to Perplexity API with shorter timeout
       const response = await axios.post(
         'https://api.perplexity.ai/chat/completions',
         req.body,
@@ -55,7 +61,7 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
-          timeout: 45000 // 45 second timeout for server-side requests
+          timeout: 20000 // Reduced to 20 second timeout to avoid Vercel's 10s function limit
         }
       );
       
@@ -63,9 +69,19 @@ export default async function handler(req, res) {
       console.log('📊 Response status:', response.status);
       console.log('📊 Response has data:', !!response.data);
 
-      // Return the response from Perplexity
+      // Return the response from Perplexity - add a shorter cache hint
+      res.setHeader('Cache-Control', 'public, max-age=120'); // Cache for 2 minutes to reduce load
       return res.status(200).json(response.data);
     } catch (apiError) {
+      // Special handling for timeout errors
+      if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout')) {
+        console.error('⏱️ Request to Perplexity API timed out after 20 seconds');
+        return res.status(504).json({
+          error: 'Gateway Timeout',
+          message: 'Perplexity API request timed out - try again or reduce prompt complexity',
+          timestamp: new Date().toISOString()
+        });
+      }
       console.error('❌ Error making request to Perplexity API:', apiError.message);
       
       if (apiError.response) {
