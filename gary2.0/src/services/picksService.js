@@ -674,7 +674,7 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
             // Generate narrative for the game
             let narrative;
             try {
-              narrative = await generateNarrative(game);
+              narrative = await picksService.generateNarrative(game);
               console.log('Generated narrative for game:', game.id);
             } catch (narrativeError) {
               console.error('Failed to generate narrative, using default:', narrativeError);
