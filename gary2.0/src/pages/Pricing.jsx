@@ -1,9 +1,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import colorBackground from '../assets/images/colorbackground.png';
 
 export function Pricing() {
   return (
-    <div className="min-h-screen w-full bg-[#333] py-12">
+    <div className="min-h-screen w-full py-12 relative">
+      {/* Stadium background image */}
+      <div className="absolute inset-0 bg-cover bg-center z-0" style={{
+        backgroundImage: `url(${colorBackground})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        filter: "brightness(0.5) blur(1px)",
+        opacity: 0.95
+      }}></div>
+      
+      {/* Dark overlay to enhance card readability */}
+      <div className="absolute inset-0 bg-black opacity-30 z-0"></div>
+      
+      {/* Content container with overlay */}
+      <div className="relative z-10">
       <div className="max-w-5xl mx-auto px-4">
         {/* Header Section */}
         <div className="text-center mb-16 pt-16">  {/* Added pt-16 for extra top padding */}
@@ -17,7 +32,7 @@ export function Pricing() {
         <div className="grid md:grid-cols-2 gap-10 max-w-3xl mx-auto">
           
           {/* Free Tier - Ticket Style */}
-          <div className="flex flex-col max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-lg transition-all duration-300">
+          <div className="flex flex-col max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
             {/* Ticket notches - simplified */}
             <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
             <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
@@ -222,6 +237,7 @@ export function Pricing() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
