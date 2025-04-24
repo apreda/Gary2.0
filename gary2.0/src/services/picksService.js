@@ -67,7 +67,7 @@ const picksService = {
       const cleanedPicks = picks.map(pick => {
         // Format shortPick as 'TEAM BET_TYPE ODDS' (e.g. 'BOS ML -110' or 'BOS -3.5 -110')
         let shortPickFormatted = '';
-        const teamAbbrev = picksService.abbreviateTeamName(pick.team || '', true);
+        const teamAbbrev = getTeamAbbreviation(pick.team || '');
 
         if (pick.betType && pick.betType.toLowerCase().includes('spread') && pick.spread) {
           // Format: TEAM SPREAD ODDS (e.g. 'BOS -3.5 -110')
