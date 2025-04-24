@@ -38,11 +38,11 @@ export const perplexityService = {
         }
       }
       
-      // Default options with valid model names
+      // Default options with correct model name from Perplexity documentation
       const defaultOptions = {
-        model: 'mistral-7b-instruct', // Using stable model that works reliably
-        temperature: 0.3,             // Lower temperature for more factual, faster responses
-        maxTokens: 300                // Reasonable output length for sports analysis
+        model: 'sonar', // Using the official model name from Perplexity documentation
+        temperature: 0.3, // Lower temperature for more factual, faster responses
+        maxTokens: 300    // Reasonable output length for sports analysis
       };
       
       // Merge default options with provided options
@@ -132,7 +132,7 @@ export const perplexityService = {
       const query = `${league} ${homeTeam} vs ${awayTeam}: key injuries, recent form, betting trends, last 5 games. Factual only, no opinions.`;
       
       return await perplexityService.fetchRealTimeInfo(query, {
-        model: 'mistral-7b-instruct',
+        model: 'sonar',
         temperature: 0.3, // Lower temperature for more factual responses
         maxTokens: 500    // Reasonable context length
       });
@@ -153,7 +153,7 @@ export const perplexityService = {
       const query = `${league} ${teamName}: current form, injuries, betting trends, last 5 games performance. Brief facts only.`;
       
       return await perplexityService.fetchRealTimeInfo(query, {
-        model: 'mistral-7b-instruct',
+        model: 'sonar',
         temperature: 0.4,
         maxTokens: 400
       });
