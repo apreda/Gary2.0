@@ -44,7 +44,7 @@ export const perplexityService = {
           : false;
         
         const apiUrl = useProxy 
-          ? '/api/proxy/perplexity' // Path to Vercel API route
+          ? '/api/perplexity' // Path to Vercel serverless function for Vite projects
           : perplexityService.API_BASE_URL;
           
         console.log(`Using ${useProxy ? 'proxy endpoint' : 'direct API call'} for Perplexity: ${apiUrl}`);
