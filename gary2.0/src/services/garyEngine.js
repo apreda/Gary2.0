@@ -144,41 +144,27 @@ export async function fetchRealTimeGameInfo(homeTeam, awayTeam, league) {
     console.log(`Fetching real-time info for ${awayTeam} @ ${homeTeam} (${league})`);
     
     const query = `
-      Provide the most current and comprehensive information about the upcoming ${league} game between ${homeTeam} (home) and ${awayTeam} (away).
-      
-      Include ALL of the following:
-      1. Pitcher scratch updates and starting pitcher changes (if applicable for ${league})
-      2. Recent storylines, headlines, and breaking news for both teams
-      3. Recent trades, lineup news, and roster changes
-      4. Detailed match-up analysis comparing strengths and weaknesses
-      5. Game breakdown including key player matchups and tactical considerations
-      6. Injury reports and player availability updates
-      7. Recent form and performance trends for both teams
-      8. Relevant betting line movements
-      9. Weather conditions that might affect game play
-      10. Historical matchup data between these teams
-      
-      Focus on information that would be valuable for making informed betting decisions.
-      Keep it factual and data-driven. Include specific statistics where available.
-      Prioritize any BREAKING NEWS from the last 24 hours that could significantly impact the game.        
+      Provide detailed analysis for the upcoming ${league} game between ${homeTeam} and ${awayTeam}.
+      Include recent team performance, important injuries, betting trends, and any relevant news that could impact the game.
+      Focus on factual information rather than opinions.
     `;
     
+    // Use perplexityService to get real-time information
     const realTimeInfo = await perplexityService.fetchRealTimeInfo(query, {
-      model: 'sonar-pro',
-      temperature: 0.3, // Lower temperature for factual responses
+      temperature: 0.3,   // Lower temperature for more factual information
       maxTokens: 1500   // Increased token limit for more comprehensive information
     });
     
     if (!realTimeInfo) {
-      console.warn('Failed to get real-time information from Perplexity API. Using fallback data.');
-      return null;
+      console.error('No real-time information returned from Perplexity API');
+      throw new Error('Failed to get required real-time data from Perplexity API');
     }
     
     console.log('Successfully retrieved real-time game information');
     return realTimeInfo;
   } catch (error) {
     console.error('Error fetching real-time game information:', error);
-    return null;
+    throw error; // Propagate error - no fallback data
   }
 }
 
