@@ -13,8 +13,8 @@ export function GaryHero() {
         backgroundImage: `url(${newspaperBg})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
-        filter: "brightness(0.9) contrast(1.2) sepia(0.15)",
-        opacity: 0.9
+        filter: "brightness(0.9) contrast(1.2) sepia(0.15) blur(2px)",
+        opacity: 0.6
       }}></div>
       
       {/* Gradient overlay for better readability */}
