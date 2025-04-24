@@ -510,8 +510,7 @@ const picksService = {
       console.log(`Successfully cleaned ${cleanedPicks.length} picks for database storage`);
       
       // Get the current date in YYYY-MM-DD format to use as the ID
-      const todayDate = new Date();
-      const currentDateString = todayDate.toISOString().split('T')[0]; // e.g., "2025-04-16"
+      const currentDateString = new Date().toISOString().split('T')[0]; // e.g., "2025-04-16"
       const timestamp = new Date().toISOString();
       
       // CRITICAL FIX: Using simplified approach to avoid PostgreSQL function issues
@@ -558,10 +557,20 @@ const picksService = {
         console.log('Note: Default wager creation skipped:', wagerErr);
       }
       
-      // Insert the cleaned picks into the database
+      // Structure the data according to the daily_picks table schema
+      // The table expects: { date: 'YYYY-MM-DD', picks: [array of pick objects] }
+      
+      const pickData = {
+        date: currentDateString,
+        picks: safeCleanedPicks // This is the JSON array of pick objects
+      };
+      
+      console.log('Inserting picks with correct structure:', pickData);
+      
+      // Insert the data with proper structure into the database
       const { error: insertError } = await supabase
         .from('daily_picks')
-        .insert(safeCleanedPicks);
+        .insert(pickData);
         
       if (insertError) {
         console.error('Error inserting picks:', insertError);
