@@ -256,34 +256,6 @@ export const oddsService = {
     }
   },
 
-  /**
-   * Get historical odds data for an event
-   * @param {string} eventId - Event ID
-   * @param {Object} options - Request options
-   * @returns {Promise<Object>} Historical odds data
-   */
-  getHistoricalOdds: async (eventId, options = {}) => {
-    try {
-      const apiKey = await configLoader.getOddsApiKey();
-      if (!apiKey) {
-        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch historical odds');
-        throw new Error('API key is required for The Odds API');
-      }
-      const response = await axios.get(`${ODDS_API_BASE_URL}/sports/historical-odds/${eventId}`, {
-        params: {
-          apiKey,
-          regions: options.regions || 'us',
-          markets: options.markets || 'h2h,spreads,totals',
-          oddsFormat: options.oddsFormat || 'american',
-          bookmakers: options.bookmakers || 'fanduel,draftkings,betmgm,caesars'
-        }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching historical odds:', error);
-      throw error;
-    }
-  },
 
   /**
    * Get all available sports
@@ -307,19 +279,110 @@ export const oddsService = {
   },
 
   /**
-   * Get line movement data for a specific event
+   * Get line movement data for a specific event using only current odds data
    * @param {string} eventId - Event ID
    * @returns {Promise<Object>} Line movement analysis
    */
   getLineMovement: async (eventId) => {
     try {
-      const historical = await oddsService.getHistoricalOdds(eventId);
-      return oddsService.analyzeLineMovement(historical);
+      // Fetch current odds for the event
+      // We'll try to infer line movement by comparing available bookmaker lines
+      const apiKey = await configLoader.getOddsApiKey();
+      if (!apiKey) {
+        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch line movement');
+        return {
+          hasSignificantMovement: false,
+          movement: 0,
+          sharpAction: 'No clear sharp action detected',
+          publicPercentages: { home: 50, away: 50 }
+        };
+      }
+      // Fetch odds for the event (try all sports, filter for eventId)
+      // For efficiency, fetch odds for all prioritized sports and find the event
+      // This assumes eventId is unique across prioritized sports (NBA, MLB, NHL)
+      const prioritizedSports = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl'];
+      let foundGame = null;
+      for (const sport of prioritizedSports) {
+        try {
+          const games = await oddsService.getUpcomingGames(sport);
+          foundGame = Array.isArray(games)
+            ? games.find(g => g.id === eventId)
+            : null;
+          if (foundGame) break;
+        } catch (sportErr) {
+          // Log and continue
+          console.error(`Error fetching games for ${sport}:`, sportErr);
+        }
+      }
+      if (!foundGame) {
+        console.warn(`No current odds found for eventId: ${eventId}`);
+        return {
+          hasSignificantMovement: false,
+          movement: 0,
+          sharpAction: 'No clear sharp action detected',
+          publicPercentages: { home: 50, away: 50 }
+        };
+      }
+      // Analyze bookmaker lines for spread and moneyline variance
+      const bookmakers = foundGame.bookmakers || [];
+      let spreadPoints = [];
+      let moneylinesHome = [];
+      let moneylinesAway = [];
+      bookmakers.forEach(bm => {
+        const spreadMarket = bm.markets.find(m => m.key === 'spreads');
+        if (spreadMarket && Array.isArray(spreadMarket.outcomes)) {
+          spreadMarket.outcomes.forEach(outcome => {
+            if (typeof outcome.point === 'number') {
+              spreadPoints.push(outcome.point);
+            }
+          });
+        }
+        const h2hMarket = bm.markets.find(m => m.key === 'h2h');
+        if (h2hMarket && Array.isArray(h2hMarket.outcomes)) {
+          if (h2hMarket.outcomes[0] && typeof h2hMarket.outcomes[0].price === 'number') {
+            moneylinesHome.push(h2hMarket.outcomes[0].price);
+          }
+          if (h2hMarket.outcomes[1] && typeof h2hMarket.outcomes[1].price === 'number') {
+            moneylinesAway.push(h2hMarket.outcomes[1].price);
+          }
+        }
+      });
+      // Calculate movement as the difference between max and min lines
+      const spreadMovement =
+        spreadPoints.length > 1 ? Math.max(...spreadPoints) - Math.min(...spreadPoints) : 0;
+      const moneylineMovementHome =
+        moneylinesHome.length > 1 ? Math.max(...moneylinesHome) - Math.min(...moneylinesHome) : 0;
+      const moneylineMovementAway =
+        moneylinesAway.length > 1 ? Math.max(...moneylinesAway) - Math.min(...moneylinesAway) : 0;
+      const hasSignificantMovement =
+        Math.abs(spreadMovement) >= 2 ||
+        Math.abs(moneylineMovementHome) >= 20 ||
+        Math.abs(moneylineMovementAway) >= 20;
+      return {
+        hasSignificantMovement,
+        movement: {
+          spread: spreadMovement,
+          moneyline: {
+            home: moneylineMovementHome,
+            away: moneylineMovementAway
+          }
+        },
+        sharpAction: hasSignificantMovement ? 'Significant sharp action detected' : 'No clear sharp action detected',
+        publicPercentages: { home: 50, away: 50 }, // Not available from current odds
+        timestamp: new Date().toISOString()
+      };
     } catch (error) {
-      console.error('Error analyzing line movement:', error);
-      throw error;
+      console.error('Error analyzing line movement from current odds:', error);
+      // Always return a safe default
+      return {
+        hasSignificantMovement: false,
+        movement: 0,
+        sharpAction: 'No clear sharp action detected',
+        publicPercentages: { home: 50, away: 50 }
+      };
     }
   },
+
 
   /**
    * Analyze line movement from historical data
