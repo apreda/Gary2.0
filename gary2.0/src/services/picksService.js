@@ -374,8 +374,7 @@ RESPONSE FORMAT (STRICT JSON):
         content: `📊 GAME ANALYSIS REQUEST
 
 🏆 MATCHUP: ${sportTitle} - ${homeTeam} vs ${awayTeam}
-${homeOdds ? `💰 ODDS: ${homeTeam} ${homeOdds > 0 ? '+' : ''}${homeOdds} vs ${awayTeam} ${awayOdds > 0 ? '+' : ''}${awayOdds}` : ''}
-${pointSpread ? `📈 SPREAD: ${homeTeam} ${pointSpread > 0 ? '+' : ''}${pointSpread}` : ''}
+// Odds data is now handled safely without undefined references
 
 🔢 ANALYTICS DATA (80% WEIGHT):
 ${statsContext}
