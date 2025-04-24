@@ -1,6 +1,7 @@
 import { makeGaryPick, fetchRealTimeGameInfo } from './garyEngine.js';
 import { oddsService } from './oddsService';
 import { sportsDataService } from './sportsDataService';
+import { openaiService } from './openaiService';
 import { supabase, ensureAnonymousSession } from '../supabaseClient.js';
 import { getTeamAbbreviation } from '../utils/teamAbbreviations';
 
