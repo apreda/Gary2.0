@@ -76,12 +76,19 @@ export default async function handler(req, res) {
       console.log('🕒 Starting Perplexity API request with truncated prompt length:', 
         req.body?.messages?.[0]?.content?.length || 'unknown');
 
-      // Use the fastest available model for sports data
+      // Use valid Perplexity Pro models
+      // Get the original model from the request or use a default
+      const originalModel = req.body?.model || 'sonar-medium-online';
+      
+      // Create a modified request body with valid parameter values
       const optimizedBody = {
         ...req.body,
-        model: 'sonar-small-online', // Use the fastest model to avoid timeouts
+        // Use valid model names from Perplexity docs
+        model: originalModel === 'sonar-small-online' ? 'sonar-small-chat' : 
+               originalModel === 'sonar-medium-online' ? 'sonar-medium-chat' : 
+               originalModel === 'sonar-pro' ? 'sonar-medium-chat' : originalModel,
         max_tokens: Math.min(req.body.max_tokens || 1000, 500), // Limit output size
-        temperature: Math.min(req.body.temperature || 0.7, 0.5), // Lower temperature for faster, more factual responses
+        temperature: Math.min(req.body.temperature || 0.7, 0.5), // Lower temperature for faster responses
       };
       
       console.log('🔄 Using optimized parameters for faster responses');
@@ -119,12 +126,55 @@ export default async function handler(req, res) {
     } catch (apiError) {
       // Special handling for timeout errors
       if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout')) {
-        console.error('⏱️ Request to Perplexity API timed out after 20 seconds');
+        console.error('⏱️ Request to Perplexity API timed out after 15 seconds');
         return res.status(504).json({
           error: 'Gateway Timeout',
           message: 'Perplexity API request timed out - try again or reduce prompt complexity',
           timestamp: new Date().toISOString()
         });
+      }
+      // Special handling for 400 Bad Request errors (usually invalid model or parameters)
+      else if (apiError.response?.status === 400) {
+        console.error('❌ Bad Request error from Perplexity API:', apiError.response?.data || 'No error details');
+        // If we encounter a 400 error, try with the most reliable model
+        try {
+          console.log('🔄 Retrying with standard model (mistral-7b-instruct)...');
+          const fallbackBody = {
+            ...req.body,
+            model: 'mistral-7b-instruct',  // Use most widely available model
+            temperature: 0.3,
+            max_tokens: 300
+          };
+          
+          const retryResponse = await axios.post(
+            'https://api.perplexity.ai/chat/completions',
+            fallbackBody,
+            {
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 15000
+            }
+          );
+          
+          // Cache the successful retry
+          RESPONSE_CACHE.set(cacheKey, retryResponse.data);
+          
+          console.log('✅ Retry successful with standard model');
+          res.setHeader('X-Cache', 'RETRY');
+          res.setHeader('Cache-Control', 'public, max-age=300');
+          return res.status(200).json(retryResponse.data);
+          
+        } catch (retryError) {
+          console.error('❌ Retry also failed:', retryError.message);
+          return res.status(400).json({
+            error: 'Invalid Request Parameters',
+            message: 'The Perplexity API rejected the request parameters. Check the model name and other settings.',
+            originalError: apiError.response?.data || apiError.message,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
       console.error('❌ Error making request to Perplexity API:', apiError.message);
       
