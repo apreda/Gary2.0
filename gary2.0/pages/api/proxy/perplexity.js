@@ -1,37 +1,26 @@
-// Netlify serverless function to proxy requests to Perplexity API
+// Vercel API route to proxy requests to Perplexity API
 // This avoids CORS issues in browser environments
-const axios = require('axios');
+import axios from 'axios';
 
-exports.handler = async function(event, context) {
+export default async function handler(req, res) {
   // Only allow POST requests
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method Not Allowed' }),
-      headers: { 'Content-Type': 'application/json' }
-    };
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    // Parse the incoming request body
-    const payload = JSON.parse(event.body);
-    
     // Get the API key from environment variables
     const apiKey = process.env.PERPLEXITY_API_KEY;
     
     if (!apiKey) {
       console.error('PERPLEXITY_API_KEY environment variable is not set');
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'API key not configured on server' }),
-        headers: { 'Content-Type': 'application/json' }
-      };
+      return res.status(500).json({ error: 'API key not configured on server' });
     }
 
     // Make the request to Perplexity API
     const response = await axios.post(
       'https://api.perplexity.ai/chat/completions',
-      payload,
+      req.body,
       {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -42,11 +31,7 @@ exports.handler = async function(event, context) {
     );
 
     // Return the response from Perplexity
-    return {
-      statusCode: 200,
-      body: JSON.stringify(response.data),
-      headers: { 'Content-Type': 'application/json' }
-    };
+    return res.status(200).json(response.data);
   } catch (error) {
     console.error('Error proxying request to Perplexity API:', error);
     
@@ -54,13 +39,9 @@ exports.handler = async function(event, context) {
     const statusCode = error.response?.status || 500;
     const errorMessage = error.response?.data?.error?.message || error.message || 'Unknown error';
     
-    return {
-      statusCode,
-      body: JSON.stringify({ 
-        error: errorMessage,
-        details: error.response?.data || null
-      }),
-      headers: { 'Content-Type': 'application/json' }
-    };
+    return res.status(statusCode).json({ 
+      error: errorMessage,
+      details: error.response?.data || null
+    });
   }
-};
+}
