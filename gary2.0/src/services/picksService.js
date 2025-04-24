@@ -696,8 +696,8 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
               };
             }
             
-            // Get bankroll data or use default
-            const bankrollData = { current_amount: 10000 };
+            // Use hardcoded bankroll value since we don't have a bankroll table
+            const bankrollData = { current_amount: 10000 }; // Hardcoded value to avoid database query
             
             // Fix data structure to match what garyEngine.generateGaryAnalysis expects
             let teamStats = null;
