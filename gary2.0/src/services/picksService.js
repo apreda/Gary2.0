@@ -671,13 +671,40 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
               oddsService.getLineMovement(game.id)
             ]);
             
+            // Generate narrative for the game
+            let narrative;
+            try {
+              narrative = await generateNarrative(game);
+              console.log('Generated narrative for game:', game.id);
+            } catch (narrativeError) {
+              console.error('Failed to generate narrative, using default:', narrativeError);
+              narrative = {
+                favoredTeam: game.home_team,  // Default to home team
+                keyPlayers: [],
+                momentum: 0.5,
+                revenge: false,
+                superstition: false
+              };
+            }
+            
+            // Get bankroll data or use default
+            const bankrollData = { current_amount: 10000 };
+            
             // Generate Gary's analysis with enhanced data
             const garyAnalysis = await makeGaryPick({
-              sport: sport,
-              game: game.home_team + ' vs ' + game.away_team,
-              odds: oddsData,
-              lineMovement: lineMovement,
-              sharpAction: lineMovement.sharpAction
+              gameId: game.id,
+              homeTeam: game.home_team,
+              awayTeam: game.away_team,
+              league: sport,
+              dataMetrics: {
+                ev: 0.6,  // Default expected value
+                line: oddsData,
+                market: lineMovement,
+              },
+              narrative: narrative,
+              pastPerformance: { gutOverrideHits: 1, totalGutOverrides: 2 },  // Default past performance
+              progressToTarget: 0.5,  // Default progress
+              bankroll: bankrollData.current_amount
             });
 
             if (!garyAnalysis || !garyAnalysis.pick) {
