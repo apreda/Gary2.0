@@ -76,17 +76,13 @@ export default async function handler(req, res) {
       console.log('🕒 Starting Perplexity API request with truncated prompt length:', 
         req.body?.messages?.[0]?.content?.length || 'unknown');
 
-      // Use valid Perplexity Pro models
-      // Get the original model from the request or use a default
-      const originalModel = req.body?.model || 'sonar-medium-online';
+      // Use valid Perplexity model according to the documentation
       
       // Create a modified request body with valid parameter values
       const optimizedBody = {
         ...req.body,
-        // Use valid model names from Perplexity docs
-        model: originalModel === 'sonar-small-online' ? 'sonar-small-chat' : 
-               originalModel === 'sonar-medium-online' ? 'sonar-medium-chat' : 
-               originalModel === 'sonar-pro' ? 'sonar-medium-chat' : originalModel,
+        // Per Perplexity API docs, the correct model name is 'sonar'
+        model: 'sonar',
         max_tokens: Math.min(req.body.max_tokens || 1000, 500), // Limit output size
         temperature: Math.min(req.body.temperature || 0.7, 0.5), // Lower temperature for faster responses
       };
@@ -138,10 +134,10 @@ export default async function handler(req, res) {
         console.error('❌ Bad Request error from Perplexity API:', apiError.response?.data || 'No error details');
         // If we encounter a 400 error, try with the most reliable model
         try {
-          console.log('🔄 Retrying with standard model (mistral-7b-instruct)...');
+          console.log('🔄 Retrying with simpler parameters...');
           const fallbackBody = {
             ...req.body,
-            model: 'mistral-7b-instruct',  // Use most widely available model
+            model: 'sonar',  // Standard model per Perplexity API docs
             temperature: 0.3,
             max_tokens: 300
           };
