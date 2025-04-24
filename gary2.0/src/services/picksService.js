@@ -44,8 +44,17 @@ const picksService = {
    */
   getGameAnalysisData: async (game) => {
     try {
-      // Get odds data for the game
-      const oddsData = await oddsService.getOddsForGame(game.id);
+      // Get odds data for the game's sport (we'll filter for the specific game)
+      // This workaround is needed because oddsService doesn't have a getOddsForGame function
+      const allOdds = await oddsService.getOdds(game.sport_key || 'basketball_nba');
+      const oddsData = allOdds.filter(odds => odds.id === game.id);
+      
+      // Get line movement data for the game
+      const lineMovement = await oddsService.getLineMovement(game.id).catch(() => ({
+        hasSignificantMovement: false,
+        movement: { spread: 0, moneyline: { home: 0, away: 0 } },
+        trend: 'stable'
+      }));
       
       // Get team stats in parallel using Promise.all
       const [homeTeamData, awayTeamData] = await Promise.all([
@@ -60,13 +69,6 @@ const picksService = {
         time: 'TBD',
         error: err.message
       }));
-      
-      // Monitor line movement (simplified version)
-      const lineMovement = {
-        opening: oddsData?.[0]?.opening_odds || null,
-        current: oddsData?.[0]?.current_odds || null,
-        trend: 'stable' // Default value
-      };
       
       return {
         oddsData,
@@ -83,7 +85,11 @@ const picksService = {
         homeTeamData: { name: game.home_team, stats: [] },
         awayTeamData: { name: game.away_team, stats: [] },
         realTimeInfo: { status: 'Unknown' },
-        lineMovement: { trend: 'unknown' }
+        lineMovement: {
+          hasSignificantMovement: false,
+          movement: { spread: 0, moneyline: { home: 0, away: 0 } },
+          trend: 'stable'
+        }
       };
     }
   },
