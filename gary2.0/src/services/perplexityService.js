@@ -38,11 +38,11 @@ export const perplexityService = {
         }
       }
       
-      // Default options
+      // Default options with valid model names
       const defaultOptions = {
-        model: 'sonar-small-online', // Using smaller model for faster responses
-        temperature: 0.3,           // Lower temperature for more factual, faster responses
-        maxTokens: 250              // Shorter output length for faster generation
+        model: 'mistral-7b-instruct', // Using stable model that works reliably
+        temperature: 0.3,             // Lower temperature for more factual, faster responses
+        maxTokens: 300                // Reasonable output length for sports analysis
       };
       
       // Merge default options with provided options
@@ -132,9 +132,9 @@ export const perplexityService = {
       const query = `${league} ${homeTeam} vs ${awayTeam}: key injuries, recent form, betting trends, last 5 games. Factual only, no opinions.`;
       
       return await perplexityService.fetchRealTimeInfo(query, {
-        model: 'sonar-pro',
+        model: 'mistral-7b-instruct',
         temperature: 0.3, // Lower temperature for more factual responses
-        maxTokens: 1000   // Longer context for comprehensive news
+        maxTokens: 500    // Reasonable context length
       });
     } catch (error) {
       console.error(`Error getting game news for ${homeTeam} vs ${awayTeam}:`, error);
@@ -153,9 +153,9 @@ export const perplexityService = {
       const query = `${league} ${teamName}: current form, injuries, betting trends, last 5 games performance. Brief facts only.`;
       
       return await perplexityService.fetchRealTimeInfo(query, {
-        model: 'sonar-pro',
+        model: 'mistral-7b-instruct',
         temperature: 0.4,
-        maxTokens: 800
+        maxTokens: 400
       });
     } catch (error) {
       console.error(`Error getting insights for ${teamName}:`, error);
