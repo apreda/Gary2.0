@@ -70,6 +70,7 @@ const picksService = {
         let shortPickFormatted = '';
         const teamAbbrev = getTeamAbbreviation(pick.team || '');
 
+        // Format proper team abbreviation + bet type + odds format
         if (pick.betType && pick.betType.toLowerCase().includes('spread') && pick.spread) {
           // Format: TEAM SPREAD ODDS (e.g. 'BOS -3.5 -110')
           shortPickFormatted = `${teamAbbrev} ${pick.spread} ${pick.odds || '-110'}`;
@@ -90,6 +91,7 @@ const picksService = {
           id: pick.id,                      // Required for reference
           league: pick.league,              // League info (NBA, MLB, etc)
           game: pick.game,                  // Game matchup
+          team: pick.team || '',            // Team being picked
           betType: pick.betType,            // Type of bet
           shortPick: shortPickFormatted,    // Formatted short pick
           odds: pick.odds,                  // Betting odds
@@ -102,6 +104,33 @@ const picksService = {
         if (pick.overUnder) essentialPickData.overUnder = pick.overUnder;
         if (pick.moneyline) essentialPickData.moneyline = pick.moneyline;
         if (pick.time) essentialPickData.time = pick.time;
+        
+        // Format game matchup to show Team vs Team (no cities)
+        try {
+          if (essentialPickData.game) {
+            const gameFormat = (gameName) => {
+              // Try different separators
+              let parts = [];
+              if (gameName.includes(' vs ')) {
+                parts = gameName.split(' vs ');
+              } else if (gameName.includes('@')) {
+                parts = gameName.split('@');
+              } else if (gameName.includes(' at ')) {
+                parts = gameName.split(' at ');
+              }
+              
+              if (parts.length >= 2) {
+                const awayTeam = parts[0].trim().split(' ').pop();
+                const homeTeam = parts[1].trim().split(' ').pop();
+                return `${awayTeam} @ ${homeTeam}`;
+              }
+              return gameName;
+            };
+            essentialPickData.gameFormatted = gameFormat(essentialPickData.game);
+          }
+        } catch (formatError) {
+          console.error('Error formatting game title:', formatError);
+        }
         
         // Remove any remaining circular references or functions
         return JSON.parse(JSON.stringify(essentialPickData));
@@ -589,7 +618,7 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
   generateDailyPicks: async () => {
     try {
       // Initialize array for storing generated picks
-      const allPicks = [];
+      let allPicks = [];
       // 1. Get sports list from The Odds API
       const sportsList = await oddsService.getSports();
       console.log(`Retrieved ${sportsList.length} sports`);
@@ -938,8 +967,12 @@ Provide your best analysis using the strict JSON format. Remember: 80% analytics
       // Limit picks to a maximum of 6, prioritizing picks with highest confidence
       if (allPicks.length > 6) {
         console.log(`Limiting picks from ${allPicks.length} to 6 based on confidence level`);
-        allPicks.length = 6;
+        // Create a new array with only the top 6 picks to ensure we don't store references to other picks
+        const topSixPicks = allPicks.slice(0, 6);
+        allPicks = topSixPicks; // Replace the array completely
       }
+      
+      console.log(`Final number of picks to be stored: ${allPicks.length}`);
 
       // Store picks in Supabase
       console.log('Saving picks to Supabase database only - NO localStorage fallbacks');
