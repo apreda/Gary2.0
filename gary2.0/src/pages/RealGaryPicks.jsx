@@ -193,17 +193,16 @@ function RealGaryPicks() {
             .maybeSingle();
             
             if (freshData && freshData.picks) {
-              // Process picks again
-              picksArray = typeof freshData.picks === 'string' ? 
-                JSON.parse(freshData.picks) : freshData.picks;
-                
-              // Apply the same filtering to remove any emergency picks
-              picksArray = picksArray.filter(pick => {
-                return pick.id && !pick.id.includes('emergency') && 
-                      pick.pick && pick.pick !== '' &&
-                      pick.rationale && pick.rationale !== '';
-              });
-            }
+            // Process picks again
+            picksArray = typeof freshData.picks === 'string' ? 
+              JSON.parse(freshData.picks) : freshData.picks;
+              
+            // Apply the same filtering to remove any emergency picks
+            picksArray = picksArray.filter(pick => {
+              return pick.id && !pick.id.includes('emergency') && 
+                    pick.pick && pick.pick !== '' &&
+                    pick.rationale && pick.rationale !== '';
+            });
           }
         } catch (genError) {
           console.error('Error generating picks:', genError);
