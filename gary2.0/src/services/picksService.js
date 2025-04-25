@@ -46,8 +46,39 @@ const picksService = {
     try {
       // Get odds data for the game's sport (we'll filter for the specific game)
       // This workaround is needed because oddsService doesn't have a getOddsForGame function
-      const allOdds = await oddsService.getOdds(game.sport_key || 'basketball_nba');
-      const oddsData = allOdds.filter(odds => odds.id === game.id);
+      const sportKey = game.sport_key || (game.id && game.id.includes('basketball') ? 'basketball_nba' : 
+                                        game.id.includes('baseball') ? 'baseball_mlb' : 
+                                        game.id.includes('hockey') ? 'hockey_nhl' : 
+                                        game.id.includes('football') ? 'americanfootball_nfl' : 'basketball_nba');
+                                        
+      console.log(`Fetching odds for sport: ${sportKey}`);
+      const allOdds = await oddsService.getOdds(sportKey);
+      console.log(`Got ${allOdds.length} odds entries for ${sportKey}`);
+      
+      // We need to make sure we have the game ID format that matches the odds API
+      let oddsData = allOdds.filter(odds => odds.id === game.id);
+      
+      // If no odds found, try to match by team names
+      if (!oddsData.length) {
+        console.log(`No odds found for ID ${game.id}, trying to match by team names`);
+        oddsData = allOdds.filter(odds => {
+          const homeMatch = odds.home_team?.toLowerCase() === game.home_team?.toLowerCase();
+          const awayMatch = odds.away_team?.toLowerCase() === game.away_team?.toLowerCase();
+          return homeMatch && awayMatch;
+        });
+      }
+      
+      // If no odds found, log error but continue with what data we have
+      if (!oddsData.length) {
+        console.log(`No odds data found for ${game.home_team} vs ${game.away_team}. Using empty odds data.`);
+        // Just use an empty array - no fake data
+        oddsData = [];
+      }
+      
+      console.log(`Found ${oddsData.length} matching odds entries for game ${game.home_team} vs ${game.away_team}`);
+      if (oddsData.length > 0) {
+        console.log('Sample odds data:', JSON.stringify(oddsData[0].bookmakers?.[0]?.markets?.[0] || {}, null, 2));
+      }
       
       // Get line movement data for the game
       const lineMovement = await oddsService.getLineMovement(game.id).catch(() => ({
@@ -234,33 +265,33 @@ const picksService = {
               // Format the odds for display
               const formattedOdds = garyAnalysis.line || '-110';
               
-              // Create standardized pick object
+              // Store the raw OpenAI response plus minimal game metadata
+              // This avoids unnecessary transformations and keeps the data clean
               const pick = {
                 id: `${sport.key}_${game.id}`,
                 league: sportsList.find(s => s.key === sport.key)?.title || sport.key,
-                game: `${game.home_team} vs ${game.away_team}`,
-                betType: betType,
-                shortPick: picksService.formatShortPick(garyAnalysis),
-                team: garyAnalysis.team,
-                odds: formattedOdds,
-                spread: spreadValue,
-                overUnder: totalValue,
-                lineMovement: gameData.lineMovement,
+                gameStr: `${game.home_team} vs ${game.away_team}`,
                 time: new Date(game.commence_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }),
-                confidenceLevel: typeof garyAnalysis.confidence === 'number' ? 
+                // Save the raw OpenAI output
+                rawAnalysis: garyAnalysis,
+                // Pull the main fields directly from Gary's analysis
+                shortPickStr: garyAnalysis.pick,
+                betType: garyAnalysis.type,
+                confidence: typeof garyAnalysis.confidence === 'number' ? 
                   Math.round(garyAnalysis.confidence * 100) : // Convert decimal confidence to percentage
-                  (garyAnalysis.confidence === 'High' ? 85 : garyAnalysis.confidence === 'Medium' ? 65 : 40),
-                // Use rationale field for Gary's Analysis
-                garysAnalysis: garyAnalysis.rationale || 'Statistical models and situational factors show value in this pick.',
-                // Make sure garysBullets is an array of the most important points
-                garysBullets: [
-                  ...(garyAnalysis.key_points || [
-                    'Statistical analysis supports this selection',
-                    'Current odds present good betting value',
-                    'Key performance metrics favor this pick'
-                  ])
-                ]
+                  0,
+                odds: garyAnalysis.pick?.match(/([-+]\d+)\)$/)?.[1] || '-110',
+                garysAnalysis: garyAnalysis.rationale,
+                bulletPoints: garyAnalysis.rationale
+                  ? garyAnalysis.rationale.split(/\.\s+/).slice(0, 3).map(s => s.trim() + '.')
+                  : ['Statistical analysis supports this selection.', 'Current odds present good betting value.', 'Key performance metrics favor this pick.']
               };
+              
+              // Extract team name from the pick
+              const teamMatch = garyAnalysis.pick?.match(/^([\w\s]+)\s+/)?.[1];
+              if (teamMatch) {
+                pick.team = teamMatch.trim();
+              }
 
               allPicks.push(pick);
             } catch (gameError) {
@@ -392,45 +423,35 @@ const picksService = {
       // Extract only the essential pick data for UI display and Supabase storage
       console.log('Ensuring we only store minimal clean data for the picks');
       
-      // Create extremely minimal objects for storage - absolute minimum data needed
+      // SIMPLIFIED VERSION - use OpenAI output directly without complex transformations
+      // We'll just do minimal validations and ensure required fields exist
       const cleanedPicks = picks.map(pick => {
-        // Normalize odds data to ensure we have valid values
-        const normalizedOdds = pick.odds ? 
-          (typeof pick.odds === 'string' ? pick.odds : String(pick.odds)) : 
-          (pick.moneyline ? String(pick.moneyline) : '-110');
+        // Use pick with required fields to ensure RetroPickCard works correctly
+        // Most importantly, just use the rawAnalysis from OpenAI directly
         
-        // Ensure odds have the proper +/- format
-        const formattedOdds = normalizedOdds.startsWith('+') || normalizedOdds.startsWith('-') ? 
-          normalizedOdds : 
-          (parseInt(normalizedOdds) > 0 ? `+${normalizedOdds}` : normalizedOdds);
-        
-        // Extract team abbreviation
-        const teamAbbrev = getTeamAbbreviation(pick.team || '');
-
-        // Format the pick string correctly based on bet type
-        let shortPickString = '';
-        const betTypeLower = (pick.betType || '').toLowerCase();
-        
-        if (betTypeLower.includes('spread') && pick.spread) {
-          // For spread bets
-          shortPickString = `${teamAbbrev} ${pick.spread} ${formattedOdds}`;
-        } else if (betTypeLower.includes('over') && pick.overUnder) {
-          // For over bets
-          shortPickString = `${teamAbbrev} O ${pick.overUnder} ${formattedOdds}`;
-        } else if (betTypeLower.includes('under') && pick.overUnder) {
-          // For under bets
-          shortPickString = `${teamAbbrev} U ${pick.overUnder} ${formattedOdds}`;
-        } else if (betTypeLower.includes('total') && pick.overUnder) {
-          // For total bets
-          const overUnder = betTypeLower.includes('over') ? 'O' : 'U';
-          shortPickString = `${teamAbbrev} ${overUnder} ${pick.overUnder} ${formattedOdds}`;
-        } else if (betTypeLower.includes('moneyline') || betTypeLower.includes('ml')) {
-          // For moneyline bets
-          shortPickString = `${teamAbbrev} ML ${formattedOdds}`;
-        } else {
-          // Default fallback
-          shortPickString = `${teamAbbrev} ML ${formattedOdds}`;
+        // For display consistency, just use the team abbreviation
+        let team = pick.team || '';
+        if (team) {
+          team = getTeamAbbreviation(team);
         }
+        
+        // Keep it extremely simple - just pass through the output from OpenAI
+        // with minimal metadata needed for the UI
+        return {
+          id: pick.id,
+          league: pick.league || '',
+          gameStr: pick.gameStr || '',
+          team: team,
+          shortPickStr: pick.shortPickStr || (pick.rawAnalysis ? pick.rawAnalysis.pick : ''),
+          betType: pick.betType || (pick.rawAnalysis ? pick.rawAnalysis.type : 'Moneyline'),
+          confidence: pick.confidence || 0,
+          time: pick.time || '10:10 PM ET',
+          odds: pick.odds || '-110',
+          garysAnalysis: pick.garysAnalysis || (pick.rawAnalysis ? pick.rawAnalysis.rationale : ''),
+          bulletPoints: pick.bulletPoints || [],
+          // Store the original analysis for completeness
+          rawAnalysis: pick.rawAnalysis
+        };
         
         // Format game for display (Nickname @ Nickname)
         let gameFormatted = '';
@@ -652,13 +673,13 @@ const picksService = {
       gameStr: pick.gameStr || pick.gameFormatted || pick.game || '',
       team: pick.team || '',
       betType: pick.betType || 'Moneyline',
-      shortPickStr: pick.shortPickStr || pick.shortPick || '',
+      shortPickStr: pick.shortPickStr || pick.shortPick || pick.rawAnalysis?.pick || '',
       confidence: pick.confidence || pick.confidenceLevel || 0,
       time: pick.time || '10:10 PM ET',
-      odds: pick.odds || '-110', // Ensure odds are included
-      garysAnalysis: pick.garysAnalysis || 'Statistical analysis shows value in this selection', // Include Gary's analysis/rationale
+      odds: pick.odds || pick.rawAnalysis?.line || '-110', // Ensure odds are included
+      garysAnalysis: pick.garysAnalysis || pick.rawAnalysis?.rationale || 'Statistical analysis shows value in this selection', // Include Gary's analysis/rationale
       bulletPoints: Array.isArray(pick.bulletPoints) ? pick.bulletPoints.slice(0, 3) : 
-                    (Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 3) : [])
+                   (Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 3) : [])
     };
   }
 };

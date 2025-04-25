@@ -84,42 +84,28 @@ function RealGaryPicks() {
       if (data && data.picks) {
         picksArray = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
         
-        // Ensure each pick has necessary fields for RetroPickCard
+        // SIMPLIFIED: Map picks to only what's needed for front/back display
         picksArray = picksArray.map(pick => {
-          const enhancedPick = {...pick};
-
-          // Handle shortPick format - RetroPickCard expects this property
-          // Convert from shortPickStr if needed
-          if (!enhancedPick.shortPick) {
-            if (enhancedPick.shortPickStr) {
-              enhancedPick.shortPick = enhancedPick.shortPickStr;
-            } else if (enhancedPick.team) {
-              enhancedPick.shortPick = `${enhancedPick.team} ${enhancedPick.betType || 'ML'} ${enhancedPick.odds || '-110'}`;
-            }
+          // Create a minimal pick object with just what we need
+          const simplePick = {
+            id: pick.id,
+            // Front of card: Just the pick
+            shortPick: pick.shortPickStr || pick.rawAnalysis?.pick || '',
+            // Back of card: Just the rationale
+            description: pick.garysAnalysis || pick.rawAnalysis?.rationale || '',
+            // Minimal metadata needed for RetroPickCard component
+            game: pick.gameStr || pick.game || '',
+            confidence: pick.confidence || 0,
+            time: pick.time || ''
+          };
+          
+          // For completeness, make sure raw data is preserved
+          if (pick.rawAnalysis) {
+            simplePick.rawAnalysis = pick.rawAnalysis;
           }
           
-          // Make sure we have a game property
-          if (!enhancedPick.game && enhancedPick.gameStr) {
-            enhancedPick.game = enhancedPick.gameStr;
-          }
-          
-          // Ensure confidence value exists
-          if (!enhancedPick.confidence && enhancedPick.confidenceLevel) {
-            enhancedPick.confidence = enhancedPick.confidenceLevel;
-          } else if (!enhancedPick.confidenceLevel && enhancedPick.confidence) {
-            enhancedPick.confidenceLevel = enhancedPick.confidence;
-          } else if (!enhancedPick.confidence && !enhancedPick.confidenceLevel) {
-            enhancedPick.confidence = 75;
-            enhancedPick.confidenceLevel = 75;
-          }
-          
-          // Make sure bulletPoints is available for display
-          if (!enhancedPick.bulletPoints && enhancedPick.garysBullets) {
-            enhancedPick.bulletPoints = enhancedPick.garysBullets;
-          }
-          
-          console.log('Enhanced pick for rendering:', enhancedPick);
-          return enhancedPick;
+          console.log('Simplified pick for rendering:', simplePick);
+          return simplePick;
         });
       }
       console.log('Parsed and enhanced picksArray:', picksArray);
