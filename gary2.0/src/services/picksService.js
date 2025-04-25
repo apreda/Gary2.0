@@ -87,10 +87,19 @@ const picksService = {
         trend: 'stable'
       }));
       
-      // Get team stats in parallel using Promise.all
+      // Get team stats in parallel using Promise.all - Fixed function reference
+      // sportsDataService has getTeamData not getTeamStats
       const [homeTeamData, awayTeamData] = await Promise.all([
-        sportsDataService.getTeamStats(game.home_team),
-        sportsDataService.getTeamStats(game.away_team)
+        sportsDataService.getTeamData(game.home_team).catch(err => ({
+          name: game.home_team,
+          stats: [],
+          error: err.message
+        })),
+        sportsDataService.getTeamData(game.away_team).catch(err => ({
+          name: game.away_team,
+          stats: [],
+          error: err.message
+        }))
       ]);
       
       // Get real-time game information if available
@@ -275,14 +284,15 @@ const picksService = {
                 // Save the raw OpenAI output
                 rawAnalysis: garyAnalysis,
                 // Pull the main fields directly from Gary's analysis
-                shortPickStr: garyAnalysis.pick,
-                betType: garyAnalysis.type,
+                shortPickStr: garyAnalysis.pick || '',
+                betType: garyAnalysis.type || 'Moneyline',
                 confidence: typeof garyAnalysis.confidence === 'number' ? 
                   Math.round(garyAnalysis.confidence * 100) : // Convert decimal confidence to percentage
                   0,
-                odds: garyAnalysis.pick?.match(/([-+]\d+)\)$/)?.[1] || '-110',
-                garysAnalysis: garyAnalysis.rationale,
-                bulletPoints: garyAnalysis.rationale
+                odds: garyAnalysis.pick?.match(/([\-+]\d+)\)$/)?.[1] || '-110',
+                garysAnalysis: garyAnalysis.rationale || '',
+                // Fix for rationale.split error - ensure it's a string before splitting
+                bulletPoints: (typeof garyAnalysis.rationale === 'string' && garyAnalysis.rationale)
                   ? garyAnalysis.rationale.split(/\.\s+/).slice(0, 3).map(s => s.trim() + '.')
                   : ['Statistical analysis supports this selection.', 'Current odds present good betting value.', 'Key performance metrics favor this pick.']
               };
@@ -308,41 +318,27 @@ const picksService = {
       }
 
       // Implement emergency pick fallback if needed
+      // If no picks were generated, log a warning but return an empty array
+      // This is better than using emergency mock data (as per development guidelines)
       if (allPicks.length < 1) {
-        console.log('No picks generated, creating an emergency pick');
+        console.log('No picks generated, attempting to get real games for analysis');
         const firstSport = sportsList[0]?.key;
         
         if (firstSport) {
-          const sportGames = await oddsService.getUpcomingGames(firstSport);
-          if (sportGames?.length > 0) {
-            const game = sportGames[0];
-            
-            // Create emergency pick
-            const emergencyPick = {
-              id: `${firstSport}_${game.id}_emergency`,
-              league: sportsList.find(s => s.key === firstSport)?.title || firstSport,
-              game: `${game.home_team} vs ${game.away_team}`,
-              betType: 'Moneyline',
-              shortPick: `${game.home_team} ML`,
-              team: game.home_team,
-              odds: '-110',
-              confidenceLevel: 60,
-              time: new Date(game.commence_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }),
-              garysAnalysis: 'Based on the available data, there is value in this selection.',
-              garysBullets: [
-                'Generated with available team analysis',
-                'Using real-time data and odds information',
-                'Based on comprehensive game assessment'
-              ]
-            };
-            
-            allPicks.push(emergencyPick);
+          try {
+            const sportGames = await oddsService.getUpcomingGames(firstSport);
+            if (sportGames?.length > 0) {
+              console.log(`Found ${sportGames.length} games for ${firstSport} but couldn't generate picks`);
+              console.log(`Following production guidelines - no mock data will be used`);
+            }
+          } catch (err) {
+            console.error('Error fetching emergency games:', err);
           }
         }
         
-        if (allPicks.length < 1) {
-          throw new Error('Failed to generate any picks');
-        }
+        console.warn('WARNING: No valid picks were found or generated. User will see empty state.');
+        // Return empty array instead of throwing - better to show empty state than crash
+        return [];
       }
 
       // Filter by confidence and limit to top picks
