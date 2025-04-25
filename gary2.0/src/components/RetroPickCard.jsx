@@ -329,48 +329,51 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     error: '#EF4444', // Red
   };
 
-  // For debugging only - log details about the pick with special focus on OpenAI format fields
-  console.log("RetroPickCard detailed pick:", {
+  // COMPREHENSIVE debug log to identify pick data format issues
+  console.log("RetroPickCard receiving pick data:", {
     id: pick?.id,
-    // OpenAI format fields
-    pick: pick?.pick,
-    rationale: pick?.rationale ? pick.rationale.substring(0, 30) + '...' : null,
-    type: pick?.type,
-    confidence: pick?.confidence,
-    // Legacy format fields
-    shortPick: pick?.shortPick,
-    description: pick?.description ? pick.description.substring(0, 30) + '...' : null,
+    // CRITICAL: Direct OpenAI format fields (these MUST exist)
+    pick: pick?.pick ? `${pick.pick.substring(0, 30)}...` : 'MISSING',
+    rationale: pick?.rationale ? `${pick.rationale.substring(0, 30)}...` : 'MISSING',
+    // Mapped fields for backwards compatibility
+    shortPick: pick?.shortPick ? `${pick.shortPick.substring(0, 30)}...` : 'MISSING',
+    description: pick?.description ? `${pick.description.substring(0, 30)}...` : 'MISSING',
+    // Metadata
     game: pick?.game,
     league: pick?.league,
-    time: pick?.time
+    confidence: pick?.confidence,
+    time: pick?.time,
+    // Format of the full pick object
+    pickKeys: pick ? Object.keys(pick) : 'NO PICK OBJECT'
   });
 
-  // Use the actual pick data with minimal defaults only for required fields
-  // IMPORTANT: We're focused on the exact OpenAI output format:
-  // pick, type, confidence, rationale, etc.
+  // CRITICALLY IMPORTANT: Use ALL sources of pick data with correct fallbacks
+  // We need to check EVERY possible field naming convention
   const safePick = {
     id: pick?.id || 'unknown',
     
-    // FRONT CARD - DISPLAY JUST THE PICK
-    // Priority order: OpenAI format (pick) > legacy (shortPick)
+    // IMPORTANT: Store the original OpenAI fields for reference
+    pick: pick?.pick || '', // Original OpenAI field for betting pick
+    rationale: pick?.rationale || '', // Original OpenAI field for analysis
+    
+    // FRONT CARD - Display the pick (check all possible field names)
     shortPick: pick?.pick || pick?.shortPick || 'PICK TBD',
     
-    // BACK CARD - DISPLAY JUST THE RATIONALE
-    // Priority order: OpenAI format (rationale) > legacy (description)
+    // BACK CARD - Display the rationale (check all possible field names)
     description: pick?.rationale || pick?.description || 'Analysis not available',
     
-    // Essential metadata for display
+    // Essential metadata with reasonable defaults
     game: pick?.game || 'TBD vs TBD',
     league: pick?.league || 'SPORT',
     time: pick?.time || '10:10 PM',
     
-    // OpenAI format fields (used in other parts of the app)
+    // OpenAI format additional fields with defaults
     type: pick?.type || 'moneyline',
     trapAlert: pick?.trapAlert || false,
     revenge: pick?.revenge || false,
     momentum: pick?.momentum || 0,
     
-    // Confidence handling (support both number and string formats)
+    // Confidence handling - support ALL formats
     confidence: typeof pick?.confidence === 'number' ? 
       Math.round(pick.confidence * 100) + '%' : 
       (pick?.confidence || '75%')
@@ -532,10 +535,12 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           maxWidth: '90%'
         }}>
           {/* Display pick directly from raw OpenAI output */}
-          {/* Display the pick from OpenAI directly */}
-          {safePick.shortPick !== 'PICK TBD' && safePick.shortPick !== '' ? 
-            safePick.shortPick : 
-            'PICK UNAVAILABLE'}
+          {/* CRITICAL: Display the pick - try multiple possible field names */}
+          {safePick.pick ? 
+            safePick.pick : 
+            (safePick.shortPick !== 'PICK TBD' && safePick.shortPick !== '' ? 
+              safePick.shortPick : 
+              'MISSING FIELDS: Check Supabase data format')}
         </div>
       </div>
       
@@ -733,9 +738,11 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           overflowY: 'auto',
           boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
         }}>
-          {/* Display the rationale from OpenAI directly */}
+          {/* CRITICAL: Display the rationale - try multiple possible field names */}
           <p style={{ margin: 0, fontWeight: 500 }}>
-            {safePick.description || 'Analysis not available.'}
+            {safePick.rationale ? 
+              safePick.rationale : 
+              (safePick.description || 'Analysis not available.')}
           </p>
         </div>
       </div>

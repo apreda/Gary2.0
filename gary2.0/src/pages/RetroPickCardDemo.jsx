@@ -37,10 +37,15 @@ export default function RetroPickCardDemo() {
       <div style={{ width: '20rem', height: '27rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <RetroPickCard 
           pick={{
-            // Map to what RetroPickCard expects
+            // Pass BOTH original OpenAI fields AND mapped fields
             id: mockPick.id,
-            shortPick: mockPick.pick, // Front: The pick
-            description: mockPick.rationale, // Back: The rationale
+            // Original OpenAI format fields - CRITICAL
+            pick: mockPick.pick,         // Original: Front of card
+            rationale: mockPick.rationale, // Original: Back of card
+            // Also include mapped fields for backward compatibility
+            shortPick: mockPick.pick,   // Legacy mapping
+            description: mockPick.rationale, // Legacy mapping
+            // Essential metadata
             game: mockPick.game,
             league: mockPick.league,
             confidence: mockPick.confidence,
