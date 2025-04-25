@@ -46,25 +46,30 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
   }
   console.log("RetroPickCard pick prop:", pick);
 
-  // SIMPLIFIED: Just use the pick as-is from OpenAI, no complex formatting
+  // SIMPLIFIED: Direct use of the OpenAI output format
   function getFormattedShortPick(pick) {
-    console.log("Using raw pick:", pick);
+    console.log("Formatting pick from OpenAI format:", pick);
     
     if (!pick) {
       return 'UNKNOWN PICK';
     }
     
-    // Only use the new OpenAI output format with 'pick' field
+    // Direct access to the pick field from the OpenAI output
     if (pick.pick) {
       return pick.pick;
     }
     
-    // If pick field is missing, show a warning
-    return 'PICK TBD';
+    // Legacy fallback for old data structure
+    if (pick.shortPick) {
+      return pick.shortPick;
+    }
+    
+    // If no pick data available, show a warning
+    return 'MISSING PICK DATA';
   }
 
-  // Defensive rendering: only check for pick.shortPick since team is not present in Supabase data
-  if (!pick || !pick.shortPick) {
+  // Defensive rendering: Check for OpenAI output format (pick.pick) first, then fallback to legacy format
+  if (!pick || (!pick.pick && !pick.shortPick)) {
     return (
       <div style={{
         minWidth: '18rem',
@@ -85,8 +90,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         textAlign: 'center'
       }}>
         MISSING FIELDS<br />
-        {`pick.shortPick: ${pick && pick.shortPick}`}<br />
-        Check Supabase data format
+        {`pick data: ${pick && (pick.pick || pick.shortPick)}`}<br />
+        Check OpenAI output format
       </div>
     );
   }

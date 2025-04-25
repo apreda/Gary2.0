@@ -175,18 +175,33 @@ function RealGaryPicks() {
           if (generatedPicks && Array.isArray(generatedPicks) && generatedPicks.length > 0) {
             console.log(`Successfully generated ${generatedPicks.length} new picks!`);
             
-            // Set the picks directly from the generation result
-            // These are already in the OpenAI output format
-            setPicks(generatedPicks.map(pick => ({
-              id: pick.id,
-              shortPick: pick.rawAnalysis?.pick || pick.pick || '',
-              description: pick.rawAnalysis?.rationale || pick.rationale || '',
-              game: pick.game || '',
-              league: pick.league || '',
-              confidence: pick.rawAnalysis?.confidence || pick.confidence || 0,
-              time: pick.time || '',
-              type: pick.rawAnalysis?.type || pick.type || 'Moneyline'
-            })));
+            // Use the EXACT OpenAI output format without any transformation
+            // This preserves the exact structure that RetroPickCard expects
+            setPicks(generatedPicks.map(pick => {
+              // Extract the raw OpenAI response data
+              const rawOutput = pick.rawAnalysis || pick;
+              
+              // Add a minimal required ID field for React keys
+              return {
+                // The only additional field we need to add is the ID
+                id: pick.id,
+                
+                // Directly use all OpenAI output fields
+                pick: rawOutput.pick,
+                type: rawOutput.type || 'moneyline',
+                confidence: rawOutput.confidence,
+                rationale: rawOutput.rationale,
+                trapAlert: rawOutput.trapAlert || false,
+                revenge: rawOutput.revenge || false,
+                momentum: rawOutput.momentum || 0,
+                
+                // Include these metadata fields for UI display
+                // but they're not part of what's stored in Supabase
+                game: pick.game || pick.gameStr || '',
+                league: pick.league || '',
+                time: pick.time || ''
+              };
+            }));
             setLoading(false); // We have picks now
             return; // Exit early since we already have the picks
           }
