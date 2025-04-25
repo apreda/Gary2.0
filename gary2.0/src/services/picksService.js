@@ -425,96 +425,50 @@ const picksService = {
       // Extract only the essential pick data for UI display and Supabase storage
       console.log('Ensuring we only store minimal clean data for the picks');
       
-      // SIMPLIFIED VERSION - use OpenAI output directly without complex transformations
-      // We'll just do minimal validations and ensure required fields exist
+      // STORE ONLY RAW OPENAI OUTPUT - per requirements
+      // This is the cleanest approach that stores exactly what OpenAI returns
       const cleanedPicks = picks.map(pick => {
-        // Use pick with required fields to ensure RetroPickCard works correctly
-        // Most importantly, just use the rawAnalysis from OpenAI directly
+        console.log('Processing pick for storage:', pick.id);
         
-        // For display consistency, just use the team abbreviation
-        let team = pick.team || '';
-        if (team) {
-          team = getTeamAbbreviation(team);
+        // Extract the raw OpenAI analysis which contains exactly the format we want
+        // { pick, type, confidence, rationale, trapAlert, revenge, momentum, etc. }
+        const rawOutput = pick.rawAnalysis;
+        
+        if (!rawOutput) {
+          console.warn(`Warning: Missing rawAnalysis for pick ${pick.id}`);
+          return null; // Will be filtered out
         }
         
-        // Keep it extremely simple - just pass through the output from OpenAI
-        // with minimal metadata needed for the UI
+        console.log(`Using raw OpenAI output format for pick ${pick.id}:`, rawOutput);
+        
+        // Return the exact OpenAI output as shown in requirements
         return {
+          // Minimal metadata
           id: pick.id,
+          game: pick.gameStr || pick.game || '',
+          time: pick.time || '',
           league: pick.league || '',
-          gameStr: pick.gameStr || '',
-          team: team,
-          shortPickStr: pick.shortPickStr || (pick.rawAnalysis ? pick.rawAnalysis.pick : ''),
-          betType: pick.betType || (pick.rawAnalysis ? pick.rawAnalysis.type : 'Moneyline'),
-          confidence: pick.confidence || 0,
-          time: pick.time || '10:10 PM ET',
-          odds: pick.odds || '-110',
-          garysAnalysis: pick.garysAnalysis || (pick.rawAnalysis ? pick.rawAnalysis.rationale : ''),
-          bulletPoints: pick.bulletPoints || [],
-          // Store the original analysis for completeness
-          rawAnalysis: pick.rawAnalysis
+          // EXACT OpenAI output format
+          pick: rawOutput.pick,
+          type: rawOutput.type,
+          confidence: rawOutput.confidence,
+          trapAlert: rawOutput.trapAlert || false,
+          revenge: rawOutput.revenge || false,
+          momentum: rawOutput.momentum || 0,
+          rationale: rawOutput.rationale
         };
-        
-        // Format game for display (Nickname @ Nickname)
-        let gameFormatted = '';
-        try {
-          if (pick.game) {
-            let parts = [];
-            if (pick.game.includes(' vs ')) parts = pick.game.split(' vs ');
-            else if (pick.game.includes('@')) parts = pick.game.split('@');
-            else if (pick.game.includes(' at ')) parts = pick.game.split(' at ');
-            
-            if (parts.length >= 2) {
-              const awayTeam = parts[0].trim().split(' ').pop();
-              const homeTeam = parts[1].trim().split(' ').pop();
-              gameFormatted = `${awayTeam.toUpperCase()} @ ${homeTeam.toUpperCase()}`;
-            } else {
-              gameFormatted = pick.game;
-            }
-          }
-        } catch (e) {
-          gameFormatted = '';
-        }
-        
-        // Process bullet points - ensure they're strings only
-        let bullets = [];
-        if (Array.isArray(pick.garysBullets) && pick.garysBullets.length > 0) {
-          // Take only first 3 bullet points and ensure they're strings
-          bullets = pick.garysBullets
-            .slice(0, 3)
-            .map(bullet => typeof bullet === 'string' ? bullet : String(bullet))
-            .filter(Boolean); // Remove any empty/null values
-        }
-        
-        // Add default bullets if needed
-        if (bullets.length === 0) {
-          bullets = [
-            `Statistical analysis favors this selection`,
-            'Current odds present good betting value',
-            'Recent performance metrics support this pick'
-          ];
-        }
-        
-        // Ensure Gary's Analysis is included (rationale from OpenAI)
-        const garysAnalysis = pick.garysAnalysis || pick.rationale || 'Statistical models and situational factors show value in this pick.';
-        
-        // The absolute minimum data needed for cards to render properly
-        return {
-          id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          league: pick.league || '',
-          gameStr: gameFormatted, // Renamed to be clearer and avoid potential object references
-          team: teamAbbrev,
-          betType: pick.betType || 'Moneyline',
-          shortPickStr: shortPickString, // Renamed to be clearer
-          confidence: pick.confidenceLevel || 0,
-          time: pick.time || '10:10 PM ET',
-          odds: formattedOdds, // Include odds for the display
-          garysAnalysis: garysAnalysis, // Include Gary's analysis from rationale
-          bulletPoints: bullets
-        };
-      });
+      }).filter(Boolean); // Remove any null entries
       
-      // Extra safety: stringify and parse to ensure no circular references or methods
+      // Log the final format that will be stored
+      console.log('Final OpenAI raw output format for storage:');
+      console.log(JSON.stringify(cleanedPicks[0] || {}, null, 2));
+      
+      // Early exit if no valid picks
+      if (cleanedPicks.length === 0) {
+        console.warn('No valid picks with raw OpenAI output to store');
+        return { data: null, error: new Error('No valid picks to store') };
+      }
+        
       // Additional step: stringified again to verify the data isn't too big
       const initialJson = JSON.stringify(cleanedPicks);
       console.log(`Cleaned picks data size: ${initialJson.length} characters`);
@@ -614,16 +568,24 @@ const picksService = {
         console.log('Note: Default wager creation skipped:', wagerErr);
       }
       
-      // Structure the data according to the daily_picks table schema
-      // The table expects: { date: 'YYYY-MM-DD', picks: [array of pick objects] }
-      
-      // Make absolutely sure we're using today's date (not the date from the picks)
+      // Get today's date string for database operations - YYYY-MM-DD format
       const todayDate = new Date();
       const todayDateString = todayDate.toISOString().split('T')[0];
       
+      console.log(`Storing picks using exactly the OpenAI output format for date: ${todayDateString}`);
+      
+      // Important: We're storing the RAW OpenAI output with no transformations
+      // This matches the example format in the requirements:
+      // {
+      //   "pick": "Angels -1.5 (+135)",
+      //   "type": "spread",
+      //   "confidence": 0.74,
+      //   "rationale": "Tyler Anderson's 2.08 ERA..."
+      // }
+      
       const pickData = {
-        date: todayDateString, // Always use today's date, regardless of pick dates
-        picks: safeCleanedPicks // This is the JSON array of pick objects
+        date: todayDateString, // Always use today's date
+        picks: safeCleanedPicks // The array of raw OpenAI output objects
       };
       
       console.log(`Storing picks with explicit today's date: ${todayDateString}`);
@@ -655,21 +617,30 @@ const picksService = {
   standardizePickData: (pick) => {
     if (!pick) return null;
     
-    // Extract only essential data with consistent naming
-    return {
-      id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      league: pick.league || '',
-      gameStr: pick.gameStr || pick.gameFormatted || pick.game || '',
-      team: pick.team || '',
-      betType: pick.betType || 'Moneyline',
-      shortPickStr: pick.shortPickStr || pick.shortPick || pick.rawAnalysis?.pick || '',
-      confidence: pick.confidence || pick.confidenceLevel || 0,
-      time: pick.time || '10:10 PM ET',
-      odds: pick.odds || pick.rawAnalysis?.line || '-110', // Ensure odds are included
-      garysAnalysis: pick.garysAnalysis || pick.rawAnalysis?.rationale || 'Statistical analysis shows value in this selection', // Include Gary's analysis/rationale
-      bulletPoints: Array.isArray(pick.bulletPoints) ? pick.bulletPoints.slice(0, 3) : 
-                   (Array.isArray(pick.garysBullets) ? pick.garysBullets.slice(0, 3) : [])
-    };
+    // If the pick has raw OpenAI output, prioritize that format
+    if (pick.rawAnalysis) {
+      console.log('Using raw OpenAI output for standardization:', pick.rawAnalysis);
+      
+      // Return the exact OpenAI format with minimal metadata
+      return {
+        id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        game: pick.gameStr || pick.game || '',
+        league: pick.league || '',
+        time: pick.time || '',
+        // Include the raw OpenAI output directly - matching example format
+        pick: pick.rawAnalysis.pick,
+        type: pick.rawAnalysis.type,
+        confidence: pick.rawAnalysis.confidence,
+        trapAlert: pick.rawAnalysis.trapAlert || false,
+        revenge: pick.rawAnalysis.revenge || false,
+        momentum: pick.rawAnalysis.momentum || 0,
+        rationale: pick.rawAnalysis.rationale
+      };
+    }
+    
+    // If no raw analysis, use whatever we have (fallback)
+    console.warn('No raw OpenAI output found for pick:', pick.id);
+    return pick;
   }
 };
 
