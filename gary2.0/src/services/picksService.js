@@ -108,11 +108,9 @@ const picksService = {
         awayTeamData = { name: game.away_team, stats: [] };
       }
       
-      // Get real-time game information if available
-      const realTimeInfo = await fetchRealTimeGameInfo(game.id).catch(err => ({
-        status: 'Not started',
-        score: { home: 0, away: 0 },
-        time: 'TBD',
+      // Get real-time game information if available - using correct parameters
+      const realTimeInfo = await fetchRealTimeGameInfo(game.home_team, game.away_team, sportKey).catch(err => ({
+        inProgress: false,
         error: err.message
       }));
       
@@ -361,7 +359,25 @@ const picksService = {
       // Limit to 5 picks max
       const topPicks = filteredPicks.slice(0, 5);
       
-      console.log(`Generated ${topPicks.length} picks successfully`);
+      console.log(`Generated ${topPicks.length} picks successfully`); 
+      
+      // Important: Store the picks in Supabase before returning
+      try {
+        // Ensure we have the rawAnalysis from OpenAI for each pick
+        const picksWithRawOutput = topPicks.filter(pick => pick.rawAnalysis);
+        
+        if (picksWithRawOutput.length > 0) {
+          console.log(`Storing ${picksWithRawOutput.length} picks in Supabase`);
+          await picksService.storeDailyPicksInDatabase(picksWithRawOutput);
+          console.log('Successfully stored picks in Supabase');
+        } else {
+          console.warn('No picks with raw OpenAI output to store');
+        }
+      } catch (storageError) {
+        console.error('Error storing picks in database:', storageError);
+        // Continue despite storage error - we'll still return the picks
+      }
+      
       return topPicks;
     } catch (error) {
       picksService.handleError('generating daily picks', error);
@@ -468,6 +484,19 @@ const picksService = {
         console.warn('No valid picks with raw OpenAI output to store');
         return { data: null, error: new Error('No valid picks to store') };
       }
+      
+      // Log the exact OpenAI output format that matches the required format
+      console.log('Example of exactly formatted OpenAI output:');
+      console.log(JSON.stringify({
+        pick: "Cincinnati Reds ML -120",
+        type: "moneyline",
+        confidence: 0.73,
+        trapAlert: false,
+        revenge: false,
+        superstition: false,
+        momentum: 0.65,
+        rationale: "Line's moved toward the Reds despite public split and injuries..."
+      }, null, 2));
         
       // Additional step: stringified again to verify the data isn't too big
       const initialJson = JSON.stringify(cleanedPicks);

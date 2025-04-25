@@ -160,14 +160,37 @@ function RealGaryPicks() {
             .eq('date', today);
             
           // Since we don't have picks, generate some
-          const generated = await picksService.generateDailyPicks();
-          if (generated && generated.success) {
-            // We successfully generated picks - reload from the database
-            const { data: freshData } = await supabase
-              .from('daily_picks')
-              .select('picks, date')
-              .eq('date', today)
-              .maybeSingle();
+          console.log('Generating new picks via picksService.generateDailyPicks()...');
+          const generatedPicks = await picksService.generateDailyPicks();
+          
+          // The generateDailyPicks returns an array of picks
+          // It also automatically stores them in Supabase now
+          if (generatedPicks && Array.isArray(generatedPicks) && generatedPicks.length > 0) {
+            console.log(`Successfully generated ${generatedPicks.length} new picks!`);
+            
+            // Set the picks directly from the generation result
+            // These are already in the OpenAI output format
+            setPicks(generatedPicks.map(pick => ({
+              id: pick.id,
+              shortPick: pick.rawAnalysis?.pick || pick.pick || '',
+              description: pick.rawAnalysis?.rationale || pick.rationale || '',
+              game: pick.game || '',
+              league: pick.league || '',
+              confidence: pick.rawAnalysis?.confidence || pick.confidence || 0,
+              time: pick.time || '',
+              type: pick.rawAnalysis?.type || pick.type || 'Moneyline'
+            })));
+            setLoading(false); // We have picks now
+            return; // Exit early since we already have the picks
+          }
+          
+          // Fallback path - try to reload from database if generation returned nothing
+          console.log('Checking database for picks after generation attempt...');
+          const { data: freshData } = await supabase
+            .from('daily_picks')
+            .select('picks, date')
+            .eq('date', today)
+            .maybeSingle();
             
             if (freshData && freshData.picks) {
               // Process picks again
