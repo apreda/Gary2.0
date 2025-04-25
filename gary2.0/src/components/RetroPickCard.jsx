@@ -54,7 +54,12 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       return 'UNKNOWN PICK';
     }
     
-    // Just return the shortPick directly from OpenAI output
+    // OpenAI output format - prioritize this format
+    if (pick.pick) {
+      return pick.pick;
+    }
+    
+    // Legacy format fallback
     if (pick.shortPick) {
       return pick.shortPick;
     }
@@ -339,13 +344,17 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
   // Use the actual pick data with minimal defaults only for required fields
   const safePick = {
     ...pick,
-    id: pick?.id || `temp-${Date.now()}`,
-    shortPick: pick?.shortPick || '',
-    game: pick?.game || '',
-    betType: pick?.betType || '',
-    spread: pick?.spread || '',
-    overUnder: pick?.overUnder || '',
-    odds: pick?.odds || '-110',
+    id: pick?.id || 'unknown',
+    // For the front of card - prioritize OpenAI format
+    shortPick: pick?.pick || pick?.shortPick || 'PICK TBD',
+    // For the back of card - prioritize OpenAI format 
+    description: pick?.rationale || pick?.description || 'Analysis not available',
+    game: pick?.game || 'TBD vs TBD',
+    league: pick?.league || 'SPORT',
+    confidence: pick?.confidence || 0,
+    time: pick?.time || '10:10 PM',
+    // Extra OpenAI format fields
+    type: pick?.type || 'moneyline',
     moneyline: pick?.moneyline || '',
     team: pick?.team || '',
     garysBullets: pick?.garysBullets || [
@@ -513,7 +522,9 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           maxWidth: '90%'
         }}>
           {/* Display pick directly from raw OpenAI output */}
-          {safePick.shortPick || 'PICK TBD'}
+          {safePick.shortPick !== 'PICK TBD' && safePick.shortPick !== '' ? 
+            safePick.shortPick : 
+            'PICK UNAVAILABLE'}
         </div>
       </div>
       
