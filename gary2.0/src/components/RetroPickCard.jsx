@@ -595,7 +595,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         boxShadow: '0 -2px 8px #bfa14222',
         textTransform: 'uppercase',
       }}>
-        {formattedGame}
+        {formatGameTitle(safePick.game || '')}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
