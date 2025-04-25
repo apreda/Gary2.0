@@ -458,16 +458,18 @@ const picksService = {
         // Log the actual pick value to help debug null issues
         console.log(`Pick value for ${pick.id}:`, rawOutput.pick);
         
-        // Return the exact OpenAI output with minimal metadata
-        // This preserves ALL fields exactly as they come from OpenAI
+        // Return ONLY the exact OpenAI output fields with no additional metadata
+        // This keeps only the essential fields shown in the example to minimize data size
         return {
-          // Minimal metadata
-          id: pick.id,
-          game: pick.gameStr || pick.game || '',
-          time: pick.time || '',
-          league: pick.league || '',
-          // Store the EXACT Raw OpenAI output with no transformations
-          ...rawOutput
+          // Only include the OpenAI output fields - nothing else
+          pick: rawOutput.pick,
+          type: rawOutput.type,
+          confidence: rawOutput.confidence,
+          trapAlert: rawOutput.trapAlert || false,
+          revenge: rawOutput.revenge || false,
+          superstition: rawOutput.superstition || false,
+          momentum: rawOutput.momentum || 0,
+          rationale: rawOutput.rationale
         };
       }).filter(Boolean); // Remove any null entries
       
