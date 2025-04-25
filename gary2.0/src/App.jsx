@@ -16,8 +16,7 @@ import { HowItWorks } from "./pages/HowItWorks";
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
-// Demo component - dynamically loaded for Vite compatibility
-const RetroPickCardDemoLazy = lazy(() => import('./pages/RetroPickCardDemo'));
+// Demo component removed - no longer needed
 
 
 import { SignIn } from "./pages/SignIn";
@@ -114,12 +113,7 @@ function AppContent() {
               <Route path="/dashboard" element={
                 session ? <UserDashboard /> : <Navigate to="/signin" replace />
               } />
-              {/* Demo route for RetroPickCard */}
-              <Route path="/retro-demo" element={
-                <Suspense fallback={<div className="flex h-96 items-center justify-center"><div className="animate-pulse text-gray-600 dark:text-gray-300">Loading...</div></div>}>
-                  <RetroPickCardDemoLazy />
-                </Suspense>
-              } />
+              {/* Demo route for RetroPickCard - removed as it's no longer needed */}
               {/* Admin routes */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
             </Routes>
