@@ -54,230 +54,13 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
       return 'UNKNOWN PICK';
     }
     
-    // OpenAI output format - prioritize this format
+    // Only use the new OpenAI output format with 'pick' field
     if (pick.pick) {
       return pick.pick;
     }
     
-    // Legacy format fallback
-    if (pick.shortPick) {
-      return pick.shortPick;
-    }
-    
-    // Extract team abbreviation
-    let team = 'TBD';
-    // Comprehensive mapping of NBA teams
-    const nbaTeamMappings = {
-      'Boston Celtics': 'BOS',
-      'Brooklyn Nets': 'BKN',
-      'New York Knicks': 'NYK',
-      'Philadelphia 76ers': 'PHI',
-      'Toronto Raptors': 'TOR',
-      'Chicago Bulls': 'CHI',
-      'Cleveland Cavaliers': 'CLE',
-      'Detroit Pistons': 'DET',
-      'Indiana Pacers': 'IND',
-      'Milwaukee Bucks': 'MIL',
-      'Atlanta Hawks': 'ATL',
-      'Charlotte Hornets': 'CHA',
-      'Miami Heat': 'MIA',
-      'Orlando Magic': 'ORL',
-      'Washington Wizards': 'WAS',
-      'Denver Nuggets': 'DEN',
-      'Minnesota Timberwolves': 'MIN',
-      'Oklahoma City Thunder': 'OKC',
-      'Portland Trail Blazers': 'POR',
-      'Utah Jazz': 'UTA',
-      'Golden State Warriors': 'GSW',
-      'Los Angeles Clippers': 'LAC',
-      'Los Angeles Lakers': 'LAL',
-      'Phoenix Suns': 'PHX',
-      'Sacramento Kings': 'SAC',
-      'Dallas Mavericks': 'DAL',
-      'Houston Rockets': 'HOU',
-      'Memphis Grizzlies': 'MEM',
-      'New Orleans Pelicans': 'NOP',
-      'San Antonio Spurs': 'SAS'
-    };
-    
-    // Handle shortened forms of team names
-    Object.entries(nbaTeamMappings).forEach(([fullName, abbr]) => {
-      // Get team nickname (last part of name)
-      const nickname = fullName.split(' ').pop();
-      if (nickname && !nbaTeamMappings[nickname]) {
-        nbaTeamMappings[nickname] = abbr;
-      }
-    });
-    
-    // For MLB, NHL and other sports, you can add more mappings
-    const teamMappings = {
-      ...nbaTeamMappings,
-      // MLB teams
-      'Chicago Cubs': 'CHC',
-      'Chicago White Sox': 'CWS',
-      'Los Angeles Dodgers': 'LAD',
-      'New York Yankees': 'NYY',
-      // NHL teams
-      'Washington Capitals': 'WSH',
-      'Montréal Canadiens': 'MTL',
-      // Soccer teams
-      'Manchester City': 'MCI',
-      'Arsenal': 'ARS',
-      'Crystal Palace': 'CRY',
-      'Aston Villa': 'AVL',
-    };
-    
-    try {
-      // Direct access to team if it's already in the pick object
-      if (pick.team && typeof pick.team === 'string') {
-        const directTeam = pick.team.trim();
-        team = teamMappings[directTeam] || directTeam.slice(0, 3).toUpperCase();
-      } 
-      // Try to extract from game info
-      else if (pick.game) {
-        // Try different delimiters: vs, at, @
-        let gameParts = [];
-        if (pick.game.includes(' vs ')) {
-          gameParts = pick.game.split(' vs ').map(part => part.trim());
-        } else if (pick.game.includes('@')) {
-          gameParts = pick.game.split('@').map(part => part.trim());
-        } else if (pick.game.includes(' at ')) {
-          gameParts = pick.game.split(' at ').map(part => part.trim());
-        }
-
-        if (gameParts.length >= 2) {
-          const homeTeam = gameParts[1] || '';
-          const awayTeam = gameParts[0] || '';
-          
-          // Try to determine which team is being bet on
-          let targetTeam = '';
-          
-          // 1. If we have explicit pick info in the object, use that
-          if (pick.team) {
-            targetTeam = pick.team;
-          }
-          // 2. If the shortPick contains identifiable team info, extract it
-          else if (pick.shortPick && typeof pick.shortPick === 'string') {
-            // Look for patterns in the shortPick
-            const shortPickLower = pick.shortPick.toLowerCase();
-            const homeTeamLower = homeTeam.toLowerCase();
-            const awayTeamLower = awayTeam.toLowerCase();
-            
-            // Check if shortPick contains team names
-            if (shortPickLower.includes(homeTeamLower)) {
-              targetTeam = homeTeam;
-            } else if (shortPickLower.includes(awayTeamLower)) {
-              targetTeam = awayTeam;
-            }
-            // Try to match the nickname/mascot part only
-            else {
-              const homeNickname = homeTeam.split(' ').pop().toLowerCase();
-              const awayNickname = awayTeam.split(' ').pop().toLowerCase();
-              
-              if (shortPickLower.includes(homeNickname)) {
-                targetTeam = homeTeam;
-              } else if (shortPickLower.includes(awayNickname)) {
-                targetTeam = awayTeam;
-              }
-            }
-          }
-          
-          // 3. If still no target team, default to home team
-          if (!targetTeam) {
-            targetTeam = homeTeam;
-          }
-          
-          // Get abbreviation or create one
-          team = teamMappings[targetTeam] || '';
-          
-          // If no match in mappings, create abbreviation from team name
-          if (!team) {
-            // First try just the last part of the name (nickname/mascot)
-            const nicknamePart = targetTeam.split(' ').pop() || '';
-            team = teamMappings[nicknamePart] || '';
-            
-            // If still no abbreviation, generate one
-            if (!team) {
-              team = targetTeam.split(' ').map(word => word[0]).join('').toUpperCase();
-              // If that didn't work, use first 3 letters
-              if (!team || team.length < 2) {
-                team = targetTeam.slice(0, 3).toUpperCase();
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error processing team data:', error);
-      team = 'TBD';
-    }
-    
-    // Format based on bet type
-    const betType = pick.betType?.toLowerCase() || '';
-    let formattedPick = '';
-    
-    if (betType.includes('moneyline')) {
-      formattedPick = `${team} ML`;
-    } else if (betType.includes('spread')) {
-      // For spread bets, include the spread value
-      const spreadValue = pick.spread || '';
-      formattedPick = `${team} ${spreadValue}`;
-    } else if (betType.includes('over')) {
-      const total = pick.overUnder || '';
-      formattedPick = `${team} O ${total}`;
-    } else if (betType.includes('under')) {
-      const total = pick.overUnder || '';
-      formattedPick = `${team} U ${total}`;
-    } else if (betType.includes('total')) {
-      // Handle general total bets (over/under)
-      const total = pick.overUnder || '';
-      const overUnder = betType.includes('over') ? 'O' : 'U';
-      formattedPick = `${team} ${overUnder} ${total}`;
-    } else {
-      // If no specific bet type is found, check if we can extract from shortPick
-      if (pick.shortPick && typeof pick.shortPick === 'string') {
-        const shortPick = pick.shortPick.toUpperCase();
-        if (shortPick.includes('ML') || shortPick.includes('MONEYLINE')) {
-          formattedPick = `${team} ML`;
-        } else if (shortPick.includes('OVER') || shortPick.includes(' O ')) {
-          const total = pick.overUnder || ''; 
-          formattedPick = `${team} O ${total}`;
-        } else if (shortPick.includes('UNDER') || shortPick.includes(' U ')) {
-          const total = pick.overUnder || '';
-          formattedPick = `${team} U ${total}`;
-        } else if (shortPick.includes('+') || shortPick.includes('-')) {
-          // Try to extract spread value from shortPick
-          const spreadMatch = shortPick.match(/[+-]\d+(\.\d+)?/);
-          const spreadValue = spreadMatch ? spreadMatch[0] : '';
-          formattedPick = `${team} ${spreadValue}`;
-        } else {
-          formattedPick = `${team} ML`; // Default to ML
-        }
-      } else {
-        formattedPick = `${team} ML`; // Default to ML if no bet type specified
-      }
-    }
-    
-    // Add odds if available
-    let odds = '';
-    if (pick.odds && typeof pick.odds === 'string') {
-      odds = pick.odds;
-    } else if (pick.odds && typeof pick.odds === 'number') {
-      odds = pick.odds.toString();
-    } else if (pick.moneyline && typeof pick.moneyline === 'string') {
-      odds = pick.moneyline;
-    } else if (pick.moneyline && typeof pick.moneyline === 'number') {
-      odds = pick.moneyline.toString();
-    } else {
-      odds = '-110'; // Default odds
-    }
-    
-    // Clean odds format
-    if (!odds.startsWith('+') && !odds.startsWith('-')) {
-      odds = parseInt(odds) > 0 ? `+${odds}` : odds;
-    }
-    
-    return `${formattedPick} ${odds}`;
+    // If pick field is missing, show a warning
+    return 'PICK TBD';
   }
 
   // Defensive rendering: only check for pick.shortPick since team is not present in Supabase data
@@ -347,20 +130,18 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     pickKeys: pick ? Object.keys(pick) : 'NO PICK OBJECT'
   });
 
-  // CRITICALLY IMPORTANT: Use ALL sources of pick data with correct fallbacks
-  // We need to check EVERY possible field naming convention
+  // Only use the new OpenAI output format fields
   const safePick = {
     id: pick?.id || 'unknown',
     
-    // IMPORTANT: Store the original OpenAI fields for reference
-    pick: pick?.pick || '', // Original OpenAI field for betting pick
-    rationale: pick?.rationale || '', // Original OpenAI field for analysis
+    // Store the OpenAI output fields
+    pick: pick?.pick || '', // The betting pick
+    rationale: pick?.rationale || '', // The analysis/reasoning
     
-    // FRONT CARD - Display the pick (check all possible field names)
-    shortPick: pick?.pick || pick?.shortPick || 'PICK TBD',
+    // Display data for the card - only use new format
     
-    // BACK CARD - Display the rationale (check all possible field names)
-    description: pick?.rationale || pick?.description || 'Analysis not available',
+    // BACK CARD - Display the rationale
+    description: pick?.rationale || 'Analysis not available',
     
     // Essential metadata with reasonable defaults
     game: pick?.game || 'TBD vs TBD',
@@ -534,13 +315,11 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           width: '90%',
           maxWidth: '90%'
         }}>
-          {/* Display pick directly from raw OpenAI output */}
-          {/* CRITICAL: Display the pick - try multiple possible field names */}
+          {/* Display pick directly from raw OpenAI output format */}
+          {/* Only use the new format with pick field */}
           {safePick.pick ? 
             safePick.pick : 
-            (safePick.shortPick !== 'PICK TBD' && safePick.shortPick !== '' ? 
-              safePick.shortPick : 
-              'MISSING FIELDS: Check Supabase data format')}
+            'MISSING FIELDS: Check Supabase data format'}
         </div>
       </div>
       
@@ -757,7 +536,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         textAlign: 'center',
         borderTop: `2px solid ${colors.border}`,
       }}>
-        {safePick.shortPick || 'PICK TBD'}
+        {getFormattedShortPick(safePick) || 'PICK TBD'}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
