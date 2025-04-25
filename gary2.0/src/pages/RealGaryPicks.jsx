@@ -65,19 +65,25 @@ function RealGaryPicks() {
     console.log('[RealGaryPicks] error:', error);
   }, [picks, loading, error]);
 
-  // Load picks from Supabase
+  // Load picks from Supabase - specifically for today's date
   const loadPicks = async () => {
     setLoading(true);
     setError(null);
     
     try {
+      // Get today's date in YYYY-MM-DD format for database query
       const today = new Date().toISOString().split('T')[0];
+      console.log(`Looking for picks specifically for today (${today})`);
+      
+      // Query Supabase for picks with today's date only
       const { data, error: fetchError } = await supabase
         .from('daily_picks')
-        .select('picks')
+        .select('picks, date')
         .eq('date', today)
         .maybeSingle(); // Use maybeSingle to avoid 406 errors
-      console.log('Supabase fetch result:', { data, fetchError });
+      
+      // Log the result for debugging - explicitly show the date we checked
+      console.log(`Supabase fetch result for ${today}:`, { data, fetchError });
 
       // Parse picks column if it's a string
       let picksArray = [];
@@ -110,22 +116,23 @@ function RealGaryPicks() {
       }
       console.log('Parsed and enhanced picksArray:', picksArray);
 
-      // Check if we have picks either from database error or empty array
+      // Check if we have picks for today - either from database error or empty array
       if (fetchError || !picksArray.length) {
-        console.log('No picks found in database. Generating new picks...');
+        const today = new Date().toISOString().split('T')[0];
+        console.log(`No picks found for today (${today}). Generating new picks...`);
         try {
           // Generate new picks using our 3-layer system
           const generatedPicks = await picksService.generateDailyPicks();
-          console.log('Successfully generated new picks:', generatedPicks);
+          console.log(`Successfully generated ${generatedPicks.length} new picks for ${today}:`, generatedPicks);
           
-          // Store the new picks in Supabase
+          // Store the new picks in Supabase with today's date
           await picksService.storeDailyPicksInDatabase(generatedPicks);
-          console.log('Successfully stored new picks in database');
+          console.log(`Successfully stored new picks in database for ${today}`);
           
           // Update state with new picks
           setPicks(generatedPicks || []);
         } catch (genError) {
-          console.error('Error generating picks:', genError);
+          console.error(`Error generating picks for ${today}:`, genError);
           throw new Error('Failed to generate new picks: ' + genError.message);
         }
       } else {
