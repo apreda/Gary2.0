@@ -46,19 +46,16 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
   }
   console.log("RetroPickCard pick prop:", pick);
 
-  // Format shortPick to show as 'TEAM BET_VALUE ODDS' (e.g., 'BOS ML -110' or 'BOS +6.5 -110')
+  // SIMPLIFIED: Just use the pick as-is from OpenAI, no complex formatting
   function getFormattedShortPick(pick) {
-    console.log("Formatting pick:", pick);
+    console.log("Using raw pick:", pick);
     
     if (!pick) {
       return 'UNKNOWN PICK';
     }
     
-    // If pick.shortPick already contains the formatted pick (TEAM BET_TYPE ODDS),
-    // return it directly instead of trying to reformat
-    if (pick.shortPick && 
-        typeof pick.shortPick === 'string' && 
-        /^[A-Z]{3}\s+(ML|[+-]\d+\.?\d*|O|U)\s+[-+]\d+$/.test(pick.shortPick)) {
+    // Just return the shortPick directly from OpenAI output
+    if (pick.shortPick) {
       return pick.shortPick;
     }
     
@@ -431,14 +428,13 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     }
   };
 
-  // --- Front of Card with Tech Elements ---
+  // --- SIMPLIFIED FRONT OF CARD - JUST THE PICK ---
   const cardFront = (
     <div className="relative w-72 h-[27rem] flex flex-col items-center justify-between"
       style={{
         background: 'linear-gradient(135deg, #f8f7f3 70%, #e6e1c5 100%)',
         border: `6px solid ${colors.primary}`,
         borderRadius: '1.2rem',
-        color: colors.accent,
         fontFamily: 'Orbitron, Inter, Segoe UI, Arial, sans-serif',
         overflow: 'hidden',
         position: 'relative',
@@ -459,7 +455,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         fontWeight: 700,
         fontSize: '1.02rem',
         letterSpacing: '0.08em',
-        padding: '0.7rem 0.9rem', // Increased size
+        padding: '0.7rem 0.9rem',
         zIndex: 3,
         borderBottom: `2px solid ${colors.border}`,
         boxShadow: '0 2px 8px #bfa14222',
@@ -471,62 +467,53 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         <span>{league}</span>
         <span style={{ fontSize: '0.95rem' }}>{formattedTime}</span>
       </div>
-
-      {/* Wallet Value Row */}
-      <div style={{
-        position: 'absolute',
-        top: '4.25rem',
-        right: '0.9rem',
-        color: colors.secondary,
-        fontWeight: 'bold',
-        fontSize: '2.2rem',
-        zIndex: 3
-      }}>
-        <span style={{ color: '#00B300' }}>{safePick.walletValue}</span>
-      </div>
       
-      {/* Gary Emblem from image file - adjusted size and position */}
+      {/* Gary Emblem */}
       <div style={{
         position: 'absolute',
-        top: '3.25rem', // Moved up 1/8 inch
-        left: '0.125rem', // Moved left 1/8 inch
+        top: '3.25rem',
+        left: '0.125rem',
         zIndex: 5,
       }}>
         <img 
           src={GaryEmblem} 
           alt="Gary Emblem"
           style={{
-            width: 99, // 10% smaller (110 * 0.9 = 99)
-            height: 99, // 10% smaller
+            width: 99,
+            height: 99,
             objectFit: 'contain',
             filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.25))',
           }}
         />
       </div>
       
-      {/* Pick Display - centered and more horizontal */}
+      {/* *** MAIN PICK DISPLAY - SIMPLIFIED *** */}
       <div className="flex items-center justify-center" style={{
         position: 'absolute',
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        zIndex: 2
+        zIndex: 2,
+        width: '100%',
+        padding: '0 1rem'
       }}>
         <div style={{
           background: 'rgba(191,161,66,0.1)',
-          padding: '0.65rem 3.5rem', // Wider horizontal padding, less vertical
-          borderRadius: '6px',
+          padding: '1.5rem 1rem',
+          borderRadius: '8px',
           border: `2px solid ${colors.primary}`,
           fontWeight: 800,
-          fontSize: '2rem',
+          fontSize: '2.5rem',
           color: colors.primary,
-          letterSpacing: '0.1em',
+          letterSpacing: '0.05em',
           textShadow: '0 1px 2px rgba(0,0,0,0.1)',
           textAlign: 'center',
-          boxShadow: '0 2px 12px rgba(191,161,66,0.15)',
-          whiteSpace: 'nowrap', // Ensures text stays on one line
+          boxShadow: '0 4px 12px rgba(191,161,66,0.25)',
+          width: '90%',
+          maxWidth: '90%'
         }}>
-          {safePick.formattedPick}
+          {/* Display pick directly from raw OpenAI output */}
+          {safePick.shortPick || 'PICK TBD'}
         </div>
       </div>
       
@@ -541,7 +528,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         gap: '1rem',
         zIndex: 3,
       }}>
-        {/* BET Button - Gold with Black Font */}
+        {/* BET Button */}
         <button 
           onClick={() => safePick.id ? handleUserDecision('bet') : null}
           disabled={!!decision || loading || !safePick.id}
@@ -565,7 +552,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           BET
         </button>
         
-        {/* FADE Button - Black with Gold Font */}
+        {/* FADE Button */}
         <button 
           onClick={() => safePick.id ? handleUserDecision('fade') : null}
           disabled={!!decision || loading || !safePick.id}
@@ -599,16 +586,16 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         background: colors.primary,
         color: colors.secondary,
         fontWeight: 700,
-        fontSize: '1.275rem', // Increased by 25% from 1.02rem
-        letterSpacing: '0.08em',
+        fontSize: '1.02rem',
+        letterSpacing: '0.075em',
         textAlign: 'center',
-        padding: '0.7rem 0', // Increased size
+        padding: '0.7rem 0',
         zIndex: 3,
         borderTop: `2px solid ${colors.border}`,
         boxShadow: '0 -2px 8px #bfa14222',
         textTransform: 'uppercase',
       }}>
-        {safePick.formattedGame}
+        {formattedGame}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
@@ -644,101 +631,103 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     </div>
   );
 
-  // --- Back of Card with Tech Elements ---
+  // --- SIMPLIFIED BACK OF CARD - JUST THE RATIONALE ---
   const cardBack = (
-    <div 
-      className="relative w-72 h-[27rem] flex flex-col items-center justify-between px-0 py-0"
+    <div className="relative w-72 h-[27rem] flex flex-col justify-between p-0" 
       style={{
-        padding: '0.38rem 0.9rem',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        letterSpacing: '0.07em',
-        boxShadow: '0 2px 8px #bfa14222, inset 0 0 15px rgba(191,161,66,0.12)',
-        margin: 0,
-        background: 'linear-gradient(135deg, #f8f7f3 70%, #e6e1c5 100%)',
+        background: 'linear-gradient(135deg, #fffbe6 50%, #f5f5dc 100%)',
         border: `6px solid ${colors.primary}`,
         borderRadius: '1.2rem',
+        fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
+        overflow: 'hidden',
+        position: 'relative',
+        perspective: '1200px', 
+        boxShadow: '0 0 36px 8px rgba(191,161,66,0.28), inset 0 0 15px rgba(191,161,66,0.12)',
         animation: 'pulse 8s infinite ease-in-out'
       }}
     >
-      {/* Scouting Report Header - Positioned higher */}
-      <div
-        style={{
-          width: 'fit-content',
-          margin: '1.2rem auto 1rem auto',
-          padding: '0.35rem 1.8rem',
-          background: '#18181b',
-          border: `2px solid ${colors.primary}`,
-          borderRadius: 7,
-          fontFamily: 'Orbitron, Segoe UI, Arial, sans-serif',
-          fontWeight: 700,
-          fontSize: '1.2rem',
-          color: colors.primary,
-          letterSpacing: '0.09em',
-          textTransform: 'uppercase',
+      {/* Card Header */}
+      <div style={{ position: 'relative', width: '100%' }}>
+        {/* Gary's Analysis Banner */}
+        <div style={{ 
+          backgroundColor: colors.primary,
+          color: colors.secondary,
+          fontWeight: 'bold',
+          fontSize: '1.1rem',
+          padding: '0.6rem 1rem',
           textAlign: 'center',
-          boxShadow: '0 2px 12px #bfa14233',
-        }}
-      >
-        Scouting Report
-      </div>
-      
-      {/* Odds and Confidence */}
-      <div style={{ width: '100%', textAlign: 'center', margin: '0.5rem 0 1rem 0' }}>
-        <span style={{ fontWeight: '900', marginRight: 16, color: '#000' }}>
-          {`Odds: ${typeof safePick.odds === 'string' ? safePick.odds : 
-            (typeof safePick.odds === 'number' ? safePick.odds.toString() : 
-            (typeof safePick.moneyline === 'string' ? safePick.moneyline : 
-            (typeof safePick.moneyline === 'number' ? safePick.moneyline.toString() : 'N/A')))}`}
-        </span>
-        <span style={{ fontWeight: '700', color: '#000' }}>
-          {`Conf: ${typeof safePick.confidence === 'string' ? safePick.confidence : 
-            (typeof safePick.confidence === 'number' ? safePick.confidence + '%' : 
-            (typeof safePick.confidenceLevel === 'number' ? safePick.confidenceLevel + '%' : '75%'))}`}
-        </span>
-      </div>
-      
-      {/* Scouting Report Bullets - Expanded to bottom */}
-      <div style={{
-        width: '100%',
-        padding: '0 0.7rem',
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        marginBottom: '3rem',
-        overflowY: 'auto',
-        fontFamily: 'Orbitron, Segoe UI, Arial, sans-serif',
-        maxHeight: 'calc(100% - 8rem)',
-      }}>
-        {/* Use bulletPoints if available, fall back to garysBullets with safe rendering */}
-        {(safePick.bulletPoints || safePick.garysBullets || []).map((bullet, index) => {
-          // Ensure bullet is a string to prevent [object Object] display
-          const bulletText = typeof bullet === 'string' ? bullet : 
-            (bullet && typeof bullet.toString === 'function' ? bullet.toString() : 
-            'Analysis bullet point');
-            
-          return (
-            <div key={index} style={{ margin: '0.4rem 0', display: 'flex', alignItems: 'flex-start' }}>
-              <span style={{ color: colors.primary, marginRight: '0.5rem', fontSize: '1.2rem' }}>•</span>
-              <p style={{ margin: 0, fontSize: '0.8rem', lineHeight: '1.1rem', fontWeight: 500, color: '#181818' }}>
-                {bulletText}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-      
-      {/* Gary's Pick */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', width: '100%', position: 'absolute', bottom: '2rem', left: '0', right: '0', padding: '0 0.7rem', backgroundColor: '#fffbe6' }}>
-        <div style={{ backgroundColor: 'rgba(191,161,66,0.2)', padding: '0.25rem 0.5rem', borderRadius: '0.3rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#222' }}>GARY'S PICK:</span>
-          <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: colors.accent, letterSpacing: '0.05rem' }}>
-            {/* Use shortPickStr if available, or fall back through other possible property names */}
-            {safePick.shortPickStr || safePick.shortPick || safePick.formattedPick || 'ML ML -110'}
-          </span>
+          letterSpacing: '0.05rem',
+          textTransform: 'uppercase',
+          borderBottom: `2px solid ${colors.border}`,
+          boxShadow: '0 2px 8px #bfa14222',
+        }}>
+          GARY'S ANALYSIS
         </div>
+      </div>
+      
+      {/* Decision Indicators */}
+      {decision && (
+        <div style={{ 
+          position: 'absolute', 
+          top: '3.5rem', 
+          right: '0.75rem', 
+          backgroundColor: decision === 'bet' ? '#00B300' : '#FF3333',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '0.8rem',
+          padding: '0.3rem 0.8rem',
+          borderRadius: '4px',
+          zIndex: 5, 
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05rem',
+        }}>
+          {decision === 'bet' ? 'You Bet' : 'You Faded'}
+        </div>
+      )}
+      
+      {/* *** SIMPLIFIED: ONLY RATIONALE SECTION *** */}
+      <div style={{ 
+        padding: '2rem 1.5rem', 
+        flex: '1', 
+        display: 'flex', 
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflowY: 'auto',
+      }}>
+        {/* Main Analysis - MUCH BIGGER */}
+        <div style={{ 
+          backgroundColor: 'rgba(255,255,255,0.5)', 
+          padding: '1.5rem', 
+          borderRadius: '0.5rem',
+          border: '2px solid rgba(191,161,66,0.3)',
+          fontSize: '1.2rem',
+          lineHeight: '1.6rem',
+          color: '#222',
+          width: '90%',
+          maxHeight: '75%',
+          overflowY: 'auto',
+          boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+        }}>
+          <p style={{ margin: 0, fontWeight: 500 }}>
+            {safePick.description || 'Analysis not available.'}
+          </p>
+        </div>
+      </div>
+      
+      {/* Bottom Pick Reference */}
+      <div style={{ 
+        padding: '0.5rem 1rem',
+        backgroundColor: colors.primary, 
+        color: colors.secondary,
+        fontWeight: 'bold',
+        fontSize: '1rem',
+        textAlign: 'center',
+        borderTop: `2px solid ${colors.border}`,
+      }}>
+        {safePick.shortPick || 'PICK TBD'}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
