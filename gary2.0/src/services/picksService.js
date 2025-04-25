@@ -478,10 +478,10 @@ const picksService = {
       
       // Log the final format that will be stored
       console.log('Final OpenAI raw output format for storage:');
-      console.log(JSON.stringify(cleanedPicks[0] || {}, null, 2));
+      console.log(JSON.stringify(allPicks[0] || {}, null, 2));
       
       // Early exit if no valid picks
-      if (cleanedPicks.length === 0) {
+      if (allPicks.length === 0) {
         console.warn('No valid picks with raw OpenAI output to store');
         return { data: null, error: new Error('No valid picks to store') };
       }
@@ -556,7 +556,7 @@ const picksService = {
         return isValid;
       });
       
-      // Replace safeCleanedPicks with our filtered version
+      // Store the filtered picks in a properly named variable
       const safeCleanedPicks = filteredPicks;
 
       console.log(`Successfully cleaned ${allPicks.length} picks, keeping ${safeCleanedPicks.length} valid picks for database storage`);
