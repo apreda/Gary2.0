@@ -583,22 +583,22 @@ const picksService = {
 
       console.log(`Successfully cleaned ${cleanedPicks.length} picks for database storage`);
       
-      // Get the current date in YYYY-MM-DD format to use as the ID
-      const currentDateString = new Date().toISOString().split('T')[0]; // e.g., "2025-04-16"
-      const timestamp = new Date().toISOString();
+      // Get today's date string for database operations - YYYY-MM-DD format
+      const currentDate = new Date();
+      const currentDateString = currentDate.toISOString().split('T')[0];
       
-      // CRITICAL FIX: Using simplified approach to avoid PostgreSQL function issues
-      console.log(`STORAGE FIX: Fixing PostgreSQL function issues for date ${currentDateString}`);
-      
-      // First, verify Supabase connection
-      console.log('Verifying Supabase connection...');
-      const connectionVerified = await ensureAnonymousSession();
+      // Log the date we're working with - be explicit about using today's date
+      console.log(`Storing picks specifically for today's date: ${currentDateString}`);
+
+      // Clean out any existing picks for today
       try {
-        // Delete any existing records for today first
         const { error: deleteError } = await supabase
           .from('daily_picks')
           .delete()
           .eq('date', currentDateString);
+        
+        // Log deletion attempt with the specific date
+        console.log(`Attempting to delete any existing picks for ${currentDateString}`);
           
         if (deleteError) {
           console.log('Note: Could not delete existing record:', deleteError);
@@ -634,10 +634,16 @@ const picksService = {
       // Structure the data according to the daily_picks table schema
       // The table expects: { date: 'YYYY-MM-DD', picks: [array of pick objects] }
       
+      // Make absolutely sure we're using today's date (not the date from the picks)
+      const todayDate = new Date();
+      const todayDateString = todayDate.toISOString().split('T')[0];
+      
       const pickData = {
-        date: currentDateString,
+        date: todayDateString, // Always use today's date, regardless of pick dates
         picks: safeCleanedPicks // This is the JSON array of pick objects
       };
+      
+      console.log(`Storing picks with explicit today's date: ${todayDateString}`);
       
       console.log('Inserting picks with correct structure:', pickData);
       
