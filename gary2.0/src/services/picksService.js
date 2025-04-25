@@ -443,7 +443,7 @@ const picksService = {
       
       // STORE ONLY RAW OPENAI OUTPUT - per requirements
       // This is the cleanest approach that stores exactly what OpenAI returns
-      const cleanedPicks = picks.map(pick => {
+      const allPicks = picks.map(pick => {
         console.log('Processing pick for storage:', pick.id);
         
         // Extract the raw OpenAI analysis which contains exactly the format we want
@@ -454,8 +454,9 @@ const picksService = {
           console.warn(`Warning: Missing rawAnalysis for pick ${pick.id}`);
           return null; // Will be filtered out
         }
-        
-        console.log(`Using raw OpenAI output format for pick ${pick.id}:`, rawOutput);
+
+        // Log the actual pick value to help debug null issues
+        console.log(`Pick value for ${pick.id}:`, rawOutput.pick);
         
         // Return the exact OpenAI output as shown in requirements
         return {
@@ -499,7 +500,7 @@ const picksService = {
       }, null, 2));
         
       // Additional step: stringified again to verify the data isn't too big
-      const initialJson = JSON.stringify(cleanedPicks);
+      const initialJson = JSON.stringify(allPicks);
       console.log(`Cleaned picks data size: ${initialJson.length} characters`);
       
       // If data is still too large, perform extreme optimization
@@ -524,12 +525,12 @@ const picksService = {
         console.log('No mock/emergency picks will be used per development guidelines');
         
         // We'll just continue with the existing cleaned real picks rather than creating fake ones
-        console.log(`Continuing with ${cleanedPicks.length} real picks only`);
+        console.log(`Continuing with ${allPicks.length} real picks only`);
         
         // No emergency picks are created here by design - following guidelines
         
         // Super minimal format - absolute bare essentials only
-        const superMinimal = cleanedPicks.map(pick => ({
+        const superMinimal = allPicks.map(pick => ({
           id: pick.id,
           league: pick.league,
           gameStr: pick.gameStr,
@@ -545,9 +546,20 @@ const picksService = {
         return JSON.parse(minimalJson);
       }
       
-      const safeCleanedPicks = JSON.parse(initialJson);
+      // CRITICAL: Filter out any picks with null 'pick' values before storing in Supabase
+      const filteredPicks = JSON.parse(initialJson).filter(pick => {
+        // Only keep picks that have valid non-null pick values
+        const isValid = pick && pick.pick !== null && pick.pick !== undefined && pick.pick !== '';
+        if (!isValid) {
+          console.log(`FILTERING OUT invalid pick with ID: ${pick?.id} - has null/empty pick value`);
+        }
+        return isValid;
+      });
+      
+      // Replace safeCleanedPicks with our filtered version
+      const safeCleanedPicks = filteredPicks;
 
-      console.log(`Successfully cleaned ${cleanedPicks.length} picks for database storage`);
+      console.log(`Successfully cleaned ${allPicks.length} picks, keeping ${safeCleanedPicks.length} valid picks for database storage`);
       
       // Get today's date string for database operations - YYYY-MM-DD format
       const currentDate = new Date();
@@ -603,7 +615,7 @@ const picksService = {
       
       console.log(`Storing picks using exactly the OpenAI output format for date: ${todayDateString}`);
       
-      // Important: We're storing the RAW OpenAI output with no transformations
+      // Important: We're storing ONLY VALID RAW OpenAI output with no transformations
       // This matches the example format in the requirements:
       // {
       //   "pick": "Angels -1.5 (+135)",
@@ -612,9 +624,17 @@ const picksService = {
       //   "rationale": "Tyler Anderson's 2.08 ERA..."
       // }
       
+      // ONLY store picks from games that Gary actually made a selection for (non-null pick value)
+      // The screenshot in OpenAI logs shows real picks but Supabase has null values - this fixes that
+      if (safeCleanedPicks.length === 0) {
+        console.warn('⚠️ WARNING: No valid picks to store in database - all picks had null values');
+        console.warn('This may indicate an issue with OpenAI output processing');
+        throw new Error('No valid picks to store in database - all picks had null values');
+      }
+      
       const pickData = {
         date: todayDateString, // Always use today's date
-        picks: safeCleanedPicks // The array of raw OpenAI output objects
+        picks: safeCleanedPicks // Only the filtered array of valid non-null OpenAI output objects
       };
       
       console.log(`Storing picks with explicit today's date: ${todayDateString}`);
