@@ -90,25 +90,29 @@ function RealGaryPicks() {
       if (data && data.picks) {
         picksArray = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
         
-        // SIMPLIFIED: Map picks to only what's needed for front/back display
+        // The picks now use the OpenAI output format directly
+        // Each pick should have: pick, type, confidence, rationale fields
         picksArray = picksArray.map(pick => {
+          console.log('Raw pick from Supabase:', pick);
+          
           // Create a minimal pick object with just what we need
           const simplePick = {
-            id: pick.id,
-            // Front of card: Just the pick
-            shortPick: pick.shortPickStr || pick.rawAnalysis?.pick || '',
-            // Back of card: Just the rationale
-            description: pick.garysAnalysis || pick.rawAnalysis?.rationale || '',
+            id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            // Front of card: Just the pick (raw OpenAI output format)
+            shortPick: pick.pick || '',
+            // Back of card: Just the rationale (raw OpenAI output format)
+            description: pick.rationale || '',
             // Minimal metadata needed for RetroPickCard component
-            game: pick.gameStr || pick.game || '',
+            game: pick.game || '',
+            league: pick.league || '',
             confidence: pick.confidence || 0,
-            time: pick.time || ''
+            time: pick.time || '',
+            // Additional OpenAI output fields that might be useful
+            type: pick.type || 'Moneyline',
+            trapAlert: pick.trapAlert || false,
+            revenge: pick.revenge || false,
+            momentum: pick.momentum || 0
           };
-          
-          // For completeness, make sure raw data is preserved
-          if (pick.rawAnalysis) {
-            simplePick.rawAnalysis = pick.rawAnalysis;
-          }
           
           console.log('Simplified pick for rendering:', simplePick);
           return simplePick;
