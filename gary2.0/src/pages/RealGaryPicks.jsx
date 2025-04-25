@@ -118,19 +118,26 @@ function RealGaryPicks() {
           .map(pick => {
             console.log('Processing valid pick from Supabase:', pick);
             
-            // Create a minimal pick object with just what we need
+            // Create a pick object with BOTH original OpenAI fields AND mapped fields
+            // IMPORTANT: RetroPickCard needs BOTH the original and mapped fields
             const simplePick = {
               id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-              // Front of card: Just the pick (raw OpenAI output format)
-              shortPick: pick.pick || '',
-              // Back of card: Just the rationale (raw OpenAI output format)
-              description: pick.rationale || '',
-              // Minimal metadata needed for RetroPickCard component
+              
+              // Include original OpenAI format fields
+              pick: pick.pick || '',          // Original OpenAI field for the bet
+              rationale: pick.rationale || '', // Original OpenAI field for analysis
+              
+              // Also include mapped fields for RetroPickCard compatibility
+              shortPick: pick.pick || '',     // For front of card 
+              description: pick.rationale || '', // For back of card
+              
+              // Essential metadata
               game: pick.game || '',
               league: pick.league || '',
               confidence: pick.confidence || 0,
               time: pick.time || '',
-              // Additional OpenAI output fields that might be useful
+              
+              // Additional OpenAI output fields
               type: pick.type || 'Moneyline',
               trapAlert: pick.trapAlert || false,
               revenge: pick.revenge || false,
