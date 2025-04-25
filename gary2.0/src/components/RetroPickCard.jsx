@@ -329,41 +329,51 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     error: '#EF4444', // Red
   };
 
-  // For debugging only - log details about the pick
+  // For debugging only - log details about the pick with special focus on OpenAI format fields
   console.log("RetroPickCard detailed pick:", {
     id: pick?.id,
+    // OpenAI format fields
+    pick: pick?.pick,
+    rationale: pick?.rationale ? pick.rationale.substring(0, 30) + '...' : null,
+    type: pick?.type,
+    confidence: pick?.confidence,
+    // Legacy format fields
     shortPick: pick?.shortPick,
+    description: pick?.description ? pick.description.substring(0, 30) + '...' : null,
     game: pick?.game,
-    betType: pick?.betType,
-    moneyline: pick?.moneyline,
-    spread: pick?.spread,
-    overUnder: pick?.overUnder,
-    bullets: pick?.garysBullets?.length
+    league: pick?.league,
+    time: pick?.time
   });
 
   // Use the actual pick data with minimal defaults only for required fields
+  // IMPORTANT: We're focused on the exact OpenAI output format:
+  // pick, type, confidence, rationale, etc.
   const safePick = {
-    ...pick,
     id: pick?.id || 'unknown',
-    // For the front of card - prioritize OpenAI format
+    
+    // FRONT CARD - DISPLAY JUST THE PICK
+    // Priority order: OpenAI format (pick) > legacy (shortPick)
     shortPick: pick?.pick || pick?.shortPick || 'PICK TBD',
-    // For the back of card - prioritize OpenAI format 
+    
+    // BACK CARD - DISPLAY JUST THE RATIONALE
+    // Priority order: OpenAI format (rationale) > legacy (description)
     description: pick?.rationale || pick?.description || 'Analysis not available',
+    
+    // Essential metadata for display
     game: pick?.game || 'TBD vs TBD',
     league: pick?.league || 'SPORT',
-    confidence: pick?.confidence || 0,
     time: pick?.time || '10:10 PM',
-    // Extra OpenAI format fields
+    
+    // OpenAI format fields (used in other parts of the app)
     type: pick?.type || 'moneyline',
-    moneyline: pick?.moneyline || '',
-    team: pick?.team || '',
-    garysBullets: pick?.garysBullets || [
-      'Statistical analysis supports this selection',
-      'Current odds present good betting value',
-    ],
-    confidenceLevel: pick?.confidenceLevel || 75,
-    // Format confidence as percentage if needed
-    confidence: pick?.confidence || (pick?.confidenceLevel ? `${pick.confidenceLevel}%` : '75%')
+    trapAlert: pick?.trapAlert || false,
+    revenge: pick?.revenge || false,
+    momentum: pick?.momentum || 0,
+    
+    // Confidence handling (support both number and string formats)
+    confidence: typeof pick?.confidence === 'number' ? 
+      Math.round(pick.confidence * 100) + '%' : 
+      (pick?.confidence || '75%')
   };
 
   // Apply formatting to safePick - store the formatted version as a new property to avoid overwriting original
@@ -522,6 +532,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           maxWidth: '90%'
         }}>
           {/* Display pick directly from raw OpenAI output */}
+          {/* Display the pick from OpenAI directly */}
           {safePick.shortPick !== 'PICK TBD' && safePick.shortPick !== '' ? 
             safePick.shortPick : 
             'PICK UNAVAILABLE'}
@@ -722,6 +733,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           overflowY: 'auto',
           boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
         }}>
+          {/* Display the rationale from OpenAI directly */}
           <p style={{ margin: 0, fontWeight: 500 }}>
             {safePick.description || 'Analysis not available.'}
           </p>
