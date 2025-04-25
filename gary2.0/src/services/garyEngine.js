@@ -296,7 +296,7 @@ Provide your betting analysis in the exact JSON format specified.`
 
 /**
  * Parse Gary's narrative analysis into structured data
- * @param {string} analysis - Full text analysis from OpenAI
+ * @param {string|object} analysis - Full analysis from OpenAI, either as JSON or formatted text
  * @returns {object} - Structured data extracted from the analysis
  */
 export function parseGaryAnalysis(analysis) {
@@ -312,6 +312,34 @@ export function parseGaryAnalysis(analysis) {
     };
     
     if (!analysis) return defaultResult;
+
+    // CRITICAL FIX: First check if this is already structured JSON data
+    try {
+      // Try to parse if it's a string, otherwise assume it's already an object
+      const jsonData = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
+      
+      // Check if it has the expected OpenAI format structure
+      if (typeof jsonData === 'object' && jsonData !== null) {
+        // If we have a direct structured pick object as expected from OpenAI
+        if (jsonData.pick !== undefined) {
+          console.log('Successfully parsed structured JSON from OpenAI');
+          return {
+            pick: jsonData.pick, // This is the critical field that was null before
+            confidence: jsonData.confidence || 'Medium',
+            betType: jsonData.type || 'Moneyline',
+            stake: typeof jsonData.confidence === 'number' ? Math.round(jsonData.confidence * 300) : 200,
+            keyPoints: [jsonData.rationale || ''].filter(Boolean),
+            reasoning: jsonData.rationale || ''
+          };
+        }
+      }
+    } catch (jsonError) {
+      // Not valid JSON, continue with text-based parsing
+      console.log('Not a valid JSON object, falling back to text parsing');
+    }
+    
+    // Legacy text-based parsing for backward compatibility
+    console.log('Using legacy text parsing for analysis');
     
     // Extract confidence level
     let confidence = 'Medium';
