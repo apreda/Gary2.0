@@ -92,30 +92,53 @@ function RealGaryPicks() {
         
         // The picks now use the OpenAI output format directly
         // Each pick should have: pick, type, confidence, rationale fields
-        picksArray = picksArray.map(pick => {
-          console.log('Raw pick from Supabase:', pick);
-          
-          // Create a minimal pick object with just what we need
-          const simplePick = {
-            id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            // Front of card: Just the pick (raw OpenAI output format)
-            shortPick: pick.pick || '',
-            // Back of card: Just the rationale (raw OpenAI output format)
-            description: pick.rationale || '',
-            // Minimal metadata needed for RetroPickCard component
-            game: pick.game || '',
-            league: pick.league || '',
-            confidence: pick.confidence || 0,
-            time: pick.time || '',
-            // Additional OpenAI output fields that might be useful
-            type: pick.type || 'Moneyline',
-            trapAlert: pick.trapAlert || false,
-            revenge: pick.revenge || false,
-            momentum: pick.momentum || 0
-          };
-          
-          console.log('Simplified pick for rendering:', simplePick);
-          return simplePick;
+        picksArray = picksArray
+          // Filter out any emergency picks or invalid picks
+          .filter(pick => {
+            // Skip any picks with emergency in the ID
+            if (pick.id && pick.id.includes('emergency')) {
+              console.log('Skipping emergency pick:', pick.id);
+              return false;
+            }
+            
+            // Skip any picks without a proper pick field (OpenAI format)
+            if (!pick.pick || pick.pick === '') {
+              console.log('Skipping pick with missing pick field:', pick.id);
+              return false;
+            }
+            
+            // Skip any picks without a rationale (OpenAI format)
+            if (!pick.rationale || pick.rationale === '') {
+              console.log('Skipping pick with missing rationale field:', pick.id);
+              return false;
+            }
+            
+            return true;
+          })
+          .map(pick => {
+            console.log('Processing valid pick from Supabase:', pick);
+            
+            // Create a minimal pick object with just what we need
+            const simplePick = {
+              id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              // Front of card: Just the pick (raw OpenAI output format)
+              shortPick: pick.pick || '',
+              // Back of card: Just the rationale (raw OpenAI output format)
+              description: pick.rationale || '',
+              // Minimal metadata needed for RetroPickCard component
+              game: pick.game || '',
+              league: pick.league || '',
+              confidence: pick.confidence || 0,
+              time: pick.time || '',
+              // Additional OpenAI output fields that might be useful
+              type: pick.type || 'Moneyline',
+              trapAlert: pick.trapAlert || false,
+              revenge: pick.revenge || false,
+              momentum: pick.momentum || 0
+            };
+            
+            console.log('Valid pick ready for rendering:', simplePick);
+            return simplePick;
         });
       }
       console.log('Parsed and enhanced picksArray:', picksArray);
@@ -123,21 +146,45 @@ function RealGaryPicks() {
       // Check if we have picks for today - either from database error or empty array
       if (fetchError || !picksArray.length) {
         const today = new Date().toISOString().split('T')[0];
-        console.log(`No picks found for today (${today}). Generating new picks...`);
+        console.log(`No valid picks found for ${today}, attempting to generate new ones`);
+        
         try {
-          // Generate new picks using our 3-layer system
-          const generatedPicks = await picksService.generateDailyPicks();
-          console.log(`Successfully generated ${generatedPicks.length} new picks for ${today}:`, generatedPicks);
+          // Show loading state during generation
+          setLoading(true);
           
-          // Store the new picks in Supabase with today's date
-          await picksService.storeDailyPicksInDatabase(generatedPicks);
-          console.log(`Successfully stored new picks in database for ${today}`);
-          
-          // Update state with new picks
-          setPicks(generatedPicks || []);
+          // Delete any old picks for today (cleanup)
+          console.log('Cleaning up any existing picks for today before generating new ones');
+          await supabase
+            .from('daily_picks')
+            .delete()
+            .eq('date', today);
+            
+          // Since we don't have picks, generate some
+          const generated = await picksService.generateDailyPicks();
+          if (generated && generated.success) {
+            // We successfully generated picks - reload from the database
+            const { data: freshData } = await supabase
+              .from('daily_picks')
+              .select('picks, date')
+              .eq('date', today)
+              .maybeSingle();
+            
+            if (freshData && freshData.picks) {
+              // Process picks again
+              picksArray = typeof freshData.picks === 'string' ? 
+                JSON.parse(freshData.picks) : freshData.picks;
+                
+              // Apply the same filtering to remove any emergency picks
+              picksArray = picksArray.filter(pick => {
+                return pick.id && !pick.id.includes('emergency') && 
+                      pick.pick && pick.pick !== '' &&
+                      pick.rationale && pick.rationale !== '';
+              });
+            }
+          }
         } catch (genError) {
-          console.error(`Error generating picks for ${today}:`, genError);
-          throw new Error('Failed to generate new picks: ' + genError.message);
+          console.error('Error generating picks:', genError);
+          setError('Failed to generate picks. Please try again later.');
         }
       } else {
         // We have picks from the database
