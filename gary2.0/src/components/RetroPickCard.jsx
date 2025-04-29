@@ -200,8 +200,9 @@ function formatGameTitle(game, homeTeam, awayTeam) {
   // Use homeTeam and awayTeam direct fields if available (from OpenAI), otherwise parse from game field
   safePick.formattedGame = formatGameTitle(safePick.game, pick?.homeTeam, pick?.awayTeam);
 
-  // Default league and time if not provided
-  const league = safePick.league || 'MLB';
+  // Get league information from the pick (could be MLB, NBA, NHL, etc.)
+  // Don't default to any specific league to avoid bias
+  const league = safePick.league || '';
   // Format time in 12-hour format if not provided (10:10 PM ET)
   // FIX: Remove leading zeros from time (06:11 PM → 6:11 PM)
   const formattedTime = safePick.time ? safePick.time.replace(/^0/,'').replace(/:0/, ':') : '10:10 PM ET';
