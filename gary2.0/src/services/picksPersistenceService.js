@@ -1,6 +1,10 @@
 /**
  * Service for managing the persistence of picks data
  * Ensures picks are properly saved and retrieved across sessions and users
+ * 
+ * NOTE: This service is maintained for backward compatibility only.
+ * Primary picks storage is now handled by picksService.js
+ * which preserves the exact OpenAI output format.
  */
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 

@@ -1,6 +1,10 @@
 /**
  * Script to update Supabase picks with properly formatted data
- * Ensures shortPick is formatted as "TEAM -ODDS" (e.g., "LAL -135")
+ * DEPRECATED: This script is maintained for backward compatibility only.
+ * 
+ * NOTE: The updated Gary 2.0 system now preserves the exact OpenAI output format
+ * including fields like league="MLB" (not "baseball_mlb") and time="10:05 PM ET"
+ * This script should not be used on data generated after April 29, 2025.
  */
 import { supabase, ensureAnonymousSession } from '../supabaseClient.js';
 
@@ -79,21 +83,35 @@ const updateSupabasePicks = async () => {
       return;
     }
     
-    // Update the shortPick format for each pick
-    const updatedPicks = data.picks.map(pick => {
-      // Add or update confidence with % if needed
-      const confidence = pick.confidenceLevel 
-        ? `${pick.confidenceLevel}%` 
-        : (pick.confidence && !pick.confidence.includes('%') 
-            ? `${pick.confidence}%` 
-            : pick.confidence || '75%');
-            
-      return {
-        ...pick,
-        shortPick: formatShortPick(pick),
-        confidence: confidence
-      };
-    });
+    // Check if we have new OpenAI format data - if so, preserve it exactly
+    const hasNewFormat = data.picks.some(pick => 
+      typeof pick.pick === 'string' && typeof pick.league === 'string' && 
+      typeof pick.time === 'string' && typeof pick.confidence === 'number'
+    );
+    
+    let updatedPicks;
+    if (hasNewFormat) {
+      console.log('Detected new OpenAI output format - preserving exact format');
+      // Leave the picks unchanged to preserve exact OpenAI output format
+      updatedPicks = data.picks;
+    } else {
+      // Only apply the old format transformations to legacy picks
+      console.log('Found legacy pick format - updating shortPick format');
+      updatedPicks = data.picks.map(pick => {
+        // Add or update confidence with % if needed
+        const confidence = pick.confidenceLevel 
+          ? `${pick.confidenceLevel}%` 
+          : (pick.confidence && !pick.confidence.includes('%') 
+              ? `${pick.confidence}%` 
+              : pick.confidence || '75%');
+              
+        return {
+          ...pick,
+          shortPick: formatShortPick(pick),
+          confidence: confidence
+        };
+      });
+    }
     
     console.log('Updated picks:', updatedPicks);
     
