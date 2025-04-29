@@ -386,15 +386,31 @@ const picksService = {
       
       // Important: Store the picks in Supabase before returning
       try {
-        // Ensure we have the rawAnalysis from OpenAI for each pick
-        const picksWithRawOutput = topPicks.filter(pick => pick.rawAnalysis);
+        // CRITICAL UPDATE: Extract picks with EXACT OpenAI output format
+        // Look for new rawOpenAIOutput field that contains unmodified OpenAI response
+        const picksWithRawOpenAI = topPicks.filter(pick => {
+          // First try to get the new rawOpenAIOutput from the aiAnalysis
+          const hasRawOpenAI = pick.rawAnalysis?.rawOpenAIOutput !== undefined;
+          if (hasRawOpenAI) {
+            console.log(`Pick has exact OpenAI output format: ${pick.id}`);
+          } else {
+            console.log(`Pick missing raw OpenAI output format: ${pick.id}`);
+          }
+          return hasRawOpenAI;
+        });
         
-        if (picksWithRawOutput.length > 0) {
-          console.log(`Storing ${picksWithRawOutput.length} picks in Supabase`);
-          await picksService.storeDailyPicksInDatabase(picksWithRawOutput);
-          console.log('Successfully stored picks in Supabase');
+        // Log exact format being used for Supabase storage
+        if (picksWithRawOpenAI.length > 0) {
+          console.log('Example EXACT OpenAI output format being stored:');
+          console.log(JSON.stringify(picksWithRawOpenAI[0].rawAnalysis.rawOpenAIOutput, null, 2));
+        }
+        
+        if (picksWithRawOpenAI.length > 0) {
+          console.log(`Storing ${picksWithRawOpenAI.length} picks with EXACT OpenAI format in Supabase`);
+          await picksService.storeDailyPicksInDatabase(picksWithRawOpenAI);
+          console.log('Successfully stored picks in Supabase using EXACT OpenAI format');
         } else {
-          console.warn('No picks with raw OpenAI output to store');
+          console.warn('No picks with EXACT OpenAI output format to store');
         }
       } catch (storageError) {
         console.error('Error storing picks in database:', storageError);
@@ -464,43 +480,37 @@ const picksService = {
       // Extract only the essential pick data for UI display and Supabase storage
       console.log('Ensuring we only store minimal clean data for the picks');
       
-      // STORE ONLY THE EXACT FIELDS FROM OPENAI OUTPUT - per requirements
-      // We must extract ONLY the expected output fields and nothing more
+      // CRITICAL: USE THE EXACT UNMODIFIED OPENAI OUTPUT - no transformations at all
+      // We must use the rawOpenAIOutput field which contains the exact JSON object returned by OpenAI
       const allPicks = picks.map(pick => {
         console.log('Processing pick for storage:', pick.id);
         
-        // Extract the raw OpenAI analysis 
-        const rawOutput = pick.rawAnalysis;
+        // CRITICAL UPDATE: Use the rawOpenAIOutput field which contains the unmodified OpenAI response
+        const rawOpenAIOutput = pick.rawAnalysis?.rawOpenAIOutput;
         
-        if (!rawOutput) {
-          console.warn(`Warning: Missing rawAnalysis for pick ${pick.id}`);
+        if (!rawOpenAIOutput) {
+          console.warn(`Warning: Missing rawOpenAIOutput for pick ${pick.id}`);
           return null; // Will be filtered out
         }
 
-        // IMPORTANT: Do NOT modify any OpenAI values like league, time, etc.
-        console.log(`Processing OpenAI output with exact fields:`, JSON.stringify(rawOutput, null, 2));
+        // Log the exact unmodified OpenAI output
+        console.log(`EXACT OpenAI output being stored:`, JSON.stringify(rawOpenAIOutput, null, 2));
         
-        // CRITICAL: Preserve the EXACT fields from OpenAI without any modification
-        // We take the raw fields directly to avoid any conversion issues (like 'MLB' vs 'baseball_mlb')
-        const exactFields = {
-          pick: rawOutput.pick,
-          type: rawOutput.type,
-          confidence: rawOutput.confidence,
-          trapAlert: rawOutput.trapAlert || false,
-          revenge: rawOutput.revenge || false,
-          superstition: rawOutput.superstition || false,
-          momentum: rawOutput.momentum || 0,
-          homeTeam: rawOutput.homeTeam,  // Use EXACT OpenAI value
-          awayTeam: rawOutput.awayTeam,  // Use EXACT OpenAI value
-          league: rawOutput.league,      // Use EXACT OpenAI value (e.g., 'MLB' not 'baseball_mlb')
-          time: rawOutput.time,          // Use EXACT OpenAI value (e.g., '7:10 PM ET')
-          rationale: rawOutput.rationale
-        };
+        // CRITICAL: Use the rawOpenAIOutput directly with no transformations at all
+        // This ensures fields like league="MLB" and time="10:05 PM ET" are preserved exactly
         
-        console.log(`Preserving exact OpenAI field values, especially league="${rawOutput.league}" and time="${rawOutput.time}"`);
-        return exactFields;
+        // Verify the critical fields exist
+        console.log(`Verifying OpenAI format has required fields:`);
+        console.log(`- pick: ${rawOpenAIOutput.pick}`);
+        console.log(`- type: ${rawOpenAIOutput.type}`);
+        console.log(`- confidence: ${rawOpenAIOutput.confidence}`);
+        console.log(`- league: ${rawOpenAIOutput.league}`);
+        console.log(`- time: ${rawOpenAIOutput.time}`);
         
-        // This ensures we store only the exact fields needed, no extra processing data
+        // Return the exact OpenAI output without any transformation
+        return rawOpenAIOutput;
+        
+        // This ensures the exact format from OpenAI is preserved in Supabase
       }).filter(Boolean); // Remove any null entries
       
       // Log the final format that will be stored
