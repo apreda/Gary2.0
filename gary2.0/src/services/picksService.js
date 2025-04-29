@@ -676,10 +676,15 @@ const picksService = {
         // We don't throw an error - we'll continue with database operations
       }
       
+      // Important: Supabase requires JSON to be properly stringified for JSONB fields
+      // We need to convert the picks array to a string before storing it
       const pickData = {
         date: todayDateString, // Always use today's date
-        picks: safeCleanedPicks // Only the filtered array of valid non-null OpenAI output objects
+        picks: JSON.stringify(safeCleanedPicks) // Convert the picks array to a JSON string for proper storage
       };
+      
+      // Log the exact format being sent to Supabase
+      console.log('Final JSON string being sent to Supabase:', pickData.picks.substring(0, 100) + '...');
       
       console.log(`Storing picks with explicit today's date: ${todayDateString}`);
       
