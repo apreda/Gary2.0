@@ -465,7 +465,7 @@ const picksService = {
       console.log('Ensuring we only store minimal clean data for the picks');
       
       // STORE ONLY RAW OPENAI OUTPUT - per requirements
-      // This is the cleanest approach that stores exactly what OpenAI returns
+      // We must preserve the EXACT format received from OpenAI without any modifications
       const allPicks = picks.map(pick => {
         console.log('Processing pick for storage:', pick.id);
         
@@ -479,28 +479,15 @@ const picksService = {
         }
 
         // Log the actual pick value to help debug null issues
-        console.log(`Pick value for ${pick.id}:`, rawOutput.pick);
+        console.log(`Pick value for ${pick.id}:`, rawOutput);
+        console.log(`Example OpenAI format that should be preserved exactly:`, JSON.stringify(rawOutput, null, 2));
         
-        // Return the OpenAI output fields with all necessary display data
-        // Include time and league information that's critical for proper display
-        return {
-          // Include all OpenAI output fields
-          pick: rawOutput.pick,
-          type: rawOutput.type,
-          confidence: rawOutput.confidence,
-          trapAlert: rawOutput.trapAlert || false,
-          revenge: rawOutput.revenge || false,
-          superstition: rawOutput.superstition || false,
-          momentum: rawOutput.momentum || 0,
-          // Include the team names from OpenAI for proper card display
-          homeTeam: rawOutput.homeTeam || pick.home_team || '',
-          awayTeam: rawOutput.awayTeam || pick.away_team || '',
-          // Include league information for sport categorization
-          league: rawOutput.league || pick.league || '',
-          // Include game time information
-          time: rawOutput.time || pick.time || '',
-          rationale: rawOutput.rationale
-        };
+        // CRITICAL: Return the raw OpenAI output object EXACTLY as received
+        // Do not modify any field names or values - preserve everything 100%
+        return rawOutput;
+        
+        // This ensures fields like type, homeTeam, awayTeam, league, time 
+        // are preserved exactly as provided by OpenAI with no modifications
       }).filter(Boolean); // Remove any null entries
       
       // Log the final format that will be stored
