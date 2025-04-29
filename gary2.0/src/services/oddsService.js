@@ -251,6 +251,9 @@ export const oddsService = {
       });
       return response.data;
     } catch (error) {
+      if (error.response && error.response.status === 401) {
+        console.error('⚠️ API KEY ERROR: The Odds API returned 401 Unauthorized. Your API key has expired or reached its limit. Please update your VITE_ODDS_API_KEY environment variable in Vercel.');
+      }
       console.error('Error fetching upcoming games:', error);
       throw error;
     }

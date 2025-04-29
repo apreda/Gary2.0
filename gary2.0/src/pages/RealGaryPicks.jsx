@@ -189,7 +189,7 @@ function RealGaryPicks() {
                 // The only additional field we need to add is the ID
                 id: pick.id,
                 
-                // Directly use all OpenAI output fields
+                // Directly use all OpenAI output fields exactly as received
                 pick: rawOutput.pick,
                 type: rawOutput.type || 'moneyline',
                 confidence: rawOutput.confidence,
@@ -198,11 +198,13 @@ function RealGaryPicks() {
                 revenge: rawOutput.revenge || false,
                 momentum: rawOutput.momentum || 0,
                 
-                // Include these metadata fields for UI display
-                // but they're not part of what's stored in Supabase
-                game: pick.game || pick.gameStr || '',
-                league: pick.league || '',
-                time: pick.time || ''
+                // CRITICAL: Use OpenAI league and time formats directly
+                // This ensures fields like league="MLB" (not "baseball_mlb") 
+                // and time="10:05 PM ET" are preserved exactly
+                homeTeam: rawOutput.homeTeam || pick.home_team || '',
+                awayTeam: rawOutput.awayTeam || pick.away_team || '',
+                league: rawOutput.league || pick.league || '',
+                time: rawOutput.time || pick.time || ''
               };
             }));
             setLoading(false); // We have picks now

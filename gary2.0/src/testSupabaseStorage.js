@@ -13,19 +13,22 @@ const testDirectSupabaseStorage = async () => {
     const dateString = todayDate.toISOString().split('T')[0]; // e.g., "2025-04-17"
     console.log(`Testing with date: ${dateString}`);
     
-    // Create a simple test pick
+    // Create test picks using the exact OpenAI output format
     const testPicks = [
       {
         id: `test-${Date.now()}`,
-        league: 'NBA',
-        game: 'Denver Nuggets vs Dallas Mavericks',
-        betType: 'Moneyline',
-        moneyline: 'Denver Nuggets',
-        odds: '-125',
-        confidenceLevel: 'High',
-        wagerAmount: 300,
-        shortPick: 'DEN ML -125',
-        result: 'pending'
+        pick: "Denver Nuggets +2 -112",
+        type: "spread",
+        confidence: 0.75,
+        trapAlert: true,
+        revenge: false,
+        superstition: false,
+        momentum: 0.52,
+        homeTeam: "Denver Nuggets",
+        awayTeam: "Dallas Mavericks",
+        league: "NBA",  // NOTE: Exact league name (not "basketball_nba")
+        time: "10:05 PM ET", // Exact time format
+        rationale: "Sharp money hammered DAL but this reeks of a trap—line moved big toward the Mavericks despite public favoring Denver. Nuggets have strong ATS record as home dogs and are getting healthy at the right time."
       }
     ];
     
