@@ -301,7 +301,7 @@ Provide your betting analysis in the exact JSON format specified.`
 /**
  * Parse Gary's narrative analysis into structured data
  * @param {string|object} analysis - Full analysis from OpenAI, either as JSON or formatted text
- * @returns {object} - Structured data extracted from the analysis
+ * @returns {object} - Structured data extracted from the analysis with original raw JSON preserved
  */
 export function parseGaryAnalysis(analysis) {
   try {
@@ -312,7 +312,9 @@ export function parseGaryAnalysis(analysis) {
       betType: 'Moneyline',
       stake: 0,
       keyPoints: [],
-      reasoning: ''
+      reasoning: '',
+      // Add a flag to indicate no raw OpenAI data was available
+      rawOpenAIOutput: null
     };
     
     if (!analysis) return defaultResult;
@@ -320,6 +322,8 @@ export function parseGaryAnalysis(analysis) {
     // CRITICAL FIX: Extract JSON from markdown code blocks if present
     // OpenAI often returns JSON inside ```json ``` blocks
     let cleanedAnalysis = analysis;
+    let rawJsonString = null; // Store the raw JSON string for preservation
+    
     if (typeof analysis === 'string') {
       // Check if the response contains a JSON code block
       const jsonCodeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/;
@@ -327,6 +331,7 @@ export function parseGaryAnalysis(analysis) {
       if (match && match[1]) {
         console.log('Found JSON in code block, extracting...');
         cleanedAnalysis = match[1].trim();
+        rawJsonString = cleanedAnalysis; // Preserve the exact JSON string as received
       }
     }
     
@@ -340,13 +345,21 @@ export function parseGaryAnalysis(analysis) {
         // If we have a direct structured pick object as expected from OpenAI
         if (jsonData.pick !== undefined) {
           console.log('Successfully parsed structured JSON from OpenAI');
+          console.log('IMPORTANT: Preserving exact OpenAI format:', JSON.stringify(jsonData, null, 2));
+          
+          // CRITICAL: Store the exact raw OpenAI output object
+          // This must be preserved exactly as received without any field modifications
+          const rawOpenAIOutput = jsonData;
+          
           return {
-            pick: jsonData.pick, // This is the critical field that was null before
+            pick: jsonData.pick,
             confidence: jsonData.confidence || 'Medium',
             betType: jsonData.type || 'Moneyline',
             stake: typeof jsonData.confidence === 'number' ? Math.round(jsonData.confidence * 300) : 200,
             keyPoints: [jsonData.rationale || ''].filter(Boolean),
-            reasoning: jsonData.rationale || ''
+            reasoning: jsonData.rationale || '',
+            // CRITICAL: Store the exact raw OpenAI output to be used for Supabase storage
+            rawOpenAIOutput: rawOpenAIOutput
           };
         }
       }
