@@ -156,8 +156,9 @@ const picksService = {
       const allPicks = [];
       
       // Process each sport (limit to major sports to avoid excessive API calls)
+      // Only include NBA, MLB, and NHL to conserve API requests
       const majorSports = sportsList.filter(sport => 
-        ['basketball_nba', 'baseball_mlb', 'hockey_nhl', 'soccer_epl'].includes(sport.key)
+        ['basketball_nba', 'baseball_mlb', 'hockey_nhl'].includes(sport.key)
       );
       
       // Process each sport sequentially
