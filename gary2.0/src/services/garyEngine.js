@@ -347,6 +347,12 @@ export function parseGaryAnalysis(analysis) {
           console.log('Successfully parsed structured JSON from OpenAI');
           console.log('IMPORTANT: Preserving exact OpenAI format:', JSON.stringify(jsonData, null, 2));
           
+          // CRITICAL DEBUG: Log key properties to verify structure
+          console.log(`OpenAI pick: ${jsonData.pick}, type: ${jsonData.type}, confidence: ${jsonData.confidence}`);
+          console.log(`OpenAI league: ${jsonData.league}, time: ${jsonData.time}`);
+          console.log(`OpenAI has rationale: ${jsonData.rationale ? 'Yes' : 'No'}`);
+          console.log(`OpenAI has full structure: ${jsonData.pick && jsonData.type && jsonData.confidence ? 'Yes' : 'No'}`);
+          
           // CRITICAL: Store the exact raw OpenAI output matching the specified format
           // This is the key fix: We must preserve the EXACT original structure
           // Without any transformations to league names or other fields

@@ -381,24 +381,75 @@ const picksService = {
       
       // Important: Store the picks in Supabase before returning
       try {
-        // STREAMLINED CODE: Extract picks with valid raw OpenAI output format
+        // CRITICAL FIX: Extract picks with valid raw OpenAI output
         let validPicksForStorage = [];
         
         if (topPicks.length > 0) {
-          // For each pick, find the rawAnalysis with rawOpenAIOutput if it exists
-          topPicks.forEach(pick => {
-            if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
-              validPicksForStorage.push(pick);
-              console.log(`Pick has exact OpenAI output format: ${pick.id || 'unknown'}`);
-            } else {
-              console.log(`Pick missing raw OpenAI output format: ${pick.id || 'unknown'}`);
+          console.log('CRITICAL DEBUG: Checking top picks for OpenAI output format:');
+          // First, log all picks to see their structure
+          topPicks.forEach((pick, index) => {
+            console.log(`Pick #${index + 1} ID: ${pick.id || 'unknown'}:`);
+            console.log(JSON.stringify(pick).substring(0, 200) + '...');
+          });
+          
+          // Now create a manual extraction of the raw OpenAI output
+          const enhancedPicks = topPicks.map(pick => {
+            // Create a copy of the pick to avoid modifying the original
+            const enhancedPick = {...pick};
+            
+            // Try to extract the raw OpenAI output from wherever it might be
+            // Direct access (new structure)
+            if (pick.rawOpenAIOutput) {
+              console.log(`Pick ${pick.id} has direct rawOpenAIOutput`);
+              // Already has it, no change needed
             }
+            // Nested in rawAnalysis (older structure)
+            else if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
+              console.log(`Pick ${pick.id} has nested rawOpenAIOutput, promoting to top level`);
+              // Promote it to the top level
+              enhancedPick.rawOpenAIOutput = pick.rawAnalysis.rawOpenAIOutput;
+            }
+            // Manually construct from key fields if possible
+            else if (pick.rawAnalysis) {
+              console.log(`Pick ${pick.id} missing rawOpenAIOutput, trying to reconstruct from rawAnalysis`);
+              // Try to construct a minimal version from available data
+              enhancedPick.rawOpenAIOutput = {
+                pick: pick.rawAnalysis.pick || pick.pick || '',
+                type: pick.rawAnalysis.betType || 'moneyline',
+                confidence: typeof pick.rawAnalysis.confidence === 'number' ? 
+                  pick.rawAnalysis.confidence : 
+                  (pick.rawAnalysis.confidence === 'High' ? 0.8 : 
+                   pick.rawAnalysis.confidence === 'Medium' ? 0.65 : 0.5),
+                league: pick.league || '',
+                time: pick.time || '',
+                homeTeam: pick.homeTeam || '',
+                awayTeam: pick.awayTeam || '',
+                rationale: pick.rawAnalysis.reasoning || pick.reasoning || ''
+              };
+            }
+            
+            return enhancedPick;
+          });
+          
+          // Now filter to only include picks with valid OpenAI output
+          validPicksForStorage = enhancedPicks.filter(pick => {
+            const hasValidOutput = pick.rawOpenAIOutput && 
+                                  pick.rawOpenAIOutput.pick && 
+                                  pick.rawOpenAIOutput.confidence;
+            
+            if (hasValidOutput) {
+              console.log(`Valid pick found: ${pick.id} - ${pick.rawOpenAIOutput.pick}`);
+            } else {
+              console.log(`Invalid pick: ${pick.id} - missing required OpenAI output structure`);
+            }
+            
+            return hasValidOutput;
           });
           
           // Log exact format being used for Supabase storage
           if (validPicksForStorage.length > 0) {
             console.log('Example EXACT OpenAI output format being stored:');
-            console.log(JSON.stringify(validPicksForStorage[0].rawAnalysis.rawOpenAIOutput, null, 2));
+            console.log(JSON.stringify(validPicksForStorage[0].rawOpenAIOutput, null, 2));
           }
         }
         
