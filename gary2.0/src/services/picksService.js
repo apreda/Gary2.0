@@ -345,8 +345,8 @@ const picksService = {
         return [];
       }
 
-      // Use the correct confidence field from OpenAI and set a higher threshold of 0.7 (or 70%)
-      console.log('Filtering picks using OpenAI confidence values with threshold 0.7 (70%)...');
+      // Use the correct confidence field from OpenAI and set a higher threshold of 0.75 (or 75%)
+      console.log('Filtering picks using OpenAI confidence values with threshold 0.75 (75%)...');
       let filteredPicks = allPicks.filter(pick => {
         // Get confidence values - check multiple sources 
         const rawConfidence = pick.rawAnalysis?.confidence || 0;
@@ -355,13 +355,13 @@ const picksService = {
         // Log each pick's confidence for debugging
         console.log(`Pick: ${pick.shortPickStr}, OpenAI confidence: ${normalizedConfidence}`);
         
-        // Filter by threshold 0.7 (70%)
-        return normalizedConfidence >= 0.7;
+        // Filter by threshold 0.75 (75%)
+        return normalizedConfidence >= 0.75;
       });
       
       // If we don't have any high confidence picks, fall back to the best picks we have
       if (filteredPicks.length === 0) {
-        console.log('No picks met the 0.7 confidence threshold, using best available picks instead');
+        console.log('No picks met the 0.75 confidence threshold, using best available picks instead');
         // Sort by confidence and take the top 3 if available
         allPicks.sort((a, b) => {
           const confA = a.rawAnalysis?.confidence || 0;
@@ -576,15 +576,20 @@ const picksService = {
       
       console.log(`Found ${validPicks.length} valid picks with non-null values`);
       
-      // Sort by confidence (high to low) and take the top 6 picks
+      // Sort by confidence (high to low) and apply the 0.75 threshold with no limit on number of picks
       const topPicks = validPicks
+        .filter(pick => {
+          const confidence = typeof pick.confidence === 'number' ? pick.confidence : 0;
+          const meetsThreshold = confidence >= 0.75; // Apply the same 0.75 threshold
+          console.log(`Pick: ${pick.pick}, Confidence: ${confidence}, Meets threshold: ${meetsThreshold}`);
+          return meetsThreshold;
+        })
         .sort((a, b) => {
           // Safely handle any non-numeric confidence values
           const confA = typeof a.confidence === 'number' ? a.confidence : 0;
           const confB = typeof b.confidence === 'number' ? b.confidence : 0;
           return confB - confA; // Sort descending (highest first)
         })
-        .slice(0, 6); // Take only top 6 picks
       
       console.log(`Selected top ${topPicks.length} picks based on confidence scores`);
       
