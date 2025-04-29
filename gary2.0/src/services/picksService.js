@@ -14,11 +14,6 @@ const picksService = {
    * @param {Object} analysis - The betting analysis from Gary's engine
    * @returns {string} The formatted pick string
    */
-  /**
-   * Format pick summary based on betting analysis
-   * @param {Object} analysis - The betting analysis from Gary's engine
-   * @returns {string} The formatted pick string
-   */
   formatShortPick: (analysis) => {
     if (!analysis) return '';
     return analysis.pick || '';
@@ -382,26 +377,11 @@ const picksService = {
       // No limit on picks - use all that meet the threshold
       const topPicks = filteredPicks;
       
-      console.log(`Generated ${topPicks.length} picks successfully`); 
+      console.log(`Generated ${topPicks.length} picks successfully`);
       
       // Important: Store the picks in Supabase before returning
       try {
-        // CRITICAL UPDATE: Extract picks with EXACT OpenAI output format
-        // Look for new rawOpenAIOutput field that contains unmodified OpenAI response
-        const picksWithRawOpenAI = topPicks.filter(pick => {
-          // First try to get the new rawOpenAIOutput from the aiAnalysis
-          const hasRawOpenAI = pick.rawAnalysis?.rawOpenAIOutput !== undefined;
-          if (hasRawOpenAI) {
-            console.log(`Pick has exact OpenAI output format: ${pick.id}`);
-          } else {
-            console.log(`Pick missing raw OpenAI output format: ${pick.id}`);
-          }
-          return hasRawOpenAI;
-        });
-        
-        // CRITICAL FIX: Ensure we always have valid picks to store
-        // This is the key issue - we need to ensure we have actual parseable OpenAI outputs
-        // Extract the raw OpenAI output directly from the picks if available
+        // STREAMLINED CODE: Extract picks with valid raw OpenAI output format
         let validPicksForStorage = [];
         
         if (topPicks.length > 0) {
@@ -409,8 +389,9 @@ const picksService = {
           topPicks.forEach(pick => {
             if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
               validPicksForStorage.push(pick);
+              console.log(`Pick has exact OpenAI output format: ${pick.id || 'unknown'}`);
             } else {
-              console.log('Found pick without proper rawOpenAIOutput structure:', pick.id || 'unknown');
+              console.log(`Pick missing raw OpenAI output format: ${pick.id || 'unknown'}`);
             }
           });
           
@@ -421,16 +402,15 @@ const picksService = {
           }
         }
         
-        // If we couldn't find any valid picks with proper OpenAI format, use the original picks as fallback
-        if (validPicksForStorage.length === 0) {
-          console.log('FALLBACK: Using original picks since no proper OpenAI output format found');
-          validPicksForStorage = topPicks;
+        // Now store the picks with valid data
+        if (validPicksForStorage.length > 0) {
+          console.log(`Storing ${validPicksForStorage.length} picks in Supabase`);
+          await picksService.storeDailyPicksInDatabase(validPicksForStorage);
+          console.log('Successfully stored picks in Supabase');
+        } else {
+          console.error('No picks with valid OpenAI output format found');
+          // Continue rather than throwing error - we'll still return the picks
         }
-        
-        // Now store the picks, guaranteed to have something to store
-        console.log(`Storing ${validPicksForStorage.length} picks in Supabase`);
-        await picksService.storeDailyPicksInDatabase(validPicksForStorage);
-        console.log('Successfully stored picks in Supabase');
       } catch (storageError) {
         console.error('Error storing picks in database:', storageError);
         // Continue despite storage error - we'll still return the picks
@@ -750,17 +730,35 @@ const picksService = {
   standardizePickData: (pick) => {
     if (!pick) return null;
     
-    // If the pick has raw OpenAI output, prioritize that format
-    if (pick.rawAnalysis) {
-      console.log('Using raw OpenAI output for standardization:', pick.rawAnalysis);
+    // UPDATED: Use consistent pattern for extracting OpenAI output
+    // This matches how we extract data in storeDailyPicksInDatabase
+    if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
+      console.log('Using rawOpenAIOutput for standardization');
       
-      // Return the exact OpenAI format with minimal metadata
+      // Use the exact raw OpenAI output format with minimal metadata
+      const rawOutput = pick.rawAnalysis.rawOpenAIOutput;
+      return {
+        id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        game: pick.gameStr || pick.game || '',
+        league: rawOutput.league || pick.league || '',
+        time: rawOutput.time || pick.time || '',
+        // Include the raw OpenAI output directly - matching example format
+        pick: rawOutput.pick,
+        type: rawOutput.type,
+        confidence: rawOutput.confidence,
+        trapAlert: rawOutput.trapAlert || false,
+        revenge: rawOutput.revenge || false,
+        momentum: rawOutput.momentum || 0,
+        rationale: rawOutput.rationale
+      };
+    } else if (pick.rawAnalysis) {
+      console.log('Falling back to rawAnalysis for standardization');
+      // Legacy format - maintained for backward compatibility
       return {
         id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         game: pick.gameStr || pick.game || '',
         league: pick.league || '',
         time: pick.time || '',
-        // Include the raw OpenAI output directly - matching example format
         pick: pick.rawAnalysis.pick,
         type: pick.rawAnalysis.type,
         confidence: pick.rawAnalysis.confidence,
@@ -771,8 +769,8 @@ const picksService = {
       };
     }
     
-    // If no raw analysis, use whatever we have (fallback)
-    console.warn('No raw OpenAI output found for pick:', pick.id);
+    // If no raw analysis, use whatever we have (final fallback)
+    console.warn('No OpenAI output found for pick:', pick.id || 'unknown');
     return pick;
   }
 };
