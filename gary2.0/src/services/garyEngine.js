@@ -572,7 +572,7 @@ export async function makeGaryPick({
     confidence: parsedAnalysis.confidence,
     // Use the text rationale from OpenAI instead of metrics object
     rationale: textRationale,
-    
+    rawOpenAIOutput: aiAnalysis.rawOpenAIOutput, // Attach rawOpenAIOutput directly to the pick object
     // Store metrics in a separate field if needed for internal use
     metrics: {
       brain_score: brain,

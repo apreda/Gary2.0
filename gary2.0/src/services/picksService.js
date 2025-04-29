@@ -627,14 +627,21 @@ const picksService = {
       // CRITICAL FIX: Extract the raw OpenAI output from each pick
       // We need to store *only* the actual OpenAI output format matching the example
       const exactOpenAIOutputs = highConfidencePicks.map(pick => {
+        // Check for the direct rawOpenAIOutput attached to the pick (this is added in the latest fix)
+        if (pick.rawOpenAIOutput) {
+          console.log(`Using direct rawOpenAIOutput for pick: ${pick.rawOpenAIOutput.pick}`);
+          return pick.rawOpenAIOutput;
+        }
         // FIXED: Extract the rawOpenAIOutput from within rawAnalysis
-        if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
-          console.log(`Using rawOpenAIOutput for pick: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
+        else if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
+          console.log(`Using rawAnalysis.rawOpenAIOutput for pick: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
           return pick.rawAnalysis.rawOpenAIOutput;
         } else if (pick.rawAnalysis) {
           console.log(`Falling back to rawAnalysis for pick`);
           return pick.rawAnalysis;
         }
+        // Log the structure of the pick for debugging
+        console.log('Pick structure:', JSON.stringify(pick, null, 2).substring(0, 500));
         // Otherwise return the pick itself (final fallback)
         return pick;
       });
