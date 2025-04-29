@@ -643,11 +643,32 @@ const picksService = {
         console.log(JSON.stringify(exactOpenAIOutputs[0], null, 2));
       }
       
+      // CRITICAL DEBUG: Add more detailed console logs to trace issue
+      console.log('TESTING OUTPUT FORMAT - First pick structure:');
+      if (exactOpenAIOutputs.length > 0) {
+        console.log(JSON.stringify(exactOpenAIOutputs[0], null, 2));
+      }
+      
+      // CRITICAL FIX: Check for any null values and remove them if they exist
+      // This is essential as Supabase can reject JSONB data with null values
+      const sanitizedOutputs = exactOpenAIOutputs.map(pick => {
+        const sanitizedPick = {};
+        // Copy only defined non-null properties
+        Object.keys(pick).forEach(key => {
+          if (pick[key] !== null && pick[key] !== undefined) {
+            sanitizedPick[key] = pick[key];
+          }
+        });
+        return sanitizedPick;
+      });
+      
+      console.log(`Sanitized ${exactOpenAIOutputs.length} picks for Supabase storage`);
+      
       // Important: For JSONB columns in Supabase, we need to provide the actual array, not a JSON string
       // Store only the high-confidence picks (>= 0.75) but preserve their exact output format
       const pickData = {
         date: currentDateString, // Always use today's date
-        picks: exactOpenAIOutputs // Send only the exact OpenAI output format directly
+        picks: sanitizedOutputs // Send only the sanitized OpenAI output format directly
       };
       
       // Log the exact format being sent to Supabase
@@ -657,10 +678,28 @@ const picksService = {
       
       console.log('Inserting picks with correct structure:', pickData);
       
+      // CRITICAL FIX: Make sure to delete any existing records first to avoid conflicts
+      try {
+        console.log(`Explicitly deleting any existing picks for ${currentDateString} before insert`);
+        const { error: deleteError } = await supabase
+          .from('daily_picks')
+          .delete()
+          .eq('date', currentDateString);
+        
+        if (deleteError) {
+          console.log('Warning: Delete operation error before insert:', deleteError);
+        } else {
+          console.log('Successfully cleared existing records');
+        }
+      } catch (e) {
+        console.log('Delete operation warning:', e);
+      }
+      
       // Insert the data with proper structure into the database
-      const { error: insertError } = await supabase
+      const { data: insertData, error: insertError } = await supabase
         .from('daily_picks')
-        .insert(pickData);
+        .insert(pickData)
+        .select(); // Add select to get return data for confirmation
         
       if (insertError) {
         console.error('Error inserting picks:', insertError);
