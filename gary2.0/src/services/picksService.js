@@ -625,11 +625,29 @@ const picksService = {
         // We don't throw an error - we'll continue with database operations
       }
       
+      // CRITICAL FIX: Extract the raw OpenAI output from each pick
+      // We need to store *only* the actual OpenAI output format matching the example
+      const exactOpenAIOutputs = highConfidencePicks.map(pick => {
+        // If the pick has rawAnalysis, use that directly
+        if (pick.rawAnalysis) {
+          console.log(`Using rawAnalysis for pick: ${pick.rawAnalysis.pick}`);
+          return pick.rawAnalysis;
+        }
+        // Otherwise return the pick itself (fallback)
+        return pick;
+      });
+      
+      // Important: Log the first pick to verify format
+      if (exactOpenAIOutputs.length > 0) {
+        console.log('EXACT FORMAT BEING STORED:');
+        console.log(JSON.stringify(exactOpenAIOutputs[0], null, 2));
+      }
+      
       // Important: For JSONB columns in Supabase, we need to provide the actual array, not a JSON string
       // Store only the high-confidence picks (>= 0.75) but preserve their exact output format
       const pickData = {
         date: currentDateString, // Always use today's date
-        picks: highConfidencePicks // Send the actual array directly - Supabase will handle the conversion
+        picks: exactOpenAIOutputs // Send only the exact OpenAI output format directly
       };
       
       // Log the exact format being sent to Supabase
