@@ -477,12 +477,12 @@ const picksService = {
           return null; // Will be filtered out
         }
 
-        // Log the pick details for debugging
-        console.log(`Processing pick with confidence ${rawOutput.confidence}:`, rawOutput.pick);
+        // IMPORTANT: Do NOT modify any OpenAI values like league, time, etc.
+        console.log(`Processing OpenAI output with exact fields:`, JSON.stringify(rawOutput, null, 2));
         
-        // CRITICAL: Extract ONLY the expected output fields from OpenAI
-        // This ensures we store exactly and only what we need
-        return {
+        // CRITICAL: Preserve the EXACT fields from OpenAI without any modification
+        // We take the raw fields directly to avoid any conversion issues (like 'MLB' vs 'baseball_mlb')
+        const exactFields = {
           pick: rawOutput.pick,
           type: rawOutput.type,
           confidence: rawOutput.confidence,
@@ -490,12 +490,15 @@ const picksService = {
           revenge: rawOutput.revenge || false,
           superstition: rawOutput.superstition || false,
           momentum: rawOutput.momentum || 0,
-          homeTeam: rawOutput.homeTeam,
-          awayTeam: rawOutput.awayTeam,
-          league: rawOutput.league,
-          time: rawOutput.time,
+          homeTeam: rawOutput.homeTeam,  // Use EXACT OpenAI value
+          awayTeam: rawOutput.awayTeam,  // Use EXACT OpenAI value
+          league: rawOutput.league,      // Use EXACT OpenAI value (e.g., 'MLB' not 'baseball_mlb')
+          time: rawOutput.time,          // Use EXACT OpenAI value (e.g., '7:10 PM ET')
           rationale: rawOutput.rationale
         };
+        
+        console.log(`Preserving exact OpenAI field values, especially league="${rawOutput.league}" and time="${rawOutput.time}"`);
+        return exactFields;
         
         // This ensures we store only the exact fields needed, no extra processing data
       }).filter(Boolean); // Remove any null entries
