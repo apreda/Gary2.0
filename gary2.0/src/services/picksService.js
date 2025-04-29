@@ -524,6 +524,8 @@ const picksService = {
         momentum: 0.65,
         homeTeam: "Cincinnati Reds",
         awayTeam: "St. Louis Cardinals",
+        league: "MLB",
+        time: "7:10 PM ET",
         rationale: "Line's moved toward the Reds despite public split and injuries..."
       }, null, 2));
         
