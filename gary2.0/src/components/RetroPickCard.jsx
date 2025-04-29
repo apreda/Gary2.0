@@ -532,7 +532,7 @@ function formatGameTitle(game, homeTeam, awayTeam) {
       
       {/* *** SIMPLIFIED: ONLY RATIONALE SECTION *** */}
       <div style={{ 
-        padding: '2rem 1.5rem', 
+        padding: '1rem 1rem', 
         flex: '1', 
         display: 'flex', 
         flexDirection: 'column',
@@ -540,17 +540,17 @@ function formatGameTitle(game, homeTeam, awayTeam) {
         alignItems: 'center',
         overflowY: 'auto',
       }}>
-        {/* Main Analysis - MUCH BIGGER */}
+        {/* Main Analysis - EXPANDED TO USE MORE SPACE */}
         <div style={{ 
           backgroundColor: 'rgba(255,255,255,0.5)', 
-          padding: '1.5rem', 
+          padding: '1.2rem', 
           borderRadius: '0.5rem',
           border: '2px solid rgba(191,161,66,0.3)',
           fontSize: '1.2rem',
           lineHeight: '1.6rem',
           color: '#222',
-          width: '90%',
-          maxHeight: '75%',
+          width: '95%',
+          maxHeight: '90%',
           overflowY: 'auto',
           boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
         }}>

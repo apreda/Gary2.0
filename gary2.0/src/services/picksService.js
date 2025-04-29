@@ -595,11 +595,8 @@ const picksService = {
         console.log('Note: Default wager creation skipped:', wagerErr);
       }
       
-      // Get today's date string for database operations - YYYY-MM-DD format
-      const todayDate = new Date();
-      const todayDateString = todayDate.toISOString().split('T')[0];
-      
-      console.log(`Storing picks using exactly the OpenAI output format for date: ${todayDateString}`);
+      // Continue using the currentDateString that was already defined
+      console.log(`Storing picks using exactly the OpenAI output format for date: ${currentDateString}`);
       
       // Important: We're storing ONLY VALID RAW OpenAI output with no transformations
       // This matches the example format in the requirements:
@@ -612,7 +609,7 @@ const picksService = {
       
       // We now store ALL picks regardless of whether they have null values
       // This ensures the exact OpenAI output is preserved, even if some picks might be null
-      if (safeCleanedPicks.length === 0) {
+      if (highConfidencePicks.length === 0) {
         console.warn('⚠️ WARNING: No picks found to store in database');
         console.warn('This may indicate an issue with the picks generation process');
         // We don't throw an error - we'll continue with database operations
@@ -621,14 +618,14 @@ const picksService = {
       // Important: Supabase requires JSON to be properly stringified for JSONB fields
       // Store only the high-confidence picks (>= 0.75) but preserve their exact output format
       const pickData = {
-        date: todayDateString, // Always use today's date
+        date: currentDateString, // Always use today's date
         picks: JSON.stringify(highConfidencePicks) // Store EXACT OpenAI output format for high-confidence picks
       };
       
       // Log the exact format being sent to Supabase
       console.log('Final JSON string being sent to Supabase:', pickData.picks.substring(0, 100) + '...');
       
-      console.log(`Storing picks with explicit today's date: ${todayDateString}`);
+      console.log(`Storing picks with explicit today's date: ${currentDateString}`);
       
       console.log('Inserting picks with correct structure:', pickData);
       
