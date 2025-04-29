@@ -530,80 +530,19 @@ const picksService = {
         rationale: "Line's moved toward the Reds despite public split and injuries..."
       }, null, 2));
         
-      // Additional step: stringified again to verify the data isn't too big
-      const initialJson = JSON.stringify(allPicks);
-      console.log(`Cleaned picks data size: ${initialJson.length} characters`);
+      // Store the raw OpenAI output directly - no optimization or filtering
+      // This is exactly what the user requested - store the direct output
+      console.log(`Storing ${allPicks.length} raw OpenAI output picks directly in Supabase...`);
       
-      // If data is still too large, perform extreme optimization
-      if (initialJson.length > 5000) {
-        console.log('Data is still too large, performing extreme optimization...');
-        
-        // Instead of using upcomingGames (which was causing ReferenceError),
-        // we'll simply truncate the data to fit within size limits
-        console.log('WARNING: Data size exceeds limits, applying size-based optimization');
-        
-        // Following production guidelines: Focus on keeping only essential data without mock content
-        // Log a warning but won't use emergency picks to align with development guidelines
-        console.log('WARNING: Large data payload detected, optimizing storage format');
-        console.log('No mock/emergency picks will be used per development guidelines');
-        
-        // We'll just continue with the existing cleaned real picks rather than creating fake ones
-        console.log(`Continuing with ${allPicks.length} real picks only`);
-        
-        // Super minimal format - absolute bare essentials only
-        // Keep only the data needed for cards display
-        const superMinimal = allPicks.map(pick => ({
-          id: pick.id,
-          league: pick.league || '',
-          game: pick.game || '',
-          time: pick.time || '',
-          // Preserve the exact pick and rationale from OpenAI output
-          pick: pick.pick,
-          type: pick.type || 'Moneyline',
-          confidence: pick.confidence || 0,
-          rationale: pick.rationale || ''
-        }));
-        
-        const minimalJson = JSON.stringify(superMinimal);
-        console.log(`Super minimal data size: ${minimalJson.length} characters`);
-        return { data: superMinimal };
-      }
+      // No size optimization, no filtering, just store exactly what OpenAI gave us
+      // We want the EXACT raw OpenAI output, even if some values might be null
+      // This is critical for proper functionality per the user's requirements
       
-      // Filter picks to keep only those with valid confidence scores
-      const allPicksData = JSON.parse(initialJson);
-      
-      // First filter out any picks with null values (shouldn't happen with our fix)
-      const validPicks = allPicksData.filter(pick => {
-        const isValid = pick && pick.pick !== null && pick.pick !== undefined && pick.pick !== '';
-        if (!isValid) {
-          console.warn(`WARNING: Filtering out pick with ID ${pick?.id} due to null/empty pick value`);
-        }
-        return isValid;
-      });
-      
-      console.log(`Found ${validPicks.length} valid picks with non-null values`);
-      
-      // Sort by confidence (high to low) and apply the 0.75 threshold with no limit on number of picks
-      const topPicks = validPicks
-        .filter(pick => {
-          const confidence = typeof pick.confidence === 'number' ? pick.confidence : 0;
-          const meetsThreshold = confidence >= 0.75; // Apply the same 0.75 threshold
-          console.log(`Pick: ${pick.pick}, Confidence: ${confidence}, Meets threshold: ${meetsThreshold}`);
-          return meetsThreshold;
-        })
-        .sort((a, b) => {
-          // Safely handle any non-numeric confidence values
-          const confA = typeof a.confidence === 'number' ? a.confidence : 0;
-          const confB = typeof b.confidence === 'number' ? b.confidence : 0;
-          return confB - confA; // Sort descending (highest first)
-        })
-      
-      console.log(`Selected top ${topPicks.length} picks based on confidence scores`);
-      
-      // Store only the top picks while preserving their exact structure from OpenAI
-      const safeCleanedPicks = topPicks;
+      // We will NOT do any confidence filtering or sorting
+      // Just use the raw OpenAI output directly as requested
+      console.log(`Using all ${allPicks.length} OpenAI picks exactly as received`);
 
-      console.log(`Successfully cleaned ${allPicks.length} picks, keeping ${safeCleanedPicks.length} valid picks for database storage`);
+      console.log(`Storing all ${allPicks.length} raw OpenAI picks without any filtering or transformation`);
       
       // Get today's date string for database operations - YYYY-MM-DD format
       const currentDate = new Date();
@@ -677,10 +616,10 @@ const picksService = {
       }
       
       // Important: Supabase requires JSON to be properly stringified for JSONB fields
-      // We need to convert the picks array to a string before storing it
+      // Store the complete raw OpenAI output with no filtering or transformations
       const pickData = {
         date: todayDateString, // Always use today's date
-        picks: JSON.stringify(safeCleanedPicks) // Convert the picks array to a JSON string for proper storage
+        picks: JSON.stringify(allPicks) // Store the EXACT raw OpenAI output as JSON string
       };
       
       // Log the exact format being sent to Supabase
