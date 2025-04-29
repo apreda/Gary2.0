@@ -238,6 +238,8 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "revenge": true|false,
   "superstition": true|false,
   "momentum": 0.0–1.0,
+  "homeTeam": "Full home team name",
+  "awayTeam": "Full away team name",
   "rationale": "1–2 sentence breakdown. Data-backed, but with Gary's swagger."
 }
 \`\`\`

@@ -44,10 +44,12 @@ function RealGaryPicks() {
   const { userPlan } = useUserPlan();
   const navigate = useNavigate();
 
-  // State for picks and UI
+  // State for cards loaded from the database
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // State to track which cards are flipped
+  const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTab, setActiveTab] = useState('today');
   const [parlayCard, setParlayCard] = useState(null);
@@ -398,8 +400,17 @@ function RealGaryPicks() {
                       {/* Inner container that holds all the cards in a row */}
                       <div className="flex flex-nowrap space-x-8 md:justify-center lg:flex-wrap lg:justify-center">
                         {picks.map((pick, index) => {
-                          // State for card flipping
-                          const [isFlipped, setIsFlipped] = useState(false);
+                          // Get the flipped state for this card
+                          const isFlipped = flippedCards[pick.id] || false;
+                          
+                          // Function to toggle the flipped state for this specific card
+                          const toggleFlip = (e) => {
+                            e.stopPropagation();
+                            setFlippedCards(prev => ({
+                              ...prev,
+                              [pick.id]: !prev[pick.id]
+                            }));
+                          };
                           
                           return (
                             <div key={pick.id} className="flex-none lg:mb-8">
@@ -409,7 +420,7 @@ function RealGaryPicks() {
                                 style={{
                                   perspective: '1000px',
                                 }}
-                                onClick={() => setIsFlipped(!isFlipped)}
+                                onClick={toggleFlip}
                               >
                                 <div style={{
                                   position: 'relative',

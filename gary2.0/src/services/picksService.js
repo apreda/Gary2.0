@@ -469,6 +469,9 @@ const picksService = {
           revenge: rawOutput.revenge || false,
           superstition: rawOutput.superstition || false,
           momentum: rawOutput.momentum || 0,
+          // Include the team names from OpenAI for proper card display
+          homeTeam: rawOutput.homeTeam || pick.home_team || '',
+          awayTeam: rawOutput.awayTeam || pick.away_team || '',
           rationale: rawOutput.rationale
         };
       }).filter(Boolean); // Remove any null entries
@@ -493,6 +496,8 @@ const picksService = {
         revenge: false,
         superstition: false,
         momentum: 0.65,
+        homeTeam: "Cincinnati Reds",
+        awayTeam: "St. Louis Cardinals",
         rationale: "Line's moved toward the Reds despite public split and injuries..."
       }, null, 2));
         
