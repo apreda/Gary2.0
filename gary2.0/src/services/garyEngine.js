@@ -524,6 +524,10 @@ export async function makeGaryPick({
     stake = Math.max(stake, minStake);
   }
   
+  // CRITICAL UPDATE: Always preserve the original text rationale from OpenAI
+  // We need the actual text rationale for display on the pick cards
+  const textRationale = parsedAnalysis.reasoning || '';
+  
   return {
     game_id: gameId,
     home_team: homeTeam,
@@ -535,7 +539,11 @@ export async function makeGaryPick({
     stake,
     status,
     confidence: parsedAnalysis.confidence,
-    rationale: {
+    // Use the text rationale from OpenAI instead of metrics object
+    rationale: textRationale,
+    
+    // Store metrics in a separate field if needed for internal use
+    metrics: {
       brain_score: brain,
       soul_score: soul,
       bias_boost: pref,
