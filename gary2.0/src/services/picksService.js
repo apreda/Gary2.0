@@ -399,19 +399,38 @@ const picksService = {
           return hasRawOpenAI;
         });
         
-        // Log exact format being used for Supabase storage
-        if (picksWithRawOpenAI.length > 0) {
-          console.log('Example EXACT OpenAI output format being stored:');
-          console.log(JSON.stringify(picksWithRawOpenAI[0].rawAnalysis.rawOpenAIOutput, null, 2));
+        // CRITICAL FIX: Ensure we always have valid picks to store
+        // This is the key issue - we need to ensure we have actual parseable OpenAI outputs
+        // Extract the raw OpenAI output directly from the picks if available
+        let validPicksForStorage = [];
+        
+        if (topPicks.length > 0) {
+          // For each pick, find the rawAnalysis with rawOpenAIOutput if it exists
+          topPicks.forEach(pick => {
+            if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
+              validPicksForStorage.push(pick);
+            } else {
+              console.log('Found pick without proper rawOpenAIOutput structure:', pick.id || 'unknown');
+            }
+          });
+          
+          // Log exact format being used for Supabase storage
+          if (validPicksForStorage.length > 0) {
+            console.log('Example EXACT OpenAI output format being stored:');
+            console.log(JSON.stringify(validPicksForStorage[0].rawAnalysis.rawOpenAIOutput, null, 2));
+          }
         }
         
-        if (picksWithRawOpenAI.length > 0) {
-          console.log(`Storing ${picksWithRawOpenAI.length} picks with EXACT OpenAI format in Supabase`);
-          await picksService.storeDailyPicksInDatabase(picksWithRawOpenAI);
-          console.log('Successfully stored picks in Supabase using EXACT OpenAI format');
-        } else {
-          console.warn('No picks with EXACT OpenAI output format to store');
+        // If we couldn't find any valid picks with proper OpenAI format, use the original picks as fallback
+        if (validPicksForStorage.length === 0) {
+          console.log('FALLBACK: Using original picks since no proper OpenAI output format found');
+          validPicksForStorage = topPicks;
         }
+        
+        // Now store the picks, guaranteed to have something to store
+        console.log(`Storing ${validPicksForStorage.length} picks in Supabase`);
+        await picksService.storeDailyPicksInDatabase(validPicksForStorage);
+        console.log('Successfully stored picks in Supabase');
       } catch (storageError) {
         console.error('Error storing picks in database:', storageError);
         // Continue despite storage error - we'll still return the picks
