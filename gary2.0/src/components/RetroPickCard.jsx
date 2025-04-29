@@ -12,40 +12,49 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
  */
 export default function RetroPickCard({ pick, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
   // Format game title to show only team names (e.g., "PISTONS @ KNICKS")
-  // FIXED: Properly handle home vs away team display
-  function formatGameTitle(game) {
-    if (!game) return 'TBD @ TBD';
-    
-    try {
-      // Split into away and home teams
-      const parts = game.split(' vs ');
-      if (parts.length < 2) {
-        // Try alternate separator formats
-        const atParts = game.split('@');
-        if (atParts.length >= 2) {
-          parts[0] = atParts[0].trim();
-          parts[1] = atParts[1].trim();
-        } else {
-          return game; // Return original if it doesn't have the expected format
-        }
-      }
-      
-      // CRITICAL FIX: Reverse order since we want away @ home format
-      // For "Reds @ Cardinals" where Reds are home team, we want "Cardinals @ Reds"
-      const homeTeam = parts[0].trim();
-      const awayTeam = parts[1].trim();
-      
-      // Extract team names (everything after the last space)
-      const homeName = homeTeam.split(' ').pop() || 'HOME';
-      const awayName = awayTeam.split(' ').pop() || 'AWAY';
-      
-      // FIX: Put away team first, then home team (proper away @ home format)
-      return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
-    } catch (error) {
-      console.error('Error formatting game title:', error);
-      return 'GAME TBD';
-    }
+// Use direct homeTeam and awayTeam fields if available, otherwise try to parse from game string
+function formatGameTitle(game, homeTeam, awayTeam) {
+  // If we have direct homeTeam and awayTeam fields, use those (preferred method)
+  if (homeTeam && awayTeam) {
+    // Extract team names (everything after the last space for shorter display)
+    const homeName = homeTeam.split(' ').pop() || 'HOME';
+    const awayName = awayTeam.split(' ').pop() || 'AWAY';
+    return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
   }
+  
+  // Fallback to parsing from game string if homeTeam/awayTeam not available
+  if (!game) return 'TBD @ TBD';
+  
+  try {
+    // Split into away and home teams
+    const parts = game.split(' vs ');
+    if (parts.length < 2) {
+      // Try alternate separator formats
+      const atParts = game.split('@');
+      if (atParts.length >= 2) {
+        parts[0] = atParts[0].trim();
+        parts[1] = atParts[1].trim();
+      } else {
+        return game; // Return original if it doesn't have the expected format
+      }
+    }
+    
+    // CRITICAL FIX: Reverse order since we want away @ home format
+    // For "Reds @ Cardinals" where Reds are home team, we want "Cardinals @ Reds"
+    const parsedHomeTeam = parts[0].trim();
+    const parsedAwayTeam = parts[1].trim();
+    
+    // Extract team names (everything after the last space)
+    const homeName = parsedHomeTeam.split(' ').pop() || 'HOME';
+    const awayName = parsedAwayTeam.split(' ').pop() || 'AWAY';
+    
+    // FIX: Put away team first, then home team (proper away @ home format)
+    return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+  } catch (error) {
+    console.error('Error formatting game title:', error);
+    return 'GAME TBD';
+  }
+}
   console.log("RetroPickCard pick prop:", pick);
 
   // SIMPLIFIED: Direct use of the OpenAI output format
@@ -188,7 +197,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
   safePick.formattedPick = getFormattedShortPick(safePick);
   
   // Format game display (convert to "AWAY @ HOME" format with team nicknames only)
-  safePick.formattedGame = formatGameTitle(safePick.game);
+  // Use homeTeam and awayTeam direct fields if available (from OpenAI), otherwise parse from game field
+  safePick.formattedGame = formatGameTitle(safePick.game, pick?.homeTeam, pick?.awayTeam);
 
   // Default league and time if not provided
   const league = safePick.league || 'MLB';
@@ -427,7 +437,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         boxShadow: '0 -2px 8px #bfa14222',
         textTransform: 'uppercase',
       }}>
-        {formatGameTitle(safePick.game || '')}
+        {safePick.formattedGame || formatGameTitle(safePick.game, pick?.homeTeam, pick?.awayTeam)}
       </div>
       
       {/* Tech-Enhanced Vintage Texture Overlay */}
