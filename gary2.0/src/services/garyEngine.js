@@ -240,6 +240,7 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "momentum": 0.0–1.0,
   "homeTeam": "Full home team name",
   "awayTeam": "Full away team name",
+  "league": "NBA | MLB | NHL | EPL",
   "rationale": "1–2 sentence breakdown. Data-backed, but with Gary's swagger."
 }
 \`\`\`
