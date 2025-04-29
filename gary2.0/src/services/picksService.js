@@ -345,19 +345,41 @@ const picksService = {
         return [];
       }
 
-      // Filter by confidence and limit to top picks
-      let filteredPicks = allPicks.filter(pick => (pick.confidenceLevel || 0) >= 60);
+      // Use the correct confidence field from OpenAI and set a higher threshold of 0.7 (or 70%)
+      console.log('Filtering picks using OpenAI confidence values with threshold 0.7 (70%)...');
+      let filteredPicks = allPicks.filter(pick => {
+        // Get confidence values - check multiple sources 
+        const rawConfidence = pick.rawAnalysis?.confidence || 0;
+        const normalizedConfidence = typeof rawConfidence === 'number' ? rawConfidence : 0;
+        
+        // Log each pick's confidence for debugging
+        console.log(`Pick: ${pick.shortPickStr}, OpenAI confidence: ${normalizedConfidence}`);
+        
+        // Filter by threshold 0.7 (70%)
+        return normalizedConfidence >= 0.7;
+      });
       
-      // If we don't have enough high confidence picks, just use what we have
-      if (filteredPicks.length < 3) {
-        filteredPicks = allPicks;
+      // If we don't have any high confidence picks, fall back to the best picks we have
+      if (filteredPicks.length === 0) {
+        console.log('No picks met the 0.7 confidence threshold, using best available picks instead');
+        // Sort by confidence and take the top 3 if available
+        allPicks.sort((a, b) => {
+          const confA = a.rawAnalysis?.confidence || 0;
+          const confB = b.rawAnalysis?.confidence || 0;
+          return confB - confA;
+        });
+        filteredPicks = allPicks.slice(0, 3);
       }
       
-      // Sort by confidence (descending)
-      filteredPicks.sort((a, b) => (b.confidenceLevel || 0) - (a.confidenceLevel || 0));
+      // Sort by confidence (descending) for display order
+      filteredPicks.sort((a, b) => {
+        const confA = a.rawAnalysis?.confidence || 0;
+        const confB = b.rawAnalysis?.confidence || 0;
+        return confB - confA;
+      });
       
-      // Limit to 5 picks max
-      const topPicks = filteredPicks.slice(0, 5);
+      // No limit on picks - use all that meet the threshold
+      const topPicks = filteredPicks;
       
       console.log(`Generated ${topPicks.length} picks successfully`); 
       
