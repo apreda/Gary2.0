@@ -480,10 +480,10 @@ const picksService = {
         // Log the actual pick value to help debug null issues
         console.log(`Pick value for ${pick.id}:`, rawOutput.pick);
         
-        // Return ONLY the exact OpenAI output fields with no additional metadata
-        // This keeps only the essential fields shown in the example to minimize data size
+        // Return the OpenAI output fields with all necessary display data
+        // Include time and league information that's critical for proper display
         return {
-          // Only include the OpenAI output fields - nothing else
+          // Include all OpenAI output fields
           pick: rawOutput.pick,
           type: rawOutput.type,
           confidence: rawOutput.confidence,
@@ -494,6 +494,10 @@ const picksService = {
           // Include the team names from OpenAI for proper card display
           homeTeam: rawOutput.homeTeam || pick.home_team || '',
           awayTeam: rawOutput.awayTeam || pick.away_team || '',
+          // Include league information for sport categorization
+          league: rawOutput.league || pick.league || '',
+          // Include game time information
+          time: rawOutput.time || pick.time || '',
           rationale: rawOutput.rationale
         };
       }).filter(Boolean); // Remove any null entries
