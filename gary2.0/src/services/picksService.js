@@ -534,15 +534,18 @@ const picksService = {
       // This is exactly what the user requested - store the direct output
       console.log(`Storing ${allPicks.length} raw OpenAI output picks directly in Supabase...`);
       
-      // No size optimization, no filtering, just store exactly what OpenAI gave us
-      // We want the EXACT raw OpenAI output, even if some values might be null
-      // This is critical for proper functionality per the user's requirements
+      // Filter by confidence threshold (>= 0.75) but preserve exact OpenAI output format
+      // This ensures only high-confidence picks are shown on cards while maintaining the raw output
+      const highConfidencePicks = allPicks.filter(pick => {
+        const confidence = typeof pick.confidence === 'number' ? pick.confidence : 0;
+        const meetsThreshold = confidence >= 0.75;
+        console.log(`Pick: ${pick.pick}, Confidence: ${confidence}, Meets threshold: ${meetsThreshold}`);
+        return meetsThreshold;
+      });
       
-      // We will NOT do any confidence filtering or sorting
-      // Just use the raw OpenAI output directly as requested
-      console.log(`Using all ${allPicks.length} OpenAI picks exactly as received`);
+      console.log(`Filtered to ${highConfidencePicks.length} high-confidence picks (>= 0.75) for display on cards`);
 
-      console.log(`Storing all ${allPicks.length} raw OpenAI picks without any filtering or transformation`);
+      console.log(`Storing ${highConfidencePicks.length} high-confidence picks with their exact OpenAI output format`);
       
       // Get today's date string for database operations - YYYY-MM-DD format
       const currentDate = new Date();
@@ -616,10 +619,10 @@ const picksService = {
       }
       
       // Important: Supabase requires JSON to be properly stringified for JSONB fields
-      // Store the complete raw OpenAI output with no filtering or transformations
+      // Store only the high-confidence picks (>= 0.75) but preserve their exact output format
       const pickData = {
         date: todayDateString, // Always use today's date
-        picks: JSON.stringify(allPicks) // Store the EXACT raw OpenAI output as JSON string
+        picks: JSON.stringify(highConfidencePicks) // Store EXACT OpenAI output format for high-confidence picks
       };
       
       // Log the exact format being sent to Supabase
