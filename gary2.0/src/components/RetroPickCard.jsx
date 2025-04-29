@@ -122,7 +122,11 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     id: pick?.id,
     // CRITICAL: Direct OpenAI format fields (these MUST exist)
     pick: pick?.pick ? `${pick.pick.substring(0, 30)}...` : 'MISSING',
-    rationale: pick?.rationale ? `${pick.rationale.substring(0, 30)}...` : 'MISSING',
+    // Handle rationale that might be an object or string
+    rationale: pick?.rationale ? 
+      (typeof pick.rationale === 'string' ? 
+        `${pick.rationale.substring(0, 30)}...` : 
+        `[${typeof pick.rationale}]`) : 'MISSING',
     // Mapped fields for backwards compatibility
     shortPick: pick?.shortPick ? `${pick.shortPick.substring(0, 30)}...` : 'MISSING',
     description: pick?.description ? `${pick.description.substring(0, 30)}...` : 'MISSING',
@@ -132,7 +136,10 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     confidence: pick?.confidence,
     time: pick?.time,
     // Format of the full pick object
-    pickKeys: pick ? Object.keys(pick) : 'NO PICK OBJECT'
+    pickKeys: pick ? Object.keys(pick) : 'NO PICK OBJECT',
+    // Log the entire rationale to debug
+    rationaleType: pick?.rationale ? typeof pick.rationale : 'N/A',
+    rationaleValue: pick?.rationale
   });
 
   // Only use the new OpenAI output format fields
@@ -141,12 +148,22 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
     
     // Store the OpenAI output fields
     pick: pick?.pick || '', // The betting pick
-    rationale: pick?.rationale || '', // The analysis/reasoning
+    
+    // Handle rationale that might be an object or string
+    rationale: pick?.rationale ? 
+      (typeof pick.rationale === 'string' ? 
+        pick.rationale : 
+        JSON.stringify(pick.rationale, null, 2)) : 
+      '', // Convert object to string if needed
     
     // Display data for the card - only use new format
     
     // BACK CARD - Display the rationale
-    description: pick?.rationale || 'Analysis not available',
+    description: pick?.rationale ? 
+      (typeof pick.rationale === 'string' ? 
+        pick.rationale : 
+        JSON.stringify(pick.rationale, null, 2)) : 
+      'Analysis not available',
     
     // Essential metadata with reasonable defaults
     game: pick?.game || 'TBD vs TBD',
