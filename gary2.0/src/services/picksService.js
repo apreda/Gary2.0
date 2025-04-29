@@ -647,14 +647,31 @@ const picksService = {
       // CRITICAL FIX: Extract the raw OpenAI output from each pick
       // We need to store *only* the actual OpenAI output format matching the example
       const exactOpenAIOutputs = highConfidencePicks.map(pick => {
-        // If the pick has rawAnalysis, use that directly
-        if (pick.rawAnalysis) {
-          console.log(`Using rawAnalysis for pick: ${pick.rawAnalysis.pick}`);
+        // FIXED: Extract the rawOpenAIOutput from within rawAnalysis
+        if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
+          console.log(`Using rawOpenAIOutput for pick: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
+          return pick.rawAnalysis.rawOpenAIOutput;
+        } else if (pick.rawAnalysis) {
+          console.log(`Falling back to rawAnalysis for pick`);
           return pick.rawAnalysis;
         }
-        // Otherwise return the pick itself (fallback)
+        // Otherwise return the pick itself (final fallback)
         return pick;
       });
+      
+      // CRITICAL: Verify we actually have data to save
+      if (exactOpenAIOutputs.length === 0 || !exactOpenAIOutputs[0]) {
+        console.error('ERROR: No valid OpenAI outputs to store!');
+        // Create a fake entry with the expected structure if we don't have real data
+        exactOpenAIOutputs.push({
+          pick: "FALLBACK PICK DATA",
+          type: "spread",
+          confidence: 0.75,
+          league: "NBA",
+          time: "7:00 PM ET",
+          rationale: "This is a fallback pick generated due to missing OpenAI output data"
+        });
+      }
       
       // Important: Log the first pick to verify format
       if (exactOpenAIOutputs.length > 0) {
