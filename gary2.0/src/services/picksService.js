@@ -662,15 +662,8 @@ const picksService = {
       // CRITICAL: Verify we actually have data to save
       if (exactOpenAIOutputs.length === 0 || !exactOpenAIOutputs[0]) {
         console.error('ERROR: No valid OpenAI outputs to store!');
-        // Create a fake entry with the expected structure if we don't have real data
-        exactOpenAIOutputs.push({
-          pick: "FALLBACK PICK DATA",
-          type: "spread",
-          confidence: 0.75,
-          league: "NBA",
-          time: "7:00 PM ET",
-          rationale: "This is a fallback pick generated due to missing OpenAI output data"
-        });
+        // We want to know if this happens rather than inserting fake data
+        throw new Error('Failed to extract valid OpenAI output format - no data to store in Supabase');
       }
       
       // Important: Log the first pick to verify format
