@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { picksService } from '../services/picksService';
-import { schedulerService } from '../services/schedulerService';
 
 /**
  * Admin tool for refreshing picks with real data
@@ -27,7 +26,8 @@ const RefreshTool = () => {
       
       // Save to localStorage and mark as generated
       localStorage.setItem('dailyPicks', JSON.stringify(newPicks));
-      schedulerService.markPicksAsGenerated();
+      // Mark picks as generated (previously handled by schedulerService)
+      localStorage.setItem('lastPicksGenerationTime', new Date().toISOString());
       
       setStatus(`✅ Success! Generated ${newPicks.length} picks with real data.`);
       setResult(newPicks);
