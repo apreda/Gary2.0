@@ -12,6 +12,7 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
  */
 export default function RetroPickCard({ pick, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
   // Format game title to show only team names (e.g., "PISTONS @ KNICKS")
+  // FIXED: Properly handle home vs away team display
   function formatGameTitle(game) {
     if (!game) return 'TBD @ TBD';
     
@@ -29,15 +30,16 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         }
       }
       
-      // Get only the last word in the team name (typically the mascot/nickname)
-      // This handles formats like "Milwaukee Bucks" -> "Bucks"
-      const awayTeam = parts[0].trim();
-      const homeTeam = parts[1].trim();
+      // CRITICAL FIX: Reverse order since we want away @ home format
+      // For "Reds @ Cardinals" where Reds are home team, we want "Cardinals @ Reds"
+      const homeTeam = parts[0].trim();
+      const awayTeam = parts[1].trim();
       
       // Extract team names (everything after the last space)
-      const awayName = awayTeam.split(' ').pop() || 'AWAY';
       const homeName = homeTeam.split(' ').pop() || 'HOME';
+      const awayName = awayTeam.split(' ').pop() || 'AWAY';
       
+      // FIX: Put away team first, then home team (proper away @ home format)
       return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
     } catch (error) {
       console.error('Error formatting game title:', error);
@@ -191,7 +193,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
   // Default league and time if not provided
   const league = safePick.league || 'MLB';
   // Format time in 12-hour format if not provided (10:10 PM ET)
-  const formattedTime = safePick.time || '10:10 PM ET';
+  // FIX: Remove leading zeros from time (06:11 PM → 6:11 PM)
+  const formattedTime = safePick.time ? safePick.time.replace(/^0/,'').replace(/:0/, ':') : '10:10 PM ET';
 
   // Reset state when pick changes
   useEffect(() => {
@@ -328,7 +331,8 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
           borderRadius: '8px',
           border: `2px solid ${colors.primary}`,
           fontWeight: 800,
-          fontSize: '2.5rem',
+          fontSize: '2.2rem',
+          marginBottom: '2.5rem',
           color: colors.primary,
           letterSpacing: '0.05em',
           textShadow: '0 1px 2px rgba(0,0,0,0.1)',
@@ -345,10 +349,10 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
         </div>
       </div>
       
-      {/* Decision Buttons */}
+      {/* Decision Buttons - FIXED POSITION to prevent overlap */}
       <div style={{
         position: 'absolute',
-        bottom: '5.5rem',
+        bottom: '3.5rem',
         left: 0,
         right: 0,
         display: 'flex',

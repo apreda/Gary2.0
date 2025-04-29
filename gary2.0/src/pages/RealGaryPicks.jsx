@@ -386,18 +386,171 @@ function RealGaryPicks() {
             <div>
               {activeTab === 'today' && (
                 <div className="mb-12">
-                  {/* Responsive Grid for All Devices - Shows all cards side by side */}
-                  <div className="pt-20 px-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 place-items-center">
-                      {picks.map((pick, index) => (
-                        <div key={pick.id}>
-                          <RetroPickCard
-                            pick={pick}
-                            showToast={showToast}
-                            onDecisionMade={handleDecisionMade}
-                          />
-                        </div>
-                      ))}
+                  {/* NEW LAYOUT: Directly on page in a horizontal row format */}
+                  <div className="pt-12 px-4">
+                    <h1 className="text-4xl font-bold text-center mb-8" style={{ color: '#d4af37' }}>
+                      TODAY'S PICKS
+                    </h1>
+                    
+                    {/* Main container for horizontal scrolling on mobile */}
+                    <div className="overflow-x-auto pb-4">
+                      {/* Inner container that holds all the cards in a row */}
+                      <div className="flex flex-nowrap space-x-8 md:justify-center lg:flex-wrap lg:justify-center">
+                        {picks.map((pick, index) => (
+                          <div key={pick.id} className="flex-none lg:mb-8">
+                            {/* Direct card display - no wrapping component */}
+                            <div className="w-72 h-[27rem] relative" style={{
+                              background: 'linear-gradient(135deg, #f8f7f3 70%, #e6e1c5 100%)',
+                              border: '6px solid #bfa142',
+                              borderRadius: '1.2rem',
+                              fontFamily: 'Orbitron, Inter, Segoe UI, Arial, sans-serif',
+                              overflow: 'hidden',
+                              boxShadow: '0 0 36px 8px rgba(191,161,66,0.28), inset 0 0 15px rgba(191,161,66,0.12)',
+                              transform: 'rotateX(2deg)',
+                            }}>
+                              {/* Top Bar with League and Time */}
+                              <div style={{
+                                background: '#bfa142',
+                                color: '#e5d3c4',
+                                fontWeight: 700,
+                                fontSize: '1.02rem',
+                                letterSpacing: '0.08em',
+                                padding: '0.7rem 0.9rem',
+                                borderBottom: '2px solid #d4af37',
+                                boxShadow: '0 2px 8px #bfa14222',
+                                textTransform: 'uppercase',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}>
+                                <span>{pick.league || 'MLB'}</span>
+                                <span style={{ fontSize: '0.95rem' }}>
+                                  {pick.time ? pick.time.replace(/^0/,'').replace(/:0/, ':') : '10:10 PM ET'}
+                                </span>
+                              </div>
+                              
+                              {/* Gary Emblem */}
+                              <div style={{
+                                position: 'absolute',
+                                top: '3.25rem',
+                                left: '0.125rem',
+                                zIndex: 5,
+                              }}>
+                                <img 
+                                  src={GaryEmblem} 
+                                  alt="Gary Emblem"
+                                  style={{
+                                    width: 99,
+                                    height: 99,
+                                    objectFit: 'contain',
+                                    filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.25))',
+                                  }}
+                                />
+                              </div>
+                              
+                              {/* *** MAIN PICK DISPLAY *** */}
+                              <div className="flex items-center justify-center" style={{
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                zIndex: 2,
+                                width: '100%',
+                                padding: '0 1rem'
+                              }}>
+                                <div style={{
+                                  background: 'rgba(191,161,66,0.1)',
+                                  padding: '1.5rem 1rem',
+                                  marginBottom: '2.5rem',
+                                  borderRadius: '8px',
+                                  border: '2px solid #bfa142',
+                                  fontWeight: 800,
+                                  fontSize: '2.2rem',
+                                  color: '#bfa142',
+                                  letterSpacing: '0.05em',
+                                  textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                  textAlign: 'center',
+                                  boxShadow: '0 4px 12px rgba(191,161,66,0.25)',
+                                  width: '90%',
+                                  maxWidth: '90%'
+                                }}>
+                                  {pick.pick || 'MISSING PICK'}
+                                </div>
+                              </div>
+                              
+                              {/* Bet or Fade Buttons */}
+                              <div style={{
+                                position: 'absolute',
+                                bottom: '3.5rem',
+                                left: 0,
+                                right: 0,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                zIndex: 5,
+                              }}>
+                                <div style={{ 
+                                  display: 'flex', 
+                                  gap: '0.5rem',
+                                  background: 'rgba(0,0,0,0.1)',
+                                  padding: '0.5rem',
+                                  borderRadius: '4px',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                                }}>
+                                  <button 
+                                    style={{
+                                      background: '#D4AF37',
+                                      color: 'black',
+                                      fontWeight: 'bold',
+                                      padding: '0.5rem 1.5rem',
+                                      borderRadius: '4px',
+                                      border: '2px solid black',
+                                      cursor: 'pointer',
+                                    }}
+                                    onClick={() => handleDecisionMade('bet', pick)}
+                                  >
+                                    BET
+                                  </button>
+                                  <button 
+                                    style={{
+                                      background: '#333',
+                                      color: 'white',
+                                      fontWeight: 'bold',
+                                      padding: '0.5rem 1.5rem',
+                                      borderRadius: '4px',
+                                      border: '2px solid black',
+                                      cursor: 'pointer',
+                                    }}
+                                    onClick={() => handleDecisionMade('fade', pick)}
+                                  >
+                                    FADE
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Bottom Game Info */}
+                              <div style={{
+                                position: 'absolute',
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                background: '#bfa142',
+                                color: '#e5d3c4',
+                                fontWeight: 700,
+                                fontSize: '1.02rem',
+                                letterSpacing: '0.075em',
+                                textAlign: 'center',
+                                padding: '0.7rem 0',
+                                borderTop: '2px solid #d4af37',
+                                boxShadow: '0 -2px 8px #bfa14222',
+                                textTransform: 'uppercase',
+                              }}>
+                                {/* Fixed team display order */}
+                                {pick.game ? pick.game.split(' @ ').reverse().join(' @ ') : 'GAME TBD'}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
