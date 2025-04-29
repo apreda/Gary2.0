@@ -313,10 +313,23 @@ export function parseGaryAnalysis(analysis) {
     
     if (!analysis) return defaultResult;
 
-    // CRITICAL FIX: First check if this is already structured JSON data
+    // CRITICAL FIX: Extract JSON from markdown code blocks if present
+    // OpenAI often returns JSON inside ```json ``` blocks
+    let cleanedAnalysis = analysis;
+    if (typeof analysis === 'string') {
+      // Check if the response contains a JSON code block
+      const jsonCodeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/;
+      const match = jsonCodeBlockRegex.exec(analysis);
+      if (match && match[1]) {
+        console.log('Found JSON in code block, extracting...');
+        cleanedAnalysis = match[1].trim();
+      }
+    }
+    
+    // Try to parse as JSON
     try {
       // Try to parse if it's a string, otherwise assume it's already an object
-      const jsonData = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
+      const jsonData = typeof cleanedAnalysis === 'string' ? JSON.parse(cleanedAnalysis) : cleanedAnalysis;
       
       // Check if it has the expected OpenAI format structure
       if (typeof jsonData === 'object' && jsonData !== null) {
@@ -334,8 +347,9 @@ export function parseGaryAnalysis(analysis) {
         }
       }
     } catch (jsonError) {
-      // Not valid JSON, continue with text-based parsing
-      console.log('Not a valid JSON object, falling back to text parsing');
+      // Not valid JSON, log the error and continue with text-based parsing
+      console.log('JSON parsing error:', jsonError.message);
+      console.log('Content that failed to parse:', cleanedAnalysis);
     }
     
     // Legacy text-based parsing for backward compatibility
