@@ -32,7 +32,7 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
 
 // Import services
 import { picksService } from '../services/picksService';
-import { schedulerService } from '../services/schedulerService';
+// schedulerService removed - no longer needed
 import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
 import { picksPersistenceService } from '../services/picksPersistenceService';
