@@ -344,15 +344,54 @@ const picksService = {
       // Use the correct confidence field from OpenAI with our strict threshold of 0.75 (75%)
     // This matches the OpenAI prompt which only generates picks with confidence >= 0.75
     console.log('Filtering picks using OpenAI confidence values with threshold 0.75 (75%)...');
+    
+    // Detailed logging of the first pick structure to debug confidence issues
+    if (allPicks.length > 0) {
+      console.log('\n📋 DEBUG: First pick structure:', {
+        hasRawAnalysis: !!allPicks[0].rawAnalysis,
+        rawAnalysisKeys: allPicks[0].rawAnalysis ? Object.keys(allPicks[0].rawAnalysis) : [],
+        hasRawOpenAIOutput: !!allPicks[0].rawAnalysis?.rawOpenAIOutput,
+        shortPickStr: allPicks[0].shortPickStr
+      });
+      
+      // Additional logging for the raw OpenAI output
+      if (allPicks[0].rawAnalysis?.rawOpenAIOutput) {
+        console.log('\n🔍 DEBUG: Raw OpenAI output for first pick:', {
+          confidence: allPicks[0].rawAnalysis.rawOpenAIOutput.confidence,
+          typeOfConfidence: typeof allPicks[0].rawAnalysis.rawOpenAIOutput.confidence,
+          pick: allPicks[0].rawAnalysis.rawOpenAIOutput.pick,
+          type: allPicks[0].rawAnalysis.rawOpenAIOutput.type
+        });
+      }
+    }
+    
     let filteredPicks = allPicks.filter(pick => {
-      // Get confidence values - check multiple sources 
-      const rawConfidence = pick.rawAnalysis?.confidence || 0;
-      const normalizedConfidence = typeof rawConfidence === 'number' ? rawConfidence : 0;
+      // Get confidence values - check all possible locations in the object structure
+      let confidenceValue = 0;
+      
+      // First try to get confidence from rawOpenAIOutput (preferred path)
+      if (pick.rawAnalysis?.rawOpenAIOutput?.confidence !== undefined) {
+        confidenceValue = pick.rawAnalysis.rawOpenAIOutput.confidence;
+      } 
+      // Fall back to rawAnalysis.confidence
+      else if (pick.rawAnalysis?.confidence !== undefined) {
+        confidenceValue = pick.rawAnalysis.confidence;
+      }
+      // Last fallback to pick.confidence
+      else if (pick.confidence !== undefined) {
+        // If it's a percentage (0-100), normalize to 0-1 scale
+        confidenceValue = typeof pick.confidence === 'number' && pick.confidence > 1 
+          ? pick.confidence / 100 
+          : pick.confidence;
+      }
+      
+      // Ensure confidence is a number
+      const normalizedConfidence = typeof confidenceValue === 'number' ? confidenceValue : 0;
       
       // Log each pick's confidence for debugging
       console.log(`Pick: ${pick.shortPickStr}, OpenAI confidence: ${normalizedConfidence}`);
       
-      // Filter by a more lenient threshold 0.75 (75%)
+      // Filter by our strict threshold of 0.75 (75%)
       return normalizedConfidence >= 0.75;
     });
       
