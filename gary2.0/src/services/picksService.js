@@ -678,23 +678,87 @@ const picksService = {
       // CRITICAL FIX: Extract the raw OpenAI output from each pick
       // We need to store *only* the actual OpenAI output format matching the example
       const exactOpenAIOutputs = highConfidencePicks.map(pick => {
-        // Check for the direct rawOpenAIOutput attached to the pick (this is added in the latest fix)
+        // Log the structure we're working with
+        console.log(`Processing pick with ID: ${pick.id || 'unknown'}`);
+        console.log(`Pick has keys: ${Object.keys(pick)}`);
+        if (pick.rawAnalysis) {
+          console.log(`rawAnalysis has keys: ${Object.keys(pick.rawAnalysis)}`);
+        }
+        
+        // Check for the direct rawOpenAIOutput attached to the pick
         if (pick.rawOpenAIOutput) {
           console.log(`Using direct rawOpenAIOutput for pick: ${pick.rawOpenAIOutput.pick}`);
-          return pick.rawOpenAIOutput;
+          // Validate that all critical fields exist with proper fallbacks
+          const validatedOutput = {
+            pick: pick.rawOpenAIOutput.pick || pick.pick || 'Unknown Pick',
+            type: pick.rawOpenAIOutput.type || 'moneyline',
+            confidence: pick.rawOpenAIOutput.confidence || 0.75,
+            trapAlert: pick.rawOpenAIOutput.trapAlert || false,
+            revenge: pick.rawOpenAIOutput.revenge || false,
+            momentum: pick.rawOpenAIOutput.momentum || 0,
+            league: pick.rawOpenAIOutput.league || '',
+            time: pick.rawOpenAIOutput.time || '',
+            rationale: pick.rawOpenAIOutput.rationale || ''
+          };
+          return validatedOutput;
         }
-        // FIXED: Extract the rawOpenAIOutput from within rawAnalysis
+        // Extract the rawOpenAIOutput from within rawAnalysis
         else if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
           console.log(`Using rawAnalysis.rawOpenAIOutput for pick: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
-          return pick.rawAnalysis.rawOpenAIOutput;
-        } else if (pick.rawAnalysis) {
-          console.log(`Falling back to rawAnalysis for pick`);
-          return pick.rawAnalysis;
+          // Validate that all critical fields exist with proper fallbacks
+          const validatedOutput = {
+            pick: pick.rawAnalysis.rawOpenAIOutput.pick || pick.pick || 'Unknown Pick',
+            type: pick.rawAnalysis.rawOpenAIOutput.type || 'moneyline',
+            confidence: pick.rawAnalysis.rawOpenAIOutput.confidence || 0.75,
+            trapAlert: pick.rawAnalysis.rawOpenAIOutput.trapAlert || false,
+            revenge: pick.rawAnalysis.rawOpenAIOutput.revenge || false,
+            momentum: pick.rawAnalysis.rawOpenAIOutput.momentum || 0,
+            league: pick.rawAnalysis.rawOpenAIOutput.league || '',
+            time: pick.rawAnalysis.rawOpenAIOutput.time || '',
+            rationale: pick.rawAnalysis.rawOpenAIOutput.rationale || ''
+          };
+          return validatedOutput;
+        } 
+        // If raw analysis exists but not in the expected format, use what we have
+        else if (pick.rawAnalysis) {
+          console.log(`Creating structured format from rawAnalysis properties`);
+          // Determine confidence value - may be a string or number
+          let confidence = pick.rawAnalysis.confidence;
+          if (typeof confidence === 'string') {
+            confidence = confidence === 'High' ? 0.85 : 
+                        confidence === 'Medium' ? 0.65 : 0.45;
+          } else if (typeof confidence !== 'number') {
+            confidence = 0.75; // Default fallback
+          }
+
+          // Create a structured output from available properties
+          const structuredOutput = {
+            pick: pick.rawAnalysis.pick || pick.shortPickStr || pick.pick || 'Unknown Pick',
+            type: (pick.rawAnalysis.type || pick.rawAnalysis.betType || pick.betType || 'moneyline').toLowerCase(),
+            confidence: confidence,
+            trapAlert: pick.rawAnalysis.trapAlert || false,
+            revenge: pick.rawAnalysis.revenge || false,
+            momentum: pick.rawAnalysis.momentum || 0,
+            league: pick.league || '',
+            time: pick.time || '',
+            rationale: pick.rawAnalysis.rationale || pick.rawAnalysis.reasoning || ''
+          };
+          console.log(`Created structured output: ${JSON.stringify(structuredOutput).substring(0, 200)}`);
+          return structuredOutput;
         }
         // Log the structure of the pick for debugging
         console.log('Pick structure:', JSON.stringify(pick, null, 2).substring(0, 500));
-        // Otherwise return the pick itself (final fallback)
-        return pick;
+        // Create minimal but valid output from whatever we have
+        const minimalOutput = {
+          pick: pick.shortPickStr || pick.pick || 'Unknown Pick',
+          type: (pick.betType || 'moneyline').toLowerCase(),
+          confidence: 0.75, // Default confidence 
+          league: pick.league || '',
+          time: pick.time || '',
+          rationale: pick.garysAnalysis || ''
+        };
+        console.log(`Created minimal fallback output: ${JSON.stringify(minimalOutput).substring(0, 200)}`);
+        return minimalOutput;
       });
       
       // CRITICAL: Verify we actually have data to save
