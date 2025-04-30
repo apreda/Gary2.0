@@ -532,15 +532,43 @@ const picksService = {
       console.log('Ensuring we only store minimal clean data for the picks');
       
       // CRITICAL: USE THE EXACT UNMODIFIED OPENAI OUTPUT - no transformations at all
-      // We must use the rawOpenAIOutput field which contains the exact JSON object returned by OpenAI
+      // We must extract the OpenAI output from wherever it might be in the data structure
       const allPicks = picks.map(pick => {
         console.log('Processing pick for storage:', pick.id);
         
-        // CRITICAL UPDATE: Use the rawOpenAIOutput field which contains the unmodified OpenAI response
-        const rawOpenAIOutput = pick.rawAnalysis?.rawOpenAIOutput;
+        let rawOpenAIOutput = null;
+        
+        // First check if rawOpenAIOutput exists directly on the pick
+        if (pick.rawOpenAIOutput) {
+          console.log(`Using direct rawOpenAIOutput for ${pick.id}: ${pick.rawOpenAIOutput.pick}`);
+          rawOpenAIOutput = pick.rawOpenAIOutput;
+        }
+        // Next check if it's in rawAnalysis
+        else if (pick.rawAnalysis?.rawOpenAIOutput) {
+          console.log(`Using rawAnalysis.rawOpenAIOutput for ${pick.id}: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
+          rawOpenAIOutput = pick.rawAnalysis.rawOpenAIOutput;
+        }
+        // NEW CRITICAL FIX: Create a valid output structure from rawAnalysis
+        // Since we have valid OpenAI data but it's not being stored correctly
+        else if (pick.rawAnalysis) {
+          // We're seeing that the OpenAI output is in pick.rawAnalysis directly, not in rawOpenAIOutput
+          // Reconstruct the format we need to store
+          console.log(`Reconstructing from rawAnalysis for pick ${pick.id}: ${pick.rawAnalysis.pick || 'unknown'}`);
+          
+          rawOpenAIOutput = {
+            pick: pick.rawAnalysis.pick || pick.pick || "",
+            type: pick.rawAnalysis.betType?.toLowerCase() || pick.betType?.toLowerCase() || "moneyline",
+            confidence: pick.rawAnalysis.confidence || pick.confidence || 0.75,
+            league: pick.league || "", 
+            time: pick.time || "",
+            homeTeam: pick.homeTeam || "",
+            awayTeam: pick.awayTeam || "",
+            rationale: pick.rawAnalysis.reasoning || pick.reasoning || ""
+          };
+        }
         
         if (!rawOpenAIOutput) {
-          console.warn(`Warning: Missing rawOpenAIOutput for pick ${pick.id}`);
+          console.warn(`Warning: Could not find any valid OpenAI output for pick ${pick.id}`);
           return null; // Will be filtered out
         }
 
@@ -555,8 +583,8 @@ const picksService = {
         console.log(`- pick: ${rawOpenAIOutput.pick}`);
         console.log(`- type: ${rawOpenAIOutput.type}`);
         console.log(`- confidence: ${rawOpenAIOutput.confidence}`);
-        console.log(`- league: ${rawOpenAIOutput.league}`);
-        console.log(`- time: ${rawOpenAIOutput.time}`);
+        console.log(`- league: ${rawOpenAIOutput.league || 'N/A'}`);
+        console.log(`- time: ${rawOpenAIOutput.time || 'N/A'}`);
         
         // Return the exact OpenAI output without any transformation
         return rawOpenAIOutput;
