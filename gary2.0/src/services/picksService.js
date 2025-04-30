@@ -525,51 +525,14 @@ const picksService = {
 
       console.log('Extracting raw OpenAI outputs for storage...');
       
-      // SIMPLIFIED: Get the raw OpenAI output from each pick directly
-      // This is dramatically simplified from the previous implementation
-      const rawOutputs = picks.map(pick => {
-        // Get the raw output from wherever it might be 
-        let output = null;
-        
-        if (pick.rawOpenAIOutput) {
-          output = pick.rawOpenAIOutput;
-          console.log(`Found direct rawOpenAIOutput for ${pick.id}: ${output.pick}`);
-        } 
-        else if (pick.rawAnalysis?.rawOpenAIOutput) {
-          output = pick.rawAnalysis.rawOpenAIOutput;
-          console.log(`Found output in rawAnalysis.rawOpenAIOutput for ${pick.id}: ${output.pick}`);
-        }
-        else if (pick.rawAnalysis && pick.rawAnalysis.pick) {
-          // Create the structure in the exact format we want
-          output = {
-            pick: pick.rawAnalysis.pick,
-            type: pick.rawAnalysis.betType?.toLowerCase() || "moneyline",
-            confidence: pick.rawAnalysis.confidence,
-            trapAlert: pick.rawAnalysis.trapAlert || false,
-            revenge: pick.rawAnalysis.revenge || false,
-            superstition: pick.rawAnalysis.superstition || false,
-            momentum: pick.rawAnalysis.momentum || 0,
-            homeTeam: pick.homeTeam || "",
-            awayTeam: pick.awayTeam || "",
-            league: pick.league || "",
-            time: pick.time || "",
-            rationale: pick.rawAnalysis.reasoning || ""
-          };
-          console.log(`Reconstructed output for ${pick.id}: ${output.pick}`);
-        }
-        
-        // Only return picks that meet our confidence threshold of 0.75
-        if (output && output.confidence >= 0.75) {
+      // FINAL: Only use picks with valid rawOpenAIOutput and confidence >= 0.75
+      const rawOutputs = picks
+        .filter(pick => pick.rawOpenAIOutput && typeof pick.rawOpenAIOutput.confidence === 'number' && pick.rawOpenAIOutput.confidence >= 0.75)
+        .map(pick => {
+          const output = pick.rawOpenAIOutput;
           console.log(`Keeping pick with confidence ${output.confidence}: ${output.pick}`);
           return output;
-        } else if (output) {
-          console.log(`Skipping pick with low confidence ${output.confidence}: ${output.pick}`);
-        } else {
-          console.log(`No valid output found for pick ${pick.id}`);
-        }
-        
-        return null;
-      }).filter(Boolean); // Remove null entries
+        });
 
       console.log(`Storing ${rawOutputs.length} picks with their exact OpenAI output format`);
       
