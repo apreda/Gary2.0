@@ -181,9 +181,22 @@ const picksService = {
           return isValid;
         })
         .map(pick => {
-          // Extract just the raw OpenAI output for storage
-          console.log(`Including pick for: ${pick.game}, confidence: ${pick.rawAnalysis.rawOpenAIOutput.confidence || 'unknown'}`);
-          return pick.rawAnalysis.rawOpenAIOutput;
+          // Extract just the essential fields from the raw OpenAI output
+          const rawOutput = pick.rawAnalysis.rawOpenAIOutput;
+          console.log(`Including pick for: ${pick.game}, confidence: ${rawOutput.confidence || 'unknown'}`);
+          
+          // Include only the essential fields to reduce storage size
+          return {
+            pick: rawOutput.pick,
+            type: rawOutput.type,
+            confidence: rawOutput.confidence,
+            trapAlert: rawOutput.trapAlert || false,
+            revenge: rawOutput.revenge || false,
+            homeTeam: rawOutput.homeTeam,
+            awayTeam: rawOutput.awayTeam,
+            league: rawOutput.league,
+            rationale: rawOutput.rationale
+          };
         });
       
       console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output`);
