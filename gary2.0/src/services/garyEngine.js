@@ -3,7 +3,6 @@
  * @module garyEngine
  */
 import { openaiService } from './openaiService.js';
-import { debugLog } from '../utils/logging.js';
 
 /**
  * Generate Gary's analysis for a specific game
