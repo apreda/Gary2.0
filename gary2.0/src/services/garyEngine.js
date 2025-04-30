@@ -120,7 +120,22 @@ export function selectBetType(confidence, behindPace) {
 export function calculateStake(bankroll, betType, confidence) {
   // no hard cap: Gary goes by feel but temp limit =  max 40%
   const maxPct = confidence > 0.8 ? 0.4 : 0.2;
-  return Math.floor(bankroll * maxPct * (ProfitModel.bet_types[betType].risk || 1));
+  
+  // Map OpenAI output bet types to our internal types
+  const typeMap = {
+    'moneyline': 'straight_moneyline',
+    'spread': 'spread',
+    'total': 'spread', // Using spread risk factor for totals as well
+    // Add more mappings as needed
+  };
+  
+  // Use mapped type or fallback to spread if unknown
+  const mappedType = typeMap[betType?.toLowerCase()] || 'spread';
+  
+  // Add logging to help with debugging
+  console.log(`Calculating stake: Original betType=${betType}, Mapped=${mappedType}, Confidence=${confidence}`);
+  
+  return Math.floor(bankroll * maxPct * (ProfitModel.bet_types[mappedType]?.risk || 1));
 }
 
 // ——————————————
@@ -284,14 +299,29 @@ Provide your betting analysis in the exact JSON format specified.`
       throw new Error('Failed to generate analysis from OpenAI');
     }
     
+    // Log the raw OpenAI response for debugging
+    console.log('\n🔍 RAW OPENAI RESPONSE:\n', analysis);
+    
     // Parse the JSON response from OpenAI
     try {
       // Find JSON content within the response (in case there's any markdown wrapper)
       const jsonMatch = analysis.match(/\{[\s\S]*\}/); // Match everything between { and }
       const jsonContent = jsonMatch ? jsonMatch[0] : analysis;
       
+      console.log('\n📊 EXTRACTED JSON CONTENT:\n', jsonContent);
+      
       // Parse the JSON content
       const parsedOutput = JSON.parse(jsonContent);
+      
+      // Add vital debug logging
+      console.log('\n✅ PARSED JSON OUTPUT: ', {
+        pick: parsedOutput.pick,
+        type: parsedOutput.type,
+        confidence: parsedOutput.confidence,
+        typeOfConfidence: typeof parsedOutput.confidence,
+        rationale: parsedOutput.rationale?.substring(0, 50) + '...',
+        allKeys: Object.keys(parsedOutput).join(', ')
+      });
       
       // Return success result with structured data
       return {
@@ -339,36 +369,66 @@ export function parseGaryAnalysis(analysisObject) {
       rawOpenAIOutput: null
     };
     
+    // Log to debug what's coming into parseGaryAnalysis
+    console.log('\n🧪 parseGaryAnalysis input:', {
+      hasAnalysisObject: !!analysisObject,
+      objectType: analysisObject ? typeof analysisObject : 'undefined',
+      hasRawOpenAIOutput: !!analysisObject?.rawOpenAIOutput,
+      hasSuccess: !!analysisObject?.success,
+      hasConfidence: analysisObject?.rawOpenAIOutput ? 
+        `${!!analysisObject.rawOpenAIOutput.confidence} (${typeof analysisObject.rawOpenAIOutput.confidence})` : 'no confidence'
+    });
+    
     if (!analysisObject) return defaultResult;
     
     // If we were passed a response from generateGaryAnalysis with rawOpenAIOutput already parsed
     if (analysisObject.rawOpenAIOutput) {
       const output = analysisObject.rawOpenAIOutput;
       
+      // Log the raw output for debugging
+      console.log('\n📊 Raw OpenAI output in parseGaryAnalysis:', {
+        pick: output.pick,
+        confidence: output.confidence,
+        typeOfConfidence: typeof output.confidence,
+        allKeys: Object.keys(output).join(', ')
+      });
+      
+      // VITAL: Always preserve the exact original confidence value from OpenAI
       return {
         pick: output.pick,
-        // Convert numeric confidence to text confidence for backwards compatibility
+        // Store BOTH numeric confidence AND text confidence
+        numericConfidence: typeof output.confidence === 'number' ? output.confidence : 0,
         confidence: typeof output.confidence === 'number' ?
           (output.confidence >= 0.75 ? 'High' : 'Medium') : 'Medium',
         betType: output.type,
         stake: typeof output.confidence === 'number' ? Math.round(output.confidence * 300) : 200,
         keyPoints: [output.rationale].filter(Boolean),
         reasoning: output.rationale,
-        rawOpenAIOutput: output
+        rawOpenAIOutput: output  // CRITICAL: Preserve the entire raw output
       };
     }
     
     // If we were passed the raw OpenAI output directly
-    if (typeof analysisObject === 'object' && analysisObject.pick && analysisObject.confidence) {
+    if (typeof analysisObject === 'object' && analysisObject.pick) {
+      // VITAL: Log for debugging
+      console.log('\n💬 Direct OpenAI output in parseGaryAnalysis:', {
+        confidence: analysisObject.confidence,
+        typeOfConfidence: typeof analysisObject.confidence,
+        pick: analysisObject.pick,
+        allKeys: Object.keys(analysisObject).join(', ')
+      });
+      
       return {
         pick: analysisObject.pick,
+        // Store BOTH numeric confidence AND text confidence
+        numericConfidence: typeof analysisObject.confidence === 'number' ? analysisObject.confidence : 0,
         confidence: typeof analysisObject.confidence === 'number' ?
           (analysisObject.confidence >= 0.75 ? 'High' : 'Medium') : 'Medium',
         betType: analysisObject.type || 'moneyline',
         stake: typeof analysisObject.confidence === 'number' ? Math.round(analysisObject.confidence * 300) : 200,
         keyPoints: [analysisObject.rationale].filter(Boolean),
         reasoning: analysisObject.rationale,
-        rawOpenAIOutput: analysisObject
+        rawOpenAIOutput: analysisObject  // CRITICAL: Preserve the entire raw output
       };
     }
     
@@ -381,7 +441,8 @@ export function parseGaryAnalysis(analysisObject) {
       betType: 'Moneyline',
       stake: 0,
       keyPoints: ['Analysis parsing error'],
-      reasoning: ''
+      reasoning: '',
+      rawOpenAIOutput: null
     };
   }
 }
