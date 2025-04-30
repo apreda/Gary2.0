@@ -609,6 +609,41 @@ const picksService = {
           console.log(`Pick #${index + 1}: Format unknown`);
         }
       });
+      
+      // Extract raw OpenAI outputs directly from picks - this is the core of our changes
+      // We just want the exact OpenAI output structure, nothing more and nothing less
+      const exactOpenAIOutputs = allPicks.map(pick => {
+        // First check if rawOpenAIOutput exists directly on the pick
+        if (pick.rawOpenAIOutput) {
+          console.log(`Using direct rawOpenAIOutput: ${pick.rawOpenAIOutput.pick}`);
+          return pick.rawOpenAIOutput;
+        }
+        // Next check if it's in rawAnalysis
+        else if (pick.rawAnalysis?.rawOpenAIOutput) {
+          console.log(`Using rawAnalysis.rawOpenAIOutput: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
+          return pick.rawAnalysis.rawOpenAIOutput;
+        }
+        // If we get here, something is wrong with our data structure
+        console.log('WARNING: Could not find raw OpenAI output structure for this pick');
+        console.log('Pick structure:', JSON.stringify(pick, null, 2).substring(0, 300));
+        
+        // Return null and we'll filter these out
+        return null;
+      }).filter(Boolean); // Remove any null values
+      
+      // If we somehow have no valid outputs, create one emergency fallback
+      // This should never happen with our updated prompt, but just in case
+      if (exactOpenAIOutputs.length === 0) {
+        console.warn('WARNING: No valid OpenAI outputs found - creating emergency fallback');
+        exactOpenAIOutputs.push({
+          pick: "Emergency Fallback Pick",
+          type: "moneyline",
+          confidence: 0.75,
+          league: "MLB",
+          time: "12:00 PM ET",
+          rationale: "This is a fallback pick generated to ensure database continuity."
+        });
+      }
 
       console.log(`Storing ${exactOpenAIOutputs.length} picks with their exact OpenAI output format`);
       
@@ -671,49 +706,6 @@ const picksService = {
       //   "confidence": 0.74,
       //   "rationale": "Tyler Anderson's 2.08 ERA..."
       // }
-      
-      // We now store ALL picks regardless of whether they have null values
-      // This ensures the exact OpenAI output is preserved, even if some picks might be null
-      if (highConfidencePicks.length === 0) {
-        console.warn('⚠️ WARNING: No picks found to store in database');
-        console.warn('This may indicate an issue with the picks generation process');
-        // We don't throw an error - we'll continue with database operations
-      }
-      
-      // Extract raw OpenAI outputs directly from picks - this is the core of our changes
-      // We just want the exact OpenAI output structure, nothing more and nothing less
-      const exactOpenAIOutputs = allPicks.map(pick => {
-        // First check if rawOpenAIOutput exists directly on the pick
-        if (pick.rawOpenAIOutput) {
-          console.log(`Using direct rawOpenAIOutput: ${pick.rawOpenAIOutput.pick}`);
-          return pick.rawOpenAIOutput;
-        }
-        // Next check if it's in rawAnalysis
-        else if (pick.rawAnalysis?.rawOpenAIOutput) {
-          console.log(`Using rawAnalysis.rawOpenAIOutput: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
-          return pick.rawAnalysis.rawOpenAIOutput;
-        }
-        // If we get here, something is wrong with our data structure
-        console.log('WARNING: Could not find raw OpenAI output structure for this pick');
-        console.log('Pick structure:', JSON.stringify(pick, null, 2).substring(0, 300));
-        
-        // Return null and we'll filter these out
-        return null;
-      }).filter(Boolean); // Remove any null values
-      
-      // If we somehow have no valid outputs, create one emergency fallback
-      // This should never happen with our updated prompt, but just in case
-      if (exactOpenAIOutputs.length === 0) {
-        console.warn('WARNING: No valid OpenAI outputs found - creating emergency fallback');
-        exactOpenAIOutputs.push({
-          pick: "Emergency Fallback Pick",
-          type: "moneyline",
-          confidence: 0.75,
-          league: "MLB",
-          time: "12:00 PM ET",
-          rationale: "This is a fallback pick generated to ensure database continuity."
-        });
-      }
       
       // Important: Log the first pick to verify format
       if (exactOpenAIOutputs.length > 0) {
