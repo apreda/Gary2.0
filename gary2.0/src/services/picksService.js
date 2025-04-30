@@ -654,16 +654,12 @@ const picksService = {
         console.log(JSON.stringify(rawJsonOutputs[0], null, 2));
       }
       
-      // Create data structure for Supabase - DIRECTLY store the raw JSON outputs
+      // Create data structure for Supabase - only include fields that exist in the schema
       const pickData = {
         date: currentDateString,
         // Store the EXACT raw JSON outputs with NO filtering or transformations
-        picks: rawJsonOutputs,
-        // Track metadata for debugging
-        count: rawJsonOutputs.length,
-        sport: rawJsonOutputs.length > 0 ? (rawJsonOutputs[0].league || 'unknown').toUpperCase() : 'ALL',
-        // Add timestamps for debugging and versioning
-        created_at: new Date().toISOString()
+        picks: rawJsonOutputs
+        // Timestamps will be handled by Supabase defaults
       };
       
       // Ensure there's a valid Supabase session before database operation
