@@ -181,23 +181,46 @@ const picksService = {
           return isValid;
         })
         .map(pick => {
-          // Extract just the essential fields from the raw OpenAI output
-          const rawOutput = pick.rawAnalysis.rawOpenAIOutput;
-          console.log(`Including pick for: ${pick.game}, confidence: ${rawOutput.confidence || 'unknown'}`);
+          // Extract the JSON data from the raw OpenAI response
+          // The raw response from OpenAI contains the JSON directly
+          const rawResponse = pick.rawAnalysis.rawOpenAIOutput;
+          let jsonData;
           
-          // Include only the essential fields to reduce storage size
-          return {
-            pick: rawOutput.pick,
-            type: rawOutput.type,
-            confidence: rawOutput.confidence,
-            trapAlert: rawOutput.trapAlert || false,
-            revenge: rawOutput.revenge || false,
-            homeTeam: rawOutput.homeTeam,
-            awayTeam: rawOutput.awayTeam,
-            league: rawOutput.league,
-            rationale: rawOutput.rationale
-          };
-        });
+          try {
+            // First try to parse directly if it's already valid JSON
+            jsonData = JSON.parse(rawResponse);
+          } catch (parseError) {
+            // If that fails, try to extract JSON from markdown code blocks
+            const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+              try {
+                jsonData = JSON.parse(jsonMatch[1].trim());
+              } catch (nestedError) {
+                // Last resort: try to find anything that looks like JSON
+                const lastResortMatch = rawResponse.match(/\{[\s\S]*?"pick"[\s\S]*?"confidence"[\s\S]*?\}/);
+                if (lastResortMatch) {
+                  try {
+                    jsonData = JSON.parse(lastResortMatch[0]);
+                  } catch (finalError) {
+                    console.error(`Failed to extract JSON from response for ${pick.game}`, finalError);
+                    return null;
+                  }
+                } else {
+                  console.error(`No JSON pattern found in response for ${pick.game}`);
+                  return null;
+                }
+              }
+            } else {
+              console.error(`No code block found in response for ${pick.game}`);
+              return null;
+            }
+          }
+          
+          console.log(`Successfully extracted JSON for: ${pick.game}, confidence: ${jsonData.confidence || 'unknown'}`);
+          return jsonData;
+        })
+        // Filter out null values from failed JSON extraction
+        .filter(jsonData => jsonData !== null);
       
       console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output`);
       
