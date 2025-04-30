@@ -186,33 +186,52 @@ const picksService = {
           const rawResponse = pick.rawAnalysis.rawOpenAIOutput;
           let jsonData;
           
-          try {
-            // First try to parse directly if it's already valid JSON
-            jsonData = JSON.parse(rawResponse);
-          } catch (parseError) {
-            // If that fails, try to extract JSON from markdown code blocks
-            const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
+          // Check if rawResponse is already an object (not a string)
+          if (rawResponse && typeof rawResponse === 'object' && !Array.isArray(rawResponse)) {
+            console.log(`Raw response for ${pick.game || 'unknown game'} is already an object, using directly`);
+            jsonData = rawResponse;
+          } else if (typeof rawResponse !== 'string') {
+            // Handle case where rawResponse is not a string and not an object
+            console.error(`Invalid raw response format for ${pick.game || 'unknown game'}: ${typeof rawResponse}`);
+            return null;
+          } else {
+            // Process string response
+            try {
+              // First try to parse directly if it's already valid JSON
+              jsonData = JSON.parse(rawResponse);
+              console.log(`Successfully parsed JSON directly for ${pick.game || 'unknown game'}`);
+            } catch (parseError) {
+              // If that fails, try to extract JSON from markdown code blocks
               try {
-                jsonData = JSON.parse(jsonMatch[1].trim());
-              } catch (nestedError) {
-                // Last resort: try to find anything that looks like JSON
-                const lastResortMatch = rawResponse.match(/\{[\s\S]*?"pick"[\s\S]*?"confidence"[\s\S]*?\}/);
-                if (lastResortMatch) {
+                const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (jsonMatch && jsonMatch[1]) {
                   try {
-                    jsonData = JSON.parse(lastResortMatch[0]);
-                  } catch (finalError) {
-                    console.error(`Failed to extract JSON from response for ${pick.game}`, finalError);
-                    return null;
+                    jsonData = JSON.parse(jsonMatch[1].trim());
+                    console.log(`Extracted JSON from code block for ${pick.game || 'unknown game'}`);
+                  } catch (nestedError) {
+                    // Last resort: try to find anything that looks like JSON
+                    const lastResortMatch = rawResponse.match(/\{[\s\S]*?"pick"[\s\S]*?"confidence"[\s\S]*?\}/);
+                    if (lastResortMatch) {
+                      try {
+                        jsonData = JSON.parse(lastResortMatch[0]);
+                        console.log(`Extracted JSON from regex match for ${pick.game || 'unknown game'}`);
+                      } catch (finalError) {
+                        console.error(`Failed to extract JSON from response for ${pick.game || 'unknown game'}`, finalError);
+                        return null;
+                      }
+                    } else {
+                      console.error(`No JSON pattern found in response for ${pick.game || 'unknown game'}`);
+                      return null;
+                    }
                   }
                 } else {
-                  console.error(`No JSON pattern found in response for ${pick.game}`);
+                  console.error(`No code block found in response for ${pick.game || 'unknown game'}`);
                   return null;
                 }
+              } catch (matchError) {
+                console.error(`Error attempting to match patterns in response for ${pick.game || 'unknown game'}:`, matchError);
+                return null;
               }
-            } else {
-              console.error(`No code block found in response for ${pick.game}`);
-              return null;
             }
           }
           
