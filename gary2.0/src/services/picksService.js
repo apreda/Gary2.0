@@ -15,7 +15,7 @@ const picksService = {
       console.log('Generating daily picks with sequential processing to avoid rate limits');
       
       // Get active sports and their games
-      const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'hockey_nhl'];
+      const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl']; // Fixed NHL sport key to match Odds API
       const allPicks = [];
       
       // Process one sport at a time to avoid overwhelming OpenAI API
