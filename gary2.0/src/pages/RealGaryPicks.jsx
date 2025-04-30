@@ -422,7 +422,7 @@ function RealGaryPicks() {
                     <div className="flex justify-center items-center relative py-8">
                       {/* Left navigation arrow - positioned outside the card */}
                       <button 
-                        className="absolute left-[-60px] z-50 text-white bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300"
+                        className="absolute left-[-60px] z-50 text-[#d4af37] bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300 border-2 border-[#d4af37] hover:text-white"
                         onClick={prevPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
@@ -434,7 +434,7 @@ function RealGaryPicks() {
                       
                       {/* Right navigation arrow - positioned outside the card */}
                       <button 
-                        className="absolute right-[-60px] z-50 text-white bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300"
+                        className="absolute right-[-60px] z-50 text-[#d4af37] bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300 border-2 border-[#d4af37] hover:text-white"
                         onClick={nextPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
@@ -446,7 +446,7 @@ function RealGaryPicks() {
                       
                       {/* Card counter - repositioned above the card */}
                       <div className="absolute top-[-30px] left-0 right-0 text-center z-50">
-                        <span className="px-4 py-2 bg-black bg-opacity-70 rounded-full text-sm text-white font-medium">
+                        <span className="px-4 py-2 bg-black bg-opacity-70 rounded-full text-sm text-[#d4af37] font-medium border border-[#d4af37]">
                           {picks.length > 0 ? `${currentIndex + 1} / ${picks.length}` : '0/0'}
                         </span>
                       </div>
