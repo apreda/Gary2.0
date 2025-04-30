@@ -7,8 +7,7 @@ import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
 
-// Import styles
-import '../styles/retro-sportsbook.css';
+// Modern UI no longer uses retro styles
 
 // Only import assets we actually need for the modern dark UI design
 import GaryEmblem from '../assets/images/Garyemblem.png';
@@ -36,7 +35,6 @@ function RealGaryPicks() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [activeTab, setActiveTab] = useState('today');
-  const [parlayCard, setParlayCard] = useState(null);
   
   // State for bet tracking
   const [showBetTracker, setShowBetTracker] = useState(false);
@@ -441,8 +439,8 @@ function RealGaryPicks() {
                         </span>
                       </div>
                       
-                      {/* Card Stack */}
-                      <div className="relative" style={{ width: '288px', height: '432px' }}>
+                      {/* Card Stack - Wider index card format */}
+                      <div className="relative" style={{ width: '480px', height: '320px' }}>
                         {picks.map((pick, index) => {
                           // Calculate position in stack relative to current index
                           const position = (index - currentIndex + picks.length) % picks.length;
@@ -485,7 +483,7 @@ function RealGaryPicks() {
                             >
                               {/* Card container with flip effect */}
                               <div 
-                                className="w-72 h-[27rem] relative cursor-pointer" 
+                                className="w-[480px] h-[320px] relative cursor-pointer" 
                                 style={{
                                   perspective: '1000px',
                                 }}
@@ -515,11 +513,11 @@ function RealGaryPicks() {
                                       }}>
                                         {/* Left side content */}
                                         <div style={{
-                                          position: 'absolute',
-                                          left: 0,
-                                          top: 0,
-                                          bottom: 0,
-                                          width: '60%',
+                                           position: 'absolute',
+                                           left: 0,
+                                           top: 0,
+                                           bottom: 0,
+                                           width: '70%',
                                           padding: '1.5rem',
                                           display: 'flex',
                                           flexDirection: 'column',
@@ -613,7 +611,7 @@ function RealGaryPicks() {
                                           right: 0,
                                           top: 0,
                                           bottom: 0,
-                                          width: '40%',
+                                          width: '30%',
                                           borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
                                           padding: '1.5rem 1rem',
                                           display: 'flex',
@@ -915,34 +913,7 @@ function RealGaryPicks() {
                   </div>
                 </div>
               )}
-              {activeTab === 'parlay' && (
-                <div className="max-w-2xl mx-auto mb-12">
-                  <div className="bg-yellow-50 rounded-lg border-4 border-red-600 overflow-hidden">
-                    <div className="bg-red-600 text-white py-2 px-4 text-center">
-                      <h2 className="text-2xl font-bold">GARY'S PARLAY OF THE DAY</h2>
-                    </div>
-                    <div className="p-4">
-                      {picks.slice(0, 3).map((pick, index) => (
-                        <div key={index} className="py-2 border-b border-dashed border-gray-400 mb-2">
-                          <div className="flex justify-between items-center">
-                            <div className="font-bold">{index + 1}. {pick.shortPick}</div>
-                            <div>{pick.odds}</div>
-                          </div>
-                          <div className="text-sm text-gray-700 mt-1">{pick.game}</div>
-                        </div>
-                      ))}
-                      <div className="text-center font-bold text-xl text-red-600 p-3 mt-2 border-2 border-red-600 rounded">
-                        PARLAY ODDS: +{650 + Math.floor(Math.random() * 350)}
-                      </div>
-                      <div className="mt-6 flex justify-center">
-                        <button className="px-6 py-3 bg-red-600 text-white font-bold uppercase rounded-full border-2 border-black hover:bg-red-700 transition-colors">
-                          PLACE PARLAY BET
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Parlay card removed - no longer used */}
               {activeTab === 'history' && (
                 <div className="mx-auto max-w-4xl mb-12" style={{ backgroundColor: '#121212', border: '3px solid #d4af37', borderRadius: '8px', overflow: 'hidden' }}>
                   <div style={{ backgroundColor: '#d4af37', padding: '8px', textAlign: 'center' }}>
