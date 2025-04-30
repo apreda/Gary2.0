@@ -562,48 +562,35 @@ const picksService = {
         throw new Error('Picks must be a valid array');
       }
 
-      console.log('Extracting raw OpenAI outputs for storage...');
+      console.log('Storing the raw JSON directly from OpenAI responses...');
       
-      // FINAL: Only use picks with valid rawOpenAIOutput and confidence >= 0.75
-      const rawOutputs = picks
-        .filter(pick => pick.rawOpenAIOutput && typeof pick.rawOpenAIOutput.confidence === 'number' && pick.rawOpenAIOutput.confidence >= 0.75)
-        .map(pick => {
-          const output = pick.rawOpenAIOutput;
-          console.log(`Keeping pick with confidence ${output.confidence}: ${output.pick}`);
-          return output;
-        });
-
-      console.log(`Storing ${rawOutputs.length} picks with their exact OpenAI output format`);
+      // Simply collect all raw JSON objects from the OpenAI responses
+      // without any additional filtering or transformation
+      const rawJsonOutputs = [];
       
-      // Log example of our expected format
-      console.log('Expected OpenAI output format:');
-      console.log(JSON.stringify({
-        pick: "Cincinnati Reds ML -120",
-        type: "moneyline",
-        confidence: 0.78,
-        trapAlert: false,
-        revenge: false,
-        superstition: false,
-        momentum: 0.65,
-        homeTeam: "Cincinnati Reds",
-        awayTeam: "St. Louis Cardinals",
-        league: "MLB",
-        time: "7:10 PM ET",
-        rationale: "Line's moved toward the Reds despite public split and injuries..."
-      }, null, 2));
-      
-      // We already have the rawOutputs array with our filtered picks
-      // The confidence check is already done when creating rawOutputs
-      
-      if (rawOutputs.length === 0) {
-        console.warn('WARNING: No valid OpenAI outputs found with confidence >= 0.75 - no picks will be stored');
-        // No fallback pick generation - we only use real data
+      // Loop through each pick and extract the raw JSON
+      for (const pick of picks) {
+        if (pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput) {
+          // Store the direct raw JSON output as it came from OpenAI
+          const rawJson = pick.rawAnalysis.rawOpenAIOutput;
+          console.log(`Storing raw JSON for pick: ${rawJson.pick}`);
+          rawJsonOutputs.push(rawJson);
+        } else if (pick.rawOpenAIOutput) {
+          // Alternative location for raw output
+          const rawJson = pick.rawOpenAIOutput;
+          console.log(`Storing raw JSON for pick: ${rawJson.pick}`);
+          rawJsonOutputs.push(rawJson);
+        } else {
+          console.log('No raw JSON found for this pick, skipping');
+        }
       }
+
+      console.log(`Storing ${rawJsonOutputs.length} raw JSON outputs directly to database`);
       
-      // If we have at least one pick, show it for debugging
-      if (rawOutputs.length > 0) {
-        console.log('Example pick being stored:');
-        console.log(JSON.stringify(rawOutputs[0], null, 2));
+      // Log what we're storing for debugging
+      if (rawJsonOutputs.length > 0) {
+        console.log('Example JSON being stored directly:');
+        console.log(JSON.stringify(rawJsonOutputs[0], null, 2));
       }
       
       // Get today's date string for database operations - YYYY-MM-DD format
@@ -655,42 +642,35 @@ const picksService = {
       }
       
       // Continue using the currentDateString that was already defined
-      console.log(`Storing picks using exactly the OpenAI output format for date: ${currentDateString}`);
+      console.log(`Storing raw JSON outputs directly to database for date: ${currentDateString}`);
       
-      // Important: We're storing ONLY VALID RAW OpenAI output with no transformations
-      // This matches the example format in the requirements:
-      // {
-      //   "pick": "Angels -1.5 (+135)",
-      //   "type": "spread",
-      //   "confidence": 0.74,
-      //   "rationale": "Tyler Anderson's 2.08 ERA..."
-      // }
+      // Store the EXACT raw JSON object exactly as it came from OpenAI
+      // No filtering, no transformations, no validation - just the raw data
+      console.log(`Storing ${rawJsonOutputs.length} raw outputs directly to database`);
       
-      // Sanitize the outputs by removing null values
-      // This is essential as Supabase can reject JSONB data with null values
-      const sanitizedOutputs = rawOutputs.map(pick => {
-        const sanitizedPick = {};
-        // Copy only defined non-null properties
-        Object.keys(pick).forEach(key => {
-          if (pick[key] !== null && pick[key] !== undefined) {
-            sanitizedPick[key] = pick[key];
-          }
-        });
-        return sanitizedPick;
-      });
+      // For debugging, show the exact format of what we're storing
+      if (rawJsonOutputs.length > 0) {
+        console.log('Example format being stored:');
+        console.log(JSON.stringify(rawJsonOutputs[0], null, 2));
+      }
       
-      console.log(`Sanitized ${rawOutputs.length} picks for Supabase storage`);
-      
-      // Create data structure for Supabase
+      // Create data structure for Supabase - DIRECTLY store the raw JSON outputs
       const pickData = {
         date: currentDateString,
-        picks: sanitizedOutputs // Store the sanitized OpenAI outputs directly
+        // Store the EXACT raw JSON outputs with NO filtering or transformations
+        picks: rawJsonOutputs,
+        // Track metadata for debugging
+        count: rawJsonOutputs.length,
+        sport: rawJsonOutputs.length > 0 ? (rawJsonOutputs[0].league || 'unknown').toUpperCase() : 'ALL',
+        // Add timestamps for debugging and versioning
+        created_at: new Date().toISOString()
       };
       
-      console.log(`Preparing to store ${sanitizedOutputs.length} picks in database`);
+      // Ensure there's a valid Supabase session before database operation
+      await picksService.ensureValidSupabaseSession();
       
-      // Insert the data with proper structure into the database
-      const { data: insertData, error: insertError } = await supabase
+      console.log(`Inserting raw JSON outputs directly into daily_picks table...`);
+      const { error: insertError } = await supabase
         .from('daily_picks')
         .insert(pickData)
         .select(); // Add select to get return data for confirmation
