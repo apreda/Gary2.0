@@ -5,6 +5,41 @@
 import { openaiService } from './openaiService.js';
 
 /**
+ * Generate a pick for a specific game using Gary's analysis system
+ * @param {object} gameData - The game data to analyze
+ * @param {object} options - Additional options
+ * @returns {Promise<object>} - The generated pick
+ */
+export async function makeGaryPick(gameData, options = {}) {
+  console.log(`Making a pick for ${gameData?.homeTeam} vs ${gameData?.awayTeam}`);
+  
+  try {
+    // Analyze the game using Gary's engine
+    const analysis = await generateGaryAnalysis(gameData, options);
+    
+    // Parse the analysis to get a standardized pick format
+    const pick = parseGaryAnalysis(analysis);
+    
+    return {
+      success: !!pick,
+      pick: pick,
+      rawAnalysis: analysis,
+      game: gameData?.game || `${gameData?.homeTeam} vs ${gameData?.awayTeam}`,
+      sport: gameData?.sport,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error making Gary pick:', error);
+    return {
+      success: false,
+      pick: null,
+      rawAnalysis: null,
+      error: error.message
+    };
+  }
+}
+
+/**
  * Fetch real-time game information and news
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
