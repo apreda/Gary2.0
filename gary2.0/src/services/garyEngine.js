@@ -123,10 +123,9 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       };
     }
     
-    // Log the raw response for troubleshooting (truncated for readability)
-    console.log('RAW OPENAI RESPONSE (first 200 chars):', 
-               rawOpenAIResponse.substring(0, 200) + 
-               (rawOpenAIResponse.length > 200 ? '...' : ''));
+    // Log the entire raw response for complete debugging
+    console.log('FULL RAW OPENAI RESPONSE:');
+    console.log(rawOpenAIResponse);
     console.log('Response length:', rawOpenAIResponse.length, 'characters');
     
     // Extract JSON content from the response
