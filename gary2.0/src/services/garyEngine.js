@@ -284,11 +284,31 @@ Provide your betting analysis in the exact JSON format specified.`
       throw new Error('Failed to generate analysis from OpenAI');
     }
     
-    // Return success result with full analysis
-    return {
-      success: true,
-      fullAnalysis: analysis
-    };
+    // Parse the JSON response from OpenAI
+    try {
+      // Find JSON content within the response (in case there's any markdown wrapper)
+      const jsonMatch = analysis.match(/\{[\s\S]*\}/); // Match everything between { and }
+      const jsonContent = jsonMatch ? jsonMatch[0] : analysis;
+      
+      // Parse the JSON content
+      const parsedOutput = JSON.parse(jsonContent);
+      
+      // Return success result with structured data
+      return {
+        success: true,
+        rawOpenAIOutput: parsedOutput, // Already parsed JSON object
+        fullAnalysis: analysis // Keep the original full response too
+      };
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response as JSON:', parseError);
+      
+      // If we can't parse as JSON, return the raw response
+      return {
+        success: true,
+        parseError: true,
+        fullAnalysis: analysis
+      };
+    }
   } catch (error) {
     console.error('Error generating Gary\'s analysis:', error);
     
@@ -301,238 +321,58 @@ Provide your betting analysis in the exact JSON format specified.`
 }
 
 /**
- * Parse Gary's narrative analysis into structured data
- * @param {string|object} analysis - Full analysis from OpenAI, either as JSON or formatted text
- * @returns {object} - Structured data extracted from the analysis with original raw JSON preserved
+ * Simplified function that now just makes the rawOpenAIOutput available in a standardized format
+ * Since we now directly parse the JSON in generateGaryAnalysis, this function mainly exists for compatibility
+ * @param {object} analysisObject - The object from generateGaryAnalysis (either rawOpenAIOutput or fullAnalysis)
+ * @returns {object} - A standardized format with the raw OpenAI output preserved
  */
-export function parseGaryAnalysis(analysis) {
+export function parseGaryAnalysis(analysisObject) {
   try {
-    // Default values in case parsing fails
+    // Default result in case we can't extract anything useful
     const defaultResult = {
       pick: null,
       confidence: 'Medium',
-      betType: 'Moneyline',
+      betType: 'moneyline', 
       stake: 0,
       keyPoints: [],
       reasoning: '',
-      // Add a flag to indicate no raw OpenAI data was available
       rawOpenAIOutput: null
     };
     
-    if (!analysis) return defaultResult;
-
-    // CRITICAL FIX: Extract JSON from markdown code blocks if present
-    // OpenAI often returns JSON inside ```json ``` blocks
-    let cleanedAnalysis = analysis;
-    let rawJsonString = null; // Store the raw JSON string for preservation
+    if (!analysisObject) return defaultResult;
     
-    if (typeof analysis === 'string') {
-      // Check if the response contains a JSON code block
-      const jsonCodeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/;
-      const match = jsonCodeBlockRegex.exec(analysis);
-      if (match && match[1]) {
-        console.log('Found JSON in code block, extracting...');
-        cleanedAnalysis = match[1].trim();
-        rawJsonString = cleanedAnalysis; // Preserve the exact JSON string as received
-      }
-    }
-    
-    // First try to handle the case where 'analysis' is already a complete object
-    if (typeof analysis === 'object' && analysis !== null && analysis.pick !== undefined) {
-      console.log('Analysis is already a structured object, preserving as-is');
-      
-      // CRITICAL: Create a complete rawOpenAIOutput directly from the object
-      // This ensures we have all required fields for storage
-      const rawOpenAIOutput = {
-        pick: analysis.pick,
-        type: analysis.type || 'moneyline',
-        confidence: analysis.confidence || 0.75,
-        trapAlert: analysis.trapAlert || false,
-        revenge: analysis.revenge || false,
-        superstition: analysis.superstition || false,
-        momentum: analysis.momentum || 0,
-        homeTeam: analysis.homeTeam || '',
-        awayTeam: analysis.awayTeam || '',
-        league: analysis.league || '',
-        time: analysis.time || '',
-        rationale: analysis.rationale || ''
-      };
-      
-      console.log('Direct object format preserved:', JSON.stringify(rawOpenAIOutput).substring(0, 200));
+    // If we were passed a response from generateGaryAnalysis with rawOpenAIOutput already parsed
+    if (analysisObject.rawOpenAIOutput) {
+      const output = analysisObject.rawOpenAIOutput;
       
       return {
-        pick: analysis.pick,
-        confidence: analysis.confidence || 'Medium',
-        betType: analysis.type || 'Moneyline',
-        stake: typeof analysis.confidence === 'number' ? Math.round(analysis.confidence * 300) : 200,
-        keyPoints: [analysis.rationale || ''].filter(Boolean),
-        reasoning: analysis.rationale || '',
-        rawOpenAIOutput: rawOpenAIOutput
+        pick: output.pick,
+        // Convert numeric confidence to text confidence for backwards compatibility
+        confidence: typeof output.confidence === 'number' ?
+          (output.confidence >= 0.75 ? 'High' : 'Medium') : 'Medium',
+        betType: output.type,
+        stake: typeof output.confidence === 'number' ? Math.round(output.confidence * 300) : 200,
+        keyPoints: [output.rationale].filter(Boolean),
+        reasoning: output.rationale,
+        rawOpenAIOutput: output
       };
     }
     
-    // Try to parse as JSON
-    try {
-      // Try to parse if it's a string, otherwise assume it's already an object
-      const jsonData = typeof cleanedAnalysis === 'string' ? JSON.parse(cleanedAnalysis) : cleanedAnalysis;
-      
-      // Check if it has the expected OpenAI format structure
-      if (typeof jsonData === 'object' && jsonData !== null) {
-        // If we have a direct structured pick object as expected from OpenAI
-        if (jsonData.pick !== undefined) {
-          console.log('Successfully parsed structured JSON from OpenAI');
-          console.log('IMPORTANT: Preserving exact OpenAI format:', JSON.stringify(jsonData, null, 2));
-          
-          // CRITICAL DEBUG: Log key properties to verify structure
-          console.log(`OpenAI pick: ${jsonData.pick}, type: ${jsonData.type}, confidence: ${jsonData.confidence}`);
-          console.log(`OpenAI league: ${jsonData.league}, time: ${jsonData.time}`);
-          console.log(`OpenAI has rationale: ${jsonData.rationale ? 'Yes' : 'No'}`);
-          console.log(`OpenAI has full structure: ${jsonData.pick && jsonData.type && jsonData.confidence ? 'Yes' : 'No'}`);
-          
-          // CRITICAL: Store the exact raw OpenAI output matching the specified format
-          // This is the key fix: We must preserve the EXACT original structure
-          // Without any transformations to league names or other fields
-          const rawOpenAIOutput = {
-            pick: jsonData.pick,
-            type: jsonData.type || 'moneyline',
-            confidence: jsonData.confidence || 0.75,
-            trapAlert: jsonData.trapAlert || false,
-            revenge: jsonData.revenge || false,
-            superstition: jsonData.superstition || false,
-            momentum: jsonData.momentum || 0,
-            homeTeam: jsonData.homeTeam || '',
-            awayTeam: jsonData.awayTeam || '',
-            league: jsonData.league || '', // This must remain untransformed (e.g., "MLB" not "baseball_mlb")
-            time: jsonData.time || '',     // This must remain untransformed (e.g., "10:05 PM ET")
-            rationale: jsonData.rationale || ''
-          };
-          
-          return {
-            pick: jsonData.pick,
-            confidence: jsonData.confidence || 'Medium',
-            betType: jsonData.type || 'Moneyline',
-            stake: typeof jsonData.confidence === 'number' ? Math.round(jsonData.confidence * 300) : 200,
-            keyPoints: [jsonData.rationale || ''].filter(Boolean),
-            reasoning: jsonData.rationale || '',
-            // CRITICAL: Store the exact raw OpenAI output to be used for Supabase storage
-            rawOpenAIOutput: rawOpenAIOutput
-          };
-        }
-      }
-    } catch (jsonError) {
-      // Not valid JSON, log the error and continue with text-based parsing
-      console.log('JSON parsing error:', jsonError.message);
-      console.log('Content that failed to parse:', cleanedAnalysis);
+    // If we were passed the raw OpenAI output directly
+    if (typeof analysisObject === 'object' && analysisObject.pick && analysisObject.confidence) {
+      return {
+        pick: analysisObject.pick,
+        confidence: typeof analysisObject.confidence === 'number' ?
+          (analysisObject.confidence >= 0.75 ? 'High' : 'Medium') : 'Medium',
+        betType: analysisObject.type || 'moneyline',
+        stake: typeof analysisObject.confidence === 'number' ? Math.round(analysisObject.confidence * 300) : 200,
+        keyPoints: [analysisObject.rationale].filter(Boolean),
+        reasoning: analysisObject.rationale,
+        rawOpenAIOutput: analysisObject
+      };
     }
     
-    // Legacy text-based parsing for backward compatibility
-    console.log('Using legacy text parsing for analysis');
-    
-    // Extract confidence level
-    let confidence = 'Medium';
-    let confidenceValue = 0.65; // Default numeric value
-    if (analysis.includes('Confidence: High') || analysis.includes('CONFIDENCE: HIGH')) {
-      confidence = 'High';
-      confidenceValue = 0.85;
-    } else if (analysis.includes('Confidence: Low') || analysis.includes('CONFIDENCE: LOW')) {
-      confidence = 'Low';
-      confidenceValue = 0.45;
-    }
-    
-    // Extract bet type (assuming it's mentioned clearly)
-    let betType = 'Moneyline'; // Default
-    let betTypeStandard = 'moneyline'; // Standardized lowercase for OpenAI format
-    if (analysis.includes('Spread') || analysis.includes('SPREAD')) {
-      betType = 'Spread';
-      betTypeStandard = 'spread';
-    } else if (analysis.includes('Over/Under') || analysis.includes('TOTAL')) {
-      betType = 'Total';
-      betTypeStandard = 'total';
-    } else if (analysis.includes('Parlay') || analysis.includes('PARLAY')) {
-      betType = 'Parlay';
-    }
-    
-    // Extract key points (assuming they're in bullet points)
-    const keyPoints = [];
-    const bulletRegex = /[•\-\*]\s*(.+?)\n/g;
-    let match;
-    while ((match = bulletRegex.exec(analysis)) !== null) {
-      keyPoints.push(match[1].trim());
-    }
-    
-    // Extract pick (simply use the first line as a fallback)
-    const lines = typeof analysis === 'string' ? analysis.split('\n') : [];
-    const pick = lines.length > 0 ? lines[0].replace('Pick:', '').trim() : 'Unknown';
-    
-    // Extract team names if possible
-    let homeTeam = '';
-    let awayTeam = '';
-    const teamMatch = pick.match(/([\w\s]+)\s+(?:vs\.?|@|against)\s+([\w\s]+)/i);
-    if (teamMatch) {
-      homeTeam = teamMatch[1].trim();
-      awayTeam = teamMatch[2].trim();
-    }
-    
-    // Extract reasoning
-    let reasoning = '';
-    const reasoningMatch = /Rationale:|Reasoning:|Analysis:/i.exec(analysis);
-    if (reasoningMatch) {
-      reasoning = analysis.substring(reasoningMatch.index + reasoningMatch[0].length).trim();
-    }
-    
-    // Try to extract league info
-    let league = '';
-    const leagueMatch = /\b(NBA|MLB|NHL|NFL)\b/i.exec(analysis);
-    if (leagueMatch) {
-      league = leagueMatch[1].toUpperCase();
-    }
-    
-    // Try to extract game time
-    let time = '';
-    const timeMatch = /(\d{1,2}:\d{2}\s*(?:AM|PM)(?:\s*ET)?)/i.exec(analysis);
-    if (timeMatch) {
-      time = timeMatch[1].trim();
-    }
-    
-    // Create a complete raw OpenAI output object with all required fields
-    const fallbackOpenAIOutput = {
-      pick: pick,
-      type: betTypeStandard,
-      confidence: confidenceValue,
-      trapAlert: false,
-      revenge: false,
-      superstition: false,
-      momentum: 0.5,
-      homeTeam: homeTeam,
-      awayTeam: awayTeam,
-      league: league,
-      time: time,
-      rationale: reasoning
-    };
-    
-    if (sportKey.includes('basketball')) {
-      console.log('Parsing text as basketball analysis');
-      // Set the league in the fallback output if not already set
-      if (!fallbackOpenAIOutput.league) {
-        fallbackOpenAIOutput.league = 'NBA';
-      }
-    } else if (sportKey.includes('baseball')) {
-      console.log('Parsing text as baseball analysis');
-      // Set the league in the fallback output if not already set
-      if (!fallbackOpenAIOutput.league) {
-        fallbackOpenAIOutput.league = 'MLB';
-      }
-    }
-    
-    return {
-      pick,
-      confidence,
-      betType,
-      stake: typeof confidenceValue === 'number' ? Math.round(confidenceValue * 300) : 200,
-      keyPoints: keyPoints.length > 0 ? keyPoints : ['No specific key points extracted'],
-      reasoning: analysis,
-      rawOpenAIOutput: fallbackOpenAIOutput
-    };
+    return defaultResult;
   } catch (error) {
     console.error('Error parsing Gary\'s analysis:', error);
     return {
@@ -541,7 +381,7 @@ export function parseGaryAnalysis(analysis) {
       betType: 'Moneyline',
       stake: 0,
       keyPoints: ['Analysis parsing error'],
-      reasoning: analysis || ''
+      reasoning: ''
     };
   }
 }
@@ -628,8 +468,9 @@ export async function makeGaryPick({
   // Step 5: Generate Gary's AI-powered analysis
   const aiAnalysis = await generateGaryAnalysis(enrichedGameData, realTimeInfo, gamePreferences);
   
-  // Step 6: Parse the AI analysis into structured data
-  const parsedAnalysis = parseGaryAnalysis(aiAnalysis.fullAnalysis);
+  // Step 6: Use the simplified parseGaryAnalysis to get standardized access to the data
+  // Since we now parse the JSON directly in generateGaryAnalysis, this is mostly for compatibility
+  const parsedAnalysis = parseGaryAnalysis(aiAnalysis);
   
   // Step 7: Blend traditional Gary logic with AI insights
   const trap = trapSafeCheck(dataMetrics.market || {});
