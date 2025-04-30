@@ -24,7 +24,7 @@ const picksService = {
         
         try {
           // Get games for this sport
-          const games = await oddsService.getGamesWithOdds(sport);
+          const games = await oddsService.getUpcomingGames(sport);
           console.log(`Got ${games.length} games for ${sport}`);
           
           if (games.length === 0) {
