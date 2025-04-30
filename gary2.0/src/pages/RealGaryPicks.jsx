@@ -420,33 +420,33 @@ function RealGaryPicks() {
                     
                     {/* Card Stack Interface */}
                     <div className="flex justify-center items-center relative py-8">
-                      {/* Left navigation arrow */}
+                      {/* Left navigation arrow - positioned outside the card */}
                       <button 
-                        className="absolute left-4 z-30 text-white bg-black bg-opacity-50 hover:bg-opacity-70 p-4 rounded-full transition-all duration-300"
+                        className="absolute left-[-60px] z-50 text-white bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300"
                         onClick={prevPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M15 18l-6-6 6-6" />
                         </svg>
                       </button>
                       
-                      {/* Right navigation arrow */}
+                      {/* Right navigation arrow - positioned outside the card */}
                       <button 
-                        className="absolute right-4 z-30 text-white bg-black bg-opacity-50 hover:bg-opacity-70 p-4 rounded-full transition-all duration-300"
+                        className="absolute right-[-60px] z-50 text-white bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300"
                         onClick={nextPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M9 18l6-6-6-6" />
                         </svg>
                       </button>
                       
-                      {/* Card counter */}
-                      <div className="absolute bottom-4 left-0 right-0 text-center">
-                        <span className="px-4 py-2 bg-black bg-opacity-50 rounded-full text-sm text-white">
+                      {/* Card counter - repositioned above the card */}
+                      <div className="absolute top-[-30px] left-0 right-0 text-center z-50">
+                        <span className="px-4 py-2 bg-black bg-opacity-70 rounded-full text-sm text-white font-medium">
                           {picks.length > 0 ? `${currentIndex + 1} / ${picks.length}` : '0/0'}
                         </span>
                       </div>
