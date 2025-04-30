@@ -623,6 +623,27 @@ const picksService = {
           console.log(`Using rawAnalysis.rawOpenAIOutput: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
           return pick.rawAnalysis.rawOpenAIOutput;
         }
+        
+        // NEW CRITICAL FIX: Create a valid output structure from rawAnalysis
+        // Since we have valid OpenAI data but it's not being stored correctly
+        else if (pick.rawAnalysis) {
+          // We're seeing that the OpenAI output is in pick.rawAnalysis directly, not in rawOpenAIOutput
+          // Reconstruct the format we need to store
+          console.log(`Reconstructing from rawAnalysis for pick ${pick.id}:`, 
+                      pick.rawAnalysis.pick ? pick.rawAnalysis.pick : 'unknown');
+          
+          return {
+            pick: pick.rawAnalysis.pick || pick.pick || "",
+            type: pick.rawAnalysis.betType?.toLowerCase() || pick.betType?.toLowerCase() || "moneyline",
+            confidence: pick.rawAnalysis.confidence || pick.confidence || 0.75,
+            league: pick.league || "", 
+            time: pick.time || "",
+            homeTeam: pick.homeTeam || "",
+            awayTeam: pick.awayTeam || "",
+            rationale: pick.rawAnalysis.reasoning || pick.reasoning || ""
+          };
+        }
+        
         // If we get here, something is wrong with our data structure
         console.log('WARNING: Could not find raw OpenAI output structure for this pick');
         console.log('Pick structure:', JSON.stringify(pick, null, 2).substring(0, 300));
