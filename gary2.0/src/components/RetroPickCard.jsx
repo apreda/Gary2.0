@@ -20,6 +20,7 @@ function formatGameTitle(game, homeTeam, awayTeam) {
     // Extract team names (everything after the last space for shorter display)
     const homeName = homeTeam.split(' ').pop() || 'HOME';
     const awayName = awayTeam.split(' ').pop() || 'AWAY';
+    // ALWAYS use awayTeam @ homeTeam format
     return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
   }
   
@@ -201,18 +202,25 @@ function formatGameTitle(game, homeTeam, awayTeam) {
   safePick.formattedPick = getFormattedShortPick(safePick);
   
   // Format game display (convert to "AWAY @ HOME" format with team nicknames only)
-  // Use homeTeam and awayTeam direct fields if available (from OpenAI), otherwise parse from game field
-  safePick.formattedGame = pick?.homeTeam && pick?.awayTeam ? 
-    formatGameTitle(null, pick.homeTeam, pick.awayTeam) : 
-    formatGameTitle(safePick.game);
+  // ALWAYS use homeTeam and awayTeam fields directly when available
+  safePick.formattedGame = (safePick.homeTeam && safePick.awayTeam) ? 
+    `${safePick.awayTeam.split(' ').pop().toUpperCase()} @ ${safePick.homeTeam.split(' ').pop().toUpperCase()}` : 
+    (pick?.homeTeam && pick?.awayTeam ? 
+      `${pick.awayTeam.split(' ').pop().toUpperCase()} @ ${pick.homeTeam.split(' ').pop().toUpperCase()}` : 
+      formatGameTitle(safePick.game));
 
   // Get league information from the pick (could be MLB, NBA, NHL, etc.)
   // Don't default to any specific league to avoid bias
   const league = safePick.league || '';
-  // Format time in 12-hour format if provided from OpenAI
+  // Format time in 12-hour format with proper padding for minutes
   // Ensure 'ET' is added if not already present
   const formattedTime = safePick.time ? 
-    (safePick.time.includes('ET') ? safePick.time : `${safePick.time} ET`) : 
+    (function() {
+      // First ensure 'ET' is present
+      let time = safePick.time.includes('ET') ? safePick.time : `${safePick.time} ET`;
+      // Then format minutes to always have 2 digits (e.g., 8:00 instead of 8:0)
+      return time.replace(/:([0-9])\s/, ':0$1 ');
+    })() : 
     '10:10 PM ET';
 
   // Reset state when pick changes
