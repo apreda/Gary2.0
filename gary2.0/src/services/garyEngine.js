@@ -5,6 +5,26 @@
 import { openaiService } from './openaiService.js';
 
 /**
+ * Fetch real-time game information and news
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {string} sportKey - Sport identification key
+ * @returns {Promise<object>} - Real-time game context information
+ */
+export async function fetchRealTimeGameInfo(homeTeam, awayTeam, sportKey) {
+  // Simple implementation that returns a placeholder
+  console.log(`Fetching real-time info for ${homeTeam} vs ${awayTeam} (${sportKey})`);
+  
+  return {
+    summary: `Latest information for ${homeTeam} vs ${awayTeam}`,
+    insights: ['Using statistical analysis only'],
+    source: 'Gary Stats Engine',
+    sport: sportKey || 'unknown',
+    timestamp: new Date().toISOString()
+  };
+}
+
+/**
  * Generate Gary's analysis for a specific game
  * @param {object} gameData - The data for the game to analyze
  * @param {object} options - Optional parameters
