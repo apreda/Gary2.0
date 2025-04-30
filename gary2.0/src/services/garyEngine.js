@@ -6,33 +6,29 @@ import { openaiService } from './openaiService.js';
 
 /**
  * Generate Gary's analysis for a specific game
- * Uses OpenAI to analyze the game data and provide betting recommendations
  * @param {object} gameData - The data for the game to analyze
  * @param {object} options - Optional parameters
  * @returns {Promise<object>} - Gary's analysis
  */
 export async function generateGaryAnalysis(gameData, options = {}) {
-  console.log('\n🎲 GARY ENGINE: Analyzing game...', { 
-    gameId: gameData?.id,
-    league: gameData?.league,
-    matchup: gameData?.matchup || `${gameData?.homeTeam || ''} vs ${gameData?.awayTeam || ''}` 
-  });
+  console.log('GARY ENGINE: Analyzing game...');
   
   try {
-    // 1. Format the game data for analysis
-    const formattedData = formatGameData(gameData);
+    // Format the game data for analysis
+    const formattedData = {
+      game: gameData?.matchup || `${gameData?.homeTeam || ''} vs ${gameData?.awayTeam || ''}`,
+      homeTeam: gameData?.homeTeam || '',
+      awayTeam: gameData?.awayTeam || '',
+      sport: gameData?.league || gameData?.sport || '',
+      odds: gameData?.odds || null,
+      teamStats: gameData?.teamStats || null,
+      lineMovement: gameData?.lineMovement || null
+    };
     
-    // 2. Get the latest news if available, otherwise use a simple placeholder
-    // In production we don't use the fetchRealTimeContext function to avoid build issues
-    let newsData = '';
-    if (options.newsData) {
-      newsData = options.newsData;
-    } else {
-      // Use a simple placeholder instead of calling the fetchRealTimeContext function
-      newsData = 'Using stats-only analysis.'; 
-    }
+    // Simple placeholder for news data
+    const newsData = options.newsData || 'Using stats-only analysis.';
     
-    // 3. Generate analysis using OpenAI
+    // Generate analysis using OpenAI
     const rawOpenAIResponse = await openaiService.generateGaryAnalysis(
       formattedData, 
       newsData,
@@ -43,14 +39,14 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     );
     
     // Log the raw response for troubleshooting
-    console.log('\n🔍 RAW OPENAI RESPONSE:\n', rawOpenAIResponse);
+    console.log('RAW OPENAI RESPONSE:', rawOpenAIResponse);
     
-    // 4. Extract JSON content from the response
+    // Extract JSON content from the response
     let extractedJSON;
     try {
       // First try to parse the entire response as JSON
       extractedJSON = JSON.parse(rawOpenAIResponse);
-      console.log('✅ Full response parsed as valid JSON');
+      console.log('Full response parsed as valid JSON');
     } catch (parseError) {
       // If that fails, try to extract JSON from markdown code blocks
       console.log('Attempting to extract JSON from markdown...');
@@ -58,9 +54,9 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       if (jsonMatch && jsonMatch[1]) {
         try {
           extractedJSON = JSON.parse(jsonMatch[1]);
-          console.log('✅ Successfully extracted JSON from markdown code block');
+          console.log('Successfully extracted JSON from markdown code block');
         } catch (nestedError) {
-          console.error('❌ Failed to parse extracted content as JSON:', nestedError.message);
+          console.error('Failed to parse extracted content as JSON:', nestedError.message);
           extractedJSON = null;
         }
       } else {
@@ -69,40 +65,33 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         if (lastResortMatch) {
           try {
             extractedJSON = JSON.parse(lastResortMatch[0]);
-            console.log('✅ Successfully extracted JSON using curly brace matching');
+            console.log('Successfully extracted JSON using curly brace matching');
           } catch (lastError) {
-            console.error('❌ All JSON extraction methods failed');
+            console.error('All JSON extraction methods failed');
             extractedJSON = null;
           }
         } else {
-          console.error('❌ No JSON-like content found in response');
+          console.error('No JSON-like content found in response');
           extractedJSON = null;
         }
       }
     }
     
-    // Log the extracted JSON for debugging
-    if (extractedJSON) {
-      console.log('\n📊 EXTRACTED JSON CONTENT:\n', extractedJSON);
-    } else {
-      console.error('❌ Failed to extract valid JSON from OpenAI response');
-    }
-    
-    // 5. Create the result object with the parsed JSON
+    // Create the result object with the parsed JSON
     const result = {
       success: !!extractedJSON,
       message: extractedJSON ? 'Analysis completed successfully' : 'Failed to generate valid analysis',
       rawOpenAIOutput: extractedJSON,
-      game: formattedData.game || `${formattedData.homeTeam} vs ${formattedData.awayTeam}`,
+      game: formattedData.game,
       sport: formattedData.sport,
       timestamp: new Date().toISOString()
     };
     
-    console.log('\n✅ PARSED JSON OUTPUT: ', result.rawOpenAIOutput);
+    console.log('PARSED JSON OUTPUT:', result.rawOpenAIOutput);
     
     return result;
   } catch (error) {
-    console.error('\n❌ Error in Gary Engine:', error);
+    console.error('Error in Gary Engine:', error);
     return {
       success: false,
       message: `Error: ${error.message}`,
@@ -112,65 +101,19 @@ export async function generateGaryAnalysis(gameData, options = {}) {
 }
 
 /**
- * Format game data for analysis
- * @param {object} gameData - Raw game data
- * @returns {object} - Formatted game data
- */
-export function formatGameData(gameData) {
-  // Return a clean copy if it's already formatted
-  if (gameData && gameData.homeTeam && gameData.awayTeam && gameData.sport) {
-    return { ...gameData };
-  }
-  
-  // Format the data based on available properties
-  return {
-    game: gameData?.matchup || `${gameData?.homeTeam || ''} vs ${gameData?.awayTeam || ''}`,
-    homeTeam: gameData?.homeTeam || '',
-    awayTeam: gameData?.awayTeam || '',
-    sport: gameData?.league || gameData?.sport || '',
-    odds: gameData?.odds || null,
-    teamStats: gameData?.teamStats || null,
-    lineMovement: gameData?.lineMovement || null,
-    preferences: gameData?.preferences || {}
-  };
-}
-
-// NOTE: fetchRealTimeContext removed to avoid production build issues
-
-/**
- * Calculate stake amount based on confidence and bet type
- * @param {object} pick - The pick object with confidence and type
+ * Calculate stake amount based on bet type
+ * @param {object} pick - The pick object
  * @returns {number} - Recommended stake amount
  */
 export function calculateStake(pick) {
   if (!pick) return 0;
   
-  // Map OpenAI's bet types to our internal types
-  const typeMap = {
-    'moneyline': 'straight_moneyline',
-    'spread': 'spread',
-    'total': 'spread',
-  };
-  
   try {
-    // Convert confidence to a number if it's a string
-    let confidence = pick.confidence;
-    if (typeof confidence === 'string') {
-      confidence = parseFloat(confidence);
-    }
-    
-    // Default to 75% confidence if invalid
-    if (isNaN(confidence)) {
-      console.log('Invalid confidence value, using default of 0.75');
-      confidence = 0.75;
-    }
-    
-    // Map pick.type to our internal betting types
-    const betType = typeMap[pick.type] || pick.type || 'straight_moneyline';
+    // Default confidence if not provided
+    const confidence = 0.75;
     
     // Calculate stake based on confidence
-    const baseStake = 100;
-    return Math.round(baseStake * confidence);
+    return Math.round(100 * confidence);
   } catch (error) {
     console.error('Error calculating stake:', error);
     return 100; // Default
@@ -178,18 +121,14 @@ export function calculateStake(pick) {
 }
 
 /**
- * Function that simply returns the raw OpenAI output without any transformations
+ * Function that simply returns the raw OpenAI output without transformations
  * @param {object} analysisObject - The object from generateGaryAnalysis
  * @returns {object} - The raw OpenAI output directly
  */
 export function parseGaryAnalysis(analysisObject) {
   try {
     // Just log what we're receiving for debugging
-    console.log('\n🧪 parseGaryAnalysis input:', {
-      hasAnalysisObject: !!analysisObject,
-      objectType: analysisObject ? typeof analysisObject : 'undefined',
-      hasRawOpenAIOutput: !!analysisObject?.rawOpenAIOutput
-    });
+    console.log('parseGaryAnalysis input:', !!analysisObject);
     
     // Early return if nothing was passed
     if (!analysisObject) {
@@ -199,13 +138,13 @@ export function parseGaryAnalysis(analysisObject) {
     
     // If we have the raw OpenAI output, return it directly
     if (analysisObject.rawOpenAIOutput) {
-      console.log('\n📊 Returning raw OpenAI output directly without transformation');
+      console.log('Returning raw OpenAI output directly without transformation');
       return analysisObject.rawOpenAIOutput;
     }
     
     // If the analysisObject is itself the raw output
     if (typeof analysisObject === 'object' && analysisObject.pick) {
-      console.log('\n📊 Returning analysisObject directly as it appears to be raw OpenAI data');
+      console.log('Returning analysisObject directly as raw OpenAI data');
       return analysisObject;
     }
     
