@@ -517,87 +517,64 @@ const picksService = {
   storeDailyPicksInDatabase: async (picks) => {
     console.log('Storing daily picks in database...');
     try {
+      // Validate parameters
       if (!picks || !Array.isArray(picks)) {
         console.error('Invalid picks data: ', picks);
         throw new Error('Picks must be a valid array');
       }
 
-      // Extract only the essential pick data for UI display and Supabase storage
-      console.log('Ensuring we only store minimal clean data for the picks');
+      console.log('Extracting raw OpenAI outputs for storage...');
       
-      // CRITICAL: USE THE EXACT UNMODIFIED OPENAI OUTPUT - no transformations at all
-      // We must extract the OpenAI output from wherever it might be in the data structure
-      const allPicks = picks.map(pick => {
-        console.log('Processing pick for storage:', pick.id);
+      // SIMPLIFIED: Get the raw OpenAI output from each pick directly
+      // This is dramatically simplified from the previous implementation
+      const rawOutputs = picks.map(pick => {
+        // Get the raw output from wherever it might be 
+        let output = null;
         
-        let rawOpenAIOutput = null;
-        
-        // First check if rawOpenAIOutput exists directly on the pick
         if (pick.rawOpenAIOutput) {
-          console.log(`Using direct rawOpenAIOutput for ${pick.id}: ${pick.rawOpenAIOutput.pick}`);
-          rawOpenAIOutput = pick.rawOpenAIOutput;
-        }
-        // Next check if it's in rawAnalysis
+          output = pick.rawOpenAIOutput;
+          console.log(`Found direct rawOpenAIOutput for ${pick.id}: ${output.pick}`);
+        } 
         else if (pick.rawAnalysis?.rawOpenAIOutput) {
-          console.log(`Using rawAnalysis.rawOpenAIOutput for ${pick.id}: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
-          rawOpenAIOutput = pick.rawAnalysis.rawOpenAIOutput;
+          output = pick.rawAnalysis.rawOpenAIOutput;
+          console.log(`Found output in rawAnalysis.rawOpenAIOutput for ${pick.id}: ${output.pick}`);
         }
-        // NEW CRITICAL FIX: Create a valid output structure from rawAnalysis
-        // Since we have valid OpenAI data but it's not being stored correctly
-        else if (pick.rawAnalysis) {
-          // We're seeing that the OpenAI output is in pick.rawAnalysis directly, not in rawOpenAIOutput
-          // Reconstruct the format we need to store
-          console.log(`Reconstructing from rawAnalysis for pick ${pick.id}: ${pick.rawAnalysis.pick || 'unknown'}`);
-          
-          rawOpenAIOutput = {
-            pick: pick.rawAnalysis.pick || pick.pick || "",
-            type: pick.rawAnalysis.betType?.toLowerCase() || pick.betType?.toLowerCase() || "moneyline",
-            confidence: pick.rawAnalysis.confidence || pick.confidence || 0.75,
-            league: pick.league || "", 
-            time: pick.time || "",
+        else if (pick.rawAnalysis && pick.rawAnalysis.pick) {
+          // Create the structure in the exact format we want
+          output = {
+            pick: pick.rawAnalysis.pick,
+            type: pick.rawAnalysis.betType?.toLowerCase() || "moneyline",
+            confidence: pick.rawAnalysis.confidence,
+            trapAlert: pick.rawAnalysis.trapAlert || false,
+            revenge: pick.rawAnalysis.revenge || false,
+            superstition: pick.rawAnalysis.superstition || false,
+            momentum: pick.rawAnalysis.momentum || 0,
             homeTeam: pick.homeTeam || "",
             awayTeam: pick.awayTeam || "",
-            rationale: pick.rawAnalysis.reasoning || pick.reasoning || ""
+            league: pick.league || "",
+            time: pick.time || "",
+            rationale: pick.rawAnalysis.reasoning || ""
           };
+          console.log(`Reconstructed output for ${pick.id}: ${output.pick}`);
         }
         
-        if (!rawOpenAIOutput) {
-          console.warn(`Warning: Could not find any valid OpenAI output for pick ${pick.id}`);
-          return null; // Will be filtered out
+        // Only return picks that meet our confidence threshold of 0.75
+        if (output && output.confidence >= 0.75) {
+          console.log(`Keeping pick with confidence ${output.confidence}: ${output.pick}`);
+          return output;
+        } else if (output) {
+          console.log(`Skipping pick with low confidence ${output.confidence}: ${output.pick}`);
+        } else {
+          console.log(`No valid output found for pick ${pick.id}`);
         }
+        
+        return null;
+      }).filter(Boolean); // Remove null entries
 
-        // Log the exact unmodified OpenAI output
-        console.log(`EXACT OpenAI output being stored:`, JSON.stringify(rawOpenAIOutput, null, 2));
-        
-        // CRITICAL: Use the rawOpenAIOutput directly with no transformations at all
-        // This ensures fields like league="MLB" and time="10:05 PM ET" are preserved exactly
-        
-        // Verify the critical fields exist
-        console.log(`Verifying OpenAI format has required fields:`);
-        console.log(`- pick: ${rawOpenAIOutput.pick}`);
-        console.log(`- type: ${rawOpenAIOutput.type}`);
-        console.log(`- confidence: ${rawOpenAIOutput.confidence}`);
-        console.log(`- league: ${rawOpenAIOutput.league || 'N/A'}`);
-        console.log(`- time: ${rawOpenAIOutput.time || 'N/A'}`);
-        
-        // Return the exact OpenAI output without any transformation
-        return rawOpenAIOutput;
-        
-        // This ensures the exact format from OpenAI is preserved in Supabase
-      }).filter(Boolean); // Remove any null entries
+      console.log(`Storing ${rawOutputs.length} picks with their exact OpenAI output format`);
       
-      // Log the final format that will be stored
-      console.log('Final OpenAI raw output format for storage:');
-      console.log(JSON.stringify(allPicks[0] || {}, null, 2));
-      
-      // Log warning if no picks with raw OpenAI output, but continue anyway
-      if (allPicks.length === 0) {
-        console.warn('WARNING: No picks with raw OpenAI output found, but continuing anyway');
-        // We don't return early - we'll attempt to store whatever we have
-      }
-      
-      // Log the exact OpenAI output format that matches the required format
-      console.log('Example of exactly formatted OpenAI output:');
+      // Log example of our expected format
+      console.log('Expected OpenAI output format:');
       console.log(JSON.stringify({
         pick: "Cincinnati Reds ML -120",
         type: "moneyline",
@@ -612,76 +589,20 @@ const picksService = {
         time: "7:10 PM ET",
         rationale: "Line's moved toward the Reds despite public split and injuries..."
       }, null, 2));
-        
-      // Store the raw OpenAI output directly - no optimization or filtering
-      // This is exactly what the user requested - store the direct output
-      console.log(`Storing ${allPicks.length} raw OpenAI output picks directly in Supabase...`);
       
-      // Since we've updated the OpenAI prompt to only return picks with confidence >= 0.75,
-      // we don't need to filter by confidence anymore - just extract the raw OpenAI output
-      console.log(`Processing ${allPicks.length} raw OpenAI picks for database storage...`);
+      // We already have the rawOutputs array with our filtered picks
+      // The confidence check is already done when creating rawOutputs
       
-      // Simple logging for visibility
-      allPicks.forEach((pick, index) => {
-        if (pick.rawAnalysis?.rawOpenAIOutput) {
-          console.log(`Pick #${index + 1}: ${pick.rawAnalysis.rawOpenAIOutput.pick} (Confidence: ${pick.rawAnalysis.rawOpenAIOutput.confidence})`);
-        } else if (pick.rawOpenAIOutput) {
-          console.log(`Pick #${index + 1}: ${pick.rawOpenAIOutput.pick} (Confidence: ${pick.rawOpenAIOutput.confidence})`);
-        } else {
-          console.log(`Pick #${index + 1}: Format unknown`);
-        }
-      });
-      
-      // Extract raw OpenAI outputs directly from picks - this is the core of our changes
-      // We just want the exact OpenAI output structure, nothing more and nothing less
-      const exactOpenAIOutputs = allPicks.map(pick => {
-        // First check if rawOpenAIOutput exists directly on the pick
-        if (pick.rawOpenAIOutput) {
-          console.log(`Using direct rawOpenAIOutput: ${pick.rawOpenAIOutput.pick}`);
-          return pick.rawOpenAIOutput;
-        }
-        // Next check if it's in rawAnalysis
-        else if (pick.rawAnalysis?.rawOpenAIOutput) {
-          console.log(`Using rawAnalysis.rawOpenAIOutput: ${pick.rawAnalysis.rawOpenAIOutput.pick}`);
-          return pick.rawAnalysis.rawOpenAIOutput;
-        }
-        
-        // NEW CRITICAL FIX: Create a valid output structure from rawAnalysis
-        // Since we have valid OpenAI data but it's not being stored correctly
-        else if (pick.rawAnalysis) {
-          // We're seeing that the OpenAI output is in pick.rawAnalysis directly, not in rawOpenAIOutput
-          // Reconstruct the format we need to store
-          console.log(`Reconstructing from rawAnalysis for pick ${pick.id}:`, 
-                      pick.rawAnalysis.pick ? pick.rawAnalysis.pick : 'unknown');
-          
-          return {
-            pick: pick.rawAnalysis.pick || pick.pick || "",
-            type: pick.rawAnalysis.betType?.toLowerCase() || pick.betType?.toLowerCase() || "moneyline",
-            confidence: pick.rawAnalysis.confidence || pick.confidence || 0.75,
-            league: pick.league || "", 
-            time: pick.time || "",
-            homeTeam: pick.homeTeam || "",
-            awayTeam: pick.awayTeam || "",
-            rationale: pick.rawAnalysis.reasoning || pick.reasoning || ""
-          };
-        }
-        
-        // If we get here, something is wrong with our data structure
-        console.log('WARNING: Could not find raw OpenAI output structure for this pick');
-        console.log('Pick structure:', JSON.stringify(pick, null, 2).substring(0, 300));
-        
-        // Return null and we'll filter these out
-        return null;
-      }).filter(Boolean); // Remove any null values
-      
-      // We do NOT create emergency fallbacks - only real generated picks from OpenAI
-      // that meet our confidence threshold will be stored
-      if (exactOpenAIOutputs.length === 0) {
-        console.warn('WARNING: No valid OpenAI outputs found - no picks will be stored');
+      if (rawOutputs.length === 0) {
+        console.warn('WARNING: No valid OpenAI outputs found with confidence >= 0.75 - no picks will be stored');
         // No fallback pick generation - we only use real data
       }
-
-      console.log(`Storing ${exactOpenAIOutputs.length} picks with their exact OpenAI output format`);
+      
+      // If we have at least one pick, show it for debugging
+      if (rawOutputs.length > 0) {
+        console.log('Example pick being stored:');
+        console.log(JSON.stringify(rawOutputs[0], null, 2));
+      }
       
       // Get today's date string for database operations - YYYY-MM-DD format
       const currentDate = new Date();
@@ -743,21 +664,9 @@ const picksService = {
       //   "rationale": "Tyler Anderson's 2.08 ERA..."
       // }
       
-      // Important: Log the first pick to verify format
-      if (exactOpenAIOutputs.length > 0) {
-        console.log('EXACT FORMAT BEING STORED:');
-        console.log(JSON.stringify(exactOpenAIOutputs[0], null, 2));
-      }
-      
-      // CRITICAL DEBUG: Add more detailed console logs to trace issue
-      console.log('TESTING OUTPUT FORMAT - First pick structure:');
-      if (exactOpenAIOutputs.length > 0) {
-        console.log(JSON.stringify(exactOpenAIOutputs[0], null, 2));
-      }
-      
-      // CRITICAL FIX: Check for any null values and remove them if they exist
+      // Sanitize the outputs by removing null values
       // This is essential as Supabase can reject JSONB data with null values
-      const sanitizedOutputs = exactOpenAIOutputs.map(pick => {
+      const sanitizedOutputs = rawOutputs.map(pick => {
         const sanitizedPick = {};
         // Copy only defined non-null properties
         Object.keys(pick).forEach(key => {
@@ -768,38 +677,15 @@ const picksService = {
         return sanitizedPick;
       });
       
-      console.log(`Sanitized ${exactOpenAIOutputs.length} picks for Supabase storage`);
+      console.log(`Sanitized ${rawOutputs.length} picks for Supabase storage`);
       
-      // Important: For JSONB columns in Supabase, we need to provide the actual array, not a JSON string
-      // Store only the high-confidence picks (>= 0.75) but preserve their exact output format
+      // Create data structure for Supabase
       const pickData = {
-        date: currentDateString, // Always use today's date
-        picks: sanitizedOutputs // Send only the sanitized OpenAI output format directly
+        date: currentDateString,
+        picks: sanitizedOutputs // Store the sanitized OpenAI outputs directly
       };
       
-      // Log the exact format being sent to Supabase
-      console.log('Final data structure being sent to Supabase:', JSON.stringify(pickData.picks).substring(0, 100) + '...');
-      
-      console.log(`Storing picks with explicit today's date: ${currentDateString}`);
-      
-      console.log('Inserting picks with correct structure:', pickData);
-      
-      // CRITICAL FIX: Make sure to delete any existing records first to avoid conflicts
-      try {
-        console.log(`Explicitly deleting any existing picks for ${currentDateString} before insert`);
-        const { error: deleteError } = await supabase
-          .from('daily_picks')
-          .delete()
-          .eq('date', currentDateString);
-        
-        if (deleteError) {
-          console.log('Warning: Delete operation error before insert:', deleteError);
-        } else {
-          console.log('Successfully cleared existing records');
-        }
-      } catch (e) {
-        console.log('Delete operation warning:', e);
-      }
+      console.log(`Preparing to store ${sanitizedOutputs.length} picks in database`);
       
       // Insert the data with proper structure into the database
       const { data: insertData, error: insertError } = await supabase
