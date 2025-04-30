@@ -128,74 +128,80 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     console.log(rawOpenAIResponse);
     console.log('Response length:', rawOpenAIResponse.length, 'characters');
     
-    // Extract JSON content from the response
-    let extractedJSON;
-    let extractionMethod = 'none';
-    
-    try {
-      // First try to parse the entire response as JSON
-      extractedJSON = JSON.parse(rawOpenAIResponse);
-      extractionMethod = 'direct_json';
-      console.log('Full response parsed as valid JSON');
-    } catch (parseError) {
-      console.log('Direct JSON parse failed:', parseError.message);
-      console.log('Attempting to extract JSON from markdown...');
+    // Unified JSON extraction function - more maintainable and reusable
+    const extractJSON = (rawResponse) => {
+      // Result object with extraction details
+      const result = {
+        json: null,
+        method: 'none',
+        success: false
+      };
       
-      // Try to extract JSON from markdown code blocks (both with and without json identifier)
-      // This handles ```json and ``` formats
-      const jsonMatch = rawOpenAIResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      // CASE 1: Response is already an object (not a string)
+      if (rawResponse && typeof rawResponse === 'object' && !Array.isArray(rawResponse)) {
+        console.log('Response is already a valid object, no parsing needed');
+        result.json = rawResponse;
+        result.method = 'direct_object';
+        result.success = true;
+        return result;
+      }
       
-      if (jsonMatch && jsonMatch[1]) {
-        try {
-          // Trim whitespace which can cause JSON parsing errors
-          const cleanedJson = jsonMatch[1].trim();
-          extractedJSON = JSON.parse(cleanedJson);
-          extractionMethod = 'markdown_code_block';
+      // CASE 2: Invalid input
+      if (typeof rawResponse !== 'string') {
+        console.error('Invalid response format - not a string or object:', typeof rawResponse);
+        return result;
+      }
+      
+      // CASE 3: Try direct JSON parsing first (fastest method)
+      try {
+        result.json = JSON.parse(rawResponse);
+        result.method = 'direct_json';
+        result.success = true;
+        console.log('Successfully parsed direct JSON');
+        return result;
+      } catch (directError) {
+        // Continue to other methods if direct parsing fails
+        console.log('Direct JSON parsing failed:', directError.message);
+      }
+      
+      // CASE 4: Extract from code blocks like ```json {content} ```
+      try {
+        const codeBlockMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch && codeBlockMatch[1]) {
+          const cleanJson = codeBlockMatch[1].trim();
+          result.json = JSON.parse(cleanJson);
+          result.method = 'markdown_code_block';
+          result.success = true;
           console.log('Successfully extracted JSON from markdown code block');
-        } catch (nestedError) {
-          console.error('Failed to parse extracted content as JSON:', nestedError.message);
-          console.log('Extracted content:', jsonMatch[1].substring(0, 100));
-          // Continue to next method
+          return result;
         }
+      } catch (markdownError) {
+        console.log('Markdown extraction failed:', markdownError.message);
       }
       
-      // If markdown extraction failed, try to find anything that looks like JSON with curly braces
-      if (!extractedJSON) {
-        console.log('Attempting last resort JSON extraction with regex...');
-        // Look for the pattern that most closely resembles a complete JSON object
-        const lastResortMatch = rawOpenAIResponse.match(/\{[\s\S]*?\"pick\"[\s\S]*?\"confidence\"[\s\S]*?\}/);
-        
-        if (lastResortMatch) {
-          try {
-            extractedJSON = JSON.parse(lastResortMatch[0]);
-            extractionMethod = 'regex_curly_braces';
-            console.log('Successfully extracted JSON using curly brace matching');
-          } catch (lastError) {
-            console.error('Regex extraction failed:', lastError.message);
-            console.log('Extracted regex match:', lastResortMatch[0].substring(0, 100));
-            
-            // One final attempt - try to clean up common JSON formatting issues
-            try {
-              // Replace single quotes with double quotes and fix common issues
-              const cleanedText = lastResortMatch[0]
-                .replace(/'/g, '"')
-                .replace(/([{,])\s*([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Add quotes to keys
-                .replace(/:\s*([a-zA-Z0-9_]+)\s*([,}])/g, ':"$1"$2'); // Add quotes to string values
-              
-              extractedJSON = JSON.parse(cleanedText);
-              extractionMethod = 'cleaned_regex';
-              console.log('Successfully parsed JSON after cleaning');
-            } catch (cleaningError) {
-              console.error('All JSON extraction methods failed');
-              extractedJSON = null;
-            }
-          }
-        } else {
-          console.error('No JSON-like content found in response');
-          extractedJSON = null;
+      // CASE 5: Last resort - regex match for JSON-like pattern
+      try {
+        const jsonPattern = rawResponse.match(/\{[\s\S]*?"pick"[\s\S]*?"confidence"[\s\S]*?\}/);
+        if (jsonPattern) {
+          result.json = JSON.parse(jsonPattern[0]);
+          result.method = 'regex_pattern';
+          result.success = true;
+          console.log('Successfully extracted JSON via regex pattern');
+          return result;
         }
+      } catch (regexError) {
+        console.log('Regex pattern extraction failed:', regexError.message);
       }
-    }
+      
+      // If all extraction methods fail, return the empty result
+      console.error('All JSON extraction methods failed');
+      return result;
+    };
+    
+    // Use the extraction function
+    const extraction = extractJSON(rawOpenAIResponse);
+    const extractedJSON = extraction.success ? extraction.json : null;
+    const extractionMethod = extraction.method;
     
     // Create the result object with the parsed JSON
     const result = {
