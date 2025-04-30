@@ -140,6 +140,10 @@ function RealGaryPicks() {
               confidence: pick.confidence || 0,
               time: pick.time || '',
               
+              // CRITICAL: Include homeTeam and awayTeam fields for display
+              homeTeam: pick.homeTeam || '',
+              awayTeam: pick.awayTeam || '',
+              
               // Additional OpenAI output fields
               type: pick.type || 'Moneyline',
               trapAlert: pick.trapAlert || false,
