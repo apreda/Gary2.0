@@ -66,7 +66,21 @@ export async function fetchRealTimeGameInfo(homeTeam, awayTeam, sportKey) {
  * @returns {Promise<object>} - Gary's analysis
  */
 export async function generateGaryAnalysis(gameData, options = {}) {
-  console.log('GARY ENGINE: Analyzing game...');
+  console.log('GARY ENGINE: Analyzing game...', gameData?.homeTeam, 'vs', gameData?.awayTeam);
+  
+  // Validate input data first
+  if (!gameData || (!gameData.homeTeam && !gameData.awayTeam)) {
+    console.error('CRITICAL ERROR: Missing required game data for analysis');
+    console.log('Game data received:', JSON.stringify(gameData, null, 2));
+    return {
+      success: false,
+      message: 'Error: Insufficient game data for analysis',
+      rawOpenAIOutput: null,
+      game: gameData?.matchup || 'Unknown Game',
+      sport: gameData?.league || gameData?.sport || 'unknown',
+      timestamp: new Date().toISOString()
+    };
+  }
   
   try {
     // Format the game data for analysis
@@ -80,10 +94,13 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       lineMovement: gameData?.lineMovement || null
     };
     
+    console.log('Formatted game data:', JSON.stringify(formattedData, null, 2));
+    
     // Simple placeholder for news data
     const newsData = options.newsData || 'Using stats-only analysis.';
     
     // Generate analysis using OpenAI
+    console.log('Calling OpenAI for analysis with temperature:', options.temperature || 0.7);
     const rawOpenAIResponse = await openaiService.generateGaryAnalysis(
       formattedData, 
       newsData,
@@ -93,37 +110,86 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       }
     );
     
-    // Log the raw response for troubleshooting
-    console.log('RAW OPENAI RESPONSE:', rawOpenAIResponse);
+    // Validate the raw response
+    if (!rawOpenAIResponse) {
+      console.error('CRITICAL ERROR: Empty response received from OpenAI');
+      return {
+        success: false,
+        message: 'Error: No response from OpenAI',
+        rawOpenAIOutput: null,
+        game: formattedData.game,
+        sport: formattedData.sport,
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    // Log the raw response for troubleshooting (truncated for readability)
+    console.log('RAW OPENAI RESPONSE (first 200 chars):', 
+               rawOpenAIResponse.substring(0, 200) + 
+               (rawOpenAIResponse.length > 200 ? '...' : ''));
+    console.log('Response length:', rawOpenAIResponse.length, 'characters');
     
     // Extract JSON content from the response
     let extractedJSON;
+    let extractionMethod = 'none';
+    
     try {
       // First try to parse the entire response as JSON
       extractedJSON = JSON.parse(rawOpenAIResponse);
+      extractionMethod = 'direct_json';
       console.log('Full response parsed as valid JSON');
     } catch (parseError) {
-      // If that fails, try to extract JSON from markdown code blocks
+      console.log('Direct JSON parse failed:', parseError.message);
       console.log('Attempting to extract JSON from markdown...');
+      
+      // Try to extract JSON from markdown code blocks (both with and without json identifier)
+      // This handles ```json and ``` formats
       const jsonMatch = rawOpenAIResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      
       if (jsonMatch && jsonMatch[1]) {
         try {
-          extractedJSON = JSON.parse(jsonMatch[1]);
+          // Trim whitespace which can cause JSON parsing errors
+          const cleanedJson = jsonMatch[1].trim();
+          extractedJSON = JSON.parse(cleanedJson);
+          extractionMethod = 'markdown_code_block';
           console.log('Successfully extracted JSON from markdown code block');
         } catch (nestedError) {
           console.error('Failed to parse extracted content as JSON:', nestedError.message);
-          extractedJSON = null;
+          console.log('Extracted content:', jsonMatch[1].substring(0, 100));
+          // Continue to next method
         }
-      } else {
-        // Last resort - try to find anything that looks like JSON with curly braces
-        const lastResortMatch = rawOpenAIResponse.match(/\{[\s\S]*\}/);
+      }
+      
+      // If markdown extraction failed, try to find anything that looks like JSON with curly braces
+      if (!extractedJSON) {
+        console.log('Attempting last resort JSON extraction with regex...');
+        // Look for the pattern that most closely resembles a complete JSON object
+        const lastResortMatch = rawOpenAIResponse.match(/\{[\s\S]*?\"pick\"[\s\S]*?\"confidence\"[\s\S]*?\}/);
+        
         if (lastResortMatch) {
           try {
             extractedJSON = JSON.parse(lastResortMatch[0]);
+            extractionMethod = 'regex_curly_braces';
             console.log('Successfully extracted JSON using curly brace matching');
           } catch (lastError) {
-            console.error('All JSON extraction methods failed');
-            extractedJSON = null;
+            console.error('Regex extraction failed:', lastError.message);
+            console.log('Extracted regex match:', lastResortMatch[0].substring(0, 100));
+            
+            // One final attempt - try to clean up common JSON formatting issues
+            try {
+              // Replace single quotes with double quotes and fix common issues
+              const cleanedText = lastResortMatch[0]
+                .replace(/'/g, '"')
+                .replace(/([{,])\s*([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Add quotes to keys
+                .replace(/:\s*([a-zA-Z0-9_]+)\s*([,}])/g, ':"$1"$2'); // Add quotes to string values
+              
+              extractedJSON = JSON.parse(cleanedText);
+              extractionMethod = 'cleaned_regex';
+              console.log('Successfully parsed JSON after cleaning');
+            } catch (cleaningError) {
+              console.error('All JSON extraction methods failed');
+              extractedJSON = null;
+            }
           }
         } else {
           console.error('No JSON-like content found in response');
@@ -135,14 +201,38 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     // Create the result object with the parsed JSON
     const result = {
       success: !!extractedJSON,
-      message: extractedJSON ? 'Analysis completed successfully' : 'Failed to generate valid analysis',
+      message: extractedJSON 
+        ? `Analysis completed successfully (using ${extractionMethod})` 
+        : 'Failed to generate valid analysis',
       rawOpenAIOutput: extractedJSON,
+      extractionMethod: extractionMethod,
       game: formattedData.game,
       sport: formattedData.sport,
       timestamp: new Date().toISOString()
     };
     
-    console.log('PARSED JSON OUTPUT:', result.rawOpenAIOutput);
+    // Validate required fields in the extracted JSON
+    if (extractedJSON) {
+      const requiredFields = ['pick', 'type', 'confidence'];
+      const missingFields = requiredFields.filter(field => !extractedJSON[field]);
+      
+      if (missingFields.length > 0) {
+        console.warn(`Warning: Extracted JSON is missing required fields: ${missingFields.join(', ')}`);
+        result.warning = `Missing fields: ${missingFields.join(', ')}`;
+      }
+      
+      if (extractedJSON.confidence && extractedJSON.confidence < 0.75) {
+        console.warn(`Warning: Confidence level ${extractedJSON.confidence} is below threshold of 0.75`);
+        result.warning = `Confidence below threshold: ${extractedJSON.confidence}`;
+      }
+    }
+    
+    console.log('PARSED JSON OUTPUT:', result.rawOpenAIOutput ? 'SUCCESS' : 'FAILED');
+    if (result.rawOpenAIOutput) {
+      console.log('Extracted fields:', Object.keys(result.rawOpenAIOutput).join(', '));
+      console.log('Confidence:', result.rawOpenAIOutput.confidence);
+      console.log('Pick:', result.rawOpenAIOutput.pick);
+    }
     
     return result;
   } catch (error) {
@@ -150,7 +240,10 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     return {
       success: false,
       message: `Error: ${error.message}`,
-      rawOpenAIOutput: null
+      rawOpenAIOutput: null,
+      game: gameData?.matchup || `${gameData?.homeTeam || ''} vs ${gameData?.awayTeam || ''}`,
+      sport: gameData?.league || gameData?.sport || '',
+      timestamp: new Date().toISOString()
     };
   }
 }
