@@ -16,6 +16,7 @@ export default function RetroPickCard({ pick, showToast: showToastFromProps, onD
 function formatGameTitle(game, homeTeam, awayTeam) {
   // If we have direct homeTeam and awayTeam fields, use those (preferred method)
   if (homeTeam && awayTeam) {
+    console.log('Using direct team names:', homeTeam, awayTeam);
     // Extract team names (everything after the last space for shorter display)
     const homeName = homeTeam.split(' ').pop() || 'HOME';
     const awayName = awayTeam.split(' ').pop() || 'AWAY';
@@ -24,6 +25,7 @@ function formatGameTitle(game, homeTeam, awayTeam) {
   
   // Fallback to parsing from game string if homeTeam/awayTeam not available
   if (!game) return 'TBD @ TBD';
+  console.log('Trying to parse game from string:', game);
   
   try {
     // Split into away and home teams
@@ -39,17 +41,14 @@ function formatGameTitle(game, homeTeam, awayTeam) {
       }
     }
     
-    // CRITICAL FIX: Reverse order since we want away @ home format
-    // For "Reds @ Cardinals" where Reds are home team, we want "Cardinals @ Reds"
-    const parsedHomeTeam = parts[0].trim();
-    const parsedAwayTeam = parts[1].trim();
-    
     // Extract team names (everything after the last space)
-    const homeName = parsedHomeTeam.split(' ').pop() || 'HOME';
-    const awayName = parsedAwayTeam.split(' ').pop() || 'AWAY';
+    const homeName = parts[0].split(' ').pop() || 'HOME';
+    const awayName = parts[1].split(' ').pop() || 'AWAY';
     
-    // FIX: Put away team first, then home team (proper away @ home format)
-    return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+    // Format in away @ home format
+    const formattedGame = `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+    console.log('Formatted game:', formattedGame);
+    return formattedGame;
   } catch (error) {
     console.error('Error formatting game title:', error);
     return 'GAME TBD';
@@ -176,10 +175,15 @@ function formatGameTitle(game, homeTeam, awayTeam) {
         JSON.stringify(pick.rationale, null, 2)) : 
       'Analysis not available',
     
-    // Essential metadata with reasonable defaults
-    game: pick?.game || 'TBD vs TBD',
+    // Essential metadata with reasonable defaults - DIRECTLY use OpenAI fields
+    homeTeam: pick?.homeTeam || 'HOME',
+    awayTeam: pick?.awayTeam || 'AWAY',
+    // Construct game string from home and away teams if present
+    game: pick?.homeTeam && pick?.awayTeam ? 
+      `${pick.awayTeam} @ ${pick.homeTeam}` : 
+      (pick?.game || 'TBD vs TBD'),
     league: pick?.league || 'SPORT',
-    time: pick?.time || '10:10 PM',
+    time: pick?.time || '10:10 PM ET',
     
     // OpenAI format additional fields with defaults
     type: pick?.type || 'moneyline',
@@ -198,14 +202,18 @@ function formatGameTitle(game, homeTeam, awayTeam) {
   
   // Format game display (convert to "AWAY @ HOME" format with team nicknames only)
   // Use homeTeam and awayTeam direct fields if available (from OpenAI), otherwise parse from game field
-  safePick.formattedGame = formatGameTitle(safePick.game, pick?.homeTeam, pick?.awayTeam);
+  safePick.formattedGame = pick?.homeTeam && pick?.awayTeam ? 
+    formatGameTitle(null, pick.homeTeam, pick.awayTeam) : 
+    formatGameTitle(safePick.game);
 
   // Get league information from the pick (could be MLB, NBA, NHL, etc.)
   // Don't default to any specific league to avoid bias
   const league = safePick.league || '';
-  // Format time in 12-hour format if not provided (10:10 PM ET)
-  // FIX: Remove leading zeros from time (06:11 PM → 6:11 PM)
-  const formattedTime = safePick.time ? safePick.time.replace(/^0/,'').replace(/:0/, ':') : '10:10 PM ET';
+  // Format time in 12-hour format if provided from OpenAI
+  // Ensure 'ET' is added if not already present
+  const formattedTime = safePick.time ? 
+    (safePick.time.includes('ET') ? safePick.time : `${safePick.time} ET`) : 
+    '10:10 PM ET';
 
   // Reset state when pick changes
   useEffect(() => {
