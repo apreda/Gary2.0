@@ -22,15 +22,14 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     // 1. Format the game data for analysis
     const formattedData = formatGameData(gameData);
     
-    // 2. Get the latest news from perplexity or other real-time sources
-    // This can be customized based on the sport & league
+    // 2. Get the latest news if available, otherwise use a simple placeholder
+    // In production we don't use the fetchRealTimeContext function to avoid build issues
     let newsData = '';
     if (options.newsData) {
       newsData = options.newsData;
-    } else if (options.skipNews) {
-      newsData = 'No real-time news available. Analysis based on provided stats only.';
     } else {
-      newsData = await fetchRealTimeContext(formattedData);
+      // Use a simple placeholder instead of calling the fetchRealTimeContext function
+      newsData = 'Using stats-only analysis.'; 
     }
     
     // 3. Generate analysis using OpenAI
@@ -136,19 +135,7 @@ export function formatGameData(gameData) {
   };
 }
 
-/**
- * Fetch real-time context for a game
- * This is a placeholder for a more sophisticated implementation
- * @param {object} gameData - Formatted game data
- * @returns {Promise<string>} - Real-time context
- */
-export async function fetchRealTimeContext(gameData) {
-  // This would typically call a service that fetches news, injury reports, etc.
-  return `Latest context for ${gameData.homeTeam} vs ${gameData.awayTeam}:\n` +
-    `- Recent form, injury reports, and game-time conditions would appear here\n` +
-    `- This would be customized based on the sport (${gameData.sport})\n` +
-    `- In a production environment, this would come from a news API or similar source`;
-}
+// NOTE: fetchRealTimeContext removed to avoid production build issues
 
 /**
  * Calculate stake amount based on confidence and bet type
