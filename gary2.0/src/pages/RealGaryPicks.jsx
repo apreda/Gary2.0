@@ -467,7 +467,14 @@ function RealGaryPicks() {
                                     }}>
                                       <span>{pick.league || 'MLB'}</span>
                                       <span style={{ fontSize: '0.95rem' }}>
-                                        {pick.time ? pick.time.replace(/^0/,'').replace(/:0/, ':') : '10:10 PM ET'}
+                                        {pick.time ? 
+                                          // Format time properly with padding for minutes
+                                          (function() {
+                                            // Ensure 'ET' is present
+                                            let time = pick.time.includes('ET') ? pick.time : `${pick.time} ET`;
+                                            // Format minutes to always have 2 digits (8:0 → 8:00)
+                                            return time.replace(/:([0-9])\s/, ':0$1 ');
+                                          })() : '10:10 PM ET'}
                                       </span>
                                     </div>
                                     
@@ -552,8 +559,10 @@ function RealGaryPicks() {
                                       boxShadow: '0 -2px 8px #bfa14222',
                                       textTransform: 'uppercase',
                                     }}>
-                                      {/* Fixed team display order */}
-                                      {pick.game ? pick.game.split(' @ ').reverse().join(' @ ') : 'GAME TBD'}
+                                      {/* Use homeTeam and awayTeam directly */}
+                                      {(pick.homeTeam && pick.awayTeam) ? 
+                                        `${pick.awayTeam.split(' ').pop().toUpperCase()} @ ${pick.homeTeam.split(' ').pop().toUpperCase()}` : 
+                                        (pick.game ? pick.game : 'GAME TBD')}
                                     </div>
                                   </div>
                                   
