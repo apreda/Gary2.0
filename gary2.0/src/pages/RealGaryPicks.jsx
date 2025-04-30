@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUserStats } from "../hooks/useUserStats";
 import { useUserPlan } from "../hooks/useUserPlan";
-import RetroPickCard from '../components/RetroPickCard';
 import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
@@ -11,23 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 // Import styles
 import '../styles/retro-sportsbook.css';
 
-// Gary/ESPN assets for background
-import espn02 from '../assets/images/espn-02.png';
-import espn03 from '../assets/images/espn-03.png';
-import espn04 from '../assets/images/espn-04.png';
-import espn05 from '../assets/images/espn-05.png';
-import espn06 from '../assets/images/espn-06.png';
-import Gary20 from '../assets/images/Gary20.png';
-import pic3 from '../assets/images/pic3.png';
-
-import color1 from '../assets/images/color1.png';
-import color4 from '../assets/images/color4.png';
-import color6 from '../assets/images/color6.png';
-
-
-import color2 from '../assets/images/color2.png';
-import color9 from '../assets/images/color9.png';
-import vegas1 from '../assets/images/vegas1.png';
+// Only import assets we actually need for the modern dark UI design
 import GaryEmblem from '../assets/images/Garyemblem.png';
 
 // Import services
@@ -51,6 +34,7 @@ function RealGaryPicks() {
   // State to track which cards are flipped
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [animating, setAnimating] = useState(false);
   const [activeTab, setActiveTab] = useState('today');
   const [parlayCard, setParlayCard] = useState(null);
   
@@ -122,7 +106,7 @@ function RealGaryPicks() {
             console.log('Processing valid pick from Supabase:', pick);
             
             // Create a pick object with BOTH original OpenAI fields AND mapped fields
-            // IMPORTANT: RetroPickCard needs BOTH the original and mapped fields
+            // Parse and extract the necessary fields for our card implementation
             const simplePick = {
               id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
               
@@ -130,7 +114,7 @@ function RealGaryPicks() {
               pick: pick.pick || '',          // Original OpenAI field for the bet
               rationale: pick.rationale || '', // Original OpenAI field for analysis
               
-              // Also include mapped fields for RetroPickCard compatibility
+              // Map and normalize data fields for consistent display
               shortPick: pick.pick || '',     // For front of card 
               description: pick.rationale || '', // For back of card
               
@@ -183,7 +167,7 @@ function RealGaryPicks() {
             console.log(`Successfully generated ${generatedPicks.length} new picks!`);
             
             // Use the EXACT OpenAI output format without any transformation
-            // This preserves the exact structure that RetroPickCard expects
+            // This preserves the exact structure needed for our card implementation
             setPicks(generatedPicks.map(pick => {
               // Extract the raw OpenAI response data
               const rawOutput = pick.rawAnalysis || pick;
@@ -294,29 +278,58 @@ function RealGaryPicks() {
     }));
   };
 
-  // Carousel navigation - circular rotation
+  // This function was removed as it's redundant with nextPick/prevPick
+  
+  // Functions to navigate between picks
   const nextPick = () => {
-    // Clockwise rotation (go right)
+    if (animating || picks.length <= 1) return;
+    
+    setAnimating(true);
+    // Move current card to the back of the stack
     const newIndex = (currentIndex + 1) % picks.length;
-    setCurrentIndex(newIndex);
-    setFlippedCardId(null);
+    
+    // Reset the flipped state when changing cards
+    setFlippedCards(prev => {
+      const newState = {...prev};
+      Object.keys(newState).forEach(key => {
+        newState[key] = false;
+      });
+      return newState;
+    });
+    
+    // After animation completes
+    setTimeout(() => {
+      setCurrentIndex(newIndex);
+      setAnimating(false);
+    }, 500);
   };
 
   const prevPick = () => {
-    // Clockwise rotation (opposite direction means adding length-1)
+    if (animating || picks.length <= 1) return;
+    
+    setAnimating(true);
+    // Move to previous card
     const newIndex = (currentIndex - 1 + picks.length) % picks.length;
-    setCurrentIndex(newIndex);
-    setFlippedCardId(null);
-  };
-
-  // Handle card flip
-  const handleCardFlip = (pickId) => {
-    setFlippedCardId(flippedCardId === pickId ? null : pickId);
+    
+    // Reset the flipped state when changing cards
+    setFlippedCards(prev => {
+      const newState = {...prev};
+      Object.keys(newState).forEach(key => {
+        newState[key] = false;
+      });
+      return newState;
+    });
+    
+    // After animation completes
+    setTimeout(() => {
+      setCurrentIndex(newIndex);
+      setAnimating(false);
+    }, 500);
   };
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100vw', overflow: 'hidden' }}>
-      {/* Expansive, retro-tech layered background */}
+      {/* Modern dark UI background */}
       <div
         style={{
           position: 'fixed',
@@ -326,43 +339,49 @@ function RealGaryPicks() {
           height: '100vh',
           zIndex: 0,
           pointerEvents: 'none',
-          background: 'radial-gradient(ellipse at 50% 40%, #232326 60%, #18181b 100%)',
+          background: 'linear-gradient(135deg, #121212 0%, #1e1e1e 100%)',
+          overflow: 'hidden',
         }}
       >
-        {/* CRT grid overlay */}
+        {/* Subtle gradient overlay */}
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: 'url("/crt-grid.png"), repeating-linear-gradient(0deg,rgba(255,215,0,0.09) 0 2px,transparent 2px 36px), repeating-linear-gradient(90deg,rgba(255,215,0,0.09) 0 2px,transparent 2px 36px)',
-          opacity: 0.22,
-          mixBlendMode: 'screen',
+          background: 'radial-gradient(circle at 50% 50%, rgba(40, 40, 50, 0.4) 0%, rgba(20, 20, 25, 0.2) 50%, rgba(10, 10, 15, 0.1) 100%)',
+          opacity: 0.6,
         }} />
-        {/* ESPN collage, blurred and low opacity for depth */}
-        <img src={espn02} alt="espn02" style={{ position: 'absolute', top: 'calc(5% - 192px)', left: '5%', width: '22vw', opacity: 0.24, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
-        <img src={espn03} alt="espn03" style={{ position: 'absolute', top: '20%', right: '10%', width: '18vw', opacity: 0.22, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
-        <img src={espn04} alt="espn04" style={{ position: 'absolute', bottom: '10%', left: '10%', width: '27vw', opacity: 0.26, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
-        <img src={espn05} alt="espn05" style={{ position: 'absolute', top: '40%', left: '20%', width: '15vw', opacity: 0.22, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
-        <img src={espn06} alt="espn06" style={{ position: 'absolute', bottom: '20%', right: '20%', width: '18vw', opacity: 0.23, filter: 'blur(0.8px) saturate(1.2)', zIndex: 1 }} />
-        {/* Additional creative collage images */}
-        <img src={pic3} alt="pic3" style={{ position: 'absolute', top: '30%', left: '40%', width: '9vw', opacity: 0.23, filter: 'blur(0.8px) saturate(1.1)', zIndex: 1 }} />
-                <img src={color1} alt="color1" style={{ position: 'absolute', top: '10%', right: '25%', width: '8vw', opacity: 0.24, filter: 'blur(0.8px)', zIndex: 1 }} />
-        <img src={color4} alt="color4" style={{ position: 'absolute', bottom: '25%', left: '15%', width: '7vw', opacity: 0.25, filter: 'blur(0.8px)', zIndex: 1 }} />
-        <img src={color6} alt="color6" style={{ position: 'absolute', top: '50%', left: '30%', width: '9vw', opacity: 0.23, filter: 'blur(0.8px)', zIndex: 1 }} />
-        {/* New collage images, spaced out */}
-
-        <img src={color2} alt="color2" style={{ position: 'absolute', top: '60%', right: '40%', width: '9vw', opacity: 0.23, filter: 'blur(0.8px)', zIndex: 1 }} />
-        <img src={color9} alt="color9" style={{ position: 'absolute', bottom: '10%', left: '35%', width: '9vw', opacity: 0.24, filter: 'blur(0.8px)', zIndex: 1 }} />
-        <img src={vegas1} alt="vegas1" style={{ position: 'absolute', top: '45%', left: '12%', width: '12vw', opacity: 0.23, filter: 'blur(0.8px)', zIndex: 1 }} />
-        {/* Gary mascot/logo watermarks */}
-        <img src={Gary20} alt="Gary20" style={{ position: 'absolute', top: '20%', left: '50%', width: '12vw', opacity: 0.12, filter: 'blur(0.2px)', zIndex: 1 }} />
+        
+        {/* Abstract shapes for visual interest */}
+        <div style={{
+          position: 'absolute',
+          top: '10%',
+          left: '5%',
+          width: '20vw',
+          height: '20vw',
+          borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%',
+          background: 'rgba(191, 161, 66, 0.03)',
+          filter: 'blur(40px)',
+          zIndex: 1,
+        }} />
+        
+        <div style={{
+          position: 'absolute',
+          bottom: '15%',
+          right: '10%',
+          width: '25vw',
+          height: '25vw',
+          borderRadius: '63% 37% 30% 70% / 50% 45% 55% 50%',
+          background: 'rgba(191, 161, 66, 0.02)',
+          filter: 'blur(50px)',
+          zIndex: 1,
+        }} />
+        
         {/* Vignette for depth */}
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: 'radial-gradient(ellipse at 50% 40%, transparent 65%, #18181b 100%)',
-          opacity: 0.35,
+          background: 'radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.6) 100%)',
           zIndex: 2,
-          pointerEvents: 'none',
         }} />
       </div>
       {/* Main content, zIndex: 2 */}
@@ -401,16 +420,56 @@ function RealGaryPicks() {
                       TODAY'S PICKS
                     </h1>
                     
-                    {/* Main container for horizontal scrolling on mobile */}
-                    <div className="overflow-x-auto pb-4">
-                      {/* Inner container that holds all the cards in a row */}
-                      <div className="flex flex-nowrap space-x-8 md:justify-center lg:flex-wrap lg:justify-center">
+                    {/* Card Stack Interface */}
+                    <div className="flex justify-center items-center relative py-8">
+                      {/* Left navigation arrow */}
+                      <button 
+                        className="absolute left-4 z-30 text-white bg-black bg-opacity-50 hover:bg-opacity-70 p-4 rounded-full transition-all duration-300"
+                        onClick={prevPick}
+                        disabled={animating || picks.length <= 1}
+                        style={{ transform: 'translateY(-50%)', top: '50%' }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 18l-6-6 6-6" />
+                        </svg>
+                      </button>
+                      
+                      {/* Card counter */}
+                      <div className="absolute bottom-4 left-0 right-0 text-center">
+                        <span className="px-4 py-2 bg-black bg-opacity-50 rounded-full text-sm text-white">
+                          {picks.length > 0 ? `${currentIndex + 1} / ${picks.length}` : '0/0'}
+                        </span>
+                      </div>
+                      
+                      {/* Card Stack */}
+                      <div className="relative" style={{ width: '288px', height: '432px' }}>
                         {picks.map((pick, index) => {
+                          // Calculate position in stack relative to current index
+                          const position = (index - currentIndex + picks.length) % picks.length;
+                          const isCurrentCard = index === currentIndex;
+                          
+                          // Style based on position in stack
+                          const cardStyle = {
+                            zIndex: picks.length - position,
+                            transform: position === 0 
+                              ? 'translateX(0) scale(1)' 
+                              : position === 1 
+                                ? 'translateX(10px) scale(0.95) translateY(10px)' 
+                                : position === 2 
+                                  ? 'translateX(20px) scale(0.9) translateY(20px)' 
+                                  : 'translateX(30px) scale(0.85) translateY(30px)',
+                            opacity: position <= 2 ? 1 - (position * 0.15) : 0,
+                            pointerEvents: isCurrentCard ? 'auto' : 'none',
+                            boxShadow: isCurrentCard ? '0 10px 25px rgba(0, 0, 0, 0.4)' : '0 5px 15px rgba(0, 0, 0, 0.3)',
+                            transition: animating ? 'all 0.5s ease-in-out' : 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out'
+                          };
+                          
                           // Get the flipped state for this card
                           const isFlipped = flippedCards[pick.id] || false;
                           
                           // Function to toggle the flipped state for this specific card
                           const toggleFlip = (e) => {
+                            if (animating) return;
                             e.stopPropagation();
                             setFlippedCards(prev => ({
                               ...prev,
@@ -419,7 +478,11 @@ function RealGaryPicks() {
                           };
                           
                           return (
-                            <div key={pick.id} className="flex-none lg:mb-8">
+                            <div 
+                              key={pick.id} 
+                              className="absolute top-0 left-0"
+                              style={cardStyle}
+                            >
                               {/* Card container with flip effect */}
                               <div 
                                 className="w-72 h-[27rem] relative cursor-pointer" 
@@ -428,259 +491,404 @@ function RealGaryPicks() {
                                 }}
                                 onClick={toggleFlip}
                               >
-                                <div style={{
-                                  position: 'relative',
-                                  width: '100%',
-                                  height: '100%',
-                                  transformStyle: 'preserve-3d',
-                                  transition: 'transform 0.6s',
-                                  transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-                                }}>
-                                  {/* FRONT OF CARD */}
-                                  <div style={{
-                                    position: 'absolute',
+                                <div 
+                                  style={{
+                                    position: 'relative',
                                     width: '100%',
                                     height: '100%',
-                                    backfaceVisibility: 'hidden',
-                                    background: 'linear-gradient(135deg, #f8f7f3 70%, #e6e1c5 100%)',
-                                    border: '6px solid #bfa142',
-                                    borderRadius: '1.2rem',
-                                    fontFamily: 'Orbitron, Inter, Segoe UI, Arial, sans-serif',
-                                    overflow: 'hidden',
-                                    boxShadow: '0 0 36px 8px rgba(191,161,66,0.28), inset 0 0 15px rgba(191,161,66,0.12)',
-                                    transform: 'rotateX(2deg)',
+                                    transformStyle: 'preserve-3d',
+                                    transition: 'transform 0.6s',
+                                    transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
                                   }}>
-                                    {/* Top Bar with League and Time */}
-                                    <div style={{
-                                      background: '#bfa142',
-                                      color: '#e5d3c4',
-                                      fontWeight: 700,
-                                      fontSize: '1.02rem',
-                                      letterSpacing: '0.08em',
-                                      padding: '0.7rem 0.9rem',
-                                      borderBottom: '2px solid #d4af37',
-                                      boxShadow: '0 2px 8px #bfa14222',
-                                      textTransform: 'uppercase',
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center'
-                                    }}>
-                                      <span>{pick.league || 'MLB'}</span>
-                                      <span style={{ fontSize: '0.95rem' }}>
-                                        {pick.time ? 
-                                          // Format time properly with padding for minutes
-                                          (function() {
-                                            // Ensure 'ET' is present
-                                            let time = pick.time.includes('ET') ? pick.time : `${pick.time} ET`;
-                                            // Format minutes to always have 2 digits (8:0 → 8:00)
-                                            return time.replace(/:([0-9])\s/, ':0$1 ');
-                                          })() : '10:10 PM ET'}
-                                      </span>
-                                    </div>
-                                    
-                                    {/* Gary Emblem - in right corner with adjusted size */}
-                                    <div style={{
-                                      position: 'absolute',
-                                      top: '3.2rem',  /* Moved down a half inch (~0.5 inches = ~48px at 96dpi) */
-                                      right: '0.8rem', /* Keep in right corner */
-                                      zIndex: 5,
-                                    }}>
-                                      <img 
-                                        src={GaryEmblem} 
-                                        alt="Gary Emblem"
-                                        style={{
-                                          width: 36,  /* 20% bigger than previous 30px */
-                                          height: 36, /* 20% bigger than previous 30px */
-                                          objectFit: 'contain',
-                                          filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.25))',
-                                          opacity: 0.9,
-                                        }}
-                                      />
-                                    </div>
-                                    
-                                    {/* *** MAIN PICK DISPLAY *** */}
-                                    <div className="flex items-center justify-center" style={{
-                                      position: 'absolute',
-                                      top: '50%',
-                                      left: '50%',
-                                      transform: 'translate(-50%, -50%)',
-                                      zIndex: 2,
-                                      width: '100%',
-                                      padding: '0 1rem'
-                                    }}>
+                                      {/* FRONT OF CARD - Modern Dark UI Design */}
                                       <div style={{
-                                        background: 'rgba(191,161,66,0.1)',
-                                        padding: '1.5rem 1rem',
-                                        marginBottom: '1rem',
-                                        borderRadius: '8px',
-                                        border: '2px solid #bfa142',
-                                        fontWeight: 800,
-                                        fontSize: '2.2rem',
-                                        color: '#bfa142',
-                                        letterSpacing: '0.05em',
-                                        textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                                        textAlign: 'center',
-                                        boxShadow: '0 4px 12px rgba(191,161,66,0.25)',
-                                        width: '90%',
-                                        maxWidth: '90%'
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%',
+                                        backfaceVisibility: 'hidden',
+                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                        borderRadius: '16px',
+                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                        color: '#ffffff',
                                       }}>
-                                        {pick.pick || 'MISSING PICK'}
+                                        {/* Left side content */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          left: 0,
+                                          top: 0,
+                                          bottom: 0,
+                                          width: '60%',
+                                          padding: '1.5rem',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          justifyContent: 'space-between',
+                                          overflow: 'hidden',
+                                        }}>
+                                          {/* League name with subtle label */}
+                                          <div>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.25rem'
+                                            }}>
+                                              League
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: '1.25rem', 
+                                              fontWeight: 600, 
+                                              letterSpacing: '0.02em',
+                                              opacity: 0.95
+                                            }}>
+                                              {pick.league || 'MLB'}
+                                            </div>
+                                          </div>
+                                          
+                                          {/* The main pick display */}
+                                          <div style={{ marginBottom: '1rem' }}>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.5rem'
+                                            }}>
+                                              Gary's Pick
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: '2rem', 
+                                              fontWeight: 700, 
+                                              lineHeight: 1.1,
+                                              color: '#bfa142', /* Keeping gold color for the actual pick */
+                                              wordBreak: 'break-word',
+                                              marginBottom: '0.75rem'
+                                            }}>
+                                              {pick.pick || 'MISSING PICK'}
+                                            </div>
+                                            
+                                            {/* Add a preview of the rationale on front card */}
+                                            <div style={{
+                                              fontSize: '0.85rem',
+                                              opacity: 0.8,
+                                              overflow: 'hidden',
+                                              display: '-webkit-box',
+                                              WebkitLineClamp: 3,
+                                              WebkitBoxOrient: 'vertical',
+                                              textOverflow: 'ellipsis',
+                                              marginBottom: '0.5rem'
+                                            }}>
+                                              {pick.rationale ? pick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Teams matchup at bottom */}
+                                          <div>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.25rem'
+                                            }}>
+                                              Matchup
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: '1rem', 
+                                              fontWeight: 600,
+                                              opacity: 0.9
+                                            }}>
+                                              {(pick.homeTeam && pick.awayTeam) ? 
+                                                `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
+                                                (pick.game ? pick.game : 'TBD')}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Right side content */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          right: 0,
+                                          top: 0,
+                                          bottom: 0,
+                                          width: '40%',
+                                          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+                                          padding: '1.5rem 1rem',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center',
+                                          background: 'rgba(0, 0, 0, 0.15)'
+                                        }}>
+                                          {/* Game Time */}
+                                          <div style={{ 
+                                            textAlign: 'center',
+                                            marginBottom: '1rem'
+                                          }}>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.25rem'
+                                            }}>
+                                              Game Time
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: '1.125rem', 
+                                              fontWeight: 600,
+                                              opacity: 0.9
+                                            }}>
+                                              {pick.time ? 
+                                                (function() {
+                                                  let time = pick.time.includes('ET') ? pick.time : `${pick.time} ET`;
+                                                  return time.replace(/:([0-9])\s/, ':0$1 ');
+                                                })() : '10:10 PM ET'}
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Gary Emblem centered */}
+                                          <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'center',
+                                            marginTop: 'auto',
+                                            marginBottom: 'auto'
+                                          }}>
+                                            <img 
+                                              src={GaryEmblem} 
+                                              alt="Gary Emblem"
+                                              style={{
+                                                width: 50,
+                                                height: 50,
+                                                objectFit: 'contain',
+                                                opacity: 0.85,
+                                              }}
+                                            />
+                                          </div>
+                                          
+                                          {/* Confidence score with visual indicator */}
+                                          <div style={{ 
+                                            textAlign: 'center',
+                                            marginTop: '1rem',
+                                            width: '100%'
+                                          }}>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.25rem'
+                                            }}>
+                                              Confidence
+                                            </div>
+                                            
+                                            {/* Confidence score display */}
+                                            <div style={{
+                                              fontSize: '1.2rem',
+                                              fontWeight: 700,
+                                              opacity: 0.95,
+                                              color: '#bfa142', /* Gold for confidence */
+                                              marginBottom: '0.5rem'
+                                            }}>
+                                              {typeof pick.confidence === 'number' ? 
+                                                Math.round(pick.confidence * 100) + '%' : 
+                                                (pick.confidence || '75%')}
+                                            </div>
+                                            
+                                            {/* Click to flip instruction with subtle design */}
+                                            <button style={{
+                                              marginTop: '1rem',
+                                              fontSize: '0.75rem',
+                                              padding: '0.5rem 1rem',
+                                              background: 'rgba(191, 161, 66, 0.15)',
+                                              color: '#bfa142',
+                                              border: 'none',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em',
+                                              fontWeight: 500,
+                                              transition: 'all 0.2s ease'
+                                            }}>
+                                              View Analysis
+                                            </button>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Subtle gradient overlay for depth */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          inset: 0,
+                                          background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
+                                          opacity: 0.5,
+                                          pointerEvents: 'none'
+                                        }}></div>
                                       </div>
-                                    </div>
-                                    
-                                    {/* Click to flip hint */}
-                                    <div style={{
-                                      position: 'absolute',
-                                      bottom: '3.5rem',
-                                      left: 0,
-                                      right: 0,
-                                      textAlign: 'center',
-                                      color: '#bfa142',
-                                      fontWeight: 'bold',
-                                      fontSize: '0.85rem',
-                                      opacity: 0.8,
-                                    }}>
-                                      CLICK FOR GARY'S ANALYSIS
-                                    </div>
-                                    
-                                    {/* Bottom Game Info */}
-                                    <div style={{
-                                      position: 'absolute',
-                                      bottom: 0,
-                                      left: 0,
-                                      right: 0,
-                                      background: '#bfa142',
-                                      color: '#e5d3c4',
-                                      fontWeight: 700,
-                                      fontSize: '1.02rem',
-                                      letterSpacing: '0.075em',
-                                      textAlign: 'center',
-                                      padding: '0.7rem 0',
-                                      borderTop: '2px solid #d4af37',
-                                      boxShadow: '0 -2px 8px #bfa14222',
-                                      textTransform: 'uppercase',
-                                    }}>
-                                      {/* Use homeTeam and awayTeam directly */}
-                                      {(pick.homeTeam && pick.awayTeam) ? 
-                                        `${pick.awayTeam.split(' ').pop().toUpperCase()} @ ${pick.homeTeam.split(' ').pop().toUpperCase()}` : 
-                                        (pick.game ? pick.game : 'GAME TBD')}
-                                    </div>
-                                  </div>
-                                  
-                                  {/* BACK OF CARD - ANALYSIS */}
-                                  <div style={{
-                                    position: 'absolute',
-                                    width: '100%',
-                                    height: '100%',
-                                    backfaceVisibility: 'hidden',
-                                    transform: 'rotateY(180deg)',
-                                    background: 'linear-gradient(135deg, #fffbe6 50%, #f5f5dc 100%)',
-                                    border: '6px solid #bfa142',
-                                    borderRadius: '1.2rem',
-                                    fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
-                                    overflow: 'hidden',
-                                    boxShadow: '0 0 36px 8px rgba(191,161,66,0.28), inset 0 0 15px rgba(191,161,66,0.12)',
-                                  }}>
-                                    {/* Card Header */}
-                                    <div style={{ position: 'relative', width: '100%' }}>
-                                      {/* Gary's Analysis Banner */}
+                                      
+                                      {/* BACK OF CARD - ANALYSIS */}
+                                      <div style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%',
+                                        backfaceVisibility: 'hidden',
+                                        transform: 'rotateY(180deg)',
+                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                        borderRadius: '16px',
+                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                        color: '#ffffff',
+                                        padding: '1.5rem',
+                                      }}>
+                                      {/* Card Header */}
+                                      <div style={{ position: 'relative', width: '100%', marginBottom: '1rem' }}>
+                                        {/* Gary's Analysis Banner */}
+                                        <div style={{ 
+                                          backgroundColor: 'rgba(191, 161, 66, 0.15)',
+                                          color: '#bfa142',
+                                          fontWeight: 'bold',
+                                          fontSize: '1rem',
+                                          padding: '0.6rem 1rem',
+                                          textAlign: 'center',
+                                          letterSpacing: '0.05rem',
+                                          textTransform: 'uppercase',
+                                          borderRadius: '8px',
+                                        }}>
+                                          GARY'S ANALYSIS
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Game details header */}
                                       <div style={{ 
-                                        backgroundColor: '#bfa142',
-                                        color: '#e5d3c4',
-                                        fontWeight: 'bold',
-                                        fontSize: '1.1rem',
-                                        padding: '0.6rem 1rem',
-                                        textAlign: 'center',
-                                        letterSpacing: '0.05rem',
-                                        textTransform: 'uppercase',
-                                        borderBottom: '2px solid #d4af37',
-                                        boxShadow: '0 2px 8px #bfa14222',
+                                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                                        paddingBottom: '1rem',
+                                        marginBottom: '1rem',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
                                       }}>
-                                        GARY'S ANALYSIS
+                                        <div>
+                                          <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.25rem' }}>
+                                            {pick.league || 'MLB'}
+                                          </div>
+                                          <div style={{ fontSize: '1.1rem', fontWeight: '600' }}>
+                                            {(pick.homeTeam && pick.awayTeam) ? 
+                                              `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
+                                              (pick.game ? pick.game : 'TBD')}
+                                          </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                          <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.25rem' }}>
+                                            Pick
+                                          </div>
+                                          <div style={{ 
+                                            fontSize: '1.1rem', 
+                                            fontWeight: '600',
+                                            color: '#bfa142'
+                                          }}>
+                                            {pick.pick || 'MISSING PICK'}
+                                          </div>
+                                        </div>
                                       </div>
-                                    </div>
-                                    
-                                    {/* *** SIMPLIFIED: ONLY RATIONALE SECTION *** */}
-                                    <div style={{ 
-                                      padding: '2rem 1.5rem', 
-                                      flex: '1', 
-                                      display: 'flex', 
-                                      flexDirection: 'column',
-                                      justifyContent: 'center',
-                                      alignItems: 'center',
+                                      
+                                      {/* Rationale Section */}
+                                      <div style={{ 
+                                        flex: '1', 
+                                        display: 'flex', 
+                                        flexDirection: 'column',
                                       overflowY: 'auto',
                                       height: 'calc(100% - 170px)',
                                     }}>
                                       {/* Main Analysis */}
                                       <div style={{ 
-                                        backgroundColor: 'rgba(255,255,255,0.5)', 
+                                        backgroundColor: 'rgba(0, 0, 0, 0.2)', 
                                         padding: '1.5rem', 
-                                        borderRadius: '0.5rem',
-                                        border: '2px solid rgba(191,161,66,0.3)',
-                                        fontSize: '1.1rem',
-                                        lineHeight: '1.5rem',
-                                        color: '#222',
-                                        width: '90%',
+                                        borderRadius: '0.75rem',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        fontSize: '0.95rem',
+                                        lineHeight: '1.6',
+                                        color: '#fff',
+                                        width: '100%',
                                         maxHeight: '75%',
                                         overflowY: 'auto',
-                                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
                                       }}>
+                                        {/* Rationale Heading */}
+                                        <div style={{ 
+                                          fontSize: '0.8rem', 
+                                          opacity: 0.6, 
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em', 
+                                          marginBottom: '0.75rem'
+                                        }}>
+                                          Rationale
+                                        </div>
+                                        
                                         {/* Display the rationale */}
-                                        <p style={{ margin: 0, fontWeight: 500 }}>
+                                        <p style={{ margin: 0, fontWeight: 400, opacity: 0.9 }}>
                                           {pick.rationale || 'Analysis not available.'}
                                         </p>
                                       </div>
                                     </div>
                                     
-                                    {/* Bet or Fade Buttons - MOVED HERE PER REQUEST */}
+                                    {/* Bet or Fade Buttons */}
                                     <div style={{
                                       display: 'flex',
                                       justifyContent: 'center',
-                                      padding: '0.75rem',
-                                      borderTop: '2px solid rgba(191,161,66,0.3)',
-                                      background: 'rgba(191,161,66,0.1)',
+                                      padding: '1.25rem 0 0.25rem',
+                                      marginTop: '1rem',
+                                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
                                     }}>
                                       <div style={{ 
                                         display: 'flex', 
                                         gap: '1rem',
                                         justifyContent: 'center',
-                                        width: '90%',
+                                        width: '100%',
                                       }}>
                                         <button 
                                           style={{
-                                            background: '#D4AF37',
-                                            color: 'black',
-                                            fontWeight: 'bold',
+                                            background: 'rgba(191, 161, 66, 0.15)',
+                                            color: '#bfa142',
+                                            fontWeight: '600',
                                             padding: '0.75rem 1.5rem',
-                                            borderRadius: '4px',
-                                            border: '2px solid black',
+                                            borderRadius: '8px',
+                                            border: '1px solid rgba(191, 161, 66, 0.3)',
                                             cursor: 'pointer',
                                             flex: 1,
+                                            fontSize: '0.9rem',
+                                            letterSpacing: '0.05em',
+                                            textTransform: 'uppercase',
+                                            transition: 'all 0.2s ease'
                                           }}
                                           onClick={(e) => {
-                                            e.stopPropagation();
+                                            e.stopPropagation(); // Prevent card flip
                                             handleDecisionMade('bet', pick);
                                           }}
                                         >
-                                          BET
+                                          Bet
                                         </button>
                                         <button 
                                           style={{
-                                            background: '#333',
-                                            color: 'white',
-                                            fontWeight: 'bold',
+                                            background: 'rgba(255, 255, 255, 0.05)',
+                                            color: 'rgba(255, 255, 255, 0.7)',
+                                            fontWeight: '600',
                                             padding: '0.75rem 1.5rem',
-                                            borderRadius: '4px',
-                                            border: '2px solid black',
+                                            borderRadius: '8px',
+                                            border: '1px solid rgba(255, 255, 255, 0.1)',
                                             cursor: 'pointer',
                                             flex: 1,
+                                            fontSize: '0.9rem',
+                                            letterSpacing: '0.05em',
+                                            textTransform: 'uppercase',
+                                            transition: 'all 0.2s ease'
                                           }}
                                           onClick={(e) => {
-                                            e.stopPropagation();
+                                            e.stopPropagation(); // Prevent card flip
                                             handleDecisionMade('fade', pick);
                                           }}
                                         >
-                                          FADE
+                                          Fade
                                         </button>
                                       </div>
                                     </div>
