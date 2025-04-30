@@ -478,21 +478,22 @@ function RealGaryPicks() {
                                       </span>
                                     </div>
                                     
-                                    {/* Gary Emblem */}
+                                    {/* Gary Emblem - 70% smaller and moved to right corner */}
                                     <div style={{
                                       position: 'absolute',
-                                      top: '3.25rem',
-                                      left: '0.125rem',
+                                      top: '2.2rem',  /* Position under the league name */
+                                      right: '0.8rem', /* Position in right corner */
                                       zIndex: 5,
                                     }}>
                                       <img 
                                         src={GaryEmblem} 
                                         alt="Gary Emblem"
                                         style={{
-                                          width: 99,
-                                          height: 99,
+                                          width: 30,  /* 70% smaller than original 99px */
+                                          height: 30, /* 70% smaller than original 99px */
                                           objectFit: 'contain',
                                           filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.25))',
+                                          opacity: 0.9,
                                         }}
                                       />
                                     </div>
