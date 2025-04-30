@@ -341,9 +341,9 @@ const picksService = {
         return [];
       }
 
-      // Use the correct confidence field from OpenAI and set a more lenient threshold of 0.70 (or 70%)
-    // This ensures we have picks to display even if confidence is slightly below high threshold
-    console.log('Filtering picks using OpenAI confidence values with threshold 0.70 (70%)...');
+      // Use the correct confidence field from OpenAI with our strict threshold of 0.75 (75%)
+    // This matches the OpenAI prompt which only generates picks with confidence >= 0.75
+    console.log('Filtering picks using OpenAI confidence values with threshold 0.75 (75%)...');
     let filteredPicks = allPicks.filter(pick => {
       // Get confidence values - check multiple sources 
       const rawConfidence = pick.rawAnalysis?.confidence || 0;
@@ -352,21 +352,15 @@ const picksService = {
       // Log each pick's confidence for debugging
       console.log(`Pick: ${pick.shortPickStr}, OpenAI confidence: ${normalizedConfidence}`);
       
-      // Filter by a more lenient threshold 0.70 (70%)
-      return normalizedConfidence >= 0.70;
+      // Filter by a more lenient threshold 0.75 (75%)
+      return normalizedConfidence >= 0.75;
     });
       
-      // If we don't have any high confidence picks, fall back to the best picks we have
+      // If we don't have any high confidence picks, we do NOT fall back to lower confidence picks
+      // This ensures we only use picks that meet our strict threshold
       if (filteredPicks.length === 0) {
-        console.log('No picks met the 0.75 confidence threshold, using best available picks instead');
-        // Sort by confidence and take the top 3 if available
-        allPicks.sort((a, b) => {
-          const confA = a.rawAnalysis?.confidence || 0;
-          const confB = b.rawAnalysis?.confidence || 0;
-          return confB - confA;
-        });
-        filteredPicks = allPicks.slice(0, 3);
-      }
+        console.log('No picks met the 0.75 confidence threshold, no picks will be displayed');
+      } 
       
       // Sort by confidence (descending) for display order
       filteredPicks.sort((a, b) => {
@@ -607,7 +601,7 @@ const picksService = {
       console.log(JSON.stringify({
         pick: "Cincinnati Reds ML -120",
         type: "moneyline",
-        confidence: 0.73,
+        confidence: 0.78,
         trapAlert: false,
         revenge: false,
         superstition: false,
@@ -680,18 +674,11 @@ const picksService = {
         return null;
       }).filter(Boolean); // Remove any null values
       
-      // If we somehow have no valid outputs, create one emergency fallback
-      // This should never happen with our updated prompt, but just in case
+      // We do NOT create emergency fallbacks - only real generated picks from OpenAI
+      // that meet our confidence threshold will be stored
       if (exactOpenAIOutputs.length === 0) {
-        console.warn('WARNING: No valid OpenAI outputs found - creating emergency fallback');
-        exactOpenAIOutputs.push({
-          pick: "Emergency Fallback Pick",
-          type: "moneyline",
-          confidence: 0.75,
-          league: "MLB",
-          time: "12:00 PM ET",
-          rationale: "This is a fallback pick generated to ensure database continuity."
-        });
+        console.warn('WARNING: No valid OpenAI outputs found - no picks will be stored');
+        // No fallback pick generation - we only use real data
       }
 
       console.log(`Storing ${exactOpenAIOutputs.length} picks with their exact OpenAI output format`);
