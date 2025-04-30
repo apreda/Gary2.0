@@ -335,6 +335,40 @@ export function parseGaryAnalysis(analysis) {
       }
     }
     
+    // First try to handle the case where 'analysis' is already a complete object
+    if (typeof analysis === 'object' && analysis !== null && analysis.pick !== undefined) {
+      console.log('Analysis is already a structured object, preserving as-is');
+      
+      // CRITICAL: Create a complete rawOpenAIOutput directly from the object
+      // This ensures we have all required fields for storage
+      const rawOpenAIOutput = {
+        pick: analysis.pick,
+        type: analysis.type || 'moneyline',
+        confidence: analysis.confidence || 0.75,
+        trapAlert: analysis.trapAlert || false,
+        revenge: analysis.revenge || false,
+        superstition: analysis.superstition || false,
+        momentum: analysis.momentum || 0,
+        homeTeam: analysis.homeTeam || '',
+        awayTeam: analysis.awayTeam || '',
+        league: analysis.league || '',
+        time: analysis.time || '',
+        rationale: analysis.rationale || ''
+      };
+      
+      console.log('Direct object format preserved:', JSON.stringify(rawOpenAIOutput).substring(0, 200));
+      
+      return {
+        pick: analysis.pick,
+        confidence: analysis.confidence || 'Medium',
+        betType: analysis.type || 'Moneyline',
+        stake: typeof analysis.confidence === 'number' ? Math.round(analysis.confidence * 300) : 200,
+        keyPoints: [analysis.rationale || ''].filter(Boolean),
+        reasoning: analysis.rationale || '',
+        rawOpenAIOutput: rawOpenAIOutput
+      };
+    }
+    
     // Try to parse as JSON
     try {
       // Try to parse if it's a string, otherwise assume it's already an object
@@ -358,17 +392,17 @@ export function parseGaryAnalysis(analysis) {
           // Without any transformations to league names or other fields
           const rawOpenAIOutput = {
             pick: jsonData.pick,
-            type: jsonData.type,
-            confidence: jsonData.confidence,
-            trapAlert: jsonData.trapAlert,
-            revenge: jsonData.revenge,
-            superstition: jsonData.superstition,
-            momentum: jsonData.momentum,
-            homeTeam: jsonData.homeTeam,
-            awayTeam: jsonData.awayTeam,
-            league: jsonData.league, // This must remain untransformed (e.g., "MLB" not "baseball_mlb")
-            time: jsonData.time,     // This must remain untransformed (e.g., "10:05 PM ET")
-            rationale: jsonData.rationale
+            type: jsonData.type || 'moneyline',
+            confidence: jsonData.confidence || 0.75,
+            trapAlert: jsonData.trapAlert || false,
+            revenge: jsonData.revenge || false,
+            superstition: jsonData.superstition || false,
+            momentum: jsonData.momentum || 0,
+            homeTeam: jsonData.homeTeam || '',
+            awayTeam: jsonData.awayTeam || '',
+            league: jsonData.league || '', // This must remain untransformed (e.g., "MLB" not "baseball_mlb")
+            time: jsonData.time || '',     // This must remain untransformed (e.g., "10:05 PM ET")
+            rationale: jsonData.rationale || ''
           };
           
           return {
@@ -394,18 +428,24 @@ export function parseGaryAnalysis(analysis) {
     
     // Extract confidence level
     let confidence = 'Medium';
+    let confidenceValue = 0.65; // Default numeric value
     if (analysis.includes('Confidence: High') || analysis.includes('CONFIDENCE: HIGH')) {
       confidence = 'High';
+      confidenceValue = 0.85;
     } else if (analysis.includes('Confidence: Low') || analysis.includes('CONFIDENCE: LOW')) {
       confidence = 'Low';
+      confidenceValue = 0.45;
     }
     
     // Extract bet type (assuming it's mentioned clearly)
     let betType = 'Moneyline'; // Default
+    let betTypeStandard = 'moneyline'; // Standardized lowercase for OpenAI format
     if (analysis.includes('Spread') || analysis.includes('SPREAD')) {
       betType = 'Spread';
+      betTypeStandard = 'spread';
     } else if (analysis.includes('Over/Under') || analysis.includes('TOTAL')) {
       betType = 'Total';
+      betTypeStandard = 'total';
     } else if (analysis.includes('Parlay') || analysis.includes('PARLAY')) {
       betType = 'Parlay';
     }
@@ -418,28 +458,78 @@ export function parseGaryAnalysis(analysis) {
       keyPoints.push(match[1].trim());
     }
     
-    // Extract pick information (this is just a best effort - actual format may vary)
-    const pickRegex = /[Rr]ecommended [Bb]et:?\s*(.+?)\n/;
-    const pickMatch = pickRegex.exec(analysis);
-    const pick = pickMatch ? pickMatch[1].trim() : null;
+    // Extract pick (simply use the first line as a fallback)
+    const lines = typeof analysis === 'string' ? analysis.split('\n') : [];
+    const pick = lines.length > 0 ? lines[0].replace('Pick:', '').trim() : 'Unknown';
     
-    // Calculate stake based on confidence
-    let stake = 0;
-    if (confidence === 'High') {
-      stake = 300;
-    } else if (confidence === 'Medium') {
-      stake = 200;
-    } else {
-      stake = 100;
+    // Extract team names if possible
+    let homeTeam = '';
+    let awayTeam = '';
+    const teamMatch = pick.match(/([\w\s]+)\s+(?:vs\.?|@|against)\s+([\w\s]+)/i);
+    if (teamMatch) {
+      homeTeam = teamMatch[1].trim();
+      awayTeam = teamMatch[2].trim();
+    }
+    
+    // Extract reasoning
+    let reasoning = '';
+    const reasoningMatch = /Rationale:|Reasoning:|Analysis:/i.exec(analysis);
+    if (reasoningMatch) {
+      reasoning = analysis.substring(reasoningMatch.index + reasoningMatch[0].length).trim();
+    }
+    
+    // Try to extract league info
+    let league = '';
+    const leagueMatch = /\b(NBA|MLB|NHL|NFL)\b/i.exec(analysis);
+    if (leagueMatch) {
+      league = leagueMatch[1].toUpperCase();
+    }
+    
+    // Try to extract game time
+    let time = '';
+    const timeMatch = /(\d{1,2}:\d{2}\s*(?:AM|PM)(?:\s*ET)?)/i.exec(analysis);
+    if (timeMatch) {
+      time = timeMatch[1].trim();
+    }
+    
+    // Create a complete raw OpenAI output object with all required fields
+    const fallbackOpenAIOutput = {
+      pick: pick,
+      type: betTypeStandard,
+      confidence: confidenceValue,
+      trapAlert: false,
+      revenge: false,
+      superstition: false,
+      momentum: 0.5,
+      homeTeam: homeTeam,
+      awayTeam: awayTeam,
+      league: league,
+      time: time,
+      rationale: reasoning
+    };
+    
+    if (sportKey.includes('basketball')) {
+      console.log('Parsing text as basketball analysis');
+      // Set the league in the fallback output if not already set
+      if (!fallbackOpenAIOutput.league) {
+        fallbackOpenAIOutput.league = 'NBA';
+      }
+    } else if (sportKey.includes('baseball')) {
+      console.log('Parsing text as baseball analysis');
+      // Set the league in the fallback output if not already set
+      if (!fallbackOpenAIOutput.league) {
+        fallbackOpenAIOutput.league = 'MLB';
+      }
     }
     
     return {
       pick,
       confidence,
       betType,
-      stake,
+      stake: typeof confidenceValue === 'number' ? Math.round(confidenceValue * 300) : 200,
       keyPoints: keyPoints.length > 0 ? keyPoints : ['No specific key points extracted'],
-      reasoning: analysis
+      reasoning: analysis,
+      rawOpenAIOutput: fallbackOpenAIOutput
     };
   } catch (error) {
     console.error('Error parsing Gary\'s analysis:', error);
