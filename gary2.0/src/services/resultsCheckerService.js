@@ -177,10 +177,13 @@ Response format must be a JSON array of objects, each with these fields:
       console.log('Sending query to Perplexity for pick evaluation');
       
       // Send the query to Perplexity
-      const response = await perplexityService.fetchRealTimeInfo(query);
-      if (!response || !response.text) {
+      const responseText = await perplexityService.fetchRealTimeInfo(query);
+      if (!responseText) {
         throw new Error('No response from Perplexity API');
       }
+      
+      // Format response for consistency
+      const response = { text: responseText };
       
       console.log('Received response from Perplexity');
       
