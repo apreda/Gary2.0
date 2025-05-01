@@ -22,7 +22,11 @@ const parseResultsManually = (text) => {
       const jsonArray = JSON.parse(jsonBlockMatch[1]);
       if (Array.isArray(jsonArray) && jsonArray.length > 0 && jsonArray[0].pick) {
         console.log(`Successfully extracted ${jsonArray.length} results from JSON block`);
-        return jsonArray;
+        // Ensure we're not using "result" as pick text
+        return jsonArray.map(item => ({
+          ...item,
+          pick: item.pick === 'result' ? '' : item.pick // Replace 'result' with empty string if that's what we got
+        }));
       }
     } catch (e) {
       console.log('Failed to parse JSON block, continuing with line-by-line parsing');
@@ -522,9 +526,20 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
 
       console.log('Final results with league field:', resultsWithLeague);
       
-      if (resultsWithLeague.length > 0) {
+      // Deep clone the results to prevent any reference issues
+      const finalResults = resultsWithLeague.map(result => {
+        // Log each result object to ensure pick text is preserved
+        console.log('Final pick object being sent to recordPickResults:', JSON.stringify(result));
+        return {
+          ...result,
+          originalPick: result.pick // Add an extra field to preserve original pick text
+        };
+      });
+      
+      if (finalResults.length > 0) {
+        console.log('Sending results to garyPerformanceService:', JSON.stringify(finalResults));
         // Record the results in the database
-        const savedResults = await garyPerformanceService.recordPickResults(picksResponse.date, resultsWithLeague);
+        const savedResults = await garyPerformanceService.recordPickResults(picksResponse.date, finalResults);
         return { 
           success: true, 
           message: `Recorded ${savedResults.length} pick results for ${picksResponse.date} (${sportsDbApiResults.length} from TheSportsDB API, ${perplexityResults.length} from Perplexity)` 

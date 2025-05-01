@@ -112,6 +112,36 @@ export const garyPerformanceService = {
    */
   recordPickResults: async (date, results) => {
     try {
+      // Debug logging to inspect incoming results before any processing
+      console.log('INCOMING RAW RESULTS to recordPickResults:', JSON.stringify(results));
+      
+      // Ensure we preserve the original pick text from any input transformation
+      // This fixes an issue where pick text was being lost/changed to "result"
+      const preservedResults = results.map(result => {
+        // Check if we have the originalPick field and use it if available
+        if (result.originalPick && typeof result.originalPick === 'string') {
+          return {
+            ...result,
+            pick: result.originalPick // Restore from backup field
+          };
+        }
+        // If result.pick is empty or "result", try to use other fields
+        if (!result.pick || result.pick === 'result') {
+          // Try to use originalPick or pickText if available
+          const pickText = result.originalPick || result.pickText || result.text || 'Unknown Pick';
+          return {
+            ...result,
+            pick: pickText
+          };
+        }
+        return result;
+      });
+      
+      console.log('PRESERVED RESULTS after fix:', JSON.stringify(preservedResults));
+      
+      // Use the preserved results for the rest of the function
+      const processedResults = preservedResults;
+      
       // Get the picks from the daily_picks table
       const { data: dailyPick, error: pickError } = await supabase
         .from('daily_picks')
