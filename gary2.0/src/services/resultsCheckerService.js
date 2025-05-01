@@ -124,10 +124,14 @@ export const resultsCheckerService = {
       
       console.log('Simplified picks for Perplexity:', simplifiedPicks);
       
-      // Create a formatted query for Perplexity
-      const query = `I need to check the results for these sports picks from ${displayDate}. For each pick, tell me if it won, lost, or pushed.
+      // Create a formatted query for Perplexity with explicit instructions to search for real game results
+      const query = `I need to check the REAL RESULTS for these sports picks from ${displayDate}. You MUST search the web to find the actual final scores and outcomes of these games.
 
-For each pick, search for the related game and provide THE EXACT PICK TEXT followed by either "won", "lost", or "push", and include the final score when applicable.
+IMPORTANT INSTRUCTIONS:
+1. For each pick, search for the actual game that happened on ${displayDate} between the teams mentioned
+2. Find the REAL final score of that game
+3. Based on the final score, determine if the pick "won", "lost", or was a "push" according to sports betting rules
+4. Include the actual final score for each game
 
 Response format must be structured as a JSON array of objects, each with fields 'pick', 'result', and 'score'.
 
