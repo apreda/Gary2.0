@@ -35,13 +35,15 @@ function Filters() {
   );
 }
 
-export default function BillfoldPicksTable({ picks = [] }) {
-  // Check if we have picks data to display
-  const hasPicks = Array.isArray(picks) && picks.length > 0;
+export default function BillfoldPicksTable({ bettingLog = [], title = "Recent Picks" }) {
+  // Check if we have pick data to display
+  const hasPicks = Array.isArray(bettingLog) && bettingLog.length > 0;
   return (
     <div className="bg-surface p-4 md:p-6 rounded-xl shadow-lg w-full">
       {/* Responsive, more padding, and visual polish */}
-      <h3 className="text-xl md:text-2xl mb-4 flex items-center font-bold text-white tracking-tight"><span className="mr-2 text-primary"><TrendingUpIcon /></span>Recent Picks</h3>
+      <h3 className="text-xl md:text-2xl mb-4 flex items-center font-bold text-white tracking-tight">
+        <span className="mr-2 text-primary"><TrendingUpIcon /></span>{title}
+      </h3>
       <Filters />
       <div className="overflow-x-auto mt-2 border-t border-gray-800 pt-4 pb-1">
         {!hasPicks ? (
@@ -53,32 +55,44 @@ export default function BillfoldPicksTable({ picks = [] }) {
             <thead className="text-left text-gray-300">
               <tr>
                 <th className="py-2">Date</th>
+                <th>Sport</th>
                 <th>Matchup</th>
                 <th>Pick</th>
-                <th>Conf.</th>
                 <th>Result</th>
+                <th>Score</th>
               </tr>
             </thead>
             <tbody>
-              {picks.map((p, i) => (
+              {bettingLog.map((bet, i) => (
               <motion.tr
-                key={i}
+                key={bet.id || i}
                 className="border-t border-gray-700 hover:bg-gray-800/50 hover:scale-[1.01] transition-all duration-150"
                 initial={{ opacity:0, y:10 }}
                 animate={{ opacity:1, y:0 }}
                 transition={{delay:0.1 + i*0.03}}
               >
-                <td className="py-2">{p.date || 'N/A'}</td>
-                <td>{p.away || 'TBD'} @ {p.home || 'TBD'}</td>
-                <td>{p.pick || 'TBD'}</td>
-                <td>{p.confidence ? `${(p.confidence*100).toFixed(0)}%` : 'N/A'}</td>
+                <td className="py-2">{bet.date ? new Date(bet.date).toLocaleDateString() : 'N/A'}</td>
                 <td>
-                  {p.won ? (
+                  <span className="inline-flex items-center">
+                    {bet.sport === 'NBA' && '🏀'}
+                    {bet.sport === 'MLB' && '⚾'}
+                    {bet.sport === 'NHL' && '🏒'}
+                    {bet.sport === 'NFL' && '🏈'}
+                    <span className="ml-1">{bet.sport || 'N/A'}</span>
+                  </span>
+                </td>
+                <td>{bet.matchup || (bet.away && bet.home ? `${bet.away} @ ${bet.home}` : 'N/A')}</td>
+                <td>{bet.pick || bet.bet || 'N/A'}</td>
+                <td>
+                  {bet.result === 'won' || bet.won ? (
                     <span className="px-2 py-0.5 rounded-full text-xs bg-positive/20 text-positive font-bold">W</span>
+                  ) : bet.result === 'push' ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-500 font-bold">P</span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full text-xs bg-negative/20 text-negative font-bold">L</span>
                   )}
                 </td>
+                <td>{bet.score || 'N/A'}</td>
               </motion.tr>
               ))}
             </tbody>

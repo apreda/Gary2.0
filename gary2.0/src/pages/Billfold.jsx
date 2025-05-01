@@ -71,19 +71,36 @@ export function Billfold() {
           
           // Set betting log from Gary's recent picks
           if (response.data && response.data.length > 0) {
-            const formattedLogs = response.data.map(result => ({
-              id: result.pick_id,
-              date: result.game_date,
-              sport: result.league,
-              bet: "Gary's Pick",
-              type: 'moneyline',
-              result: result.result,
-              amount: 100, // Example bet amount
-              odds: -110, // Example odds
-              payout: result.result === 'won' ? 190 : 0, // Example payout
-              score: result.final_score,
-              status: result.result // Using result as status
-            }));
+            const formattedLogs = response.data.map(result => {
+              // Parse matchup to get home and away teams
+              let homeTeam = '', awayTeam = '';
+              if (result.matchup) {
+                const matchupParts = result.matchup.split(' @ ');
+                if (matchupParts.length === 2) {
+                  awayTeam = matchupParts[0];
+                  homeTeam = matchupParts[1];
+                }
+              }
+              
+              return {
+                id: result.pick_id,
+                date: result.game_date,
+                sport: result.league,
+                bet: "Gary's Pick",
+                pick: result.pick_text || "Gary's Pick", // Use the original pick text
+                matchup: result.matchup || '', // Use the matchup field
+                home: homeTeam,
+                away: awayTeam,
+                type: 'moneyline',
+                result: result.result,
+                amount: 100, // Example bet amount
+                odds: -110, // Example odds
+                payout: result.result === 'won' ? 190 : 0, // Example payout
+                score: result.final_score,
+                status: result.result, // Using result as status
+                won: result.result === 'won'
+              };
+            });
             
             setBettingLog(formattedLogs);
           }

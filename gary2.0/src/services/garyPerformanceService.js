@@ -163,6 +163,12 @@ export const garyPerformanceService = {
         console.log(`Using league ${league} for pick "${normalizedPickText}"`);
 
         try {
+          // Format the matchup text
+          let matchup = '';
+          if (originalPick && originalPick.homeTeam && originalPick.awayTeam) {
+            matchup = `${originalPick.awayTeam} @ ${originalPick.homeTeam}`;
+          }
+
           // Insert the result into game_results table
           const { data: insertedResult, error: insertError } = await supabase
             .from('game_results')
@@ -171,8 +177,9 @@ export const garyPerformanceService = {
               game_date: date,
               result: result.result,
               final_score: result.score || '',
-              pick_text: result.pick, // Store the normalized pick text
-              league: league // Add the league field to the insert
+              pick_text: result.pick, // Store the original pick text
+              matchup: matchup,       // Add the matchup information
+              league: league          // Add the league field
             })
             .select();
 
