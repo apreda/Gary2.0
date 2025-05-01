@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../supabaseClient";
 import '../styles/BillfoldStyle.css';
 import BillfoldKPI from '../components/BillfoldKPI.jsx';
 import BillfoldCharts from '../components/BillfoldCharts.jsx';
 import BillfoldPicksTable from '../components/BillfoldPicksTable.jsx';
+import { garyPerformanceService } from '../services/garyPerformanceService.js';
 
 export function Billfold() {
+  // Stats for the KPI component
   const [bankrollStats, setBankrollStats] = useState({
     currentBankroll: 10000,
     startingBankroll: 10000,
@@ -14,227 +15,150 @@ export function Billfold() {
     totalBets: 0,
     winRate: 0,
     averageBet: 0,
+    record: '0-0',
+    sportPerformance: [],
+    betTypePerformance: []
   });
-
+  
+  // Gary's performance tracking - this is the only data we need
+  const [garyPerformance, setGaryPerformance] = useState({
+    summary: { wins: 0, losses: 0, pushes: 0, winRate: 0, total: 0, record: '0-0' },
+    sportBreakdown: []
+  });
+  
+  // For displaying data in UI components
   const [sportsBreakdown, setSportsBreakdown] = useState([]);
   const [bettingLog, setBettingLog] = useState([]);
   const [activeBettingFilter, setActiveBettingFilter] = useState('all');
 
   useEffect(() => {
-    const fetchBankrollData = async () => {
+    const fetchGaryPerformance = async () => {
       try {
-        const { data, error } = await supabase
-          .from('wagers')
-          .select('current_bankroll, starting_bankroll, monthly_goal_percentage')
-          .order('id', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (error) throw error;
-
-        const roi = data.starting_bankroll > 0 ?
-          ((data.current_bankroll - data.starting_bankroll) / data.starting_bankroll) * 100 : 0;
-
-        setBankrollStats({
-          currentBankroll: Math.round(data.current_bankroll),
-          startingBankroll: Math.round(data.starting_bankroll),
-          monthlyGoal: data.monthly_goal_percentage,
-          currentRoi: parseFloat(roi.toFixed(1)),
-          totalBets: 0, // To be updated after fetching betting history
-          winRate: 0, // To be updated after fetching betting history
-          averageBet: 0, // To be updated after fetching betting history
-        });
-      } catch (error) {
-        console.error('Error fetching bankroll data:', error);
-      }
-    };
-
-    fetchBankrollData();
-  }, []);
-
-  useEffect(() => {
-    const fetchSportsBreakdown = async () => {
-      try {
-        const sports = ['NBA', 'MLB', 'NFL', 'NHL'];
-        const sportStats = [];
-
-        for (const sport of sports) {
-          const { data, error } = await supabase
-            .from('wagers')
-            .select('result')
-            .eq('sport', sport);
-
-          if (error) throw error;
-
-          const wins = data.filter(wager => wager.result === 'won').length;
-          const losses = data.filter(wager => wager.result === 'lost').length;
-          const total = wins + losses;
-          const winRate = total > 0 ? (wins / total) * 100 : 0;
-
-          sportStats.push({
-            name: sport,
-            icon: sport === 'NBA' ? '🏀' : 
-                  sport === 'MLB' ? '⚾' :
-                  sport === 'NFL' ? '🏈' :
-                  sport === 'NHL' ? '🏒' : '🎯',
-            record: `${wins}-${losses}`,
-            winRate: parseFloat(winRate.toFixed(1)),
-            roi: 0 // Placeholder for ROI calculation
+        // First track any new results
+        await garyPerformanceService.trackPickResults();
+        
+        // Then fetch the updated performance data
+        const response = await garyPerformanceService.getGaryPerformance();
+        
+        if (response.success) {
+          // Update Gary's performance stats
+          setGaryPerformance({
+            summary: response.summary,
+            sportBreakdown: response.sportBreakdown
           });
+          
+          // Set bankroll stats with Gary's performance data
+          setBankrollStats({
+            currentBankroll: 10000, // Example starting value
+            startingBankroll: 10000, // Example starting value
+            monthlyGoal: 30, // Example monthly goal
+            currentRoi: 15.5, // Example ROI
+            totalBets: response.summary.total || 0,
+            winRate: response.summary.winRate || 0,
+            averageBet: 100, // Example average bet
+            record: response.summary.record || '0-0',
+            sportPerformance: response.sportBreakdown.map(sport => ({
+              sport: sport.name,
+              wins: sport.wins,
+              losses: sport.losses,
+              total: sport.total
+            })) || [],
+            betTypePerformance: []
+          });
+          
+          // Use Gary's sport breakdown for the charts
+          setSportsBreakdown(response.sportBreakdown);
+          
+          // Set betting log from Gary's recent picks
+          if (response.data && response.data.length > 0) {
+            const formattedLogs = response.data.map(result => ({
+              id: result.pick_id,
+              date: result.game_date,
+              sport: result.league,
+              bet: "Gary's Pick",
+              type: 'moneyline',
+              result: result.result,
+              amount: 100, // Example bet amount
+              odds: -110, // Example odds
+              payout: result.result === 'won' ? 190 : 0, // Example payout
+              score: result.final_score,
+              status: result.result // Using result as status
+            }));
+            
+            setBettingLog(formattedLogs);
+          }
         }
-
-        setSportsBreakdown(sportStats);
       } catch (error) {
-        console.error('Error fetching sports breakdown:', error);
+        console.error('Error fetching Gary performance data:', error);
       }
     };
 
-    fetchSportsBreakdown();
-  }, []);
-
-  useEffect(() => {
-    const fetchBettingHistory = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('wagers')
-          .select('*')
-          .order('placed_date', { ascending: false });
-
-        if (error) throw error;
-
-        setBettingLog(data);
-
-        const totalBets = data.length;
-        const wonBets = data.filter(bet => bet.status === 'won').length;
-        const lostBets = data.filter(bet => bet.status === 'lost').length;
-        const totalWagered = data.reduce((sum, bet) => sum + bet.amount, 0);
-        const averageBet = totalBets > 0 ? totalWagered / totalBets : 0;
-        const winRate = totalBets > 0 ? (wonBets / totalBets) * 100 : 0;
-        const record = `${wonBets}-${lostBets}`;
-
-        // Process data for sport performance chart
-        const sportStats = {};
-        data.forEach(bet => {
-          if (!bet.sport) return;
-          
-          if (!sportStats[bet.sport]) {
-            sportStats[bet.sport] = { wins: 0, losses: 0 };
-          }
-          
-          if (bet.status === 'won') {
-            sportStats[bet.sport].wins++;
-          } else if (bet.status === 'lost') {
-            sportStats[bet.sport].losses++;
-          }
-        });
-
-        // Convert to array format for chart
-        const sportPerformance = Object.keys(sportStats).map(sport => ({
-          sport,
-          wins: sportStats[sport].wins,
-          losses: sportStats[sport].losses,
-          total: sportStats[sport].wins + sportStats[sport].losses
-        }));
-
-        // Sort by total number of bets descending
-        sportPerformance.sort((a, b) => b.total - a.total);
-
-        // Process data for bet type performance chart
-        const betTypeStats = {};
-        data.forEach(bet => {
-          if (!bet.bet_type) return;
-          
-          const betType = bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1);
-          
-          if (!betTypeStats[betType]) {
-            betTypeStats[betType] = { wins: 0, losses: 0 };
-          }
-          
-          if (bet.status === 'won') {
-            betTypeStats[betType].wins++;
-          } else if (bet.status === 'lost') {
-            betTypeStats[betType].losses++;
-          }
-        });
-
-        // Convert to array format for chart
-        const betTypePerformance = Object.keys(betTypeStats).map(betType => ({
-          betType,
-          wins: betTypeStats[betType].wins,
-          losses: betTypeStats[betType].losses,
-          total: betTypeStats[betType].wins + betTypeStats[betType].losses
-        }));
-
-        // Sort by total number of bets descending
-        betTypePerformance.sort((a, b) => b.total - a.total);
-
-        setBankrollStats(prevStats => ({
-          ...prevStats,
-          totalBets,
-          winRate: parseFloat(winRate.toFixed(1)),
-          averageBet: Math.round(averageBet),
-          record,
-          sportPerformance,
-          betTypePerformance
-        }));
-      } catch (error) {
-        console.error('Error fetching betting history:', error);
-      }
-    };
-
-    fetchBettingHistory();
+    // Only fetch Gary's performance data
+    fetchGaryPerformance();
   }, []);
 
   const filteredBettingLog = bettingLog.filter(bet =>
     activeBettingFilter === 'all' ? true : bet.status === activeBettingFilter
   );
 
-  // Using real data from Supabase queries
+  // Prepare stats for UI components
   const stats = {
     bankroll: bankrollStats.currentBankroll,
     roi: bankrollStats.currentRoi,
-    record: bankrollStats.record || '0-0', // Real win-loss record from wagers
-    winLoss: `${bankrollStats.winRate}%`,
+    record: garyPerformance.summary.record || '0-0',
+    winLoss: `${garyPerformance.summary.winRate || 0}%`,
     equityHistory: [
       { date: '2025-04-01', value: 10000 },
       { date: '2025-04-07', value: 11200 },
       { date: '2025-04-14', value: 10800 },
       { date: '2025-04-21', value: 12500 },
     ],
-    // Using real processed data for sports performance
-    sportPerformance: bankrollStats.sportPerformance || [],
-    // Using real processed data for bet type performance
-    betTypePerformance: bankrollStats.betTypePerformance || [],
+    // Using Gary's performance data for sports performance
+    sportPerformance: sportsBreakdown.map(sport => ({
+      sport: sport.name,
+      wins: sport.wins,
+      losses: sport.losses,
+      total: sport.total
+    })),
+    // Example data for bet type performance
+    betTypePerformance: [
+      { betType: 'Moneyline', wins: garyPerformance.summary.wins || 0, losses: garyPerformance.summary.losses || 0 }
+    ],
     confidenceBuckets: [
       { range: 0.9, count: 12 },
       { range: 0.8, count: 18 },
       { range: 0.7, count: 8 },
       { range: 0.6, count: 6 },
     ],
-    sportBreakdown: [
-      { sport: 'NBA', count: 14, color: '#2563EB' },
-      { sport: 'MLB', count: 10, color: '#10B981' },
-      { sport: 'NHL', count: 8, color: '#F59E42' },
-      { sport: 'NFL', count: 6, color: '#EF4444' },
-    ],
-    recentPicks: bettingLog.slice(0, 10).map(bet => ({
-      date: bet.placed_date ? new Date(bet.placed_date).toLocaleDateString() : '',
-      away: bet.picks?.away || '',
-      home: bet.picks?.home || '',
-      pick: bet.picks?.pick || '',
+    sportBreakdown: sportsBreakdown.map((sport, index) => {
+      const colors = ['#2563EB', '#10B981', '#F59E42', '#EF4444'];
+      return {
+        sport: sport.name,
+        count: sport.total,
+        color: colors[index % colors.length]
+      };
+    }),
+    recentPicks: filteredBettingLog.slice(0, 10).map(bet => ({
+      date: bet.date ? new Date(bet.date).toLocaleDateString() : '',
+      away: bet.away || '',
+      home: bet.home || '',
+      pick: bet.bet || '',
       confidence: bet.confidence || 0.7,
-      won: bet.status === 'won',
+      won: bet.result === 'won',
     })),
   };
 
   return (
     <div className="pt-24 pb-12 px-0 max-w-full mx-auto min-h-screen text-white grid grid-cols-12 gap-4 bg-gradient-to-br from-[#10141b] via-[#1e2330] to-[#21243b]">
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#10141b] via-[#1e2330] to-[#21243b] opacity-90"></div>
+      
       {/* KPI Cards */}
       <div className="col-span-12 mb-2">
         <BillfoldKPI stats={stats} />
       </div>
+      
       <div className="col-span-12 my-2 border-t border-gray-800"></div>
+      
       {/* Charts - Full width with no padding */}
       <div className="col-span-12 mb-6 w-full px-0">
         <BillfoldCharts 
@@ -242,10 +166,34 @@ export function Billfold() {
           betTypePerformance={stats.betTypePerformance}
         />
       </div>
-      <div className="col-span-12 my-2 border-t border-gray-800"></div>
-      {/* Betting History Table */}
-      <div className="col-span-12">
-        <BillfoldPicksTable picks={stats.recentPicks} />
+      
+      {/* Filters and Betting Log Table */}
+      <div className="col-span-12 mb-6">
+        <div className="mb-4 flex space-x-2">
+          <button 
+            className={`px-4 py-2 rounded-md ${activeBettingFilter === 'all' ? 'bg-blue-600' : 'bg-gray-700'}`}
+            onClick={() => setActiveBettingFilter('all')}
+          >
+            All
+          </button>
+          <button 
+            className={`px-4 py-2 rounded-md ${activeBettingFilter === 'won' ? 'bg-green-600' : 'bg-gray-700'}`}
+            onClick={() => setActiveBettingFilter('won')}
+          >
+            Wins
+          </button>
+          <button 
+            className={`px-4 py-2 rounded-md ${activeBettingFilter === 'lost' ? 'bg-red-600' : 'bg-gray-700'}`}
+            onClick={() => setActiveBettingFilter('lost')}
+          >
+            Losses
+          </button>
+        </div>
+        
+        <BillfoldPicksTable 
+          bettingLog={filteredBettingLog}
+          title="Gary's Pick History"
+        />
       </div>
     </div>
   );
