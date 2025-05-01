@@ -685,19 +685,19 @@ function RealGaryPicks() {
                                         
                                         {/* Right side content */}
                                         <div style={{
-                                          position: 'absolute',
-                                          right: 0,
-                                          top: 0,
-                                          bottom: 0,
-                                          width: '30%',
-                                          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
-                                          padding: '1.5rem 1rem',
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          justifyContent: 'space-between',
-                                          alignItems: 'center',
-                                          background: 'rgba(0, 0, 0, 0.15)'
-                                        }}>
+                                           position: 'absolute',
+                                           right: 0,
+                                           top: 0,
+                                           bottom: 0,
+                                           width: '30%',
+                                           borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+                                           padding: '1.5rem 1rem',
+                                           display: 'flex',
+                                           flexDirection: 'column',
+                                           justifyContent: 'space-between',
+                                           alignItems: 'center',
+                                           background: 'transparent'
+                                         }}>
                                            {/* Game time section */}
                                            <div style={{ 
                                              textAlign: 'center',
@@ -725,21 +725,23 @@ function RealGaryPicks() {
                                             </div>
                                           </div>
                                           
-                                          {/* Gary Emblem centered */}
+                                          {/* Gary Emblem centered - no background */}
                                           <div style={{
                                             display: 'flex',
                                             justifyContent: 'center',
                                             marginTop: 'auto',
-                                            marginBottom: 'auto'
+                                            marginBottom: 'auto',
+                                            background: 'transparent'
                                           }}>
                                             <img 
                                               src={GaryEmblem} 
                                               alt="Gary Emblem"
                                               style={{
-                                                width: 90, /* 80% bigger */
-                                                height: 90, /* 80% bigger */
+                                                width: 108, /* 20% bigger than previous 90px */
+                                                height: 108, /* 20% bigger than previous 90px */
                                                 objectFit: 'contain',
-                                                opacity: 0.85,
+                                                opacity: 1,
+                                                background: 'transparent'
                                               }}
                                             />
                                           </div>
