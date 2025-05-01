@@ -16,6 +16,7 @@ import { HowItWorks } from "./pages/HowItWorks";
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
+const ResultsAdmin = lazy(() => import('./pages/ResultsAdmin'));
 // Demo component removed - no longer needed
 
 
@@ -116,6 +117,7 @@ function AppContent() {
               {/* Demo route for RetroPickCard - removed as it's no longer needed */}
               {/* Admin routes */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
+              <Route path="/admin/results" element={<ResultsAdmin />} />
             </Routes>
           </Suspense>
         </div>
