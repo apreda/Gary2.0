@@ -690,7 +690,7 @@ function RealGaryPicks() {
                                            top: 0,
                                            bottom: 0,
                                            width: '30%',
-                                           borderLeft: '1.5px solid #bfa142', /* 50% thicker gold border */
+                                           borderLeft: '2.25px solid #bfa142', /* Made even thicker (50% more) */
                                            padding: '1.5rem 1rem',
                                            display: 'flex',
                                            flexDirection: 'column',
