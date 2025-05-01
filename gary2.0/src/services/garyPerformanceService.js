@@ -139,9 +139,14 @@ export const garyPerformanceService = {
       const recordedResults = [];
       let validResultsCount = 0;
 
+      // Debug output to see the structure of results
+      console.log('Results structure for matching:', JSON.stringify(results, null, 2));
+      
       for (const result of results) {
         // Skip invalid results
         if (!result.pick || !result.result) continue;
+        
+        console.log(`Processing result: ${JSON.stringify(result)}`);
 
         // Replace special characters in pick string to match original when searching
         const normalizedPickText = result.pick.replace(/\s+/g, ' ').trim();
