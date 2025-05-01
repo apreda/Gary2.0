@@ -153,7 +153,6 @@ export const garyPerformanceService = {
             pick_id: pickId,
             game_date: date,
             league: league,
-            pick_details: result.pick,
             result: result.result,
             final_score: result.score || 'N/A'
           })
