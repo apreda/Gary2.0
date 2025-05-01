@@ -228,70 +228,61 @@ export const Billfold = () => {
           </div>
         </div>
           
-        {/* Sport Performance Section - Enhanced with more accents */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-3 mb-4 border-b border-[#d4af37]/20 pb-3">
-            <div className="w-1.5 h-6 bg-[#d4af37] rounded-sm mr-1"></div>
-            <h3 className="text-lg font-bold text-black">SPORT PERFORMANCE</h3>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200/60">
-            <div className="space-y-6">
-              {stats.sportPerformance.map((sport, index) => {
-                // Calculate bar width based on real data and ensure it's displayed correctly
-                const totalGames = sport.wins + sport.losses;
-                const winPercentage = totalGames > 0 ? (sport.wins / totalGames * 100) : 0;
-                
-                // Get sport icon
-                const sportIcon = 
-                  sport.sport === 'NBA' ? '🏀' : 
-                  sport.sport === 'MLB' ? '⚾' :
-                  sport.sport === 'NFL' ? '🏈' :
-                  sport.sport === 'NHL' ? '🏒' : '🎯';
+        {/* Two-column layout for Sport Performance and Bet Type Distribution */}
+        <div className="grid grid-cols-2 gap-6 mb-8">
+          {/* Sport Performance - More sleek and professional */}
+          <div>
+            <div className="flex items-center mb-4 border-b border-[#d4af37]/20 pb-2">
+              <h3 className="text-base font-bold text-black uppercase tracking-wider">Sport Performance</h3>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200/60 overflow-hidden">
+              <div className="divide-y divide-gray-100">
+                {stats.sportPerformance.map((sport, index) => {
+                  // Calculate bar width based on real data
+                  const totalGames = sport.wins + sport.losses;
+                  const winPercentage = totalGames > 0 ? (sport.wins / totalGames * 100) : 0;
                   
-                return (
-                  <div key={index} className="space-y-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center">
-                        <span className="mr-2 text-xl">{sportIcon}</span>
-                        <span className="text-black font-medium text-lg">{sport.sport}</span>
+                  return (
+                    <div key={index} className="py-3 px-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-black font-medium">{sport.sport}</span>
+                        <div className="flex items-center text-sm">
+                          <span className="text-win font-medium mr-2">W {sport.wins}</span>
+                          <span className="text-loss font-medium">L {sport.losses}</span>
+                        </div>
                       </div>
-                      <div className="flex space-x-4">
-                        <span className="bg-green-50 text-win font-medium px-2 py-1 rounded-md">W {sport.wins}</span>
-                        <span className="bg-red-50 text-loss font-medium px-2 py-1 rounded-md">L {sport.losses}</span>
+                      <div className="h-2 bg-gray-100 rounded-sm overflow-hidden">
+                        <div 
+                          className="h-full bg-[#d4af37]" 
+                          style={{ width: `${winPercentage}%` }}
+                        ></div>
                       </div>
                     </div>
-                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
-                      <div 
-                        className="h-full bg-gradient-to-r from-[#d4af37]/80 to-[#d4af37] rounded-full shadow-sm" 
-                        style={{ width: `${winPercentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
           
-        {/* Bet Type Distribution - Enhanced with accent colors */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-3 mb-4 border-b border-[#d4af37]/20 pb-3">
-            <div className="w-1.5 h-6 bg-[#d4af37] rounded-sm mr-1"></div>
-            <h3 className="text-lg font-bold text-black">BET TYPE DISTRIBUTION</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-6">
-            <div className="bg-gradient-to-br from-white to-[#d4af37]/5 rounded-lg p-6 shadow-md border border-[#d4af37]/20 flex items-center space-x-4 hover:shadow-lg transition-all duration-200">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#d4af37] to-[#c69c21] rounded-full flex items-center justify-center shadow-md">
-                <img src="/coin2.png" alt="Gary Coin" className="w-10 h-10" />
-              </div>
-              <div>
-                <p className="text-lg font-medium text-black">We're due for a comeback</p>
-              </div>
+          {/* Bet Type Distribution - More sleek and professional */}
+          <div>
+            <div className="flex items-center mb-4 border-b border-[#d4af37]/20 pb-2">
+              <h3 className="text-base font-bold text-black uppercase tracking-wider">Bet Type Distribution</h3>
             </div>
-            <div className="bg-gradient-to-br from-white to-[#d4af37]/5 rounded-lg p-6 shadow-md border border-[#d4af37]/20 hover:shadow-lg transition-all duration-200">
-              <div className="flex flex-col items-center justify-center">
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[#d4af37] to-[#c69c21] flex-shrink-0 shadow-lg"></div>
-                <div className="mt-3 text-black font-medium">DISTRIBUTION</div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200/60 h-full">
+              <div className="grid grid-cols-2 h-full">
+                <div className="p-5 flex items-center border-r border-gray-100">
+                  <div className="w-12 h-12 bg-[#d4af37] rounded-full flex items-center justify-center shadow-sm mr-4">
+                    <img src="/coin2.png" alt="Gary Coin" className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <p className="text-base font-medium text-black">We're due for a comeback</p>
+                  </div>
+                </div>
+                <div className="p-5 flex flex-col items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-[#d4af37] flex-shrink-0 shadow-sm"></div>
+                  <div className="mt-2 text-sm text-black font-medium">DISTRIBUTION</div>
+                </div>
               </div>
             </div>
           </div>
