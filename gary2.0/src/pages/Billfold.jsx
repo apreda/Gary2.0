@@ -4,6 +4,7 @@ import BillfoldKPI from '../components/BillfoldKPI.jsx';
 import BillfoldCharts from '../components/BillfoldCharts.jsx';
 import BillfoldPicksTable from '../components/BillfoldPicksTable.jsx';
 import { garyPerformanceService } from '../services/garyPerformanceService.js';
+import { FaChartPie, FaHistory } from 'react-icons/fa';
 
 export function Billfold() {
   // Stats for the KPI component
@@ -166,51 +167,96 @@ export function Billfold() {
   };
 
   return (
-    <div className="pt-24 pb-12 px-0 max-w-full mx-auto min-h-screen text-white grid grid-cols-12 gap-4 bg-gradient-to-br from-[#10141b] via-[#1e2330] to-[#21243b]">
-      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#10141b] via-[#1e2330] to-[#21243b] opacity-90"></div>
-      
-      {/* KPI Cards */}
-      <div className="col-span-12 mb-2">
-        <BillfoldKPI stats={stats} />
+    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
+      {/* Background effects */}
+      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#f7f4ed]/20 via-transparent to-transparent" />
+        <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-br from-[#fffbe9]/15 via-transparent to-transparent" />
+        <div className="absolute bottom-24 left-0 w-full h-24 bg-gradient-to-t from-[#f7f4ed]/15 via-transparent to-transparent blur-2xl opacity-60" />
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#d4af37]/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#d4af37]/10 blur-3xl" />
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
+        <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#18181b]/80 to-black/95 opacity-95" />
       </div>
       
-      <div className="col-span-12 my-2 border-t border-gray-800"></div>
-      
-      {/* Charts - Full width with no padding */}
-      <div className="col-span-12 mb-6 w-full px-0">
-        <BillfoldCharts 
-          sportPerformance={stats.sportPerformance}
-          betTypePerformance={stats.betTypePerformance}
-        />
-      </div>
-      
-      {/* Filters and Betting Log Table */}
-      <div className="col-span-12 mb-6">
-        <div className="mb-4 flex space-x-2">
-          <button 
-            className={`px-4 py-2 rounded-md ${activeBettingFilter === 'all' ? 'bg-blue-600' : 'bg-gray-700'}`}
-            onClick={() => setActiveBettingFilter('all')}
-          >
-            All
-          </button>
-          <button 
-            className={`px-4 py-2 rounded-md ${activeBettingFilter === 'won' ? 'bg-green-600' : 'bg-gray-700'}`}
-            onClick={() => setActiveBettingFilter('won')}
-          >
-            Wins
-          </button>
-          <button 
-            className={`px-4 py-2 rounded-md ${activeBettingFilter === 'lost' ? 'bg-red-600' : 'bg-gray-700'}`}
-            onClick={() => setActiveBettingFilter('lost')}
-          >
-            Losses
-          </button>
+      <div className="pt-24 pb-12 px-4 md:px-8 max-w-7xl mx-auto min-h-screen text-white">
+        {/* Header with golden accents */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl md:text-5xl font-bold mb-2">
+            The <span className="text-[#d4af37] text-glow">Billfold</span>
+          </h1>
+          <p className="text-[#c0c0c0] max-w-2xl mx-auto text-lg">
+            Track Gary's picks and performance metrics in real-time
+          </p>
+          <div className="w-24 h-1 bg-[#d4af37] mx-auto my-6 relative">
+            <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-[#d4af37]"></div>
+            <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-[#d4af37]"></div>
+            <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-[#d4af37]"></div>
+            <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-[#d4af37]"></div>
+          </div>
         </div>
         
-        <BillfoldPicksTable 
-          bettingLog={filteredBettingLog}
-          title="Gary's Pick History"
-        />
+        {/* KPI Cards */}
+        <div className="mb-10">
+          <BillfoldKPI stats={stats} />
+        </div>
+        
+        {/* Section Divider */}
+        <div className="flex items-center mb-8">
+          <div className="flex-grow h-px bg-gray-800"></div>
+          <div className="mx-4 flex items-center">
+            <FaChartPie className="text-[#d4af37] mr-2" />
+            <span className="text-xl font-semibold text-white">Performance Metrics</span>
+          </div>
+          <div className="flex-grow h-px bg-gray-800"></div>
+        </div>
+        
+        {/* Charts - With elegant container */}
+        <div className="mb-10 p-6 rounded-xl bg-[#111]/40 border border-gray-800 backdrop-blur-sm shadow-lg">
+          <BillfoldCharts 
+            sportPerformance={stats.sportPerformance}
+            betTypePerformance={stats.betTypePerformance}
+          />
+        </div>
+        
+        {/* Section Divider */}
+        <div className="flex items-center mb-8">
+          <div className="flex-grow h-px bg-gray-800"></div>
+          <div className="mx-4 flex items-center">
+            <FaHistory className="text-[#d4af37] mr-2" />
+            <span className="text-xl font-semibold text-white">Pick History</span>
+          </div>
+          <div className="flex-grow h-px bg-gray-800"></div>
+        </div>
+        
+        {/* Filters and Betting Log Table */}
+        <div className="mb-10 p-6 rounded-xl bg-[#111]/40 border border-gray-800 backdrop-blur-sm shadow-lg">
+          <div className="mb-6 flex space-x-2">
+            <button 
+              className={`px-4 py-2 rounded-md transition-all duration-200 ${activeBettingFilter === 'all' ? 'bg-[#d4af37] text-black font-semibold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+              onClick={() => setActiveBettingFilter('all')}
+            >
+              All Picks
+            </button>
+            <button 
+              className={`px-4 py-2 rounded-md transition-all duration-200 ${activeBettingFilter === 'won' ? 'bg-green-600 text-white font-semibold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+              onClick={() => setActiveBettingFilter('won')}
+            >
+              Wins
+            </button>
+            <button 
+              className={`px-4 py-2 rounded-md transition-all duration-200 ${activeBettingFilter === 'lost' ? 'bg-red-600 text-white font-semibold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+              onClick={() => setActiveBettingFilter('lost')}
+            >
+              Losses
+            </button>
+          </div>
+          
+          <BillfoldPicksTable 
+            bettingLog={filteredBettingLog}
+            title="Gary's Picks"
+          />
+        </div>
       </div>
     </div>
   );
