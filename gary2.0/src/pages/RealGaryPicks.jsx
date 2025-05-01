@@ -684,22 +684,24 @@ function RealGaryPicks() {
                                           </div>
                                         </div>
                                         
-                                        {/* Right side content - elevated appearance */}
-                                         <div style={{
+                                        {/* Right side content - prominently elevated appearance */}
+                                        <div style={{
                                             position: 'absolute',
                                             right: 0,
-                                            top: 0,
-                                            bottom: 0,
+                                            top: '4px',  /* Shifted slightly up to create elevation */
+                                            bottom: '4px', /* Shifted up from bottom to create elevation */
                                             width: '30%',
-                                            borderLeft: '2.25px solid #bfa142', /* Made even thicker (50% more) */
+                                            borderLeft: '2.25px solid #bfa142', /* Gold border */
                                             padding: '1.5rem 1rem',
                                             display: 'flex',
                                             flexDirection: 'column',
                                             justifyContent: 'space-between',
                                             alignItems: 'center',
-                                            background: 'linear-gradient(135deg, rgba(42, 42, 42, 0.4) 0%, rgba(30, 30, 30, 0.2) 100%)',
-                                            boxShadow: 'inset 3px 0 8px rgba(0, 0, 0, 0.25), 0 0 15px rgba(191, 161, 66, 0.025)',
-                                            borderRadius: '0 16px 16px 0'
+                                            background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
+                                            boxShadow: '-10px 0 20px rgba(0, 0, 0, 0.5), 0 5px 20px rgba(0, 0, 0, 0.4), 0 0 25px rgba(191, 161, 66, 0.12)', /* Very pronounced shadow */
+                                            borderRadius: '0 16px 16px 0',
+                                            zIndex: 2, /* Ensure it appears above other content */
+                                            transform: 'translateZ(10px)', /* 3D effect */
                                           }}>
                                            {/* Game time section */}
                                            <div style={{ 
