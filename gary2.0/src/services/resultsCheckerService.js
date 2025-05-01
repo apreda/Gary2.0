@@ -65,33 +65,26 @@ export const resultsCheckerService = {
       
       console.log('Using OpenAI API key from openaiService');
       
-      // Prepare data for the OpenAI API call
+      // Prepare data for the OpenAI API call - using standard chat completion without tools
       const data = {
-        model: "gpt-4o", // or any model with web browsing capabilities
+        model: "gpt-4", // Using standard GPT-4 model
         messages: [
           {
             role: "system",
-            content: "You are a sports betting analyst who can accurately determine if bets won and lost based on game results. Use the web browser tool to check actual game results from ESPN, CBS Sports, or other reliable sports sites."
+            content: "You are a sports betting analyst who can accurately determine if bets won and lost based on game results. You have access to all sports results up to your knowledge cutoff."
           },
           {
             role: "user",
-            content: `Here are my sports picks from ${displayDate}. I need you to check if each pick won, lost, or pushed.
+            content: `Here are my sports picks from ${displayDate}. I need you to check if each pick won, lost, or pushed based on your knowledge of sports results.
 
-For each pick, provide THE EXACT PICK TEXT followed by either "won", "lost", or "push", and the final score when applicable.
+For each pick, respond with the EXACT PICK TEXT followed by either "won", "lost", or "push", and the final score when applicable.
 
 Response format must be structured as a JSON array of objects, each with fields 'pick', 'result', and 'score'.
 
 Picks: ${JSON.stringify(picks, null, 2)}`
           }
         ],
-        tools: [
-          {
-            type: "web_browsing",
-            config: {
-              search_results_max_results: 5
-            }
-          }
-        ]
+        temperature: 0.3
       };
       
       // Make the API call
