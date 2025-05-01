@@ -75,16 +75,17 @@ const extractJsonFromText = (text) => {
     const endPos = text.lastIndexOf('}]');
     
     if (startPos !== -1 && endPos !== -1 && endPos > startPos) {
-      // Extract what looks like a JSON array
-      const jsonText = text.substring(startPos, endPos + 2);
-      console.log('Found possible JSON array by indexes:', jsonText.substring(0, 100) + '...');
-      
-      try {
-        const parsedJson = JSON.parse(jsonText);
-        console.log('Successfully parsed JSON from indexes');
-        return parsedJson;
-      } catch (arrayError) {
-        console.error('Error parsing JSON array by indexes:', arrayError);
+      // Use regex fallback to extract JSON array
+      const jsonMatch = text.match(/\[(\s\S)*\]/); // This matches anything between [ and ]
+      if (jsonMatch) {
+        try {
+          console.log('Found JSON array with regex:', jsonMatch[0].substring(0, 100) + '...');
+          const jsonArray = JSON.parse(jsonMatch[0]);
+          console.log('Successfully parsed JSON array with regex');
+          return jsonArray;
+        } catch (e) {
+          console.log('Failed to parse JSON array with regex:', e.message);
+        }
       }
     }
     
@@ -361,26 +362,29 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
           } else {
             // Verify these results are for the current batch by checking pick content
             // This is critical to prevent duplicate results from being stored
-            const validResults = [];
-            const batchPickTexts = batchPicks.map(pick => pick.pick);
+            const batchResultsValid = batchResults.every(result => {
+              // Find the corresponding pick 
+              // If there's no pick property, consider it invalid
+              if (!result.pick) return false;
+
+              const pickText = extractPickText(result.pick);
+              if (!pickText) return false;
+              // Check if this pick text exists in any of the original picks for this batch
+              return batchPicks.some(pick => pick.pick && pick.pick.includes(pickText));
+            });
             
-            for (const result of batchResults) {
-              // Only include results that match picks from this batch
-              if (batchPickTexts.includes(result.pick)) {
-                validResults.push(result);
-              } else {
-                console.log(`Skipping result not in this batch: ${result.pick}`);
-              }
+            if (batchResultsValid) {
+              console.log(`Successfully validated ${batchResults.length} results from batch ${i/BATCH_SIZE + 1}`);
+              allResults.push(...batchResults);
+            } else {
+              console.log(`Skipping invalid results for batch ${i/BATCH_SIZE + 1}`);
             }
             
-            console.log(`Successfully validated ${validResults.length} results from batch ${i/BATCH_SIZE + 1}`);
-            allResults.push(...validResults);
-          }
-          
-          // Add a short delay between batches to avoid rate limiting
-          if (i + BATCH_SIZE < picks.length) {
-            console.log('Waiting 2 seconds before processing next batch...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Add a short delay between batches to avoid rate limiting
+            if (i + BATCH_SIZE < picks.length) {
+              console.log('Waiting 2 seconds before processing next batch...');
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
           }
         } catch (batchError) {
           console.error(`Error evaluating batch ${i/BATCH_SIZE + 1}:`, batchError);
@@ -407,7 +411,7 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
       console.log(`Recording ${results.length} results for pick ID ${pickId}`);
       
       // Format results for insert
-      const recordsToInsert = results.map(result => ({
+      let recordsToInsert = results.map(result => ({
         pick_id: pickId,
         game_date: date,
         league: result.league || '',
@@ -422,7 +426,7 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
       // Insert records into game_results table with RLS bypass using the service role key
       try {
         // First check if any of these picks already have results to avoid duplicates
-        const { data: existingData } = await supabase
+        const { data: existingData } = await adminSupabase
           .from('game_results')
           .select('pick_id')
           .eq('game_date', date)
@@ -432,34 +436,49 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
           console.log(`Found ${existingData.length} existing results for these picks, skipping those`);
           // Filter out picks that already have results
           const existingPickIds = existingData.map(d => d.pick_id);
-          recordsToInsert = recordsToInsert.filter(r => !existingPickIds.includes(r.pick_id));
+          const filteredRecordsToInsert = recordsToInsert.filter(r => !existingPickIds.includes(r.pick_id));
+          // Insert new results with explicit created_at and updated_at timestamps
+          const timestamp = new Date().toISOString();
+          const recordsWithTimestamps = filteredRecordsToInsert.map(record => ({
+            ...record,
+            created_at: timestamp,
+            updated_at: timestamp
+          }));
+          
+          const { data, error } = await adminSupabase
+            .from('game_results')
+            .insert(recordsWithTimestamps)
+            .select();
+          
+          if (error) {
+            console.error('Database error inserting results:', error);
+            throw new Error(`Error inserting results: ${error.message}`);
+          }
+          
+          console.log(`Successfully recorded ${data.length} results`);
+          return data;
+        } else {
+          // Insert new results with explicit created_at and updated_at timestamps
+          const timestamp = new Date().toISOString();
+          const recordsWithTimestamps = recordsToInsert.map(record => ({
+            ...record,
+            created_at: timestamp,
+            updated_at: timestamp
+          }));
+          
+          const { data, error } = await adminSupabase
+            .from('game_results')
+            .insert(recordsWithTimestamps)
+            .select();
+          
+          if (error) {
+            console.error('Database error inserting results:', error);
+            throw new Error(`Error inserting results: ${error.message}`);
+          }
+          
+          console.log(`Successfully recorded ${data.length} results`);
+          return data;
         }
-        
-        if (recordsToInsert.length === 0) {
-          console.log('No new results to insert');
-          return [];
-        }
-        
-        // Insert new results with explicit created_at and updated_at timestamps
-        const timestamp = new Date().toISOString();
-        const recordsWithTimestamps = recordsToInsert.map(record => ({
-          ...record,
-          created_at: timestamp,
-          updated_at: timestamp
-        }));
-        
-        const { data, error } = await supabase
-          .from('game_results')
-          .insert(recordsWithTimestamps)
-          .select();
-        
-        if (error) {
-          console.error('Database error inserting results:', error);
-          throw new Error(`Error inserting results: ${error.message}`);
-        }
-        
-        console.log(`Successfully recorded ${data.length} results`);
-        return data;
       } catch (dbError) {
         console.error('Error in database operation:', dbError);
         throw dbError;
@@ -543,7 +562,8 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
         try {
           // Check if the function exists before calling it
           if (typeof garyPerformanceService.recordPickResults === 'function') {
-            await garyPerformanceService.recordPickResults(picksResponse.date);
+            // Pass the actual results array to the recordPickResults function
+            await garyPerformanceService.recordPickResults(resultsResponse.results);
             console.log('Successfully updated performance stats');
           } else {
             console.log('Performance stats update skipped - function not available');
