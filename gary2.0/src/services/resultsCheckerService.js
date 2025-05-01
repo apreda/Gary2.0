@@ -27,7 +27,7 @@ const extractJsonFromText = (text) => {
   }
   
   // Save full response to debug log for analysis
-  console.log('FULL PERPLEXITY RESPONSE:', text);
+  console.log('FULL OPENAI RESPONSE:', text);
   console.log('Attempting to parse JSON from text:', text.substring(0, 200) + '...');
   
   try {
