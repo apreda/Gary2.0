@@ -452,8 +452,17 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       
       // Step 3: Fall back to Perplexity for any picks that weren't resolved by TheSportsDB API
       const unresolvedPicks = picksResponse.data.filter(pick => {
-        // Check if this pick wasn't resolved by TheSportsDB API
-        return !sportsDbApiResults.some(result => result.pick === pick.pick);
+        // Check if this pick wasn't resolved by TheSportsDB API using normalized comparison
+        return !sportsDbApiResults.some(result => {
+          if (!result.pick || !pick.pick) return false;
+          // Normalize both strings for flexible comparison
+          const normalizedResultPick = result.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+          const normalizedOriginalPick = pick.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+          
+          // Check if either string includes the other for partial matching
+          return normalizedResultPick.includes(normalizedOriginalPick) || 
+                 normalizedOriginalPick.includes(normalizedResultPick);
+        });
       });
       
       let perplexityResults = [];
@@ -477,15 +486,37 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       const allResults = [...sportsDbApiResults, ...perplexityResults];
       console.log(`Combined results: ${allResults.length} total (${sportsDbApiResults.length} from TheSportsDB API, ${perplexityResults.length} from Perplexity)`);
       
-      // Ensure each result has a league field
+      // Ensure each result has a league field and uses the original pick text
       const resultsWithLeague = allResults.map(result => {
-        // If result doesn't have a league field, find the original pick to get its league
-        if (!result.league) {
-          const originalPick = picksResponse.data.find(p => p.pick === result.pick);
-          if (originalPick) {
-            result.league = originalPick.league;
+        // Find the matching original pick using flexible matching
+        const matchingPick = picksResponse.data.find(p => {
+          if (!p.pick || !result.pick) return false;
+          // Normalize both strings for comparison
+          const normalizedResultPick = result.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+          const normalizedOriginalPick = p.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+          
+          return normalizedResultPick.includes(normalizedOriginalPick) || 
+                 normalizedOriginalPick.includes(normalizedResultPick);
+        });
+        
+        if (matchingPick) {
+          // Use the original pick text from the database to ensure consistency
+          result.pick = matchingPick.pick;
+          
+          // If result doesn't have a league field, get it from the original pick
+          if (!result.league) {
+            result.league = matchingPick.league;
+          }
+          
+          // Add home/away team info if available in the original pick
+          if (matchingPick.homeTeam && !result.homeTeam) {
+            result.homeTeam = matchingPick.homeTeam;
+          }
+          if (matchingPick.awayTeam && !result.awayTeam) {
+            result.awayTeam = matchingPick.awayTeam;
           }
         }
+        
         return result;
       });
 
