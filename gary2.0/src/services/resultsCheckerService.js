@@ -340,11 +340,13 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
         
         try {
           // Use OpenAI instead of Perplexity for better JSON handling and reliability
-          const responseText = await openaiService.getCompletion(prompt, {
+          const responseText = await openaiService.generateResponse([{
+            role: 'user',
+            content: prompt
+          }], {
             model: 'gpt-3.5-turbo-1106', // Use a model with JSON mode capability
             temperature: 0.1, // Low temperature for more deterministic responses
-            response_format: { type: 'json_object' }, // Force JSON response format
-            max_tokens: 1000
+            maxTokens: 1000 // Note the camelCase format to match the API
           });
           if (!responseText) {
             console.error(`No response from OpenAI for batch ${i/BATCH_SIZE + 1}`);
