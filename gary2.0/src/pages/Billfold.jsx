@@ -167,52 +167,52 @@ export function Billfold() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
+    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible bg-[#0F172A]">
       {/* Background effects */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#f7f4ed]/20 via-transparent to-transparent" />
-        <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-br from-[#fffbe9]/15 via-transparent to-transparent" />
-        <div className="absolute bottom-24 left-0 w-full h-24 bg-gradient-to-t from-[#f7f4ed]/15 via-transparent to-transparent blur-2xl opacity-60" />
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#d4af37]/10 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#d4af37]/10 blur-3xl" />
-        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
-        <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#18181b]/80 to-black/95 opacity-95" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1E293B]/30 via-transparent to-transparent" />
+        <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-br from-[#3B82F6]/5 via-transparent to-transparent" />
+        <div className="absolute bottom-24 left-0 w-full h-24 bg-gradient-to-t from-[#1E293B]/15 via-transparent to-transparent blur-2xl opacity-60" />
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#FACC15]/5 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#FACC15]/5 blur-3xl" />
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-15 mix-blend-soft-light" />
+        <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#0F172A]/90 to-[#0F172A] opacity-95" />
       </div>
       
-      <div className="pt-24 pb-12 px-4 md:px-8 max-w-7xl mx-auto min-h-screen text-white">
-        {/* Header with golden accents */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold mb-2">
-            The <span className="text-[#d4af37] text-glow">Billfold</span>
+      <div className="pt-24 pb-12 px-4 md:px-8 max-w-7xl mx-auto min-h-screen text-[#F9FAFB] space-y-12">
+        {/* Header with premium golden accents */}
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+            THE <span className="text-[#FACC15] drop-shadow-[0_0_8px_rgba(250,204,21,0.3)]">BILLFOLD</span>
           </h1>
-          <p className="text-[#c0c0c0] max-w-2xl mx-auto text-lg">
+          <p className="text-[#94A3B8] max-w-2xl mx-auto text-lg font-light tracking-wide">
             Track Gary's picks and performance metrics in real-time
           </p>
-          <div className="w-24 h-1 bg-[#d4af37] mx-auto my-6 relative">
-            <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-[#d4af37]"></div>
-            <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-[#d4af37]"></div>
-            <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-[#d4af37]"></div>
-            <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-[#d4af37]"></div>
+          <div className="w-32 h-1 bg-[#FACC15] mx-auto my-3 relative opacity-80 glow-sm">
+            <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-[#FACC15]"></div>
+            <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-[#FACC15]"></div>
+            <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-[#FACC15]"></div>
+            <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-[#FACC15]"></div>
           </div>
         </div>
         
         {/* KPI Cards */}
-        <div className="mb-10">
+        <div>
           <BillfoldKPI stats={stats} />
         </div>
         
         {/* Section Divider */}
-        <div className="flex items-center mb-8">
-          <div className="flex-grow h-px bg-gray-800"></div>
-          <div className="mx-4 flex items-center">
-            <FaChartPie className="text-[#d4af37] mr-2" />
-            <span className="text-xl font-semibold text-white">Performance Metrics</span>
+        <div className="flex items-center">
+          <div className="flex-grow h-px bg-[#334155]"></div>
+          <div className="mx-4 flex items-center bg-[#1E293B] px-4 py-2 rounded-full shadow-md">
+            <FaChartPie className="text-[#FACC15] mr-2" />
+            <span className="text-lg font-bold uppercase tracking-wider text-white">Performance Metrics</span>
           </div>
-          <div className="flex-grow h-px bg-gray-800"></div>
+          <div className="flex-grow h-px bg-[#334155]"></div>
         </div>
         
-        {/* Charts - With elegant container */}
-        <div className="mb-10 p-6 rounded-xl bg-[#111]/40 border border-gray-800 backdrop-blur-sm shadow-lg">
+        {/* Charts - With elegant glassmorphism container */}
+        <div className="p-6 md:p-8 rounded-xl bg-[#1E293B]/80 border border-[#334155] backdrop-blur-sm shadow-xl">
           <BillfoldCharts 
             sportPerformance={stats.sportPerformance}
             betTypePerformance={stats.betTypePerformance}
@@ -220,32 +220,32 @@ export function Billfold() {
         </div>
         
         {/* Section Divider */}
-        <div className="flex items-center mb-8">
-          <div className="flex-grow h-px bg-gray-800"></div>
-          <div className="mx-4 flex items-center">
-            <FaHistory className="text-[#d4af37] mr-2" />
-            <span className="text-xl font-semibold text-white">Pick History</span>
+        <div className="flex items-center">
+          <div className="flex-grow h-px bg-[#334155]"></div>
+          <div className="mx-4 flex items-center bg-[#1E293B] px-4 py-2 rounded-full shadow-md">
+            <FaHistory className="text-[#FACC15] mr-2" />
+            <span className="text-lg font-bold uppercase tracking-wider text-white">Pick History</span>
           </div>
-          <div className="flex-grow h-px bg-gray-800"></div>
+          <div className="flex-grow h-px bg-[#334155]"></div>
         </div>
         
         {/* Filters and Betting Log Table */}
-        <div className="mb-10 p-6 rounded-xl bg-[#111]/40 border border-gray-800 backdrop-blur-sm shadow-lg">
-          <div className="mb-6 flex space-x-2">
+        <div className="p-6 md:p-8 rounded-xl bg-[#1E293B]/80 border border-[#334155] backdrop-blur-sm shadow-xl">
+          <div className="mb-6 flex flex-wrap gap-3">
             <button 
-              className={`px-4 py-2 rounded-md transition-all duration-200 ${activeBettingFilter === 'all' ? 'bg-[#d4af37] text-black font-semibold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+              className={`px-5 py-2.5 rounded-lg transition-all duration-300 font-medium text-sm ${activeBettingFilter === 'all' ? 'bg-[#FACC15] text-[#0F172A] font-semibold shadow-md shadow-[#FACC15]/20' : 'bg-[#334155] text-gray-300 hover:bg-[#475569]'}`}
               onClick={() => setActiveBettingFilter('all')}
             >
               All Picks
             </button>
             <button 
-              className={`px-4 py-2 rounded-md transition-all duration-200 ${activeBettingFilter === 'won' ? 'bg-green-600 text-white font-semibold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+              className={`px-5 py-2.5 rounded-lg transition-all duration-300 font-medium text-sm ${activeBettingFilter === 'won' ? 'bg-green-500 text-white font-semibold shadow-md shadow-green-500/20' : 'bg-[#334155] text-gray-300 hover:bg-[#475569]'}`}
               onClick={() => setActiveBettingFilter('won')}
             >
               Wins
             </button>
             <button 
-              className={`px-4 py-2 rounded-md transition-all duration-200 ${activeBettingFilter === 'lost' ? 'bg-red-600 text-white font-semibold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+              className={`px-5 py-2.5 rounded-lg transition-all duration-300 font-medium text-sm ${activeBettingFilter === 'lost' ? 'bg-red-500 text-white font-semibold shadow-md shadow-red-500/20' : 'bg-[#334155] text-gray-300 hover:bg-[#475569]'}`}
               onClick={() => setActiveBettingFilter('lost')}
             >
               Losses
