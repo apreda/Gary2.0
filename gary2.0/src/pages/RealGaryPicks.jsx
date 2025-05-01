@@ -752,76 +752,44 @@ function RealGaryPicks() {
                                         color: '#ffffff',
                                         padding: '1.5rem',
                                       }}>
-                                      {/* Card Header */}
-                                      <div style={{ position: 'relative', width: '100%', marginBottom: '1rem' }}>
-                                        {/* Gary's Analysis Banner */}
+                                      {/* Card Header - Pick */}
+                                      <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
+                                        {/* Pick Banner */}
                                         <div style={{ 
                                           backgroundColor: 'rgba(191, 161, 66, 0.15)',
                                           color: '#bfa142',
                                           fontWeight: 'bold',
-                                          fontSize: '1rem',
-                                          padding: '0.6rem 1rem',
+                                          fontSize: '1.25rem',
+                                          padding: '0.8rem 1rem',
                                           textAlign: 'center',
                                           letterSpacing: '0.05rem',
                                           textTransform: 'uppercase',
                                           borderRadius: '8px',
                                         }}>
-                                          GARY'S ANALYSIS
+                                          {pick.pick || 'GARY\'S PICK'}
                                         </div>
                                       </div>
                                       
-                                      {/* Game details header */}
-                                      <div style={{ 
-                                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                                        paddingBottom: '1rem',
-                                        marginBottom: '1rem',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center'
-                                      }}>
-                                        <div>
-                                          <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.25rem' }}>
-                                            {pick.league || 'MLB'}
-                                          </div>
-                                          <div style={{ fontSize: '1.1rem', fontWeight: '600' }}>
-                                            {(pick.homeTeam && pick.awayTeam) ? 
-                                              `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
-                                              (pick.game ? pick.game : 'TBD')}
-                                          </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                          <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.25rem' }}>
-                                            Pick
-                                          </div>
-                                          <div style={{ 
-                                            fontSize: '1.1rem', 
-                                            fontWeight: '600',
-                                            color: '#bfa142'
-                                          }}>
-                                            {pick.pick || 'MISSING PICK'}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Rationale Section */}
+                                      {/* Rationale Section - Expanded */}
                                       <div style={{ 
                                         flex: '1', 
                                         display: 'flex', 
                                         flexDirection: 'column',
-                                      overflowY: 'auto',
-                                      height: 'calc(100% - 170px)',
+                                        overflowY: 'auto',
+                                        height: 'calc(100% - 110px)', /* Increased from 170px since header section is smaller */
+                                        marginBottom: '20px',
                                     }}>
                                       {/* Main Analysis */}
                                       <div style={{ 
                                         backgroundColor: 'rgba(0, 0, 0, 0.2)', 
-                                        padding: '1.5rem', 
+                                        padding: '1.75rem', 
                                         borderRadius: '0.75rem',
                                         border: '1px solid rgba(255, 255, 255, 0.1)',
-                                        fontSize: '0.95rem',
-                                        lineHeight: '1.6',
+                                        fontSize: '1.1rem',  /* Increased font size */
+                                        lineHeight: '1.7',   /* Increased line height */
                                         color: '#fff',
                                         width: '100%',
-                                        maxHeight: '75%',
+                                        height: '100%',     /* Take all available height */
                                         overflowY: 'auto',
                                       }}>
                                         {/* Rationale Heading */}
