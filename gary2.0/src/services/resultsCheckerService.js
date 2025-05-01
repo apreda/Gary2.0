@@ -124,12 +124,21 @@ export const resultsCheckerService = {
       
       console.log('Simplified picks for Perplexity:', simplifiedPicks);
       
-      // Create a formatted query for Perplexity with explicit instructions to search for REAL results only
+      // Create a formatted query for Perplexity with explicit instructions to search for REAL results only with specific sources
       const query = `I need to find REAL RESULTS for these sports picks from ${displayDate}. Search for the actual final scores for these games.
 
-IMPORTANT - ONLY USE REAL RESULTS:
-1. For each pick, search extensively for the actual game that was played on ${displayDate}
-2. Search using multiple sports sites (ESPN, CBS Sports, Yahoo Sports, official league sites)
+IMPORTANT - ONLY USE REAL RESULTS. Search using these official sources:
+- https://www.espn.com/scores
+- https://www.cbssports.com/scores/
+- https://sports.yahoo.com/scores/
+- https://www.nba.com/scores
+- https://www.nfl.com/scores/
+- https://www.mlb.com/scores
+- https://www.ncaa.com/scoreboard
+
+INSTRUCTIONS:
+1. For each pick, search extensively in the above sites for the actual game that was played on ${displayDate}
+2. Check each source listed above until you find the real result
 3. If you cannot find the real result for a game, label it as "unknown" - DO NOT make up any results
 4. For each game with real results, determine if the pick "won", "lost", or was a "push" according to sports betting rules
 5. Include the actual final score for each game with format "Team A score - Team B score"
