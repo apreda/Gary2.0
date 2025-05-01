@@ -39,60 +39,43 @@ export default function BillfoldCharts({
 
   return (
     // Horizontal layout on larger screens, vertical on mobile
-    <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+    <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4"> {/* Reduced gap */}
       {/* Sport Performance Chart */}
       <motion.div
-        className="w-full rounded-xl overflow-hidden shadow-lg relative"
-        whileHover={{ scale: 1.01, boxShadow: '0 8px 32px 0 rgba(212,175,55,0.18)' }}
-        initial={{ opacity: 0, y: 10 }}
+        className="w-full overflow-hidden rounded-md border border-[#333333] bg-[#1a1a1a]"
+        whileHover={{ scale: 1.005 }}
+        initial={{ opacity: 0, y: 5 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        {/* Background grid pattern */}
-        <div className="absolute inset-0 bg-white" style={{ 
-          backgroundImage: `
-            linear-gradient(to right, ${garyColors.black}10 1px, transparent 1px),
-            linear-gradient(to bottom, ${garyColors.black}10 1px, transparent 1px)
-          `,
-          backgroundSize: '20px 20px'
-        }}></div>
-        
-        {/* Gold accent line at top */}
-        <div className="h-1 w-full bg-gradient-to-r from-[#d4af37] via-[#e5c349] to-[#d4af37]"></div>
-        
-        <div className="px-5 py-4 border-b border-[#d4af37]/20 bg-white relative z-10">
-          <h3 className="text-lg font-bold text-[#0a0a0a] uppercase tracking-wider flex items-center">
-            <span className="mr-2 text-[#d4af37]"><ChartIcon /></span>Performance by Sport
-          </h3>
-        </div>
-        
-        <div className="p-4 bg-white/95 relative z-10">
+        <div className="p-3 relative"> {/* Reduced padding */}
           {!hasSportData ? (
-            <div className="h-60 flex items-center justify-center text-gray-400 border-2 border-dashed border-[#d4af37]/20 rounded-lg">
+            <div className="h-40 flex items-center justify-center text-gray-400 border border-dashed border-[#333333] rounded-md"> {/* Reduced height */}
               <div className="text-center">
-                <p className="font-medium">No sport data available</p>
-                <p className="text-sm text-gray-500">Check back after picks are evaluated</p>
+                <p className="font-medium text-sm">No sport data available</p>
               </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={380}>
+            <ResponsiveContainer width="100%" height={240}> {/* Reduced height */}
               <BarChart
                 layout="vertical"
                 data={sportPerformance}
-                margin={{ top: 20, right: 30, left: 75, bottom: 5 }}
+                margin={{ top: 10, right: 20, left: 60, bottom: 0 }}
               >
                 <XAxis 
                   type="number" 
                   domain={[0, 'dataMax']} 
-                  stroke="#333333"
-                  tick={{ fill: '#333333' }}
+                  stroke="#666666"
+                  tick={{ fill: '#cccccc' }}
+                  axisLine={{ stroke: '#333333' }}
                 />
                 <YAxis 
                   type="category" 
                   dataKey="sport" 
-                  width={70} 
-                  stroke="#333333"
-                  tick={{ fill: '#333333' }}
+                  width={60} 
+                  stroke="#666666"
+                  tick={{ fill: '#cccccc' }}
+                  axisLine={{ stroke: '#333333' }}
                 />
                 <Tooltip 
                   formatter={(value, name) => [
@@ -100,23 +83,25 @@ export default function BillfoldCharts({
                     name === 'wins' ? 'Wins' : 'Losses'
                   ]}
                   contentStyle={{ 
-                    backgroundColor: '#ffffff', 
+                    backgroundColor: '#222222', 
                     borderColor: garyColors.gold,
                     borderWidth: '1px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                    color: '#ffffff'
                   }}
-                  labelStyle={{ color: '#0a0a0a', fontWeight: 'bold' }}
+                  labelStyle={{ color: '#ffffff', fontWeight: 'bold' }}
                 />
                 <Legend 
                   wrapperStyle={{ 
-                    paddingTop: '10px'
+                    paddingTop: '5px',
+                    fontSize: '12px',
+                    color: '#cccccc'
                   }}
                 />
                 <Bar dataKey="wins" stackId="a" fill={garyColors.win} name="Wins">
-                  <LabelList dataKey="wins" position="insideRight" fill="#fff" fontWeight="bold" />
+                  <LabelList dataKey="wins" position="insideRight" fill="#fff" fontWeight="bold" fontSize="11" />
                 </Bar>
                 <Bar dataKey="losses" stackId="a" fill={garyColors.loss} name="Losses">
-                  <LabelList dataKey="losses" position="insideRight" fill="#fff" fontWeight="bold" />
+                  <LabelList dataKey="losses" position="insideRight" fill="#fff" fontWeight="bold" fontSize="11" />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -126,57 +111,40 @@ export default function BillfoldCharts({
 
       {/* Bet Type Performance Chart */}
       <motion.div
-        className="w-full rounded-xl overflow-hidden shadow-lg relative"
-        whileHover={{ scale: 1.01, boxShadow: '0 8px 32px 0 rgba(212,175,55,0.18)' }}
-        initial={{ opacity: 0, y: 10 }}
+        className="w-full overflow-hidden rounded-md border border-[#333333] bg-[#1a1a1a]"
+        whileHover={{ scale: 1.005 }}
+        initial={{ opacity: 0, y: 5 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        {/* Background grid pattern */}
-        <div className="absolute inset-0 bg-white" style={{ 
-          backgroundImage: `
-            linear-gradient(to right, ${garyColors.black}10 1px, transparent 1px),
-            linear-gradient(to bottom, ${garyColors.black}10 1px, transparent 1px)
-          `,
-          backgroundSize: '20px 20px'
-        }}></div>
-        
-        {/* Gold accent line at top */}
-        <div className="h-1 w-full bg-gradient-to-r from-[#d4af37] via-[#e5c349] to-[#d4af37]"></div>
-        
-        <div className="px-5 py-4 border-b border-[#d4af37]/20 bg-white relative z-10">
-          <h3 className="text-lg font-bold text-[#0a0a0a] uppercase tracking-wider flex items-center">
-            <span className="mr-2 text-[#d4af37]"><TagIcon /></span>Performance by Bet Type
-          </h3>
-        </div>
-        
-        <div className="p-4 bg-white/95 relative z-10">
+        <div className="p-3 relative"> {/* Reduced padding */}
           {!hasBetTypeData ? (
-            <div className="h-60 flex items-center justify-center text-gray-400 border-2 border-dashed border-[#d4af37]/20 rounded-lg">
+            <div className="h-40 flex items-center justify-center text-gray-400 border border-dashed border-[#333333] rounded-md"> {/* Reduced height */}
               <div className="text-center">
-                <p className="font-medium">No bet type data available</p>
-                <p className="text-sm text-gray-500">Check back after picks are evaluated</p>
+                <p className="font-medium text-sm">No bet type data available</p>
               </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={380}>
+            <ResponsiveContainer width="100%" height={240}> {/* Reduced height */}
               <BarChart
                 layout="vertical"
                 data={betTypePerformance}
-                margin={{ top: 20, right: 30, left: 95, bottom: 5 }}
+                margin={{ top: 10, right: 20, left: 70, bottom: 0 }}
               >
                 <XAxis 
                   type="number" 
                   domain={[0, 'dataMax']} 
-                  stroke="#333333"
-                  tick={{ fill: '#333333' }}
+                  stroke="#666666"
+                  tick={{ fill: '#cccccc' }}
+                  axisLine={{ stroke: '#333333' }}
                 />
                 <YAxis 
                   type="category" 
                   dataKey="betType" 
-                  width={90} 
-                  stroke="#333333"
-                  tick={{ fill: '#333333' }}
+                  width={70} 
+                  stroke="#666666"
+                  tick={{ fill: '#cccccc' }}
+                  axisLine={{ stroke: '#333333' }}
                 />
                 <Tooltip 
                   formatter={(value, name) => [
@@ -184,23 +152,25 @@ export default function BillfoldCharts({
                     name === 'wins' ? 'Wins' : 'Losses'
                   ]}
                   contentStyle={{ 
-                    backgroundColor: '#ffffff', 
+                    backgroundColor: '#222222', 
                     borderColor: garyColors.gold,
                     borderWidth: '1px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                    color: '#ffffff'
                   }}
-                  labelStyle={{ color: '#0a0a0a', fontWeight: 'bold' }}
+                  labelStyle={{ color: '#ffffff', fontWeight: 'bold' }}
                 />
                 <Legend 
                   wrapperStyle={{ 
-                    paddingTop: '10px'
+                    paddingTop: '5px',
+                    fontSize: '12px',
+                    color: '#cccccc'
                   }}
                 />
                 <Bar dataKey="wins" stackId="a" fill={garyColors.gold} name="Wins">
-                  <LabelList dataKey="wins" position="insideRight" fill="#fff" fontWeight="bold" />
+                  <LabelList dataKey="wins" position="insideRight" fill="#111" fontWeight="bold" fontSize="11" />
                 </Bar>
-                <Bar dataKey="losses" stackId="a" fill={garyColors.black} name="Losses">
-                  <LabelList dataKey="losses" position="insideRight" fill="#fff" fontWeight="bold" />
+                <Bar dataKey="losses" stackId="a" fill="#444444" name="Losses">
+                  <LabelList dataKey="losses" position="insideRight" fill="#fff" fontWeight="bold" fontSize="11" />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
