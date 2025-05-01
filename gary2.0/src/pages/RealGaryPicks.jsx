@@ -736,8 +736,8 @@ function RealGaryPicks() {
                                               src={GaryEmblem} 
                                               alt="Gary Emblem"
                                               style={{
-                                                width: 50,
-                                                height: 50,
+                                                width: 90, /* 80% bigger */
+                                                height: 90, /* 80% bigger */
                                                 objectFit: 'contain',
                                                 opacity: 0.85,
                                               }}
