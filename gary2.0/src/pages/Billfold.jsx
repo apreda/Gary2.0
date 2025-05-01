@@ -51,66 +51,53 @@ export const Billfold = () => {
         const response = await garyPerformanceService.getGaryPerformance({timeFrame: selectedTimeFrame});
         const data = response.success ? response : null;
         if (data) {
+          const summary = data.summary || {};
+          const sportBreakdown = data.sportBreakdown || [];
+          
+          // Calculate ROI (you can replace this with actual calculation if available)
+          const calculatedROI = ((summary.wins - summary.losses) / (summary.wins + summary.losses) * 100).toFixed(1);
+          
           setStats({
-            bankroll: data.bankroll || 10000,
-            roi: data.roi || 15.5,
-            winLoss: data.winLoss || 0.419,
-            record: data.record || '26-36',
-            totalBets: data.totalBets || 62,
-            totalWins: data.totalWins || 26,
-            totalLosses: data.totalLosses || 36,
-            pushes: data.pushes || 0,
-            sportPerformance: data.sportPerformance || [
-              { sport: 'NBA', wins: 12, losses: 14 },
-              { sport: 'MLB', wins: 8, losses: 10 },
-              { sport: 'NFL', wins: 6, losses: 6 },
-              { sport: 'NHL', wins: 2, losses: 4 },
-            ],
-            betTypePerformance: data.betTypePerformance || [
+            bankroll: 10000, // Static value as requested
+            roi: parseFloat(calculatedROI) || 15.5,
+            winLoss: summary.winRate ? summary.winRate / 100 : 0.419,
+            record: summary.record || '26-36',
+            totalBets: summary.total || 62,
+            totalWins: summary.wins || 26,
+            totalLosses: summary.losses || 36,
+            pushes: summary.pushes || 0,
+            // Map sport breakdown to the format our UI expects
+            sportPerformance: sportBreakdown.map(sport => ({
+              sport: sport.name,
+              wins: sport.wins,
+              losses: sport.losses,
+              pushes: sport.pushes || 0
+            })) || [],
+            betTypePerformance: [
               { betType: 'Spread', count: 35 },
               { betType: 'Moneyline', count: 15 },
               { betType: 'Total', count: 12 },
             ],
           });
 
-          // Set betting log from response
-          const logData = data.bettingLog || [
-            {
-              date: new Date('2023-04-28'),
-              sport: 'NHL',
-              matchup: 'St Louis Blues at Winnipeg Jet',
-              pick: 'UNDER 5.5',
-              result: 'lost'
-            },
-            {
-              date: new Date('2023-04-27'),
-              sport: 'MLB',
-              matchup: 'NY Yankees at Texas Rangers',
-              pick: 'Yankees -1.5',
-              result: 'won'
-            },
-            {
-              date: new Date('2023-04-26'),
-              sport: 'NBA',
-              matchup: 'Sacramento Kings at Golden State Warriors',
-              pick: 'Warriors -3.5',
-              result: 'lost'
-            },
-            {
-              date: new Date('2023-04-25'),
-              sport: 'NHL',
-              matchup: 'Boston Bruins at Florida Panthers',
-              pick: 'Bruins ML',
-              result: 'won'
-            }
-          ];
+          // Format real data from the response
+          const logData = data.data?.map(game => ({
+            id: game.id,
+            date: new Date(game.game_date),
+            sport: game.league,
+            matchup: game.matchup,
+            pick: game.pick,
+            result: game.result
+          })) || [];
           
           setBettingLog(logData);
           
-          // Set the best win (most recent win for now)
+          // Set the best win (most recent win from the actual data)
           const wins = logData.filter(bet => bet.result === 'won');
           if (wins.length > 0) {
-            setBestWin(wins[0]);
+            // Sort by date descending to get most recent win
+            const sortedWins = [...wins].sort((a, b) => b.date - a.date);
+            setBestWin(sortedWins[0]);
           }
         }
         setIsLoading(false);
