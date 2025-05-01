@@ -124,24 +124,27 @@ export const resultsCheckerService = {
       
       console.log('Simplified picks for Perplexity:', simplifiedPicks);
       
-      // Create a formatted query for Perplexity with explicit instructions to search for REAL results only with specific sources
+      // Create a formatted query for Perplexity with explicit instructions on finding results with date navigation
       const query = `I need to find REAL RESULTS for these sports picks from ${displayDate}. Search for the actual final scores for these games.
 
-IMPORTANT - ONLY USE REAL RESULTS. Search using these official sources:
-- https://www.espn.com/scores
-- https://www.cbssports.com/scores/
-- https://sports.yahoo.com/scores/
-- https://www.nba.com/scores
-- https://www.nfl.com/scores/
-- https://www.mlb.com/scores
-- https://www.ncaa.com/scoreboard
+VERY IMPORTANT - FOLLOW THESE EXACT STEPS TO FIND REAL RESULTS:
+1. Go to https://www.espn.com/scores
+2. Look for a date picker/calendar and select ${displayDate} specifically
+3. If ESPN doesn't have it, try the same process with the date picker on these sites:
+   - https://www.cbssports.com/scores/ (look for calendar icon)
+   - https://sports.yahoo.com/scores/ (has date navigation)
+   - League-specific sites with date selection:
+     * NBA: https://www.nba.com/games (use date picker)
+     * MLB: https://www.mlb.com/scores (click calendar icon)
+     * NHL: https://www.nhl.com/scores (use date selector)
 
-INSTRUCTIONS:
-1. For each pick, search extensively in the above sites for the actual game that was played on ${displayDate}
-2. Check each source listed above until you find the real result
-3. If you cannot find the real result for a game, label it as "unknown" - DO NOT make up any results
+KEY INSTRUCTIONS:
+1. You MUST use the date navigation on these sites to go to ${displayDate} specifically
+2. For each pick, find the actual game played on that date between the exact teams mentioned
+3. If you cannot find the real result for a game after trying all sites, label it as "unknown"
 4. For each game with real results, determine if the pick "won", "lost", or was a "push" according to sports betting rules
 5. Include the actual final score for each game with format "Team A score - Team B score"
+6. DO NOT make up or estimate any results
 
 Response format must be structured as a JSON array of objects, each with fields 'pick', 'result', and 'score'.
 
