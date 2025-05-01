@@ -743,8 +743,8 @@ function RealGaryPicks() {
                                               src="/coin1.png" 
                                               alt="Coin Image"
                                               style={{
-                                                width: 108, /* Same size as previous image */
-                                                height: 108, /* Same size as previous image */
+                                                width: 130, /* 20% bigger than previous 108px */
+                                                height: 130, /* 20% bigger than previous 108px */
                                                 objectFit: 'contain',
                                                 opacity: 1,
                                                 background: 'transparent'
