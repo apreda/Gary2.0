@@ -128,9 +128,11 @@ export const garyPerformanceService = {
       // For each result, insert a record in the game_results table
       const gameResults = [];
       
+      // We need to use the daily_pick ID as the pick_id (foreign key)
+      const pickId = dailyPick.id;
+      console.log(`Using daily_picks ID as foreign key: ${pickId}`);
+      
       for (const result of results) {
-        // Create a proper UUID for the pick
-        const pickId = generateUUID();
         
         // Get league from the pick
         let league = 'Unknown';
