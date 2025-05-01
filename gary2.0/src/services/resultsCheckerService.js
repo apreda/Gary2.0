@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { garyPerformanceService } from './garyPerformanceService';
+import { openaiService } from './openaiService';
 
 export const resultsCheckerService = {
   /**
@@ -56,11 +57,13 @@ export const resultsCheckerService = {
         day: 'numeric'
       });
       
-      // Get API key from environment or your secure storage
-      const apiKey = process.env.OPENAI_API_KEY;
+      // Use the existing OpenAI API key from openaiService
+      const apiKey = openaiService.API_KEY;
       if (!apiKey) {
-        throw new Error('OpenAI API key is not configured');
+        throw new Error('OpenAI API key is not configured - please check the openaiService');
       }
+      
+      console.log('Using OpenAI API key from openaiService');
       
       // Prepare data for the OpenAI API call
       const data = {
