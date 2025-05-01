@@ -43,12 +43,23 @@ export const oddsApiService = {
       
       console.log(`Fetching scores for ${sport} on ${date} from Odds API`);
       
+      // Construct request URL for completed scores
       const url = `${oddsApiService.BASE_URL}/sports/${sport}/scores/`;
+      console.log(`Full API URL: ${url} (requesting completed games for ${date})`);
+      
+      // Calculate daysFrom based on the date parameter
+      const targetDate = new Date(date);
+      const today = new Date();
+      const diffTime = Math.abs(today - targetDate);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      console.log(`Requesting games from ${diffDays} days ago`);
+      
       const response = await axios.get(url, {
         params: {
           apiKey: oddsApiService.API_KEY,
-          daysFrom: 1, // Get games from the last day
-          dateFormat: 'iso' // Use ISO format for dates
+          daysFrom: diffDays, // Get games from the specific date
+          dateFormat: 'iso', // Use ISO format for dates
         }
       });
       
@@ -64,6 +75,36 @@ export const oddsApiService = {
       });
       
       console.log(`Found ${games.length} games for ${sport} on ${date}`);
+      
+      // Log details about completed games and scores
+      const completedGames = games.filter(game => game.completed);
+      console.log(`Of which ${completedGames.length} games are completed`);
+      
+      if (completedGames.length > 0) {
+        // Log the first completed game to see structure
+        console.log('Sample completed game data:', JSON.stringify(completedGames[0], null, 2));
+      }
+      
+      // For games with missing scores, try to compute them from the score data
+      games.forEach(game => {
+        if (game.completed && (!game.scores || Object.keys(game.scores).length === 0)) {
+          console.log(`Game ${game.id} is marked as completed but has no scores. Checking alternative score fields...`);
+          
+          // Some API responses might have scores in different formats
+          if (game.scores_normalized) {
+            console.log('Found normalized scores');
+            game.scores = {};
+            game.scores[game.home_team] = game.scores_normalized.home_score;
+            game.scores[game.away_team] = game.scores_normalized.away_score;
+          } else if (game.score) {
+            console.log('Found score object');
+            game.scores = {};
+            game.scores[game.home_team] = game.score.home;
+            game.scores[game.away_team] = game.score.away;
+          }
+        }
+      });
+      
       return games;
     } catch (error) {
       console.error('Error fetching scores from Odds API:', error);
