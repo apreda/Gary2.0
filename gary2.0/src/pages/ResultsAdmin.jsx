@@ -1,35 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { resultsCheckerService } from '../services/resultsCheckerService';
+import { openaiService } from '../services/openaiService';
 
 function ResultsAdmin() {
-  const [apiKey, setApiKey] = useState('');
   const [date, setDate] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(false);
+  const [apiKeyStatus, setApiKeyStatus] = useState('loading');
   
-  // Set the default date to yesterday
-  useState(() => {
+  // Set the default date to yesterday and check API key status
+  useEffect(() => {
+    // Set yesterday's date
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     setDate(yesterday.toISOString().split('T')[0]);
-  }, []);
-  
-  // Save API key to localStorage
-  const saveApiKey = () => {
-    if (apiKey) {
-      localStorage.setItem('openai_api_key', apiKey);
-      process.env.OPENAI_API_KEY = apiKey;
-      setStatus('API key saved');
-    }
-  };
-  
-  // Load API key from localStorage
-  useState(() => {
-    const savedKey = localStorage.getItem('openai_api_key');
-    if (savedKey) {
-      setApiKey(savedKey);
-      process.env.OPENAI_API_KEY = savedKey;
+    
+    // Check OpenAI API key status
+    if (openaiService.API_KEY) {
+      setApiKeyStatus('configured');
+      setStatus('OpenAI API key is already configured in the system');
+    } else {
+      setApiKeyStatus('missing');
+      setStatus('OpenAI API key is not configured. Please check your environment variables.');
     }
     
     // Check if automatic checking is enabled
@@ -58,12 +51,11 @@ function ResultsAdmin() {
     setStatus('Checking results...');
     
     try {
-      // Override the date in the getYesterdaysPicks function
-      const picksResponse = await fetch('/api/picks?date=' + date);
-      const picksData = await picksResponse.json();
+      // Get the picks from the daily_picks table for this date
+      const picksResponse = await resultsCheckerService.getYesterdaysPicks();
       
-      if (!picksData.success) {
-        setStatus(`Error: ${picksData.message || 'Could not fetch picks'}`);
+      if (!picksResponse.success) {
+        setStatus(`Error: ${picksResponse.message || 'Could not fetch picks'}`);
         setLoading(false);
         return;
       }
@@ -71,7 +63,7 @@ function ResultsAdmin() {
       // Check results with OpenAI
       const results = await resultsCheckerService.checkResultsWithAI(
         date,
-        picksData.data
+        picksResponse.data
       );
       
       if (!results.success) {
@@ -81,7 +73,7 @@ function ResultsAdmin() {
       }
       
       // Record the results
-      const recordResponse = await resultsCheckerService.recordPickResults(
+      const recordResponse = await garyPerformanceService.recordPickResults(
         date,
         results.results
       );
@@ -106,21 +98,18 @@ function ResultsAdmin() {
       <div className="bg-gray-800 p-6 rounded-lg mb-8">
         <h2 className="text-xl font-semibold mb-4">OpenAI API Configuration</h2>
         <div className="mb-4">
-          <label className="block mb-2">API Key</label>
-          <input 
-            type="password" 
-            value={apiKey} 
-            onChange={(e) => setApiKey(e.target.value)}
-            className="w-full p-2 bg-gray-700 rounded"
-            placeholder="sk-..."
-          />
+          {apiKeyStatus === 'configured' ? (
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
+              <span>API Key is configured and ready to use</span>
+            </div>
+          ) : (
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+              <span>API Key is missing or invalid. Please check your environment variables.</span>
+            </div>
+          )}
         </div>
-        <button 
-          onClick={saveApiKey}
-          className="px-4 py-2 bg-blue-600 rounded"
-        >
-          Save API Key
-        </button>
       </div>
       
       <div className="bg-gray-800 p-6 rounded-lg mb-8">
