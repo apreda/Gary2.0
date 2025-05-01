@@ -1,7 +1,15 @@
 import { supabase } from '../supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 import { garyPerformanceService } from './garyPerformanceService';
 import { perplexityService } from './perplexityService';
 import { sportsDbApiService } from './sportsDbApiService';
+
+// Create a Supabase client with admin privileges that bypasses RLS
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || 'https://wljxcsmijuhnqumstxvr.supabase.co';
+const SUPABASE_SERVICE_KEY = process.env.REACT_APP_SUPABASE_SERVICE_ROLE_KEY;
+const adminSupabase = SUPABASE_SERVICE_KEY ? 
+  createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : 
+  supabase; // Fallback to regular client if no service key
 
 // Initialize services
 sportsDbApiService.initialize();
@@ -278,24 +286,33 @@ export const resultsCheckerService = {
     try {
       console.log(`Evaluating ${picks.length} picks against ${Object.keys(scores).length} games`);
       
-      // Format game scores for the prompt
+      // Format game scores for the prompt (used in all batches)
       const scoresText = Object.values(scores)
         .map(game => `${game.league}: ${game.scoreText}`)
         .join('\n');
       
-      // Format picks for the prompt
-      const picksText = picks.map((pick, i) =>
-        `${i+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
-      ).join('\n');
+      // Process picks in smaller batches to avoid token limits
+      const BATCH_SIZE = 10;
+      const allResults = [];
       
-      // Create the Perplexity prompt with stronger JSON formatting instructions
-      const prompt = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:
+      for (let i = 0; i < picks.length; i += BATCH_SIZE) {
+        const batchPicks = picks.slice(i, i + BATCH_SIZE);
+        console.log(`Processing batch ${i/BATCH_SIZE + 1} with ${batchPicks.length} picks (${i+1}-${Math.min(i+BATCH_SIZE, picks.length)})`);
+        
+        // Format just this batch of picks for the prompt
+        // Keep the original pick number for reference
+        const batchPicksText = batchPicks.map((pick, j) =>
+          `${i+j+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
+        ).join('\n');
+        
+        // Create the Perplexity prompt for this batch
+        const prompt = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:
 
 📊 ACTUAL GAME RESULTS:
 ${scoresText}
 
-🎲 BETTING PICKS TO EVALUATE:
-${picksText}
+🎲 BETTING PICKS TO EVALUATE (BATCH ${i/BATCH_SIZE + 1}):
+${batchPicksText}
 
 For each numbered pick:
 1. Find the corresponding game in the results
@@ -313,44 +330,41 @@ Response format must be ONLY a JSON array of objects with ABSOLUTELY NO ADDITION
 - 'final_score': The final score
 - 'matchup': Team A vs Team B from the game scores
 
-Make sure to include ALL picks in your response, even if you're not 100% confident about the result - make your best guess. IMPORTANT: Your response must be PARSEABLE JSON with no markdown formatting or explanations outside the JSON.
-
-EXAMPLE FORMAT (DO NOT USE THESE VALUES, THIS IS JUST AN EXAMPLE OF THE FORMAT):
-[
-  {
-    "pick": "Los Angeles Lakers -5.5 -110",
-    "league": "NBA",
-    "result": "won",
-    "final_score": "Lakers 120 - Celtics 100",
-    "matchup": "Lakers vs Celtics"
-  },
-  {
-    "pick": "OVER 220.5 -110",
-    "league": "NBA",
-    "result": "lost",
-    "final_score": "Warriors 100 - Kings 110",
-    "matchup": "Warriors vs Kings"
-  }
-]`;
-      
-      console.log('Sending picks to Perplexity for evaluation');
-      
-      // Get response from Perplexity
-      const responseText = await perplexityService.fetchRealTimeInfo(prompt);
-      if (!responseText) {
-        throw new Error('No response from Perplexity');
+Make sure to include ALL picks in your response, even if you're not 100% confident about the result - make your best guess. IMPORTANT: Your response must be PARSEABLE JSON with no markdown formatting or explanations outside the JSON.`;
+        
+        console.log(`Sending batch ${i/BATCH_SIZE + 1} (${batchPicks.length} picks) to Perplexity for evaluation`);
+        
+        try {
+          // Get response from Perplexity for this batch
+          const responseText = await perplexityService.fetchRealTimeInfo(prompt);
+          if (!responseText) {
+            console.error(`No response from Perplexity for batch ${i/BATCH_SIZE + 1}`);
+            continue; // Skip to the next batch if there's no response
+          }
+          
+          // Parse the results from the response
+          const batchResults = extractJsonFromText(responseText);
+          
+          if (!batchResults || batchResults.length === 0) {
+            console.log(`No valid results parsed from Perplexity response for batch ${i/BATCH_SIZE + 1}`);
+          } else {
+            console.log(`Successfully parsed ${batchResults.length} results from batch ${i/BATCH_SIZE + 1}`);
+            allResults.push(...batchResults);
+          }
+          
+          // Add a short delay between batches to avoid rate limiting
+          if (i + BATCH_SIZE < picks.length) {
+            console.log('Waiting 2 seconds before processing next batch...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } catch (batchError) {
+          console.error(`Error evaluating batch ${i/BATCH_SIZE + 1}:`, batchError);
+          // Continue with the next batch even if this one failed
+        }
       }
       
-      // Parse the results from the response
-      const results = extractJsonFromText(responseText);
-      
-      if (!results || results.length === 0) {
-        console.log('No valid results parsed from Perplexity response');
-        return [];
-      }
-      
-      console.log(`Successfully parsed ${results.length} results from Perplexity`);
-      return results;
+      console.log(`Total results across all batches: ${allResults.length}`);
+      return allResults;
     } catch (error) {
       console.error('Error evaluating picks:', error);
       return [];
