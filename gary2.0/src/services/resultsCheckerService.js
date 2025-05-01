@@ -377,9 +377,36 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       
       // Step 2: Use Perplexity to match our picks with the game results
       // Prepare a query for Perplexity with all the picks and scores
-      const query = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:\n\n📊 ACTUAL GAME RESULTS:\n${allGames.map(game => `${game.league}: ${game.awayTeam} ${game.awayScore} @ ${game.homeTeam} ${game.homeScore}`).join('\n')}\n\n🎲 BETTING PICKS TO EVALUATE:\n${picks.map((pick, i) => 
+      const query = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:
+
+📊 ACTUAL GAME RESULTS:
+${allGames.map(game => `${game.league}: ${game.awayTeam} ${game.awayScore} @ ${game.homeTeam} ${game.homeScore}`).join('\n')}
+
+🎲 BETTING PICKS TO EVALUATE:
+${picks.map((pick, i) => 
   `${i+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
-).join('\n')}\n\nFor each numbered pick:\n1. Find the corresponding game in the results\n2. Determine if the pick "won", "lost", or was a "push" according to sports betting rules\n3. Provide the actual final score that determined the result\n\nBetting Rules:\n- Spread bets (e.g. "Team +3.5"): Add the spread to the team's score. If that total exceeds the opponent's score, the bet wins.\n- Moneyline bets (e.g. "Team ML"): Simply pick the winner of the game.\n- Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.\n\nResponse format must be a JSON array of objects, each with these fields:\n- 'pick': The original pick text\n- 'league': The league (NBA, NHL, MLB)\n- 'result': Whether the pick 'won', 'lost', 'push', or 'unknown'\n- 'score': The final score in format 'Team A score - Team B score'`;
+).join('\n')}
+
+For each numbered pick:
+1. Find the corresponding game in the results
+2. Determine if the pick "won", "lost", or was a "push" according to sports betting rules
+3. Provide the actual final score that determined the result
+
+Betting Rules:
+- Spread bets (e.g. "Team +3.5"): Add the spread to the team's score. If that total exceeds the opponent's score, the bet wins.
+- Moneyline bets (e.g. "Team ML"): Simply pick the winner of the game.
+- Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.
+
+VERY IMPORTANT INSTRUCTIONS:
+1. The 'pick' field in your response MUST EXACTLY MATCH the original pick text I provided (e.g., "UNDER 204.5 -110")
+2. DO NOT replace the pick text with any generic value like "result" or anything else
+3. Copy the exact pick text from the "🎲 BETTING PICKS TO EVALUATE" section when creating your response
+
+Response format must be a JSON array of objects, each with these fields:
+- 'pick': The EXACT original pick text as provided (copy it directly from the list above)
+- 'league': The league (NBA, NHL, MLB)
+- 'result': Whether the pick 'won', 'lost', 'push', or 'unknown'
+- 'score': The final score in format 'Team A score - Team B score'`;
 
       console.log('Using Perplexity to match picks with TheSportsDB API results');
       console.log(`Prepared Perplexity query with ${allGames.length} games and ${picks.length} picks`);
@@ -448,7 +475,59 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       
       let sportsDbApiResults = [];
       if (sportsDbApiResponse.success) {
-        sportsDbApiResults = sportsDbApiResponse.results.filter(r => r.result !== 'unknown');
+        // Process TheSportsDB API results to ensure original pick texts are preserved
+        sportsDbApiResults = sportsDbApiResponse.results
+          .filter(r => r.result !== 'unknown')
+          .map(result => {
+            // Log raw result for debugging
+            console.log(`Raw TheSportsDB API result item:`, JSON.stringify(result));
+            
+            // Find the original pick in the data
+            const originalPick = picksResponse.data.find(p => {
+              // Try exact match first
+              if (p.pick === result.pick) return true;
+              
+              // Then try normalized comparison
+              if (!p.pick || !result.pick) return false;
+              const normalizedResultPick = result.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+              const normalizedOriginalPick = p.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+              
+              return normalizedResultPick.includes(normalizedOriginalPick) || 
+                     normalizedOriginalPick.includes(normalizedResultPick);
+            });
+            
+            // Use the original pick text if found
+            if (originalPick) {
+              console.log(`Matched TheSportsDB result "${result.pick}" with original pick "${originalPick.pick}"`);
+              return {
+                ...result,
+                pick: originalPick.pick,  // Use the exact original text
+                originalPickText: originalPick.pick  // Store in backup field too
+              };
+            }
+            
+            // Add safeguard against 'result' placeholder
+            if (result.pick === 'result') {
+              console.log(`Detected 'result' placeholder in TheSportsDB output, attempting recovery`);
+              // Try to find a matching pick based on other fields
+              const matchingPick = picksResponse.data.find(p => {
+                if (!p.homeTeam || !p.awayTeam) return false;
+                return (result.homeTeam && p.homeTeam.includes(result.homeTeam)) || 
+                       (result.awayTeam && p.awayTeam.includes(result.awayTeam));
+              });
+              
+              if (matchingPick) {
+                return {
+                  ...result,
+                  pick: matchingPick.pick,
+                  originalPickText: matchingPick.pick
+                };
+              }
+            }
+            
+            return result;
+          });
+        
         console.log(`Got ${sportsDbApiResults.length} valid results from TheSportsDB API`);
       } else {
         console.log(`TheSportsDB API check failed: ${sportsDbApiResponse.message}`);
@@ -481,7 +560,54 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
         );
         
         if (aiResponse.success) {
-          perplexityResults = aiResponse.results.filter(r => r.result !== 'unknown');
+          // Ensure original pick texts are preserved from Perplexity
+          perplexityResults = aiResponse.results
+            .filter(r => r.result !== 'unknown')
+            .map(result => {
+              // Debug logging to track pick texts
+              console.log(`Raw Perplexity result item:`, JSON.stringify(result));
+              
+              // Find the original pick text in unresolvedPicks
+              const originalPick = unresolvedPicks.find(p => {
+                // First try exact match
+                if (p.pick === result.pick) return true;
+                
+                // Then try normalized comparison
+                if (!p.pick || !result.pick) return false;
+                const normalizedResultPick = result.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+                const normalizedOriginalPick = p.pick.replace(/\s+/g, ' ').trim().toLowerCase();
+                
+                return normalizedResultPick.includes(normalizedOriginalPick) || 
+                       normalizedOriginalPick.includes(normalizedResultPick);
+              });
+              
+              // Use the original pick text if found, otherwise keep what we got
+              if (originalPick) {
+                console.log(`Matched Perplexity result "${result.pick}" with original pick "${originalPick.pick}"`);
+                return {
+                  ...result,
+                  pick: originalPick.pick,  // Use the exact original text
+                  originalPickText: originalPick.pick  // Store in backup field too
+                };
+              }
+              
+              // Add safeguard against 'result' placeholder
+              if (result.pick === 'result') {
+                console.log(`Detected 'result' placeholder in Perplexity output, attempting recovery`);
+                // Try to recover from picks array using the index
+                const index = perplexityResults.indexOf(result);
+                if (index >= 0 && index < unresolvedPicks.length) {
+                  return {
+                    ...result,
+                    pick: unresolvedPicks[index].pick,
+                    originalPickText: unresolvedPicks[index].pick
+                  };
+                }
+              }
+              
+              return result;
+            });
+          
           console.log(`Got ${perplexityResults.length} additional results from Perplexity`);
         }
       }
@@ -526,13 +652,49 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
 
       console.log('Final results with league field:', resultsWithLeague);
       
-      // Deep clone the results to prevent any reference issues
-      const finalResults = resultsWithLeague.map(result => {
+      // Log the raw results before any final processing
+      console.log('Raw results before final processing:', JSON.stringify(resultsWithLeague, null, 2));
+      
+      // Deep clone and protect the results to prevent any reference issues or loss of pick text
+      const finalResults = resultsWithLeague.map((result, index) => {
+        // Check if result has pick text being lost/transformed to 'result'
+        if (!result.pick || result.pick === 'result') {
+          console.log(`WARNING: Detected missing or placeholder pick text at index ${index}`);
+          
+          // Try to recover the original pick text from any available field
+          const originalPickFromField = result.originalPickText || result.originalPick || '';
+          
+          if (originalPickFromField && originalPickFromField !== 'result') {
+            console.log(`Recovered pick text from backup field: "${originalPickFromField}"`);
+            result.pick = originalPickFromField;
+          } else {
+            // Last resort - look for matching pick in original picks data by game teams
+            const matchingOriginalPick = picksResponse.data.find(p => {
+              if (!p.homeTeam || !p.awayTeam || !result.homeTeam || !result.awayTeam) return false;
+              return p.homeTeam.includes(result.homeTeam) || p.awayTeam.includes(result.awayTeam);
+            });
+            
+            if (matchingOriginalPick) {
+              console.log(`Recovered pick text by team matching: "${matchingOriginalPick.pick}"`);
+              result.pick = matchingOriginalPick.pick;
+            } else {
+              // If all recovery attempts fail, create a descriptive placeholder rather than just "result"
+              result.pick = `Unidentified pick for ${result.homeTeam || ''} vs ${result.awayTeam || ''}`;
+              console.log(`Created descriptive placeholder: "${result.pick}"`);
+            }
+          }
+        }
+        
         // Log each result object to ensure pick text is preserved
         console.log('Final pick object being sent to recordPickResults:', JSON.stringify(result));
+        
+        // Create a new object with all fields and backup fields
         return {
           ...result,
-          originalPick: result.pick // Add an extra field to preserve original pick text
+          originalPick: result.pick, // Add an extra field to preserve original pick text
+          pickText: result.pick,     // Add another backup field
+          rawResult: result,         // Store the entire object as a backup
+          processedAt: new Date().toISOString() // Add timestamp for debugging
         };
       });
       
@@ -561,7 +723,7 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
     try {
       const status = {
         perplexity: false,
-        oddsApi: false
+        sportsDb: false
       };
       
       // Check Perplexity API key
@@ -580,23 +742,23 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
         console.log('❌ Perplexity API key is not configured');
       }
       
-      // Check Odds API key
-      if (oddsApiService.API_KEY) {
+      // Check TheSportsDB API key (used for results checking)
+      if (sportsDbApiService.API_KEY) {
         try {
-          const isValid = await oddsApiService.checkApiKey();
-          status.oddsApi = isValid;
-          console.log(isValid ? '✅ Odds API key is valid' : '❌ Odds API key is invalid');
+          const isValid = await sportsDbApiService.checkApiKey();
+          status.sportsDb = isValid;
+          console.log(isValid ? '✅ TheSportsDB API key is valid' : '❌ TheSportsDB API key is invalid');
         } catch (error) {
-          console.error('Error checking Odds API key status:', error);
+          console.error('Error checking TheSportsDB API key status:', error);
         }
       } else {
-        console.log('❌ Odds API key is not configured');
+        console.log('❌ TheSportsDB API key is not configured');
       }
       
       return status;
     } catch (error) {
       console.error('Error checking API key status:', error);
-      return { perplexity: false, oddsApi: false };
+      return { perplexity: false, sportsDb: false };
     }
   },
   
