@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchUserPerformance } from '../services/garyPerformanceService';
+import { garyPerformanceService } from '../services/garyPerformanceService';
 import '../styles/BillfoldStyle.css';
 
 const Billfold = () => {
@@ -43,8 +43,9 @@ const Billfold = () => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Replace with your actual API call
-        const data = await fetchUserPerformance(selectedTimeFrame);
+        // Get performance data from the service
+        const response = await garyPerformanceService.getGaryPerformance({timeFrame: selectedTimeFrame});
+        const data = response.success ? response : null;
         if (data) {
           setStats({
             bankroll: data.bankroll || 10000,
