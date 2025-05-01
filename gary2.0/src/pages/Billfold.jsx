@@ -21,6 +21,9 @@ export const Billfold = () => {
   // State for betting log/history
   const [bettingLog, setBettingLog] = useState([]);
 
+  // State for best win (for featured Top Win section)
+  const [bestWin, setBestWin] = useState(null);
+
   // State for loading
   const [isLoading, setIsLoading] = useState(true);
 
@@ -61,63 +64,59 @@ export const Billfold = () => {
               { sport: 'NBA', wins: 12, losses: 14 },
               { sport: 'MLB', wins: 8, losses: 10 },
               { sport: 'NFL', wins: 6, losses: 6 },
-              { sport: 'NHL', wins: 2, losses: 4 }
+              { sport: 'NHL', wins: 2, losses: 4 },
             ],
             betTypePerformance: data.betTypePerformance || [
-              { type: 'Spread', count: 30 },
-              { type: 'Moneyline', count: 20 },
-              { type: 'Total', count: 12 }
+              { betType: 'Spread', count: 35 },
+              { betType: 'Moneyline', count: 15 },
+              { betType: 'Total', count: 12 },
             ],
           });
-          
-          // Betting log for recent picks
-          setBettingLog(data.bettingLog || [
+
+          // Set betting log from response
+          const logData = data.bettingLog || [
             {
-              date: '2023-04-29',
+              date: new Date('2023-04-28'),
               sport: 'NHL',
               matchup: 'St Louis Blues at Winnipeg Jet',
               pick: 'UNDER 5.5',
-              result: 'lost',
-              score: '2-3'
+              result: 'lost'
             },
             {
-              date: '2023-04-28',
+              date: new Date('2023-04-27'),
               sport: 'MLB',
               matchup: 'NY Yankees at Texas Rangers',
               pick: 'Yankees -1.5',
-              result: 'won',
-              score: '4-2'
+              result: 'won'
             },
             {
-              date: '2023-04-27',
+              date: new Date('2023-04-26'),
               sport: 'NBA',
               matchup: 'Sacramento Kings at Golden State Warriors',
               pick: 'Warriors -3.5',
-              result: 'lost',
-              score: '114-119'
+              result: 'lost'
             },
             {
-              date: '2023-04-26',
+              date: new Date('2023-04-25'),
               sport: 'NHL',
               matchup: 'Boston Bruins at Florida Panthers',
               pick: 'Bruins ML',
-              result: 'won',
-              score: '3-2'
-            },
-            {
-              date: '2023-04-25',
-              sport: 'MLB',
-              matchup: 'Atlanta Braves at Miami Marlins',
-              pick: 'OVER 7.5',
-              result: 'lost',
-              score: '3-1'
-            },
-          ]);
+              result: 'won'
+            }
+          ];
+          
+          setBettingLog(logData);
+          
+          // Set the best win (most recent win for now)
+          const wins = logData.filter(bet => bet.result === 'won');
+          if (wins.length > 0) {
+            setBestWin(wins[0]);
+          }
         }
+        setIsLoading(false);
       } catch (err) {
         console.error('Error fetching performance data:', err);
-        setError('Failed to load performance data. Please try again later.');
-      } finally {
+        setError(err.message);
         setIsLoading(false);
       }
     };
@@ -129,186 +128,167 @@ export const Billfold = () => {
   const handleTimeFrameChange = (timeFrame) => {
     setSelectedTimeFrame(timeFrame);
   };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-xl">Loading...</p>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-xl text-red-500">{error}</p>
-      </div>
-    );
-  }
-  
-  // Find the best win and worst loss for highlights
-  const bestWin = bettingLog.find(bet => bet.result === 'won') || null;
-  const worstLoss = bettingLog.find(bet => bet.result === 'lost') || null;
   
   return (
     <div className="bg-white min-h-screen font-sans pt-16">
-      <div className="max-w-screen-lg mx-auto px-4 py-4">
-        {/* Header */}
-        <h2 className="text-black text-2xl font-bold mb-6">Billfold</h2>
+      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm">
+        {/* Header with glass morphism effect */}
+        <div className="mb-8 relative">
+          <h2 className="text-black text-3xl font-bold mb-2">Billfold</h2>
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#d4af37]/50 to-transparent"></div>
+        </div>
         
-        {/* Top Stats Bar */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div>
-            <div className="uppercase text-xs font-semibold mb-1 text-black">BANKROLL</div>
-            <div className="text-lg font-bold text-black">${stats.bankroll || '10000'}</div>
+        {/* Key Metrics Row */}
+        <div className="grid grid-cols-3 gap-8 mb-8">
+          <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-md p-4 hover:shadow-lg transition-all duration-200">
+            <h3 className="uppercase text-xs font-semibold mb-2 text-gray-600 tracking-wider">BANKROLL</h3>
+            <div className="text-3xl font-bold text-black mb-auto">${stats.bankroll.toLocaleString()}</div>
           </div>
           
-          <div className="text-center">
-            <div className="uppercase text-xs font-semibold mb-1 text-black">ROI</div>
-            <div className="flex justify-center items-center">
-              <span className="text-lg font-bold text-black">{stats.roi?.toFixed(1) || '15.5'} %</span>
-              <img src="/coin2.png" alt="Gary Coin" className="h-6 w-6 ml-2" />
+          <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-md p-4 hover:shadow-lg transition-all duration-200">
+            <h3 className="uppercase text-xs font-semibold mb-2 text-gray-600 tracking-wider">ROI</h3>
+            <div className="text-3xl font-bold text-black mb-auto flex items-center">
+              {stats.roi}% <span className="ml-2"><img src="/coin.png" alt="ROI" className="w-6 h-6" /></span>
             </div>
           </div>
           
-          <div className="text-right">
-            <div className="uppercase text-xs font-semibold mb-1 text-black">WIN RATE</div>
-            <div className="text-lg font-bold text-black">{(stats.winLoss * 100)?.toFixed(1) || '41.9'} %</div>
+          <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-md p-4 hover:shadow-lg transition-all duration-200">
+            <h3 className="uppercase text-xs font-semibold mb-2 text-gray-600 tracking-wider">WIN RATE</h3>
+            <div className="text-3xl font-bold text-black mb-auto">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
           </div>
         </div>
         
-        {/* Main Content */}
-        <div className="space-y-6">
-          {/* Yellow Highlight Boxes */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Record Box */}
-            <div className="bg-[#fff9d0] rounded-lg p-6">
-              <h3 className="uppercase text-sm font-bold mb-2 text-black">RECORD</h3>
-              <div className="text-6xl font-bold text-black mb-2">{stats.record || '26-36'}</div>
-              <div className="text-sm text-black">Past 5 Games: 1W – 4 L 🔥 🔥</div>
-            </div>
-            
-            {/* Win Rate Box */}
-            <div className="bg-[#fff9d0] rounded-lg p-6">
-              <h3 className="uppercase text-sm font-bold mb-2 text-black">WIN RATE</h3>
-              <div className="text-6xl font-bold text-black mb-2">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-              <div className="text-sm text-black">Best Streak: 4 W's (Apr 12-15)</div>
-            </div>
+        {/* Main Content - 3 Column Grid */}
+        <div className="grid grid-cols-3 gap-6 mb-8">
+          {/* Record Box */}
+          <div className="bg-[#fff9d0] rounded-lg p-6 border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-200">
+            <h3 className="uppercase text-sm font-bold mb-2 text-black">RECORD</h3>
+            <div className="text-6xl font-bold text-black mb-2">{stats.record || '26-36'}</div>
+            <div className="text-sm text-black">Past 5 Games: 1W – 4 L 🔥 🔥</div>
           </div>
           
-          {/* Checkbox header for Recent Picks */}
-          <div className="flex items-center space-x-2 mt-6">
-            <div className="w-6 h-6 bg-gray-200 flex items-center justify-center rounded-md">
-              <span className="text-black">✓</span>
-            </div>
-            <h3 className="uppercase text-base font-bold text-black">RECENT PICKS</h3>
+          {/* Win Rate Box */}
+          <div className="bg-[#fff9d0] rounded-lg p-6 border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-200">
+            <h3 className="uppercase text-sm font-bold mb-2 text-black">WIN RATE</h3>
+            <div className="text-6xl font-bold text-black mb-2">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="text-sm text-black">Best Streak: 4 W's (Apr 12-15)</div>
           </div>
           
-          {/* Recent Picks Table */}
-          <div>
+          {/* Featured Top Win */}
+          {bestWin && (
+            <div className="bg-white rounded-lg p-6 border border-[#d4af37]/30 shadow-md hover:shadow-lg transition-all duration-200">
+              <h3 className="uppercase text-sm font-bold mb-3 text-black border-b border-[#d4af37]/20 pb-2">TOP WIN</h3>
+              <div className="flex flex-col justify-between h-[calc(100%-2rem)]">
+                <div className="mb-2">
+                  <div className="text-sm text-black">{bestWin.date ? new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 28'}</div>
+                  <div className="font-bold text-black text-lg">{bestWin.sport || 'MLB'}</div>
+                  <div className="text-black">{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
+                </div>
+                <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
+                  <div className="text-sm font-medium text-black">{bestWin.pick || 'Yankees -1.5'}</div>
+                  <div className="font-bold text-lg rounded-md px-3 py-1 bg-green-50 text-win">WON</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+          
+        {/* Recent Picks Section */}
+        <div className="mb-8">
+          {/* Enhanced Header for Recent Picks */}
+          <div className="flex items-center space-x-3 mb-4 border-b border-gray-200 pb-3">
+            <div className="bg-gray-100 rounded-md p-1 shadow-sm border border-gray-200">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M20 6L9 17l-5-5" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-black">RECENT PICKS</h3>
+          </div>
+          
+          {/* Enhanced Recent Picks Table */}
+          <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200/60">
             <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 text-xs uppercase text-black font-normal">DATE</th>
-                  <th className="text-left py-2 text-xs uppercase text-black font-normal">SPORT</th>
-                  <th className="text-left py-2 text-xs uppercase text-black font-normal">MATCHUP</th>
-                  <th className="text-left py-2 text-xs uppercase text-black font-normal">PICK</th>
-                  <th className="text-left py-2 text-xs uppercase text-black font-normal">RESULT</th>
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">DATE</th>
+                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">SPORT</th>
+                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">MATCHUP</th>
+                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">PICK</th>
+                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">RESULT</th>
                 </tr>
               </thead>
               <tbody>
                 {bettingLog.slice(0, 4).map((bet, index) => (
-                  <tr key={index} className="border-b border-gray-100">
-                    <td className="py-3 text-sm text-black">{bet.date ? new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 29'}</td>
-                    <td className="py-3 text-sm text-black">{bet.sport || 'NHL'}</td>
-                    <td className="py-3 text-sm text-black">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
-                    <td className="py-3 text-sm">
+                  <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                    <td className="py-4 px-4 text-sm text-black">{bet.date ? new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 29'}</td>
+                    <td className="py-4 px-4 text-sm font-medium text-black">{bet.sport || 'NHL'}</td>
+                    <td className="py-4 px-4 text-sm text-black">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
+                    <td className="py-4 px-4 text-sm">
                       <div className="flex items-center">
-                        <span className="inline-block w-3 h-3 rounded-full bg-[#ef4444] mr-2"></span>
+                        <span className="inline-block w-3 h-3 rounded-full bg-[#ef4444] mr-2 shadow-sm"></span>
                         <span className="text-black">{bet.pick || 'UNDER 5.5'}</span>
                       </div>
                     </td>
-                    <td className={`py-3 text-sm font-semibold ${bet.result === 'won' ? 'text-win' : 'text-loss'}`}>
-                      {bet.result === 'won' ? 'WON' : 'LOST'}
+                    <td className="py-4 px-4">
+                      <span className={`text-sm font-semibold py-1 px-3 rounded-full ${bet.result === 'won' ? 'bg-green-50 text-win' : 'bg-red-50 text-loss'}`}>
+                        {bet.result === 'won' ? 'WON' : 'LOST'}
+                      </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </div>
           
-          {/* Sport Performance Section */}
-          <div>
-            <h3 className="uppercase text-base font-bold mb-4 text-black">SPORT PERFORMANCE</h3>
-            <div className="bg-white rounded shadow-sm p-4">
-              <div className="space-y-6">
-                {stats.sportPerformance.map((sport, index) => (
-                  <div key={index} className="space-y-1">
-                    <div className="flex justify-between">
-                      <div className="text-black">{sport.sport || 'NBA'}</div>
-                      <div className="flex space-x-2 text-black">
-                        <span>W {sport.wins || 12}</span>
-                        <span>L {sport.losses || 14}</span>
-                      </div>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-[#d4af37] rounded-full" 
-                        style={{ width: `${(sport.wins / (sport.wins + sport.losses) * 100) || 45}%` }}
-                      ></div>
+        {/* Sport Performance Section - Enhanced */}
+        <div className="mb-8">
+          <div className="flex items-center space-x-3 mb-4 border-b border-gray-200 pb-3">
+            <h3 className="text-lg font-bold text-black">SPORT PERFORMANCE</h3>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200/60">
+            <div className="space-y-6">
+              {stats.sportPerformance.map((sport, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div className="text-black font-medium">{sport.sport || 'NBA'}</div>
+                    <div className="flex space-x-4 text-black">
+                      <span className="text-win font-medium">W {sport.wins || 12}</span>
+                      <span className="text-loss font-medium">L {sport.losses || 14}</span>
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className="h-full bg-[#d4af37] rounded-full shadow-sm" 
+                      style={{ width: `${(sport.wins / (sport.wins + sport.losses) * 100) || 45}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+        </div>
           
-          {/* Bet Type Distribution */}
-          <div>
-            <h3 className="uppercase text-base font-bold mb-4 text-black">BET TYPE DISTRIBUTION</h3>
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <div className="bg-white p-4 rounded shadow-sm flex items-center space-x-4">
-                  <div className="w-16 h-16 bg-[#d4af37] rounded-full flex items-center justify-center">
-                    <img src="/coin2.png" alt="Gary Coin" className="w-10 h-10" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-black">We're due for a comeback</p>
-                  </div>
-                </div>
+        {/* Bet Type Distribution - Enhanced */}
+        <div className="mb-8">
+          <div className="flex items-center space-x-3 mb-4 border-b border-gray-200 pb-3">
+            <h3 className="text-lg font-bold text-black">BET TYPE DISTRIBUTION</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-white rounded-lg p-6 shadow-md border border-gray-200/60 flex items-center space-x-4">
+              <div className="w-16 h-16 bg-[#d4af37] rounded-full flex items-center justify-center shadow-md">
+                <img src="/coin2.png" alt="Gary Coin" className="w-10 h-10" />
               </div>
               <div>
-                <div className="bg-white p-4 rounded shadow-sm">
-                  <h4 className="uppercase text-sm font-bold mb-2 text-black">BET TYPE</h4>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-28 h-28 rounded-full bg-[#d4af37] flex-shrink-0"></div>
-                    <div className="text-center text-black">DISTRIBUTION</div>
-                  </div>
-                </div>
+                <p className="text-lg font-medium text-black">We're due for a comeback</p>
               </div>
             </div>
-          </div>
-          
-          {/* Top Win Section */}
-          <div>
-            <h3 className="uppercase text-base font-bold mb-4 text-black">TOP WIN</h3>
-            {bestWin && (
-              <div className="bg-white rounded shadow-sm p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="text-sm text-black">{bestWin.date ? new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 28'}</div>
-                    <div className="font-bold text-black">{bestWin.sport || 'MLB'}</div>
-                    <div className="text-black">{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="font-bold text-lg" style={{ color: '#22c55e' }}>WON</div>
-                    <div className="text-sm text-black">{bestWin.pick || 'Yankees -1.5'}</div>
-                  </div>
-                </div>
+            <div className="bg-white rounded-lg p-6 shadow-md border border-gray-200/60">
+              <div className="flex flex-col items-center justify-center">
+                <div className="w-32 h-32 rounded-full bg-[#d4af37] flex-shrink-0 shadow-lg"></div>
+                <div className="mt-3 text-black font-medium">DISTRIBUTION</div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -316,4 +296,4 @@ export const Billfold = () => {
   );
 };
 
-// Component is exported as a named export at the top
+export default Billfold;
