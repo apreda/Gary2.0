@@ -119,78 +119,82 @@ export const garyPerformanceService = {
         .eq('date', date)
         .maybeSingle();
 
-      if (pickError) throw pickError;
+      if (pickError) {
+        console.error('Error fetching daily pick data for results recording:', pickError);
+        return { success: false, error: pickError, message: 'Error fetching daily pick data' };
+      }
 
       if (!dailyPick) {
-        return { success: false, message: `No picks found for ${date}` };
+        console.error('No daily pick found for date:', date);
+        return { success: false, message: `No daily pick found for date: ${date}` };
       }
 
       console.log(`Found daily pick for ${date} with ID ${dailyPick.id}, processing ${results.length} results`);
       
-      // For each result, insert a record in the game_results table
-      const gameResults = [];
-      
-      // We need to use the daily_pick ID as the pick_id (foreign key)
+      // Create entries in game_results table using the actual daily_pick ID
       const pickId = dailyPick.id;
-      console.log(`Using daily_picks ID as foreign key: ${pickId}`);
-      
-      // First filter out any results with 'unknown' values
-      const validResults = results.filter(r => r.result && r.result.toLowerCase() !== 'unknown');
-      console.log(`Found ${validResults.length} valid results out of ${results.length} total`);
-      
-      for (const result of validResults) {
+      console.log('Using daily_picks ID as foreign key:', pickId);
+
+      // Record each result in the database
+      const recordedResults = [];
+      let validResultsCount = 0;
+
+      for (const result of results) {
+        // Skip invalid results
+        if (!result.pick || !result.result) continue;
+
+        // Replace special characters in pick string to match original when searching
+        const normalizedPickText = result.pick.replace(/\s+/g, ' ').trim();
         
-        // Get league from the pick
-        let league = 'Unknown';
-        if (result.pick.includes('NHL') || 
-            result.pick.toLowerCase().includes('hockey')) {
-          league = 'NHL';
-        } else if (result.pick.includes('NBA') || 
-                  result.pick.toLowerCase().includes('basketball') || 
-                  result.pick.includes('Knicks') || 
-                  result.pick.includes('Nuggets') || 
-                  result.pick.includes('Timberwolves') || 
-                  result.pick.includes('Pacers')) {
-          league = 'NBA';
-        } else if (result.pick.includes('MLB') || 
-                  result.pick.toLowerCase().includes('baseball') || 
-                  result.pick.includes('Astros') || 
-                  result.pick.includes('Marlins') || 
-                  result.pick.includes('Mariners') || 
-                  result.pick.includes('Guardians') || 
-                  result.pick.includes('Yankees') || 
-                  result.pick.includes('Pirates') || 
-                  result.pick.includes('Reds') || 
-                  result.pick.includes('Phillies') || 
-                  result.pick.includes('Mets')) {
-          league = 'MLB';
-        }
+        // Find the original pick from daily_picks to use its ID
+        const originalPick = dailyPick.picks.find(p => {
+          const pNormalized = (p.pick || '').replace(/\s+/g, ' ').trim();
+          return pNormalized === normalizedPickText;
+        });
 
-        // Insert to game_results
-        const { data, error: insertError } = await supabase
-          .from('game_results')
-          .insert({
-            pick_id: pickId,
-            game_date: date,
-            league: league,
-            result: result.result,
-            final_score: result.score || 'N/A'
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error(`Error inserting result for pick ${result.pick}:`, insertError);
+        if (!originalPick) {
+          console.log(`Could not find original pick for "${normalizedPickText}" in daily picks data`);
           continue;
         }
 
-        gameResults.push(data);
+        // Get the league - either from the result object (if Perplexity returned it)
+        // or from the original pick in the daily_picks table
+        const league = result.league || originalPick.league || 'UNKNOWN';
+        console.log(`Using league ${league} for pick "${normalizedPickText}"`);
+
+        try {
+          // Insert the result into game_results table
+          const { data: insertedResult, error: insertError } = await supabase
+            .from('game_results')
+            .insert({
+              pick_id: pickId, // Use the daily pick ID as foreign key
+              game_date: date,
+              result: result.result,
+              final_score: result.score || '',
+              pick_text: result.pick, // Store the normalized pick text
+              league: league // Add the league field to the insert
+            })
+            .select();
+
+          if (insertError) {
+            console.error(`Error recording result for pick "${result.pick}":`, insertError);
+          } else {
+            console.log(`Successfully recorded result for pick "${result.pick}" (${league}):`, result.result);
+            recordedResults.push(insertedResult[0]);
+            validResultsCount++;
+          }
+        } catch (error) {
+          console.error(`Error processing result for pick "${result.pick}":`, error);
+        }
       }
 
+      console.log(`Found ${validResultsCount} valid results out of ${results.length} total`);
+      
       return { 
         success: true, 
-        message: `Recorded ${gameResults.length} pick results for ${date}`,
-        data: gameResults
+        message: `Recorded ${validResultsCount} results for ${date}`,
+        results: recordedResults,
+        length: recordedResults.length
       };
     } catch (error) {
       console.error('Error recording pick results:', error);

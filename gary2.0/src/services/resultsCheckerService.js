@@ -133,6 +133,8 @@ VERY IMPORTANT - FOLLOW THESE EXACT STEPS TO FIND REAL RESULTS:
 3. If ESPN doesn't have it, try the same process with the date picker on these sites:
    - https://www.cbssports.com/scores/ (look for calendar icon)
    - https://sports.yahoo.com/scores/ (has date navigation)
+   - https://www.sportingnews.com/us/scores (has date selector)
+   - https://www.scoresandodds.com/ (shows multiple dates)
    - League-specific sites with date selection:
      * NBA: https://www.nba.com/games (use date picker)
      * MLB: https://www.mlb.com/scores (click calendar icon)
@@ -141,12 +143,17 @@ VERY IMPORTANT - FOLLOW THESE EXACT STEPS TO FIND REAL RESULTS:
 KEY INSTRUCTIONS:
 1. You MUST use the date navigation on these sites to go to ${displayDate} specifically
 2. For each pick, find the actual game played on that date between the exact teams mentioned
-3. If you cannot find the real result for a game after trying all sites, label it as "unknown"
+3. Spend more time searching for each pick - check ALL sites for each game
 4. For each game with real results, determine if the pick "won", "lost", or was a "push" according to sports betting rules
 5. Include the actual final score for each game with format "Team A score - Team B score"
 6. DO NOT make up or estimate any results
+7. VERY IMPORTANT: Each response MUST include the original league (NBA, MLB, NHL) from the pick
 
-Response format must be structured as a JSON array of objects, each with fields 'pick', 'result', and 'score'.
+Response format must be structured as a JSON array of objects, each with these REQUIRED fields:
+- 'pick': The original pick text
+- 'league': The league of the game (NBA, MLB, NHL)
+- 'result': Whether the pick 'won', 'lost', 'push', or 'unknown' 
+- 'score': The final score in format 'Team A score - Team B score'
 
 Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       
@@ -264,13 +271,31 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
         return resultsResponse; // Return error
       }
       
-      // Step 3: Record the results
-      const recordResponse = await garyPerformanceService.recordPickResults(
-        picksResponse.date,
-        resultsResponse.results
-      );
+      // Filter out any unknown results to avoid recording them
+      const validResults = resultsResponse.results.filter(result => result.result !== 'unknown');
+      console.log(`Successfully parsed ${validResults.length} valid results out of ${resultsResponse.results.length} total`);
       
-      return recordResponse;
+      // Ensure each result has a league field (use original pick's league if not provided by Perplexity)
+      const resultsWithLeague = validResults.map(result => {
+        // If Perplexity didn't return a league field, find the original pick to get its league
+        if (!result.league) {
+          const originalPick = picksResponse.data.find(p => p.pick === result.pick);
+          if (originalPick) {
+            result.league = originalPick.league;
+          }
+        }
+        return result;
+      });
+
+      console.log('Results with league field:', resultsWithLeague);
+      
+      if (resultsWithLeague.length > 0) {
+        // Record the results in the database
+        const savedResults = await garyPerformanceService.recordPickResults(picksResponse.date, resultsWithLeague);
+        return { success: true, message: `Recorded ${savedResults.length} pick results for ${picksResponse.date}` };
+      } else {
+        return { success: false, message: 'No valid results to record' };
+      }
     } catch (error) {
       console.error('Error automating results checking:', error);
       return { success: false, message: error.message };
