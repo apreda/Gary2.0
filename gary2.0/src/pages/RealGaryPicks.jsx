@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 // Only import assets we actually need for the modern dark UI design
 import GaryEmblem from '../assets/images/Garyemblem.png';
+import CoinImage from '../assets/images/coin1.png';
 
 // Import services
 import { picksService } from '../services/picksService';
@@ -725,7 +726,7 @@ function RealGaryPicks() {
                                             </div>
                                           </div>
                                           
-                                          {/* Gary Emblem centered - no background */}
+                                          {/* Coin Image centered - no background */}
                                           <div style={{
                                             display: 'flex',
                                             justifyContent: 'center',
@@ -734,11 +735,11 @@ function RealGaryPicks() {
                                             background: 'transparent'
                                           }}>
                                             <img 
-                                              src={GaryEmblem} 
-                                              alt="Gary Emblem"
+                                              src={CoinImage} 
+                                              alt="Coin Image"
                                               style={{
-                                                width: 108, /* 20% bigger than previous 90px */
-                                                height: 108, /* 20% bigger than previous 90px */
+                                                width: 108, /* Same size as previous image */
+                                                height: 108, /* Same size as previous image */
                                                 objectFit: 'contain',
                                                 opacity: 1,
                                                 background: 'transparent'
