@@ -177,85 +177,92 @@ export function Billfold() {
   };
 
   return (
-    <div className="bg-white min-h-screen font-sans pt-16">
+    <div className="bg-[#FFFDF8] min-h-screen font-sans pt-16" 
+         style={{ 
+           backgroundImage: 'url(/noise.svg)',
+           backgroundRepeat: 'repeat',
+           backgroundSize: '200px',
+           backgroundOpacity: 0.05
+         }}>
       {/* Sticky Header with Key Metrics */}
-      <div className="sticky top-16 z-10 bg-white border-b border-[#d4af37] shadow-sm">
+      <div className="sticky top-16 z-10 bg-white border-b border-[#d4af37] shadow-md" 
+           style={{ backgroundImage: 'url(/noise.svg)', backgroundSize: '200px', backgroundOpacity: 0.02 }}>
         <div className="max-w-screen-2xl mx-auto px-4 py-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <div className="flex items-center">
-              <h1 className="text-lg text-gray-900 font-bold">Billfold</h1>
-              <span className="text-xs text-gray-500 ml-2">Last updated: {new Date().toLocaleTimeString()}</span>
+              <h2 className="text-gray-800 text-lg font-bold">Billfold</h2>
             </div>
-            
-            {/* Key Stats Ticker */}
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-              {/* Bankroll */}
-              <div className="flex items-center">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#f8f8f8] mr-2">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 1v22M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6" stroke="#d4af37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div>
-                  <p className="text-xs text-gray-500 leading-none">Bankroll</p>
-                  <p className="text-sm font-bold">${stats.bankroll?.toLocaleString() || '10,000'}</p>
-                </div>
-              </div>
-              
-              {/* Record */}
-              <div className="flex items-center">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#f8f8f8] mr-2">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M15 2H9a1 1 0 00-1 1v2a1 1 0 001 1h6a1 1 0 001-1V3a1 1 0 00-1-1z" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div>
-                  <p className="text-xs text-gray-500 leading-none">Record</p>
-                  <p className="text-sm font-bold">{stats.record || '0-0'}</p>
-                </div>
-              </div>
-              
-              {/* ROI */}
-              <div className="flex items-center">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#f8f8f8] mr-2">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 8c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zM3 12h1m8-9v1m8 8h1m-9 8v1M5.6 5.6l.7.7m12.1-.7l-.7.7m0 11.4l.7.7m-12.1-.7l-.7.7" stroke="#d4af37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div>
-                  <p className="text-xs text-gray-500 leading-none">ROI</p>
-                  <p className="text-sm font-bold text-[#d4af37]">{stats.roi?.toFixed(1) || 0}%</p>
-                </div>
-              </div>
-              
-              {/* Win Rate */}
-              <div className="flex items-center">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#f8f8f8] mr-2">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M20 6L9 17l-5-5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div>
-                  <p className="text-xs text-gray-500 leading-none">Win Rate</p>
-                  <p className="text-sm font-bold">{stats.winLoss || '0'}%</p>
-                </div>
-              </div>
+            <div className="flex items-center space-x-6">
+              <BillfoldKPI icon="dollar" metric="Bankroll" value={`$${stats.bankroll || 10000}`} textColor="text-gray-800" />
+              <BillfoldKPI icon="scale" metric="Record" value={stats.record} textColor="text-gray-800" />
+              <BillfoldKPI icon="trending" metric="ROI" value={`${stats.roi.toFixed(1)}%`} textColor="text-[#d4af37]" />
+              <BillfoldKPI icon="check" metric="Win Rate" value={`${(stats.winLoss * 100).toFixed(1)}%`} textColor="text-gray-800" />
             </div>
           </div>
         </div>
       </div>
       
       {/* Main Content */}
-      <div className="max-w-screen-2xl mx-auto px-4 py-4">
+      <div className="max-w-screen-2xl mx-auto px-4 py-6">
+        {/* Page Title with Coin Image */}
+        <div className="flex items-center mb-4 pl-1">
+          <img src="/coin2.png" alt="Gary Coin" className="h-8 w-8 mr-2" />
+          <h2 className="text-xl font-bold text-gray-800">Performance Dashboard</h2>
+        </div>
+        
+        {/* Recent Picks - At the top */}
+        <div className="mb-6">
+          <div className="bg-white rounded-md overflow-hidden border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300">
+            <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent flex justify-between items-center">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center">
+                <span className="mr-2 text-[#d4af37]">📈</span>Recent Picks
+              </h3>
+              
+              <div className="flex space-x-2">
+                <button 
+                  className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${activeBettingFilter === 'all' 
+                    ? 'bg-white text-[#d4af37] font-medium shadow-sm border border-[#d4af37]/20' 
+                    : 'text-gray-600 hover:bg-white/50 bg-gray-100'}`}
+                  onClick={() => setActiveBettingFilter('all')}
+                >
+                  All
+                </button>
+                <button 
+                  className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${activeBettingFilter === 'won' 
+                    ? 'bg-white text-green-600 font-medium shadow-sm border border-green-300/20' 
+                    : 'text-gray-600 hover:bg-white/50 bg-gray-100'}`}
+                  onClick={() => setActiveBettingFilter('won')}
+                >
+                  Wins
+                </button>
+                <button 
+                  className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${activeBettingFilter === 'lost' 
+                    ? 'bg-white text-red-600 font-medium shadow-sm border border-red-300/20' 
+                    : 'text-gray-600 hover:bg-white/50 bg-gray-100'}`}
+                  onClick={() => setActiveBettingFilter('lost')}
+                >
+                  Losses
+                </button>
+              </div>
+            </div>
+            
+            <BillfoldPicksTable 
+              bettingLog={filteredBettingLog}
+              title=""
+            />
+          </div>
+        </div>
+        
         {/* Two-column layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Left Column: Performance Overview + Sport Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column: Sport Breakdown + Highlights */}
           <div className="space-y-4">
             {/* Sport Breakdown with horizontal bars */}
-            <div className="bg-white rounded-md overflow-hidden border border-gray-200 shadow-sm">
-              <div className="px-3 py-2 border-b border-gray-200">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">Sport Breakdown</h3>
+            <div className="bg-white rounded-md overflow-hidden border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300">
+              <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center">
+                  <span className="mr-2 text-[#d4af37]">📊</span>Sport Breakdown
+                </h3>
               </div>
               
               <div className="p-3 space-y-3">
@@ -299,17 +306,17 @@ export function Billfold() {
             {/* Highlight Boxes */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Best Win */}
-              <div className="bg-white rounded-md overflow-hidden border border-gray-200 shadow-sm">
-                <div className="px-3 py-2 border-b border-gray-200 flex items-center">
-                  <FaTrophy className="text-[#d4af37] mr-1.5" size={12} />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">Top Win</h3>
+              <div className="bg-white rounded-md overflow-hidden border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300">
+                <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent flex items-center">
+                  <FaTrophy className="text-[#d4af37] mr-2" size={14} />
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800">Top Win</h3>
                 </div>
                 
-                <div className="p-3">
+                <div className="p-4">
                   {bestWin ? (
-                    <div className="space-y-1">
-                      <div className="flex items-center text-xs text-[#d4af37]">
-                        <span className="mr-1.5">
+                    <div className="space-y-2">
+                      <div className="flex items-center text-sm text-[#d4af37] font-medium">
+                        <span className="mr-2 text-lg">
                           {bestWin.sport === 'NBA' && '🏀'}
                           {bestWin.sport === 'NFL' && '🏈'}
                           {bestWin.sport === 'MLB' && '⚾'}
@@ -317,101 +324,112 @@ export function Billfold() {
                         </span>
                         <span>{bestWin.matchup}</span>
                       </div>
-                      <p className="text-sm font-medium text-gray-700">{bestWin.pick}</p>
-                      <p className="text-xs text-green-600">Result: {bestWin.score || 'Win'}</p>
+                      <div className="flex items-center">
+                        <img src="/coin2.png" alt="Gary Coin" className="h-4 w-4 mr-2 opacity-70" />
+                        <p className="text-base font-medium text-gray-700">{bestWin.pick}</p>
+                      </div>
+                      <p className="text-sm text-green-600 font-medium flex items-center">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 mr-2">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
+                        {bestWin.score || 'Win'}
+                      </p>
                     </div>
                   ) : (
-                    <div className="text-xs text-[#d4af37] text-center py-2">No win data available</div>
+                    <div className="flex items-center justify-center h-24">
+                      <div className="text-center">
+                        <img src="/coin2.png" alt="Gary Coin" className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm text-gray-500">No win data available yet</p>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
               
               {/* Gary's Mood */}
-              <div className="bg-white rounded-md overflow-hidden border border-gray-200 shadow-sm">
-                <div className="px-3 py-2 border-b border-gray-200">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">Gary's Mood</h3>
+              <div className="bg-white rounded-md overflow-hidden border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300">
+                <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center">
+                    <span className="text-[#d4af37] mr-2">🐻</span>
+                    Gary's Mood
+                  </h3>
                 </div>
                 
-                <div className="p-3 flex items-center justify-center">
+                <div 
+                  className={`p-4 flex items-center justify-center ${getGaryMood().split(' ')[0] === '🔥' ? 'bg-gradient-to-br from-[#fffcf0] to-[#fff6e0]' : 
+                    getGaryMood().split(' ')[0] === '😎' ? 'bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe]' :
+                    getGaryMood().split(' ')[0] === '🙂' ? 'bg-gradient-to-br from-[#f9fafb] to-[#f3f4f6]' :
+                    getGaryMood().split(' ')[0] === '😐' ? 'bg-gradient-to-br from-[#f9fafb] to-[#e5e7eb]' :
+                    'bg-gradient-to-br from-[#fef2f2] to-[#fee2e2]'}`}>
                   <div className="text-center">
-                    <p className="text-2xl mb-1">{getGaryMood().split(' ')[0]}</p>
-                    <p className="text-xs text-[#d4af37] font-medium">{getGaryMood().split(' ')[1]}</p>
+                    <div className="relative">
+                      <p className="text-3xl mb-2">{getGaryMood().split(' ')[0]}</p>
+                      <img src="/coin2.png" alt="Gary Coin" className="h-6 w-6 absolute -top-1 -right-3 opacity-70" />
+                    </div>
+                    <p className="text-sm text-gray-800 font-bold mb-1">{getGaryMood().split(' ')[1]}</p>
+                    <p className="text-xs text-gray-600 italic">
+                      {getGaryMood().split(' ')[0] === '🔥' ? "We're crushing it!" : 
+                        getGaryMood().split(' ')[0] === '😎' ? "Solid picks coming in hot!" :
+                        getGaryMood().split(' ')[0] === '🙂' ? "Steady does it, we'll get there" :
+                        getGaryMood().split(' ')[0] === '😐' ? "Gotta trust the system" :
+                        "We're due for a comeback"}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
           
-          {/* Right Column: Performance Charts + Recent Picks */}
+          {/* Right Column: Highlights */}
           <div className="space-y-4">
-            {/* Performance Charts */}
-            <div className="bg-white rounded-md overflow-hidden border border-gray-200 shadow-sm">
-              <div className="px-3 py-2 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">Performance Charts</h3>
-                
-                <div className="flex space-x-1.5">
-                  <button 
-                    className={`px-2 py-0.5 text-[10px] rounded transition-all ${activeTimeframe === 'all' ? 'bg-[#d4af37] text-white font-medium' : 'bg-gray-200 text-gray-700 font-medium'}`}
-                    onClick={() => setActiveTimeframe('all')}
-                  >
-                    All Time
-                  </button>
-                  <button 
-                    className={`px-2 py-0.5 text-[10px] rounded transition-all ${activeTimeframe === 'month' ? 'bg-[#d4af37] text-white font-medium' : 'bg-gray-200 text-gray-700 font-medium'}`}
-                    onClick={() => setActiveTimeframe('month')}
-                  >
-                    Month
-                  </button>
-                  <button 
-                    className={`px-2 py-0.5 text-[10px] rounded transition-all ${activeTimeframe === 'week' ? 'bg-[#d4af37] text-white font-medium' : 'bg-gray-200 text-gray-700 font-medium'}`}
-                    onClick={() => setActiveTimeframe('week')}
-                  >
-                    Week
-                  </button>
-                </div>
-              </div>
+            {/* More highlights or stats can go here */}
+            {/* Currently only contains the highlight boxes from the left column */}
+          </div>
+        </div>
+        
+        {/* Performance Charts - Full Width */}
+        <div className="mt-6">
+          <div className="bg-white rounded-md overflow-hidden border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300">
+            <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent flex justify-between items-center">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center">
+                <span className="mr-2 text-[#d4af37]">📈</span>Performance Charts
+              </h3>
               
-              <div className="p-2">
-                <BillfoldCharts 
-                  sportPerformance={stats.sportPerformance}
-                  betTypePerformance={stats.betTypePerformance}
-                />
+              <div className="flex space-x-2">
+                <button 
+                  className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${activeTimeframe === 'all' 
+                    ? 'bg-white text-[#d4af37] font-medium shadow-sm border border-[#d4af37]/20' 
+                    : 'text-gray-600 hover:bg-white/50 bg-gray-100'}`}
+                  onClick={() => setActiveTimeframe('all')}
+                >
+                  All Time
+                </button>
+                <button 
+                  className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${activeTimeframe === 'month' 
+                    ? 'bg-white text-[#d4af37] font-medium shadow-sm border border-[#d4af37]/20' 
+                    : 'text-gray-600 hover:bg-white/50 bg-gray-100'}`}
+                  onClick={() => setActiveTimeframe('month')}
+                >
+                  Month
+                </button>
+                <button 
+                  className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${activeTimeframe === 'week' 
+                    ? 'bg-white text-[#d4af37] font-medium shadow-sm border border-[#d4af37]/20' 
+                    : 'text-gray-600 hover:bg-white/50 bg-gray-100'}`}
+                  onClick={() => setActiveTimeframe('week')}
+                >
+                  Week
+                </button>
               </div>
             </div>
             
-            {/* Picks Table */}
-            <div className="bg-white rounded-md overflow-hidden border border-gray-200 shadow-sm">
-              <div className="px-3 py-2 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">Recent Picks</h3>
-                
-                <div className="flex space-x-1.5">
-                  <button 
-                    className={`px-2 py-0.5 text-[10px] rounded transition-all ${activeBettingFilter === 'all' ? 'bg-[#d4af37] text-white font-medium' : 'bg-gray-200 text-gray-700 font-medium'}`}
-                    onClick={() => setActiveBettingFilter('all')}
-                  >
-                    All
-                  </button>
-                  <button 
-                    className={`px-2 py-0.5 text-[10px] rounded transition-all ${activeBettingFilter === 'won' ? 'bg-green-600 text-white font-medium' : 'bg-gray-200 text-gray-700 font-medium'}`}
-                    onClick={() => setActiveBettingFilter('won')}
-                  >
-                    Wins
-                  </button>
-                  <button 
-                    className={`px-2 py-0.5 text-[10px] rounded transition-all ${activeBettingFilter === 'lost' ? 'bg-red-600 text-white font-medium' : 'bg-gray-200 text-gray-700 font-medium'}`}
-                    onClick={() => setActiveBettingFilter('lost')}
-                  >
-                    Losses
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-0">
-                <BillfoldPicksTable 
-                  bettingLog={filteredBettingLog}
-                  title=""
-                />
-              </div>
+            <div className="p-4">
+              <BillfoldCharts 
+                sportPerformance={stats.sportPerformance}
+                betTypePerformance={stats.betTypePerformance}
+              />
             </div>
           </div>
         </div>
