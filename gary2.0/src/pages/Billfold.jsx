@@ -155,7 +155,7 @@ export const Billfold = () => {
     <div className="bg-white min-h-screen font-sans pt-16">
       <div className="max-w-screen-lg mx-auto px-4 py-4">
         {/* Header */}
-        <h2 className="text-gray-800 text-2xl font-bold mb-6">Billfold</h2>
+        <h2 className="text-black text-2xl font-bold mb-6">Billfold</h2>
         
         {/* Top Stats Bar */}
         <div className="grid grid-cols-3 gap-4 mb-8">
@@ -229,7 +229,7 @@ export const Billfold = () => {
                         <span className="text-black">{bet.pick || 'UNDER 5.5'}</span>
                       </div>
                     </td>
-                    <td className="py-3 text-sm font-semibold" style={{ color: bet.result === 'won' ? '#22c55e' : '#ef4444' }}>
+                    <td className="py-3 text-sm font-semibold" style={{ color: bet.result === 'won' ? 'var(--gary-win)' : 'var(--gary-loss)' }}>
                       {bet.result === 'won' ? 'WON' : 'LOST'}
                     </td>
                   </tr>
