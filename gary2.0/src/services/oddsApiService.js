@@ -25,7 +25,7 @@ export const oddsApiService = {
   // Sport keys for the Odds API
   sportKeys: {
     NBA: 'basketball_nba',
-    NHL: 'hockey_nhl',
+    NHL: 'icehockey_nhl', // Fixed NHL sport key
     MLB: 'baseball_mlb'
   },
   
