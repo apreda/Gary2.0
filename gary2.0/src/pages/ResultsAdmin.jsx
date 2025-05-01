@@ -94,29 +94,21 @@ function ResultsAdmin() {
         return;
       }
       
-      // Check results with Perplexity
-      const results = await resultsCheckerService.checkResultsWithAI(
-        picksResponse.data,
-        date
-      );
+      // Use the automated results checking that includes Odds API
+      // Update the date in the picksResponse for proper processing
+      const automatedResults = await resultsCheckerService.automateResultsChecking();
       
-      if (!results.success) {
-        setStatus(`Error: ${results.message || 'Could not check results'}`);
+      if (!automatedResults.success) {
+        setStatus(`Error: ${automatedResults.message || 'Could not check results'}`);
         setLoading(false);
         return;
       }
       
-      // Record the results
-      const recordResponse = await garyPerformanceService.recordPickResults(
-        date,
-        results.results
-      );
+      // No need for separate record call as automateResultsChecking includes it
       
-      if (recordResponse.success) {
-        setStatus(`Success: ${recordResponse.message}`);
-      } else {
-        setStatus(`Error: ${recordResponse.message}`);
-      }
+      // Set the success message directly from automatedResults
+      setStatus(`Success: ${automatedResults.message}`);
+      
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       console.error('Error checking results:', error);

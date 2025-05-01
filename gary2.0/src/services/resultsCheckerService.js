@@ -253,102 +253,101 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
   },
   
   /**
-   * Check results using the Odds API directly
+   * Check results using the Odds API directly and match with Perplexity
    * @param {Array} picks - Array of picks to check
    * @param {string} date - Date of the picks in YYYY-MM-DD format
    * @returns {Promise} Results of the check
    */
   checkResultsWithOddsApi: async (picks, date) => {
     try {
-      console.log(`Checking results for ${picks.length} picks on ${date} using Odds API`);
+      console.log(`Checking results using Odds API for ${date}`);
       
-      // Map to store all the results
-      const resultsMap = new Map();
+      // Step 1: Fetch all sports scores from Odds API for the specified date
+      console.log(`Fetching all sports scores for ${date}`);
+      const allScores = await oddsApiService.getAllSportsScores(date);
       
-      // Group picks by league for efficient API calls
-      const picksByLeague = {};
-      for (const pick of picks) {
-        const league = pick.league || 'UNKNOWN';
-        if (!picksByLeague[league]) {
-          picksByLeague[league] = [];
-        }
-        picksByLeague[league].push(pick);
-      }
-      
-      console.log('Grouped picks by league:', picksByLeague);
-      
-      // Process each league
-      for (const league in picksByLeague) {
-        // Map the league to the correct Odds API sport key
-        const sportKey = {
-          'NBA': 'basketball_nba',
-          'MLB': 'baseball_mlb',
-          'NHL': 'icehockey_nhl',
-          'NFL': 'americanfootball_nfl'
-        }[league] || null;
-        
-        if (!sportKey) {
-          console.log(`No sport key mapping for league ${league}, skipping`);
-          continue;
-        }
-        
-        // Get scores from the Odds API
-        try {
-          const games = await oddsApiService.getScores(sportKey, date);
-          console.log(`Retrieved ${games.length} games for ${league} on ${date}`, games);
-          
-          // Process each pick for this league
-          for (const pick of picksByLeague[league]) {
-            // Find a matching game for this pick
-            // We need to match based on the teams in the pick
-            let matchingGame = null;
-            for (const game of games) {
-              const homeTeamLower = game.home_team.toLowerCase();
-              const awayTeamLower = game.away_team.toLowerCase();
-              const pickLower = pick.pick.toLowerCase();
-              const hasHomeTeam = homeTeamLower.includes(pick.homeTeam.toLowerCase()) || pick.homeTeam.toLowerCase().includes(homeTeamLower);
-              const hasAwayTeam = awayTeamLower.includes(pick.awayTeam.toLowerCase()) || pick.awayTeam.toLowerCase().includes(awayTeamLower);
-              
-              if (hasHomeTeam && hasAwayTeam) {
-                matchingGame = game;
-                break;
-              }
-            }
-            
-            if (matchingGame) {
-              // Found a matching game, evaluate the pick
-              const evaluation = oddsApiService.evaluatePick(matchingGame, pick.pick);
-              
-              // Create result object
-              const result = {
-                pick: pick.pick,
-                league: league,
-                result: evaluation.result,
-                score: evaluation.score
-              };
-              
-              resultsMap.set(pick.pick, result);
-              console.log(`Evaluated ${league} pick: ${pick.pick} => ${evaluation.result}`);
-            } else {
-              console.log(`No matching game found for pick: ${pick.pick}`);
-            }
-          }
-        } catch (error) {
-          console.error(`Error fetching ${league} games:`, error);
-        }
-      }
-      
-      // Convert results map to array
-      const results = Array.from(resultsMap.values());
-      console.log(`OddsAPI results: Found ${results.length} results for ${picks.length} picks`);
-      
-      return {
-        success: true,
-        results: results
+      // Flatten the games from all sports for easier processing
+      const allGames = [];
+      const sportMapping = { 
+        'basketball_nba': 'NBA', 
+        'hockey_nhl': 'NHL', 
+        'baseball_mlb': 'MLB' 
       };
+      
+      // Format all games for Perplexity to understand
+      Object.entries(allScores).forEach(([sportKey, games]) => {
+        games.forEach(game => {
+          if (game.completed) {
+            allGames.push({
+              league: sportMapping[sportKey] || sportKey,
+              homeTeam: game.home_team,
+              homeScore: game.scores?.[game.home_team] || 0,
+              awayTeam: game.away_team,
+              awayScore: game.scores?.[game.away_team] || 0,
+              date: new Date(game.commence_time).toISOString().split('T')[0],
+              rawGame: game // Keep original game data for reference
+            });
+          }
+        });
+      });
+      
+      console.log(`Found ${allGames.length} completed games across all sports for ${date}`);
+      
+      // If no games found, return empty results
+      if (allGames.length === 0) {
+        console.log(`No completed games found for any sport on ${date}`);
+        return { success: false, message: `No completed games found for ${date}`, results: [] };
+      }
+      
+      // Step 2: Use Perplexity to match our picks with the game results
+      // Prepare a query for Perplexity with all the picks and scores
+      const query = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:\n\n📊 ACTUAL GAME RESULTS:\n${allGames.map(game => `${game.league}: ${game.awayTeam} ${game.awayScore} @ ${game.homeTeam} ${game.homeScore}`).join('\n')}\n\n🎲 BETTING PICKS TO EVALUATE:\n${picks.map((pick, i) => 
+  `${i+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
+).join('\n')}\n\nFor each numbered pick:\n1. Find the corresponding game in the results\n2. Determine if the pick "won", "lost", or was a "push" according to sports betting rules\n3. Provide the actual final score that determined the result\n\nBetting Rules:\n- Spread bets (e.g. "Team +3.5"): Add the spread to the team's score. If that total exceeds the opponent's score, the bet wins.\n- Moneyline bets (e.g. "Team ML"): Simply pick the winner of the game.\n- Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.\n\nResponse format must be a JSON array of objects, each with these fields:\n- 'pick': The original pick text\n- 'league': The league (NBA, NHL, MLB)\n- 'result': Whether the pick 'won', 'lost', 'push', or 'unknown'\n- 'score': The final score in format 'Team A score - Team B score'`;
+
+      console.log('Using Perplexity to match picks with Odds API results');
+      console.log(`Prepared Perplexity query with ${allGames.length} games and ${picks.length} picks`);
+      
+      // Call Perplexity API with the prepared query
+      const responseText = await perplexityService.fetchRealTimeInfo(query, {
+        model: 'sonar-medium-online',
+        temperature: 0.1,
+        maxTokens: 4000
+      });
+      
+      console.log('Received response from Perplexity for pick matching');
+      
+      // Parse the results from Perplexity's response
+      let results = [];
+      
+      try {
+        // First try direct JSON parsing
+        results = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.log('Direct JSON parsing failed, trying to extract JSON from text');
+        
+        // Try to find and extract JSON from the response
+        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        
+        if (jsonMatch && jsonMatch[1]) {
+          try {
+            results = JSON.parse(jsonMatch[1]);
+          } catch (extractedJsonError) {
+            console.error('Failed to parse extracted JSON:', extractedJsonError);
+            // Fall back to manual parsing as a last resort
+            results = parseResultsManually(responseText);
+          }
+        } else {
+          console.log('Attempting to manually parse the response');
+          results = parseResultsManually(responseText);
+        }
+      }
+      
+      console.log(`Processed ${results.length} of ${picks.length} picks with Perplexity + Odds API`);
+      return { success: true, results };
     } catch (error) {
-      console.error('Error checking results with Odds API:', error);
-      return { success: false, message: error.message };
+      console.error('Error checking results with Odds API + Perplexity:', error);
+      return { success: false, message: error.message, results: [] };
     }
   },
 

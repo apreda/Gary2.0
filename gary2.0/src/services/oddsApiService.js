@@ -22,6 +22,13 @@ export const oddsApiService = {
   },
   BASE_URL: 'https://api.the-odds-api.com/v4',
   
+  // Sport keys for the Odds API
+  sportKeys: {
+    NBA: 'basketball_nba',
+    NHL: 'hockey_nhl',
+    MLB: 'baseball_mlb'
+  },
+  
   /**
    * Get scores for a specific sport and date
    * @param {string} sport - Sport key (e.g. 'basketball_nba', 'baseball_mlb')
@@ -60,6 +67,56 @@ export const oddsApiService = {
       return games;
     } catch (error) {
       console.error('Error fetching scores from Odds API:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Get scores for all sports (NBA, NHL, MLB) for a specific date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Object>} Object with scores grouped by sport
+   */
+  getAllSportsScores: async (date) => {
+    try {
+      if (!oddsApiService.API_KEY) {
+        throw new Error('Odds API key not configured');
+      }
+      
+      console.log(`Fetching scores for all sports on ${date} from Odds API`);
+      
+      // Define all sports we want to fetch
+      const sports = [
+        oddsApiService.sportKeys.NBA,
+        oddsApiService.sportKeys.NHL,
+        oddsApiService.sportKeys.MLB
+      ];
+      
+      // Fetch scores for each sport in parallel
+      const scoresPromises = sports.map(sport => oddsApiService.getScores(sport, date));
+      const scoresResults = await Promise.allSettled(scoresPromises);
+      
+      // Process results, including handling errors for individual sports
+      const allScores = {};
+      
+      sports.forEach((sport, index) => {
+        const result = scoresResults[index];
+        if (result.status === 'fulfilled') {
+          allScores[sport] = result.value;
+        } else {
+          console.error(`Failed to fetch scores for ${sport}:`, result.reason);
+          allScores[sport] = [];
+        }
+      });
+      
+      // Count total games found
+      const totalGames = Object.values(allScores).reduce(
+        (total, sportGames) => total + sportGames.length, 0
+      );
+      
+      console.log(`Found a total of ${totalGames} games across all sports for ${date}`);
+      return allScores;
+    } catch (error) {
+      console.error('Error fetching all sports scores from Odds API:', error);
       throw error;
     }
   },
