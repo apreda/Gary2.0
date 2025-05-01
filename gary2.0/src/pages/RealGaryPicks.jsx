@@ -11,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 // Only import assets we actually need for the modern dark UI design
 import GaryEmblem from '../assets/images/Garyemblem.png';
-import CoinImage from '../assets/images/coin1.png';
+// Using coin image from public directory to avoid build issues
 
 // Import services
 import { picksService } from '../services/picksService';
@@ -735,7 +735,7 @@ function RealGaryPicks() {
                                             background: 'transparent'
                                           }}>
                                             <img 
-                                              src={CoinImage} 
+                                              src="/coin1.png" 
                                               alt="Coin Image"
                                               style={{
                                                 width: 108, /* Same size as previous image */
