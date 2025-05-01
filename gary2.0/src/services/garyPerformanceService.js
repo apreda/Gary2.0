@@ -87,7 +87,12 @@ export const garyPerformanceService = {
                 league === 'NHL' ? '🏒' : '🎯',
           record: `${leagueWins}-${leagueLosses}${leaguePushes > 0 ? `-${leaguePushes}` : ''}`,
           winRate: parseFloat(leagueWinRate.toFixed(1)),
-          totalBets: leagueTotal
+          totalBets: leagueTotal,
+          // Add these properties for the chart to use
+          wins: leagueWins,
+          losses: leagueLosses,
+          pushes: leaguePushes,
+          total: leagueTotal
         });
       }
       
