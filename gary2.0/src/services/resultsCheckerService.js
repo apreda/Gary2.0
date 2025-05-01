@@ -2,6 +2,66 @@ import { supabase } from '../supabaseClient';
 import { garyPerformanceService } from './garyPerformanceService';
 import { perplexityService } from './perplexityService';
 
+/**
+ * Manually parse results from text response when JSON parsing fails
+ * @param {string} text - The text response from Perplexity
+ * @returns {Array} - Array of pick results objects
+ */
+const parseResultsManually = (text) => {
+  console.log('Manual parsing of:', text);
+  
+  // Initialize results array
+  const results = [];
+  
+  // Split the text by lines or by clear separators
+  const lines = text.split(/\n|\r|\.|\*|•/);
+  
+  // Look for patterns like "[Pick text] won/lost/push [score]" in each line
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+    
+    // Skip lines that are clearly not about results
+    if (line.startsWith('I found') || line.startsWith('Here are') || 
+        line.startsWith('Based on') || line.includes('search for')) {
+      continue;
+    }
+    
+    // Try to extract pick text
+    let pickMatch = line.match(/"([^"]+)"|'([^']+)'|^([^:]+):|^(.+?)(?=won|lost|push)/i);
+    if (!pickMatch) continue;
+    
+    const pickText = (pickMatch[1] || pickMatch[2] || pickMatch[3] || pickMatch[4] || '').trim();
+    if (!pickText || pickText.length < 5) continue; // Skip too short matches
+    
+    // Try to find result
+    const resultMatch = line.toLowerCase().match(/(won|lost|push)/);
+    if (!resultMatch) continue;
+    
+    const result = resultMatch[1];
+    
+    // Try to extract score if present
+    const scoreMatch = line.match(/\d+[-–]\d+|\(.*?\)/);
+    const score = scoreMatch ? scoreMatch[0] : '';
+    
+    // Add to results
+    results.push({
+      pick: pickText,
+      result: result,
+      score: score
+    });
+  }
+  
+  // If we found any results, return them
+  if (results.length > 0) {
+    console.log(`Manually parsed ${results.length} results:`, results);
+    return results;
+  }
+  
+  // If manual parsing failed, throw error
+  throw new Error('Manual parsing could not extract any valid results');
+};
+
 export const resultsCheckerService = {
   /**
    * Get yesterday's picks from the database
@@ -94,18 +154,38 @@ Picks: ${JSON.stringify(picks, null, 2)}`;
       const assistantMessage = responseData.choices[0].message.content;
       console.log('Perplexity response:', assistantMessage);
       
-      // Extract JSON from the response
+      // Extract JSON from the response using multiple approaches
       let results;
       try {
-        // Try to parse JSON directly
-        results = JSON.parse(assistantMessage);
+        // First attempt: Direct parsing if it's clean JSON
+        results = JSON.parse(assistantMessage.trim());
       } catch (e) {
-        // If direct parsing fails, try to extract JSON from the text
-        const jsonMatch = assistantMessage.match(/\[\s*\{.*\}\s*\]/s);
-        if (jsonMatch) {
-          results = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('Could not parse results from Perplexity response');
+        console.log('Direct JSON parsing failed, trying to extract JSON from text');
+        try {
+          // Second attempt: Find JSON array pattern [{ ... }] with regex
+          const jsonArrayMatch = assistantMessage.match(/\[\s*\{.*\}\s*\]/s);
+          if (jsonArrayMatch) {
+            results = JSON.parse(jsonArrayMatch[0]);
+          } else {
+            // Third attempt: Look for JSON inside code blocks
+            const codeBlockMatch = assistantMessage.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (codeBlockMatch && codeBlockMatch[1]) {
+              results = JSON.parse(codeBlockMatch[1].trim());
+            } else {
+              // Fourth attempt: Find any sequence that looks like JSON objects
+              const jsonObjectsMatch = assistantMessage.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+              if (jsonObjectsMatch && jsonObjectsMatch[0]) {
+                results = JSON.parse(jsonObjectsMatch[0]);
+              } else {
+                // Fifth attempt: Parse manually if all else fails
+                console.log('Attempting to manually parse the response');
+                results = parseResultsManually(assistantMessage);
+              }
+            }
+          }
+        } catch (nestedError) {
+          console.error('All JSON parsing attempts failed:', nestedError);
+          throw new Error('Could not parse results from Perplexity response. Check console for details.');
         }
       }
       
