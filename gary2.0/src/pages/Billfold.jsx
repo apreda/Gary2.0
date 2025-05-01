@@ -158,8 +158,8 @@ export const Billfold = () => {
         <h2 className="text-gray-800 text-2xl font-bold mb-6">Billfold</h2>
         
         {/* Top Stats Bar */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <div className="text-center">
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <div>
             <div className="text-gray-600 uppercase text-xs font-semibold mb-1">BANKROLL</div>
             <div className="text-lg font-bold">${stats.bankroll || '10000'}</div>
           </div>
@@ -172,9 +172,7 @@ export const Billfold = () => {
             </div>
           </div>
           
-          <div></div> {/* Empty div for spacing */}
-          
-          <div className="text-center">
+          <div className="text-right">
             <div className="text-gray-600 uppercase text-xs font-semibold mb-1">WIN RATE</div>
             <div className="text-lg font-bold">{(stats.winLoss * 100)?.toFixed(1) || '41.9'} %</div>
           </div>
@@ -185,26 +183,26 @@ export const Billfold = () => {
           {/* Yellow Highlight Boxes */}
           <div className="grid grid-cols-2 gap-6">
             {/* Record Box */}
-            <div className="bg-[#fff9d0] rounded-md p-6">
-              <h3 className="uppercase text-sm font-bold mb-2">RECORD</h3>
-              <div className="text-6xl font-bold text-gray-800 mb-2">{stats.record}</div>
+            <div className="bg-[#fff9d0] rounded-lg p-6">
+              <h3 className="uppercase text-sm font-bold mb-2 text-gray-600">RECORD</h3>
+              <div className="text-6xl font-bold text-gray-900 mb-2">{stats.record || '26-36'}</div>
               <div className="text-sm text-gray-600">Past 5 Games: 1W – 4 L 🔥 🔥</div>
             </div>
             
             {/* Win Rate Box */}
-            <div className="bg-[#fff9d0] rounded-md p-6">
-              <h3 className="uppercase text-sm font-bold mb-2">WIN RATE</h3>
-              <div className="text-6xl font-bold text-gray-800 mb-2">{(stats.winLoss * 100).toFixed(1)}%</div>
+            <div className="bg-[#fff9d0] rounded-lg p-6">
+              <h3 className="uppercase text-sm font-bold mb-2 text-gray-600">WIN RATE</h3>
+              <div className="text-6xl font-bold text-gray-900 mb-2">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
               <div className="text-sm text-gray-600">Best Streak: 4 W's (Apr 12-15)</div>
             </div>
           </div>
           
           {/* Checkbox header for Recent Picks */}
           <div className="flex items-center space-x-2 mt-6">
-            <div className="w-5 h-5 bg-gray-200 flex items-center justify-center rounded">
+            <div className="w-6 h-6 bg-gray-200 flex items-center justify-center rounded-md">
               <span className="text-gray-600">✓</span>
             </div>
-            <h3 className="uppercase text-base font-bold">RECENT PICKS</h3>
+            <h3 className="uppercase text-base font-bold text-gray-800">RECENT PICKS</h3>
           </div>
           
           {/* Recent Picks Table */}
@@ -227,11 +225,13 @@ export const Billfold = () => {
                     <td className="py-3 text-sm">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
                     <td className="py-3 text-sm">
                       <div className="flex items-center">
-                        <span className="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span>
+                        <span className="inline-block w-3 h-3 rounded-full bg-[#ef4444] mr-2"></span>
                         {bet.pick || 'UNDER 5.5'}
                       </div>
                     </td>
-                    <td className="py-3 text-sm text-red-500 font-semibold">{bet.result?.toUpperCase() || 'LOST'}</td>
+                    <td className="py-3 text-sm font-semibold" style={{ color: bet.result === 'won' ? '#22c55e' : '#ef4444' }}>
+                      {bet.result === 'won' ? 'WON' : 'LOST'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -255,7 +255,7 @@ export const Billfold = () => {
                     <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-[#d4af37] rounded-full" 
-                        style={{ width: `${sport.wins / (sport.wins + sport.losses) * 100 || 45}%` }}
+                        style={{ width: `${(sport.wins / (sport.wins + sport.losses) * 100) || 45}%` }}
                       ></div>
                     </div>
                   </div>
@@ -271,11 +271,10 @@ export const Billfold = () => {
               <div>
                 <div className="bg-white p-4 rounded shadow-sm flex items-center space-x-4">
                   <div className="w-16 h-16 bg-[#d4af37] rounded-full flex items-center justify-center">
-                    <img src="/coin2.png" alt="Bear" className="w-12 h-12" />
+                    <img src="/coin2.png" alt="Gary Coin" className="w-10 h-10" />
                   </div>
-                  <div>
-                    <h4 className="font-bold">Determined</h4>
-                    <p className="text-sm text-gray-600">We're due for a comeback</p>
+                  <div className="text-gray-700">
+                    <p className="text-sm">We're due for a comeback</p>
                   </div>
                 </div>
               </div>
@@ -303,7 +302,7 @@ export const Billfold = () => {
                     <div>{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-green-500 font-bold text-lg">WON</div>
+                    <div className="font-bold text-lg" style={{ color: '#22c55e' }}>WON</div>
                     <div className="text-sm">{bestWin.pick || 'Yankees -1.5'}</div>
                   </div>
                 </div>
