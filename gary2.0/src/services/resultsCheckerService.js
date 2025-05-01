@@ -1,10 +1,10 @@
 import { supabase } from '../supabaseClient';
 import { garyPerformanceService } from './garyPerformanceService';
 import { perplexityService } from './perplexityService';
-import { oddsApiService } from './oddsApiService';
+import { sportsDbApiService } from './sportsDbApiService';
 
-// Initialize the Odds API service
-oddsApiService.initialize();
+// Initialize services
+sportsDbApiService.initialize();
 
 /**
  * Manually parse results from text response when JSON parsing fails
@@ -329,50 +329,46 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
   },
   
   /**
-   * Check results using the Odds API directly and match with Perplexity
+   * Check results using the TheSportsDB API and match with Perplexity
    * @param {Array} picks - Array of picks to check
    * @param {string} date - Date of the picks in YYYY-MM-DD format
    * @returns {Promise} Results of the check
    */
-  checkResultsWithOddsApi: async (picks, date) => {
+  checkResultsWithSportsDbApi: async (picks, date) => {
     try {
-      console.log(`Checking results using Odds API for ${date}`);
+      console.log(`Checking results using TheSportsDB API for ${date}`);
       
-      // Step 1: Fetch all sports scores from Odds API for the specified date
-      console.log(`Fetching all sports scores for ${date}`);
-      const allScores = await oddsApiService.getAllSportsScores(date);
+      // Step 1: Fetch all sports events from TheSportsDB API for the specified date
+      console.log(`Fetching all sports events for ${date}`);
+      const allEvents = await sportsDbApiService.getAllSportsEvents(date);
       
-      // Flatten the games from all sports for easier processing
+      // Flatten the events from all leagues for easier processing
       const allGames = [];
-      const sportMapping = { 
-        'basketball_nba': 'NBA', 
-        'hockey_nhl': 'NHL', 
-        'baseball_mlb': 'MLB' 
-      };
       
-      // Format all games for Perplexity to understand
-      Object.entries(allScores).forEach(([sportKey, games]) => {
-        games.forEach(game => {
-          if (game.completed) {
+      // Format all events for Perplexity to understand
+      Object.entries(allEvents).forEach(([league, events]) => {
+        events.forEach(event => {
+          // Only include events with scores
+          if (event.intHomeScore !== null && event.intAwayScore !== null) {
             allGames.push({
-              league: sportMapping[sportKey] || sportKey,
-              homeTeam: game.home_team,
-              homeScore: game.scores?.[game.home_team] || 0,
-              awayTeam: game.away_team,
-              awayScore: game.scores?.[game.away_team] || 0,
-              date: new Date(game.commence_time).toISOString().split('T')[0],
-              rawGame: game // Keep original game data for reference
+              league: league,
+              homeTeam: event.strHomeTeam,
+              homeScore: parseInt(event.intHomeScore, 10) || 0,
+              awayTeam: event.strAwayTeam,
+              awayScore: parseInt(event.intAwayScore, 10) || 0,
+              date: event.dateEvent,
+              rawEvent: event // Keep original event data for reference
             });
           }
         });
       });
       
-      console.log(`Found ${allGames.length} completed games across all sports for ${date}`);
+      console.log(`Found ${allGames.length} games with scores across all sports for ${date}`);
       
       // If no games found, return empty results
       if (allGames.length === 0) {
-        console.log(`No completed games found for any sport on ${date}`);
-        return { success: false, message: `No completed games found for ${date}`, results: [] };
+        console.log(`No games with scores found for any sport on ${date}`);
+        return { success: false, message: `No games with scores found for ${date}`, results: [] };
       }
       
       // Step 2: Use Perplexity to match our picks with the game results
@@ -381,7 +377,7 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
   `${i+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
 ).join('\n')}\n\nFor each numbered pick:\n1. Find the corresponding game in the results\n2. Determine if the pick "won", "lost", or was a "push" according to sports betting rules\n3. Provide the actual final score that determined the result\n\nBetting Rules:\n- Spread bets (e.g. "Team +3.5"): Add the spread to the team's score. If that total exceeds the opponent's score, the bet wins.\n- Moneyline bets (e.g. "Team ML"): Simply pick the winner of the game.\n- Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.\n\nResponse format must be a JSON array of objects, each with these fields:\n- 'pick': The original pick text\n- 'league': The league (NBA, NHL, MLB)\n- 'result': Whether the pick 'won', 'lost', 'push', or 'unknown'\n- 'score': The final score in format 'Team A score - Team B score'`;
 
-      console.log('Using Perplexity to match picks with Odds API results');
+      console.log('Using Perplexity to match picks with TheSportsDB API results');
       console.log(`Prepared Perplexity query with ${allGames.length} games and ${picks.length} picks`);
       
       // Call Perplexity API with the prepared query
@@ -419,10 +415,10 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
         }
       }
       
-      console.log(`Processed ${results.length} of ${picks.length} picks with Perplexity + Odds API`);
+      console.log(`Processed ${results.length} of ${picks.length} picks with Perplexity + TheSportsDB API`);
       return { success: true, results };
     } catch (error) {
-      console.error('Error checking results with Odds API + Perplexity:', error);
+      console.error('Error checking results with TheSportsDB API + Perplexity:', error);
       return { success: false, message: error.message, results: [] };
     }
   },
@@ -437,27 +433,27 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       const picksResponse = await resultsCheckerService.getYesterdaysPicks();
       
       if (!picksResponse.success) {
-        return picksResponse; // Return error
+        return picksResponse; // Return the error message
       }
       
-      // Step 2: Try to check results with Odds API first
-      let resultsResponse = await resultsCheckerService.checkResultsWithOddsApi(
-        picksResponse.data, 
+      // Step 2: Check results using TheSportsDB API
+      const sportsDbApiResponse = await resultsCheckerService.checkResultsWithSportsDbApi(
+        picksResponse.data,
         picksResponse.date
       );
       
-      let oddsApiResults = [];
-      
-      if (resultsResponse.success && resultsResponse.results.length > 0) {
-        // Store valid Odds API results
-        oddsApiResults = resultsResponse.results.filter(r => r.result !== 'unknown');
-        console.log(`Got ${oddsApiResults.length} valid results from Odds API`);
+      let sportsDbApiResults = [];
+      if (sportsDbApiResponse.success) {
+        sportsDbApiResults = sportsDbApiResponse.results.filter(r => r.result !== 'unknown');
+        console.log(`Got ${sportsDbApiResults.length} valid results from TheSportsDB API`);
+      } else {
+        console.log(`TheSportsDB API check failed: ${sportsDbApiResponse.message}`);
       }
       
-      // Step 3: Fall back to Perplexity for any picks that weren't resolved by Odds API
+      // Step 3: Fall back to Perplexity for any picks that weren't resolved by TheSportsDB API
       const unresolvedPicks = picksResponse.data.filter(pick => {
-        // Check if this pick wasn't resolved by Odds API
-        return !oddsApiResults.some(result => result.pick === pick.pick);
+        // Check if this pick wasn't resolved by TheSportsDB API
+        return !sportsDbApiResults.some(result => result.pick === pick.pick);
       });
       
       let perplexityResults = [];
@@ -478,8 +474,8 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       }
       
       // Combine results from both sources
-      const allResults = [...oddsApiResults, ...perplexityResults];
-      console.log(`Combined results: ${allResults.length} total (${oddsApiResults.length} from Odds API, ${perplexityResults.length} from Perplexity)`);
+      const allResults = [...sportsDbApiResults, ...perplexityResults];
+      console.log(`Combined results: ${allResults.length} total (${sportsDbApiResults.length} from TheSportsDB API, ${perplexityResults.length} from Perplexity)`);
       
       // Ensure each result has a league field
       const resultsWithLeague = allResults.map(result => {
@@ -500,7 +496,7 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
         const savedResults = await garyPerformanceService.recordPickResults(picksResponse.date, resultsWithLeague);
         return { 
           success: true, 
-          message: `Recorded ${savedResults.length} pick results for ${picksResponse.date} (${oddsApiResults.length} from Odds API, ${perplexityResults.length} from Perplexity)` 
+          message: `Recorded ${savedResults.length} pick results for ${picksResponse.date} (${sportsDbApiResults.length} from TheSportsDB API, ${perplexityResults.length} from Perplexity)` 
         };
       } else {
         return { success: false, message: 'No valid results to record' };
