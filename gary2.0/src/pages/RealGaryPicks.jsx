@@ -536,24 +536,49 @@ function RealGaryPicks() {
                                           justifyContent: 'space-between',
                                           overflow: 'hidden',
                                         }}>
-                                          {/* League name with subtle label */}
-                                          <div>
-                                            <div style={{ 
-                                              fontSize: '0.75rem', 
-                                              opacity: 0.6, 
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em', 
-                                              marginBottom: '0.25rem'
-                                            }}>
-                                              League
+                                          {/* League and Matchup in horizontal layout */}
+                                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                                            {/* League */}
+                                            <div>
+                                              <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.25rem'
+                                              }}>
+                                                League
+                                              </div>
+                                              <div style={{ 
+                                                fontSize: '1.25rem', 
+                                                fontWeight: 600, 
+                                                letterSpacing: '0.02em',
+                                                opacity: 0.95
+                                              }}>
+                                                {pick.league || 'MLB'}
+                                              </div>
                                             </div>
-                                            <div style={{ 
-                                              fontSize: '1.25rem', 
-                                              fontWeight: 600, 
-                                              letterSpacing: '0.02em',
-                                              opacity: 0.95
-                                            }}>
-                                              {pick.league || 'MLB'}
+                                            
+                                            {/* Matchup */}
+                                            <div style={{ marginLeft: '20px' }}>
+                                              <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.25rem'
+                                              }}>
+                                                Matchup
+                                              </div>
+                                              <div style={{ 
+                                                fontSize: '1.25rem', 
+                                                fontWeight: 600,
+                                                opacity: 0.9
+                                              }}>
+                                                {(pick.homeTeam && pick.awayTeam) ? 
+                                                  `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
+                                                  (pick.game ? pick.game : 'TBD')}
+                                              </div>
                                             </div>
                                           </div>
                                           
@@ -673,50 +698,11 @@ function RealGaryPicks() {
                                           alignItems: 'center',
                                           background: 'rgba(0, 0, 0, 0.15)'
                                         }}>
-                                           {/* League */}
+                                           {/* Game time section */}
                                            <div style={{ 
                                              textAlign: 'center',
                                              marginBottom: '1rem'
                                            }}>
-                                             <div style={{ 
-                                               fontSize: '0.75rem', 
-                                               opacity: 0.6, 
-                                               textTransform: 'uppercase',
-                                               letterSpacing: '0.05em', 
-                                               marginBottom: '0.25rem'
-                                             }}>
-                                               League
-                                             </div>
-                                             <div style={{ 
-                                               fontSize: '1.125rem', 
-                                               fontWeight: 600,
-                                               opacity: 0.95,
-                                               marginBottom: '1rem'
-                                             }}>
-                                               {pick.league || 'MLB'}
-                                             </div>
-                                             
-                                             {/* Matchup now in middle right */}
-                                             <div style={{ 
-                                               fontSize: '0.75rem', 
-                                               opacity: 0.6, 
-                                               textTransform: 'uppercase',
-                                               letterSpacing: '0.05em', 
-                                               marginBottom: '0.25rem'
-                                             }}>
-                                               Matchup
-                                             </div>
-                                             <div style={{ 
-                                               fontSize: '1rem', 
-                                               fontWeight: 600,
-                                               opacity: 0.9,
-                                               marginBottom: '1rem'
-                                             }}>
-                                               {(pick.homeTeam && pick.awayTeam) ? 
-                                                 `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
-                                                 (pick.game ? pick.game : 'TBD')}
-                                             </div>
-                                             
                                              <div style={{ 
                                                fontSize: '0.75rem', 
                                                opacity: 0.6, 
