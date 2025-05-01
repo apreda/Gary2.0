@@ -160,21 +160,21 @@ export const Billfold = () => {
         {/* Top Stats Bar */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div>
-            <div className="text-gray-600 uppercase text-xs font-semibold mb-1">BANKROLL</div>
-            <div className="text-lg font-bold">${stats.bankroll || '10000'}</div>
+            <div className="uppercase text-xs font-semibold mb-1 text-black">BANKROLL</div>
+            <div className="text-lg font-bold text-black">${stats.bankroll || '10000'}</div>
           </div>
           
           <div className="text-center">
-            <div className="text-gray-600 uppercase text-xs font-semibold mb-1">ROI</div>
+            <div className="uppercase text-xs font-semibold mb-1 text-black">ROI</div>
             <div className="flex justify-center items-center">
-              <span className="text-lg font-bold">{stats.roi?.toFixed(1) || '15.5'} %</span>
+              <span className="text-lg font-bold text-black">{stats.roi?.toFixed(1) || '15.5'} %</span>
               <img src="/coin2.png" alt="Gary Coin" className="h-6 w-6 ml-2" />
             </div>
           </div>
           
           <div className="text-right">
-            <div className="text-gray-600 uppercase text-xs font-semibold mb-1">WIN RATE</div>
-            <div className="text-lg font-bold">{(stats.winLoss * 100)?.toFixed(1) || '41.9'} %</div>
+            <div className="uppercase text-xs font-semibold mb-1 text-black">WIN RATE</div>
+            <div className="text-lg font-bold text-black">{(stats.winLoss * 100)?.toFixed(1) || '41.9'} %</div>
           </div>
         </div>
         
@@ -184,25 +184,25 @@ export const Billfold = () => {
           <div className="grid grid-cols-2 gap-6">
             {/* Record Box */}
             <div className="bg-[#fff9d0] rounded-lg p-6">
-              <h3 className="uppercase text-sm font-bold mb-2 text-gray-600">RECORD</h3>
-              <div className="text-6xl font-bold text-gray-900 mb-2">{stats.record || '26-36'}</div>
-              <div className="text-sm text-gray-600">Past 5 Games: 1W – 4 L 🔥 🔥</div>
+              <h3 className="uppercase text-sm font-bold mb-2 text-black">RECORD</h3>
+              <div className="text-6xl font-bold text-black mb-2">{stats.record || '26-36'}</div>
+              <div className="text-sm text-black">Past 5 Games: 1W – 4 L 🔥 🔥</div>
             </div>
             
             {/* Win Rate Box */}
             <div className="bg-[#fff9d0] rounded-lg p-6">
-              <h3 className="uppercase text-sm font-bold mb-2 text-gray-600">WIN RATE</h3>
-              <div className="text-6xl font-bold text-gray-900 mb-2">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-              <div className="text-sm text-gray-600">Best Streak: 4 W's (Apr 12-15)</div>
+              <h3 className="uppercase text-sm font-bold mb-2 text-black">WIN RATE</h3>
+              <div className="text-6xl font-bold text-black mb-2">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+              <div className="text-sm text-black">Best Streak: 4 W's (Apr 12-15)</div>
             </div>
           </div>
           
           {/* Checkbox header for Recent Picks */}
           <div className="flex items-center space-x-2 mt-6">
             <div className="w-6 h-6 bg-gray-200 flex items-center justify-center rounded-md">
-              <span className="text-gray-600">✓</span>
+              <span className="text-black">✓</span>
             </div>
-            <h3 className="uppercase text-base font-bold text-gray-800">RECENT PICKS</h3>
+            <h3 className="uppercase text-base font-bold text-black">RECENT PICKS</h3>
           </div>
           
           {/* Recent Picks Table */}
@@ -210,23 +210,23 @@ export const Billfold = () => {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 text-xs uppercase text-gray-600 font-normal">DATE</th>
-                  <th className="text-left py-2 text-xs uppercase text-gray-600 font-normal">SPORT</th>
-                  <th className="text-left py-2 text-xs uppercase text-gray-600 font-normal">MATCHUP</th>
-                  <th className="text-left py-2 text-xs uppercase text-gray-600 font-normal">PICK</th>
-                  <th className="text-left py-2 text-xs uppercase text-gray-600 font-normal">RESULT</th>
+                  <th className="text-left py-2 text-xs uppercase text-black font-normal">DATE</th>
+                  <th className="text-left py-2 text-xs uppercase text-black font-normal">SPORT</th>
+                  <th className="text-left py-2 text-xs uppercase text-black font-normal">MATCHUP</th>
+                  <th className="text-left py-2 text-xs uppercase text-black font-normal">PICK</th>
+                  <th className="text-left py-2 text-xs uppercase text-black font-normal">RESULT</th>
                 </tr>
               </thead>
               <tbody>
                 {bettingLog.slice(0, 4).map((bet, index) => (
                   <tr key={index} className="border-b border-gray-100">
-                    <td className="py-3 text-sm">{bet.date ? new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 29'}</td>
-                    <td className="py-3 text-sm">{bet.sport || 'NHL'}</td>
-                    <td className="py-3 text-sm">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
+                    <td className="py-3 text-sm text-black">{bet.date ? new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 29'}</td>
+                    <td className="py-3 text-sm text-black">{bet.sport || 'NHL'}</td>
+                    <td className="py-3 text-sm text-black">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
                     <td className="py-3 text-sm">
                       <div className="flex items-center">
                         <span className="inline-block w-3 h-3 rounded-full bg-[#ef4444] mr-2"></span>
-                        {bet.pick || 'UNDER 5.5'}
+                        <span className="text-black">{bet.pick || 'UNDER 5.5'}</span>
                       </div>
                     </td>
                     <td className="py-3 text-sm font-semibold" style={{ color: bet.result === 'won' ? '#22c55e' : '#ef4444' }}>
@@ -240,14 +240,14 @@ export const Billfold = () => {
           
           {/* Sport Performance Section */}
           <div>
-            <h3 className="uppercase text-base font-bold mb-4">SPORT PERFORMANCE</h3>
+            <h3 className="uppercase text-base font-bold mb-4 text-black">SPORT PERFORMANCE</h3>
             <div className="bg-white rounded shadow-sm p-4">
               <div className="space-y-6">
                 {stats.sportPerformance.map((sport, index) => (
                   <div key={index} className="space-y-1">
                     <div className="flex justify-between">
-                      <div>{sport.sport || 'NBA'}</div>
-                      <div className="flex space-x-2">
+                      <div className="text-black">{sport.sport || 'NBA'}</div>
+                      <div className="flex space-x-2 text-black">
                         <span>W {sport.wins || 12}</span>
                         <span>L {sport.losses || 14}</span>
                       </div>
@@ -266,24 +266,24 @@ export const Billfold = () => {
           
           {/* Bet Type Distribution */}
           <div>
-            <h3 className="uppercase text-base font-bold mb-4">BET TYPE DISTRIBUTION</h3>
+            <h3 className="uppercase text-base font-bold mb-4 text-black">BET TYPE DISTRIBUTION</h3>
             <div className="grid grid-cols-2 gap-6">
               <div>
                 <div className="bg-white p-4 rounded shadow-sm flex items-center space-x-4">
                   <div className="w-16 h-16 bg-[#d4af37] rounded-full flex items-center justify-center">
                     <img src="/coin2.png" alt="Gary Coin" className="w-10 h-10" />
                   </div>
-                  <div className="text-gray-700">
-                    <p className="text-sm">We're due for a comeback</p>
+                  <div>
+                    <p className="text-sm text-black">We're due for a comeback</p>
                   </div>
                 </div>
               </div>
               <div>
                 <div className="bg-white p-4 rounded shadow-sm">
-                  <h4 className="uppercase text-sm font-bold mb-2">BET TYPE</h4>
+                  <h4 className="uppercase text-sm font-bold mb-2 text-black">BET TYPE</h4>
                   <div className="flex items-center space-x-2">
                     <div className="w-28 h-28 rounded-full bg-[#d4af37] flex-shrink-0"></div>
-                    <div className="text-center">DISTRIBUTION</div>
+                    <div className="text-center text-black">DISTRIBUTION</div>
                   </div>
                 </div>
               </div>
@@ -292,18 +292,18 @@ export const Billfold = () => {
           
           {/* Top Win Section */}
           <div>
-            <h3 className="uppercase text-base font-bold mb-4">TOP WIN</h3>
+            <h3 className="uppercase text-base font-bold mb-4 text-black">TOP WIN</h3>
             {bestWin && (
               <div className="bg-white rounded shadow-sm p-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <div className="text-sm text-gray-600">{bestWin.date ? new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 28'}</div>
-                    <div className="font-bold">{bestWin.sport || 'MLB'}</div>
-                    <div>{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
+                    <div className="text-sm text-black">{bestWin.date ? new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 28'}</div>
+                    <div className="font-bold text-black">{bestWin.sport || 'MLB'}</div>
+                    <div className="text-black">{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
                   </div>
                   <div className="text-center">
                     <div className="font-bold text-lg" style={{ color: '#22c55e' }}>WON</div>
-                    <div className="text-sm">{bestWin.pick || 'Yankees -1.5'}</div>
+                    <div className="text-sm text-black">{bestWin.pick || 'Yankees -1.5'}</div>
                   </div>
                 </div>
               </div>
