@@ -146,11 +146,35 @@ export const garyPerformanceService = {
         // Replace special characters in pick string to match original when searching
         const normalizedPickText = result.pick.replace(/\s+/g, ' ').trim();
         
-        // Find the original pick from daily_picks to use its ID
-        const originalPick = dailyPick.picks.find(p => {
-          const pNormalized = (p.pick || '').replace(/\s+/g, ' ').trim();
+        // Find the original pick from daily_picks with improved matching
+        // First try exact normalized matching
+        let originalPick = dailyPick.picks.find(p => {
+          if (!p || !p.pick) return false;
+          const pNormalized = p.pick.replace(/\s+/g, ' ').trim();
           return pNormalized === normalizedPickText;
         });
+
+        // If not found, try partial matching (case insensitive)
+        if (!originalPick) {
+          const lowerPickText = normalizedPickText.toLowerCase();
+          originalPick = dailyPick.picks.find(p => {
+            if (!p || !p.pick) return false;
+            return p.pick.toLowerCase().includes(lowerPickText) || 
+                   lowerPickText.includes(p.pick.toLowerCase());
+          });
+        }
+        
+        // If still not found, try matching based on teams
+        if (!originalPick && result.score) {
+          // Extract team names from score if available
+          const scoreTeams = result.score.toLowerCase().replace(/\d+/g, '').replace(/-/g, '');
+          originalPick = dailyPick.picks.find(p => {
+            if (!p || !p.homeTeam || !p.awayTeam) return false;
+            const homeTeam = p.homeTeam.toLowerCase();
+            const awayTeam = p.awayTeam.toLowerCase();
+            return scoreTeams.includes(homeTeam) && scoreTeams.includes(awayTeam);
+          });
+        }
 
         if (!originalPick) {
           console.log(`Could not find original pick for "${normalizedPickText}" in daily picks data`);

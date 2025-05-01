@@ -3,6 +3,9 @@ import { garyPerformanceService } from './garyPerformanceService';
 import { perplexityService } from './perplexityService';
 import { oddsApiService } from './oddsApiService';
 
+// Initialize the Odds API service
+oddsApiService.initialize();
+
 /**
  * Manually parse results from text response when JSON parsing fails
  * @param {string} text - The text response from Perplexity
