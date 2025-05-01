@@ -125,6 +125,8 @@ export const garyPerformanceService = {
         return { success: false, message: `No picks found for ${date}` };
       }
 
+      console.log(`Found daily pick for ${date} with ID ${dailyPick.id}, processing ${results.length} results`);
+      
       // For each result, insert a record in the game_results table
       const gameResults = [];
       
@@ -132,7 +134,11 @@ export const garyPerformanceService = {
       const pickId = dailyPick.id;
       console.log(`Using daily_picks ID as foreign key: ${pickId}`);
       
-      for (const result of results) {
+      // First filter out any results with 'unknown' values
+      const validResults = results.filter(r => r.result && r.result.toLowerCase() !== 'unknown');
+      console.log(`Found ${validResults.length} valid results out of ${results.length} total`);
+      
+      for (const result of validResults) {
         
         // Get league from the pick
         let league = 'Unknown';

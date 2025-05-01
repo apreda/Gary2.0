@@ -142,8 +142,8 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       // Use the Perplexity service to make the API call
       const responseText = await perplexityService.fetchRealTimeInfo(query, {
         model: 'sonar-medium-online', // Better model for complex sports analysis
-        temperature: 0.2,  // Low temperature for more consistent factual responses
-        maxTokens: 2000    // Allow enough tokens for all the results
+        temperature: 0.1,  // Very low temperature for more consistent factual responses
+        maxTokens: 4000    // Doubled token limit to ensure all results are returned
       });
       
       // Create a simulated response object for compatibility with the rest of the code
