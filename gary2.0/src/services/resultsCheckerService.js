@@ -242,7 +242,6 @@ ${picksText}
 For each numbered pick:
 1. Find the corresponding game in the results
 2. Determine if the pick "won", "lost", or was a "push" according to sports betting rules
-3. Provide the actual final score that determined the result
 
 Betting Rules:
 - Spread bets (e.g. "Team +3.5"): Add the spread to the team's score. If that total exceeds the opponent's score, the bet wins.
