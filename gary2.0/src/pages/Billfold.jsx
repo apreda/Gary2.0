@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import '../styles/BillfoldStyle.css';
+import '../styles/BillfoldOverride.css'; // Emergency override for text colors
 
 export const Billfold = () => {
   // State for user performance data
@@ -229,7 +230,7 @@ export const Billfold = () => {
                         <span className="text-black">{bet.pick || 'UNDER 5.5'}</span>
                       </div>
                     </td>
-                    <td className="py-3 text-sm font-semibold" style={{ color: bet.result === 'won' ? 'var(--gary-win)' : 'var(--gary-loss)' }}>
+                    <td className={`py-3 text-sm font-semibold ${bet.result === 'won' ? 'text-win' : 'text-loss'}`}>
                       {bet.result === 'won' ? 'WON' : 'LOST'}
                     </td>
                   </tr>
