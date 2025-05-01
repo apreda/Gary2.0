@@ -178,15 +178,9 @@ export function Billfold() {
 
   return (
     <div className="bg-[#FFFDF8] min-h-screen font-sans pt-16" 
-         style={{ 
-           backgroundImage: 'url(/noise.svg)',
-           backgroundRepeat: 'repeat',
-           backgroundSize: '200px',
-           backgroundOpacity: 0.05
-         }}>
+         style={{ backgroundImage: 'url(/noise.svg)', backgroundSize: '200px', backgroundOpacity: 0.5 }}>
       {/* Sticky Header with Key Metrics */}
-      <div className="sticky top-16 z-10 bg-white border-b border-[#d4af37] shadow-md" 
-           style={{ backgroundImage: 'url(/noise.svg)', backgroundSize: '200px', backgroundOpacity: 0.02 }}>
+      <div className="sticky top-16 z-10 bg-white border-b border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300">
         <div className="max-w-screen-2xl mx-auto px-4 py-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <div className="flex items-center">
@@ -203,11 +197,13 @@ export function Billfold() {
       </div>
       
       {/* Main Content */}
-      <div className="max-w-screen-2xl mx-auto px-4 py-6">
+      <div className="max-w-screen-xl mx-auto px-4 py-6 pb-24 space-y-8">
         {/* Page Title with Coin Image */}
-        <div className="flex items-center mb-4 pl-1">
-          <img src="/coin2.png" alt="Gary Coin" className="h-8 w-8 mr-2" />
-          <h2 className="text-xl font-bold text-gray-800">Performance Dashboard</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/coin2.png" alt="Gary Coin" className="w-8 h-8" />
+            <h2 className="text-2xl font-bold text-gray-800">Performance Dashboard</h2>
+          </div>
         </div>
         
         {/* Recent Picks - At the top */}
@@ -382,10 +378,26 @@ export function Billfold() {
             </div>
           </div>
           
-          {/* Right Column: Highlights */}
+          {/* Right Column: Highlights + Gary's Mood */}
           <div className="space-y-4">
-            {/* More highlights or stats can go here */}
-            {/* Currently only contains the highlight boxes from the left column */}
+            {/* Gary's Mood */}
+            <div className="bg-white rounded-md overflow-hidden border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300 relative">
+              <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center">
+                  <span className="mr-2 text-[#d4af37]">🤯</span>Gary's Mood
+                </h3>
+              </div>
+              <div className="p-6 bg-gradient-to-br from-[#fcf9f0] to-[#fff8e0] relative">
+                <div className="absolute top-2 right-2 opacity-10">
+                  <img src="/coin2.png" alt="Gary Coin" className="w-24 h-24" />
+                </div>
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <span className="text-4xl">😎</span>
+                  <p className="font-serif text-lg italic text-gray-800">"Remember, you can only lose if you quit gamblin', kid."</p>
+                  <p className="text-xs text-gray-500">- Gary, The Gambling Guru</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         
