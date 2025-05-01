@@ -128,10 +128,11 @@ export const resultsCheckerService = {
       const query = `I need to check the REAL RESULTS for these sports picks from ${displayDate}. You MUST search the web to find the actual final scores and outcomes of these games.
 
 IMPORTANT INSTRUCTIONS:
-1. For each pick, search for the actual game that happened on ${displayDate} between the teams mentioned
-2. Find the REAL final score of that game
-3. Based on the final score, determine if the pick "won", "lost", or was a "push" according to sports betting rules
-4. Include the actual final score for each game
+1. For each pick, search for the actual game that happened on ${displayDate} in the specific league (NBA, MLB, NHL, etc.)
+2. Make sure to use the league information (NBA, MLB, NHL) to find the correct game between the teams
+3. Find the REAL final score of that game
+4. Based on the final score, determine if the pick "won", "lost", or was a "push" according to sports betting rules
+5. Include the actual final score for each game
 
 Response format must be structured as a JSON array of objects, each with fields 'pick', 'result', and 'score'.
 
