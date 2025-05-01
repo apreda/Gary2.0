@@ -17,16 +17,20 @@ const extractJsonFromText = (text) => {
     return [];
   }
   
+  // Save full response to debug log for analysis
+  console.log('FULL PERPLEXITY RESPONSE:', text);
   console.log('Attempting to parse JSON from text:', text.substring(0, 200) + '...');
   
   try {
-    // Try to find JSON within markdown code blocks (most common format from Perplexity)
+    // First approach: Try to find JSON within markdown code blocks (most common format from Perplexity)
     const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonBlockMatch && jsonBlockMatch[1]) {
       const jsonText = jsonBlockMatch[1].trim();
       console.log('Found JSON in code block:', jsonText.substring(0, 100) + '...');
       try {
-        const parsedJson = JSON.parse(jsonText);
+        // Clean up any potential formatting issues
+        const cleanedJson = jsonText.replace(/\\n/g, '\n').replace(/\\r/g, '');
+        const parsedJson = JSON.parse(cleanedJson);
         console.log('Successfully parsed JSON from code block');
         return parsedJson;
       } catch (codeBlockError) {
@@ -42,11 +46,18 @@ const extractJsonFromText = (text) => {
       const jsonArray = arrayRegexMatch[0];
       console.log('Found JSON array with regex:', jsonArray.substring(0, 100) + '...');
       try {
-        const parsedArray = JSON.parse(jsonArray);
+        // Clean up any potential issues with the JSON string
+        const cleanedJson = jsonArray
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '')
+          .replace(/([\{,])\s*([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Fix unquoted keys
+          .replace(/:\s*'([^']*)'/g, ':"$1"'); // Fix single quotes around values
+        const parsedArray = JSON.parse(cleanedJson);
         console.log('Successfully parsed JSON array with regex');
         return parsedArray;
       } catch (arrayRegexError) {
         console.error('Error parsing JSON array from regex:', arrayRegexError);
+        console.log('JSON array that failed parsing:\n', jsonArray);
       }
     }
     
@@ -277,7 +288,7 @@ export const resultsCheckerService = {
         `${i+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
       ).join('\n');
       
-      // Create the Perplexity prompt
+      // Create the Perplexity prompt with stronger JSON formatting instructions
       const prompt = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:
 
 📊 ACTUAL GAME RESULTS:
@@ -295,12 +306,32 @@ Betting Rules:
 - Moneyline bets (e.g. "Team ML"): Simply pick the winner of the game.
 - Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.
 
-Response format must be a JSON array of objects, each with these fields:
+Response format must be ONLY a JSON array of objects with ABSOLUTELY NO ADDITIONAL TEXT before or after the array. Each object must have these exact fields:
 - 'pick': The original pick text as provided 
 - 'league': The league (NBA, NHL, MLB)
 - 'result': Whether the pick 'won', 'lost', 'push'
 - 'final_score': The final score
-- 'matchup': Team A vs Team B from the game scores`;
+- 'matchup': Team A vs Team B from the game scores
+
+Make sure to include ALL picks in your response, even if you're not 100% confident about the result - make your best guess. IMPORTANT: Your response must be PARSEABLE JSON with no markdown formatting or explanations outside the JSON.
+
+EXAMPLE FORMAT (DO NOT USE THESE VALUES, THIS IS JUST AN EXAMPLE OF THE FORMAT):
+[
+  {
+    "pick": "Los Angeles Lakers -5.5 -110",
+    "league": "NBA",
+    "result": "won",
+    "final_score": "Lakers 120 - Celtics 100",
+    "matchup": "Lakers vs Celtics"
+  },
+  {
+    "pick": "OVER 220.5 -110",
+    "league": "NBA",
+    "result": "lost",
+    "final_score": "Warriors 100 - Kings 110",
+    "matchup": "Warriors vs Kings"
+  }
+]`;
       
       console.log('Sending picks to Perplexity for evaluation');
       
