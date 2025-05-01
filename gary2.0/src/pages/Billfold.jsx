@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import '../styles/BillfoldStyle.css';
 
-const Billfold = () => {
+export const Billfold = () => {
   // State for user performance data
   const [stats, setStats] = useState({
     bankroll: 0,
@@ -316,4 +316,4 @@ const Billfold = () => {
   );
 };
 
-export default Billfold;
+// Component is exported as a named export at the top
