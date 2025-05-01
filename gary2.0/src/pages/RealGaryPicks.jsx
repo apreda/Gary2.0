@@ -684,21 +684,23 @@ function RealGaryPicks() {
                                           </div>
                                         </div>
                                         
-                                        {/* Right side content */}
-                                        <div style={{
-                                           position: 'absolute',
-                                           right: 0,
-                                           top: 0,
-                                           bottom: 0,
-                                           width: '30%',
-                                           borderLeft: '2.25px solid #bfa142', /* Made even thicker (50% more) */
-                                           padding: '1.5rem 1rem',
-                                           display: 'flex',
-                                           flexDirection: 'column',
-                                           justifyContent: 'space-between',
-                                           alignItems: 'center',
-                                           background: 'transparent'
-                                         }}>
+                                        {/* Right side content - elevated appearance */}
+                                         <div style={{
+                                            position: 'absolute',
+                                            right: 0,
+                                            top: 0,
+                                            bottom: 0,
+                                            width: '30%',
+                                            borderLeft: '2.25px solid #bfa142', /* Made even thicker (50% more) */
+                                            padding: '1.5rem 1rem',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            background: 'linear-gradient(135deg, rgba(42, 42, 42, 0.4) 0%, rgba(30, 30, 30, 0.2) 100%)',
+                                            boxShadow: 'inset 3px 0 8px rgba(0, 0, 0, 0.25), 0 0 15px rgba(191, 161, 66, 0.025)',
+                                            borderRadius: '0 16px 16px 0'
+                                          }}>
                                            {/* Game time section */}
                                            <div style={{ 
                                              textAlign: 'center',
