@@ -113,6 +113,17 @@ export const resultsCheckerService = {
       // Format the date for display
       const displayDate = date;
       
+      // Extract only the essential pick information
+      const simplifiedPicks = picks.map(pick => ({
+        pick: pick.pick,
+        league: pick.league,
+        awayTeam: pick.awayTeam,
+        homeTeam: pick.homeTeam,
+        time: pick.time
+      }));
+      
+      console.log('Simplified picks for Perplexity:', simplifiedPicks);
+      
       // Create a formatted query for Perplexity
       const query = `I need to check the results for these sports picks from ${displayDate}. For each pick, tell me if it won, lost, or pushed.
 
@@ -120,7 +131,7 @@ For each pick, search for the related game and provide THE EXACT PICK TEXT follo
 
 Response format must be structured as a JSON array of objects, each with fields 'pick', 'result', and 'score'.
 
-Picks: ${JSON.stringify(picks, null, 2)}`;
+Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
       
       console.log(`Using Perplexity API for checking results`);
       
