@@ -148,14 +148,14 @@ export const Billfold = () => {
         {/* Main Content - 3 Column Grid */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           {/* Record Box */}
-          <div className="bg-[#fff9d0] rounded-lg p-6 border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-200">
+          <div className="bg-[#d4af37]/10 rounded-lg p-6 border border-[#d4af37]/30 shadow-md hover:shadow-lg transition-all duration-200">
             <h3 className="uppercase text-sm font-bold mb-2 text-black">RECORD</h3>
             <div className="text-6xl font-bold text-black mb-2">{stats.record || '26-36'}</div>
             <div className="text-sm text-black">Past 5 Games: 1W – 4 L 🔥 🔥</div>
           </div>
           
           {/* Win Rate Box */}
-          <div className="bg-[#fff9d0] rounded-lg p-6 border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-200">
+          <div className="bg-[#d4af37]/10 rounded-lg p-6 border border-[#d4af37]/30 shadow-md hover:shadow-lg transition-all duration-200">
             <h3 className="uppercase text-sm font-bold mb-2 text-black">WIN RATE</h3>
             <div className="text-6xl font-bold text-black mb-2">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="text-sm text-black">Best Streak: 4 W's (Apr 12-15)</div>
