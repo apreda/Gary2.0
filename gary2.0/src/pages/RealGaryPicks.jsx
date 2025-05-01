@@ -688,8 +688,8 @@ function RealGaryPicks() {
                                         <div style={{
                                             position: 'absolute',
                                             right: 0,
-                                            top: '4px',  /* Shifted slightly up to create elevation */
-                                            bottom: '4px', /* Shifted up from bottom to create elevation */
+                                            top: 0,  /* Aligned to card edge */
+                                            bottom: 0, /* Aligned to card edge */
                                             width: '30%',
                                             borderLeft: '2.25px solid #bfa142', /* Gold border */
                                             padding: '1.5rem 1rem',
@@ -698,8 +698,9 @@ function RealGaryPicks() {
                                             justifyContent: 'space-between',
                                             alignItems: 'center',
                                             background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
-                                            boxShadow: '-10px 0 20px rgba(0, 0, 0, 0.5), 0 5px 20px rgba(0, 0, 0, 0.4), 0 0 25px rgba(191, 161, 66, 0.12)', /* Very pronounced shadow */
-                                            borderRadius: '0 16px 16px 0',
+                                            boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
+                                            borderRadius: '0 16px 16px 0', /* Rounded on right side only */
+                                            clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
                                             zIndex: 2, /* Ensure it appears above other content */
                                             transform: 'translateZ(10px)', /* 3D effect */
                                           }}>
