@@ -1,6 +1,18 @@
 import { supabase } from '../supabaseClient';
 
 /**
+ * Generate a random UUID v4
+ * @returns {string} A valid UUID
+ */
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, 
+          v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+/**
  * Service for tracking Gary's pick performance
  */
 export const garyPerformanceService = {
@@ -117,8 +129,8 @@ export const garyPerformanceService = {
       const gameResults = [];
       
       for (const result of results) {
-        // Create a synthetic ID for the pick
-        const pickId = `${date}-${result.pick.replace(/\s+/g, '-')}`;
+        // Create a proper UUID for the pick
+        const pickId = generateUUID();
         
         // Get league from the pick
         let league = 'Unknown';
