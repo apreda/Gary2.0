@@ -53,7 +53,18 @@ function ResultsAdmin() {
     setStatus('Checking results...');
     
     try {
-      // Try to get actual picks from the database
+      // Get picks from the database
+      console.log(`Fetching picks for date: ${date}`);
+      
+      // First, log all entries in daily_picks to diagnose the issue
+      const { data: allPicks, error: allPicksError } = await supabase
+        .from('daily_picks')
+        .select('id, date, created_at');
+      
+      if (allPicksError) throw allPicksError;
+      console.log('All picks in database:', allPicks);
+      
+      // Now try to get the specific date
       const { data, error } = await supabase
         .from('daily_picks')
         .select('*')
@@ -62,42 +73,13 @@ function ResultsAdmin() {
       
       if (error) throw error;
       
-      // If no picks found for the date, use sample data for testing
+      // If no picks found for the date
       if (!data || !data.picks) {
-        console.log(`No picks found in database for ${date}, using sample test data`);
-        
-        // Sample test data for demonstration purposes
-        const samplePicks = [
-          {
-            "pick": "Golden State Warriors ML -150",
-            "time": "7:30 PM ET",
-            "type": "moneyline",
-            "league": "NBA",
-            "awayTeam": "Golden State Warriors",
-            "homeTeam": "Houston Rockets"
-          },
-          {
-            "pick": "OVER 224.5 -110",
-            "time": "8:00 PM ET",
-            "type": "total",
-            "league": "NBA",
-            "awayTeam": "Denver Nuggets",
-            "homeTeam": "Los Angeles Clippers"
-          },
-          {
-            "pick": "New York Yankees -1.5 +120",
-            "time": "7:05 PM ET",
-            "type": "spread",
-            "league": "MLB",
-            "awayTeam": "New York Yankees",
-            "homeTeam": "Boston Red Sox"
-          }
-        ];
-        
-        // Use the sample data instead of database data
-        data = { picks: samplePicks };
-        
-        setStatus(`Using sample test data for ${date} since no picks were found in the database`);
+        const errorMessage = `Error: No picks found for ${date}`;
+        console.error(errorMessage);
+        setStatus(errorMessage);
+        setLoading(false);
+        return;
       }
       
       const picksResponse = {
