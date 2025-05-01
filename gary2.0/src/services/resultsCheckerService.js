@@ -7,117 +7,40 @@ import { sportsDbApiService } from './sportsDbApiService';
 sportsDbApiService.initialize();
 
 /**
- * Parse JSON results from Perplexity response
+ * Simple JSON parser to extract results from Perplexity response
  * @param {string} text - The text response from Perplexity
- * @returns {Array} - Array of pick results objects
+ * @returns {Array} Parsed results array
  */
-const parseResultsFromText = (text) => {
-  console.log('Parsing results from text:', text.substring(0, 200) + '...');
-  
-  // Try to extract JSON from a code block first (most common format from Perplexity)
-  const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  if (jsonBlockMatch && jsonBlockMatch[1]) {
-    try {
-      // Clean up the JSON string before parsing
-      let jsonText = jsonBlockMatch[1].trim();
-      // Make sure it doesn't have any leading/trailing text
-      if (!jsonText.startsWith('[')) {
-        const startBracket = jsonText.indexOf('[');
-        if (startBracket !== -1) {
-          jsonText = jsonText.substring(startBracket);
-        }
-      }
-      if (!jsonText.endsWith(']')) {
-        const endBracket = jsonText.lastIndexOf(']');
-        if (endBracket !== -1) {
-          jsonText = jsonText.substring(0, endBracket + 1);
-        }
-      }
-      
-      // Log the actual JSON string we're trying to parse
-      console.log('Attempting to parse JSON:', jsonText.substring(0, 100) + '...');
-      
-      const jsonArray = JSON.parse(jsonText);
-      if (Array.isArray(jsonArray) && jsonArray.length > 0) {
-        console.log(`Successfully extracted ${jsonArray.length} results from JSON block`);
-        return jsonArray;
-      }
-    } catch (e) {
-      console.log('Failed to parse JSON block:', e.message);
-    }
-  }
-  
-  // If we couldn't extract JSON from a code block, try to find it elsewhere in the text
+const extractJsonFromText = (text) => {
   try {
-    // Look for arrays in the text using a more robust pattern
-    const startPos = text.indexOf('[{');
-    const endPos = text.lastIndexOf('}]');
-    
-    if (startPos !== -1 && endPos !== -1 && endPos > startPos) {
-      // Extract what looks like a JSON array
-      const jsonText = text.substring(startPos, endPos + 2);
-      console.log('Found possible JSON array:', jsonText.substring(0, 100) + '...');
-      
-      try {
-        const jsonArray = JSON.parse(jsonText);
-        if (Array.isArray(jsonArray) && jsonArray.length > 0) {
-          console.log(`Successfully parsed JSON array with ${jsonArray.length} results`);
-          return jsonArray;
-        }
-      } catch (innerError) {
-        console.log('Failed to parse extracted JSON array:', innerError.message);
-      }
+    // Try to find JSON within code blocks first
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      return JSON.parse(jsonMatch[1].trim());
     }
-  } catch (e) {
-    console.log('Failed to find JSON array in text:', e.message);
+    
+    // If no code block, try to find JSON array anywhere in the text
+    const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (arrayMatch) {
+      return JSON.parse(arrayMatch[0]);
+    }
+    
+    // If still no match, return empty array
+    return [];
+  } catch (error) {
+    console.error('Error parsing JSON from text:', error);
+    return [];
   }
-  
-  // As a last resort, manually parse pick results from text patterns
-  try {
-    console.log('Attempting to manually extract structured data from text');
-    const pickResults = [];
-    const pickRegex = /Pick:\s*"([^"]+)".*?result:\s*(won|lost|push|unknown)/gi;
-    
-    let match;
-    while ((match = pickRegex.exec(text)) !== null) {
-      // Found a pick and its result
-      const pick = match[1];
-      const result = match[2].toLowerCase();
-      
-      // Try to find the league nearby
-      const contextBefore = text.substring(Math.max(0, match.index - 50), match.index);
-      const leagueMatch = contextBefore.match(/(NBA|NHL|MLB)/i);
-      const league = leagueMatch ? leagueMatch[1].toUpperCase() : '';
-      
-      // Try to find a score nearby
-      const contextAfter = text.substring(match.index, Math.min(text.length, match.index + 150));
-      const scoreMatch = contextAfter.match(/(\d+\s*-\s*\d+)/i);
-      const score = scoreMatch ? scoreMatch[1] : 'N/A';
-      
-      pickResults.push({
-        pick: pick,
-        league: league,
-        result: result,
-        score: score
-      });
-    }
-    
-    if (pickResults.length > 0) {
-      console.log(`Manually extracted ${pickResults.length} results from text patterns`);
-      return pickResults;
-    }
-  } catch (e) {
-    console.log('Failed manual text extraction:', e.message);
-  }
-  
-  console.log('Could not parse results as JSON or extract structured data, returning empty array');
-  return [];
 };
 
+/**
+ * Results checker service for evaluating sports betting picks
+ * Handles fetching picks, getting game scores, and evaluating results
+ */
 export const resultsCheckerService = {
   /**
    * Get yesterday's picks from the database
-   * @returns {Promise<Array>} Array of picks
+   * @returns {Promise<Object>} Picks data with success flag
    */
   getYesterdaysPicks: async () => {
     try {
@@ -128,7 +51,7 @@ export const resultsCheckerService = {
       
       console.log(`Fetching picks for yesterday (${formattedDate})`);
       
-      // Query the database for yesterday's picks
+      // Get picks from Supabase
       const { data, error } = await supabase
         .from('daily_picks')
         .select('*')
@@ -154,81 +77,87 @@ export const resultsCheckerService = {
   },
   
   /**
-   * Get sports events data from TheSportsDB API
-   * @param {string} date - The date in YYYY-MM-DD format
-   * @returns {Promise<Object>} - Game events data
+   * Get sports events and scores for a specific date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Object>} Game scores mapped by matchup
    */
-  getSportsEventsByDate: async (date) => {
+  getGameScores: async (date) => {
     try {
-      console.log(`Fetching all sports events for ${date}`);
-      // Get all events from all leagues
-      const eventsData = await sportsDbApiService.getAllSportsEvents(date);
+      console.log(`Fetching sports events for ${date}`);
+      const scores = {};
       
-      // Flatten the events from all leagues into a single array
-      const allEvents = [];
-      for (const league in eventsData) {
-        if (eventsData[league] && Array.isArray(eventsData[league])) {
-          allEvents.push(...eventsData[league]);
+      // Get scores for each league (NBA, NHL, MLB)
+      const leagues = [
+        { id: sportsDbApiService.leagueIds.NBA, name: 'NBA' },
+        { id: sportsDbApiService.leagueIds.NHL, name: 'NHL' },
+        { id: sportsDbApiService.leagueIds.MLB, name: 'MLB' }
+      ];
+      
+      for (const league of leagues) {
+        try {
+          const events = await sportsDbApiService.getEventsByDate(league.id, date);
+          console.log(`Found ${events.length} games for ${league.name}`);
+          
+          // Add each event to the scores object
+          events.forEach(event => {
+            if (event.intHomeScore && event.intAwayScore) {
+              // Create matchup key for identifying games
+              const matchup = `${event.strAwayTeam} @ ${event.strHomeTeam}`;
+              
+              scores[matchup] = {
+                league: league.name,
+                homeTeam: event.strHomeTeam,
+                awayTeam: event.strAwayTeam,
+                homeScore: parseInt(event.intHomeScore, 10),
+                awayScore: parseInt(event.intAwayScore, 10),
+                scoreText: `${event.strAwayTeam} ${event.intAwayScore} - ${event.strHomeTeam} ${event.intHomeScore}`
+              };
+            }
+          });
+        } catch (leagueError) {
+          console.error(`Error fetching ${league.name} events:`, leagueError);
         }
       }
       
-      return { 
-        success: true, 
-        events: allEvents
-      };
+      const gameCount = Object.keys(scores).length;
+      console.log(`Found a total of ${gameCount} games with scores`);
+      
+      return scores;
     } catch (error) {
-      console.error('Error fetching events from TheSportsDB API:', error);
-      return { 
-        success: false, 
-        message: error.message, 
-        events: [] 
-      };
+      console.error('Error getting game scores:', error);
+      return {};
     }
   },
   
   /**
-   * Evaluate picks against game results using Perplexity
-   * @param {Array} picks - The original picks array
-   * @param {string} date - The date in YYYY-MM-DD format
-   * @param {Array} gameEvents - The game events from TheSportsDB API
-   * @returns {Promise<Object>} - Results of the evaluation
+   * Evaluate picks against game scores using Perplexity
+   * @param {Array} picks - Array of pick objects
+   * @param {Object} scores - Game scores mapped by matchup
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Array>} Evaluated results
    */
-  checkAllResultsWithPerplexity: async (picks, date, gameEvents) => {
+  evaluatePicks: async (picks, scores, date) => {
     try {
-      console.log(`Evaluating ${picks.length} picks against ${gameEvents.length} games for ${date}`);
+      console.log(`Evaluating ${picks.length} picks against ${Object.keys(scores).length} games`);
       
-      // Prepare a simple format of picks for Perplexity
-      const simplifiedPicks = picks.map(pick => {
-        // Extract just the essential information
-        return {
-          pick: pick.pick,
-          league: pick.league,
-          homeTeam: pick.homeTeam,
-          awayTeam: pick.awayTeam,
-          time: pick.time || '7:00 PM ET'
-        };
-      });
+      // Format game scores for the prompt
+      const scoresText = Object.values(scores)
+        .map(game => `${game.league}: ${game.scoreText}`)
+        .join('\n');
       
-      // Format game events for the prompt
-      let gameResultsText = '';
-      if (gameEvents && gameEvents.length > 0) {
-        gameResultsText = '📊 ACTUAL GAME RESULTS:\\n';
-        gameEvents.forEach(event => {
-          // Only include events with scores
-          if (event.intHomeScore && event.intAwayScore) {
-            gameResultsText += `${event.strLeague}: ${event.strAwayTeam} ${event.intAwayScore} @ ${event.strHomeTeam} ${event.intHomeScore}\\n`;
-          }
-        });
-      }
+      // Format picks for the prompt
+      const picksText = picks.map((pick, i) =>
+        `${i+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
+      ).join('\n');
       
-      // Build the query for Perplexity that preserves original pick text
-      const query = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:
+      // Create the Perplexity prompt
+      const prompt = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:
 
-${gameResultsText}
+📊 ACTUAL GAME RESULTS:
+${scoresText}
+
 🎲 BETTING PICKS TO EVALUATE:
-${simplifiedPicks.map((pick, index) => {
-  return `${index + 1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`;
-}).join('\\n')}
+${picksText}
 
 For each numbered pick:
 1. Find the corresponding game in the results
@@ -241,9 +170,9 @@ Betting Rules:
 - Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.
 
 VERY IMPORTANT INSTRUCTIONS:
-1. The 'pick' field in your response MUST EXACTLY MATCH the original pick text I provided (e.g., "UNDER 204.5 -110")
+1. The 'pick' field in your response MUST EXACTLY MATCH the original pick text I provided
 2. DO NOT replace the pick text with any generic value like "result" or anything else
-3. Copy the exact pick text from the "🎲 BETTING PICKS TO EVALUATE" section when creating your response
+3. Copy the exact pick text from the "🎲 BETTING PICKS TO EVALUATE" section
 
 Response format must be a JSON array of objects, each with these fields:
 - 'pick': The EXACT original pick text as provided (copy it directly from the list above)
@@ -251,70 +180,81 @@ Response format must be a JSON array of objects, each with these fields:
 - 'result': Whether the pick 'won', 'lost', 'push', or 'unknown'
 - 'score': The final score in format 'Team A score - Team B score'`;
       
-      console.log('Sending query to Perplexity for pick evaluation');
+      console.log('Sending picks to Perplexity for evaluation');
       
-      // Send the query to Perplexity
-      const responseText = await perplexityService.fetchRealTimeInfo(query);
+      // Get response from Perplexity
+      const responseText = await perplexityService.fetchRealTimeInfo(prompt);
       if (!responseText) {
-        throw new Error('No response from Perplexity API');
+        throw new Error('No response from Perplexity');
       }
       
-      // Format response for consistency
-      const response = { text: responseText };
-      
-      console.log('Received response from Perplexity');
-      
       // Parse the results from the response
-      const results = parseResultsFromText(response.text);
+      const results = extractJsonFromText(responseText);
       
       if (!results || results.length === 0) {
         console.log('No valid results parsed from Perplexity response');
-        return { success: false, message: 'Failed to parse results', results: [] };
+        return [];
       }
       
-      console.log(`Successfully parsed ${results.length} results`);
-      
-      // Ensure the results maintain the original pick text by comparing with original picks
-      const finalResults = results.map(result => {
-        // Find the matching original pick
-        const originalPick = picks.find(p => p.pick === result.pick);
-        
-        if (originalPick) {
-          // Use the original pick data for consistency
-          return {
-            ...result,
-            pick: originalPick.pick,  // Use the exact original text
-            league: result.league || originalPick.league || '',
-            homeTeam: originalPick.homeTeam,
-            awayTeam: originalPick.awayTeam
-          };
-        }
-        
-        return result;
-      });
-      
-      console.log(`Finalized ${finalResults.length} results with original pick texts preserved`);
-      
-      return {
-        success: true,
-        results: finalResults
-      };
+      console.log(`Successfully parsed ${results.length} results from Perplexity`);
+      return results;
     } catch (error) {
-      console.error('Error checking results with Perplexity:', error);
-      return { success: false, message: error.message, results: [] };
+      console.error('Error evaluating picks:', error);
+      return [];
+    }
+  },
+  
+  /**
+   * Record results in the game_results table
+   * @param {string} pickId - ID of the daily_picks record
+   * @param {Array} results - Array of evaluated pick results
+   * @returns {Promise<Array>} Inserted records
+   */
+  recordResults: async (pickId, results, date) => {
+    try {
+      console.log(`Recording ${results.length} results for pick ID ${pickId}`);
+      
+      // Format results for insert
+      const recordsToInsert = results.map(result => ({
+        pick_id: pickId,
+        game_date: date,
+        league: result.league || '',
+        result: result.result || 'unknown',
+        final_score: result.score || '',
+        pick_text: result.pick || '',
+        // Extract matchup from score or use empty string
+        matchup: result.score ? result.score.split(' - ')[0].split(' ').slice(0, -1).join(' ') + ' @ ' + 
+                               result.score.split(' - ')[1].split(' ').slice(0, -1).join(' ') : ''
+      }));
+      
+      // Insert records into game_results table
+      const { data, error } = await supabase
+        .from('game_results')
+        .insert(recordsToInsert)
+        .select();
+      
+      if (error) {
+        throw new Error(`Error inserting results: ${error.message}`);
+      }
+      
+      console.log(`Successfully recorded ${data.length} results`);
+      return data;
+    } catch (error) {
+      console.error('Error recording results:', error);
+      return [];
     }
   },
   
   /**
    * Check results for picks from a specific date
-   * @param {string} date - The date in YYYY-MM-DD format
-   * @returns {Promise<Object>} - Results of the check
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Object>} Results of the operation
    */
   checkResults: async (date) => {
     try {
-      console.log(`Checking results for picks on ${date}`);
-
-      // Step 1: Get the picks from the daily picks table
+      console.log(`Checking results for ${date}`);
+      
+      // Step 1: Get the picks from Supabase
       const { data, error } = await supabase
         .from('daily_picks')
         .select('*')
@@ -334,33 +274,23 @@ Response format must be a JSON array of objects, each with these fields:
       const picks = data.picks;
       console.log(`Found ${picks.length} picks for ${date}`);
       
-      // Step 2: Get game events from TheSportsDB API
-      const gamesResponse = await resultsCheckerService.getSportsEventsByDate(date);
+      // Step 2: Get the game scores
+      const scores = await resultsCheckerService.getGameScores(date);
       
-      let games = [];
-      if (gamesResponse.success) {
-        games = gamesResponse.events;
-        console.log(`Retrieved ${games.length} games from TheSportsDB API`);
-      } else {
-        console.log(`Warning: Could not fetch games from TheSportsDB API: ${gamesResponse.message}`);
-        // Continue anyway, Perplexity might be able to handle it
+      // Step 3: Evaluate the picks
+      const results = await resultsCheckerService.evaluatePicks(picks, scores, date);
+      
+      if (results.length === 0) {
+        return { success: false, message: 'No results could be evaluated' };
       }
       
-      // Step 3: Use Perplexity to evaluate the picks
-      const resultsResponse = await resultsCheckerService.checkAllResultsWithPerplexity(picks, date, games);
-      
-      if (!resultsResponse.success) {
-        return { success: false, message: resultsResponse.message };
-      }
-      
-      // Step 4: Record the results using garyPerformanceService
-      console.log(`Recording ${resultsResponse.results.length} pick results`);
-      await garyPerformanceService.recordPickResults(date, resultsResponse.results);
+      // Step 4: Record the results
+      await resultsCheckerService.recordResults(data.id, results, date);
       
       return { 
         success: true, 
-        message: `Successfully processed ${resultsResponse.results.length} results for ${date}`, 
-        results: resultsResponse.results 
+        message: `Successfully processed ${results.length} results for ${date}`,
+        results
       };
     } catch (error) {
       console.error('Error checking results:', error);
@@ -370,7 +300,7 @@ Response format must be a JSON array of objects, each with these fields:
   
   /**
    * Automate the whole process of getting picks and recording results
-   * @returns {Promise<Object>} - Results of the operation
+   * @returns {Promise<Object>} Results of the operation
    */
   automateResultsChecking: async () => {
     try {
@@ -383,6 +313,15 @@ Response format must be a JSON array of objects, each with these fields:
       // Step 2: Check results for those picks
       const resultsResponse = await resultsCheckerService.checkResults(picksResponse.date);
       
+      // Optionally record performance stats
+      if (resultsResponse.success && resultsResponse.results && resultsResponse.results.length > 0) {
+        try {
+          await garyPerformanceService.updatePerformanceStats(picksResponse.date);
+        } catch (statsError) {
+          console.error('Error updating performance stats:', statsError);
+        }
+      }
+      
       return resultsResponse;
     } catch (error) {
       console.error('Error automating results checking:', error);
@@ -392,7 +331,7 @@ Response format must be a JSON array of objects, each with these fields:
   
   /**
    * Check the status of the API keys
-   * @returns {Promise<Object>} - Status of each API key
+   * @returns {Promise<Object>} Status of each API key
    */
   checkApiKeyStatus: async () => {
     try {
@@ -405,8 +344,8 @@ Response format must be a JSON array of objects, each with these fields:
       if (perplexityService.API_KEY) {
         try {
           await perplexityService.fetchRealTimeInfo('Hello', {
-            model: 'sonar-small-online', // Use smallest model for quick check
-            maxTokens: 10 // Minimal tokens needed
+            model: 'sonar-small-online',
+            maxTokens: 10
           });
           status.perplexity = true;
           console.log('✅ Perplexity API key is valid');
@@ -439,7 +378,7 @@ Response format must be a JSON array of objects, each with these fields:
   
   /**
    * Start a daily job to check results automatically
-   * @returns {Object} - Status of the operation
+   * @returns {Object} Status of the operation
    */
   startDailyResultsChecker: () => {
     // Set up a daily job that runs at a specific time (e.g., 10 AM)
