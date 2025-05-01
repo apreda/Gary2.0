@@ -119,7 +119,35 @@ export function Billfold() {
     ? bettingLog 
     : bettingLog.filter(bet => bet.result === activeBettingFilter);
 
-  // Derived variables for easy display
+  // Extract bet types from betting log for performance charts
+  const extractBetTypeData = () => {
+    if (!bettingLog || bettingLog.length === 0) return [];
+    
+    // Count wins and losses for each bet type
+    const betTypeCounts = {};
+    
+    bettingLog.forEach(bet => {
+      const betType = bet.type || 'Unknown';
+      if (!betTypeCounts[betType]) {
+        betTypeCounts[betType] = { wins: 0, losses: 0 };
+      }
+      
+      if (bet.result === 'won' || bet.won) {
+        betTypeCounts[betType].wins += 1;
+      } else if (bet.result === 'lost' || !bet.won) {
+        betTypeCounts[betType].losses += 1;
+      }
+    });
+    
+    // Convert to array format for charts
+    return Object.keys(betTypeCounts).map(betType => ({
+      betType,
+      wins: betTypeCounts[betType].wins,
+      losses: betTypeCounts[betType].losses
+    }));
+  };
+
+  // Derived variables for easy display - NO MOCK DATA
   const stats = {
     bankroll: bankrollStats.currentBankroll,
     roi: (bankrollStats.currentBankroll - bankrollStats.startingBankroll) / bankrollStats.startingBankroll * 100,
@@ -131,12 +159,7 @@ export function Billfold() {
       wins: sport.wins,
       losses: sport.losses
     })),
-    betTypePerformance: [
-      { betType: 'Spread', wins: 30, losses: 15 },
-      { betType: 'Moneyline', wins: 25, losses: 10 },
-      { betType: 'Over/Under', wins: 20, losses: 18 },
-      { betType: 'Prop', wins: 15, losses: 12 },
-    ]
+    betTypePerformance: extractBetTypeData()
   };
   
   // Find the best win and worst loss for highlights
