@@ -292,7 +292,7 @@ export const resultsCheckerService = {
         .join('\n');
       
       // Process picks in smaller batches to avoid token limits
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 5;
       const allResults = [];
       
       for (let i = 0; i < picks.length; i += BATCH_SIZE) {
@@ -305,16 +305,19 @@ export const resultsCheckerService = {
           `${i+j+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
         ).join('\n');
         
-        // Create the Perplexity prompt for this batch
-        const prompt = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost:
+        // Create the Perplexity prompt for this batch - add a cache busting random number
+        // This is critical to prevent Perplexity from returning cached responses
+        const cacheKey = Math.random().toString().substring(2, 8);
+        
+        const prompt = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost. Request ID: ${cacheKey}
 
 📊 ACTUAL GAME RESULTS:
 ${scoresText}
 
-🎲 BETTING PICKS TO EVALUATE (BATCH ${i/BATCH_SIZE + 1}):
+🎲 BETTING PICKS TO EVALUATE (BATCH ${i/BATCH_SIZE + 1} ONLY):
 ${batchPicksText}
 
-For each numbered pick:
+For each numbered pick IN THIS BATCH ONLY:
 1. Find the corresponding game in the results
 2. Determine if the pick "won", "lost", or was a "push" according to sports betting rules
 
@@ -325,12 +328,12 @@ Betting Rules:
 
 Response format must be ONLY a JSON array of objects with ABSOLUTELY NO ADDITIONAL TEXT before or after the array. Each object must have these exact fields:
 - 'pick': The original pick text as provided 
-- 'league': The league (NBA, NHL, MLB)
+- 'league': The league (NBA, NHL, MLB) exactly as provided in the pick
 - 'result': Whether the pick 'won', 'lost', 'push'
 - 'final_score': The final score
 - 'matchup': Team A vs Team B from the game scores
 
-Make sure to include ALL picks in your response, even if you're not 100% confident about the result - make your best guess. IMPORTANT: Your response must be PARSEABLE JSON with no markdown formatting or explanations outside the JSON.`;
+IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not previous batches. Response ID: ${cacheKey}`;
         
         console.log(`Sending batch ${i/BATCH_SIZE + 1} (${batchPicks.length} picks) to Perplexity for evaluation`);
         
@@ -348,8 +351,22 @@ Make sure to include ALL picks in your response, even if you're not 100% confide
           if (!batchResults || batchResults.length === 0) {
             console.log(`No valid results parsed from Perplexity response for batch ${i/BATCH_SIZE + 1}`);
           } else {
-            console.log(`Successfully parsed ${batchResults.length} results from batch ${i/BATCH_SIZE + 1}`);
-            allResults.push(...batchResults);
+            // Verify these results are for the current batch by checking pick content
+            // This is critical to prevent duplicate results from being stored
+            const validResults = [];
+            const batchPickTexts = batchPicks.map(pick => pick.pick);
+            
+            for (const result of batchResults) {
+              // Only include results that match picks from this batch
+              if (batchPickTexts.includes(result.pick)) {
+                validResults.push(result);
+              } else {
+                console.log(`Skipping result not in this batch: ${result.pick}`);
+              }
+            }
+            
+            console.log(`Successfully validated ${validResults.length} results from batch ${i/BATCH_SIZE + 1}`);
+            allResults.push(...validResults);
           }
           
           // Add a short delay between batches to avoid rate limiting
