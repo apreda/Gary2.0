@@ -104,7 +104,7 @@ export const garyPerformanceService = {
       const { data: dailyPick, error: pickError } = await supabase
         .from('daily_picks')
         .select('*')
-        .eq('created_at', date)
+        .eq('date', date)
         .maybeSingle();
 
       if (pickError) throw pickError;
