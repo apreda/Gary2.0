@@ -5,7 +5,7 @@ import axios from 'axios';
  * https://the-odds-api.com/
  */
 export const oddsApiService = {
-  API_KEY: process.env.REACT_APP_ODDS_API_KEY || '',
+  API_KEY: import.meta.env.VITE_ODDS_API_KEY || '',
   BASE_URL: 'https://api.the-odds-api.com/v4',
   
   /**
