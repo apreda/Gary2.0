@@ -167,95 +167,176 @@ export function Billfold() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible bg-[#0F172A]">
-      {/* Background effects */}
-      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#1E293B]/30 via-transparent to-transparent" />
-        <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-br from-[#3B82F6]/5 via-transparent to-transparent" />
-        <div className="absolute bottom-24 left-0 w-full h-24 bg-gradient-to-t from-[#1E293B]/15 via-transparent to-transparent blur-2xl opacity-60" />
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#FACC15]/5 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#FACC15]/5 blur-3xl" />
-        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-15 mix-blend-soft-light" />
-        <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#0F172A]/90 to-[#0F172A] opacity-95" />
-      </div>
+    <div className="min-h-screen premium-white-bg py-6 relative">
+      {/* Background pattern */}
+      <div className="absolute inset-0" style={{ 
+        backgroundImage: `var(--grid-pattern-premium)`,
+        backgroundSize: '40px 40px',
+        opacity: 0.8
+      }}></div>
       
-      <div className="pt-24 pb-12 px-4 md:px-8 max-w-7xl mx-auto min-h-screen text-[#F9FAFB] space-y-12">
-        {/* Header with premium golden accents */}
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-            THE <span className="text-[#FACC15] drop-shadow-[0_0_8px_rgba(250,204,21,0.3)]">BILLFOLD</span>
-          </h1>
-          <p className="text-[#94A3B8] max-w-2xl mx-auto text-lg font-light tracking-wide">
-            Track Gary's picks and performance metrics in real-time
-          </p>
-          <div className="w-32 h-1 bg-[#FACC15] mx-auto my-3 relative opacity-80 glow-sm">
-            <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-[#FACC15]"></div>
-            <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-[#FACC15]"></div>
-            <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-[#FACC15]"></div>
-            <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-[#FACC15]"></div>
-          </div>
-        </div>
-        
-        {/* KPI Cards */}
-        <div>
-          <BillfoldKPI stats={stats} />
-        </div>
-        
-        {/* Section Divider */}
-        <div className="flex items-center">
-          <div className="flex-grow h-px bg-[#334155]"></div>
-          <div className="mx-4 flex items-center bg-[#1E293B] px-4 py-2 rounded-full shadow-md">
-            <FaChartPie className="text-[#FACC15] mr-2" />
-            <span className="text-lg font-bold uppercase tracking-wider text-white">Performance Metrics</span>
-          </div>
-          <div className="flex-grow h-px bg-[#334155]"></div>
-        </div>
-        
-        {/* Charts - With elegant glassmorphism container */}
-        <div className="p-6 md:p-8 rounded-xl bg-[#1E293B]/80 border border-[#334155] backdrop-blur-sm shadow-xl">
-          <BillfoldCharts 
-            sportPerformance={stats.sportPerformance}
-            betTypePerformance={stats.betTypePerformance}
-          />
-        </div>
-        
-        {/* Section Divider */}
-        <div className="flex items-center">
-          <div className="flex-grow h-px bg-[#334155]"></div>
-          <div className="mx-4 flex items-center bg-[#1E293B] px-4 py-2 rounded-full shadow-md">
-            <FaHistory className="text-[#FACC15] mr-2" />
-            <span className="text-lg font-bold uppercase tracking-wider text-white">Pick History</span>
-          </div>
-          <div className="flex-grow h-px bg-[#334155]"></div>
-        </div>
-        
-        {/* Filters and Betting Log Table */}
-        <div className="p-6 md:p-8 rounded-xl bg-[#1E293B]/80 border border-[#334155] backdrop-blur-sm shadow-xl">
-          <div className="mb-6 flex flex-wrap gap-3">
-            <button 
-              className={`px-5 py-2.5 rounded-lg transition-all duration-300 font-medium text-sm ${activeBettingFilter === 'all' ? 'bg-[#FACC15] text-[#0F172A] font-semibold shadow-md shadow-[#FACC15]/20' : 'bg-[#334155] text-gray-300 hover:bg-[#475569]'}`}
-              onClick={() => setActiveBettingFilter('all')}
-            >
-              All Picks
-            </button>
-            <button 
-              className={`px-5 py-2.5 rounded-lg transition-all duration-300 font-medium text-sm ${activeBettingFilter === 'won' ? 'bg-green-500 text-white font-semibold shadow-md shadow-green-500/20' : 'bg-[#334155] text-gray-300 hover:bg-[#475569]'}`}
-              onClick={() => setActiveBettingFilter('won')}
-            >
-              Wins
-            </button>
-            <button 
-              className={`px-5 py-2.5 rounded-lg transition-all duration-300 font-medium text-sm ${activeBettingFilter === 'lost' ? 'bg-red-500 text-white font-semibold shadow-md shadow-red-500/20' : 'bg-[#334155] text-gray-300 hover:bg-[#475569]'}`}
-              onClick={() => setActiveBettingFilter('lost')}
-            >
-              Losses
-            </button>
+      {/* Gold accent line at the very top */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#d4af37] via-[#e5c349] to-[#d4af37]"></div>
+      
+      <div className="relative z-10 max-w-7xl mx-auto px-4">
+        {/* Top navigation bar inspired by trading interfaces */}
+        <div className="flex items-center justify-between pb-6 border-b border-gray-200">
+          <div className="flex items-center">
+            <h1 className="text-2xl font-bold tracking-tight text-[#0a0a0a]">
+              THE <span className="text-[#d4af37]">BILLFOLD</span>
+            </h1>
           </div>
           
-          <BillfoldPicksTable 
-            bettingLog={filteredBettingLog}
-            title="Gary's Picks"
-          />
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-500">
+              <span className="font-medium mr-2">Last Updated:</span>
+              {new Date().toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </div>
+          </div>
+        </div>
+        
+        {/* Main layout inspired by trading interfaces */}
+        <div className="mt-6 grid grid-cols-12 gap-6">
+          {/* Left sidebar - KPI stats (like price/stats in trading) */}
+          <div className="col-span-12 lg:col-span-3 space-y-6">
+            <div className="premium-white-panel premium-gold-accent rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Performance Overview</h3>
+              </div>
+              <div className="p-4 space-y-6">
+                {/* Main stats displayed vertically like a trading sidebar */}
+                <div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500 text-sm">Current Bankroll</span>
+                    <span className="text-xl font-bold text-[#0a0a0a]">${stats.bankroll?.toLocaleString() || '10,000'}</span>
+                  </div>
+                  <div className="mt-1 flex items-center">
+                    <span className="text-sm text-gray-400">Starting: $10,000</span>
+                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-green-50 text-green-600">
+                      +{((stats.bankroll || 10000) - 10000) / 100}%
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="pt-4 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500 text-sm">Record</span>
+                    <span className="text-xl font-bold text-[#0a0a0a]">{stats.record || '0-0'}</span>
+                  </div>
+                  <div className="mt-1">
+                    <span className="text-sm text-gray-400">Win Rate: {stats.winLoss || '0%'}</span>
+                  </div>
+                </div>
+                
+                <div className="pt-4 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500 text-sm">ROI</span>
+                    <span className="text-xl font-bold text-[#0a0a0a]">{stats.roi?.toFixed(1) || '0'}%</span>
+                  </div>
+                  <div className="mt-1">
+                    <span className="text-sm text-gray-400">Total Bets: {stats.totalBets || 0}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Sport Performance Card */}
+            <div className="premium-white-panel premium-gold-accent rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Sport Breakdown</h3>
+              </div>
+              <div className="p-4">
+                {stats.sportPerformance?.length > 0 ? (
+                  <div className="space-y-3">
+                    {stats.sportPerformance.map((sport, index) => (
+                      <div key={sport.sport || index} className="flex justify-between items-center">
+                        <div className="flex items-center">
+                          <span className="w-5 text-center mr-2">
+                            {sport.sport === 'NBA' && '🏀'}
+                            {sport.sport === 'MLB' && '⚾'}
+                            {sport.sport === 'NHL' && '🏒'}
+                            {sport.sport === 'NFL' && '🏈'}
+                          </span>
+                          <span className="text-sm font-medium">{sport.sport}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-green-600 font-medium">{sport.wins || 0}W</span>
+                          <span className="mx-1 text-gray-300">-</span>
+                          <span className="text-red-600 font-medium">{sport.losses || 0}L</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 text-center py-4">No sport data available</div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Main content - center and right */}
+          <div className="col-span-12 lg:col-span-9 space-y-6">
+            {/* Chart area (like price chart in trading) */}
+            <div className="premium-white-panel premium-gold-accent rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Performance Charts</h3>
+                
+                <div className="flex space-x-2">
+                  <button className="px-3 py-1 text-xs rounded-full bg-[#d4af37] text-white font-medium">All Time</button>
+                  <button className="px-3 py-1 text-xs rounded-full bg-white border border-gray-200 text-gray-700 font-medium">Month</button>
+                  <button className="px-3 py-1 text-xs rounded-full bg-white border border-gray-200 text-gray-700 font-medium">Week</button>
+                </div>
+              </div>
+              
+              <div className="p-4">
+                <BillfoldCharts 
+                  sportPerformance={stats.sportPerformance}
+                  betTypePerformance={stats.betTypePerformance}
+                />
+              </div>
+            </div>
+            
+            {/* Picks table (like transactions in trading) */}
+            <div className="premium-white-panel premium-gold-accent rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">Gary's Picks</h3>
+                
+                <div className="flex space-x-2">
+                  <button 
+                    className={`px-3 py-1 text-xs rounded-full transition-all ${activeBettingFilter === 'all' ? 'bg-[#d4af37] text-white font-medium' : 'bg-white border border-gray-200 text-gray-700 font-medium'}`}
+                    onClick={() => setActiveBettingFilter('all')}
+                  >
+                    All
+                  </button>
+                  <button 
+                    className={`px-3 py-1 text-xs rounded-full transition-all ${activeBettingFilter === 'won' ? 'bg-green-500 text-white font-medium' : 'bg-white border border-gray-200 text-gray-700 font-medium'}`}
+                    onClick={() => setActiveBettingFilter('won')}
+                  >
+                    Wins
+                  </button>
+                  <button 
+                    className={`px-3 py-1 text-xs rounded-full transition-all ${activeBettingFilter === 'lost' ? 'bg-red-500 text-white font-medium' : 'bg-white border border-gray-200 text-gray-700 font-medium'}`}
+                    onClick={() => setActiveBettingFilter('lost')}
+                  >
+                    Losses
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-0">
+                <BillfoldPicksTable 
+                  bettingLog={filteredBettingLog}
+                  title=""
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

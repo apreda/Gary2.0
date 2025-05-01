@@ -70,38 +70,31 @@ export default function BillfoldKPI({ stats = {} }) {
       {kpis.map((kpi, i) => (
         <motion.div
           key={kpi.label}
-          className="col-span-12 sm:col-span-6 lg:col-span-3"
-          initial={{ opacity: 0, y: 15 }}
+          className="relative flex items-center p-5 premium-white-panel premium-gold-accent premium-gloss rounded-xl shadow-md overflow-hidden"
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.1, duration: 0.4 }}
+          transition={{ delay: i * 0.1 }}
+          whileHover={{ 
+            scale: 1.02, 
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05), 0 0 15px rgba(212, 175, 55, 0.3)' 
+          }}
         >
-          <div className="bg-[#1E293B]/80 backdrop-blur-sm border border-[#334155] p-5 md:p-6 rounded-xl shadow-lg hover:shadow-xl hover:translate-y-[-4px] hover:border-opacity-70 transition-all duration-300">
-            {/* Card header with labeled icon */}
-            <div className="flex items-center mb-4">
-              <div 
-                className="w-10 h-10 flex items-center justify-center rounded-full mr-3" 
-                style={{
-                  background: kpi.iconBg,
-                  border: `1px solid ${kpi.iconBorder}`
-                }}
-              >
-                <span style={{ color: kpi.bgColor }}>{kpi.icon}</span>
-              </div>
-              <div>
-                <p className="text-[#94A3B8] text-sm font-medium uppercase tracking-wider">{kpi.label}</p>
-                <p className="text-[#64748B] text-xs">{kpi.subLabel}</p>
-              </div>
-            </div>
-            
-            {/* Large value with dramatic styling */}
-            <div className="mt-2">
-              <p 
-                className="text-3xl font-extrabold tracking-tight" 
-                style={{ color: kpi.bgColor }}
-              >
-                {kpi.value}
-              </p>
-            </div>
+          {/* Background patterns and effects */}
+          <div className="absolute inset-0 opacity-10" style={{ 
+            backgroundImage: `
+              linear-gradient(to right, #0a0a0a10 1px, transparent 1px),
+              linear-gradient(to bottom, #0a0a0a10 1px, transparent 1px)
+            `,
+            backgroundSize: '20px 20px'
+          }}></div>
+          
+          <div className="flex-shrink-0 mr-4 p-3 rounded-full bg-white border-2 border-[#d4af37]/20 shadow-sm z-10 text-[#d4af37]">
+            <span style={{ color: kpi.bgColor }}>{kpi.icon}</span>
+          </div>
+          
+          <div className="z-10">
+            <p className="text-xs uppercase tracking-wide font-medium text-gray-500">{kpi.label}</p>
+            <p className="text-xl md:text-2xl font-bold text-[#0a0a0a] tracking-tight">{kpi.value}</p>
           </div>
         </motion.div>
       ))}

@@ -1,7 +1,7 @@
 /* Premium Dimensional Design System for Gary AI */
 
 :root {
-  /* Core palette with enhanced depth variations */
+  /* Core palette - matching base.css */
   --gary-navy: #111111;
   --gary-navy-800: #1a1a1a;
   --gary-navy-700: #222222;
@@ -24,15 +24,81 @@
   
   /* Design system values */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
   
   --gold-glow: 0 0 15px rgba(212, 175, 55, 0.3), 0 0 5px rgba(212, 175, 55, 0.2);
   --gold-glow-intense: 0 0 25px rgba(212, 175, 55, 0.4), 0 0 10px rgba(212, 175, 55, 0.3);
+  
+  /* Premium grid patterns for backgrounds */
+  --grid-pattern-light: linear-gradient(#0a0a0a10 1px, transparent 1px),
+                         linear-gradient(90deg, #0a0a0a10 1px, transparent 1px);
+  --grid-pattern-medium: linear-gradient(#0a0a0a15 1px, transparent 1px),
+                          linear-gradient(90deg, #0a0a0a15 1px, transparent 1px);
+  --grid-pattern-premium: linear-gradient(#d4af3705 1px, transparent 1px),
+                           linear-gradient(90deg, #0a0a0a08 1px, transparent 1px);
+  --grid-pattern-gold: linear-gradient(#d4af3710 1px, transparent 1px),
+                        linear-gradient(90deg, #d4af3710 1px, transparent 1px);
+                        
+  /* Depth gradients and overlays */                    
+  --depth-white-gradient: linear-gradient(180deg, #ffffff 0%, #f8f8f8 100%);
+  --depth-gold-accent: linear-gradient(90deg, #d4af3700 0%, #d4af3740 50%, #d4af3700 100%);
+  --depth-gloss-overlay: linear-gradient(120deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%);
 }
 
-/* Dimensional Room Background */
+/* Premium White Background with Grid Patterns */
+.premium-white-bg {
+  position: relative;
+  background-color: var(--gary-white);
+  background-image: var(--grid-pattern-premium);
+  background-size: 40px 40px;
+  overflow: hidden;
+}
+
+/* Gold accent grid variation */
+.premium-white-bg-gold {
+  position: relative;
+  background-color: var(--gary-white);
+  background-image: var(--grid-pattern-gold);
+  background-size: 40px 40px;
+  overflow: hidden;
+}
+
+/* Subtle white grid for panels and content areas */
+.premium-white-panel {
+  position: relative;
+  background-color: var(--gary-white);
+  background-image: var(--grid-pattern-light);
+  background-size: 20px 20px;
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(10, 10, 10, 0.05);
+  overflow: hidden;
+}
+
+/* Gold accent that can be applied to any panel */
+.premium-gold-accent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, var(--gary-gold-dark), var(--gary-gold), var(--gary-gold-dark));
+  z-index: 1;
+}
+
+/* Glossy effect for premium surfaces */
+.premium-gloss::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--depth-gloss-overlay);
+  pointer-events: none;
+}
+
+/* Original Dimensional Room Background - keeping for reference */
 .dimension-bg {
   position: absolute;
   inset: 0;
