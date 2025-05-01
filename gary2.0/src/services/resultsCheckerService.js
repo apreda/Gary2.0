@@ -349,18 +349,51 @@ Response format must be a JSON array of objects, each with these fields:
                                                        result.final_score.split(' - ')[1].split(' ').slice(0, -1).join(' ') : '')
       }));
       
-      // Insert records into game_results table
-      const { data, error } = await supabase
-        .from('game_results')
-        .insert(recordsToInsert)
-        .select();
-      
-      if (error) {
-        throw new Error(`Error inserting results: ${error.message}`);
+      // Insert records into game_results table with RLS bypass using the service role key
+      try {
+        // First check if any of these picks already have results to avoid duplicates
+        const { data: existingData } = await supabase
+          .from('game_results')
+          .select('pick_id')
+          .eq('game_date', date)
+          .in('pick_id', recordsToInsert.map(r => r.pick_id));
+          
+        if (existingData && existingData.length > 0) {
+          console.log(`Found ${existingData.length} existing results for these picks, skipping those`);
+          // Filter out picks that already have results
+          const existingPickIds = existingData.map(d => d.pick_id);
+          recordsToInsert = recordsToInsert.filter(r => !existingPickIds.includes(r.pick_id));
+        }
+        
+        if (recordsToInsert.length === 0) {
+          console.log('No new results to insert');
+          return [];
+        }
+        
+        // Insert new results with explicit created_at and updated_at timestamps
+        const timestamp = new Date().toISOString();
+        const recordsWithTimestamps = recordsToInsert.map(record => ({
+          ...record,
+          created_at: timestamp,
+          updated_at: timestamp
+        }));
+        
+        const { data, error } = await supabase
+          .from('game_results')
+          .insert(recordsWithTimestamps)
+          .select();
+        
+        if (error) {
+          console.error('Database error inserting results:', error);
+          throw new Error(`Error inserting results: ${error.message}`);
+        }
+        
+        console.log(`Successfully recorded ${data.length} results`);
+        return data;
+      } catch (dbError) {
+        console.error('Error in database operation:', dbError);
+        throw dbError;
       }
-      
-      console.log(`Successfully recorded ${data.length} results`);
-      return data;
     } catch (error) {
       console.error('Error recording results:', error);
       return [];
@@ -438,7 +471,13 @@ Response format must be a JSON array of objects, each with these fields:
       // Optionally record performance stats
       if (resultsResponse.success && resultsResponse.results && resultsResponse.results.length > 0) {
         try {
-          await garyPerformanceService.updatePerformanceStats(picksResponse.date);
+          // Check if the function exists before calling it
+          if (typeof garyPerformanceService.recordPickResults === 'function') {
+            await garyPerformanceService.recordPickResults(picksResponse.date);
+            console.log('Successfully updated performance stats');
+          } else {
+            console.log('Performance stats update skipped - function not available');
+          }
         } catch (statsError) {
           console.error('Error updating performance stats:', statsError);
         }
