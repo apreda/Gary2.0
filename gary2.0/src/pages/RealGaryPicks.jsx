@@ -420,39 +420,39 @@ function RealGaryPicks() {
                     
                     {/* Card Stack Interface */}
                     <div className="flex justify-center items-center relative py-8">
-                      {/* Left navigation arrow - positioned outside the card */}
+                      {/* Left navigation arrow - positioned outside the card, no circle */}
                       <button 
-                        className="absolute left-[-60px] z-50 text-[#d4af37] bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300 border-2 border-[#d4af37] hover:text-white"
+                        className="absolute left-[-60px] z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent"
                         onClick={prevPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M15 18l-6-6 6-6" />
                         </svg>
                       </button>
                       
-                      {/* Right navigation arrow - positioned outside the card */}
+                      {/* Right navigation arrow - positioned outside the card, no circle */}
                       <button 
-                        className="absolute right-[-60px] z-50 text-[#d4af37] bg-black bg-opacity-70 hover:bg-opacity-90 p-3 rounded-full transition-all duration-300 border-2 border-[#d4af37] hover:text-white"
+                        className="absolute right-[-60px] z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent"
                         onClick={nextPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M9 18l6-6-6-6" />
                         </svg>
                       </button>
                       
-                      {/* Card counter - repositioned above the card */}
-                      <div className="absolute top-[-30px] left-0 right-0 text-center z-50">
-                        <span className="px-4 py-2 bg-black bg-opacity-70 rounded-full text-sm text-[#d4af37] font-medium border border-[#d4af37]">
+                      {/* Card counter - repositioned below the card */}
+                      <div className="absolute bottom-[-50px] left-0 right-0 text-center z-50">
+                        <span className="px-4 py-2 bg-transparent text-lg text-[#d4af37] font-medium">
                           {picks.length > 0 ? `${currentIndex + 1} / ${picks.length}` : '0/0'}
                         </span>
                       </div>
                       
-                      {/* Card Stack - Wider index card format */}
-                      <div className="relative" style={{ width: '480px', height: '320px' }}>
+                      {/* Card Stack - Wider index card format (20% larger) */}
+                      <div className="relative" style={{ width: '576px', height: '384px' }}>
                         {picks.map((pick, index) => {
                           // Calculate position in stack relative to current index
                           const position = (index - currentIndex + picks.length) % picks.length;
@@ -495,7 +495,7 @@ function RealGaryPicks() {
                             >
                               {/* Card container with flip effect */}
                               <div 
-                                className="w-[480px] h-[320px] relative cursor-pointer" 
+                                className="w-[576px] h-[384px] relative cursor-pointer" 
                                 style={{
                                   perspective: '1000px',
                                 }}
