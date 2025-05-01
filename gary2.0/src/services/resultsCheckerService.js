@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { garyPerformanceService } from './garyPerformanceService';
-import { openaiService } from './openaiService';
+import { perplexityService } from './perplexityService';
 
 export const resultsCheckerService = {
   /**
@@ -41,72 +41,58 @@ export const resultsCheckerService = {
   },
   
   /**
-   * Check results for picks using OpenAI's API
+   * Check results for picks using Perplexity API
    * @param {string} date - Date of the picks
    * @param {Array} picks - Array of picks to check
    * @returns {Promise} API response with results
    */
-  checkResultsWithAI: async (date, picks) => {
+  checkResultsWithAI: async (picks, date) => {
     try {
       console.log(`Checking results for picks on ${date}:`, picks);
       
-      // Format the date for the prompt
-      const displayDate = new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+      // Format the date for display
+      const displayDate = date;
       
-      // Use the existing OpenAI API key from openaiService
-      const apiKey = openaiService.API_KEY;
-      if (!apiKey) {
-        throw new Error('OpenAI API key is not configured - please check the openaiService');
-      }
-      
-      console.log('Using OpenAI API key from openaiService');
-      
-      // Prepare data for the OpenAI API call - using standard chat completion without tools
-      const data = {
-        model: "gpt-4", // Using standard GPT-4 model
-        messages: [
-          {
-            role: "system",
-            content: "You are a sports betting analyst who can accurately determine if bets won and lost based on game results. You have access to all sports results up to your knowledge cutoff."
-          },
-          {
-            role: "user",
-            content: `Here are my sports picks from ${displayDate}. I need you to check if each pick won, lost, or pushed based on your knowledge of sports results.
+      // Create a formatted query for Perplexity
+      const query = `I need to check the results for these sports picks from ${displayDate}. For each pick, tell me if it won, lost, or pushed.
 
-For each pick, respond with the EXACT PICK TEXT followed by either "won", "lost", or "push", and the final score when applicable.
+For each pick, search for the related game and provide THE EXACT PICK TEXT followed by either "won", "lost", or "push", and include the final score when applicable.
 
 Response format must be structured as a JSON array of objects, each with fields 'pick', 'result', and 'score'.
 
-Picks: ${JSON.stringify(picks, null, 2)}`
-          }
-        ],
-        temperature: 0.3
-      };
+Picks: ${JSON.stringify(picks, null, 2)}`;
       
-      // Make the API call
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(data)
+      console.log(`Using Perplexity API for checking results`);
+      
+      // Use the Perplexity service to make the API call
+      const responseText = await perplexityService.fetchRealTimeInfo(query, {
+        model: 'sonar-medium-online', // Better model for complex sports analysis
+        temperature: 0.2,  // Low temperature for more consistent factual responses
+        maxTokens: 2000    // Allow enough tokens for all the results
       });
+      
+      // Create a simulated response object for compatibility with the rest of the code
+      const response = {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              content: responseText
+            }
+          }]
+        })
+      };
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
+        throw new Error(`Perplexity API error: ${errorData.error?.message || response.statusText}`);
       }
       
       const responseData = await response.json();
       
       // Parse the response to extract the results
       const assistantMessage = responseData.choices[0].message.content;
-      console.log('OpenAI response:', assistantMessage);
+      console.log('Perplexity response:', assistantMessage);
       
       // Extract JSON from the response
       let results;
@@ -119,7 +105,7 @@ Picks: ${JSON.stringify(picks, null, 2)}`
         if (jsonMatch) {
           results = JSON.parse(jsonMatch[0]);
         } else {
-          throw new Error('Could not parse results from OpenAI response');
+          throw new Error('Could not parse results from Perplexity response');
         }
       }
       
@@ -162,8 +148,8 @@ Picks: ${JSON.stringify(picks, null, 2)}`
       
       // Step 2: Check results with AI
       const resultsResponse = await resultsCheckerService.checkResultsWithAI(
-        picksResponse.date, 
-        picksResponse.data
+        picksResponse.data, 
+        picksResponse.date
       );
       
       if (!resultsResponse.success) {
@@ -180,6 +166,35 @@ Picks: ${JSON.stringify(picks, null, 2)}`
     } catch (error) {
       console.error('Error automating results checking:', error);
       return { success: false, message: error.message };
+    }
+  },
+  
+  /**
+   * Check the status of the Perplexity API key
+   * @returns {Promise<boolean>} True if the API key is valid, false otherwise
+   */
+  checkApiKeyStatus: async () => {
+    try {
+      // The API key is already loaded in the perplexityService
+      if (!perplexityService.API_KEY) {
+        return false;
+      }
+      
+      // Try a simple query to check if the key is valid
+      try {
+        await perplexityService.fetchRealTimeInfo('Hello', {
+          model: 'sonar-small-online', // Use smallest model for quick check
+          maxTokens: 10 // Minimal tokens needed
+        });
+        return true;
+      } catch (error) {
+        // If there's an error with the API key, this will fail
+        console.error('Error checking Perplexity API key status:', error);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error checking Perplexity API key status:', error);
+      return false;
     }
   },
   
