@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 import { resultsCheckerService } from '../services/resultsCheckerService';
 import { openaiService } from '../services/openaiService';
+import { garyPerformanceService } from '../services/garyPerformanceService';
 
 function ResultsAdmin() {
   const [date, setDate] = useState('');
@@ -51,8 +53,27 @@ function ResultsAdmin() {
     setStatus('Checking results...');
     
     try {
-      // Get the picks from the daily_picks table for this date
-      const picksResponse = await resultsCheckerService.getYesterdaysPicks();
+      // Override the date in getYesterdaysPicks to use our selected date
+      // We'll modify this to directly fetch from the date column
+      const { data, error } = await supabase
+        .from('daily_picks')
+        .select('*')
+        .eq('date', date)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (!data || !data.picks) {
+        setStatus(`Error: No picks found for ${date}`);
+        setLoading(false);
+        return;
+      }
+      
+      const picksResponse = {
+        success: true,
+        data: data.picks,
+        date: date
+      };
       
       if (!picksResponse.success) {
         setStatus(`Error: ${picksResponse.message || 'Could not fetch picks'}`);

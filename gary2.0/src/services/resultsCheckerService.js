@@ -16,11 +16,11 @@ export const resultsCheckerService = {
       
       console.log(`Fetching picks for date: ${formattedDate}`);
       
-      // Get the picks from the daily_picks table
+      // Get the picks from the daily_picks table using the date column
       const { data, error } = await supabase
         .from('daily_picks')
         .select('*')
-        .eq('created_at', formattedDate)
+        .eq('date', formattedDate)
         .maybeSingle();
 
       if (error) throw error;
