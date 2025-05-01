@@ -594,25 +594,66 @@ function RealGaryPicks() {
                                             </div>
                                           </div>
                                           
-                                          {/* Teams matchup at bottom */}
+                                          {/* Bet or Fade Buttons */}
                                           <div>
                                             <div style={{ 
                                               fontSize: '0.75rem', 
                                               opacity: 0.6, 
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.05em', 
-                                              marginBottom: '0.25rem'
+                                              marginBottom: '0.5rem'
                                             }}>
-                                              Matchup
+                                              Place Your Bet
                                             </div>
-                                            <div style={{ 
-                                              fontSize: '1rem', 
-                                              fontWeight: 600,
-                                              opacity: 0.9
+                                            <div style={{
+                                              display: 'flex',
+                                              gap: '0.75rem',
+                                              width: '100%',
                                             }}>
-                                              {(pick.homeTeam && pick.awayTeam) ? 
-                                                `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
-                                                (pick.game ? pick.game : 'TBD')}
+                                              <button 
+                                                style={{
+                                                  background: 'rgba(191, 161, 66, 0.15)',
+                                                  color: '#bfa142',
+                                                  fontWeight: '600',
+                                                  padding: '0.5rem 1rem',
+                                                  borderRadius: '8px',
+                                                  border: '1px solid rgba(191, 161, 66, 0.3)',
+                                                  cursor: 'pointer',
+                                                  flex: 1,
+                                                  fontSize: '0.8rem',
+                                                  letterSpacing: '0.05em',
+                                                  textTransform: 'uppercase',
+                                                  transition: 'all 0.2s ease'
+                                                }}
+                                                onClick={(e) => {
+                                                  e.stopPropagation(); // Prevent card flip
+                                                  handleDecisionMade('bet', pick);
+                                                }}
+                                              >
+                                                Bet
+                                              </button>
+                                              <button 
+                                                style={{
+                                                  background: 'rgba(255, 255, 255, 0.05)',
+                                                  color: 'rgba(255, 255, 255, 0.8)',
+                                                  fontWeight: '600',
+                                                  padding: '0.5rem 1rem',
+                                                  borderRadius: '8px',
+                                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                  cursor: 'pointer',
+                                                  flex: 1,
+                                                  fontSize: '0.8rem',
+                                                  letterSpacing: '0.05em',
+                                                  textTransform: 'uppercase',
+                                                  transition: 'all 0.2s ease'
+                                                }}
+                                                onClick={(e) => {
+                                                  e.stopPropagation(); // Prevent card flip
+                                                  handleDecisionMade('fade', pick);
+                                                }}
+                                              >
+                                                Fade
+                                              </button>
                                             </div>
                                           </div>
                                         </div>
@@ -632,23 +673,62 @@ function RealGaryPicks() {
                                           alignItems: 'center',
                                           background: 'rgba(0, 0, 0, 0.15)'
                                         }}>
-                                          {/* Game Time */}
-                                          <div style={{ 
-                                            textAlign: 'center',
-                                            marginBottom: '1rem'
-                                          }}>
-                                            <div style={{ 
-                                              fontSize: '0.75rem', 
-                                              opacity: 0.6, 
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em', 
-                                              marginBottom: '0.25rem'
-                                            }}>
-                                              Game Time
-                                            </div>
-                                            <div style={{ 
-                                              fontSize: '1.125rem', 
-                                              fontWeight: 600,
+                                           {/* League */}
+                                           <div style={{ 
+                                             textAlign: 'center',
+                                             marginBottom: '1rem'
+                                           }}>
+                                             <div style={{ 
+                                               fontSize: '0.75rem', 
+                                               opacity: 0.6, 
+                                               textTransform: 'uppercase',
+                                               letterSpacing: '0.05em', 
+                                               marginBottom: '0.25rem'
+                                             }}>
+                                               League
+                                             </div>
+                                             <div style={{ 
+                                               fontSize: '1.125rem', 
+                                               fontWeight: 600,
+                                               opacity: 0.95,
+                                               marginBottom: '1rem'
+                                             }}>
+                                               {pick.league || 'MLB'}
+                                             </div>
+                                             
+                                             {/* Matchup now in middle right */}
+                                             <div style={{ 
+                                               fontSize: '0.75rem', 
+                                               opacity: 0.6, 
+                                               textTransform: 'uppercase',
+                                               letterSpacing: '0.05em', 
+                                               marginBottom: '0.25rem'
+                                             }}>
+                                               Matchup
+                                             </div>
+                                             <div style={{ 
+                                               fontSize: '1rem', 
+                                               fontWeight: 600,
+                                               opacity: 0.9,
+                                               marginBottom: '1rem'
+                                             }}>
+                                               {(pick.homeTeam && pick.awayTeam) ? 
+                                                 `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
+                                                 (pick.game ? pick.game : 'TBD')}
+                                             </div>
+                                             
+                                             <div style={{ 
+                                               fontSize: '0.75rem', 
+                                               opacity: 0.6, 
+                                               textTransform: 'uppercase',
+                                               letterSpacing: '0.05em', 
+                                               marginBottom: '0.25rem'
+                                             }}>
+                                               Game Time
+                                             </div>
+                                             <div style={{ 
+                                               fontSize: '1.125rem', 
+                                               fontWeight: 600,
                                               opacity: 0.9
                                             }}>
                                               {pick.time ? 
@@ -810,66 +890,7 @@ function RealGaryPicks() {
                                       </div>
                                     </div>
                                     
-                                    {/* Bet or Fade Buttons */}
-                                    <div style={{
-                                      display: 'flex',
-                                      justifyContent: 'center',
-                                      padding: '1.25rem 0 0.25rem',
-                                      marginTop: '1rem',
-                                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                                    }}>
-                                      <div style={{ 
-                                        display: 'flex', 
-                                        gap: '1rem',
-                                        justifyContent: 'center',
-                                        width: '100%',
-                                      }}>
-                                        <button 
-                                          style={{
-                                            background: 'rgba(191, 161, 66, 0.15)',
-                                            color: '#bfa142',
-                                            fontWeight: '600',
-                                            padding: '0.75rem 1.5rem',
-                                            borderRadius: '8px',
-                                            border: '1px solid rgba(191, 161, 66, 0.3)',
-                                            cursor: 'pointer',
-                                            flex: 1,
-                                            fontSize: '0.9rem',
-                                            letterSpacing: '0.05em',
-                                            textTransform: 'uppercase',
-                                            transition: 'all 0.2s ease'
-                                          }}
-                                          onClick={(e) => {
-                                            e.stopPropagation(); // Prevent card flip
-                                            handleDecisionMade('bet', pick);
-                                          }}
-                                        >
-                                          Bet
-                                        </button>
-                                        <button 
-                                          style={{
-                                            background: 'rgba(255, 255, 255, 0.05)',
-                                            color: 'rgba(255, 255, 255, 0.7)',
-                                            fontWeight: '600',
-                                            padding: '0.75rem 1.5rem',
-                                            borderRadius: '8px',
-                                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                                            cursor: 'pointer',
-                                            flex: 1,
-                                            fontSize: '0.9rem',
-                                            letterSpacing: '0.05em',
-                                            textTransform: 'uppercase',
-                                            transition: 'all 0.2s ease'
-                                          }}
-                                          onClick={(e) => {
-                                            e.stopPropagation(); // Prevent card flip
-                                            handleDecisionMade('fade', pick);
-                                          }}
-                                        >
-                                          Fade
-                                        </button>
-                                      </div>
-                                    </div>
+                                    {/* Removed Bet or Fade Buttons - now on front of card */}
                                     
                                     {/* Bottom Pick Reference */}
                                     <div style={{ 
