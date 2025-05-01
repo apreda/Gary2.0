@@ -836,15 +836,15 @@ function RealGaryPicks() {
                                         </div>
                                       </div>
                                       
-                                      {/* Rationale Section - Expanded */}
-                                      <div style={{ 
-                                        flex: '1', 
-                                        display: 'flex', 
-                                        flexDirection: 'column',
-                                        overflowY: 'auto',
-                                        height: 'calc(100% - 110px)', /* Increased from 170px since header section is smaller */
-                                        marginBottom: '20px',
-                                    }}>
+                                      {/* Rationale Section - Further Expanded */}
+                                       <div style={{ 
+                                         flex: '1', 
+                                         display: 'flex', 
+                                         flexDirection: 'column',
+                                         overflowY: 'auto',
+                                         height: 'calc(100% - 80px)', /* Further increased to fill space where yellow bar was */
+                                         marginBottom: '0', /* Removed margin to expand all the way */
+                                     }}>
                                       {/* Main Analysis */}
                                       <div style={{ 
                                         backgroundColor: 'rgba(0, 0, 0, 0.2)', 
