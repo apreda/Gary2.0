@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { resultsCheckerService } from '../services/resultsCheckerService';
-import { openaiService } from '../services/openaiService';
+import { perplexityService } from '../services/perplexityService';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 
 function ResultsAdmin() {
@@ -18,13 +18,13 @@ function ResultsAdmin() {
     yesterday.setDate(yesterday.getDate() - 1);
     setDate(yesterday.toISOString().split('T')[0]);
     
-    // Check OpenAI API key status
-    if (openaiService.API_KEY) {
+    // Check Perplexity API key status
+    if (perplexityService.API_KEY) {
       setApiKeyStatus('configured');
-      setStatus('OpenAI API key is already configured in the system');
+      setStatus('Perplexity API key is already configured in the system');
     } else {
       setApiKeyStatus('missing');
-      setStatus('OpenAI API key is not configured. Please check your environment variables.');
+      setStatus('Perplexity API key is not configured. Please check your environment variables.');
     }
     
     // Check if automatic checking is enabled
@@ -81,10 +81,10 @@ function ResultsAdmin() {
         return;
       }
       
-      // Check results with OpenAI
+      // Check results with Perplexity
       const results = await resultsCheckerService.checkResultsWithAI(
-        date,
-        picksResponse.data
+        picksResponse.data,
+        date
       );
       
       if (!results.success) {
@@ -117,17 +117,17 @@ function ResultsAdmin() {
       <h1 className="text-3xl font-bold mb-6">Results Admin</h1>
       
       <div className="bg-gray-800 p-6 rounded-lg mb-8">
-        <h2 className="text-xl font-semibold mb-4">OpenAI API Configuration</h2>
+        <h2 className="text-xl font-semibold mb-4">Perplexity API Configuration</h2>
         <div className="mb-4">
           {apiKeyStatus === 'configured' ? (
             <div className="flex items-center">
               <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
-              <span>API Key is configured and ready to use</span>
+              <span>Perplexity API Key is configured and ready to use</span>
             </div>
           ) : (
             <div className="flex items-center">
               <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-              <span>API Key is missing or invalid. Please check your environment variables.</span>
+              <span>Perplexity API Key is missing or invalid. Please check your environment variables.</span>
             </div>
           )}
         </div>
