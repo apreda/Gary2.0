@@ -85,7 +85,7 @@ export function Billfold() {
               
               return {
                 id: result.pick_id,
-                date: result.game_date,
+                date: result.game_date, // Using the game_date field from Supabase,
                 sport: result.league,
                 bet: "Gary's Pick",
                 pick: result.pick_text || "Gary's Pick", // Use the original pick text

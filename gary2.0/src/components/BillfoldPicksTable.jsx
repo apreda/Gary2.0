@@ -35,6 +35,33 @@ function Filters() {
   );
 }
 
+// Helper function to properly format dates from game_date field
+const formatDate = (dateString) => {
+  // Handle both date string formats
+  if (!dateString) return 'N/A';
+  
+  try {
+    // Parse the date string
+    const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date format:', dateString);
+      return dateString; // Return the original string if invalid
+    }
+    
+    // Format the date in a user-friendly way: MM/DD/YYYY
+    return date.toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return dateString; // Return the original string on error
+  }
+};
+
 export default function BillfoldPicksTable({ bettingLog = [], title = "Recent Picks" }) {
   // Check if we have pick data to display
   const hasPicks = Array.isArray(bettingLog) && bettingLog.length > 0;
@@ -71,7 +98,7 @@ export default function BillfoldPicksTable({ bettingLog = [], title = "Recent Pi
                 animate={{ opacity:1, y:0 }}
                 transition={{delay:0.1 + i*0.03}}
               >
-                <td className="py-2">{bet.date ? new Date(bet.date).toLocaleDateString() : 'N/A'}</td>
+                <td className="py-2">{bet.date ? formatDate(bet.date) : 'N/A'}</td>
                 <td>
                   <span className="inline-flex items-center">
                     {bet.sport === 'NBA' && '🏀'}
