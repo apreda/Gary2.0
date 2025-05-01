@@ -82,10 +82,18 @@ export const perplexityService = {
           }
         );
         
+        // Log successful response status
+        console.log('Successfully retrieved real-time information from Perplexity');
+        
+        // Log the full response to help debug JSON parsing issues
+        console.log('Perplexity response:', response.data);
+        
         // Extract the response content
         if (response.data && response.data.choices && response.data.choices.length > 0) {
           const result = response.data.choices[0].message.content;
-          console.log('Successfully retrieved real-time information from Perplexity');
+          // Log the first 200 characters of the response to see what we're getting
+          console.log('Perplexity response preview:', result.substring(0, 200) + '...');
+          console.log('Perplexity response length:', result.length);
           return result;
         } else {
           console.error('Invalid response format from Perplexity API:', response.data);

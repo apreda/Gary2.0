@@ -7,25 +7,105 @@ import { sportsDbApiService } from './sportsDbApiService';
 sportsDbApiService.initialize();
 
 /**
- * Simple JSON parser to extract results from Perplexity response
+ * Enhanced JSON parser to extract results from Perplexity response
  * @param {string} text - The text response from Perplexity
  * @returns {Array} Parsed results array
  */
 const extractJsonFromText = (text) => {
+  if (!text) {
+    console.error('No text provided to parse');
+    return [];
+  }
+  
+  console.log('Attempting to parse JSON from text:', text.substring(0, 200) + '...');
+  
   try {
     // Try to find JSON within code blocks first
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[1]) {
-      return JSON.parse(jsonMatch[1].trim());
+      const jsonText = jsonMatch[1].trim();
+      console.log('Found JSON in code block:', jsonText.substring(0, 100) + '...');
+      try {
+        return JSON.parse(jsonText);
+      } catch (codeBlockError) {
+        console.error('Error parsing JSON from code block:', codeBlockError);
+      }
     }
     
     // If no code block, try to find JSON array anywhere in the text
-    const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    if (arrayMatch) {
-      return JSON.parse(arrayMatch[0]);
+    const startPos = text.indexOf('[{');
+    const endPos = text.lastIndexOf('}]');
+    
+    if (startPos !== -1 && endPos !== -1 && endPos > startPos) {
+      // Extract what looks like a JSON array
+      const jsonText = text.substring(startPos, endPos + 2);
+      console.log('Found possible JSON array:', jsonText.substring(0, 100) + '...');
+      
+      try {
+        return JSON.parse(jsonText);
+      } catch (arrayError) {
+        console.error('Error parsing JSON array:', arrayError);
+      }
+    }
+    
+    // As a last resort, try to parse line by line
+    console.log('Attempting to manually extract structured data from text');
+    const picks = [];
+    const lines = text.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      // Look for lines that appear to be describing a pick result
+      if (lines[i].includes('Pick:') && lines[i].includes('|')) {
+        try {
+          // Extract pick text
+          const pickMatch = lines[i].match(/Pick:\s*"([^"]+)"/i);
+          if (!pickMatch) continue;
+          
+          const pick = pickMatch[1];
+          
+          // Try to find league
+          const leagueMatch = lines[i].match(/(NBA|NHL|MLB)/i);
+          const league = leagueMatch ? leagueMatch[1].toUpperCase() : '';
+          
+          // Look for result in the next few lines
+          let result = 'unknown';
+          let score = '';
+          
+          for (let j = i; j < Math.min(i + 5, lines.length); j++) {
+            if (lines[j].includes('won') || lines[j].includes('lost') || lines[j].includes('push')) {
+              if (lines[j].includes('won')) result = 'won';
+              else if (lines[j].includes('lost')) result = 'lost';
+              else if (lines[j].includes('push')) result = 'push';
+              
+              // Try to extract score
+              const scoreMatch = lines[j].match(/(\d+)\s*-\s*(\d+)/i);
+              if (scoreMatch) {
+                score = scoreMatch[0];
+              }
+              
+              break;
+            }
+          }
+          
+          picks.push({
+            pick: pick,
+            league: league,
+            result: result,
+            score: score
+          });
+        } catch (lineError) {
+          console.error('Error parsing line:', lineError);
+        }
+      }
+    }
+    
+    if (picks.length > 0) {
+      console.log(`Manually extracted ${picks.length} picks`);
+      return picks;
     }
     
     // If still no match, return empty array
+    console.error('Could not extract any JSON or structured data from text');
     return [];
   } catch (error) {
     console.error('Error parsing JSON from text:', error);
