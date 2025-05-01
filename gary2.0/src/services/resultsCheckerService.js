@@ -361,7 +361,16 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
             console.log(`No valid results parsed from OpenAI response for batch ${i/BATCH_SIZE + 1}`);
           } else {
             // Verify these results are for the current batch by checking pick content
-            // This is critical to prevent duplicate results from being stored
+            // Helper function to extract the core text from a pick
+            function extractPickText(pickString) {
+              if (!pickString) return '';
+              // Extract the team name or OVER/UNDER part
+              const pattern = /(OVER|UNDER|\w+\s+\w+)(\s+[+-]?\d+(\.\d+)?)?/i;
+              const match = pickString.match(pattern);
+              return match ? match[0] : pickString;
+            }
+
+            // Checking that the pick content is a subString of the original pick to ensure this is the right batch
             const batchResultsValid = batchResults.every(result => {
               // Find the corresponding pick 
               // If there's no pick property, consider it invalid
