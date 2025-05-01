@@ -14,45 +14,121 @@ oddsApiService.initialize();
 const parseResultsManually = (text) => {
   console.log('Manual parsing of:', text);
   
-  // Initialize results array
+  // Try to extract JSON from a code block first
+  const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (jsonBlockMatch && jsonBlockMatch[1]) {
+    try {
+      // Try parsing the JSON block content
+      const jsonArray = JSON.parse(jsonBlockMatch[1]);
+      if (Array.isArray(jsonArray) && jsonArray.length > 0 && jsonArray[0].pick) {
+        console.log(`Successfully extracted ${jsonArray.length} results from JSON block`);
+        return jsonArray;
+      }
+    } catch (e) {
+      console.log('Failed to parse JSON block, continuing with line-by-line parsing');
+    }
+  }
+  
+  // Initialize results array for manual parsing
   const results = [];
   
-  // Split the text by lines or by clear separators
-  const lines = text.split(/\n|\r|\.|\*|•/);
+  // Split the text by lines
+  const lines = text.split(/\n/);
   
-  // Look for patterns like "[Pick text] won/lost/push [score]" in each line
+  // Look for patterns in each line
+  let currentPick = null;
+  let currentLeague = null;
+  let currentResult = null;
+  let currentScore = null;
+  
   for (let line of lines) {
     line = line.trim();
     if (!line) continue;
     
-    // Skip lines that are clearly not about results
+    // Skip header/intro lines
     if (line.startsWith('I found') || line.startsWith('Here are') || 
-        line.startsWith('Based on') || line.includes('search for')) {
+        line.startsWith('Based on') || line.startsWith('Given the')) {
       continue;
     }
     
-    // Try to extract pick text
-    let pickMatch = line.match(/"([^"]+)"|'([^']+)'|^([^:]+):|^(.+?)(?=won|lost|push)/i);
-    if (!pickMatch) continue;
-    
-    const pickText = (pickMatch[1] || pickMatch[2] || pickMatch[3] || pickMatch[4] || '').trim();
-    if (!pickText || pickText.length < 5) continue; // Skip too short matches
-    
-    // Try to find result
-    const resultMatch = line.toLowerCase().match(/(won|lost|push)/);
-    if (!resultMatch) continue;
-    
-    const result = resultMatch[1];
-    
-    // Try to extract score if present
-    const scoreMatch = line.match(/\d+[-–]\d+|\(.*?\)/);
-    const score = scoreMatch ? scoreMatch[0] : '';
-    
-    // Add to results
+    // Try to match a pick description with quotes
+    const pickMatch = line.match(/"([^"]+)"/);
+    if (pickMatch) {
+      // If we have a complete result ready, add it
+      if (currentPick && currentResult) {
+        results.push({
+          pick: currentPick,
+          league: currentLeague || '',
+          result: currentResult,
+          score: currentScore || 'N/A'
+        });
+      }
+      
+      // Start a new pick
+      currentPick = pickMatch[1];
+      
+      // Try to extract league
+      const leagueMatch = line.match(/(NBA|MLB|NHL)/);
+      currentLeague = leagueMatch ? leagueMatch[1] : '';
+      
+      // Try to extract result
+      const resultMatch = line.toLowerCase().match(/(won|lost|push|unknown)/);
+      currentResult = resultMatch ? resultMatch[1] : null;
+      
+      // Try to extract score
+      const scoreMatch = line.match(/([\w\s]+)\s+(\d+)\s*-\s*(\w+\s+\d+)|([\w\s]+\s+\d+\s*-\s*\d+)/);
+      currentScore = scoreMatch ? (scoreMatch[0] || 'N/A') : 'N/A';
+      
+      // If we got everything in one line, add the result
+      if (currentPick && currentResult) {
+        results.push({
+          pick: currentPick,
+          league: currentLeague || '',
+          result: currentResult,
+          score: currentScore || 'N/A'
+        });
+        
+        // Reset for next pick
+        currentPick = null;
+        currentLeague = null;
+        currentResult = null;
+        currentScore = null;
+      }
+    }
+    // Check for result lines
+    else if (currentPick && !currentResult) {
+      const resultMatch = line.toLowerCase().match(/(won|lost|push|unknown)/);
+      if (resultMatch) {
+        currentResult = resultMatch[1];
+        
+        // Try to extract score
+        const scoreMatch = line.match(/([\w\s]+)\s+(\d+)\s*-\s*(\w+\s+\d+)|([\w\s]+\s+\d+\s*-\s*\d+)/);
+        currentScore = scoreMatch ? (scoreMatch[0] || 'N/A') : 'N/A';
+        
+        // Add the completed result
+        results.push({
+          pick: currentPick,
+          league: currentLeague || '',
+          result: currentResult,
+          score: currentScore || 'N/A'
+        });
+        
+        // Reset for next pick
+        currentPick = null;
+        currentLeague = null;
+        currentResult = null;
+        currentScore = null;
+      }
+    }
+  }
+  
+  // Add the last result if it's complete
+  if (currentPick && currentResult) {
     results.push({
-      pick: pickText,
-      result: result,
-      score: score
+      pick: currentPick,
+      league: currentLeague || '',
+      result: currentResult,
+      score: currentScore || 'N/A'
     });
   }
   
