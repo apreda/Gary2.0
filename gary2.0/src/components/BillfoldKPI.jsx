@@ -56,45 +56,62 @@ export default function BillfoldKPI({ stats = {} }) {
     {
       label: "Win Rate",
       subLabel: "Last 30 days",
-      value: stats.winLoss || '0%',
+      value: metrics[3] || '0%',
       icon: <TrendingUpIcon />,
       bgColor: "#F97316",
       iconBg: "rgba(249, 115, 22, 0.15)",
-      iconBorder: "rgba(249, 115, 22, 0.3)"
+      iconBorder: "rgba(249, 115, 22, 0.3)",
+      change: 0,
+      period: "Last 30 days"
     },
   ];
   
   return (
-    <div className="grid grid-cols-12 gap-4 md:gap-6 w-full">
-      {/* Responsive: stack on mobile, 4-wide on md+ */}
+    <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
       {kpis.map((kpi, i) => (
         <motion.div
-          key={kpi.label}
-          className="relative flex items-center p-5 premium-white-panel premium-gold-accent premium-gloss rounded-xl shadow-md overflow-hidden"
-          initial={{ opacity: 0, y: 20 }}
+          key={kpi.label || i}
+          className="relative overflow-hidden rounded-md border border-[#333333] bg-[#1a1a1a]"
+          whileHover={{ scale: 1.005 }}
+          initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.1 }}
-          whileHover={{ 
-            scale: 1.02, 
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05), 0 0 15px rgba(212, 175, 55, 0.3)' 
-          }}
+          transition={{ delay: i * 0.03 }}
         >
-          {/* Background patterns and effects */}
-          <div className="absolute inset-0 opacity-10" style={{ 
-            backgroundImage: `
-              linear-gradient(to right, #0a0a0a10 1px, transparent 1px),
-              linear-gradient(to bottom, #0a0a0a10 1px, transparent 1px)
-            `,
-            backgroundSize: '20px 20px'
-          }}></div>
-          
-          <div className="flex-shrink-0 mr-4 p-3 rounded-full bg-white border-2 border-[#d4af37]/20 shadow-sm z-10 text-[#d4af37]">
-            <span style={{ color: kpi.bgColor }}>{kpi.icon}</span>
-          </div>
-          
-          <div className="z-10">
-            <p className="text-xs uppercase tracking-wide font-medium text-gray-500">{kpi.label}</p>
-            <p className="text-xl md:text-2xl font-bold text-[#0a0a0a] tracking-tight">{kpi.value}</p>
+          <div className="px-3 py-3 relative">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs text-gray-400 font-medium truncate">{kpi.label}</p>
+                <p className="text-xl font-bold text-white tracking-tight truncate mt-0.5">{kpi.value}</p>
+              </div>
+              <div className={`
+                flex items-center justify-center w-7 h-7 rounded-md
+                ${kpi.change > 0 ? 'bg-green-900/30 text-green-400' : kpi.change < 0 ? 'bg-red-900/30 text-red-400' : 'bg-gray-900/30 text-gray-400'}
+              `}>
+                {kpi.change > 0 ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 19V5M12 5L5 12M12 5L19 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ) : kpi.change < 0 ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 5V19M12 19L5 12M12 19L19 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center mt-1.5">
+              <span className={`
+                text-xs font-medium mr-1.5
+                ${kpi.change > 0 ? 'text-green-400' : kpi.change < 0 ? 'text-red-400' : 'text-gray-400'}
+              `}>
+                {kpi.change > 0 ? '+' : ''}{kpi.change}%
+              </span>
+              <span className="text-[10px] text-gray-500">{kpi.period}</span>
+            </div>
           </div>
         </motion.div>
       ))}
