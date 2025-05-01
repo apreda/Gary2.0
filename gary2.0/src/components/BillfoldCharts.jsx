@@ -1,22 +1,6 @@
 import { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend, LabelList } from 'recharts';
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend, LabelList, PieChart, Pie } from 'recharts';
 import { motion } from 'framer-motion';
-
-// Inline SVG icons to avoid build dependency issues
-const ChartIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2"/>
-    <path d="M3 9h18"/>
-    <path d="M9 21V9"/>
-  </svg>
-);
-
-const TagIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/>
-    <path d="M7 7h.01"/>
-  </svg>
-);
 
 export default function BillfoldCharts({ 
   sportPerformance = [], 
@@ -41,9 +25,32 @@ export default function BillfoldCharts({
     loss: '#ef4444'
   };
 
-  // In a real implementation, we would filter data by timeRange here
-  // const filteredSportData = filterDataByTimeRange(sportPerformance, timeRange);
-  // const filteredBetTypeData = filterDataByTimeRange(betTypePerformance, timeRange);
+  // Format data for the pie chart
+  const prepareBetTypeData = () => {
+    if (!betTypePerformance || !Array.isArray(betTypePerformance) || betTypePerformance.length === 0) {
+      return [];
+    }
+    
+    return betTypePerformance.map((item, index) => ({
+      name: item.betType,
+      value: item.count,
+      fill: [garyColors.gold, '#3b82f6', '#10b981', '#8b5cf6'][index % 4]
+    }));
+  };
+
+  const betTypePieData = prepareBetTypeData();
+
+  // Custom tooltip for charts
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-[#d4af37]/20 shadow-md rounded-md">
+          <p className="text-sm font-medium text-gray-800">{`${label || payload[0].name}: ${payload[0].value}`}</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     // Horizontal layout on larger screens, vertical on mobile
@@ -121,20 +128,7 @@ export default function BillfoldCharts({
                     tick={{ fill: '#333333' }}
                     axisLine={{ stroke: '#cccccc' }}
                   />
-                  <Tooltip 
-                    formatter={(value, name) => [
-                      name === 'wins' ? `${value} wins` : `${value} losses`, 
-                      name === 'wins' ? 'Wins' : 'Losses'
-                    ]}
-                    contentStyle={{ 
-                      backgroundColor: '#ffffff', 
-                      borderColor: garyColors.gold,
-                      borderWidth: '1px',
-                      color: '#333333',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                    }}
-                    labelStyle={{ color: '#333333', fontWeight: 'bold' }}
-                  />
+                  <Tooltip content={<CustomTooltip />} />
                   <Legend 
                     wrapperStyle={{ 
                       paddingTop: '5px',
@@ -165,7 +159,7 @@ export default function BillfoldCharts({
       >
         <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent">
           <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center">
-            <span className="mr-2 text-[#d4af37]">💰</span>Bet Type Performance
+            <span className="mr-2 text-[#d4af37]">💰</span>Bet Type Distribution
           </h3>
         </div>
         
@@ -179,58 +173,38 @@ export default function BillfoldCharts({
             </div>
           ) : (
             <>
-              {/* Using the same time range filter as sport chart, no need to repeat UI */}
-              <div className="h-[46px] mb-4"></div> 
+              {/* Using the same time filter as sport chart */}
+              <div className="flex justify-center space-x-2 mb-4 p-1 bg-[#f9f9f9] rounded-lg border border-[#d4af37]/10 shadow-inner opacity-0 pointer-events-none">
+                <button className="px-4 py-1.5 rounded-md text-sm">Placeholder</button>
+              </div>
               
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart
-                  layout="vertical"
-                  data={betTypePerformance} 
-                  margin={{ top: 10, right: 20, left: 70, bottom: 0 }}
-                >
-                  <XAxis 
-                    type="number" 
-                    domain={[0, 'dataMax']} 
-                    stroke="#666666"
-                    tick={{ fill: '#333333' }}
-                    axisLine={{ stroke: '#cccccc' }}
-                  />
-                  <YAxis 
-                    type="category" 
-                    dataKey="betType" 
-                    width={70} 
-                    stroke="#666666"
-                    tick={{ fill: '#333333' }}
-                    axisLine={{ stroke: '#cccccc' }}
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => [
-                      name === 'wins' ? `${value} wins` : `${value} losses`, 
-                      name === 'wins' ? 'Wins' : 'Losses'
-                    ]}
-                    contentStyle={{ 
-                      backgroundColor: '#ffffff', 
-                      borderColor: garyColors.gold,
-                      borderWidth: '1px',
-                      color: '#333333',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                    }}
-                    labelStyle={{ color: '#333333', fontWeight: 'bold' }}
-                  />
+                <PieChart>
+                  <Pie
+                    data={betTypePieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {betTypePieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
                   <Legend 
+                    verticalAlign="bottom" 
+                    height={36} 
                     wrapperStyle={{ 
                       paddingTop: '5px',
                       fontSize: '12px',
                       color: '#333333'
                     }}
                   />
-                  <Bar dataKey="wins" stackId="a" fill={garyColors.gold} name="Wins">
-                    <LabelList dataKey="wins" position="insideRight" fill="#333" fontWeight="bold" fontSize="11" />
-                  </Bar>
-                  <Bar dataKey="losses" stackId="a" fill="#999999" name="Losses">
-                    <LabelList dataKey="losses" position="insideRight" fill="#fff" fontWeight="bold" fontSize="11" />
-                  </Bar>
-                </BarChart>
+                </PieChart>
               </ResponsiveContainer>
             </>
           )}

@@ -1,14 +1,6 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 
-// Inline SVG icon to avoid build dependency issues
-const TrendingUpIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-    <polyline points="17 6 23 6 23 12"></polyline>
-  </svg>
-);
-
 // Helper function to properly format dates from game_date field
 const formatDate = (dateString) => {
   // Handle both date string formats
@@ -60,6 +52,19 @@ export default function BillfoldPicksTable({ bettingLog = [], title = "" }) {
   // The grouped data (we'll use flat list for now but structure is ready for accordion)
   const groupedBets = groupBetsByDate(bettingLog);
   
+  // Get sport emoji
+  const getSportEmoji = (sport) => {
+    switch (sport?.toUpperCase()) {
+      case 'NBA': return '🏀';
+      case 'NFL': return '🏈';
+      case 'MLB': return '⚾';
+      case 'NHL': return '🏒';
+      case 'SOCCER': return '⚽';
+      case 'UFC': return '🥊';
+      default: return '🎯';
+    }
+  };
+  
   return (
     <div className="w-full overflow-hidden rounded-md border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300 bg-white">
       <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent sticky top-0 z-10">
@@ -70,58 +75,56 @@ export default function BillfoldPicksTable({ bettingLog = [], title = "" }) {
       
       <div className="max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-track-gray-100">
         {!hasPicks ? (
-          <div className="flex justify-center items-center py-10 text-gray-500">
+          <div className="h-40 flex items-center justify-center">
             <div className="text-center">
               <img src="/coin2.png" alt="Gary Coin" className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              <p>No recent picks available</p>
+              <p className="text-gray-500 text-sm font-medium">No recent picks available</p>
             </div>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-[#f8f7f4] sticky top-0 z-10">
+          <table className="min-w-full divide-y divide-[#d4af37]/10 bg-white">
+            <thead className="bg-[#f9f9f9] sticky top-0 z-10">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                   Date
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                   Sport
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider hidden md:table-cell">
                   Matchup
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                   Pick
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                   Result
                 </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                   Score
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            
+            <tbody className="bg-white divide-y divide-gray-100">
               {bettingLog.map((bet, index) => (
                 <motion.tr 
                   key={bet.id || index} 
-                  className={`${index % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'} hover:bg-[#fffdf8] transition-colors duration-150`}
-                  initial={{ opacity: 0, y: 2 }}
+                  className="hover:bg-[#fffdf8] transition-colors" 
+                  initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.02 * index, duration: 0.15 }}
+                  transition={{ delay: index * 0.05 }}
                 >
                   <td className="px-4 py-3.5 text-gray-800 font-medium">
                     {bet.date ? formatDate(bet.date) : 'N/A'}
                   </td>
                   <td className="px-4 py-3.5 text-gray-800 flex items-center">
                     <span className="mr-1.5 text-lg">
-                      {bet.sport === 'NBA' && '🏀'}
-                      {bet.sport === 'NFL' && '🏈'}
-                      {bet.sport === 'MLB' && '⚾'}
-                      {bet.sport === 'NHL' && '🏒'}
+                      {getSportEmoji(bet.sport)}
                     </span>
                     <span>{bet.sport || 'N/A'}</span>
                   </td>
-                  <td className="px-4 py-3.5 text-gray-800">
+                  <td className="px-4 py-3.5 text-gray-800 hidden md:table-cell">
                     {bet.matchup || (bet.away && bet.home ? `${bet.away} @ ${bet.home}` : 'N/A')}
                   </td>
                   <td className="px-4 py-3.5">
@@ -133,14 +136,23 @@ export default function BillfoldPicksTable({ bettingLog = [], title = "" }) {
                   <td className="px-4 py-3.5">
                     <span 
                       className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        bet.result === 'won' || bet.won ? 'bg-green-100 text-green-800' : 
-                        bet.result === 'lost' || bet.won === false ? 'bg-red-100 text-red-800' : 
-                        bet.result === 'push' ? 'bg-yellow-100 text-yellow-800' : 
-                        'bg-gray-100 text-gray-800'
+                        bet.result === 'won' || bet.result === 'win' || bet.won 
+                          ? 'bg-green-100 text-green-800 border border-green-200' 
+                        : bet.result === 'lost' || bet.result === 'loss' || bet.won === false 
+                          ? 'bg-red-100 text-red-800 border border-red-200' 
+                        : bet.result === 'push' 
+                          ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' 
+                        : 'bg-[#fffbea] text-[#d4af37] border border-[#d4af37]/20'
                       }`}
                     >
-                      {bet.result === 'push' ? 'Push' : 
-                        bet.result || (bet.won !== undefined ? (bet.won ? 'Won' : 'Lost') : 'Pending')}
+                      {bet.result === 'push' 
+                        ? 'PUSH' 
+                        : bet.result 
+                          ? bet.result.toUpperCase() 
+                          : (bet.won !== undefined 
+                              ? (bet.won ? 'WON' : 'LOST') 
+                              : 'PENDING')
+                      }
                     </span>
                   </td>
                   <td className="px-4 py-3.5 text-gray-800 font-medium">

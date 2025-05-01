@@ -1,55 +1,56 @@
 // Using styled divs instead of Card components
-import { motion } from 'framer-motion';
+import React from 'react';
 
-// Inline SVG icons to avoid build dependency issues
-const DollarSignIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="2" x2="12" y2="22"></line>
-    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-  </svg>
-);
-
-const TrendingUpIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-    <polyline points="17 6 23 6 23 12"></polyline>
-  </svg>
-);
-
-const PieChartIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-    <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
-  </svg>
-);
-
-export default function BillfoldKPI({ icon, metric, value, textColor = "text-gray-800" }) {
-  // Determine which icon to use
+const BillfoldKPI = ({ icon, metric, value, textColor = 'text-gray-800', iconBgColor = 'bg-[#f9f9f9]' }) => {
   const getIcon = () => {
-    switch(icon) {
+    switch (icon) {
       case 'dollar':
-        return <DollarSignIcon />;
-      case 'trending':
-        return <TrendingUpIcon />;
-      case 'pie':
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"
+              stroke="#d4af37"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
       case 'scale':
-        return <PieChartIcon />;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M15 2H9a1 1 0 00-1 1v2a1 1 0 001 1h6a1 1 0 001-1V3a1 1 0 00-1-1z" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
+      case 'trending':
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 8c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zM3 12h1m8-9v1m8 8h1m-9 8v1M5.6 5.6l.7.7m12.1-.7l-.7.7m0 11.4l.7.7m-12.1-.7l-.7.7" stroke="#d4af37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
+      case 'check':
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 6L9 17l-5-5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
       default:
-        return <DollarSignIcon />;
+        return null;
     }
   };
-  
+
   return (
-    <div className="flex items-center">
-      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#f8f8f8] mr-2">
-        <span className="text-[#d4af37]">
-          {getIcon()}
-        </span>
+    <div className="flex items-center bg-white/80 hover:bg-white rounded-lg px-3 py-2 transition-all duration-200 border border-[#d4af37]/10 shadow-sm hover:shadow-md">
+      <span className={`flex items-center justify-center w-8 h-8 rounded-full ${iconBgColor} border border-[#d4af37]/20 mr-3`}>
+        {getIcon()}
       </span>
       <div>
-        <p className="text-xs text-gray-500 leading-none">{metric}</p>
-        <p className={`text-sm font-bold ${textColor}`}>{value}</p>
+        <p className="text-xs text-gray-600 font-medium leading-tight uppercase tracking-wide">{metric}</p>
+        <p className={`text-md font-bold leading-tight ${textColor}`}>{value}</p>
       </div>
     </div>
   );
-}
+};
+
+export default BillfoldKPI;
