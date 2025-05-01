@@ -629,7 +629,7 @@ function RealGaryPicks() {
                                               letterSpacing: '0.05em', 
                                               marginBottom: '0.5rem'
                                             }}>
-                                              Place Your Bet
+                                              Take Your Pick
                                             </div>
                                             <div style={{
                                               display: 'flex',
