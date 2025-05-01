@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { createClient } from '@supabase/supabase-js';
 import { garyPerformanceService } from './garyPerformanceService';
 import { perplexityService } from './perplexityService';
+import { openaiService } from './openaiService';
 import { sportsDbApiService } from './sportsDbApiService';
 
 // Create a Supabase client with admin privileges that bypasses RLS
@@ -335,13 +336,18 @@ Response format must be ONLY a JSON array of objects with ABSOLUTELY NO ADDITION
 
 IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not previous batches. Response ID: ${cacheKey}`;
         
-        console.log(`Sending batch ${i/BATCH_SIZE + 1} (${batchPicks.length} picks) to Perplexity for evaluation`);
+        console.log(`Sending batch ${i/BATCH_SIZE + 1} (${batchPicks.length} picks) to OpenAI for evaluation`);
         
         try {
-          // Get response from Perplexity for this batch
-          const responseText = await perplexityService.fetchRealTimeInfo(prompt);
+          // Use OpenAI instead of Perplexity for better JSON handling and reliability
+          const responseText = await openaiService.getCompletion(prompt, {
+            model: 'gpt-3.5-turbo-1106', // Use a model with JSON mode capability
+            temperature: 0.1, // Low temperature for more deterministic responses
+            response_format: { type: 'json_object' }, // Force JSON response format
+            max_tokens: 1000
+          });
           if (!responseText) {
-            console.error(`No response from Perplexity for batch ${i/BATCH_SIZE + 1}`);
+            console.error(`No response from OpenAI for batch ${i/BATCH_SIZE + 1}`);
             continue; // Skip to the next batch if there's no response
           }
           
@@ -349,7 +355,7 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
           const batchResults = extractJsonFromText(responseText);
           
           if (!batchResults || batchResults.length === 0) {
-            console.log(`No valid results parsed from Perplexity response for batch ${i/BATCH_SIZE + 1}`);
+            console.log(`No valid results parsed from OpenAI response for batch ${i/BATCH_SIZE + 1}`);
           } else {
             // Verify these results are for the current batch by checking pick content
             // This is critical to prevent duplicate results from being stored
@@ -577,6 +583,16 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
         }
       } else {
         console.log('❌ Perplexity API key is not configured');
+      }
+      
+      // Check OpenAI API key
+      try {
+        const isValid = await openaiService.validateApiKey();
+        status.openai = isValid;
+        console.log(isValid ? '✅ OpenAI API key is valid' : '❌ OpenAI API key is invalid');
+      } catch (error) {
+        console.error('Error checking OpenAI API key status:', error);
+        status.openai = false;
       }
       
       // Check TheSportsDB API key
