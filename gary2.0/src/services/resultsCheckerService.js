@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { garyPerformanceService } from './garyPerformanceService';
 import { perplexityService } from './perplexityService';
+import { oddsApiService } from './oddsApiService';
 
 /**
  * Manually parse results from text response when JSON parsing fails
@@ -249,6 +250,106 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
   },
   
   /**
+   * Check results using the Odds API directly
+   * @param {Array} picks - Array of picks to check
+   * @param {string} date - Date of the picks in YYYY-MM-DD format
+   * @returns {Promise} Results of the check
+   */
+  checkResultsWithOddsApi: async (picks, date) => {
+    try {
+      console.log(`Checking results for ${picks.length} picks on ${date} using Odds API`);
+      
+      // Map to store all the results
+      const resultsMap = new Map();
+      
+      // Group picks by league for efficient API calls
+      const picksByLeague = {};
+      for (const pick of picks) {
+        const league = pick.league || 'UNKNOWN';
+        if (!picksByLeague[league]) {
+          picksByLeague[league] = [];
+        }
+        picksByLeague[league].push(pick);
+      }
+      
+      console.log('Grouped picks by league:', picksByLeague);
+      
+      // Process each league
+      for (const league in picksByLeague) {
+        // Map the league to the correct Odds API sport key
+        const sportKey = {
+          'NBA': 'basketball_nba',
+          'MLB': 'baseball_mlb',
+          'NHL': 'icehockey_nhl',
+          'NFL': 'americanfootball_nfl'
+        }[league] || null;
+        
+        if (!sportKey) {
+          console.log(`No sport key mapping for league ${league}, skipping`);
+          continue;
+        }
+        
+        // Get scores from the Odds API
+        try {
+          const games = await oddsApiService.getScores(sportKey, date);
+          console.log(`Retrieved ${games.length} games for ${league} on ${date}`, games);
+          
+          // Process each pick for this league
+          for (const pick of picksByLeague[league]) {
+            // Find a matching game for this pick
+            // We need to match based on the teams in the pick
+            let matchingGame = null;
+            for (const game of games) {
+              const homeTeamLower = game.home_team.toLowerCase();
+              const awayTeamLower = game.away_team.toLowerCase();
+              const pickLower = pick.pick.toLowerCase();
+              const hasHomeTeam = homeTeamLower.includes(pick.homeTeam.toLowerCase()) || pick.homeTeam.toLowerCase().includes(homeTeamLower);
+              const hasAwayTeam = awayTeamLower.includes(pick.awayTeam.toLowerCase()) || pick.awayTeam.toLowerCase().includes(awayTeamLower);
+              
+              if (hasHomeTeam && hasAwayTeam) {
+                matchingGame = game;
+                break;
+              }
+            }
+            
+            if (matchingGame) {
+              // Found a matching game, evaluate the pick
+              const evaluation = oddsApiService.evaluatePick(matchingGame, pick.pick);
+              
+              // Create result object
+              const result = {
+                pick: pick.pick,
+                league: league,
+                result: evaluation.result,
+                score: evaluation.score
+              };
+              
+              resultsMap.set(pick.pick, result);
+              console.log(`Evaluated ${league} pick: ${pick.pick} => ${evaluation.result}`);
+            } else {
+              console.log(`No matching game found for pick: ${pick.pick}`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching ${league} games:`, error);
+        }
+      }
+      
+      // Convert results map to array
+      const results = Array.from(resultsMap.values());
+      console.log(`OddsAPI results: Found ${results.length} results for ${picks.length} picks`);
+      
+      return {
+        success: true,
+        results: results
+      };
+    } catch (error) {
+      console.error('Error checking results with Odds API:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
    * Automate the whole process of getting picks and recording results
    * @returns {Promise} Results of the operation
    */
@@ -261,23 +362,50 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
         return picksResponse; // Return error
       }
       
-      // Step 2: Check results with AI
-      const resultsResponse = await resultsCheckerService.checkResultsWithAI(
+      // Step 2: Try to check results with Odds API first
+      let resultsResponse = await resultsCheckerService.checkResultsWithOddsApi(
         picksResponse.data, 
         picksResponse.date
       );
       
-      if (!resultsResponse.success) {
-        return resultsResponse; // Return error
+      let oddsApiResults = [];
+      
+      if (resultsResponse.success && resultsResponse.results.length > 0) {
+        // Store valid Odds API results
+        oddsApiResults = resultsResponse.results.filter(r => r.result !== 'unknown');
+        console.log(`Got ${oddsApiResults.length} valid results from Odds API`);
       }
       
-      // Filter out any unknown results to avoid recording them
-      const validResults = resultsResponse.results.filter(result => result.result !== 'unknown');
-      console.log(`Successfully parsed ${validResults.length} valid results out of ${resultsResponse.results.length} total`);
+      // Step 3: Fall back to Perplexity for any picks that weren't resolved by Odds API
+      const unresolvedPicks = picksResponse.data.filter(pick => {
+        // Check if this pick wasn't resolved by Odds API
+        return !oddsApiResults.some(result => result.pick === pick.pick);
+      });
       
-      // Ensure each result has a league field (use original pick's league if not provided by Perplexity)
-      const resultsWithLeague = validResults.map(result => {
-        // If Perplexity didn't return a league field, find the original pick to get its league
+      let perplexityResults = [];
+      
+      if (unresolvedPicks.length > 0) {
+        console.log(`Checking ${unresolvedPicks.length} unresolved picks with Perplexity`);
+        
+        // Call Perplexity for remaining picks
+        const aiResponse = await resultsCheckerService.checkResultsWithAI(
+          unresolvedPicks, 
+          picksResponse.date
+        );
+        
+        if (aiResponse.success) {
+          perplexityResults = aiResponse.results.filter(r => r.result !== 'unknown');
+          console.log(`Got ${perplexityResults.length} additional results from Perplexity`);
+        }
+      }
+      
+      // Combine results from both sources
+      const allResults = [...oddsApiResults, ...perplexityResults];
+      console.log(`Combined results: ${allResults.length} total (${oddsApiResults.length} from Odds API, ${perplexityResults.length} from Perplexity)`);
+      
+      // Ensure each result has a league field
+      const resultsWithLeague = allResults.map(result => {
+        // If result doesn't have a league field, find the original pick to get its league
         if (!result.league) {
           const originalPick = picksResponse.data.find(p => p.pick === result.pick);
           if (originalPick) {
@@ -287,12 +415,15 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
         return result;
       });
 
-      console.log('Results with league field:', resultsWithLeague);
+      console.log('Final results with league field:', resultsWithLeague);
       
       if (resultsWithLeague.length > 0) {
         // Record the results in the database
         const savedResults = await garyPerformanceService.recordPickResults(picksResponse.date, resultsWithLeague);
-        return { success: true, message: `Recorded ${savedResults.length} pick results for ${picksResponse.date}` };
+        return { 
+          success: true, 
+          message: `Recorded ${savedResults.length} pick results for ${picksResponse.date} (${oddsApiResults.length} from Odds API, ${perplexityResults.length} from Perplexity)` 
+        };
       } else {
         return { success: false, message: 'No valid results to record' };
       }
@@ -303,31 +434,49 @@ Picks: ${JSON.stringify(simplifiedPicks, null, 2)}`;
   },
   
   /**
-   * Check the status of the Perplexity API key
-   * @returns {Promise<boolean>} True if the API key is valid, false otherwise
+   * Check the status of the API keys
+   * @returns {Promise<Object>} Status of each API key
    */
   checkApiKeyStatus: async () => {
     try {
-      // The API key is already loaded in the perplexityService
-      if (!perplexityService.API_KEY) {
-        return false;
+      const status = {
+        perplexity: false,
+        oddsApi: false
+      };
+      
+      // Check Perplexity API key
+      if (perplexityService.API_KEY) {
+        try {
+          await perplexityService.fetchRealTimeInfo('Hello', {
+            model: 'sonar-small-online', // Use smallest model for quick check
+            maxTokens: 10 // Minimal tokens needed
+          });
+          status.perplexity = true;
+          console.log('✅ Perplexity API key is valid');
+        } catch (error) {
+          console.error('Error checking Perplexity API key status:', error);
+        }
+      } else {
+        console.log('❌ Perplexity API key is not configured');
       }
       
-      // Try a simple query to check if the key is valid
-      try {
-        await perplexityService.fetchRealTimeInfo('Hello', {
-          model: 'sonar-small-online', // Use smallest model for quick check
-          maxTokens: 10 // Minimal tokens needed
-        });
-        return true;
-      } catch (error) {
-        // If there's an error with the API key, this will fail
-        console.error('Error checking Perplexity API key status:', error);
-        return false;
+      // Check Odds API key
+      if (oddsApiService.API_KEY) {
+        try {
+          const isValid = await oddsApiService.checkApiKey();
+          status.oddsApi = isValid;
+          console.log(isValid ? '✅ Odds API key is valid' : '❌ Odds API key is invalid');
+        } catch (error) {
+          console.error('Error checking Odds API key status:', error);
+        }
+      } else {
+        console.log('❌ Odds API key is not configured');
       }
+      
+      return status;
     } catch (error) {
-      console.error('Error checking Perplexity API key status:', error);
-      return false;
+      console.error('Error checking API key status:', error);
+      return { perplexity: false, oddsApi: false };
     }
   },
   
