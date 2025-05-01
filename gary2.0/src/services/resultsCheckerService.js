@@ -84,7 +84,14 @@ Response format must be structured as a JSON array of objects, each with fields 
 Picks: ${JSON.stringify(picks, null, 2)}`
           }
         ],
-        tools: [{ type: "web_browser" }]
+        tools: [
+          {
+            type: "web_browsing",
+            config: {
+              search_results_max_results: 5
+            }
+          }
+        ]
       };
       
       // Make the API call
