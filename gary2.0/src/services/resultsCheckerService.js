@@ -20,95 +20,142 @@ const extractJsonFromText = (text) => {
   console.log('Attempting to parse JSON from text:', text.substring(0, 200) + '...');
   
   try {
-    // Try to find JSON within code blocks first
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      const jsonText = jsonMatch[1].trim();
+    // Try to find JSON within markdown code blocks (most common format from Perplexity)
+    const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch && jsonBlockMatch[1]) {
+      const jsonText = jsonBlockMatch[1].trim();
       console.log('Found JSON in code block:', jsonText.substring(0, 100) + '...');
       try {
-        return JSON.parse(jsonText);
+        const parsedJson = JSON.parse(jsonText);
+        console.log('Successfully parsed JSON from code block');
+        return parsedJson;
       } catch (codeBlockError) {
         console.error('Error parsing JSON from code block:', codeBlockError);
+        // Log more details to help debug the JSON parsing issue
+        console.log('Code block content that failed parsing:\n', jsonText);
       }
     }
     
-    // If no code block, try to find JSON array anywhere in the text
+    // Second approach: Try to find JSON array with a direct regex match
+    const arrayRegexMatch = text.match(/\[\s*\{[\s\S]*?\}\s*\]/m);
+    if (arrayRegexMatch) {
+      const jsonArray = arrayRegexMatch[0];
+      console.log('Found JSON array with regex:', jsonArray.substring(0, 100) + '...');
+      try {
+        const parsedArray = JSON.parse(jsonArray);
+        console.log('Successfully parsed JSON array with regex');
+        return parsedArray;
+      } catch (arrayRegexError) {
+        console.error('Error parsing JSON array from regex:', arrayRegexError);
+      }
+    }
+    
+    // Third approach: Try to use direct string indexes to find JSON array
     const startPos = text.indexOf('[{');
     const endPos = text.lastIndexOf('}]');
     
     if (startPos !== -1 && endPos !== -1 && endPos > startPos) {
       // Extract what looks like a JSON array
       const jsonText = text.substring(startPos, endPos + 2);
-      console.log('Found possible JSON array:', jsonText.substring(0, 100) + '...');
+      console.log('Found possible JSON array by indexes:', jsonText.substring(0, 100) + '...');
       
       try {
-        return JSON.parse(jsonText);
+        const parsedJson = JSON.parse(jsonText);
+        console.log('Successfully parsed JSON from indexes');
+        return parsedJson;
       } catch (arrayError) {
-        console.error('Error parsing JSON array:', arrayError);
+        console.error('Error parsing JSON array by indexes:', arrayError);
       }
     }
     
-    // As a last resort, try to parse line by line
-    console.log('Attempting to manually extract structured data from text');
+    // Fourth approach: Create an array manually by parsing each JSON object
+    const objMatches = text.matchAll(/\{\s*"pick"\s*:\s*"([^"]+)"[\s\S]*?\}/g);
+    if (objMatches) {
+      const results = [];
+      for (const match of objMatches) {
+        try {
+          const obj = JSON.parse(match[0]);
+          results.push(obj);
+        } catch (objError) {
+          console.error('Failed to parse individual object:', objError);
+        }
+      }
+      
+      if (results.length > 0) {
+        console.log(`Successfully parsed ${results.length} individual JSON objects`);
+        return results;
+      }
+    }
+    
+    // Final fallback: Manual line-by-line parsing
+    console.log('Attempting manual line-by-line extraction');
     const picks = [];
     const lines = text.split('\n');
     
+    let currentPick = null;
+    
     for (let i = 0; i < lines.length; i++) {
-      // Look for lines that appear to be describing a pick result
-      if (lines[i].includes('Pick:') && lines[i].includes('|')) {
-        try {
-          // Extract pick text
-          const pickMatch = lines[i].match(/Pick:\s*"([^"]+)"/i);
-          if (!pickMatch) continue;
-          
-          const pick = pickMatch[1];
-          
-          // Try to find league
-          const leagueMatch = lines[i].match(/(NBA|NHL|MLB)/i);
-          const league = leagueMatch ? leagueMatch[1].toUpperCase() : '';
-          
-          // Look for result in the next few lines
-          let result = 'unknown';
-          let score = '';
-          
-          for (let j = i; j < Math.min(i + 5, lines.length); j++) {
-            if (lines[j].includes('won') || lines[j].includes('lost') || lines[j].includes('push')) {
-              if (lines[j].includes('won')) result = 'won';
-              else if (lines[j].includes('lost')) result = 'lost';
-              else if (lines[j].includes('push')) result = 'push';
-              
-              // Try to extract score
-              const scoreMatch = lines[j].match(/(\d+)\s*-\s*(\d+)/i);
-              if (scoreMatch) {
-                score = scoreMatch[0];
-              }
-              
-              break;
-            }
-          }
-          
-          picks.push({
-            pick: pick,
-            league: league,
-            result: result,
-            score: score
-          });
-        } catch (lineError) {
-          console.error('Error parsing line:', lineError);
+      const line = lines[i].trim();
+      
+      // Skip empty lines and code block markers
+      if (!line || line === '```' || line === '```json') continue;
+      
+      // Look for pick information
+      const pickMatch = line.match(/"pick"\s*:\s*"([^"]+)"/i);
+      if (pickMatch) {
+        currentPick = { pick: pickMatch[1] };
+        
+        // Look for other fields on the same line
+        const leagueMatch = line.match(/"league"\s*:\s*"([^"]+)"/i);
+        if (leagueMatch) currentPick.league = leagueMatch[1];
+        
+        const resultMatch = line.match(/"result"\s*:\s*"([^"]+)"/i);
+        if (resultMatch) currentPick.result = resultMatch[1];
+        
+        const scoreMatch = line.match(/"final_score"\s*:\s*"([^"]+)"/i);
+        if (scoreMatch) currentPick.final_score = scoreMatch[1];
+        
+        const matchupMatch = line.match(/"matchup"\s*:\s*"([^"]+)"/i);
+        if (matchupMatch) currentPick.matchup = matchupMatch[1];
+        
+        // Check if this is a complete object
+        if (line.includes('}')) {
+          picks.push(currentPick);
+          currentPick = null;
+        }
+      } 
+      // Continue looking for fields if we have a current pick
+      else if (currentPick) {
+        const leagueMatch = line.match(/"league"\s*:\s*"([^"]+)"/i);
+        if (leagueMatch) currentPick.league = leagueMatch[1];
+        
+        const resultMatch = line.match(/"result"\s*:\s*"([^"]+)"/i);
+        if (resultMatch) currentPick.result = resultMatch[1];
+        
+        const scoreMatch = line.match(/"final_score"\s*:\s*"([^"]+)"/i);
+        if (scoreMatch) currentPick.final_score = scoreMatch[1];
+        
+        const matchupMatch = line.match(/"matchup"\s*:\s*"([^"]+)"/i);
+        if (matchupMatch) currentPick.matchup = matchupMatch[1];
+        
+        // Check if this object is complete
+        if (line.includes('}')) {
+          picks.push(currentPick);
+          currentPick = null;
         }
       }
     }
     
     if (picks.length > 0) {
-      console.log(`Manually extracted ${picks.length} picks`);
+      console.log(`Manually extracted ${picks.length} picks line by line`);
       return picks;
     }
     
-    // If still no match, return empty array
-    console.error('Could not extract any JSON or structured data from text');
+    // If all extraction methods fail, log error and return empty array
+    console.error('All JSON extraction methods failed');
     return [];
   } catch (error) {
-    console.error('Error parsing JSON from text:', error);
+    console.error('Error in JSON extraction function:', error);
     return [];
   }
 };
