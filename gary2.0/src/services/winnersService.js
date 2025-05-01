@@ -1,4 +1,5 @@
-import { oddsService } from './oddsService';
+// Needed for the build to succeed
+import { oddsService } from './oddsService.js';
 
 /**
  * Service for managing Gary's winning picks history
