@@ -66,60 +66,82 @@ export default function BillfoldPicksTable({ bettingLog = [], title = "Recent Pi
   // Check if we have pick data to display
   const hasPicks = Array.isArray(bettingLog) && bettingLog.length > 0;
   return (
-    <div className="bg-surface p-4 md:p-6 rounded-xl shadow-lg w-full">
-      {/* Responsive, more padding, and visual polish */}
-      <h3 className="text-xl md:text-2xl mb-4 flex items-center font-bold text-white tracking-tight">
-        <span className="mr-2 text-primary"><TrendingUpIcon /></span>{title}
-      </h3>
-      <Filters />
-      <div className="overflow-x-auto mt-2 border-t border-gray-800 pt-4 pb-1">
+    <div className="w-full">
+      {/* Cleaner, more minimal header */}
+      <div className="flex items-center justify-between mb-5 pb-3 border-b border-[#334155]">
+        <h3 className="text-lg font-bold uppercase tracking-wider text-white flex items-center">
+          <span className="text-[#FACC15] mr-2"><TrendingUpIcon /></span>
+          {title}
+        </h3>
+      </div>
+      
+      <div className="overflow-x-auto mb-2">
         {!hasPicks ? (
-          <div className="py-8 text-center text-gray-400">
-            No recent picks available
+          <div className="py-10 text-center text-[#64748B] bg-[#1E293B]/30 rounded-lg border border-[#334155] border-dashed">
+            <p className="text-base font-medium">No picks available</p>
+            <p className="text-sm mt-1">Check back soon for Gary's latest picks</p>
           </div>
         ) : (
-          <table className="w-full text-base md:text-lg min-w-[600px]">
-            <thead className="text-left text-gray-300">
+          <table className="w-full text-sm min-w-[700px] border-separate border-spacing-y-2">
+            <thead className="text-left">
               <tr>
-                <th className="py-2">Date</th>
-                <th>Sport</th>
-                <th>Matchup</th>
-                <th>Pick</th>
-                <th>Result</th>
-                <th>Score</th>
+                <th className="px-3 py-2 text-[#94A3B8] uppercase text-xs tracking-wider font-medium">Date</th>
+                <th className="px-3 py-2 text-[#94A3B8] uppercase text-xs tracking-wider font-medium">Sport</th>
+                <th className="px-3 py-2 text-[#94A3B8] uppercase text-xs tracking-wider font-medium">Matchup</th>
+                <th className="px-3 py-2 text-[#94A3B8] uppercase text-xs tracking-wider font-medium">Pick</th>
+                <th className="px-3 py-2 text-[#94A3B8] uppercase text-xs tracking-wider font-medium">Result</th>
+                <th className="px-3 py-2 text-[#94A3B8] uppercase text-xs tracking-wider font-medium">Score</th>
               </tr>
             </thead>
             <tbody>
               {bettingLog.map((bet, i) => (
               <motion.tr
                 key={bet.id || i}
-                className="border-t border-gray-700 hover:bg-gray-800/50 hover:scale-[1.01] transition-all duration-150"
-                initial={{ opacity:0, y:10 }}
+                className="bg-[#1E293B]/60 hover:bg-[#1E293B] transition-all duration-200"
+                initial={{ opacity:0, y:5 }}
                 animate={{ opacity:1, y:0 }}
-                transition={{delay:0.1 + i*0.03}}
+                transition={{delay:0.1 + i*0.03, duration: 0.3}}
               >
-                <td className="py-2">{bet.date ? formatDate(bet.date) : 'N/A'}</td>
-                <td>
-                  <span className="inline-flex items-center">
-                    {bet.sport === 'NBA' && '🏀'}
-                    {bet.sport === 'MLB' && '⚾'}
-                    {bet.sport === 'NHL' && '🏒'}
-                    {bet.sport === 'NFL' && '🏈'}
-                    <span className="ml-1">{bet.sport || 'N/A'}</span>
+                <td className="px-3 py-4 rounded-l-lg text-[#F1F5F9]">{bet.date ? formatDate(bet.date) : 'N/A'}</td>
+                <td className="px-3 py-4">
+                  <span className="inline-flex items-center h-8 px-3 rounded-full bg-[#0F172A]/40 border border-[#334155]/50">
+                    <span className="mr-1.5">
+                      {bet.sport === 'NBA' && '🏀'}
+                      {bet.sport === 'MLB' && '⚾'}
+                      {bet.sport === 'NHL' && '🏒'}
+                      {bet.sport === 'NFL' && '🏈'}
+                    </span>
+                    <span className="font-medium text-[#F1F5F9]">{bet.sport || 'N/A'}</span>
                   </span>
                 </td>
-                <td>{bet.matchup || (bet.away && bet.home ? `${bet.away} @ ${bet.home}` : 'N/A')}</td>
-                <td>{bet.pick || bet.bet || 'N/A'}</td>
-                <td>
+                <td className="px-3 py-4 text-[#F1F5F9] font-medium">
+                  {bet.matchup || (bet.away && bet.home ? `${bet.away} @ ${bet.home}` : 'N/A')}
+                </td>
+                <td className="px-3 py-4 text-[#FACC15] font-medium">
+                  {bet.pick || bet.bet || 'N/A'}
+                </td>
+                <td className="px-3 py-4">
                   {bet.result === 'won' || bet.won ? (
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-positive/20 text-positive font-bold">W</span>
+                    <span className="inline-flex items-center h-7 px-3 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 font-semibold">
+                      <span className="mr-1">W</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
                   ) : bet.result === 'push' ? (
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-500 font-bold">P</span>
+                    <span className="inline-flex items-center h-7 px-3 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-semibold">
+                      <span>PUSH</span>
+                    </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-negative/20 text-negative font-bold">L</span>
+                    <span className="inline-flex items-center h-7 px-3 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 font-semibold">
+                      <span className="mr-1">L</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
                   )}
                 </td>
-                <td>{bet.score || 'N/A'}</td>
+                <td className="px-3 py-4 rounded-r-lg text-[#F1F5F9] font-medium">{bet.score || 'N/A'}</td>
               </motion.tr>
               ))}
             </tbody>
