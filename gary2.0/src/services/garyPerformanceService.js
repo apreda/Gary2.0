@@ -117,24 +117,56 @@ export const garyPerformanceService = {
       
       // Ensure we preserve the original pick text from any input transformation
       // This fixes an issue where pick text was being lost/changed to "result"
-      const preservedResults = results.map(result => {
-        // Check if we have the originalPick field and use it if available
-        if (result.originalPick && typeof result.originalPick === 'string') {
-          return {
-            ...result,
-            pick: result.originalPick // Restore from backup field
-          };
+      const preservedResults = results.map((result, index) => {
+        console.log(`Processing result ${index} in garyPerformanceService:`, JSON.stringify(result));
+        
+        // Advanced recovery for pick text
+        let finalPickText = result.pick;
+        
+        // Define a hierarchy of backup fields to check
+        const backupFields = ['originalPick', 'pickText', 'text', 'originalPickText'];
+        
+        // If the pick is missing or 'result', try recovery from backup fields
+        if (!finalPickText || finalPickText === 'result') {
+          console.log(`Need to recover pick text for result ${index}`);
+          
+          // Try each backup field in order
+          for (const field of backupFields) {
+            if (result[field] && typeof result[field] === 'string' && result[field] !== 'result') {
+              finalPickText = result[field];
+              console.log(`Recovered pick text from ${field}: "${finalPickText}"`);
+              break;
+            }
+          }
+          
+          // If still not recovered, try the rawResult object if available
+          if ((!finalPickText || finalPickText === 'result') && result.rawResult) {
+            for (const field of backupFields) {
+              if (result.rawResult[field] && typeof result.rawResult[field] === 'string' && result.rawResult[field] !== 'result') {
+                finalPickText = result.rawResult[field];
+                console.log(`Recovered pick text from rawResult.${field}: "${finalPickText}"`);
+                break;
+              }
+            }
+          }
+          
+          // If still no valid pick text, create a descriptive placeholder
+          if (!finalPickText || finalPickText === 'result') {
+            finalPickText = result.homeTeam && result.awayTeam ?
+              `Pick for ${result.awayTeam} @ ${result.homeTeam}` :
+              `Unknown Pick ${index + 1}`;
+            console.log(`Created descriptive placeholder: "${finalPickText}"`);
+          }
         }
-        // If result.pick is empty or "result", try to use other fields
-        if (!result.pick || result.pick === 'result') {
-          // Try to use originalPick or pickText if available
-          const pickText = result.originalPick || result.pickText || result.text || 'Unknown Pick';
-          return {
-            ...result,
-            pick: pickText
-          };
-        }
-        return result;
+        
+        // Return an object with all original fields plus the recovered pick text
+        return {
+          ...result,
+          pick: finalPickText,
+          // Add backup fields just in case
+          originalPick: finalPickText,
+          pickText: finalPickText
+        };
       });
       
       console.log('PRESERVED RESULTS after fix:', JSON.stringify(preservedResults));
