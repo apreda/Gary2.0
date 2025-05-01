@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
 // Inline SVG icon to avoid build dependency issues
 const TrendingUpIcon = () => (
@@ -7,33 +8,6 @@ const TrendingUpIcon = () => (
     <polyline points="17 6 23 6 23 12"></polyline>
   </svg>
 );
-
-// Placeholder filter controls (to be replaced with headlessui/react and date picker integration)
-// This component is used internally only
-function Filters() {
-  return (
-    <div className="flex flex-wrap gap-2 mb-3 items-center">
-      <input type="date" className="bg-surface border border-gray-700 rounded px-2 py-1 text-gray-200" />
-      <select className="bg-surface border border-gray-700 rounded px-2 py-1 text-gray-200">
-        <option>All Sports</option>
-        <option>NBA</option>
-        <option>MLB</option>
-        <option>NHL</option>
-        <option>NFL</option>
-      </select>
-      <div className="flex gap-2">
-        {['All', 'Won', 'Lost'].map(val => (
-          <button
-            key={val}
-            className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-800 text-gray-300 hover:bg-primary/20 hover:text-primary transition"
-          >
-            {val}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // Helper function to properly format dates from game_date field
 const formatDate = (dateString) => {
@@ -50,11 +24,10 @@ const formatDate = (dateString) => {
       return dateString; // Return the original string if invalid
     }
     
-    // Format the date in a user-friendly way: MM/DD/YYYY
+    // Format the date in a user-friendly way: MM/DD/YY
     return date.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: 'numeric'
+      month: 'short',
+      day: 'numeric'
     });
   } catch (error) {
     console.error('Error formatting date:', error);
@@ -62,82 +35,118 @@ const formatDate = (dateString) => {
   }
 };
 
+// Group bets by date for possible accordion display
+const groupBetsByDate = (bets) => {
+  const grouped = {};
+  
+  bets.forEach(bet => {
+    const dateKey = bet.date ? formatDate(bet.date) : 'No Date';
+    if (!grouped[dateKey]) {
+      grouped[dateKey] = [];
+    }
+    grouped[dateKey].push(bet);
+  });
+  
+  return Object.entries(grouped).map(([date, bets]) => ({ date, bets }));
+};
+
 export default function BillfoldPicksTable({ bettingLog = [], title = "" }) {
   // Check if we have pick data to display
   const hasPicks = Array.isArray(bettingLog) && bettingLog.length > 0;
+  
+  // State for expanded date sections (future accordion functionality)
+  const [expandedDates, setExpandedDates] = useState({});
+  
+  // The grouped data (we'll use flat list for now but structure is ready for accordion)
+  const groupedBets = groupBetsByDate(bettingLog);
+  
   return (
-    <div className="w-full relative">
-      <div className="overflow-x-auto">
+    <div className="w-full overflow-hidden rounded-md border border-[#d4af37]/20 shadow-md hover:shadow-lg transition-all duration-300 bg-white">
+      <div className="px-4 py-3 border-b border-[#d4af37]/20 bg-gradient-to-r from-transparent via-[#f9f9f9] to-transparent sticky top-0 z-10">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center">
+          <span className="mr-2 text-[#d4af37]">📈</span>{title || "Recent Picks"}
+        </h3>
+      </div>
+      
+      <div className="max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-track-gray-100">
         {!hasPicks ? (
-          <div className="py-6 text-center text-gray-500 bg-[#1a1a1a] rounded-md border border-[#333333] border-dashed">
-            <p className="text-sm font-medium text-gray-400">No picks available</p>
+          <div className="flex justify-center items-center py-10 text-gray-500">
+            <div className="text-center">
+              <img src="/coin2.png" alt="Gary Coin" className="h-10 w-10 mx-auto mb-2 opacity-30" />
+              <p>No recent picks available</p>
+            </div>
           </div>
         ) : (
-          <table className="w-full text-xs min-w-[700px] border-collapse">
-            <thead className="text-left bg-[#222222] border-b border-[#333333]">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-[#f8f7f4] sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2 text-gray-400 uppercase text-[10px] tracking-wider font-medium">Date</th>
-                <th className="px-3 py-2 text-gray-400 uppercase text-[10px] tracking-wider font-medium">Sport</th>
-                <th className="px-3 py-2 text-gray-400 uppercase text-[10px] tracking-wider font-medium">Matchup</th>
-                <th className="px-3 py-2 text-gray-400 uppercase text-[10px] tracking-wider font-medium">Pick</th>
-                <th className="px-3 py-2 text-gray-400 uppercase text-[10px] tracking-wider font-medium">Result</th>
-                <th className="px-3 py-2 text-gray-400 uppercase text-[10px] tracking-wider font-medium">Score</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  Date
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  Sport
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  Matchup
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  Pick
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  Result
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  Score
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {bettingLog.map((bet, i) => (
-              <motion.tr
-                key={bet.id || i}
-                className="border-b border-[#333333] hover:bg-[#1a1a1a] transition-all duration-200"
-                initial={{ opacity:0, y:2 }}
-                animate={{ opacity:1, y:0 }}
-                transition={{delay:0.05 + i*0.01, duration: 0.15}}
-              >
-                <td className="px-3 py-2.5 text-gray-300">
-                  {bet.date ? formatDate(bet.date) : 'N/A'}
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className="inline-flex items-center h-5 px-1.5 rounded bg-[#222222] border border-[#444444]">
-                    <span className="mr-1">
+            <tbody className="bg-white divide-y divide-gray-200">
+              {bettingLog.map((bet, index) => (
+                <motion.tr 
+                  key={bet.id || index} 
+                  className={`${index % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'} hover:bg-[#fffdf8] transition-colors duration-150`}
+                  initial={{ opacity: 0, y: 2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.02 * index, duration: 0.15 }}
+                >
+                  <td className="px-4 py-3.5 text-gray-800 font-medium">
+                    {bet.date ? formatDate(bet.date) : 'N/A'}
+                  </td>
+                  <td className="px-4 py-3.5 text-gray-800 flex items-center">
+                    <span className="mr-1.5 text-lg">
                       {bet.sport === 'NBA' && '🏀'}
+                      {bet.sport === 'NFL' && '🏈'}
                       {bet.sport === 'MLB' && '⚾'}
                       {bet.sport === 'NHL' && '🏒'}
-                      {bet.sport === 'NFL' && '🏈'}
                     </span>
-                    <span className="font-medium text-gray-300 text-[10px]">{bet.sport || 'N/A'}</span>
-                  </span>
-                </td>
-                <td className="px-3 py-2.5 text-gray-300 font-medium">
-                  {bet.matchup || (bet.away && bet.home ? `${bet.away} @ ${bet.home}` : 'N/A')}
-                </td>
-                <td className="px-3 py-2.5 text-[#d4af37] font-medium">
-                  {bet.pick || bet.bet || 'N/A'}
-                </td>
-                <td className="px-3 py-2.5">
-                  {bet.result === 'won' || bet.won ? (
-                    <span className="inline-flex items-center h-5 px-1.5 rounded bg-green-900/20 text-green-400 font-medium text-[10px]">
-                      <span className="mr-1">WIN</span>
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                    <span>{bet.sport || 'N/A'}</span>
+                  </td>
+                  <td className="px-4 py-3.5 text-gray-800">
+                    {bet.matchup || (bet.away && bet.home ? `${bet.away} @ ${bet.home}` : 'N/A')}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center">
+                      <img src="/coin2.png" alt="Gary Coin" className="h-4 w-4 mr-2 opacity-70 hidden sm:block" />
+                      <span className="text-gray-800 font-medium">{bet.pick || bet.bet || 'N/A'}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span 
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        bet.result === 'won' || bet.won ? 'bg-green-100 text-green-800' : 
+                        bet.result === 'lost' || bet.won === false ? 'bg-red-100 text-red-800' : 
+                        bet.result === 'push' ? 'bg-yellow-100 text-yellow-800' : 
+                        'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {bet.result === 'push' ? 'Push' : 
+                        bet.result || (bet.won !== undefined ? (bet.won ? 'Won' : 'Lost') : 'Pending')}
                     </span>
-                  ) : bet.result === 'push' ? (
-                    <span className="inline-flex items-center h-5 px-1.5 rounded bg-yellow-900/20 text-yellow-400 font-medium text-[10px]">
-                      <span>PUSH</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center h-5 px-1.5 rounded bg-red-900/20 text-red-400 font-medium text-[10px]">
-                      <span className="mr-1">LOSS</span>
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-gray-300 font-medium">
-                  {bet.score || 'N/A'}
-                </td>
-              </motion.tr>
+                  </td>
+                  <td className="px-4 py-3.5 text-gray-800 font-medium">
+                    {bet.score || 'N/A'}
+                  </td>
+                </motion.tr>
               ))}
             </tbody>
           </table>
@@ -146,5 +155,3 @@ export default function BillfoldPicksTable({ bettingLog = [], title = "" }) {
     </div>
   );
 }
-
-
