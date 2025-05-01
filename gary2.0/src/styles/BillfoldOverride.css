@@ -1,0 +1,28 @@
+/* BillfoldOverride.css - Emergency override for text colors */
+.bg-white * {
+  color: black !important;
+}
+
+/* Specific exceptions for Billfold yellow boxes */
+.bg-\[\#fff9d0\] * {
+  color: black !important;
+}
+
+/* Keep the win/lost colors */
+.text-win, .text-win * {
+  color: #22c55e !important;
+}
+
+.text-loss, .text-loss * {
+  color: #ef4444 !important;
+}
+
+/* Reset for table headers and cells */
+th, td {
+  color: black !important;
+}
+
+/* Exception for result column */
+td[style*="color"] {
+  color: inherit !important;
+}
