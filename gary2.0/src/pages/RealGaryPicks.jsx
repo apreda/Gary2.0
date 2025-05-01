@@ -877,18 +877,6 @@ function RealGaryPicks() {
                                     </div>
                                     
                                     {/* Removed Bet or Fade Buttons - now on front of card */}
-                                    
-                                    {/* Bottom Pick Reference */}
-                                    <div style={{ 
-                                      padding: '0.5rem 1rem',
-                                      backgroundColor: '#bfa142', 
-                                      color: '#e5d3c4',
-                                      fontWeight: 'bold',
-                                      fontSize: '1rem',
-                                      textAlign: 'center',
-                                    }}>
-                                      {pick.pick || 'PICK TBD'}
-                                    </div>
                                   </div>
                                 </div>
                               </div>
