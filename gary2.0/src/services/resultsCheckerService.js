@@ -249,16 +249,12 @@ Betting Rules:
 - Moneyline bets (e.g. "Team ML"): Simply pick the winner of the game.
 - Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.
 
-VERY IMPORTANT INSTRUCTIONS:
-1. The 'pick' field in your response MUST EXACTLY MATCH the original pick text I provided
-2. DO NOT replace the pick text with any generic value like "result" or anything else
-3. Copy the exact pick text from the "🎲 BETTING PICKS TO EVALUATE" section
-
 Response format must be a JSON array of objects, each with these fields:
-- 'pick': The EXACT original pick text as provided (copy it directly from the list above)
+- 'pick': The original pick text as provided 
 - 'league': The league (NBA, NHL, MLB)
-- 'result': Whether the pick 'won', 'lost', 'push', or 'unknown'
-- 'score': The final score in format 'Team A score - Team B score'`;
+- 'result': Whether the pick 'won', 'lost', 'push'
+- 'final_score': The final score
+- 'matchup': Team A vs Team B from the game scores`;
       
       console.log('Sending picks to Perplexity for evaluation');
       
@@ -300,11 +296,11 @@ Response format must be a JSON array of objects, each with these fields:
         game_date: date,
         league: result.league || '',
         result: result.result || 'unknown',
-        final_score: result.score || '',
+        final_score: result.final_score || result.score || '', // Support both new and old field names
         pick_text: result.pick || '',
-        // Extract matchup from score or use empty string
-        matchup: result.score ? result.score.split(' - ')[0].split(' ').slice(0, -1).join(' ') + ' @ ' + 
-                               result.score.split(' - ')[1].split(' ').slice(0, -1).join(' ') : ''
+        // Use provided matchup or extract from score
+        matchup: result.matchup || (result.final_score ? result.final_score.split(' - ')[0].split(' ').slice(0, -1).join(' ') + ' @ ' + 
+                                                       result.final_score.split(' - ')[1].split(' ').slice(0, -1).join(' ') : '')
       }));
       
       // Insert records into game_results table
