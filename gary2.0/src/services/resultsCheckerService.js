@@ -18,7 +18,26 @@ const parseResultsFromText = (text) => {
   const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (jsonBlockMatch && jsonBlockMatch[1]) {
     try {
-      const jsonArray = JSON.parse(jsonBlockMatch[1]);
+      // Clean up the JSON string before parsing
+      let jsonText = jsonBlockMatch[1].trim();
+      // Make sure it doesn't have any leading/trailing text
+      if (!jsonText.startsWith('[')) {
+        const startBracket = jsonText.indexOf('[');
+        if (startBracket !== -1) {
+          jsonText = jsonText.substring(startBracket);
+        }
+      }
+      if (!jsonText.endsWith(']')) {
+        const endBracket = jsonText.lastIndexOf(']');
+        if (endBracket !== -1) {
+          jsonText = jsonText.substring(0, endBracket + 1);
+        }
+      }
+      
+      // Log the actual JSON string we're trying to parse
+      console.log('Attempting to parse JSON:', jsonText.substring(0, 100) + '...');
+      
+      const jsonArray = JSON.parse(jsonText);
       if (Array.isArray(jsonArray) && jsonArray.length > 0) {
         console.log(`Successfully extracted ${jsonArray.length} results from JSON block`);
         return jsonArray;
@@ -30,20 +49,68 @@ const parseResultsFromText = (text) => {
   
   // If we couldn't extract JSON from a code block, try to find it elsewhere in the text
   try {
-    // Look for arrays in the text that might be JSON
-    const possibleJson = text.match(/\[\s*\{[\s\S]*\}\s*\]/g);
-    if (possibleJson && possibleJson[0]) {
-      const jsonArray = JSON.parse(possibleJson[0]);
-      if (Array.isArray(jsonArray) && jsonArray.length > 0) {
-        console.log(`Found and parsed JSON array with ${jsonArray.length} results`);
-        return jsonArray;
+    // Look for arrays in the text using a more robust pattern
+    const startPos = text.indexOf('[{');
+    const endPos = text.lastIndexOf('}]');
+    
+    if (startPos !== -1 && endPos !== -1 && endPos > startPos) {
+      // Extract what looks like a JSON array
+      const jsonText = text.substring(startPos, endPos + 2);
+      console.log('Found possible JSON array:', jsonText.substring(0, 100) + '...');
+      
+      try {
+        const jsonArray = JSON.parse(jsonText);
+        if (Array.isArray(jsonArray) && jsonArray.length > 0) {
+          console.log(`Successfully parsed JSON array with ${jsonArray.length} results`);
+          return jsonArray;
+        }
+      } catch (innerError) {
+        console.log('Failed to parse extracted JSON array:', innerError.message);
       }
     }
   } catch (e) {
     console.log('Failed to find JSON array in text:', e.message);
   }
   
-  console.log('Could not parse results as JSON, returning empty array');
+  // As a last resort, manually parse pick results from text patterns
+  try {
+    console.log('Attempting to manually extract structured data from text');
+    const pickResults = [];
+    const pickRegex = /Pick:\s*"([^"]+)".*?result:\s*(won|lost|push|unknown)/gi;
+    
+    let match;
+    while ((match = pickRegex.exec(text)) !== null) {
+      // Found a pick and its result
+      const pick = match[1];
+      const result = match[2].toLowerCase();
+      
+      // Try to find the league nearby
+      const contextBefore = text.substring(Math.max(0, match.index - 50), match.index);
+      const leagueMatch = contextBefore.match(/(NBA|NHL|MLB)/i);
+      const league = leagueMatch ? leagueMatch[1].toUpperCase() : '';
+      
+      // Try to find a score nearby
+      const contextAfter = text.substring(match.index, Math.min(text.length, match.index + 150));
+      const scoreMatch = contextAfter.match(/(\d+\s*-\s*\d+)/i);
+      const score = scoreMatch ? scoreMatch[1] : 'N/A';
+      
+      pickResults.push({
+        pick: pick,
+        league: league,
+        result: result,
+        score: score
+      });
+    }
+    
+    if (pickResults.length > 0) {
+      console.log(`Manually extracted ${pickResults.length} results from text patterns`);
+      return pickResults;
+    }
+  } catch (e) {
+    console.log('Failed manual text extraction:', e.message);
+  }
+  
+  console.log('Could not parse results as JSON or extract structured data, returning empty array');
   return [];
 };
 
@@ -94,10 +161,20 @@ export const resultsCheckerService = {
   getSportsEventsByDate: async (date) => {
     try {
       console.log(`Fetching all sports events for ${date}`);
-      const events = await sportsDbApiService.getMultiSportEvents(date);
+      // Get all events from all leagues
+      const eventsData = await sportsDbApiService.getAllSportsEvents(date);
+      
+      // Flatten the events from all leagues into a single array
+      const allEvents = [];
+      for (const league in eventsData) {
+        if (eventsData[league] && Array.isArray(eventsData[league])) {
+          allEvents.push(...eventsData[league]);
+        }
+      }
+      
       return { 
         success: true, 
-        events: events
+        events: allEvents
       };
     } catch (error) {
       console.error('Error fetching events from TheSportsDB API:', error);
