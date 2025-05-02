@@ -233,7 +233,7 @@ export const Billfold = () => {
   };
   
   return (
-    <div className="billfold-container min-h-screen font-sans pt-16 relative bg-black">
+    <div className="billfold-container min-h-screen font-sans pt-16 relative">
       {/* Grid Background for depth */}
       <div className="absolute inset-0 w-full h-full z-0" style={{
         backgroundImage: `
