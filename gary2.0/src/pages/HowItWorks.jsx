@@ -27,7 +27,7 @@ const staggerContainer = {
 const SectionHeader = ({ pretitle, title, description }) => {
   return (
     <motion.div 
-      className="text-center mb-16"
+      className="text-center mb-8"
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
@@ -51,7 +51,7 @@ const SectionHeader = ({ pretitle, title, description }) => {
 const StepCard = ({ number, title, description, image, reverse = false }) => {
   return (
     <motion.div 
-      className={`grid grid-cols-1 ${reverse ? 'lg:grid-cols-12' : 'lg:grid-cols-12'} gap-8 lg:gap-16 items-center mb-20`}
+      className={`grid grid-cols-1 ${reverse ? 'lg:grid-cols-12' : 'lg:grid-cols-12'} gap-6 lg:gap-10 items-center mb-12`}
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8 }}
@@ -154,10 +154,10 @@ export function HowItWorks() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative pt-28 pb-20 px-6 lg:px-8">
+      <section className="relative pt-20 pb-12 px-6 lg:px-8">
         <div className="container mx-auto max-w-6xl">
           <motion.div 
-            className="text-center mb-16"
+            className="text-center mb-8"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
@@ -188,7 +188,7 @@ export function HowItWorks() {
       </section>
 
       {/* Process Steps Section */}
-      <section className="py-10 px-6 lg:px-8 bg-black/40 relative overflow-hidden">
+      <section className="py-6 px-6 lg:px-8 bg-black/40 relative overflow-hidden">
         <div className="container mx-auto max-w-6xl relative z-10">
           <SectionHeader 
             pretitle="Our Process"
@@ -227,7 +227,7 @@ export function HowItWorks() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-10 px-6 lg:px-8">
+      <section className="py-6 px-6 lg:px-8">
         <div className="container mx-auto max-w-6xl">
           <SectionHeader 
             pretitle="Success Stories"
@@ -263,7 +263,7 @@ export function HowItWorks() {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-10 px-6 lg:px-8 bg-black/20 backdrop-blur-sm">
+      <section className="py-6 px-6 lg:px-8 bg-black/20 backdrop-blur-sm">
         <div className="container mx-auto max-w-4xl">
           <SectionHeader 
             pretitle="Questions"
@@ -295,7 +295,7 @@ export function HowItWorks() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-14 px-6 lg:px-8 relative overflow-hidden">
+      <section className="py-8 px-6 lg:px-8 relative overflow-hidden">
         <div className="container mx-auto max-w-4xl text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
