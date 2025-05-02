@@ -22,7 +22,7 @@ export function Pricing() {
       <div className="max-w-5xl mx-auto px-4">
         {/* Header Section */}
         <div className="text-center mb-16 pt-16">  {/* Added pt-16 for extra top padding */}
-          <h1 className="text-5xl font-bold text-[#d4af37] mb-4">Pricing</h1>
+          <h1 className="text-5xl font-bold text-[#c19c60] mb-4">Pricing</h1>
           <p className="text-xl text-gray-400 max-w-xl mx-auto">
             Simple, transparent pricing to upgrade your betting game
           </p>
@@ -40,10 +40,10 @@ export function Pricing() {
             <div className="absolute -right-1 top-2/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
             
             {/* Ticket header */}
-            <div className="bg-[#1a365d] w-full py-2 px-4 rounded-t-xl flex flex-col">
+            <div className="bg-black w-full py-2 px-4 rounded-t-xl flex flex-col">
               <div className="flex flex-col">
                 <div className="flex justify-between items-center">
-                  <div className="text-lg font-bold text-[#d4af37] font-sans tracking-wider">GARY A.I.</div>
+                  <div className="text-lg font-bold text-[#c19c60] font-sans tracking-wider">GARY A.I.</div>
                   <div className="text-sm text-white font-sans tracking-wider">BLEACHER PASS</div>
                 </div>
                 <div className="flex justify-between mt-1">
@@ -165,13 +165,13 @@ export function Pricing() {
             </div>
             
             {/* Button area */}
-            <div className="px-6 pb-6 pt-2 bg-[#f8f8e0] border-t border-dotted border-gray-400/30">
+            <div className="px-6 pb-6 pt-2 bg-[#fffbe6] border-t border-dotted border-gray-400/30">
               {/* Barcode */}
               <div className="mb-4 flex justify-center">
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div className="w-full py-3 px-4 bg-[#e5aa32] text-center rounded-md">
+              <div className="w-full py-3 px-4 bg-[#c19c60] text-center rounded-md">
                 <Link to="/checkout" className="no-underline">
                   <div className="text-xl text-black font-sans tracking-wider">
                     SELECT PLAN
@@ -180,9 +180,9 @@ export function Pricing() {
               </div>
               
               {/* VIP punch hole */}
-              <div className="absolute bottom-3 -right-[15px] w-[30px] h-[30px] rounded-full bg-[#333] flex items-center justify-center overflow-hidden">
-                <div className="absolute inset-1 rounded-full bg-[#f8f8e0]"></div>
-                <div className="text-[7px] font-bold relative z-10 text-[#333] rotate-90">VIP</div>
+              <div className="absolute bottom-3 -right-[15px] w-[30px] h-[30px] rounded-full bg-black flex items-center justify-center overflow-hidden">
+                <div className="absolute inset-1 rounded-full bg-[#fffbe6]"></div>
+                <div className="text-[7px] font-bold relative z-10 text-black rotate-90">VIP</div>
               </div>
             </div>
           </div>
@@ -198,15 +198,15 @@ export function Pricing() {
           
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="text-[#d4af37] text-4xl font-light mb-1">67%</div>
+              <div className="text-[#c19c60] text-4xl font-light mb-1">67%</div>
               <p className="text-gray-500 text-sm">Win Rate on Premium Picks</p>
             </div>
             <div className="text-center">
-              <div className="text-[#d4af37] text-4xl font-light mb-1">+18%</div>
+              <div className="text-[#c19c60] text-4xl font-light mb-1">+18%</div>
               <p className="text-gray-500 text-sm">Average Monthly ROI</p>
             </div>
             <div className="text-center">
-              <div className="text-[#d4af37] text-4xl font-light mb-1">15-20</div>
+              <div className="text-[#c19c60] text-4xl font-light mb-1">15-20</div>
               <p className="text-gray-500 text-sm">Premium Picks Per Week</p>
             </div>
           </div>
