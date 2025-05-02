@@ -165,7 +165,7 @@
   letter-spacing: 0.05em;
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: black !important;
+  color: black;
 }
 
 .sleek-table td {
@@ -204,7 +204,7 @@
   font-size: 3rem;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: black !important;
+  color: black;
 }
 
 .metric-label {
@@ -212,5 +212,5 @@
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   font-weight: 600;
-  color: black !important;
+  color: black;
 }
