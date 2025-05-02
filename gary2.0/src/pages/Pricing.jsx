@@ -92,8 +92,8 @@ export function Pricing() {
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div className="w-full py-3 px-4 bg-black text-center rounded-md shadow-md border border-[#c19c60]">
-                <div className="text-xl text-[#c19c60] font-sans tracking-wider font-bold">
+              <div style={{ width: '100%', padding: '0.75rem 1rem', backgroundColor: 'black', textAlign: 'center', borderRadius: '0.375rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', border: '1px solid #c19c60' }}>
+                <div style={{ fontSize: '1.25rem', color: '#c19c60', fontFamily: 'sans-serif', letterSpacing: '0.05em', fontWeight: 'bold' }}>
                   CURRENT PLAN
                 </div>
               </div>
