@@ -149,23 +149,23 @@
 }
 
 /* Metric cards - updated for dark theme */
-.billfold-metric-card {
+.billfold-metrics-card {
   border-top: 3px solid var(--gary-gold);
   background-color: rgba(18, 18, 18, 0.8);
   border-radius: 8px;
   overflow: hidden;
 }
 
-.billfold-metric-card:hover {
+.billfold-metrics-card:hover {
   background-color: rgba(24, 24, 24, 0.9);
 }
 
 /* Fix for nested backgrounds in metric cards */
-.billfold-metric-card .metric-value,
-.billfold-metric-card span,
-.billfold-metric-card div,
-.billfold-metric-card h3.billfold-section-heading,
-.billfold-metric-card .billfold-section-heading::before {
+.billfold-metrics-card .metric-value,
+.billfold-metrics-card span,
+.billfold-metrics-card div,
+.billfold-metrics-card h3.billfold-section-heading,
+.billfold-metrics-card .billfold-section-heading::before {
   background-color: transparent;
 }
 
