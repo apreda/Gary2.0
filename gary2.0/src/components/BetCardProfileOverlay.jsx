@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { FaFire, FaSnowflake } from 'react-icons/fa';
+import { FaFire, FaSnowflake, FaTimes } from 'react-icons/fa';
 import { useUserStats } from '../hooks/useUserStats';
 
 // Baseball card style overlay for BetCard Profile
