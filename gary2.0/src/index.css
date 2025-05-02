@@ -16,6 +16,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  
+  /* Ensure default text color is black */
+  body, div, p, h1, h2, h3, h4, h5, h6, span, a, button, input, select, textarea {
+    color: rgba(0, 0, 0, 0.87);
+  }
 
   .dark {
     color-scheme: dark;
