@@ -53,9 +53,9 @@ function RecentWinnersFeed() {
   };
 
   return (
-    <div className="bg-black/80 border border-[#d4af37]/20 rounded-lg shadow-lg overflow-hidden h-full">
-      <div className="p-4 bg-[#111] border-b border-[#d4af37]/20">
-        <h3 className="text-xl font-bold text-[#d4af37] flex items-center">
+    <div className="bg-black/80 border border-[#c19c60]/20 rounded-lg shadow-lg overflow-hidden h-full">
+      <div className="p-4 bg-[#111] border-b border-[#c19c60]/20">
+        <h3 className="text-xl font-bold text-[#c19c60] flex items-center">
           <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
@@ -66,7 +66,7 @@ function RecentWinnersFeed() {
       <div className="h-[500px] overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d4af37 #111' }}>
         {loading ? (
           <div className="flex justify-center items-center h-40">
-            <div className="loader border-t-2 border-[#d4af37] rounded-full w-6 h-6 animate-spin"></div>
+            <div className="loader border-t-2 border-[#c19c60] rounded-full w-6 h-6 animate-spin"></div>
           </div>
         ) : winners.length === 0 ? (
           <div className="p-6 text-center text-gray-400">
@@ -77,7 +77,7 @@ function RecentWinnersFeed() {
             {winners.map((winner, index) => (
               <div key={winner.id || index} className="p-4 border-b border-[#222] hover:bg-black/40 transition-colors">
                 <div className="flex justify-between items-start mb-2">
-                  <span className="text-xs text-[#d4af37] bg-[#d4af37]/10 px-2 py-1 rounded">{winner.league}</span>
+                  <span className="text-xs text-[#c19c60] bg-[#d4af37]/10 px-2 py-1 rounded">{winner.league}</span>
                   <span className="text-xs text-gray-400">{winner.timestamp ? formatTimeDiff(winner.timestamp) : '—'}</span>
                 </div>
                 
@@ -109,7 +109,7 @@ function RecentWinnersFeed() {
                 
                 <div className="flex justify-between items-center mt-2">
                   <div className="flex items-center">
-                    <span className="text-[#d4af37] text-xs mr-1">✓</span>
+                    <span className="text-[#c19c60] text-xs mr-1">✓</span>
                     <span className="text-xs text-gray-400">
                       Final: {winner.result?.final_score || 'Win'}
                     </span>
@@ -123,7 +123,7 @@ function RecentWinnersFeed() {
             <div className="p-4 text-center">
               <Link 
                 to="/real-gary-picks" 
-                className="text-[#d4af37] text-sm hover:underline inline-flex items-center"
+                className="text-[#c19c60] text-sm hover:underline inline-flex items-center"
               >
                 See all of Gary's picks
                 <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,7 +209,7 @@ function Home() {
             <h2 className="font-extrabold mb-6 text-black leading-tight text-center">
               <span className="block text-6xl md:text-7xl font-serif italic inline-block" style={{ textShadow: "-1px -1px 0 #bfa142, 1px -1px 0 #bfa142, -1px 1px 0 #bfa142, 1px 1px 0 #bfa142" }}>THE BEAR'S</span>
               <div className="w-full h-0.5 bg-[#212121] my-2"></div>
-              <span className="block text-[#bfa142] text-6xl md:text-7xl font-black transform -skew-x-6">BRAIN</span>
+              <span className="block text-[#c19c60] text-6xl md:text-7xl font-black transform -skew-x-6">BRAIN</span>
               <div className="w-full h-0.5 bg-[#212121] my-2"></div>
             </h2>
             
@@ -230,20 +230,20 @@ function Home() {
                 <div className="text-left">
                   {/* Data Aware */}
                   <div className="mb-10">
-                    <h3 className="text-xl font-bold border-b border-[#bfa142] pb-2 mb-3 font-serif italic text-[#bfa142]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>1. Data Aware</h3>
+                    <h3 className="text-xl font-bold border-b border-[#c19c60] pb-2 mb-3 font-serif italic text-[#c19c60]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>1. Data Aware</h3>
                     <p className="text-gray-500 font-serif leading-relaxed mb-3">Legacy data enhanced with real-time details that impact the odds. Gary treats each new stat update as a crucial piece of the betting puzzle.</p>
                     <p className="text-gray-500 font-serif leading-relaxed">Unlike static models that simply crunch historical data, Gary's system integrates player sentiment, weather impact factors, and arena-specific performance indicators to create a dynamic predictive model.</p>
                   </div>
                   
                   {/* Fan Brain */}
                   <div className="mb-10">
-                    <h3 className="text-xl font-bold border-b border-[#bfa142] pb-2 mb-3 font-serif italic text-[#bfa142]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>2. Fan Brain</h3>
+                    <h3 className="text-xl font-bold border-b border-[#c19c60] pb-2 mb-3 font-serif italic text-[#c19c60]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>2. Fan Brain</h3>
                     <p className="text-gray-500 font-serif leading-relaxed">Reads team loyalty, emotional bias, and fan storylines to spot hidden angles. Gary's system analyzes how public perception influences betting lines, creating opportunities for value bets that go against the crowd.</p>
                   </div>
                   
                   {/* Narrative Tracker */}
                   <div className="mb-10">
-                    <h3 className="text-xl font-bold border-b border-[#bfa142] pb-2 mb-3 font-serif italic text-[#bfa142]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>3. Narrative Tracker</h3>
+                    <h3 className="text-xl font-bold border-b border-[#c19c60] pb-2 mb-3 font-serif italic text-[#c19c60]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>3. Narrative Tracker</h3>
                     <p className="text-gray-500 font-serif leading-relaxed">Uncovers hidden motivations and emotional weights that move the lines. When a player faces their former team or a coach returns to a city where they previously worked, Gary factors these emotional elements into the prediction model.</p>
                   </div>
                 </div>
@@ -252,19 +252,19 @@ function Home() {
                 <div className="text-left">
                   {/* Street Smart */}
                   <div className="mb-10">
-                    <h3 className="text-xl font-bold border-b border-[#bfa142] pb-2 mb-3 font-serif italic text-[#bfa142]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>4. Street Smart</h3>
+                    <h3 className="text-xl font-bold border-b border-[#c19c60] pb-2 mb-3 font-serif italic text-[#c19c60]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>4. Street Smart</h3>
                     <p className="text-gray-500 font-serif leading-relaxed mb-3">Old-school instincts meet AI precision to sniff out real betting value. Gary doesn't just follow the math—he understands the human element that often defies the numbers.</p>
                     <p className="text-gray-500 font-serif leading-relaxed">By combining decades of handicapping wisdom with cutting-edge machine learning, Gary can identify value opportunities that purely statistical models miss.</p>
                   </div>
                   
                   {/* Three-Layered Core */}
                   <div className="mb-10">
-                    <h3 className="text-xl font-bold border-b border-[#bfa142] pb-2 mb-3 font-serif italic text-[#bfa142]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>5. Three-Layered Core</h3>
+                    <h3 className="text-xl font-bold border-b border-[#c19c60] pb-2 mb-3 font-serif italic text-[#c19c60]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>5. Three-Layered Core</h3>
                     <p className="text-gray-500 font-serif leading-relaxed">Sports Odds & Stats, Real-Time Storylines, and Reasoning Engine—Gary's secret sauce. This proprietary system processes information through three distinct layers, each adding depth to the analysis and improving prediction accuracy.</p>
                   </div>
                   
                   {/* Pull quote */}
-                  <div className="border-l-4 border-[#bfa142] pl-4 italic my-6">
+                  <div className="border-l-4 border-[#c19c60] pl-4 italic my-6">
                     <p className="text-gray-500 font-serif text-lg">"Our system doesn't just predict outcomes—it understands the game at a fundamental level that most handicappers can't match."</p>
                     <p className="text-gray-500 font-serif text-sm mt-2">— Gary A.I. Development Team</p>
                   </div>

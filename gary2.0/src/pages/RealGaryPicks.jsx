@@ -6,6 +6,7 @@ import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
+import '../styles/PickCardGlow.css'; // Import the glow effect CSS
 
 // Modern UI no longer uses retro styles
 
@@ -491,7 +492,7 @@ function RealGaryPicks() {
                           return (
                             <div 
                               key={pick.id} 
-                              className="absolute top-0 left-0"
+                              className="absolute top-0 left-0 pick-card-container"
                               style={cardStyle}
                             >
                               {/* Card container with flip effect */}
