@@ -135,15 +135,13 @@
 /* Metric cards */
 .billfold-metric-card {
   border-top: 3px solid var(--gary-gold);
-  background-color: white !important;
+  background-color: rgba(193, 162, 101, 0.08) !important;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .billfold-metric-card:hover {
-  background-color: white !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  background-color: rgba(193, 162, 101, 0.12) !important;
 }
 
 /* Combined card row */
