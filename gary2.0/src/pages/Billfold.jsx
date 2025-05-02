@@ -123,8 +123,8 @@ export const Billfold = () => {
         {/* Enhanced Header with GARY A.I. */}
         <div className="billfold-header mb-8 relative">
           <h2 className="mb-2 flex items-center relative">
-            <span className="font-bold tracking-wide" style={{ color: '#d4af37', fontSize: '28px' }}>GARY</span>
-            <span className="font-bold tracking-wide text-black" style={{ fontSize: '28px' }}>A.I.</span>
+            <span className="font-bold tracking-wide" style={{ color: '#d4af37 !important', fontSize: '28px' }}>GARY</span>
+            <span className="font-bold tracking-wide" style={{ color: 'black', fontSize: '28px' }}>A.I.</span>
           </h2>
         </div>
         
@@ -133,7 +133,7 @@ export const Billfold = () => {
           <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200">
             <h3 className="metric-label mb-2">BANKROLL</h3>
             <div className="metric-value text-black mb-1">${stats.bankroll.toLocaleString()}</div>
-            <div className="text-xs text-gray-500 mt-1">Current balance</div>
+            <div className="text-xs text-gray-500 mt-1"></div>
           </div>
           
           <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200 relative overflow-hidden">
@@ -142,20 +142,20 @@ export const Billfold = () => {
             <div className="metric-value text-black mb-1 flex items-center relative z-10">
               {stats.roi}% <span className="ml-2"><img src="/coin.png" alt="ROI" className="w-6 h-6" /></span>
             </div>
-            <div className="text-xs text-gray-500 mt-1 relative z-10">Overall return</div>
+            <div className="text-xs text-gray-500 mt-1 relative z-10"></div>
           </div>
           
           <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200">
             <h3 className="metric-label mb-2">WIN RATE</h3>
             <div className="metric-value text-black mb-1">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-            <div className="text-xs text-gray-500 mt-1">Success rate</div>
+            <div className="text-xs text-gray-500 mt-1"></div>
           </div>
         </div>
         
         {/* Main Content - 3 Column Grid - Enhanced */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           {/* Record Box - Enhanced with gold-light */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d4af37', borderTop: '3px solid #e5c349' }}>
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d8b231', border: 'none', borderRadius: '10px' }}>
             <h3 className="metric-label mb-3 text-white">RECORD</h3>
             <div className="metric-value text-white mb-3">{stats.record || '26-36'}</div>
             <div className="text-sm text-white flex items-center">
@@ -168,7 +168,7 @@ export const Billfold = () => {
           </div>
           
           {/* Win Rate Box - Enhanced with gold-light */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d4af37', borderTop: '3px solid #e5c349' }}>
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d8b231', border: 'none', borderRadius: '10px' }}>
             <h3 className="metric-label mb-3 text-white">WIN RATE</h3>
             <div className="metric-value text-white mb-3">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="text-sm text-white flex items-center">
@@ -208,7 +208,7 @@ export const Billfold = () => {
           {/* Enhanced Recent Picks Table */}
           <div className="billfold-card bg-white rounded-lg shadow-sm overflow-hidden">
             <table className="w-full border-collapse sleek-table">
-              <thead className="bg-gradient-to-r from-[#d4af37]/70 to-[#d4af37]/60">
+              <thead style={{ backgroundColor: '#d8b231' }}>
                 <tr>
                   <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">DATE</th>
                   <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">SPORT</th>
