@@ -159,23 +159,25 @@ export const Billfold = () => {
             </div>
           </div>
           
-          {/* COMBINED BANKROLL + ROI CARD */}
-          <div className="metric-combined-card">
-            <div className="flex flex-col">
-              <h3 className="billfold-section-heading-underline mb-3">BANKROLL</h3>
-              <div className="font-feature-tnum" style={{ fontFeatureSettings: "'tnum'" }}>
-                <div className="text-3xl font-bold mb-1" style={{ color: 'black' }}>${stats.bankroll.toLocaleString()}</div>
+          {/* TOP WIN CARD IN METRICS GRID */}
+          {bestWin && (
+            <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200" 
+                 style={{ 
+                   backgroundColor: 'white',
+                   borderTop: '3px solid var(--gary-gold)'
+                 }}>
+              <h3 className="billfold-section-heading">TOP WIN</h3>
+              <div className="font-bold text-lg mb-1 text-black overflow-hidden text-ellipsis" style={{ maxHeight: '48px' }}>
+                {bestWin.matchup || 'Detroit Tigers vs Cleveland Guardians'}
+              </div>
+              <div className="font-medium text-sm mb-2 text-gary-text-soft">
+                {bestWin.pick || 'Detroit Tigers ML +120'}
+              </div>
+              <div className="inline-block px-3 py-1 rounded text-white font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
+                +$120
               </div>
             </div>
-            <div className="flex flex-col">
-              <h3 className="billfold-section-heading-underline mb-3">ROI</h3>
-              <div className="font-feature-tnum" style={{ fontFeatureSettings: "'tnum'" }}>
-                <div className="text-3xl font-bold mb-1 flex items-center" style={{ color: 'black' }}>
-                  {stats.roi}%
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
         
         {/* Recent Picks - now in a single column with improved styling */}
@@ -218,33 +220,7 @@ export const Billfold = () => {
             </table>
           </div>
           
-          {/* Top Win - Now with improved styling as a secondary element after the table */}
-          {bestWin && (
-            <div className="billfold-card p-5 relative overflow-hidden" 
-                 style={{ 
-                   backgroundColor: 'white',
-                   borderTop: '3px solid var(--gary-gold)',
-                   color: 'black' 
-                 }}>
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="billfold-section-heading mb-0">TOP WIN</h3>
-                <div className="text-sm text-gary-text-soft">{new Date(bestWin.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-              </div>
-              <div className="flex items-start">
-                <div className="w-full">
-                  <div className="font-bold text-xl mb-2 text-black overflow-hidden text-ellipsis" style={{ maxHeight: '56px' }}>
-                    {bestWin.matchup || 'Detroit Tigers vs Cleveland Guardians'}
-                  </div>
-                  <div className="font-medium text-lg mb-4 text-gary-text-soft">
-                    {bestWin.pick || 'Detroit Tigers ML +120'}
-                  </div>
-                  <div className="inline-block px-4 py-2 rounded text-white font-bold" style={{ backgroundColor: 'var(--gary-gold)' }}>
-                    +$120
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+
         </div>
           
         {/* Two-column layout for Sport Performance and Bet Type Distribution - Enhanced */}
