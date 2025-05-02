@@ -214,13 +214,13 @@ export const Billfold = () => {
           {/* Enhanced Recent Picks Table */}
           <div className="billfold-card bg-white rounded-lg shadow-sm overflow-hidden">
             <table className="w-full border-collapse sleek-table">
-              <thead className="bg-gray-50/80">
+              <thead className="bg-gradient-to-r from-[#d4af37]/70 to-[#d4af37]/60">
                 <tr>
-                  <th className="text-left py-3 px-4 border-b border-gray-100">DATE</th>
-                  <th className="text-left py-3 px-4 border-b border-gray-100">SPORT</th>
-                  <th className="text-left py-3 px-4 border-b border-gray-100">MATCHUP</th>
-                  <th className="text-left py-3 px-4 border-b border-gray-100">PICK</th>
-                  <th className="text-right py-3 px-4 border-b border-gray-100">RESULT</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">DATE</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">SPORT</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">MATCHUP</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">PICK</th>
+                  <th className="text-right py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">RESULT</th>
                 </tr>
               </thead>
               <tbody>
