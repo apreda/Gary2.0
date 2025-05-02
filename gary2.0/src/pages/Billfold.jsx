@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
+import { supabase } from '../supabaseClient';
 import '../styles/BillfoldEnhanced.css'; // Consolidated high-tech modern styling
 
 export const Billfold = () => {
   // State for user performance data
   const [stats, setStats] = useState({
-    bankroll: 0,
-    roi: 0,
-    winLoss: 0,
-    record: '0-0',
+    record: '',
     totalBets: 0,
     totalWins: 0,
     totalLosses: 0,
     pushes: 0,
+    winLoss: 0,
     sportPerformance: [],
     betTypePerformance: [],
   });
@@ -46,93 +45,166 @@ export const Billfold = () => {
     setSelectedTimeFrame(timeFrame);
   };
 
-  // Fetch user performance data on component mount
+  // Fetch data directly from Supabase game_results table
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setError(null);
+      
       try {
-        // Get performance data from the service
-        const response = await garyPerformanceService.getGaryPerformance({timeFrame: selectedTimeFrame});
-        const data = response.success ? response : null;
-        if (data) {
-          const summary = data.summary || {};
-          const sportBreakdown = data.sportBreakdown || [];
+        // Fetch game results from Supabase
+        let query = supabase.from('game_results').select('*');
+        
+        // Apply time filter if not 'all'
+        if (selectedTimeFrame !== 'all') {
+          let dateFilter;
+          const now = new Date();
           
-          // Calculate ROI (you can replace this with actual calculation if available)
-          const calculatedROI = ((summary.wins - summary.losses) / (summary.wins + summary.losses) * 100).toFixed(1);
+          switch (selectedTimeFrame) {
+            case '7d':
+              dateFilter = new Date(now.setDate(now.getDate() - 7));
+              break;
+            case '30d':
+              dateFilter = new Date(now.setDate(now.getDate() - 30));
+              break;
+            case '90d':
+              dateFilter = new Date(now.setDate(now.getDate() - 90));
+              break;
+            case 'ytd':
+              dateFilter = new Date(now.getFullYear(), 0, 1); // Jan 1 of current year
+              break;
+            default:
+              dateFilter = null;
+          }
           
-          setStats({
-            bankroll: 10000, // Static value as requested
-            roi: parseFloat(calculatedROI) || 15.5,
-            winLoss: summary.winRate ? summary.winRate / 100 : 0.419,
-            record: summary.record || '26-36',
-            totalBets: summary.total || 62,
-            totalWins: summary.wins || 26,
-            totalLosses: summary.losses || 36,
-            pushes: summary.pushes || 0,
-            // Map sport breakdown to the format our UI expects
-            sportPerformance: sportBreakdown.map(sport => ({
-              sport: sport.name,
-              wins: sport.wins,
-              losses: sport.losses,
-              pushes: sport.pushes || 0
-            })) || [],
-            betTypePerformance: [
-              { betType: 'Spread', count: 35 },
-              { betType: 'Moneyline', count: 15 },
-              { betType: 'Total', count: 12 },
-            ],
-          });
-
-          // Format real data from the response - use all available fields from game_results table
-          const logData = data.data?.map(game => ({
-            id: game.id,
-            date: new Date(game.game_date),
-            sport: game.league,
-            matchup: game.matchup,
-            pick: game.pick_text || game.pick, // Use pick_text first, fallback to pick
-            result: game.result,
-            odds: game.odds, // Include odds information if available
-            final_score: game.final_score // Include final score if available
-          })) || [];
-          
-          setBettingLog(logData);
-          
-          // Set the best win (most recent win from the actual data)
-          const wins = logData.filter(bet => bet.result === 'won');
-          if (wins.length > 0) {
-            // Sort by date descending to get most recent win
-            const sortedWins = [...wins].sort((a, b) => b.date - a.date);
-            
-            // Get the top win with all necessary details
-            const topWin = sortedWins[0];
-            
-            // Calculate or get a realistic win amount (could be enhanced to pull from wager table)
-            let winAmount = 120; // Default fallback amount
-            
-            // If we have bet amount info in the data, we could use that
-            if (topWin.odds && typeof topWin.odds === 'string') {
-              // Extract numeric value from odds string like "+120" or "-110"
-              const oddsValue = parseInt(topWin.odds.replace(/[^0-9-]/g, ''));
-              if (!isNaN(oddsValue)) {
-                // Calculate win amount based on standard $100 stake
-                if (oddsValue > 0) {
-                  winAmount = oddsValue; // For positive odds, this is the win on $100 stake
-                } else if (oddsValue < 0) {
-                  winAmount = Math.round(10000 / Math.abs(oddsValue)); // For negative odds
-                }
-              }
-            }
-            
-            // Set the best win with win amount
-            setBestWin({...topWin, winAmount});
-          } else {
-            // Only set bestWin if there are actual wins
-            setBestWin(null);
+          if (dateFilter) {
+            query = query.gte('game_date', dateFilter.toISOString());
           }
         }
+        
+        // Execute the query
+        const { data: gameResults, error: gameResultsError } = await query.order('game_date', { ascending: false });
+        
+        if (gameResultsError) {
+          throw new Error(`Error fetching game results: ${gameResultsError.message}`);
+        }
+        
+        if (!gameResults || gameResults.length === 0) {
+          setError('No game results found. Check back later for updated picks.');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Process game results data
+        const processedBettingLog = gameResults.map(game => ({
+          id: game.id,
+          date: new Date(game.game_date),
+          sport: game.league,
+          matchup: game.matchup,
+          pick: game.pick_text,
+          result: game.result,
+          odds: game.odds,
+          final_score: game.final_score
+        }));
+        
+        setBettingLog(processedBettingLog);
+        
+        // Calculate stats
+        const wins = gameResults.filter(game => game.result === 'won').length;
+        const losses = gameResults.filter(game => game.result === 'lost').length;
+        const pushes = gameResults.filter(game => game.result === 'push').length;
+        const total = gameResults.length;
+        const winRate = total > 0 ? (wins / total) : 0;
+        
+        // Group by sport/league
+        const sportBreakdown = {};
+        gameResults.forEach(game => {
+          if (!sportBreakdown[game.league]) {
+            sportBreakdown[game.league] = { sport: game.league, wins: 0, losses: 0, pushes: 0 };
+          }
+          
+          if (game.result === 'won') sportBreakdown[game.league].wins++;
+          else if (game.result === 'lost') sportBreakdown[game.league].losses++;
+          else if (game.result === 'push') sportBreakdown[game.league].pushes++;
+        });
+        
+        // Group by bet type
+        const betTypeBreakdown = {};
+        gameResults.forEach(game => {
+          const betType = determineBetType(game.pick_text);
+          if (!betTypeBreakdown[betType]) {
+            betTypeBreakdown[betType] = { betType, count: 0, wins: 0, losses: 0, pushes: 0 };
+          }
+          
+          betTypeBreakdown[betType].count++;
+          if (game.result === 'won') betTypeBreakdown[betType].wins++;
+          else if (game.result === 'lost') betTypeBreakdown[betType].losses++;
+          else if (game.result === 'push') betTypeBreakdown[betType].pushes++;
+        });
+        
+        // Find most profitable bet type
+        let mostProfitableBetType = { betType: 'N/A', winRate: 0 };
+        Object.values(betTypeBreakdown).forEach(bt => {
+          const btWinRate = (bt.wins + bt.losses) > 0 ? (bt.wins / (bt.wins + bt.losses)) : 0;
+          if (bt.count >= 5 && btWinRate > mostProfitableBetType.winRate) {
+            mostProfitableBetType = { 
+              betType: bt.betType, 
+              winRate: btWinRate,
+              displayRate: `+${(btWinRate * 100).toFixed(1)}%`
+            };
+          }
+        });
+        
+        // Find best win
+        const winningGames = gameResults.filter(game => game.result === 'won');
+        let topWin = null;
+        
+        if (winningGames.length > 0) {
+          // Sort by date (most recent first)
+          const sortedWins = [...winningGames].sort(
+            (a, b) => new Date(b.game_date) - new Date(a.game_date)
+          );
+          
+          const bestGame = sortedWins[0];
+          
+          // Calculate win amount based on odds
+          let winAmount = 100; // Default amount if odds not available
+          
+          if (bestGame.odds && typeof bestGame.odds === 'string') {
+            const oddsValue = parseInt(bestGame.odds.replace(/[^0-9-]/g, ''));
+            if (!isNaN(oddsValue)) {
+              if (oddsValue > 0) {
+                winAmount = oddsValue;
+              } else if (oddsValue < 0) {
+                winAmount = Math.round(10000 / Math.abs(oddsValue));
+              }
+            }
+          }
+          
+          topWin = {
+            matchup: bestGame.matchup,
+            pick: bestGame.pick_text,
+            odds: bestGame.odds,
+            date: new Date(bestGame.game_date),
+            winAmount
+          };
+        }
+        
+        setBestWin(topWin);
+        
+        setStats({
+          record: `${wins}-${losses}${pushes > 0 ? `-${pushes}` : ''}`,
+          totalBets: total,
+          totalWins: wins,
+          totalLosses: losses,
+          pushes,
+          winLoss: winRate,
+          sportPerformance: Object.values(sportBreakdown),
+          betTypePerformance: Object.values(betTypeBreakdown),
+          mostProfitableBetType
+        });
       } catch (err) {
-        console.error('Error fetching performance data:', err);
+        console.error('Error processing data:', err);
         setError('Failed to load your performance data. Please try again later.');
       } finally {
         setIsLoading(false);
@@ -141,6 +213,24 @@ export const Billfold = () => {
 
     fetchData();
   }, [selectedTimeFrame]);
+  
+  // Helper function to determine bet type based on pick text
+  const determineBetType = (pickText) => {
+    if (!pickText) return 'Unknown';
+    
+    const lowerCaseText = pickText.toLowerCase();
+    
+    if (lowerCaseText.includes('under') || lowerCaseText.includes('over')) {
+      return 'Total';
+    } else if (lowerCaseText.includes('+') || lowerCaseText.includes('-')) {
+      if (lowerCaseText.includes('spread') || lowerCaseText.includes('cover')) {
+        return 'Spread';
+      }
+    }
+    
+    // Default to moneyline if no specific indicators
+    return 'Moneyline';
+  };
   
   return (
     <div className="billfold-container bg-white min-h-screen font-sans pt-16">
