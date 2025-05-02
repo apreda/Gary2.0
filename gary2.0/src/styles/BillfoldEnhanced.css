@@ -135,7 +135,6 @@
   box-shadow: var(--shadow-sm);
   transition: all 0.25s ease-in-out;
   overflow: hidden;
-  background-color: white;
 }
 
 .billfold-card:hover {
@@ -149,16 +148,16 @@
   border: 1px solid rgba(193, 162, 101, 0.2);
 }
 
-/* Metric cards */
+/* Metric cards - updated for dark theme */
 .billfold-metric-card {
   border-top: 3px solid var(--gary-gold);
-  background-color: rgba(193, 162, 101, 0.08);
+  background-color: rgba(18, 18, 18, 0.8);
   border-radius: 8px;
   overflow: hidden;
 }
 
 .billfold-metric-card:hover {
-  background-color: rgba(193, 162, 101, 0.12);
+  background-color: rgba(24, 24, 24, 0.9);
 }
 
 /* Fix for nested backgrounds in metric cards */
@@ -170,18 +169,18 @@
   background-color: transparent;
 }
 
-/* Combined card row */
+/* Combined card row - updated for dark theme */
 .metric-combined-card {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
-  background-color: rgba(193, 162, 101, 0.15);
+  background-color: rgba(184, 149, 63, 0.2);
   border-radius: 8px;
   overflow: hidden;
 }
 
 .metric-combined-card > div {
-  background-color: white;
+  background-color: rgba(18, 18, 18, 0.8);
   padding: 1.5rem;
 }
 
@@ -192,13 +191,13 @@
   gap: 1.5rem;
 }
 
-/* High-tech progress bars */
+/* High-tech progress bars - updated for dark theme */
 .progress-bar-track {
   height: 6px;
-  background: #f1f1f1;
+  background: #2a2a2a;
   border-radius: 1px;
   overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .progress-bar-fill {
@@ -220,11 +219,11 @@
               rgba(255, 255, 255, 0) 100%);
 }
 
-/* Highlight boxes with modern look */
+/* Highlight boxes with modern look - updated for dark theme */
 .highlight-box {
-  background-color: rgba(212, 175, 55, 0.08);
-  border: 1px solid rgba(212, 175, 55, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  background-color: rgba(18, 18, 18, 0.8);
+  border: 1px solid rgba(184, 149, 63, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   position: relative;
   z-index: 1;
 }
