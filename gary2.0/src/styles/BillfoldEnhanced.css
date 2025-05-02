@@ -1,5 +1,34 @@
 /* BillfoldEnhanced.css - Consolidated modern styling for Billfold page */
 
+/* Billfold-specific navbar styling */
+.billfold-container ~ header,
+.billfold-container + header {
+  background: black !important;
+  border: 1px solid #c19c60 !important;
+  box-shadow: 0 0 10px rgba(193, 156, 96, 0.3) !important;
+}
+
+.billfold-container ~ header a,
+.billfold-container + header a,
+.billfold-container ~ header button,
+.billfold-container + header button {
+  color: #c19c60 !important;
+}
+
+.billfold-container ~ header a:hover,
+.billfold-container + header a:hover,
+.billfold-container ~ header button:hover,
+.billfold-container + header button:hover {
+  color: #e5c349 !important;
+}
+
+/* Make the Billfold nav item always gold in the navbar */
+.billfold-container ~ header a[href="/billfold"],
+.billfold-container + header a[href="/billfold"] {
+  color: #c19c60 !important;
+  font-weight: bold !important;
+}
+
 /* Billfold-specific text color fixes - ONLY applied within the Billfold page */
 .billfold-container {
   /* These styles will only apply to the Billfold page */

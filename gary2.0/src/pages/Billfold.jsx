@@ -79,13 +79,13 @@ export const Billfold = () => {
             ],
           });
 
-          // Format real data from the response
+          // Format real data from the response - use pick_text field for actual pick data
           const logData = data.data?.map(game => ({
             id: game.id,
             date: new Date(game.game_date),
             sport: game.league,
             matchup: game.matchup,
-            pick: game.pick,
+            pick: game.pick_text || game.pick, // Use pick_text first, fallback to pick
             result: game.result
           })) || [];
           
@@ -231,7 +231,7 @@ export const Billfold = () => {
                     <td className="py-4 px-4">
                       <div className="flex items-center">
                         <span className="inline-block w-2 h-2 rounded-sm bg-[#d4af37] mr-2"></span>
-                        <span style={{ color: 'black' }}>{bet.pick || 'UNDER 5.5'}</span>
+                        <span style={{ color: 'black' }}>{bet.pick || 'No pick data'}</span>
                       </div>
                     </td>
                     <td className="py-4 px-4 text-right">
