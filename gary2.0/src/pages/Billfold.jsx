@@ -101,11 +101,32 @@ export const Billfold = () => {
           if (wins.length > 0) {
             // Sort by date descending to get most recent win
             const sortedWins = [...wins].sort((a, b) => b.date - a.date);
-            setBestWin(sortedWins[0]);
-          } else if (logData.length > 0) {
-            // If no wins are available, use the most recent game as a fallback
-            const sortedGames = [...logData].sort((a, b) => b.date - a.date);
-            setBestWin(sortedGames[0]);
+            
+            // Get the top win with all necessary details
+            const topWin = sortedWins[0];
+            
+            // Calculate or get a realistic win amount (could be enhanced to pull from wager table)
+            let winAmount = 120; // Default fallback amount
+            
+            // If we have bet amount info in the data, we could use that
+            if (topWin.odds && typeof topWin.odds === 'string') {
+              // Extract numeric value from odds string like "+120" or "-110"
+              const oddsValue = parseInt(topWin.odds.replace(/[^0-9-]/g, ''));
+              if (!isNaN(oddsValue)) {
+                // Calculate win amount based on standard $100 stake
+                if (oddsValue > 0) {
+                  winAmount = oddsValue; // For positive odds, this is the win on $100 stake
+                } else if (oddsValue < 0) {
+                  winAmount = Math.round(10000 / Math.abs(oddsValue)); // For negative odds
+                }
+              }
+            }
+            
+            // Set the best win with win amount
+            setBestWin({...topWin, winAmount});
+          } else {
+            // Only set bestWin if there are actual wins
+            setBestWin(null);
           }
         }
       } catch (err) {
@@ -170,7 +191,7 @@ export const Billfold = () => {
                 {bestWin.pick || 'Detroit Tigers ML +120'}
               </div>
               <div className="inline-block px-3 py-1 rounded text-white font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
-                +$120
+                +${bestWin.winAmount || 120}
               </div>
             </div>
           )}
