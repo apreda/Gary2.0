@@ -1,31 +1,33 @@
 /* BillfoldEnhanced.css - Consolidated modern styling for Billfold page */
 
-/* Billfold-specific navbar styling */
+/* Billfold-specific navbar styling - with updated colors */
 .billfold-container ~ header,
 .billfold-container + header {
   background: black !important;
-  border: 1px solid #c19c60 !important;
-  box-shadow: 0 0 10px rgba(193, 156, 96, 0.3) !important;
+  border: 1px solid var(--gary-gold) !important;
+  box-shadow: 0 0 10px rgba(193, 162, 101, 0.25) !important;
 }
 
 .billfold-container ~ header a,
 .billfold-container + header a,
 .billfold-container ~ header button,
 .billfold-container + header button {
-  color: #c19c60 !important;
+  color: var(--gary-gold) !important;
 }
 
 .billfold-container ~ header a:hover,
 .billfold-container + header a:hover,
 .billfold-container ~ header button:hover,
 .billfold-container + header button:hover {
-  color: #e5c349 !important;
+  color: var(--gary-gold-light) !important;
+  transform: translateY(-1px);
+  transition: all 0.2s ease-in-out;
 }
 
 /* Make the Billfold nav item always gold in the navbar */
 .billfold-container ~ header a[href="/billfold"],
 .billfold-container + header a[href="/billfold"] {
-  color: #c19c60 !important;
+  color: var(--gary-gold-light) !important;
   font-weight: bold !important;
 }
 
@@ -65,15 +67,24 @@
   color: #ef4444;
 }
 
-/* Core variables */
+/* Core variables - updated with improved colors */
 :root {
   --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --gary-gold: #d4af37;
-  --gary-gold-light: #e5c349;
-  --gary-gold-dark: #b08d1d;
+  --gary-gold: #C1A265;
+  --gary-gold-light: #D9C7A9;
+  --gary-gold-dark: #8E774B;
+  --gary-gold-tint: #F5F3EC;
+  --gary-gold-rgb: 193, 162, 101; /* RGB values for rgba() usage */
+  --gary-text-soft: #4B4B4B;
   --gary-win: #10b981;
   --gary-loss: #ef4444;
+  
+  /* Shadow variables for enhanced depth */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.06);
+  --shadow-hover: 0 8px 20px rgba(0,0,0,0.12), 0 3px 6px rgba(0,0,0,0.08);
 }
 
 /* Header styling with modern treatment */
@@ -100,21 +111,59 @@
   border-radius: 1px;
 }
 
-/* Enhanced card styling */
+/* Enhanced card styling with improved visuals and interactions */
 .billfold-card {
-  border: 1px solid rgba(212, 175, 55, 0.15);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 
-              0 1px 2px rgba(0, 0, 0, 0.02),
-              0 0 0 1px rgba(212, 175, 55, 0.05);
-  transition: all 0.2s ease-in-out;
+  border: 1px solid rgba(193, 162, 101, 0.15);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease-in-out;
   overflow: hidden;
+  background-color: white;
 }
 
 .billfold-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 
-              0 2px 4px rgba(0, 0, 0, 0.04),
-              0 0 0 1px rgba(212, 175, 55, 0.1);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+/* Card variants */
+.billfold-card-highlighted {
+  background-color: var(--gary-gold-tint);
+  border: 1px solid rgba(193, 162, 101, 0.2);
+}
+
+/* Metric cards */
+.billfold-metric-card {
+  border-top: 3px solid var(--gary-gold);
+  background-color: rgba(193, 162, 101, 0.08) !important;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.billfold-metric-card:hover {
+  background-color: rgba(193, 162, 101, 0.12) !important;
+}
+
+/* Combined card row */
+.metric-combined-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background-color: rgba(193, 162, 101, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.metric-combined-card > div {
+  background-color: white;
+  padding: 1.5rem;
+}
+
+/* Fixed-width grid for metric cards */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 1.5rem;
 }
 
 /* High-tech progress bars */
@@ -166,26 +215,45 @@
   z-index: 2;
 }
 
-/* Section headings */
-.section-heading {
+/* Consistent section headings */
+.billfold-section-heading {
   font-family: var(--font-heading);
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.7);
+  font-size: 0.75rem;
+  color: var(--gary-text-soft);
   display: flex;
   align-items: center;
   margin-bottom: 1rem;
+  position: relative;
+  padding-left: 12px;
 }
 
-.section-heading::before {
+.billfold-section-heading::before {
   content: '';
-  width: 12px;
-  height: 2px;
-  margin-right: 8px;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
   background-color: var(--gary-gold);
-  display: inline-block;
+  border-radius: 1px;
+}
+
+/* Alternative heading style with underline */
+.billfold-section-heading-underline {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--gary-text-soft);
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--gary-gold);
+  opacity: 0.85;
+  margin-bottom: 1rem;
 }
 
 /* Sleek table styling */
