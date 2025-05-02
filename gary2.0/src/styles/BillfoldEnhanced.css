@@ -1,12 +1,14 @@
-/* BillfoldEnhanced.css - High-tech modern styling for Billfold page */
+/* BillfoldEnhanced.css - Consolidated modern styling for Billfold page */
 
-/* Modern font variables */
+/* Core variables */
 :root {
   --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --gary-gold: #d4af37;
-  --gary-gold-light: #e9cc5f;
-  --gary-gold-dark: #a88a23;
+  --gary-gold-light: #e5c349;
+  --gary-gold-dark: #b08d1d;
+  --gary-win: #10b981;
+  --gary-loss: #ef4444;
 }
 
 /* Header styling with modern treatment */
