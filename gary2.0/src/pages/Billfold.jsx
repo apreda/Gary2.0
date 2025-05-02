@@ -123,7 +123,7 @@ export const Billfold = () => {
   };
   
   return (
-    <div className="bg-white min-h-screen font-sans pt-16">
+    <div className="billfold-container bg-white min-h-screen font-sans pt-16">
       <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm bg-[#fffdf8]">
         {/* Enhanced Header with GARY A.I. */}
         <div className="billfold-header mb-8 relative">
