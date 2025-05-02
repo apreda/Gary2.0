@@ -135,7 +135,7 @@ const StatItem = ({ value, label }) => {
 // Main component
 export function HowItWorks() {
   return (
-    <div className="bg-black min-h-screen">
+    <div className="bg-black min-h-screen pt-4">
       {/* Background elements */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
         {/* Gold vignette corners with new gold color */}
@@ -295,7 +295,7 @@ export function HowItWorks() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-8 px-6 lg:px-8 relative overflow-hidden">
+      <section className="py-4 px-6 lg:px-8 relative overflow-hidden">
         <div className="container mx-auto max-w-4xl text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
