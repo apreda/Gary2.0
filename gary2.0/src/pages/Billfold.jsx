@@ -120,9 +120,18 @@ export const Billfold = () => {
   return (
     <div className="bg-white min-h-screen font-sans pt-16">
       <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm bg-[#fffdf8]">
-        {/* Enhanced Header */}
+        {/* Enhanced Header with Gary's Billfold and coin emblem */}
         <div className="billfold-header mb-8 relative">
-          <h2 className="text-black mb-2">Billfold</h2>
+          <h2 className="text-black mb-2 flex items-center pl-10 relative">
+            <img 
+              src="/coin2.png" 
+              alt="Gary's Coin" 
+              className="w-10 h-10 absolute -left-2 top-1/2 transform -translate-y-1/2 shadow-md rounded-full" 
+              style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.1))' }}
+            />
+            <span className="mr-2 font-extrabold">Gary's</span>
+            <span>Billfold</span>
+          </h2>
         </div>
         
         {/* Enhanced Key Metrics Row */}
