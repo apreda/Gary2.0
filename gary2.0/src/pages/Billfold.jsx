@@ -121,7 +121,7 @@ export const Billfold = () => {
         {/* Enhanced Header with GARY A.I. */}
         <div className="billfold-header mb-8 relative">
           <h2 className="mb-2 flex items-center relative">
-            <span className="font-bold tracking-wide" style={{ color: '#d4af37 !important', fontSize: '28px' }}>GARY</span>
+            <span className="font-bold tracking-wide" style={{ color: '#c19c60 !important', fontSize: '28px' }}>GARY</span>
             <span className="font-bold tracking-wide" style={{ color: 'black', fontSize: '28px' }}>A.I.</span>
           </h2>
         </div>
@@ -153,7 +153,7 @@ export const Billfold = () => {
         {/* Main Content - 3 Column Grid - Enhanced */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           {/* Record Box - Enhanced with gold-light */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d8b231', border: 'none', borderRadius: '10px' }}>
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#c19c60', border: 'none', borderRadius: '10px' }}>
             <h3 className="metric-label mb-3 text-white">RECORD</h3>
             <div className="metric-value text-white mb-3">{stats.record || '26-36'}</div>
             <div className="text-sm text-white flex items-center">
@@ -166,7 +166,7 @@ export const Billfold = () => {
           </div>
           
           {/* Win Rate Box - Enhanced with gold-light */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d8b231', border: 'none', borderRadius: '10px' }}>
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#c19c60', border: 'none', borderRadius: '10px' }}>
             <h3 className="metric-label mb-3 text-white">WIN RATE</h3>
             <div className="metric-value text-white mb-3">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="text-sm text-white flex items-center">
@@ -206,7 +206,7 @@ export const Billfold = () => {
           {/* Enhanced Recent Picks Table */}
           <div className="billfold-card bg-white rounded-lg shadow-sm overflow-hidden">
             <table className="w-full border-collapse sleek-table">
-              <thead style={{ backgroundColor: '#d8b231' }}>
+              <thead style={{ backgroundColor: '#c19c60' }}>
                 <tr>
                   <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">DATE</th>
                   <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">SPORT</th>
