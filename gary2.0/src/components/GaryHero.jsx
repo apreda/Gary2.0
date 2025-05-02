@@ -8,18 +8,18 @@ import newspaperBg from '../assets/images/newspaper.png';
 export function GaryHero() {
   return (
     <div className="relative flex flex-col justify-center items-center min-h-screen w-full px-4 py-20 overflow-hidden">
-      {/* Newspaper background */}
+      {/* Newspaper background - reduced opacity */}
       <div className="absolute inset-0 z-0" style={{
         backgroundImage: `url(${newspaperBg})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
-        filter: "brightness(0.9) contrast(1.2) sepia(0.15) blur(2px)",
-        opacity: 0.6
+        filter: "brightness(0.85) contrast(1.1) sepia(0.15) blur(3px)",
+        opacity: 0.35
       }}></div>
       
       {/* Gradient overlay for better readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/65 to-black/80 z-0"></div>
-      <div className="absolute inset-0 bg-black opacity-40 z-0"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/75 to-black/85 z-0"></div>
+      <div className="absolute inset-0 bg-black opacity-60 z-0"></div>
       {/* Gary20 image top left */}
       <img src={Gary20} alt="Gary 2.0" className="absolute top-4 left-4 w-24 h-auto z-30" />
       {/* Gold vignette accents for depth */}
