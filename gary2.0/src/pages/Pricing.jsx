@@ -115,20 +115,20 @@ export function Pricing() {
             <div className="absolute -right-1 top-2/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
             
             {/* Ticket header with branding */}
-            <div className="bg-[#e5aa32] w-full py-2 px-4 rounded-t-xl flex flex-col">
+            <div className="bg-[#c19c60] w-full py-2 px-4 rounded-t-xl flex flex-col">
               <div className="flex flex-col">
                 <div className="flex justify-between items-center">
-                  <div className="text-lg font-bold text-[#1a365d] font-sans tracking-wider">GARY A.I.</div>
-                  <div className="text-sm text-[#1a365d] font-sans tracking-wider">BOX SEAT ACCESS</div>
+                  <div className="text-lg font-bold text-black font-sans tracking-wider">GARY A.I.</div>
+                  <div className="text-sm text-black font-sans tracking-wider">BOX SEAT ACCESS</div>
                 </div>
                 <div className="flex justify-between mt-1">
                   {/* Ticket seat information */}
-                  <div className="font-mono text-xs opacity-80 text-[#1a365d]">
+                  <div className="font-mono text-xs opacity-80 text-black">
                     <div>SECTION: VIP BOX</div>
                     <div>ROW: P</div>
                     <div>SEAT: 29</div>
                   </div>
-                  <div className="font-mono text-xs opacity-80 text-[#1a365d] text-right">
+                  <div className="font-mono text-xs opacity-80 text-black text-right">
                     SERIAL: GA-2025-V29
                   </div>
                 </div>
@@ -136,7 +136,7 @@ export function Pricing() {
             </div>
             
             {/* Ticket body */}
-            <div className="px-6 pt-4 pb-2 flex-1 bg-[#f8f8e0] text-black rounded-b-xl">
+            <div className="px-6 pt-4 pb-2 flex-1 bg-[#fffbe6] text-black rounded-b-xl">
               <h2 className="text-5xl font-bold mb-3 font-sans tracking-wider uppercase" style={{color: 'black'}}>PRO</h2>
               
               <div className="mb-4 flex items-baseline border-b border-dotted border-gray-400/30 pb-4">
