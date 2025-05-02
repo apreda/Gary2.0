@@ -120,11 +120,11 @@ export const Billfold = () => {
   return (
     <div className="bg-white min-h-screen font-sans pt-16">
       <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm bg-[#fffdf8]">
-        {/* Enhanced Header with Gary's Billfold */}
+        {/* Enhanced Header with GARY A.I. */}
         <div className="billfold-header mb-8 relative">
-          <h2 className="text-black mb-2 flex items-center relative">
-            <span className="mr-2 font-extrabold">Gary's</span>
-            <span>Billfold</span>
+          <h2 className="mb-2 flex items-center relative">
+            <span className="font-bold tracking-wide" style={{ color: '#e5c349', fontSize: '28px' }}>GARY</span>
+            <span className="font-bold tracking-wide text-black" style={{ fontSize: '28px' }}>A.I.</span>
           </h2>
         </div>
         
@@ -154,8 +154,8 @@ export const Billfold = () => {
         
         {/* Main Content - 3 Column Grid - Enhanced */}
         <div className="grid grid-cols-3 gap-6 mb-8">
-          {/* Record Box - Enhanced with darker gold */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#b08d1d', borderTop: '3px solid #d4af37' }}>
+          {/* Record Box - Enhanced with gold-light */}
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#e5c349', borderTop: '3px solid #d4af37' }}>
             <h3 className="metric-label mb-3 text-white">RECORD</h3>
             <div className="metric-value text-white mb-3">{stats.record || '26-36'}</div>
             <div className="text-sm text-white flex items-center">
@@ -167,8 +167,8 @@ export const Billfold = () => {
             </div>
           </div>
           
-          {/* Win Rate Box - Enhanced with darker gold */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#b08d1d', borderTop: '3px solid #d4af37' }}>
+          {/* Win Rate Box - Enhanced with gold-light */}
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#e5c349', borderTop: '3px solid #d4af37' }}>
             <h3 className="metric-label mb-3 text-white">WIN RATE</h3>
             <div className="metric-value text-white mb-3">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="text-sm text-white flex items-center">
