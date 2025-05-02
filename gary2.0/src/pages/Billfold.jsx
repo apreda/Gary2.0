@@ -120,15 +120,9 @@ export const Billfold = () => {
   return (
     <div className="bg-white min-h-screen font-sans pt-16">
       <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm bg-[#fffdf8]">
-        {/* Enhanced Header with Gary's Billfold and coin emblem */}
+        {/* Enhanced Header with Gary's Billfold */}
         <div className="billfold-header mb-8 relative">
-          <h2 className="text-black mb-2 flex items-center pl-10 relative">
-            <img 
-              src="/coin2.png" 
-              alt="Gary's Coin" 
-              className="w-10 h-10 absolute -left-2 top-1/2 transform -translate-y-1/2 shadow-md rounded-full" 
-              style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.1))' }}
-            />
+          <h2 className="text-black mb-2 flex items-center relative">
             <span className="mr-2 font-extrabold">Gary's</span>
             <span>Billfold</span>
           </h2>
@@ -160,27 +154,27 @@ export const Billfold = () => {
         
         {/* Main Content - 3 Column Grid - Enhanced */}
         <div className="grid grid-cols-3 gap-6 mb-8">
-          {/* Record Box - Enhanced */}
-          <div className="highlight-box rounded-lg p-6 hover:shadow-lg transition-all duration-200">
-            <h3 className="metric-label mb-3 text-black">RECORD</h3>
-            <div className="metric-value text-black mb-3">{stats.record || '26-36'}</div>
-            <div className="text-sm text-black/80 flex items-center">
+          {/* Record Box - Enhanced with darker gold */}
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#b08d1d', borderTop: '3px solid #d4af37' }}>
+            <h3 className="metric-label mb-3 text-white">RECORD</h3>
+            <div className="metric-value text-white mb-3">{stats.record || '26-36'}</div>
+            <div className="text-sm text-white flex items-center">
               <span className="font-medium">Last 5:</span>
-              <span className="ml-2 mr-1 font-semibold text-[#10b981]">1W</span>
+              <span className="ml-2 mr-1 font-semibold text-white">1W</span>
               <span className="mr-1">–</span>
-              <span className="font-semibold text-[#ef4444]">4L</span>
-              <span className="ml-2 opacity-80">🔥</span>
+              <span className="font-semibold text-white">4L</span>
+              <span className="ml-2">🔥</span>
             </div>
           </div>
           
-          {/* Win Rate Box - Enhanced */}
-          <div className="highlight-box rounded-lg p-6 hover:shadow-lg transition-all duration-200">
-            <h3 className="metric-label mb-3 text-black">WIN RATE</h3>
-            <div className="metric-value text-black mb-3">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-            <div className="text-sm text-black/80 flex items-center">
+          {/* Win Rate Box - Enhanced with darker gold */}
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#b08d1d', borderTop: '3px solid #d4af37' }}>
+            <h3 className="metric-label mb-3 text-white">WIN RATE</h3>
+            <div className="metric-value text-white mb-3">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="text-sm text-white flex items-center">
               <span className="font-medium">Best Streak:</span>
-              <span className="ml-2 font-semibold text-[#10b981]">4 W's</span>
-              <span className="ml-2 opacity-70">(Apr 12-15)</span>
+              <span className="ml-2 font-semibold text-white">4 W's</span>
+              <span className="ml-2">(Apr 12-15)</span>
             </div>
           </div>
           
