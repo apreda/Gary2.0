@@ -233,57 +233,80 @@ export const Billfold = () => {
   };
   
   return (
-    <div className="billfold-container bg-white min-h-screen font-sans pt-16">
-      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm bg-[#fffdf8]">
+    <div className="billfold-container min-h-screen font-sans pt-16 relative bg-black">
+      {/* Grid Background for depth */}
+      <div className="absolute inset-0 w-full h-full z-0" style={{
+        backgroundImage: `
+          linear-gradient(rgba(18, 18, 18, 0.8) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(18, 18, 18, 0.8) 1px, transparent 1px),
+          linear-gradient(rgba(18, 18, 18, 0.2) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(18, 18, 18, 0.2) 1px, transparent 1px)
+        `,
+        backgroundSize: '100px 100px, 100px 100px, 20px 20px, 20px 20px',
+        backgroundPosition: '-1px -1px, -1px -1px, -1px -1px, -1px -1px',
+        perspective: '1000px',
+        backgroundAttachment: 'fixed'
+      }}></div>
+      
+      {/* Gold accent lines */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[20%] left-0 w-full h-[1px] bg-[#b8953f]/20"></div>
+        <div className="absolute top-[80%] left-0 w-full h-[1px] bg-[#b8953f]/20"></div>
+        <div className="absolute top-0 left-[30%] w-[1px] h-full bg-[#b8953f]/10"></div>
+        <div className="absolute top-0 left-[70%] w-[1px] h-full bg-[#b8953f]/10"></div>
+        
+        {/* Corner accents */}
+        <div className="absolute top-10 left-10 w-20 h-20">
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-[#b8953f]/40"></div>
+          <div className="absolute top-0 left-0 h-full w-[1px] bg-[#b8953f]/40"></div>
+        </div>
+        <div className="absolute top-10 right-10 w-20 h-20">
+          <div className="absolute top-0 right-0 w-full h-[1px] bg-[#b8953f]/40"></div>
+          <div className="absolute top-0 right-0 h-full w-[1px] bg-[#b8953f]/40"></div>
+        </div>
+      </div>
+      
+      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-700/30 shadow-lg bg-[#121212]/90 backdrop-blur-sm relative z-10">
         {/* Enhanced Header with GARY A.I. */}
         <div className="billfold-header mb-10 relative">
           <h2 className="mb-1 flex items-center relative">
-            <span className="font-bold tracking-wide" style={{ color: 'var(--gary-gold)', fontSize: '28px', opacity: 0.95 }}>GARY</span>
-            <span className="font-bold tracking-wide" style={{ color: 'black', fontSize: '28px' }}>A.I.</span>
+            <span className="font-bold tracking-wide" style={{ color: '#b8953f', fontSize: '28px', opacity: 0.95 }}>GARY</span>
+            <span className="font-bold tracking-wide" style={{ color: 'white', fontSize: '28px' }}>A.I.</span>
           </h2>
-          <div className="h-1 w-28 mt-2 rounded-sm" style={{ backgroundColor: 'var(--gary-gold)', opacity: 0.85 }}></div>
+          <div className="h-1 w-28 mt-2 rounded-sm" style={{ backgroundColor: '#b8953f', opacity: 0.85 }}></div>
         </div>
         
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
-        <div className="metrics-grid mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           {/* RECORD - With enhanced styling */}
-          <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
-            <h3 className="billfold-section-heading">RECORD</h3>
-            <div className="metric-value mb-1" style={{ color: 'black', fontFeatureSettings: "'tnum'" }}>
-              {stats.record || '13-18-1'}
-            </div>
-            <div className="text-xs text-gary-text-soft mt-2 flex items-center">
-              <span>Last 5: </span>
-              <span className="ml-1 font-medium">1W - 4L</span>
-              <span className="ml-2 text-gary-loss">↓</span>
-            </div>
+          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg">
+            <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">RECORD</h5>
+            <div className="text-xl font-bold text-white">{stats.record}</div>
           </div>
           
           {/* WIN RATE - With enhanced styling */}
-          <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
-            <h3 className="billfold-section-heading">WIN RATE</h3>
-            <div className="metric-value mb-1" style={{ color: 'black', fontFeatureSettings: "'tnum'" }}>
-              {(stats.winLoss * 100)?.toFixed(1) || '41.9'}%
-            </div>
-            <div className="text-xs text-gary-text-soft mt-2 flex items-center">
+          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg">
+            <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">WIN RATE</h5>
+            <div className="text-xl font-bold text-white">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="mt-2 text-xs text-gray-400 flex items-center">
               <span>Last month: </span>
-              <span className="ml-1 font-medium">38.5%</span>
-              <span className="ml-2 text-gary-win">↑</span>
+              <span className="ml-1 font-medium text-gray-300">38.5%</span>
+              <span className="ml-2 text-green-500">↑</span>
             </div>
           </div>
           
           {/* TOP WIN CARD IN METRICS GRID */}
           {bestWin && (
-            <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
-              <h3 className="billfold-section-heading">TOP WIN</h3>
-              <div className="font-bold text-lg mb-1 text-black overflow-hidden text-ellipsis" style={{ maxHeight: '48px' }}>
+            <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg">
+              <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">TOP WIN</h5>
+              <div className="font-bold text-lg mb-1 text-white overflow-hidden text-ellipsis" style={{ maxHeight: '48px' }}>
                 {bestWin.matchup || ''}
               </div>
-              <div className="font-medium text-sm mb-2 text-gary-text-soft">
+              <div className="font-medium text-sm mb-2 text-gray-400">
                 {bestWin.pick || ''}
                 {bestWin.odds && <span className="ml-1">{bestWin.odds}</span>}
               </div>
-              <div className="inline-block px-3 py-1 rounded text-white font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
+              <div className="inline-block px-3 py-1 rounded text-black font-bold text-sm bg-[#b8953f]">
                 +${bestWin.winAmount || 100}
               </div>
             </div>
@@ -293,34 +316,34 @@ export const Billfold = () => {
         {/* Recent Picks - now in a single column with improved styling */}
         <div className="grid grid-cols-1 gap-8 mb-8">
           {/* Recent Picks Table - Enhanced */}
-          <div className="billfold-card overflow-hidden">
-            <div className="px-5 py-4" style={{ backgroundColor: 'var(--gary-gold-tint)' }}>
-              <h3 className="billfold-section-heading mb-0">RECENT PICKS</h3>
+          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
+            <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
+              <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">RECENT PICKS</h3>
             </div>
             <table className="w-full border-collapse sleek-table">
-              <thead style={{ backgroundColor: 'rgba(193, 162, 101, 0.1)' }}>
+              <thead className="bg-gray-800/60">
                 <tr>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-200" style={{ color: 'var(--gary-text-soft)' }}>DATE</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-200" style={{ color: 'var(--gary-text-soft)' }}>SPORT</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-200" style={{ color: 'var(--gary-text-soft)' }}>MATCHUP</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-200" style={{ color: 'var(--gary-text-soft)' }}>PICK</th>
-                  <th className="text-right py-3 px-4 font-semibold border-b border-gray-200" style={{ color: 'var(--gary-text-soft)' }}>RESULT</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">DATE</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">SPORT</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">MATCHUP</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">PICK</th>
+                  <th className="text-right py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">RESULT</th>
                 </tr>
               </thead>
               <tbody>
                 {bettingLog.slice(0, 5).map((bet, index) => (
-                  <tr key={index} className="border-b border-gray-50 hover:bg-[#fafafa] transition-colors">
-                    <td className="py-3 px-4" style={{ color: 'var(--gary-text-soft)' }}>{new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
-                    <td className="py-3 px-4" style={{ color: 'var(--gary-text-soft)' }}>{bet.sport}</td>
-                    <td className="py-3 px-4" style={{ color: 'black' }}>{bet.matchup || 'Game not found'}</td>
+                  <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-800/50 transition-colors">
+                    <td className="py-3 px-4 text-gray-400">{new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                    <td className="py-3 px-4 text-gray-400">{bet.sport}</td>
+                    <td className="py-3 px-4 text-gray-200">{bet.matchup || 'Game not found'}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center">
-                        <span className="inline-block w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--gary-gold)' }}></span>
-                        <span className="ml-2" style={{ color: 'black' }}>{bet.pick || 'No pick data'}</span>
+                        <span className="inline-block w-2 h-2 rounded-sm bg-[#b8953f]"></span>
+                        <span className="ml-2 text-gray-200">{bet.pick || 'No pick data'}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <span className={`status-pill ${bet.result === 'won' ? 'win' : bet.result === 'push' ? 'push' : 'loss'}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${bet.result === 'won' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : bet.result === 'push' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
                         {bet.result === 'won' ? 'WON' : bet.result === 'push' ? 'PUSH' : 'LOST'}
                       </span>
                     </td>
@@ -336,37 +359,37 @@ export const Billfold = () => {
         {/* Two-column layout for Sport Performance and Bet Type Distribution - Enhanced */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           {/* Sport Performance - Enhanced */}
-          <div className="billfold-card overflow-hidden">
-            <div className="px-5 py-4" style={{ backgroundColor: 'var(--gary-gold-tint)' }}>
-              <h3 className="billfold-section-heading mb-0">SPORT PERFORMANCE</h3>
+          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
+            <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
+              <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">SPORT PERFORMANCE</h3>
             </div>
-            <div className="p-1">
+            <div className="p-4">
               {stats.sportPerformance.map((sport, index) => {
                 // Calculate bar width based on real data
                 const totalGames = sport.wins + sport.losses;
                 const winPercentage = totalGames > 0 ? (sport.wins / totalGames * 100) : 0;
                 
-                // Get sport-specific color hints with reduced opacity for better visual
+                // Get sport-specific color hints with increased opacity for better visibility on dark background
                 const sportColor = 
-                  sport.sport === 'NBA' ? 'from-[#C9082A]/30 to-[#17408B]/30' : 
-                  sport.sport === 'MLB' ? 'from-[#005A9C]/30 to-[#E81828]/30' :
-                  sport.sport === 'NFL' ? 'from-[#013369]/30 to-[#D50A0A]/30' :
-                  sport.sport === 'NHL' ? 'from-[#000000]/30 to-[#CCB876]/30' : 
-                  'from-[var(--gary-gold)]/30 to-[var(--gary-gold)]/10';
+                  sport.sport === 'NBA' ? 'from-[#C9082A]/80 to-[#17408B]/80' : 
+                  sport.sport === 'NFL' ? 'from-[#013369]/70 to-[#D50A0A]/70' : 
+                  sport.sport === 'MLB' ? 'from-[#002D72]/70 to-[#E81828]/70' : 
+                  sport.sport === 'NHL' ? 'from-[#000000]/70 to-[#FA4616]/70' : 
+                  'from-[#b8953f]/70 to-[#b8953f]/40';
                 
                 return (
-                  <div key={index} className={`py-4 px-5 ${index !== stats.sportPerformance.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="font-semibold tracking-tight" style={{ color: 'black' }}>{sport.sport}</span>
-                      <div className="flex space-x-3 items-center">
-                        <span className="text-gary-win font-medium text-sm">W {sport.wins}</span>
-                        <span className="text-gary-loss font-medium text-sm">L {sport.losses}</span>
-                      </div>
+                  <div key={index} className="mb-4 last:mb-0">
+                    {/* Sport name and win-loss record */}
+                    <div className="flex justify-between mb-1">
+                      <div className="font-bold text-sm text-gray-200">{sport.sport}</div>
+                      <div className="text-xs text-gray-400">{sport.wins}W - {sport.losses}L</div>
                     </div>
-                    <div className="progress-bar-track">
+                    
+                    {/* Win percentage visualized */}
+                    <div className="w-full bg-gray-800/80 h-2 rounded-full overflow-hidden">
                       <div 
-                        className={`progress-bar-fill bg-gradient-to-r ${sportColor}`}
-                        style={{ width: `${winPercentage}%` }}
+                        className={`h-full rounded-full bg-gradient-to-r ${sportColor}`}
+                        style={{ width: `${winPercentage}%`, minWidth: '10px' }}
                       ></div>
                     </div>
                   </div>
@@ -376,9 +399,9 @@ export const Billfold = () => {
           </div>
           
           {/* Bet Type Distribution - Enhanced */}
-          <div className="billfold-card overflow-hidden">
-            <div className="px-5 py-4" style={{ backgroundColor: 'var(--gary-gold-tint)' }}>
-              <h3 className="billfold-section-heading mb-0">BET TYPE DISTRIBUTION</h3>
+          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
+            <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
+              <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">BET TYPE DISTRIBUTION</h3>
             </div>
             <div className="p-5 h-full">
               <div className="grid gap-4">
@@ -386,12 +409,15 @@ export const Billfold = () => {
                   <div key={index} className="flex justify-between items-center">
                     <div className="flex items-center">
                       <div className="w-3 h-3 rounded-sm" 
-                           style={{ backgroundColor: index === 0 ? 'var(--gary-gold)' : 
-                                   index === 1 ? 'rgba(var(--gary-gold-rgb), 0.7)' : 
-                                   'rgba(var(--gary-gold-rgb), 0.4)' }}></div>
-                      <span className="ml-3 font-medium" style={{ color: 'black' }}>{betType.betType}</span>
+                           style={{ backgroundColor: index === 0 ? '#b8953f' : 
+                                   index === 1 ? 'rgba(184, 149, 63, 0.7)' : 
+                                   'rgba(184, 149, 63, 0.4)' }}></div>
+                      <span className="ml-3 font-medium text-gray-200">{betType.betType}</span>
                     </div>
-                    <span className="text-gary-text-soft font-medium">{betType.count}</span>
+                    <div className="flex items-baseline">
+                      <span className="font-medium text-white">{betType.count}</span>
+                      <span className="text-sm ml-1 text-gray-400">({Math.round(betType.percentage)}%)</span>
+                    </div>
                   </div>
                 ))}
               </div>
