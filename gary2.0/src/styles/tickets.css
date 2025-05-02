@@ -2,9 +2,7 @@
 /* No forcing, simple class-based styling */
 
 /* Button text colors */
-.current-plan-button {
-  color: white;
-}
+/* Removed current-plan-button style to allow for customization in the components */
 
 .select-plan-button {
   color: black;
