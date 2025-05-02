@@ -123,7 +123,7 @@ export const Billfold = () => {
         {/* Enhanced Header with GARY A.I. */}
         <div className="billfold-header mb-8 relative">
           <h2 className="mb-2 flex items-center relative">
-            <span className="font-bold tracking-wide" style={{ color: '#e5c349', fontSize: '28px' }}>GARY</span>
+            <span className="font-bold tracking-wide" style={{ color: '#d4af37', fontSize: '28px' }}>GARY</span>
             <span className="font-bold tracking-wide text-black" style={{ fontSize: '28px' }}>A.I.</span>
           </h2>
         </div>
@@ -155,7 +155,7 @@ export const Billfold = () => {
         {/* Main Content - 3 Column Grid - Enhanced */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           {/* Record Box - Enhanced with gold-light */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#e5c349', borderTop: '3px solid #d4af37' }}>
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d4af37', borderTop: '3px solid #e5c349' }}>
             <h3 className="metric-label mb-3 text-white">RECORD</h3>
             <div className="metric-value text-white mb-3">{stats.record || '26-36'}</div>
             <div className="text-sm text-white flex items-center">
@@ -168,7 +168,7 @@ export const Billfold = () => {
           </div>
           
           {/* Win Rate Box - Enhanced with gold-light */}
-          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#e5c349', borderTop: '3px solid #d4af37' }}>
+          <div className="rounded-lg p-6 hover:shadow-lg transition-all duration-200" style={{ backgroundColor: '#d4af37', borderTop: '3px solid #e5c349' }}>
             <h3 className="metric-label mb-3 text-white">WIN RATE</h3>
             <div className="metric-value text-white mb-3">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="text-sm text-white flex items-center">
