@@ -56,6 +56,23 @@
   color: #121212;
 }
 
+/* Animation for floating garymoney image */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
 /* Preserve win/loss colors in Billfold */
 .billfold-container .text-win, 
 .billfold-container .status-pill.win {
