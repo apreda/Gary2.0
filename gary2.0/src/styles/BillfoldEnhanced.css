@@ -147,7 +147,9 @@
 /* Fix for nested backgrounds in metric cards */
 .billfold-metric-card .metric-value,
 .billfold-metric-card span,
-.billfold-metric-card div {
+.billfold-metric-card div,
+.billfold-metric-card h3.billfold-section-heading,
+.billfold-metric-card .billfold-section-heading::before {
   background-color: transparent;
 }
 
