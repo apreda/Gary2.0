@@ -1,27 +1,39 @@
 /* BillfoldEnhanced.css - Consolidated modern styling for Billfold page */
 
-/* Force ALL text to be visible by default */
-* {
-  color: black !important;
+/* Billfold-specific text color fixes - ONLY applied within the Billfold page */
+.billfold-container {
+  /* These styles will only apply to the Billfold page */
+  color: black;
 }
 
-/* Exception for gold highlight boxes */
-[style*="background-color: #c19c60"] * {
-  color: white !important;
+/* Target specific elements within the Billfold container */
+.billfold-container td,
+.billfold-container th,
+.billfold-container p,
+.billfold-container h1,
+.billfold-container h2,
+.billfold-container h3,
+.billfold-container h4,
+.billfold-container span,
+.billfold-container div.metric-value,
+.billfold-container div.metric-label {
+  color: black;
 }
 
-/* Specific text colors that should be preserved */
-.text-win, .text-win *, .status-pill.win {
-  color: #22c55e !important;
+/* Exception for gold highlight boxes in Billfold */
+.billfold-container [style*="background-color: #c19c60"] * {
+  color: white;
 }
 
-.text-loss, .text-loss *, .status-pill.loss {
-  color: #ef4444 !important;
+/* Preserve win/loss colors in Billfold */
+.billfold-container .text-win, 
+.billfold-container .status-pill.win {
+  color: #22c55e;
 }
 
-/* Extra specificity for table cells and text elements */
-table td, table th, p, h1, h2, h3, h4, h5, h6, span, div {
-  color: black !important;
+.billfold-container .text-loss, 
+.billfold-container .status-pill.loss {
+  color: #ef4444;
 }
 
 /* Core variables */
