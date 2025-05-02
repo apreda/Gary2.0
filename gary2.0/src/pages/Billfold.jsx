@@ -129,24 +129,24 @@ export const Billfold = () => {
         {/* Enhanced Key Metrics Row */}
         <div className="grid grid-cols-3 gap-8 mb-8">
           <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200">
-            <h3 className="metric-label mb-2">BANKROLL</h3>
-            <div className="metric-value text-black mb-1">${stats.bankroll.toLocaleString()}</div>
-            <div className="text-xs text-gray-500 mt-1"></div>
+            <h3 className="metric-label mb-2" style={{ color: 'black' }}>BANKROLL</h3>
+            <div className="metric-value text-black mb-1" style={{ color: 'black' }}>${stats.bankroll.toLocaleString()}</div>
+            <div className="text-xs text-black mt-1"></div>
           </div>
           
           <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200 relative overflow-hidden">
             <div className="absolute w-10 h-10 rounded-full bg-[#d4af37]/10 -top-4 -right-4"></div>
-            <h3 className="metric-label mb-2 relative z-10">ROI</h3>
-            <div className="metric-value text-black mb-1 flex items-center relative z-10">
+            <h3 className="metric-label mb-2 relative z-10" style={{ color: 'black' }}>ROI</h3>
+            <div className="metric-value text-black mb-1 flex items-center relative z-10" style={{ color: 'black' }}>
               {stats.roi}% <span className="ml-2"><img src="/coin.png" alt="ROI" className="w-6 h-6" /></span>
             </div>
-            <div className="text-xs text-gray-500 mt-1 relative z-10"></div>
+            <div className="text-xs text-black mt-1 relative z-10"></div>
           </div>
           
           <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200">
-            <h3 className="metric-label mb-2">WIN RATE</h3>
-            <div className="metric-value text-black mb-1">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-            <div className="text-xs text-gray-500 mt-1"></div>
+            <h3 className="metric-label mb-2" style={{ color: 'black' }}>WIN RATE</h3>
+            <div className="metric-value text-black mb-1" style={{ color: 'black' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="text-xs text-black mt-1"></div>
           </div>
         </div>
         
@@ -208,11 +208,11 @@ export const Billfold = () => {
             <table className="w-full border-collapse sleek-table">
               <thead style={{ backgroundColor: '#c19c60' }}>
                 <tr>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">DATE</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">SPORT</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">MATCHUP</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">PICK</th>
-                  <th className="text-right py-3 px-4 font-semibold border-b border-[#d4af37]/50 text-black/90">RESULT</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50" style={{ color: 'black' }}>DATE</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50" style={{ color: 'black' }}>SPORT</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50" style={{ color: 'black' }}>MATCHUP</th>
+                  <th className="text-left py-3 px-4 font-semibold border-b border-[#d4af37]/50" style={{ color: 'black' }}>PICK</th>
+                  <th className="text-right py-3 px-4 font-semibold border-b border-[#d4af37]/50" style={{ color: 'black' }}>RESULT</th>
                 </tr>
               </thead>
               <tbody>
