@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import '../styles/BillfoldStyle.css';
 import '../styles/BillfoldOverride.css'; // Emergency override for text colors
+import '../styles/BillfoldEnhanced.css'; // High-tech modern styling
 
 export const Billfold = () => {
   // State for user performance data
@@ -118,106 +119,117 @@ export const Billfold = () => {
   
   return (
     <div className="bg-white min-h-screen font-sans pt-16">
-      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm">
-        {/* Header with glass morphism effect */}
-        <div className="mb-8 relative">
-          <h2 className="text-black text-3xl font-bold mb-2">Billfold</h2>
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#d4af37]/50 to-transparent"></div>
+      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-100 shadow-sm bg-[#fffdf8]">
+        {/* Enhanced Header */}
+        <div className="billfold-header mb-8 relative">
+          <h2 className="text-black mb-2">Billfold</h2>
         </div>
         
-        {/* Key Metrics Row */}
+        {/* Enhanced Key Metrics Row */}
         <div className="grid grid-cols-3 gap-8 mb-8">
-          <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-md p-4 hover:shadow-lg transition-all duration-200">
-            <h3 className="uppercase text-xs font-semibold mb-2 text-gray-600 tracking-wider">BANKROLL</h3>
-            <div className="text-3xl font-bold text-black mb-auto">${stats.bankroll.toLocaleString()}</div>
+          <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200">
+            <h3 className="metric-label mb-2">BANKROLL</h3>
+            <div className="metric-value text-black mb-1">${stats.bankroll.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 mt-1">Current balance</div>
           </div>
           
-          <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-md p-4 hover:shadow-lg transition-all duration-200">
-            <h3 className="uppercase text-xs font-semibold mb-2 text-gray-600 tracking-wider">ROI</h3>
-            <div className="text-3xl font-bold text-black mb-auto flex items-center">
+          <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200 relative overflow-hidden">
+            <div className="absolute w-10 h-10 rounded-full bg-[#d4af37]/10 -top-4 -right-4"></div>
+            <h3 className="metric-label mb-2 relative z-10">ROI</h3>
+            <div className="metric-value text-black mb-1 flex items-center relative z-10">
               {stats.roi}% <span className="ml-2"><img src="/coin.png" alt="ROI" className="w-6 h-6" /></span>
+            </div>
+            <div className="text-xs text-gray-500 mt-1 relative z-10">Overall return</div>
+          </div>
+          
+          <div className="billfold-card flex flex-col bg-white rounded-lg p-5 hover:shadow-lg transition-all duration-200">
+            <h3 className="metric-label mb-2">WIN RATE</h3>
+            <div className="metric-value text-black mb-1">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="text-xs text-gray-500 mt-1">Success rate</div>
+          </div>
+        </div>
+        
+        {/* Main Content - 3 Column Grid - Enhanced */}
+        <div className="grid grid-cols-3 gap-6 mb-8">
+          {/* Record Box - Enhanced */}
+          <div className="highlight-box rounded-lg p-6 hover:shadow-lg transition-all duration-200">
+            <h3 className="metric-label mb-3 text-black">RECORD</h3>
+            <div className="metric-value text-black mb-3">{stats.record || '26-36'}</div>
+            <div className="text-sm text-black/80 flex items-center">
+              <span className="font-medium">Last 5:</span>
+              <span className="ml-2 mr-1 font-semibold text-[#10b981]">1W</span>
+              <span className="mr-1">–</span>
+              <span className="font-semibold text-[#ef4444]">4L</span>
+              <span className="ml-2 opacity-80">🔥</span>
             </div>
           </div>
           
-          <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-md p-4 hover:shadow-lg transition-all duration-200">
-            <h3 className="uppercase text-xs font-semibold mb-2 text-gray-600 tracking-wider">WIN RATE</h3>
-            <div className="text-3xl font-bold text-black mb-auto">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-          </div>
-        </div>
-        
-        {/* Main Content - 3 Column Grid */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
-          {/* Record Box */}
-          <div className="bg-[#d4af37]/10 rounded-lg p-6 border border-[#d4af37]/30 shadow-md hover:shadow-lg transition-all duration-200">
-            <h3 className="uppercase text-sm font-bold mb-2 text-black">RECORD</h3>
-            <div className="text-6xl font-bold text-black mb-2">{stats.record || '26-36'}</div>
-            <div className="text-sm text-black">Past 5 Games: 1W – 4 L 🔥 🔥</div>
+          {/* Win Rate Box - Enhanced */}
+          <div className="highlight-box rounded-lg p-6 hover:shadow-lg transition-all duration-200">
+            <h3 className="metric-label mb-3 text-black">WIN RATE</h3>
+            <div className="metric-value text-black mb-3">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="text-sm text-black/80 flex items-center">
+              <span className="font-medium">Best Streak:</span>
+              <span className="ml-2 font-semibold text-[#10b981]">4 W's</span>
+              <span className="ml-2 opacity-70">(Apr 12-15)</span>
+            </div>
           </div>
           
-          {/* Win Rate Box */}
-          <div className="bg-[#d4af37]/10 rounded-lg p-6 border border-[#d4af37]/30 shadow-md hover:shadow-lg transition-all duration-200">
-            <h3 className="uppercase text-sm font-bold mb-2 text-black">WIN RATE</h3>
-            <div className="text-6xl font-bold text-black mb-2">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-            <div className="text-sm text-black">Best Streak: 4 W's (Apr 12-15)</div>
-          </div>
-          
-          {/* Featured Top Win */}
+          {/* Featured Top Win - Enhanced */}
           {bestWin && (
-            <div className="bg-white rounded-lg p-6 border border-[#d4af37]/30 shadow-md hover:shadow-lg transition-all duration-200">
-              <h3 className="uppercase text-sm font-bold mb-3 text-black border-b border-[#d4af37]/20 pb-2">TOP WIN</h3>
-              <div className="flex flex-col justify-between h-[calc(100%-2rem)]">
-                <div className="mb-2">
-                  <div className="text-sm text-black">{bestWin.date ? new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 28'}</div>
-                  <div className="font-bold text-black text-lg">{bestWin.sport || 'MLB'}</div>
-                  <div className="text-black">{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
+            <div className="billfold-card bg-white rounded-lg p-6 hover:shadow-lg transition-all duration-200 relative overflow-hidden">
+              <div className="absolute w-24 h-24 rounded-full bg-[#10b981]/5 -top-8 -right-8"></div>
+              <h3 className="section-heading mb-4 text-black relative z-10">TOP WIN</h3>
+              <div className="flex flex-col justify-between h-[calc(100%-4rem)] relative z-10">
+                <div className="mb-3">
+                  <div className="text-sm text-black/70 font-medium">{bestWin.date ? new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 28'}</div>
+                  <div className="font-bold text-black text-xl tracking-tight mt-1">{bestWin.sport || 'MLB'}</div>
+                  <div className="text-black/90 font-medium mt-1">{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
                 </div>
-                <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
-                  <div className="text-sm font-medium text-black">{bestWin.pick || 'Yankees -1.5'}</div>
-                  <div className="font-bold text-lg rounded-md px-3 py-1 bg-green-50 text-win">WON</div>
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                  <div className="text-sm font-medium text-black/90">{bestWin.pick || 'Yankees -1.5'}</div>
+                  <div className="status-pill win font-semibold">WON</div>
                 </div>
               </div>
             </div>
           )}
         </div>
           
-        {/* Recent Picks Section */}
+        {/* Recent Picks Section - Enhanced */}
         <div className="mb-8">
           {/* Enhanced Header for Recent Picks */}
-          <div className="flex items-center space-x-3 mb-4 border-b border-gray-200 pb-3">
-            <div className="bg-gray-100 rounded-md p-1 shadow-sm border border-gray-200">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20 6L9 17l-5-5" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <h3 className="text-lg font-bold text-black">RECENT PICKS</h3>
+          <div className="mb-5">
+            <h3 className="section-heading text-black">RECENT PICKS</h3>
           </div>
           
           {/* Enhanced Recent Picks Table */}
-          <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200/60">
-            <table className="w-full border-collapse">
-              <thead className="bg-gray-50">
+          <div className="billfold-card bg-white rounded-lg shadow-sm overflow-hidden">
+            <table className="w-full border-collapse sleek-table">
+              <thead className="bg-gray-50/80">
                 <tr>
-                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">DATE</th>
-                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">SPORT</th>
-                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">MATCHUP</th>
-                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">PICK</th>
-                  <th className="text-left py-3 px-4 text-xs uppercase text-black font-medium tracking-wider border-b border-gray-200">RESULT</th>
+                  <th className="text-left py-3 px-4 border-b border-gray-100">DATE</th>
+                  <th className="text-left py-3 px-4 border-b border-gray-100">SPORT</th>
+                  <th className="text-left py-3 px-4 border-b border-gray-100">MATCHUP</th>
+                  <th className="text-left py-3 px-4 border-b border-gray-100">PICK</th>
+                  <th className="text-right py-3 px-4 border-b border-gray-100">RESULT</th>
                 </tr>
               </thead>
               <tbody>
                 {bettingLog.slice(0, 4).map((bet, index) => (
-                  <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-4 px-4 text-sm text-black">{bet.date ? new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 29'}</td>
-                    <td className="py-4 px-4 text-sm font-medium text-black">{bet.sport || 'NHL'}</td>
-                    <td className="py-4 px-4 text-sm text-black">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
-                    <td className="py-4 px-4 text-sm">
+                  <tr key={index} className="border-b border-gray-50 hover:bg-[#fafafa] transition-colors">
+                    <td className="py-4 px-4 text-black/80">
+                      {bet.date ? new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 29'}
+                    </td>
+                    <td className="py-4 px-4 font-medium text-black">{bet.sport || 'NHL'}</td>
+                    <td className="py-4 px-4 text-black/90">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
+                    <td className="py-4 px-4">
                       <div className="flex items-center">
-                        <span className="inline-block w-3 h-3 rounded-full bg-[#ef4444] mr-2 shadow-sm"></span>
-                        <span className="text-black">{bet.pick || 'UNDER 5.5'}</span>
+                        <span className="inline-block w-2 h-2 rounded-sm bg-[#d4af37] mr-2"></span>
+                        <span className="text-black/80">{bet.pick || 'UNDER 5.5'}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className={`text-sm font-semibold py-1 px-3 rounded-full ${bet.result === 'won' ? 'bg-green-50 text-win' : 'bg-red-50 text-loss'}`}>
+                    <td className="py-4 px-4 text-right">
+                      <span className={`status-pill ${bet.result === 'won' ? 'win' : 'loss'}`}>
                         {bet.result === 'won' ? 'WON' : 'LOST'}
                       </span>
                     </td>
@@ -228,32 +240,37 @@ export const Billfold = () => {
           </div>
         </div>
           
-        {/* Two-column layout for Sport Performance and Bet Type Distribution */}
+        {/* Two-column layout for Sport Performance and Bet Type Distribution - Enhanced */}
         <div className="grid grid-cols-2 gap-6 mb-8">
-          {/* Sport Performance - More sleek and professional */}
+          {/* Sport Performance - Enhanced */}
           <div>
-            <div className="flex items-center mb-4 border-b border-[#d4af37]/20 pb-2">
-              <h3 className="text-base font-bold text-black uppercase tracking-wider">Sport Performance</h3>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200/60 overflow-hidden">
-              <div className="divide-y divide-gray-100">
+            <h3 className="section-heading mb-4 text-black">SPORT PERFORMANCE</h3>
+            <div className="billfold-card bg-white rounded-lg overflow-hidden">
+              <div>
                 {stats.sportPerformance.map((sport, index) => {
                   // Calculate bar width based on real data
                   const totalGames = sport.wins + sport.losses;
                   const winPercentage = totalGames > 0 ? (sport.wins / totalGames * 100) : 0;
                   
+                  // Get team-specific color hints
+                  const sportColor = 
+                    sport.sport === 'NBA' ? 'from-[#C9082A]/40 to-[#17408B]/40' : 
+                    sport.sport === 'MLB' ? 'from-[#005A9C]/40 to-[#E81828]/40' :
+                    sport.sport === 'NFL' ? 'from-[#013369]/40 to-[#D50A0A]/40' :
+                    sport.sport === 'NHL' ? 'from-[#000000]/40 to-[#CCB876]/40' : 'from-[#d4af37]/40 to-[#d4af37]/20';
+                  
                   return (
-                    <div key={index} className="py-3 px-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-black font-medium">{sport.sport}</span>
-                        <div className="flex items-center text-sm">
-                          <span className="text-win font-medium mr-2">W {sport.wins}</span>
-                          <span className="text-loss font-medium">L {sport.losses}</span>
+                    <div key={index} className={`py-4 px-5 ${index !== stats.sportPerformance.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-black font-semibold tracking-tight">{sport.sport}</span>
+                        <div className="flex space-x-3 items-center">
+                          <span className="text-[#10b981] font-medium text-sm">W {sport.wins}</span>
+                          <span className="text-[#ef4444] font-medium text-sm">L {sport.losses}</span>
                         </div>
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-sm overflow-hidden">
+                      <div className="progress-bar-track">
                         <div 
-                          className="h-full bg-[#d4af37]" 
+                          className={`progress-bar-fill bg-gradient-to-r ${sportColor}`}
                           style={{ width: `${winPercentage}%` }}
                         ></div>
                       </div>
@@ -264,24 +281,25 @@ export const Billfold = () => {
             </div>
           </div>
           
-          {/* Bet Type Distribution - More sleek and professional */}
+          {/* Bet Type Distribution - Enhanced */}
           <div>
-            <div className="flex items-center mb-4 border-b border-[#d4af37]/20 pb-2">
-              <h3 className="text-base font-bold text-black uppercase tracking-wider">Bet Type Distribution</h3>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200/60 h-full">
-              <div className="grid grid-cols-2 h-full">
-                <div className="p-5 flex items-center border-r border-gray-100">
-                  <div className="w-12 h-12 bg-[#d4af37] rounded-full flex items-center justify-center shadow-sm mr-4">
-                    <img src="/coin2.png" alt="Gary Coin" className="w-8 h-8" />
+            <h3 className="section-heading mb-4 text-black">BET TYPE DISTRIBUTION</h3>
+            <div className="billfold-card bg-white rounded-lg h-full relative overflow-hidden">
+              <div className="absolute w-56 h-56 rounded-full bg-[#d4af37]/5 -bottom-20 -right-20 z-0"></div>
+              <div className="grid grid-cols-2 h-full relative z-10">
+                <div className="p-6 flex items-center">
+                  <div className="w-14 h-14 bg-gradient-to-br from-[#d4af37] to-[#ba9320] rounded-lg flex items-center justify-center shadow-sm mr-5">
+                    <img src="/coin2.png" alt="Gary Coin" className="w-9 h-9" />
                   </div>
                   <div>
                     <p className="text-base font-medium text-black">We're due for a comeback</p>
                   </div>
                 </div>
-                <div className="p-5 flex flex-col items-center justify-center">
-                  <div className="w-20 h-20 rounded-full bg-[#d4af37] flex-shrink-0 shadow-sm"></div>
-                  <div className="mt-2 text-sm text-black font-medium">DISTRIBUTION</div>
+                <div className="p-6 flex flex-col items-center justify-center relative z-10 border-l border-gray-100">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#d4af37] to-[#ba9320] flex-shrink-0 shadow-sm">
+                    <div className="absolute inset-0 rounded-full bg-white/10"></div>
+                  </div>
+                  <div className="mt-3 text-sm text-black font-medium tracking-wide">DISTRIBUTION</div>
                 </div>
               </div>
             </div>
