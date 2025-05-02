@@ -741,7 +741,7 @@ function RealGaryPicks() {
                                             background: 'transparent'
                                           }}>
                                             <img 
-                                              src="/coin1.png" 
+                                              src="/coin2.png" 
                                               alt="Coin Image"
                                               style={{
                                                 width: 130, /* 20% bigger than previous 108px */
