@@ -93,10 +93,17 @@ export const Billfold = () => {
           
           // Set the best win (most recent win from the actual data)
           const wins = logData.filter(bet => bet.result === 'won');
+          console.log('Available wins:', wins);
           if (wins.length > 0) {
             // Sort by date descending to get most recent win
             const sortedWins = [...wins].sort((a, b) => b.date - a.date);
+            console.log('Selected top win:', sortedWins[0]);
             setBestWin(sortedWins[0]);
+          } else if (logData.length > 0) {
+            // If no wins are available, use the most recent game as a fallback
+            const sortedGames = [...logData].sort((a, b) => b.date - a.date);
+            console.log('No wins found, using most recent game:', sortedGames[0]);
+            setBestWin(sortedGames[0]);
           }
         }
         setIsLoading(false);
@@ -183,12 +190,12 @@ export const Billfold = () => {
               <h3 className="section-heading mb-4 text-black relative z-10">TOP WIN</h3>
               <div className="flex flex-col justify-between h-[calc(100%-4rem)] relative z-10">
                 <div className="mb-3">
-                  <div className="text-sm text-black/70 font-medium">{bestWin.date ? new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 28'}</div>
-                  <div className="font-bold text-black text-xl tracking-tight mt-1">{bestWin.sport || 'MLB'}</div>
-                  <div className="text-black/90 font-medium mt-1">{bestWin.matchup || 'NY Yankees at Texas Rangers'}</div>
+                  <div className="text-sm text-black/70 font-medium" style={{ color: 'black' }}>{new Date(bestWin.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</div>
+                  <div className="font-bold text-black text-xl tracking-tight mt-1" style={{ color: 'black' }}>{bestWin.sport}</div>
+                  <div className="text-black/90 font-medium mt-1" style={{ color: 'black' }}>{bestWin.matchup}</div>
                 </div>
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                  <div className="text-sm font-medium text-black/90">{bestWin.pick || 'Yankees -1.5'}</div>
+                  <div className="text-sm font-medium text-black/90" style={{ color: 'black' }}>{bestWin.pick}</div>
                   <div className="status-pill win font-semibold">WON</div>
                 </div>
               </div>
