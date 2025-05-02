@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import colorBackground from '../assets/images/colorbackground.png';
+import '../styles/PricingPage.css'; // Import the Pricing page specific styles
 
 export function Pricing() {
   return (
@@ -92,8 +93,8 @@ export function Pricing() {
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div style={{ width: '100%', padding: '0.75rem 1rem', backgroundColor: 'black', textAlign: 'center', borderRadius: '0.375rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', border: '1px solid #c19c60' }}>
-                <div style={{ fontSize: '1.25rem', color: '#c19c60', fontFamily: 'sans-serif', letterSpacing: '0.05em', fontWeight: 'bold' }}>
+              <div className="pricing-page-button-container" style={{ width: '100%', padding: '0.75rem 1rem', backgroundColor: 'black', background: 'black', textAlign: 'center', borderRadius: '0.375rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', border: '1px solid #c19c60' }}>
+                <div className="pricing-page-button-text" style={{ fontSize: '1.25rem', color: '#c19c60', fontFamily: 'sans-serif', letterSpacing: '0.05em', fontWeight: 'bold' }}>
                   CURRENT PLAN
                 </div>
               </div>

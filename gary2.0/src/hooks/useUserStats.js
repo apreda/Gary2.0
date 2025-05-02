@@ -132,16 +132,16 @@ export function useUserStats() {
         return;
       }
       
-      // First try to get existing stats, without using .single() to avoid the PGRST116 error
-      let { data: existingStatsArray, error: statsError } = await supabase
+      // Query the user_stats table using the user's ID
+      let { data: userStatsArray, error: statsError } = await supabase
         .from('user_stats')
         .select('*')
         .eq('id', user.id);
-
-      console.log('Fetched existing stats array:', existingStatsArray, 'Error:', statsError);
+        
+      console.log('User stats query result:', userStatsArray, statsError);
       
       // Get the first stats record if it exists
-      const existingStats = existingStatsArray && existingStatsArray.length > 0 ? existingStatsArray[0] : null;
+      const existingStats = userStatsArray && userStatsArray.length > 0 ? userStatsArray[0] : null;
       
       // Only throw an error if it's not a "no rows returned" error
       if (statsError && statsError.code !== 'PGRST116') throw statsError;
@@ -150,46 +150,49 @@ export function useUserStats() {
 
       // If no stats exist yet, create them
       if (!existingStats) {
-        console.log('No existing stats, creating new stats record');
+        console.log('No existing stats found, creating new record');
         
-        // Create minimal stats record with only essential fields
-        try {
-          // Create a minimal record with just the id to avoid column errors
-          const { data: newStats, error: createError } = await supabase
-            .from('user_stats')
-            .insert([{ 
-              id: user.id,
-              total_picks: 0,
-              ride_count: 0,
-              fade_count: 0,
-              win_count: 0,
-              loss_count: 0,
-              current_streak: 0,
-              longest_streak: 0
-            }])
-            .select();
-            
-          if (createError) {
-            console.error('Error creating stats:', createError);
-          } else {
-            console.log('Successfully created stats record:', newStats);
-            userStats = newStats[0]; // Use the first result
-          }
-        } catch (insertError) {
-          console.error('Error in stats insertion:', insertError);
+        // Schema for empty stats - this should match the Supabase user_stats table exactly
+        const newStats = {
+          id: user.id,
+          total_picks: 0,
+          ride_count: 0,
+          fade_count: 0,
+          win_count: 0,
+          loss_count: 0,
+          current_streak: 0,
+          longest_streak: 0,
+          recent_results: [],
+          last_result: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        // Create new record in the user_stats table
+        const { data: insertedData, error: insertError } = await supabase
+          .from('user_stats')
+          .insert([newStats]);
+          
+        console.log('Insert result:', insertedData, 'Error:', insertError);
+        
+        // If creation was successful, use the new stats
+        if (!insertError && insertedData && insertedData.length > 0) {
+          userStats = insertedData[0];
         }
         
-        // If we still don't have stats, try fetching again in case of race condition
+        // If we still failed, try a more direct approach on the correct table
         if (!userStats) {
-          const { data: retryStatsArray, error: retryError } = await supabase
-            .from('user_stats')
-            .select('*')
-            .eq('id', user.id);
+          console.log('Retrying with direct table access');
+          const { data: retryData, error: retryError } = await supabase
+            .from('user_stats') 
+            .insert([newStats]);
             
-          if (retryError) {
-            console.error('Retry fetching stats failed:', retryError);
-          } else if (retryStatsArray && retryStatsArray.length > 0) {
-            userStats = retryStatsArray[0];
+          console.log('Retry result:', retryData, 'Error:', retryError);
+          
+          if (!retryError && retryData && retryData.length > 0) {
+            userStats = retryData[0];
+          } else if (userStatsArray && userStatsArray.length > 0) {
+            userStats = userStatsArray[0];
           }
         }
       } else {

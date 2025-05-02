@@ -1,0 +1,11 @@
+/* Pricing Page specific styles */
+.pricing-page-button-container {
+  background-color: black !important;
+  border: 1px solid #c19c60 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.pricing-page-button-text {
+  color: #c19c60 !important;
+  font-weight: bold !important;
+}
