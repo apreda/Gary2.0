@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
-import '../styles/BillfoldStyle.css';
-import '../styles/BillfoldOverride.css'; // Emergency override for text colors
-import '../styles/BillfoldEnhanced.css'; // High-tech modern styling
+import '../styles/BillfoldEnhanced.css'; // Consolidated high-tech modern styling
 
 export const Billfold = () => {
   // State for user performance data
@@ -297,12 +295,6 @@ export const Billfold = () => {
                   <div>
                     <p className="text-base font-medium text-black">We're due for a comeback</p>
                   </div>
-                </div>
-                <div className="p-6 flex flex-col items-center justify-center relative z-10 border-l border-gray-100">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#d4af37] to-[#ba9320] flex-shrink-0 shadow-sm">
-                    <div className="absolute inset-0 rounded-full bg-white/10"></div>
-                  </div>
-                  <div className="mt-3 text-sm text-black font-medium tracking-wide">DISTRIBUTION</div>
                 </div>
               </div>
             </div>
