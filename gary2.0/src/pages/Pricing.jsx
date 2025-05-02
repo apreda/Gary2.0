@@ -92,8 +92,8 @@ export function Pricing() {
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div className="w-full py-3 px-4 bg-[#1a365d] text-center rounded-md">
-                <div className="text-xl text-white font-sans tracking-wider">
+              <div className="w-full py-3 px-4 bg-black text-center rounded-md">
+                <div className="text-xl text-[#c19c60] font-sans tracking-wider">
                   CURRENT PLAN
                 </div>
               </div>
