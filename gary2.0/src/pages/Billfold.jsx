@@ -136,8 +136,8 @@ export const Billfold = () => {
           {/* RECORD - With enhanced styling */}
           <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
             <h3 className="billfold-section-heading">RECORD</h3>
-            <div className="font-feature-tnum" style={{ fontFeatureSettings: "'tnum'" }}>
-              <div className="metric-value mb-1" style={{ color: 'black' }}>{stats.record || '26-36'}</div>
+            <div className="metric-value mb-1" style={{ color: 'black', fontFeatureSettings: "'tnum'" }}>
+              {stats.record || '13-18-1'}
             </div>
             <div className="text-xs text-gary-text-soft mt-2 flex items-center">
               <span>Last 5: </span>
@@ -149,8 +149,8 @@ export const Billfold = () => {
           {/* WIN RATE - With enhanced styling */}
           <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
             <h3 className="billfold-section-heading">WIN RATE</h3>
-            <div className="font-feature-tnum" style={{ fontFeatureSettings: "'tnum'" }}>
-              <div className="metric-value mb-1" style={{ color: 'black' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="metric-value mb-1" style={{ color: 'black', fontFeatureSettings: "'tnum'" }}>
+              {(stats.winLoss * 100)?.toFixed(1) || '41.9'}%
             </div>
             <div className="text-xs text-gary-text-soft mt-2 flex items-center">
               <span>Last month: </span>
