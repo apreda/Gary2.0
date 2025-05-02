@@ -134,7 +134,7 @@ export const Billfold = () => {
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
         <div className="metrics-grid mb-8">
           {/* RECORD - With enhanced styling */}
-          <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
+          <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200" style={{ backgroundColor: '#ffffff' }}>
             <h3 className="billfold-section-heading">RECORD</h3>
             <div className="font-feature-tnum" style={{ fontFeatureSettings: "'tnum'" }}>
               <div className="metric-value mb-1" style={{ color: 'black' }}>{stats.record || '26-36'}</div>
@@ -147,7 +147,7 @@ export const Billfold = () => {
           </div>
           
           {/* WIN RATE - With enhanced styling */}
-          <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
+          <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200" style={{ backgroundColor: '#ffffff' }}>
             <h3 className="billfold-section-heading">WIN RATE</h3>
             <div className="font-feature-tnum" style={{ fontFeatureSettings: "'tnum'" }}>
               <div className="metric-value mb-1" style={{ color: 'black' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
@@ -162,10 +162,7 @@ export const Billfold = () => {
           {/* TOP WIN CARD IN METRICS GRID */}
           {bestWin && (
             <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200" 
-                 style={{ 
-                   backgroundColor: 'white',
-                   borderTop: '3px solid var(--gary-gold)'
-                 }}>
+                 style={{ backgroundColor: '#ffffff' }}>
               <h3 className="billfold-section-heading">TOP WIN</h3>
               <div className="font-bold text-lg mb-1 text-black overflow-hidden text-ellipsis" style={{ maxHeight: '48px' }}>
                 {bestWin.matchup || 'Detroit Tigers vs Cleveland Guardians'}
