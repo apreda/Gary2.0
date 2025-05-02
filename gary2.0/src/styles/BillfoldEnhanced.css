@@ -304,6 +304,11 @@
   color: rgba(239, 68, 68, 1);
 }
 
+.status-pill.push {
+  background-color: rgba(100, 116, 139, 0.1);
+  color: rgba(100, 116, 139, 1);
+}
+
 /* High-tech metrics display */
 .metric-value {
   font-weight: 800;

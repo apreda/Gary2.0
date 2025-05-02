@@ -206,8 +206,8 @@ export const Billfold = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <span className={`status-pill ${bet.result === 'won' ? 'win' : 'loss'}`}>
-                        {bet.result === 'won' ? 'WON' : 'LOST'}
+                      <span className={`status-pill ${bet.result === 'won' ? 'win' : bet.result === 'push' ? 'push' : 'loss'}`}>
+                        {bet.result === 'won' ? 'WON' : bet.result === 'push' ? 'PUSH' : 'LOST'}
                       </span>
                     </td>
                   </tr>
