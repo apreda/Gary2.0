@@ -25,14 +25,14 @@ export function GaryHero() {
       {/* Gold vignette accents for depth */}
       <div className="pointer-events-none absolute inset-0 z-1" aria-hidden="true">
         {/* Gold vignette corners */}
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#bfa142]/20 blur-3xl opacity-20" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#bfa142]/20 blur-3xl opacity-20" />
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#c19c60]/20 blur-3xl opacity-20" />
+        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#c19c60]/20 blur-3xl opacity-20" />
       </div>
 
       {/* Hero Content Centered */}
       <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-3xl mx-auto text-center mt-6">
         {/* Newspaper-style headline banner */}
-        <div className="w-full max-w-lg bg-[#bfa142] py-1 mb-2 transform -rotate-1">
+        <div className="w-full max-w-lg bg-[#c19c60] py-1 mb-2 transform -rotate-1">
           <p className="uppercase text-black font-bold tracking-wide text-center text-sm md:text-base">SPORTS INSIDER EXTRA EDITION</p>
         </div>
         
@@ -40,22 +40,22 @@ export function GaryHero() {
 
         <h1 className="font-extrabold mb-8 text-white leading-tight drop-shadow-lg">
           <span className="block text-6xl md:text-8xl font-serif italic">MAKE SMARTER</span>
-          <div className="w-full h-1 bg-[#bfa142] my-2"></div>
-          <span className="block text-[#bfa142] text-6xl md:text-8xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
-          <div className="w-full h-1 bg-[#bfa142] my-2"></div>
+          <div className="w-full h-1 bg-[#c19c60] my-2"></div>
+          <span className="block text-[#c19c60] text-6xl md:text-8xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
+          <div className="w-full h-1 bg-[#c19c60] my-2"></div>
           <span className="block text-white text-lg mt-1 font-bold tracking-widest">THE WINNING EDGE SINCE 2025</span>
         </h1>
 
         <div className="flex flex-col sm:flex-row gap-8 justify-center mb-10 w-full items-center">
           <Link 
             to="/real-gary-picks" 
-            className="inline-flex items-center justify-center bg-[#bfa142] border-2 border-[#bfa142] ring-2 ring-gray-700 text-[#232326] font-semibold py-3 w-60 min-h-[60px] rounded-full hover:bg-[#a4882d] transition duration-300 text-lg shadow-xl glass-card backdrop-blur-xl"
+            className="inline-flex items-center justify-center bg-[#c19c60] border-2 border-[#c19c60] ring-2 ring-gray-700 text-[#232326] font-semibold py-3 w-60 min-h-[60px] rounded-full hover:bg-[#a4882d] transition duration-300 text-lg shadow-xl glass-card backdrop-blur-xl"
           >
             Get Today's Picks
           </Link>
           <Link 
             to="/how-it-works" 
-            className="inline-flex items-center justify-center bg-[#bfa142] border-2 border-[#bfa142] ring-2 ring-gray-700 text-[#232326] font-semibold py-3 w-60 min-h-[60px] rounded-full hover:bg-[#a4882d] transition duration-300 text-lg shadow-xl glass-card backdrop-blur-xl"
+            className="inline-flex items-center justify-center bg-[#c19c60] border-2 border-[#c19c60] ring-2 ring-gray-700 text-[#232326] font-semibold py-3 w-60 min-h-[60px] rounded-full hover:bg-[#a4882d] transition duration-300 text-lg shadow-xl glass-card backdrop-blur-xl"
           >
             How it Works
           </Link>
