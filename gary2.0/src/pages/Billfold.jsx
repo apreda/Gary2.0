@@ -84,14 +84,16 @@ export const Billfold = () => {
             ],
           });
 
-          // Format real data from the response - use pick_text field for actual pick data
+          // Format real data from the response - use all available fields from game_results table
           const logData = data.data?.map(game => ({
             id: game.id,
             date: new Date(game.game_date),
             sport: game.league,
             matchup: game.matchup,
             pick: game.pick_text || game.pick, // Use pick_text first, fallback to pick
-            result: game.result
+            result: game.result,
+            odds: game.odds, // Include odds information if available
+            final_score: game.final_score // Include final score if available
           })) || [];
           
           setBettingLog(logData);
@@ -185,13 +187,14 @@ export const Billfold = () => {
             <div className="billfold-metric-card flex flex-col p-5 transition-all duration-200">
               <h3 className="billfold-section-heading">TOP WIN</h3>
               <div className="font-bold text-lg mb-1 text-black overflow-hidden text-ellipsis" style={{ maxHeight: '48px' }}>
-                {bestWin.matchup || 'Detroit Tigers vs Cleveland Guardians'}
+                {bestWin.matchup || ''}
               </div>
               <div className="font-medium text-sm mb-2 text-gary-text-soft">
-                {bestWin.pick || 'Detroit Tigers ML +120'}
+                {bestWin.pick || ''}
+                {bestWin.odds && <span className="ml-1">{bestWin.odds}</span>}
               </div>
               <div className="inline-block px-3 py-1 rounded text-white font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
-                +${bestWin.winAmount || 120}
+                +${bestWin.winAmount || 100}
               </div>
             </div>
           )}
