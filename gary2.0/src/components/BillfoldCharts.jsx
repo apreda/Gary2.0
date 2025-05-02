@@ -13,14 +13,13 @@ export default function BillfoldCharts({
   const hasSportData = sportPerformance && sportPerformance.length > 0;
   const hasBetTypeData = betTypePerformance && betTypePerformance.length > 0;
   
-  // Gary brand colors
+  // Gary brand colors - updated to match new dark theme
   const garyColors = {
-    gold: '#d4af37',
-    goldLight: '#e5c349',
-    goldDark: '#b08d1d',
-    black: '#0a0a0a',
+    gold: '#b8953f',
+    goldLight: '#cda94d',
+    goldDark: '#a07a2d',
+    black: '#121212',
     white: '#ffffff',
-    navy: '#111111',
     win: '#10b981',
     loss: '#ef4444'
   };
@@ -34,22 +33,38 @@ export default function BillfoldCharts({
     return betTypePerformance.map((item, index) => ({
       name: item.betType,
       value: item.count,
-      fill: [garyColors.gold, '#3b82f6', '#10b981', '#8b5cf6'][index % 4]
+      fill: [garyColors.gold, garyColors.goldLight, '#3b82f6', '#8b5cf6'][index % 4]
     }));
   };
 
   const betTypePieData = prepareBetTypeData();
 
   // Custom tooltip for charts
-  const CustomTooltip = ({ active, payload, label }) => {
+  const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border border-[#d4af37]/20 shadow-md rounded-md">
-          <p className="text-sm font-medium text-gray-800">{`${label || payload[0].name}: ${payload[0].value}`}</p>
+        <div className="bg-gray-900 p-2 border border-gray-700 shadow-md rounded-md">
+          <p className="font-medium text-xs text-gray-300 mb-1">
+            {payload[0].payload.sport}
+          </p>
+          <p className="font-medium text-xs text-green-400">
+            Wins: {payload[0].value}
+          </p>
+          <p className="font-medium text-xs text-red-400">
+            Losses: {payload[1].value}
+          </p>
         </div>
       );
     }
     return null;
+  };
+
+  const renderCustomizedLabel = ({ percent, x, y, payload }) => {
+    return (
+      <text x={x} y={y} fill="white" textAnchor={x > 50 ? 'start' : 'end'} dominantBaseline="central">
+        {`${payload.name} ${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
   };
 
   return (
@@ -84,24 +99,24 @@ export default function BillfoldCharts({
                 <button 
                   onClick={() => setTimeRange('all')} 
                   className={`px-4 py-1.5 rounded-md text-sm transition-all duration-200 ${timeRange === 'all' 
-                    ? 'bg-white text-[#d4af37] font-medium shadow-sm border border-[#d4af37]/20' 
-                    : 'text-gray-600 hover:bg-white/50'}`}
+                    ? 'bg-gray-800 text-[#b8953f] font-medium shadow-sm border border-[#b8953f]/40' 
+                    : 'text-gray-400 hover:bg-gray-800/50'}`}
                 >
                   All Time
                 </button>
                 <button 
                   onClick={() => setTimeRange('month')} 
                   className={`px-4 py-1.5 rounded-md text-sm transition-all duration-200 ${timeRange === 'month' 
-                    ? 'bg-white text-[#d4af37] font-medium shadow-sm border border-[#d4af37]/20' 
-                    : 'text-gray-600 hover:bg-white/50'}`}
+                    ? 'bg-gray-800 text-[#b8953f] font-medium shadow-sm border border-[#b8953f]/40' 
+                    : 'text-gray-400 hover:bg-gray-800/50'}`}
                 >
                   Month
                 </button>
                 <button 
                   onClick={() => setTimeRange('week')} 
                   className={`px-4 py-1.5 rounded-md text-sm transition-all duration-200 ${timeRange === 'week' 
-                    ? 'bg-white text-[#d4af37] font-medium shadow-sm border border-[#d4af37]/20' 
-                    : 'text-gray-600 hover:bg-white/50'}`}
+                    ? 'bg-gray-800 text-[#b8953f] font-medium shadow-sm border border-[#b8953f]/40' 
+                    : 'text-gray-400 hover:bg-gray-800/50'}`}
                 >
                   Week
                 </button>
@@ -116,31 +131,31 @@ export default function BillfoldCharts({
                   <XAxis 
                     type="number" 
                     domain={[0, 'dataMax']} 
-                    stroke="#666666"
-                    tick={{ fill: '#333333' }}
-                    axisLine={{ stroke: '#cccccc' }}
+                    stroke="#555555"
+                    tick={{ fill: '#aaaaaa' }}
+                    axisLine={{ stroke: '#444444' }}
                   />
                   <YAxis 
                     type="category" 
                     dataKey="sport" 
                     width={60} 
-                    stroke="#666666"
-                    tick={{ fill: '#333333' }}
-                    axisLine={{ stroke: '#cccccc' }}
+                    stroke="#555555"
+                    tick={{ fill: '#aaaaaa' }}
+                    axisLine={{ stroke: '#444444' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend 
                     wrapperStyle={{ 
                       paddingTop: '5px',
                       fontSize: '12px',
-                      color: '#333333'
+                      color: '#aaaaaa'
                     }}
                   />
                   <Bar dataKey="wins" stackId="a" fill={garyColors.gold} name="Wins">
-                    <LabelList dataKey="wins" position="insideRight" fill="#333" fontWeight="bold" fontSize="11" />
+                    <LabelList dataKey="wins" position="insideRight" fill="#ffffff" fontWeight="bold" fontSize="11" />
                   </Bar>
-                  <Bar dataKey="losses" stackId="a" fill="#999999" name="Losses">
-                    <LabelList dataKey="losses" position="insideRight" fill="#fff" fontWeight="bold" fontSize="11" />
+                  <Bar dataKey="losses" stackId="a" fill="#555555" name="Losses">
+                    <LabelList dataKey="losses" position="insideRight" fill="#ffffff" fontWeight="bold" fontSize="11" />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -178,34 +193,33 @@ export default function BillfoldCharts({
                 <button className="px-4 py-1.5 rounded-md text-sm">Placeholder</button>
               </div>
               
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie
-                    data={betTypePieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {betTypePieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={36} 
-                    wrapperStyle={{ 
-                      paddingTop: '5px',
-                      fontSize: '12px',
-                      color: '#333333'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex items-center justify-center h-60 w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={betTypePieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      nameKey="name"
+                      label={renderCustomizedLabel}
+                    >
+                      {betTypePieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Legend
+                      layout="vertical"
+                      verticalAlign="middle"
+                      align="right"
+                      wrapperStyle={{ fontSize: '12px', color: '#aaaaaa' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </>
           )}
         </div>

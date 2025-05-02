@@ -138,9 +138,9 @@ export function HowItWorks() {
     <div className="bg-black min-h-screen pt-4">
       {/* Background elements */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        {/* Gold vignette corners with new gold color */}
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/10 blur-3xl" />
+        {/* Gold vignette corners */}
+        <div className="absolute top-1/4 right-0 w-64 h-64 rounded-full bg-[#b8953f]/10 blur-xl opacity-60 z-0"></div>
+        <div className="absolute bottom-1/4 left-0 w-80 h-80 rounded-full bg-[#b8953f]/10 blur-xl opacity-60 z-0"></div>
         {/* Subtle grid/noise overlay for texture */}
         <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
         {/* Newspaper texture in background */}
@@ -154,7 +154,7 @@ export function HowItWorks() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative pt-20 pb-12 px-6 lg:px-8">
+      <section className="pt-16 pb-12 px-6 lg:px-8 relative overflow-hidden">
         <div className="container mx-auto max-w-6xl">
           <motion.div 
             className="text-center mb-8"
@@ -188,7 +188,7 @@ export function HowItWorks() {
       </section>
 
       {/* Process Steps Section */}
-      <section className="py-6 px-6 lg:px-8 bg-black/40 relative overflow-hidden">
+      <section className="py-12 px-6 lg:px-8 relative">
         <div className="container mx-auto max-w-6xl relative z-10">
           <SectionHeader 
             pretitle="Our Process"
@@ -222,12 +222,12 @@ export function HowItWorks() {
           />
         </div>
 
-        {/* Background elements */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-[#b8953f]/5 blur-3xl opacity-50 z-0"></div>
+        {/* Background elements - increased opacity */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-[#b8953f]/10 blur-3xl opacity-70 z-0"></div>
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-6 px-6 lg:px-8">
+      <section className="py-12 px-6 lg:px-8">
         <div className="container mx-auto max-w-6xl">
           <SectionHeader 
             pretitle="Success Stories"
@@ -263,8 +263,8 @@ export function HowItWorks() {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-6 px-6 lg:px-8 bg-black/20 backdrop-blur-sm">
-        <div className="container mx-auto max-w-4xl">
+      <section className="py-12 px-6 lg:px-8 bg-gray-900/50 relative">
+        <div className="container mx-auto max-w-4xl relative z-10">
           <SectionHeader 
             pretitle="Questions"
             title="Frequently Asked Questions"
@@ -295,7 +295,7 @@ export function HowItWorks() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-4 px-6 lg:px-8 relative overflow-hidden">
+      <section className="py-12 px-6 lg:px-8 relative overflow-hidden">
         <div className="container mx-auto max-w-4xl text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -325,8 +325,9 @@ export function HowItWorks() {
           </motion.div>
         </div>
         
-        {/* Background effect for CTA */}
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-black/0 via-[#b8953f]/5 to-black/0 z-0"></div>
+        {/* Enhanced background effect for CTA */}
+        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-black/0 via-[#b8953f]/10 to-black/0 z-0"></div>
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-2xl opacity-60 z-0"></div>
       </section>
     </div>
   );
