@@ -267,13 +267,22 @@ export const Billfold = () => {
       </div>
       
       <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-700/30 shadow-lg bg-[#121212]/90 backdrop-blur-sm relative z-10">
-        {/* Enhanced Header with GARY A.I. */}
+        {/* Enhanced Header with GARY A.I. and garymoney image */}
         <div className="billfold-header mb-10 relative">
-          <h2 className="mb-1 flex items-center relative">
-            <span className="font-bold tracking-wide" style={{ color: '#b8953f', fontSize: '28px', opacity: 0.95 }}>GARY</span>
-            <span className="font-bold tracking-wide" style={{ color: 'white', fontSize: '28px' }}>A.I.</span>
-          </h2>
-          <div className="h-1 w-28 mt-2 rounded-sm" style={{ backgroundColor: '#b8953f', opacity: 0.85 }}></div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="mb-1 flex items-center relative">
+                <span className="font-bold tracking-wide" style={{ color: '#b8953f', fontSize: '28px', opacity: 0.95 }}>GARY</span>
+                <span className="font-bold tracking-wide" style={{ color: 'white', fontSize: '28px' }}>A.I.</span>
+              </h2>
+              <div className="h-1 w-28 mt-2 rounded-sm" style={{ backgroundColor: '#b8953f', opacity: 0.85 }}></div>
+            </div>
+            <img 
+              src="/garymoney.png" 
+              alt="Gary Money" 
+              className="h-20 w-auto object-contain opacity-90 animate-float" 
+            />
+          </div>
         </div>
         
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
