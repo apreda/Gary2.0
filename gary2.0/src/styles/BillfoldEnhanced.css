@@ -1,5 +1,29 @@
 /* BillfoldEnhanced.css - Consolidated modern styling for Billfold page */
 
+/* Force ALL text to be visible by default */
+* {
+  color: black !important;
+}
+
+/* Exception for gold highlight boxes */
+[style*="background-color: #c19c60"] * {
+  color: white !important;
+}
+
+/* Specific text colors that should be preserved */
+.text-win, .text-win *, .status-pill.win {
+  color: #22c55e !important;
+}
+
+.text-loss, .text-loss *, .status-pill.loss {
+  color: #ef4444 !important;
+}
+
+/* Extra specificity for table cells and text elements */
+table td, table th, p, h1, h2, h3, h4, h5, h6, span, div {
+  color: black !important;
+}
+
 /* Core variables */
 :root {
   --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -129,7 +153,7 @@
   letter-spacing: 0.05em;
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.6);
+  color: black !important;
 }
 
 .sleek-table td {
@@ -168,6 +192,7 @@
   font-size: 3rem;
   line-height: 1;
   letter-spacing: -0.03em;
+  color: black !important;
 }
 
 .metric-label {
@@ -175,5 +200,5 @@
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.6);
+  color: black !important;
 }

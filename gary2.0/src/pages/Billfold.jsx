@@ -218,15 +218,13 @@ export const Billfold = () => {
               <tbody>
                 {bettingLog.slice(0, 4).map((bet, index) => (
                   <tr key={index} className="border-b border-gray-50 hover:bg-[#fafafa] transition-colors">
-                    <td className="py-4 px-4 text-black/80">
-                      {bet.date ? new Date(bet.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'Apr 29'}
-                    </td>
-                    <td className="py-4 px-4 font-medium text-black">{bet.sport || 'NHL'}</td>
-                    <td className="py-4 px-4 text-black/90">{bet.matchup || 'St Louis Blues at Winnipeg Jet'}</td>
+                    <td className="py-4 px-4" style={{ color: 'black' }}>{new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                    <td className="py-4 px-4" style={{ color: 'black' }}>{bet.sport}</td>
+                    <td className="py-4 px-4" style={{ color: 'black' }}>{bet.matchup || 'Game not found'}</td>
                     <td className="py-4 px-4">
                       <div className="flex items-center">
                         <span className="inline-block w-2 h-2 rounded-sm bg-[#d4af37] mr-2"></span>
-                        <span className="text-black/80">{bet.pick || 'UNDER 5.5'}</span>
+                        <span style={{ color: 'black' }}>{bet.pick || 'UNDER 5.5'}</span>
                       </div>
                     </td>
                     <td className="py-4 px-4 text-right">
@@ -263,7 +261,7 @@ export const Billfold = () => {
                   return (
                     <div key={index} className={`py-4 px-5 ${index !== stats.sportPerformance.length - 1 ? 'border-b border-gray-100' : ''}`}>
                       <div className="flex justify-between items-center mb-3">
-                        <span className="text-black font-semibold tracking-tight">{sport.sport}</span>
+                        <span style={{ color: 'black' }} className="font-semibold tracking-tight">{sport.sport}</span>
                         <div className="flex space-x-3 items-center">
                           <span className="text-[#10b981] font-medium text-sm">W {sport.wins}</span>
                           <span className="text-[#ef4444] font-medium text-sm">L {sport.losses}</span>
@@ -293,7 +291,7 @@ export const Billfold = () => {
                     <img src="/coin2.png" alt="Gary Coin" className="w-9 h-9" />
                   </div>
                   <div>
-                    <p className="text-base font-medium text-black">We're due for a comeback</p>
+                    <p className="text-base font-medium" style={{ color: 'black !important' }}>We're due for a comeback</p>
                   </div>
                 </div>
               </div>
