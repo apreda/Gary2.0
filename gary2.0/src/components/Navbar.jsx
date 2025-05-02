@@ -36,13 +36,21 @@ export function Navbar() {
     setActiveLink(location.pathname);
   }, [location.pathname]);
   
+  // Custom styling for Billfold page
+  const isBillfoldPage = location.pathname === '/billfold';
+  
+  // Determine navbar styling based on current page
+  const navbarStyles = isBillfoldPage
+    ? "fixed top-3 left-1/2 z-50 w-full max-w-[90vw] md:max-w-[75vw] -translate-x-1/2 rounded-full bg-black border border-[#c19c60] px-4 py-2 backdrop-blur-2xl shadow-sm shadow-[#c19c60]/30 flex justify-between items-center text-[#c19c60]"
+    : "fixed top-3 left-1/2 z-50 w-full max-w-[90vw] md:max-w-[75vw] -translate-x-1/2 rounded-full bg-gradient-to-br from-black/90 via-zinc-900/80 to-black/80 border border-[#bfa142]/20 px-4 py-2 backdrop-blur-2xl shadow-sm shadow-[#bfa14222] flex justify-between items-center text-white";
+  
   return (
-    <header className="fixed top-3 left-1/2 z-50 w-full max-w-[90vw] md:max-w-[75vw] -translate-x-1/2 rounded-full bg-gradient-to-br from-black/90 via-zinc-900/80 to-black/80 border border-[#bfa142]/20 px-4 py-2 backdrop-blur-2xl shadow-sm shadow-[#bfa14222] flex justify-between items-center text-white">
+    <header className={navbarStyles}>
       {/* Logo and Left Nav Links */}
       <div className="flex items-center space-x-6">
-        <Link to="/" className="text-lg font-bold text-[#d4af37] flex items-center group">
+        <Link to="/" className="text-lg font-bold flex items-center group">
           <span className="text-[#d4af37] text-lg tracking-tight font-light">GARY</span>
-          <span className="text-white text-lg tracking-wide font-bold">A.I.</span>
+          <span className={`${isBillfoldPage ? 'text-[#c19c60]' : 'text-white'} text-lg tracking-wide font-bold`}>A.I.</span>
         </Link>
         
         {/* Desktop Navigation Links */}
@@ -60,7 +68,9 @@ export function Navbar() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`hover:text-[#d4af37] transition-colors duration-200 ${activeLink === item.path ? 'text-[#d4af37]' : 'text-white'}`}
+                className={`hover:text-[#d4af37] transition-colors duration-200 ${activeLink === item.path 
+                  ? 'text-[#d4af37]' 
+                  : isBillfoldPage ? 'text-[#c19c60]' : 'text-white'}`}
                 onClick={() => setActiveLink(item.path)}
               >
                 {item.label}
@@ -76,14 +86,14 @@ export function Navbar() {
           <>
             <Link 
               to="/signin" 
-              className="text-sm hover:text-[#d4af37] transition-colors duration-200"
+              className={`text-sm hover:text-[#d4af37] transition-colors duration-200 ${isBillfoldPage ? 'text-[#c19c60]' : ''}`}
               onClick={() => setActiveLink("/signin")}
             >
               Log In
             </Link>
             <Link 
               to="/pricing" 
-              className="rounded-full bg-black px-3 py-1.5 text-xs font-semibold text-[#d4af37] shadow hover:bg-zinc-900 transition border border-[#d4af37]/40"
+              className={`rounded-full bg-black px-3 py-1.5 text-xs font-semibold shadow hover:bg-zinc-900 transition ${isBillfoldPage ? 'text-[#c19c60] border border-[#c19c60]' : 'text-[#d4af37] border border-[#d4af37]/40'}`}
               onClick={() => setActiveLink("/pricing")}
             >
               Upgrade
@@ -92,7 +102,7 @@ export function Navbar() {
         ) : (
           <>
             <button
-              className="text-sm hover:text-[#d4af37] transition-colors duration-200 mr-2"
+              className={`text-sm hover:text-[#d4af37] transition-colors duration-200 mr-2 ${isBillfoldPage ? 'text-[#c19c60]' : ''}`}
               onClick={openBetCardProfile}
             >
               BetCard
@@ -110,7 +120,7 @@ export function Navbar() {
         {/* Mobile menu button */}
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="md:hidden p-2 text-white hover:text-[#d4af37] focus:outline-none rounded-full transition-colors duration-200"
+          className={`md:hidden p-2 hover:text-[#d4af37] focus:outline-none rounded-full transition-colors duration-200 ${isBillfoldPage ? 'text-[#c19c60]' : 'text-white'}`}
           aria-label="Toggle mobile menu"
           aria-expanded={isMobileMenuOpen}
         >
@@ -128,7 +138,7 @@ export function Navbar() {
       
       {/* Mobile Menu Dropdown */}
       {isMobileMenuOpen && (
-        <div className="absolute top-full left-0 right-0 mt-3 bg-zinc-900/95 rounded-3xl backdrop-blur-lg shadow-xl p-4 md:hidden">
+        <div className={`absolute top-full left-0 right-0 mt-3 rounded-3xl backdrop-blur-lg shadow-xl p-4 md:hidden ${isBillfoldPage ? 'bg-black border border-[#c19c60]/30' : 'bg-zinc-900/95'}`}>
           <div className="flex flex-col space-y-3">
             {filteredNavItems.map((item) => (
               item.action ? (
@@ -146,7 +156,7 @@ export function Navbar() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`px-4 py-2 rounded-lg ${activeLink === item.path ? 'bg-[#d4af37]/20 text-[#d4af37]' : 'text-white hover:bg-zinc-800'}`}
+                  className={`px-4 py-2 rounded-lg ${activeLink === item.path ? `bg-[${isBillfoldPage ? '#c19c60' : '#d4af37'}]/20 text-[${isBillfoldPage ? '#c19c60' : '#d4af37'}]` : `${isBillfoldPage ? 'text-[#c19c60]' : 'text-white'} hover:bg-zinc-800`}`}
                   onClick={() => {
                     setActiveLink(item.path);
                     setIsMobileMenuOpen(false);
