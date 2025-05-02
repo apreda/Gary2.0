@@ -34,7 +34,7 @@
 /* Billfold-specific text color fixes - ONLY applied within the Billfold page */
 .billfold-container {
   /* These styles will only apply to the Billfold page */
-  color: black;
+  color: #f5f5f5;
 }
 
 /* Target specific elements within the Billfold container */
@@ -48,12 +48,12 @@
 .billfold-container span,
 .billfold-container div.metric-value,
 .billfold-container div.metric-label {
-  color: black;
+  color: #f5f5f5;
 }
 
 /* Exception for gold highlight boxes in Billfold */
-.billfold-container [style*="background-color: #c19c60"] * {
-  color: white;
+.billfold-container [style*="background-color: #b8953f"] * {
+  color: #121212;
 }
 
 /* Preserve win/loss colors in Billfold */
