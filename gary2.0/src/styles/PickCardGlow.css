@@ -1,0 +1,22 @@
+/* Subtle glow effect for pick cards using the new gold color */
+.pick-card-container {
+  position: relative;
+}
+
+.pick-card-container::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  right: -5px;
+  bottom: -5px;
+  border-radius: 1.3rem;
+  background: radial-gradient(circle at center, rgba(193, 156, 96, 0.3) 0%, rgba(193, 156, 96, 0) 70%);
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.pick-card-container:hover::before {
+  opacity: 0.8;
+}
