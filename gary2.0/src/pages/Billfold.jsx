@@ -268,7 +268,7 @@ export const Billfold = () => {
       
       <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-700/30 shadow-lg backdrop-blur-sm relative z-10">
         {/* Enhanced Header with GARY A.I. and garymoney image */}
-        <div className="billfold-header mb-10 relative">
+        <div className="billfold-header mb-4 relative">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="mb-1 flex items-center relative">
@@ -280,8 +280,13 @@ export const Billfold = () => {
             <img 
               src="/garymoney.png" 
               alt="Gary Money" 
-              className="h-20 w-auto object-contain opacity-90 animate-float" 
-              style={{ filter: 'drop-shadow(0 0 8px rgba(184, 149, 63, 0.3))' }}
+              className="h-32 w-auto object-contain opacity-90 animate-float" 
+              style={{ 
+                filter: 'drop-shadow(0 0 8px rgba(184, 149, 63, 0.3))',
+                marginBottom: '-1.5rem',
+                position: 'relative',
+                zIndex: 5
+              }}
             />
           </div>
         </div>
