@@ -16,6 +16,8 @@ import { Leaderboard } from "./pages/Leaderboard";
 import { HowItWorks } from "./pages/HowItWorks";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
+import { CheckoutSuccess } from "./pages/CheckoutSuccess";
+import { CheckoutCancel } from "./pages/CheckoutCancel";
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
@@ -120,6 +122,8 @@ function AppContent() {
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signout" element={<SignOut />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
+              <Route path="/checkout/cancel" element={<CheckoutCancel />} />
               {/* Parlays feature removed */}
               <Route path="/betcard" element={
                 session ? <BetCardProfile /> : <Navigate to="/signin" replace />
