@@ -14,6 +14,8 @@ import { Pricing } from "./pages/Pricing";
 import { Billfold } from "./pages/Billfold";
 import { Leaderboard } from "./pages/Leaderboard";
 import { HowItWorks } from "./pages/HowItWorks";
+import { TermsOfService } from "./pages/TermsOfService";
+import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
@@ -112,6 +114,8 @@ function AppContent() {
               <Route path="/billfold" element={<Billfold />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
 
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signout" element={<SignOut />} />
@@ -133,6 +137,23 @@ function AppContent() {
       </div>
       
       {/* Chat with Gary feature removed */}
+      
+      {/* Global footer */}
+      <div style={{
+        borderTop: '1px solid #333',
+        padding: '20px 0',
+        textAlign: 'center',
+        color: '#999',
+        fontSize: '0.9rem',
+        width: '100%',
+        marginTop: 'auto'
+      }}>
+        <p>&copy; {new Date().getFullYear()} Gary A.I. LLC. All rights reserved.</p>
+        <div style={{ marginTop: '10px' }}>
+          <Link to="/terms" style={{ color: '#b8953f', marginRight: '20px', textDecoration: 'none' }}>Terms of Service</Link>
+          <Link to="/privacy" style={{ color: '#b8953f', textDecoration: 'none' }}>Privacy Policy</Link>
+        </div>
+      </div>
     </div>
   );
 }
