@@ -331,7 +331,7 @@ export const Billfold = () => {
         {/* Recent Picks - now in a single column with improved styling */}
         <div className="gary-grid" style={{ marginBottom: 'var(--space-xl)' }}>
           {/* Recent Picks Table - Enhanced */}
-          <div className="gary-card overflow-hidden">
+          <div className="gary-card-accent overflow-hidden">
             <div className="gary-card-header">
               <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">RECENT PICKS</h3>
             </div>
@@ -374,7 +374,7 @@ export const Billfold = () => {
         {/* Two-column layout for Sport Performance and Bet Type Distribution - Enhanced */}
         <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginBottom: 'var(--space-xl)' }}>
           {/* Sport Performance - Enhanced */}
-          <div className="gary-card overflow-hidden">
+          <div className="gary-card-accent overflow-hidden">
             <div className="gary-card-header">
               <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">SPORT PERFORMANCE</h3>
             </div>
@@ -421,7 +421,7 @@ export const Billfold = () => {
           </div>
           
           {/* Bet Type Distribution - Enhanced */}
-          <div className="gary-card overflow-hidden">
+          <div className="gary-card-accent overflow-hidden">
             <div className="gary-card-header">
               <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">BET TYPE DISTRIBUTION</h3>
             </div>
