@@ -33,7 +33,7 @@ export function Pricing() {
         <div className="grid md:grid-cols-2 gap-10 max-w-3xl mx-auto">
           
           {/* Free Tier - Ticket Style */}
-          <div className="flex flex-col max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
+          <div className="flex flex-col h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
             {/* Ticket notches - simplified */}
             <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
             <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
@@ -107,8 +107,8 @@ export function Pricing() {
             </div>
           </div>
           
-          {/* Pro Tier - Premium Ticket Style */}
-          <div className="flex flex-col max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-lg transition-all duration-300">
+          {/* Pro Tier - Ticket Style */}
+          <div className="flex flex-col h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
             {/* Ticket notches - simplified */}
             <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
             <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
@@ -137,7 +137,7 @@ export function Pricing() {
             </div>
             
             {/* Ticket body */}
-            <div className="px-6 pt-4 pb-2 flex-1 bg-[#fffbe6] text-black rounded-b-xl">
+            <div className="px-6 pt-4 pb-2 flex-1 bg-[#f8f8e0] text-black rounded-b-xl">
               <h2 className="text-5xl font-bold mb-3 font-sans tracking-wider uppercase" style={{color: 'black'}}>PRO</h2>
               
               <div className="mb-4 flex items-baseline border-b border-dotted border-gray-400/30 pb-4">
@@ -166,7 +166,7 @@ export function Pricing() {
             </div>
             
             {/* Button area */}
-            <div className="px-6 pb-6 pt-2 bg-[#fffbe6] border-t border-dotted border-gray-400/30">
+            <div className="px-6 pb-6 pt-2 bg-[#f8f8e0] border-t border-dotted border-gray-400/30">
               {/* Barcode */}
               <div className="mb-4 flex justify-center">
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
