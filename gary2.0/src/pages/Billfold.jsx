@@ -288,13 +288,13 @@ export const Billfold = () => {
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           {/* RECORD - With enhanced styling */}
-          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg bg-explicit">
+          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg">
             <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">RECORD</h5>
             <div className="text-xl font-bold text-white">{stats.record}</div>
           </div>
           
           {/* WIN RATE - With enhanced styling */}
-          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg bg-explicit">
+          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg">
             <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">WIN RATE</h5>
             <div className="text-xl font-bold text-white">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="mt-2 text-xs text-gray-400 flex items-center">
@@ -306,7 +306,7 @@ export const Billfold = () => {
           
           {/* TOP WIN CARD IN METRICS GRID */}
           {bestWin && (
-            <div className="billfold-card billfold-metrics-card p-5 border border-gray-800 backdrop-blur rounded-lg shadow-lg bg-explicit" style={{ backgroundColor: 'rgba(17, 17, 17, 0.95)' }}>
+            <div className="billfold-card billfold-metrics-card p-5 border border-gray-800 backdrop-blur rounded-lg shadow-lg" style={{ backgroundColor: 'rgba(17, 17, 17, 0.95)' }}>
               <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">TOP WIN</h5>
               <div className="font-bold text-lg mb-1 text-white overflow-hidden text-ellipsis" style={{ maxHeight: '48px' }}>
                 {bestWin.matchup || ''}
@@ -325,7 +325,7 @@ export const Billfold = () => {
         {/* Recent Picks - now in a single column with improved styling */}
         <div className="grid grid-cols-1 gap-8 mb-8">
           {/* Recent Picks Table - Enhanced */}
-          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg bg-explicit">
+          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
             <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
               <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">RECENT PICKS</h3>
             </div>
@@ -368,7 +368,7 @@ export const Billfold = () => {
         {/* Two-column layout for Sport Performance and Bet Type Distribution - Enhanced */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           {/* Sport Performance - Enhanced */}
-          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg bg-explicit">
+          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
             <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
               <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">SPORT PERFORMANCE</h3>
             </div>
@@ -408,7 +408,7 @@ export const Billfold = () => {
           </div>
           
           {/* Bet Type Distribution - Enhanced */}
-          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg bg-explicit">
+          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
             <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
               <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">BET TYPE DISTRIBUTION</h3>
             </div>
