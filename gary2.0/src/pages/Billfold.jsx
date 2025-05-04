@@ -266,7 +266,7 @@ export const Billfold = () => {
         </div>
       </div>
       
-      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-700/30 shadow-lg bg-[#121212]/90 backdrop-blur-sm relative z-10">
+      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-700/30 shadow-lg backdrop-blur-sm relative z-10">
         {/* Enhanced Header with GARY A.I. and garymoney image */}
         <div className="billfold-header mb-10 relative">
           <div className="flex items-center justify-between">
