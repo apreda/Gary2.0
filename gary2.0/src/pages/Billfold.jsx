@@ -294,29 +294,19 @@ export const Billfold = () => {
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
         <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginBottom: 'var(--space-xl)' }}>
           {/* RECORD - With enhanced styling */}
-          <div className="gary-card-accent p-5" style={{ 
-            backgroundColor: 'white', 
-            borderColor: 'var(--gary-gold-light)',
-            borderTop: '3px solid var(--gary-gold)',
-            boxShadow: '0 4px 12px rgba(184, 149, 63, 0.1)'
-          }}>
-            <h5 className="gary-text-small uppercase tracking-wider mb-1" style={{ color: 'var(--gary-gold-light)' }}>RECORD</h5>
-            <div className="font-bold" style={{ color: 'var(--gary-gold)', fontSize: '2.25rem', lineHeight: '1.1' }}>{stats.record}</div>
+          <div className="gary-card-accent p-5">
+            <h5 className="gary-text-small uppercase tracking-wider mb-1">RECORD</h5>
+            <div className="font-bold" style={{ color: 'var(--gary-text-primary)', fontSize: '2.25rem', lineHeight: '1.1' }}>{stats.record}</div>
           </div>
           
           {/* WIN RATE - With enhanced styling */}
-          <div className="gary-card-accent p-5" style={{ 
-            backgroundColor: 'white', 
-            borderColor: 'var(--gary-gold-light)',
-            borderTop: '3px solid var(--gary-gold)',
-            boxShadow: '0 4px 12px rgba(184, 149, 63, 0.1)'
-          }}>
-            <h5 className="gary-text-small uppercase tracking-wider mb-1" style={{ color: 'var(--gary-gold-light)' }}>WIN RATE</h5>
-            <div className="font-bold" style={{ color: 'var(--gary-gold)', fontSize: '2.25rem', lineHeight: '1.1' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+          <div className="gary-card-accent p-5">
+            <h5 className="gary-text-small uppercase tracking-wider mb-1">WIN RATE</h5>
+            <div className="font-bold" style={{ color: 'var(--gary-text-primary)', fontSize: '2.25rem', lineHeight: '1.1' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="gary-flex mt-2" style={{ fontSize: 'var(--text-xs)' }}>
-              <span style={{ color: 'rgba(0, 0, 0, 0.4)' }}>Last month: </span>
-              <span className="ml-1 font-medium" style={{ color: 'rgba(0, 0, 0, 0.6)' }}>38.5%</span>
-              <span className="ml-2" style={{ color: 'var(--gary-gold)' }}>↑</span>
+              <span style={{ color: 'var(--gary-text-tertiary)' }}>Last month: </span>
+              <span className="ml-1 font-medium" style={{ color: 'var(--gary-text-secondary)' }}>38.5%</span>
+              <span className="ml-2 text-green-500">↑</span>
             </div>
           </div>
           
