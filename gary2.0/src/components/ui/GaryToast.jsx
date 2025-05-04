@@ -1,5 +1,4 @@
 import React from 'react';
-import gary1 from '../../assets/images/gary1.svg';
 
 /**
  * Special toast notification with Gary's personality and avatar
@@ -23,7 +22,7 @@ export const GaryToast = ({ message, type, onClose }) => {
       role="alert"
     >
       <div className="mr-3 flex-shrink-0">
-        <img src={gary1} alt="Gary" className="w-12 h-12" />
+        <img src="/garymoney.png" alt="Gary" className="w-12 h-12 object-cover rounded-full" />
       </div>
       <div className="flex-grow">
         <p className="text-sm font-medium">{message}</p>

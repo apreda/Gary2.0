@@ -282,18 +282,7 @@ function RealGaryPicks() {
       await userStatsService.recordDecision(userId, decision, pick);
       
       // Update user-pick tracking
-      const flippedState = flippedCards[pick.id] || false;
-      const cardData = { 
-        pickId: pick.id, 
-        decision: decision, 
-        flipped: flippedState,
-        team: pick.pick, 
-        game: pick.matchup,
-        type: pick.type || 'spread',
-        league: pick.league || 'NBA'
-      };
-      
-      await betTrackingService.trackUserBet(userId, cardData);
+      await betTrackingService.saveBetDecision(pick.id, decision, userId);
       
       // Reload picks if necessary
       loadPicks();
