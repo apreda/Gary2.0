@@ -416,12 +416,12 @@ function RealGaryPicks() {
                 <div className="mb-12">
                   {/* NEW LAYOUT: Directly on page in a horizontal row format */}
                   <div className="pt-12 px-4">
-                    <h1 className="text-4xl font-bold text-center mb-8" style={{ color: '#b8953f' }}>
+                    <h1 className="text-4xl font-bold text-center mb-4" style={{ color: '#b8953f' }}>
                       TODAY'S PICKS
                     </h1>
                     
                     {/* Card Stack Interface */}
-                    <div className="flex justify-center items-center relative py-8">
+                    <div className="flex justify-center items-center relative py-4 pt-2">
                       {/* Left navigation arrow - positioned outside the card, no circle */}
                       <button 
                         className="absolute left-[-60px] z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent"
