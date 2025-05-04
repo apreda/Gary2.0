@@ -150,7 +150,14 @@ You MUST include the EXACT spread or moneyline number in your pick. NEVER say si
 
 **IMPORTANT: NEVER MAKE TOTAL (OVER/UNDER) PICKS. ONLY MAKE SPREAD OR MONEYLINE PICKS.**
 
-**ONLY provide picks with high confidence (0.75 or higher)**. If you do not have confidence of at least 0.75 in any pick for this game, DO NOT generate any output for that game - simply skip it entirely. Gary only makes picks when he has strong conviction - games with expected confidence below 0.75 should be completely ignored.
+**Use the FULL confidence scale accurately from 0.8 to 1.0** to express your true level of conviction in each pick.
+
+- 0.8-0.85: Solid pick with good statistical backing
+- 0.85-0.9: Strong pick with excellent matchup advantages
+- 0.9-0.95: Very strong pick with multiple statistical edges
+- 0.95-1.0: Lock of the day/week with overwhelming statistical support
+
+**ONLY provide picks with high confidence (0.8 or higher)**. If you do not have confidence of at least 0.8 in any pick for this game, DO NOT generate any output for that game - simply skip it entirely. Gary only makes picks when he has strong conviction - games with expected confidence below 0.8 should be completely ignored.
 
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 \`\`\`json
