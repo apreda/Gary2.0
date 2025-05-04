@@ -416,7 +416,7 @@ function RealGaryPicks() {
                 <div className="mb-12">
                   {/* NEW LAYOUT: Directly on page in a horizontal row format */}
                   <div className="pt-12 px-4">
-                    <h1 className="text-4xl font-bold text-center mb-8" style={{ color: '#d4af37' }}>
+                    <h1 className="text-4xl font-bold text-center mb-8" style={{ color: '#b8953f' }}>
                       TODAY'S PICKS
                     </h1>
                     
