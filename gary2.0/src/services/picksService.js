@@ -68,9 +68,16 @@ const picksService = {
               });
               
               if (pick && pick.success && pick.rawAnalysis?.rawOpenAIOutput) {
-                allPicks.push(pick);
-                console.log('Success! Pick generated:', pick.rawAnalysis.rawOpenAIOutput.pick || 'No pick text');
-                console.log('Confidence:', pick.rawAnalysis.rawOpenAIOutput.confidence || 'Unknown');
+                // Strictly enforce the 0.8 confidence threshold
+                const confidence = pick.rawAnalysis.rawOpenAIOutput.confidence || 0;
+                console.log('Pick generated with confidence:', confidence);
+                
+                if (confidence >= 0.8) {
+                  allPicks.push(pick);
+                  console.log('Success! Pick added:', pick.rawAnalysis.rawOpenAIOutput.pick || 'No pick text');
+                } else {
+                  console.warn(`Filtering out pick for ${formattedGameData.matchup} - confidence ${confidence} below threshold of 0.8`);
+                }
               } else {
                 console.warn(`No pick generated for ${formattedGameData.matchup}. Likely confidence below threshold.`);
               }
@@ -238,10 +245,23 @@ const picksService = {
           console.log(`Successfully extracted JSON for: ${pick.game}, confidence: ${jsonData.confidence || 'unknown'}`);
           return jsonData;
         })
-        // Filter out null values from failed JSON extraction
-        .filter(jsonData => jsonData !== null);
+        // Filter out null values and picks with confidence below threshold
+        .filter(jsonData => {
+          // Skip null values
+          if (jsonData === null) return false;
+          
+          // Strictly enforce 0.8 threshold
+          const confidence = jsonData.confidence || 0;
+          const isAboveThreshold = confidence >= 0.8;
+          
+          if (!isAboveThreshold) {
+            console.warn(`Filtering out pick (${jsonData.homeTeam} vs ${jsonData.awayTeam}) at database storage - confidence ${confidence} below threshold of 0.8`);
+          }
+          
+          return isAboveThreshold;
+        });
       
-      console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output`);
+      console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output above 0.8 confidence threshold`);
       
       // Skip if there are no valid picks
       if (rawJsonOutputs.length === 0) {
