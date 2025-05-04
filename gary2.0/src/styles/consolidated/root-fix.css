@@ -14,6 +14,12 @@ body {
   background: transparent !important;
 }
 
-* {
+/* Apply background inheritance only to layout/structural elements, not to components */
+body > *, #root > *, #app > * {
   background-color: inherit;
+}
+
+/* Class for components that need to explicitly set backgrounds */
+.bg-explicit {
+  background-color: initial !important;
 }
