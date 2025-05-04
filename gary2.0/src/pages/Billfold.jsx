@@ -408,32 +408,37 @@ export const Billfold = () => {
           </div>
           
           {/* Bet Type Distribution - Enhanced */}
-          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
-            <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
-              <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">BET TYPE DISTRIBUTION</h3>
+          <div className="gary-card rounded-lg overflow-hidden" style={{
+            borderRadius: 'var(--radius-md)',
+            borderColor: 'var(--gary-border-primary)'
+          }}>
+            <div className="gary-card-header">
+              <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">BET TYPE DISTRIBUTION</h3>
             </div>
-            <div className="p-5 h-full">
-              <div className="grid gap-4">
+            <div className="gary-card-body">
+              <div className="gary-grid" style={{ gap: 'var(--space-md)' }}>
                 {stats.betTypePerformance.map((betType, index) => (
-                  <div key={index} className="flex justify-between items-center">
-                    <div className="flex items-center">
+                  <div key={index} className="gary-flex-between">
+                    <div className="gary-flex">
                       <div className="w-3 h-3 rounded-sm" 
-                           style={{ backgroundColor: index === 0 ? '#b8953f' : 
-                                   index === 1 ? 'rgba(184, 149, 63, 0.7)' : 
-                                   'rgba(184, 149, 63, 0.4)' }}></div>
-                      <span className="ml-3 font-medium text-gray-200">{betType.betType}</span>
+                           style={{ 
+                             backgroundColor: index === 0 ? 'var(--gary-gold)' : 
+                                           index === 1 ? 'var(--gary-gold-light)' : 
+                                           'var(--gary-gold-tint)' 
+                           }}></div>
+                      <span className="ml-3 font-medium" style={{ color: 'var(--gary-text-primary)' }}>{betType.betType}</span>
                     </div>
-                    <div className="flex items-baseline">
-                      <span className="font-medium text-white">{betType.count}</span>
-                      <span className="text-sm ml-1 text-gray-400">({Math.round(betType.percentage)}%)</span>
+                    <div className="gary-flex">
+                      <span className="font-medium" style={{ color: 'var(--gary-text-primary)' }}>{betType.count}</span>
+                      <span className="text-sm ml-1" style={{ color: 'var(--gary-text-secondary)' }}>({Math.round(betType.percentage)}%)</span>
                     </div>
                   </div>
                 ))}
               </div>
               
-              <div className="mt-6 pt-6 border-t border-gray-100">
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--gary-border-secondary)' }}>
                 <div className="text-center">
-                  <div className="mb-2 text-gary-text-soft text-sm">MOST PROFITABLE BET TYPE</div>
+                  <div className="mb-2 text-sm" style={{ color: 'var(--gary-text-tertiary)' }}>MOST PROFITABLE BET TYPE</div>
                   <div className="inline-block py-2 px-4 rounded-full" 
                        style={{ backgroundColor: 'var(--gary-gold-tint)', color: 'var(--gary-gold)' }}>
                     <span className="font-bold">Moneyline +14.2%</span>
