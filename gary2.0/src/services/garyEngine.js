@@ -226,8 +226,8 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         result.warning = `Missing fields: ${missingFields.join(', ')}`;
       }
       
-      if (extractedJSON.confidence && extractedJSON.confidence < 0.8) {
-        console.warn(`Warning: Confidence level ${extractedJSON.confidence} is below threshold of 0.8`);
+      if (extractedJSON.confidence && extractedJSON.confidence < 0.75) {
+        console.warn(`Warning: Confidence level ${extractedJSON.confidence} is below threshold of 0.75`);
         result.warning = `Confidence below threshold: ${extractedJSON.confidence}`;
       }
     }
