@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "api": "node api/stripe-api.js"
+    "api": "node api/stripe-api.js",
+    "api:prod": "NODE_ENV=production node api/stripe-api.js"
   },
   "dependencies": {
     "@react-spring/three": "^9.7.5",
