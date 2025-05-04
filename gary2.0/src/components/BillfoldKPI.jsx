@@ -1,5 +1,6 @@
 // Using styled divs instead of Card components
 import React from 'react';
+import '../styles/design-system.css';
 
 const BillfoldKPI = ({ icon, metric, value, textColor = 'text-gray-300', iconBgColor = 'bg-gray-800' }) => {
   const getIcon = () => {
@@ -41,13 +42,19 @@ const BillfoldKPI = ({ icon, metric, value, textColor = 'text-gray-300', iconBgC
   };
 
   return (
-    <div className="flex items-center bg-gray-800/80 hover:bg-gray-800 rounded-lg px-3 py-2 transition-all duration-200 border border-[#b8953f]/20 shadow-sm hover:shadow-md">
-      <span className={`flex items-center justify-center w-8 h-8 rounded-full ${iconBgColor} border border-[#b8953f]/30 mr-3`}>
+    <div className="flex items-center gary-card py-2 px-3" style={{
+      '--gary-bg-card': 'var(--gary-bg-tertiary)', 
+      'borderRadius': 'var(--radius-md)',
+      'borderColor': 'var(--gary-gold-tint)'
+    }}>
+      <span className={`gary-flex-center w-8 h-8 rounded-full ${iconBgColor} mr-3`} style={{
+        border: '1px solid var(--gary-gold-tint)'
+      }}>
         {getIcon()}
       </span>
       <div>
-        <p className="text-xs text-gray-400 font-medium leading-tight uppercase tracking-wide">{metric}</p>
-        <p className={`text-md font-bold leading-tight ${textColor}`}>{value}</p>
+        <p className="text-xs gary-text-small font-medium uppercase tracking-wide">{metric}</p>
+        <p className={`gary-text-body font-bold ${textColor}`}>{value}</p>
       </div>
     </div>
   );

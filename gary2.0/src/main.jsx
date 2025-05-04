@@ -1,6 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+// Import design system CSS first to establish variables
+import './styles/design-system.css'
 import './styles/base.css'
 // Import error prevention CSS to ensure no white backgrounds appear
 import './styles/consolidated/error-prevention.css'
