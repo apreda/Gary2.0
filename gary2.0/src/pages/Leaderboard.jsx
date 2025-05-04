@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-// Make sure react-icons is installed
-// If not, install with: npm install react-icons
-import { FaFire, FaChartLine, FaUsers } from 'react-icons/fa';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../supabaseClient';
+import { userStatsService } from '../services/userStatsService';
+import { FaFire, FaChartLine, FaUsers, FaTrophy } from 'react-icons/fa';
+
 // Fallback icons in case react-icons is not available
 const iconFallbacks = {
   trophy: "🏆",
@@ -9,7 +11,7 @@ const iconFallbacks = {
   chart: "📈"
 };
 
-// Mock data for the simplified leaderboard tracking Bet with Gary vs. Fade the Bear decisions
+// Fallback data in case API call fails
 const mockLeaderboardData = [
   { 
     id: 1,
@@ -134,15 +136,134 @@ const mockLeaderboardData = [
 ];
 
 export function Leaderboard() {
+  const { user } = useAuth();
   const [leaderboard, setLeaderboard] = useState([]);
   const [timeframe, setTimeframe] = useState('allTime');
+  const [loading, setLoading] = useState(true);
+  const [userRank, setUserRank] = useState(null);
+  const [userStats, setUserStats] = useState(null);
+
+  // Fetch leaderboard data from Supabase
+  const fetchLeaderboard = async () => {
+    setLoading(true);
+    try {
+      // Get top users by win count
+      const leaderboardData = await userStatsService.getLeaderboard(20);
+      
+      if (leaderboardData && leaderboardData.length > 0) {
+        // Fetch profile data for each user to get usernames
+        const enhancedData = await Promise.all(leaderboardData.map(async (userData) => {
+          // Calculate win rate
+          const totalDecisions = userData.win_count + userData.loss_count;
+          const winRate = totalDecisions > 0 
+            ? ((userData.win_count / totalDecisions) * 100).toFixed(1) 
+            : 0;
+          
+          // Determine preferred strategy
+          const preferredStrategy = (userData.ride_count || 0) >= (userData.fade_count || 0) ? 'ride' : 'fade';
+          
+          // Get user profile for username/avatar
+          let username = `User ${userData.id.substr(0, 6)}`;
+          let avatar = `https://i.pravatar.cc/150?u=${userData.id}`;
+          
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('username, avatar_url')
+              .eq('id', userData.id)
+              .single();
+              
+            if (profile) {
+              username = profile.username || username;
+              avatar = profile.avatar_url || avatar;
+            }
+          } catch (err) {
+            console.log('Could not fetch profile for user', userData.id);
+          }
+          
+          return {
+            id: userData.id,
+            username,
+            avatar,
+            totalDecisions: (userData.ride_count || 0) + (userData.fade_count || 0),
+            rideCount: userData.ride_count || 0,
+            fadeCount: userData.fade_count || 0,
+            correctDecisions: userData.win_count || 0,
+            winRate,
+            streak: userData.current_streak || 0,
+            preferredStrategy,
+            // Include raw data for sorting
+            raw: userData
+          };
+        }));
+        
+        // Sort by win_count descending
+        const sortedData = enhancedData.sort((a, b) => {
+          // First sort by win rate
+          const winRateDiff = parseFloat(b.winRate) - parseFloat(a.winRate);
+          
+          if (Math.abs(winRateDiff) > 0.01) { // If win rates differ by more than 0.01%
+            return winRateDiff;
+          }
+          
+          // If win rates are very close, sort by total decisions as a tiebreaker
+          return b.totalDecisions - a.totalDecisions;
+        });
+        
+        setLeaderboard(sortedData);
+        
+        // If user is logged in, find their rank
+        if (user) {
+          const userIndex = sortedData.findIndex(data => data.id === user.id);
+          if (userIndex >= 0) {
+            setUserRank({
+              rank: userIndex + 1,
+              ...sortedData[userIndex]
+            });
+            setUserStats(sortedData[userIndex]);
+          } else {
+            // User not in leaderboard, get their stats directly
+            const userData = await userStatsService.getUserStats(user.id);
+            if (userData) {
+              const totalDecisions = (userData.win_count || 0) + (userData.loss_count || 0);
+              const winRate = totalDecisions > 0 
+                ? ((userData.win_count / totalDecisions) * 100).toFixed(1) 
+                : 0;
+              
+              setUserStats({
+                id: userData.id,
+                totalDecisions,
+                rideCount: userData.ride_count || 0,
+                fadeCount: userData.fade_count || 0,
+                correctDecisions: userData.win_count || 0,
+                winRate,
+                streak: userData.current_streak || 0,
+                preferredStrategy: (userData.ride_count || 0) >= (userData.fade_count || 0) ? 'ride' : 'fade'
+              });
+            }
+          }
+        }
+      } else {
+        // No data, use mock data as fallback
+        console.log('No leaderboard data found, using fallback');
+        setLeaderboard(mockLeaderboardData);
+      }
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      // Use mock data as fallback on error
+      setLeaderboard(mockLeaderboardData);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Simulate data loading
-    setTimeout(() => {
-      setLeaderboard(mockLeaderboardData);
-    }, 300);
-  }, []);
+    fetchLeaderboard();
+    
+    // Refresh every 3 minutes
+    const interval = setInterval(fetchLeaderboard, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
@@ -451,14 +572,73 @@ export function Leaderboard() {
               <div className="w-12 h-12 rounded-full bg-[#d4af37]/20 flex items-center justify-center mr-4">
                 {typeof FaTrophy !== 'undefined' ? <FaTrophy className="text-[#d4af37]" /> : <span className="text-[#d4af37]">{iconFallbacks.trophy}</span>}
               </div>
-              <div>
-                <div className="text-sm text-gray-400">Your Current Rank</div>
-                <div className="text-xl font-bold text-white">Not Ranked Yet</div>
-              </div>
+              
+              {userStats ? (
+                <div className="flex-grow">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-gray-400">Your Current Rank</div>
+                    {userRank && (
+                      <div className="px-2 py-0.5 bg-[#d4af37]/20 rounded text-[#d4af37] text-xs font-bold">
+                        #{userRank.rank}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-4 mt-2">
+                    <div>
+                      <div className="text-xs text-gray-500">Win Rate</div>
+                      <div className="text-lg font-bold" style={{ color: parseFloat(userStats.winRate) > 60 ? '#4ADE80' : '#d4af37' }}>
+                        {userStats.winRate}%
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-gray-500">Streak</div>
+                      <div className="text-lg font-bold" style={{ color: userStats.streak > 0 ? '#4ADE80' : '#d4af37' }}>
+                        {userStats.streak > 0 ? `W${userStats.streak}` : '-'}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-gray-500">Strategy</div>
+                      <div className="text-lg font-bold text-[#d4af37]">
+                        {userStats.preferredStrategy === 'ride' ? 'Ride' : 'Fade'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="text-sm text-gray-400">Your Current Rank</div>
+                  <div className="text-xl font-bold text-white">Not Ranked Yet</div>
+                </div>
+              )}
             </div>
-            <button className="px-5 py-2 bg-[#d4af37] text-black rounded-md text-sm font-medium transition-all hover:bg-[#c9a431]">
-              Start Betting
-            </button>
+            
+            <div>
+              {!user ? (
+                <button 
+                  onClick={() => window.location.href = '/signin'}
+                  className="px-5 py-2 bg-[#d4af37] text-black rounded-md text-sm font-medium transition-all hover:bg-[#c9a431]"
+                >
+                  Sign In
+                </button>
+              ) : !userStats ? (
+                <button 
+                  onClick={() => window.location.href = '/real-gary-picks'}
+                  className="px-5 py-2 bg-[#d4af37] text-black rounded-md text-sm font-medium transition-all hover:bg-[#c9a431]"
+                >
+                  Start Betting
+                </button>
+              ) : (
+                <button 
+                  onClick={() => window.location.href = '/billfold'}
+                  className="px-5 py-2 bg-[#d4af37] text-black rounded-md text-sm font-medium transition-all hover:bg-[#c9a431]"
+                >
+                  View Stats
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
