@@ -1,12 +1,24 @@
 import express from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import { createCheckoutSession, handleStripeWebhook, getUserSubscription, cancelSubscription, createCustomerPortalSession } from './stripe.js';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// CORS Configuration
+const corsOptions = {
+  origin: ['https://betwithgary.ai', 'https://www.betwithgary.ai', process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : null].filter(Boolean),
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Stripe webhook needs raw body
@@ -83,8 +95,19 @@ app.post('/api/create-portal-session', async (req, res) => {
   }
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    status: 'error',
+    message: process.env.NODE_ENV === 'production' ? 'Server error' : err.message
+  });
+});
+
+// Start server
 app.listen(PORT, () => {
   console.log(`Stripe API server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 export default app;

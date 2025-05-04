@@ -31,7 +31,7 @@ function CheckoutForm({ priceId }) {
 
     try {
       // Create a checkout session on your server
-      const response = await fetch('/api/create-checkout-session', {
+      const response = await fetch('https://betwithgary.ai/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
