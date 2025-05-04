@@ -296,13 +296,13 @@ export const Billfold = () => {
           {/* RECORD - With enhanced styling */}
           <div className="gary-card-accent p-5">
             <h5 className="gary-text-small uppercase tracking-wider mb-1">RECORD</h5>
-            <div className="text-xl font-bold" style={{ color: 'var(--gary-text-primary)' }}>{stats.record}</div>
+            <div className="font-bold" style={{ color: 'var(--gary-text-primary)', fontSize: '2.25rem', lineHeight: '1.1' }}>{stats.record}</div>
           </div>
           
           {/* WIN RATE - With enhanced styling */}
           <div className="gary-card-accent p-5">
             <h5 className="gary-text-small uppercase tracking-wider mb-1">WIN RATE</h5>
-            <div className="text-xl font-bold" style={{ color: 'var(--gary-text-primary)' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="font-bold" style={{ color: 'var(--gary-text-primary)', fontSize: '2.25rem', lineHeight: '1.1' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
             <div className="gary-flex mt-2" style={{ fontSize: 'var(--text-xs)' }}>
               <span style={{ color: 'var(--gary-text-tertiary)' }}>Last month: </span>
               <span className="ml-1 font-medium" style={{ color: 'var(--gary-text-secondary)' }}>38.5%</span>
