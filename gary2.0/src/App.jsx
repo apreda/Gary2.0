@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { userPickResultsService } from './services/userPickResultsService';
 import { BetCardProfileProvider } from './contexts/BetCardProfileContext';
 import { UserPlanProvider } from './contexts/UserPlanContext';
 import { UserStatsProvider } from './contexts/UserStatsContext';
@@ -37,9 +38,17 @@ function AppContent() {
   const location = useLocation();
   const { session, user } = useAuth();
   
-
-  
-
+  // Initialize user pick results service to check for results every 30 minutes
+  useEffect(() => {
+    userPickResultsService.scheduleResultsUpdates(30);
+    
+    return () => {
+      // Clear interval when component unmounts
+      if (userPickResultsService.updateInterval) {
+        clearInterval(userPickResultsService.updateInterval);
+      }
+    };
+  }, []);
   
   // Theme toggling functionality
   const ThemeToggle = () => {

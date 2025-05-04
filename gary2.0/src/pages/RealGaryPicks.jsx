@@ -20,6 +20,8 @@ import { picksService } from '../services/picksService';
 import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
 import { picksPersistenceService } from '../services/picksPersistenceService';
+import { userStatsService } from '../services/userStatsService';
+import { garyPhrases } from '../utils/garyPhrases';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 
 function RealGaryPicks() {
@@ -248,18 +250,65 @@ function RealGaryPicks() {
 
   /**
    * Handler called when a user makes a bet/fade decision in PickCard.
-   * Triggers reload of picks/user stats and logs for debugging.
+   * Records the decision, displays a toast notification, and updates user stats.
    */
-  const handleDecisionMade = (decision, pick) => {
+  const handleDecisionMade = async (decision, pick) => {
     console.log('[RealGaryPicks] handleDecisionMade', { decision, pick });
-    // Reload picks if necessary
-    loadPicks();
-    // Increment reloadKey to force BetCard to reload
-    setReloadKey(prev => {
-      const newKey = prev + 1;
-      console.log('[RealGaryPicks] reloadKey incremented', newKey);
-      return newKey;
-    });
+    
+    try {
+      // Make sure user is logged in
+      if (!user) {
+        // Create or ensure anonymous session
+        await ensureAnonymousSession();
+      }
+      
+      // Get current user ID
+      const userId = user?.id || (await supabase.auth.getUser()).data.user?.id;
+      
+      if (!userId) {
+        console.error('User ID not available for tracking bet/fade decision');
+        showToast('Sign in to track your picks!', 'error', 3000, false);
+        return;
+      }
+      
+      // Display appropriate Gary toast message based on decision
+      const toastMessage = decision === 'bet'
+        ? garyPhrases.getRandom('betPhrases')
+        : garyPhrases.getRandom('fadePhrases');
+        
+      showToast(toastMessage, decision === 'bet' ? 'success' : 'info', 4000, true);
+      
+      // Track user decision in Supabase
+      await userStatsService.recordDecision(userId, decision, pick);
+      
+      // Update user-pick tracking
+      const flippedState = flippedCards[pick.id] || false;
+      const cardData = { 
+        pickId: pick.id, 
+        decision: decision, 
+        flipped: flippedState,
+        team: pick.pick, 
+        game: pick.matchup,
+        type: pick.type || 'spread',
+        league: pick.league || 'NBA'
+      };
+      
+      await betTrackingService.trackUserBet(userId, cardData);
+      
+      // Reload picks if necessary
+      loadPicks();
+      
+      // Increment reloadKey to force BetCard to reload
+      setReloadKey(prev => {
+        const newKey = prev + 1;
+        console.log('[RealGaryPicks] reloadKey incremented', newKey);
+        return newKey;
+      });
+      
+    } catch (error) {
+      console.error('Error handling bet/fade decision:', error);
+      showToast('Something went wrong. Please try again.', 'error', 3000, false);
+    }
   };
 
   // Function to handle bet tracking
