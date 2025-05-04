@@ -1,0 +1,236 @@
+/* 
+ * GARY A.I. DESIGN SYSTEM
+ * A comprehensive set of design tokens and component styles
+ * to ensure consistency and flexibility across the application
+ */
+
+:root {
+  /* Color Palette */
+  --gary-bg-primary: #18181b;
+  --gary-bg-secondary: #242424;
+  --gary-bg-tertiary: #2e2e2e;
+  --gary-bg-card: rgba(17, 17, 17, 0.95);
+  --gary-bg-card-hover: rgba(24, 24, 24, 0.95);
+  --gary-bg-card-active: rgba(30, 30, 30, 0.95);
+  
+  /* Gold accent colors */
+  --gary-gold: #b8953f;
+  --gary-gold-light: rgba(184, 149, 63, 0.7);
+  --gary-gold-tint: rgba(184, 149, 63, 0.2);
+  --gary-gold-ultra-tint: rgba(184, 149, 63, 0.05);
+  
+  /* Text colors */
+  --gary-text-primary: #ffffff;
+  --gary-text-secondary: #a0a0a0;
+  --gary-text-tertiary: #6b7280;
+  --gary-text-accent: var(--gary-gold);
+  
+  /* Borders */
+  --gary-border-primary: #2e2e2e;
+  --gary-border-secondary: rgba(60, 60, 60, 0.6);
+  --gary-border-accent: var(--gary-gold);
+  
+  /* Shadows */
+  --gary-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --gary-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --gary-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+  --gary-shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  
+  /* Gradients */
+  --gary-gradient-dark: linear-gradient(180deg, var(--gary-bg-secondary) 0%, var(--gary-bg-primary) 100%);
+  --gary-gradient-gold: linear-gradient(90deg, var(--gary-gold-ultra-tint), var(--gary-gold-tint), var(--gary-gold-ultra-tint));
+  
+  /* Spacing scale */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+}
+
+/* Reusable Component Classes */
+
+/* Card Containers */
+.gary-card {
+  background-color: var(--gary-bg-card);
+  border: 1px solid var(--gary-border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--gary-shadow-md);
+  transition: all var(--transition-normal);
+}
+
+.gary-card:hover {
+  background-color: var(--gary-bg-card-hover);
+  box-shadow: var(--gary-shadow-lg);
+}
+
+.gary-card-accent {
+  background-color: var(--gary-bg-card);
+  border: 1px solid var(--gary-border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--gary-shadow-md);
+  transition: all var(--transition-normal);
+  border-top: 3px solid var(--gary-gold);
+}
+
+.gary-card-accent:hover {
+  background-color: var(--gary-bg-card-hover);
+  box-shadow: var(--gary-shadow-lg);
+}
+
+.gary-card-header {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--gary-border-primary);
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.gary-card-body {
+  padding: var(--space-lg);
+}
+
+/* Tables */
+.gary-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.gary-table thead {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.gary-table th {
+  text-align: left;
+  padding: var(--space-md) var(--space-lg);
+  font-weight: 600;
+  color: var(--gary-text-secondary);
+  border-bottom: 1px solid var(--gary-border-primary);
+}
+
+.gary-table td {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--gary-border-secondary);
+}
+
+.gary-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Buttons */
+.gary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.gary-button-primary {
+  background-color: var(--gary-gold);
+  color: black;
+}
+
+.gary-button-primary:hover {
+  background-color: var(--gary-gold-light);
+}
+
+.gary-button-secondary {
+  background-color: var(--gary-bg-tertiary);
+  color: var(--gary-text-primary);
+  border: 1px solid var(--gary-border-primary);
+}
+
+.gary-button-secondary:hover {
+  background-color: var(--gary-bg-secondary);
+}
+
+/* Progress Bars */
+.gary-progress-track {
+  width: 100%;
+  height: 8px;
+  background-color: var(--gary-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.gary-progress-bar {
+  height: 100%;
+  background-color: var(--gary-gold);
+  border-radius: var(--radius-full);
+}
+
+/* Text styles */
+.gary-heading-1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--gary-text-primary);
+}
+
+.gary-heading-2 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--gary-text-primary);
+}
+
+.gary-heading-3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--gary-text-primary);
+}
+
+.gary-text-accent {
+  color: var(--gary-gold);
+}
+
+.gary-text-body {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--gary-text-secondary);
+}
+
+.gary-text-small {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--gary-text-tertiary);
+}
+
+/* Layout utilities */
+.gary-grid {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.gary-flex {
+  display: flex;
+}
+
+.gary-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gary-flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
