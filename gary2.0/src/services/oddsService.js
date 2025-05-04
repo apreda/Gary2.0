@@ -231,7 +231,7 @@ export const oddsService = {
    * Get upcoming games with comprehensive odds data
    * @param {string} sport - Sport key
    * @param {Object} options - Request options
-   * @returns {Promise<Object>} Upcoming games with odds
+   * @returns {Promise<Object>} Upcoming games with odds that happen on the current day
    */
   getUpcomingGames: async (sport = 'upcoming', options = {}) => {
     try {
@@ -240,6 +240,22 @@ export const oddsService = {
         console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch upcoming games');
         throw new Error('API key is required for The Odds API');
       }
+      
+      // Get the current date in EST timezone (for 12pm cutoff)
+      const now = new Date();
+      // Convert to EST (UTC-4 or UTC-5 depending on daylight savings)
+      const estOffset = -4; // Adjust for daylight savings if needed
+      const estTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (estOffset * 3600000));
+      
+      // Set to 12pm EST today for our reference point
+      const twelvePmEST = new Date(estTime);
+      twelvePmEST.setHours(12, 0, 0, 0);
+      
+      // Calculate 12 hours from 12pm EST (midnight EST)
+      const cutoffTime = new Date(twelvePmEST.getTime() + (12 * 60 * 60 * 1000));
+      
+      console.log(`Fetching games between ${twelvePmEST.toISOString()} and ${cutoffTime.toISOString()} EST`);
+      
       const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
         params: {
           apiKey,
@@ -249,7 +265,16 @@ export const oddsService = {
           bookmakers: options.bookmakers || 'fanduel,draftkings,betmgm,caesars'
         }
       });
-      return response.data;
+      
+      // Filter games to only include those happening on the current day (between 12pm-12am EST)
+      const filteredGames = response.data.filter(game => {
+        const gameTime = new Date(game.commence_time);
+        return gameTime >= twelvePmEST && gameTime <= cutoffTime;
+      });
+      
+      console.log(`Filtered from ${response.data.length} games to ${filteredGames.length} games happening between 12pm-12am EST today`);
+      
+      return filteredGames;
     } catch (error) {
       if (error.response && error.response.status === 401) {
         console.error('⚠️ API KEY ERROR: The Odds API returned 401 Unauthorized. Your API key has expired or reached its limit. Please update your VITE_ODDS_API_KEY environment variable in Vercel.');
