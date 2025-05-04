@@ -286,36 +286,36 @@ export const Billfold = () => {
         </div>
         
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginBottom: 'var(--space-xl)' }}>
           {/* RECORD - With enhanced styling */}
-          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg">
-            <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">RECORD</h5>
-            <div className="text-xl font-bold text-white">{stats.record}</div>
+          <div className="gary-card-accent p-5">
+            <h5 className="gary-text-small uppercase tracking-wider mb-1">RECORD</h5>
+            <div className="text-xl font-bold" style={{ color: 'var(--gary-text-primary)' }}>{stats.record}</div>
           </div>
           
           {/* WIN RATE - With enhanced styling */}
-          <div className="billfold-card billfold-metrics-card p-5 bg-gray-900/80 border border-gray-800 backdrop-blur rounded-lg shadow-lg">
-            <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">WIN RATE</h5>
-            <div className="text-xl font-bold text-white">{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
-            <div className="mt-2 text-xs text-gray-400 flex items-center">
-              <span>Last month: </span>
-              <span className="ml-1 font-medium text-gray-300">38.5%</span>
+          <div className="gary-card-accent p-5">
+            <h5 className="gary-text-small uppercase tracking-wider mb-1">WIN RATE</h5>
+            <div className="text-xl font-bold" style={{ color: 'var(--gary-text-primary)' }}>{(stats.winLoss * 100)?.toFixed(1) || '41.9'}%</div>
+            <div className="gary-flex mt-2" style={{ fontSize: 'var(--text-xs)' }}>
+              <span style={{ color: 'var(--gary-text-tertiary)' }}>Last month: </span>
+              <span className="ml-1 font-medium" style={{ color: 'var(--gary-text-secondary)' }}>38.5%</span>
               <span className="ml-2 text-green-500">↑</span>
             </div>
           </div>
           
           {/* TOP WIN CARD IN METRICS GRID */}
           {bestWin && (
-            <div className="billfold-card billfold-metrics-card p-5 border border-gray-800 backdrop-blur rounded-lg shadow-lg" style={{ backgroundColor: 'rgba(17, 17, 17, 0.95)' }}>
-              <h5 className="text-xs uppercase tracking-wider mb-1 text-gray-400">TOP WIN</h5>
-              <div className="font-bold text-lg mb-1 text-white overflow-hidden text-ellipsis" style={{ maxHeight: '48px' }}>
+            <div className="gary-card-accent p-5">
+              <h5 className="gary-text-small uppercase tracking-wider mb-1">TOP WIN</h5>
+              <div className="font-bold text-lg mb-1 overflow-hidden text-ellipsis" style={{ maxHeight: '48px', color: 'var(--gary-text-primary)' }}>
                 {bestWin.matchup || ''}
               </div>
-              <div className="font-medium text-sm mb-2 text-gray-400">
+              <div className="font-medium text-sm mb-2" style={{ color: 'var(--gary-text-tertiary)' }}>
                 {bestWin.pick || ''}
                 {bestWin.odds && <span className="ml-1">{bestWin.odds}</span>}
               </div>
-              <div className="inline-block px-3 py-1 rounded text-black font-bold text-sm bg-[#b8953f]">
+              <div className="inline-block px-3 py-1 rounded text-black font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
                 +${bestWin.winAmount || 100}
               </div>
             </div>
@@ -323,20 +323,20 @@ export const Billfold = () => {
         </div>
         
         {/* Recent Picks - now in a single column with improved styling */}
-        <div className="grid grid-cols-1 gap-8 mb-8">
+        <div className="gary-grid" style={{ marginBottom: 'var(--space-xl)' }}>
           {/* Recent Picks Table - Enhanced */}
-          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
-            <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
-              <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">RECENT PICKS</h3>
+          <div className="gary-card overflow-hidden">
+            <div className="gary-card-header">
+              <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">RECENT PICKS</h3>
             </div>
-            <table className="w-full border-collapse sleek-table">
-              <thead className="bg-gray-800/60">
+            <table className="gary-table">
+              <thead>
                 <tr>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">DATE</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">SPORT</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">MATCHUP</th>
-                  <th className="text-left py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">PICK</th>
-                  <th className="text-right py-3 px-4 font-semibold border-b border-gray-700 text-gray-400">RESULT</th>
+                  <th>DATE</th>
+                  <th>SPORT</th>
+                  <th>MATCHUP</th>
+                  <th>PICK</th>
+                  <th style={{ textAlign: 'right' }}>RESULT</th>
                 </tr>
               </thead>
               <tbody>
@@ -366,39 +366,46 @@ export const Billfold = () => {
         </div>
           
         {/* Two-column layout for Sport Performance and Bet Type Distribution - Enhanced */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginBottom: 'var(--space-xl)' }}>
           {/* Sport Performance - Enhanced */}
-          <div className="rounded-lg overflow-hidden bg-gray-900/80 border border-gray-800 backdrop-blur shadow-lg">
-            <div className="px-5 py-4 bg-gray-800/80 border-b border-gray-700">
-              <h3 className="font-bold text-[#b8953f] text-lg tracking-wide mb-0">SPORT PERFORMANCE</h3>
+          <div className="gary-card overflow-hidden">
+            <div className="gary-card-header">
+              <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">SPORT PERFORMANCE</h3>
             </div>
-            <div className="p-4">
+            <div className="gary-card-body">
               {stats.sportPerformance.map((sport, index) => {
                 // Calculate bar width based on real data
                 const totalGames = sport.wins + sport.losses;
                 const winPercentage = totalGames > 0 ? (sport.wins / totalGames * 100) : 0;
                 
-                // Get sport-specific color hints with increased opacity for better visibility on dark background
-                const sportColor = 
-                  sport.sport === 'NBA' ? 'from-[#C9082A]/80 to-[#17408B]/80' : 
-                  sport.sport === 'NFL' ? 'from-[#013369]/70 to-[#D50A0A]/70' : 
-                  sport.sport === 'MLB' ? 'from-[#002D72]/70 to-[#E81828]/70' : 
-                  sport.sport === 'NHL' ? 'from-[#000000]/70 to-[#FA4616]/70' : 
-                  'from-[#b8953f]/70 to-[#b8953f]/40';
+                // Get sport-specific color hints using CSS variables for consistency
+                const getSportGradient = (sport) => {
+                  switch(sport) {
+                    case 'NBA': return 'linear-gradient(to right, rgba(201, 8, 42, 0.8), rgba(23, 64, 139, 0.8))';
+                    case 'NFL': return 'linear-gradient(to right, rgba(1, 51, 105, 0.7), rgba(213, 10, 10, 0.7))';
+                    case 'MLB': return 'linear-gradient(to right, rgba(0, 45, 114, 0.7), rgba(232, 24, 40, 0.7))';
+                    case 'NHL': return 'linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(250, 70, 22, 0.7))';
+                    default: return 'linear-gradient(to right, var(--gary-gold), var(--gary-gold-light))';
+                  }
+                };
                 
                 return (
                   <div key={index} className="mb-4 last:mb-0">
                     {/* Sport name and win-loss record */}
-                    <div className="flex justify-between mb-1">
-                      <div className="font-bold text-sm text-gray-200">{sport.sport}</div>
-                      <div className="text-xs text-gray-400">{sport.wins}W - {sport.losses}L</div>
+                    <div className="gary-flex-between mb-1">
+                      <div className="font-bold text-sm" style={{ color: 'var(--gary-text-primary)' }}>{sport.sport}</div>
+                      <div className="text-xs" style={{ color: 'var(--gary-text-tertiary)' }}>{sport.wins}W - {sport.losses}L</div>
                     </div>
                     
                     {/* Win percentage visualized */}
-                    <div className="w-full bg-gray-800/80 h-2 rounded-full overflow-hidden">
+                    <div className="gary-progress-track">
                       <div 
-                        className={`h-full rounded-full bg-gradient-to-r ${sportColor}`}
-                        style={{ width: `${winPercentage}%`, minWidth: '10px' }}
+                        className="h-full rounded-full"
+                        style={{ 
+                          width: `${winPercentage}%`, 
+                          minWidth: '10px',
+                          background: getSportGradient(sport.sport)
+                        }}
                       ></div>
                     </div>
                   </div>
@@ -408,10 +415,7 @@ export const Billfold = () => {
           </div>
           
           {/* Bet Type Distribution - Enhanced */}
-          <div className="gary-card rounded-lg overflow-hidden" style={{
-            borderRadius: 'var(--radius-md)',
-            borderColor: 'var(--gary-border-primary)'
-          }}>
+          <div className="gary-card overflow-hidden">
             <div className="gary-card-header">
               <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">BET TYPE DISTRIBUTION</h3>
             </div>
