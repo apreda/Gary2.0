@@ -314,7 +314,7 @@ export const Billfold = () => {
           {bestWin && (
             <div className="gary-card-accent p-5">
               <h5 className="gary-text-small uppercase tracking-wider mb-1">TOP WIN</h5>
-              <div className="font-bold text-lg mb-1 overflow-hidden text-ellipsis" style={{ maxHeight: '48px', color: 'var(--gary-text-primary)' }}>
+              <div className="font-bold text-lg mb-1 overflow-hidden text-ellipsis" style={{ maxHeight: '48px', color: '#b8953f' }}>
                 {bestWin.matchup || ''}
               </div>
               <div className="font-medium text-sm mb-2" style={{ color: 'var(--gary-text-tertiary)' }}>
