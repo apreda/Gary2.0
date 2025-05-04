@@ -281,6 +281,7 @@ export const Billfold = () => {
               src="/garymoney.png" 
               alt="Gary Money" 
               className="h-20 w-auto object-contain opacity-90 animate-float" 
+              style={{ filter: 'drop-shadow(0 0 8px rgba(184, 149, 63, 0.3))' }}
             />
           </div>
         </div>
