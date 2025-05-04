@@ -41,7 +41,7 @@ export function Pricing() {
             <div className="absolute -right-1 top-2/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
             
             {/* Ticket header */}
-            <div className="bg-black w-full py-2 px-4 rounded-t-xl flex flex-col">
+            <div className="w-full py-2 px-4 rounded-t-xl flex flex-col" style={{backgroundColor: '#000000'}}>
               <div className="flex flex-col">
                 <div className="flex justify-between items-center">
                   <div className="text-lg font-bold text-[#b8953f] font-sans tracking-wider">GARY A.I.</div>
@@ -116,7 +116,7 @@ export function Pricing() {
             <div className="absolute -right-1 top-2/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
             
             {/* Ticket header with branding */}
-            <div className="bg-[#b8953f] w-full py-2 px-4 rounded-t-xl flex flex-col">
+            <div className="w-full py-2 px-4 rounded-t-xl flex flex-col" style={{backgroundColor: '#b8953f'}}>
               <div className="flex flex-col">
                 <div className="flex justify-between items-center">
                   <div className="text-lg font-bold text-black font-sans tracking-wider">GARY A.I.</div>
