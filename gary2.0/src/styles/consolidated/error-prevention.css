@@ -14,12 +14,4 @@ body {
   background: transparent;
 }
 
-/* Prevent background color flashes on route changes or hydration */
-body > *, #root > *, #app > * {
-  background-color: inherit;
-}
-
-/* Class for components that need to explicitly set backgrounds */
-.bg-explicit {
-  background-color: initial !important;
-}
+/* Universal background inheritance rule removed to allow more design flexibility */
