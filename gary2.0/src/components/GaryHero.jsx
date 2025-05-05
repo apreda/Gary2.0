@@ -52,7 +52,7 @@ export function GaryHero() {
   }, []);
 
   return (
-    <div className="relative flex flex-col min-h-screen w-full overflow-visible">
+    <div className="relative flex flex-col min-h-screen w-full overflow-visible bg-[#0e0e0e]">
       
       <main className="max-w-[1280px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">
         <div className="w-full mx-auto">
@@ -152,7 +152,7 @@ export function GaryHero() {
                   {/* FRONT CARD - positioned at the top */}
                   <div style={{
                     position: 'absolute',
-                    top: '-100px', /* Moved up closer to top of page */
+                    top: '-196px', /* Moved up by an additional inch */
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
@@ -459,7 +459,7 @@ export function GaryHero() {
                   {/* BACK CARD - analysis card positioned below with proper separation */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '-270px', /* Maintained spacing while moving up */
+                    top: '236px', /* Positioned 48px (half inch) below the top card */
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
