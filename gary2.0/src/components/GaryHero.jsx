@@ -54,44 +54,44 @@ export function GaryHero() {
 
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible">
-      {/* Massive background inspired by reference images */}
-      <div className="absolute inset-0 z-0 overflow-hidden bg-[#060d21]">
-        {/* Deep gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0a1228] via-[#101b36] to-[#1a1028] opacity-80"></div>
+      {/* Massive background matching screenshot colors */}
+      <div className="absolute inset-0 z-0 overflow-hidden bg-[#1e1e1e]">
+        {/* Dark gradient background with charcoal tones */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1e1e1e] via-[#232323] to-[#1a1a1a] opacity-90"></div>
         
         {/* Animated wave effect */}
         <div className="absolute inset-0">
-          {/* Vertical lines for sense of scale - similar to example */}
+          {/* Vertical lines for sense of scale */}
           <div className="absolute inset-0 opacity-10" 
                style={{ 
-                 background: 'linear-gradient(90deg, transparent 50%, rgba(80, 80, 255, 0.05) 50%), linear-gradient(rgba(20, 20, 60, 0.1) 1px, transparent 1px)', 
+                 background: 'linear-gradient(90deg, transparent 50%, rgba(184, 149, 63, 0.05) 50%), linear-gradient(rgba(184, 149, 63, 0.05) 1px, transparent 1px)', 
                  backgroundSize: '40px 40px',
                  animation: 'waveAnimation 20s ease-in-out infinite'
                }}>
           </div>
         </div>
         
-        {/* Vibrant color waves/visualizations */}
+        {/* Gold/Amber accent waves matching screenshot */}
         <div className="absolute bottom-0 left-0 right-0 h-[70vh]" 
              style={{ 
-               background: 'linear-gradient(to top, rgba(76, 29, 149, 0.3) 0%, rgba(180, 83, 9, 0.1) 50%, transparent 100%)',
+               background: 'linear-gradient(to top, rgba(184, 149, 63, 0.2) 0%, rgba(184, 149, 63, 0.05) 50%, transparent 100%)',
                opacity: '0.3',
                animation: 'pulseGlow 10s ease-in-out infinite'
              }}>
         </div>
         
-        {/* Blue Gradient (inspired by example image 3) */}
-        <div className="absolute top-0 right-0 w-1/2 h-[80vh] bg-gradient-to-b from-[#0c4a6e]/30 via-[#0369a1]/20 to-transparent blur-3xl"
+        {/* Dark Gradient Accent */}
+        <div className="absolute top-0 right-0 w-1/2 h-[80vh] bg-gradient-to-b from-[#252525]/30 via-[#2c2c2c]/20 to-transparent blur-3xl"
              style={{ animation: 'pulseGlow 15s ease-in-out infinite', animationDelay: '2s' }}>
         </div>
         
-        {/* Orange/Gold Gradient (inspired by example image 2) */}
-        <div className="absolute bottom-0 left-0 w-2/3 h-[60vh] bg-gradient-to-t from-[#b45309]/30 via-[#d97706]/20 to-transparent blur-3xl"
+        {/* Gold/Amber Gradient matching coin color */}
+        <div className="absolute bottom-0 left-0 w-2/3 h-[60vh] bg-gradient-to-t from-[#b8953f]/20 via-[#d4af37]/10 to-transparent blur-3xl"
              style={{ animation: 'pulseGlow 18s ease-in-out infinite', animationDelay: '5s' }}>
         </div>
         
-        {/* Purple Gradient */}
-        <div className="absolute bottom-0 right-0 w-2/3 h-[70vh] bg-gradient-to-t from-[#4c1d95]/30 via-[#7e22ce]/20 to-transparent blur-3xl"
+        {/* Darker Gold Gradient for depth */}
+        <div className="absolute bottom-0 right-0 w-2/3 h-[70vh] bg-gradient-to-t from-[#8a6e2f]/20 via-[#a47e3b]/15 to-transparent blur-3xl"
              style={{ animation: 'pulseGlow 20s ease-in-out infinite', animationDelay: '7s' }}>
         </div>
       </div>
@@ -123,29 +123,29 @@ export function GaryHero() {
           
           {/* Left side - Headline and CTA with high-tech container */}
           <div className="flex-1 flex flex-col max-w-2xl relative z-30">
-            {/* High-tech container with solid background - completely opaque */}
-            <div className="absolute inset-0 z-20 bg-[#060d21] rounded-2xl border border-[#333] shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-hidden">
-              {/* Solid background layer to completely hide headlines - multiple layers for guaranteed opacity */}
-              <div className="absolute inset-0 bg-[#080f23] z-10"></div>
-              <div className="absolute inset-0 bg-[#060d21] z-11"></div> {/* Double layer for full opacity */}
-              <div className="absolute inset-0 bg-[#071026] z-12"></div> {/* Triple layer for guaranteed opacity */}
+            {/* High-tech container with colors matching screenshot - completely opaque */}
+            <div className="absolute inset-0 z-20 bg-[#1e1e1e] rounded-2xl border border-[#b8953f]/30 shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-hidden">
+              {/* Solid background layers to completely hide headlines - dark charcoal like screenshot */}
+              <div className="absolute inset-0 bg-[#1e1e1e] z-10"></div>
+              <div className="absolute inset-0 bg-[#1a1a1a] z-11"></div> {/* Double layer for full opacity */}
+              <div className="absolute inset-0 bg-[#232323] z-12"></div> {/* Triple layer for guaranteed opacity */}
               
-              {/* Edge glow effect */}
-              <div className="absolute inset-0 z-20 bg-gradient-to-tr from-[#0a1228] via-[#101b36] to-[#1a1028] opacity-100"></div> {/* Increased opacity */}
+              {/* Edge glow effect with gold tones from the coin in screenshot */}
+              <div className="absolute inset-0 z-20 bg-gradient-to-tr from-[#1e1e1e] via-[#262626] to-[#2c2c2c] opacity-100"></div>
 
-              {/* Subtle pattern overlay */}
+              {/* Subtle pattern overlay with gold accent color */}
               <div className="absolute inset-0 z-25 opacity-5" style={{ backgroundImage: 'radial-gradient(circle, #b8953f 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
               
-              {/* Top tech line accent */}
+              {/* Top tech line accent in gold */}
               <div className="absolute z-30 top-0 left-1/2 -translate-x-1/2 w-[80%] h-[2px] bg-gradient-to-r from-transparent via-[#b8953f] to-transparent"></div>
               
-              {/* Corner accents */}
+              {/* Corner accents in gold - matching coin color */}
               <div className="absolute z-30 top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-[#b8953f]/60 rounded-tl-lg"></div>
               <div className="absolute z-30 top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-[#b8953f]/60 rounded-tr-lg"></div>
               <div className="absolute z-30 bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-[#b8953f]/60 rounded-bl-lg"></div>
               <div className="absolute z-30 bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-[#b8953f]/60 rounded-br-lg"></div>
               
-              {/* Side accent line */}
+              {/* Side accent line in gold */}
               <div className="absolute z-30 left-0 top-1/4 bottom-1/4 w-[2px] bg-gradient-to-b from-transparent via-[#b8953f]/60 to-transparent"></div>
             </div>
             

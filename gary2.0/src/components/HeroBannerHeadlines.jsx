@@ -9,6 +9,10 @@ const VISIBLE_HEADLINES = 12; // increased to cover the entire hero height
 const HEADLINE_HEIGHT = 60; // height of each headline lane including spacing
 const TOTAL_HEADLINES = 16; // total headlines that will be on rotation
 
+// Colors that match the screenshot (dark charcoal and gold/amber)
+const GOLD_COLOR = "#b8953f"; // From the screenshot's coins and highlights
+const DARK_GRAY = "#1e1e1e"; // From the screenshot's background
+
 export default function HeroBannerHeadlines() {
   // Prepare headlines with exactly one headline per lane (no overlap)
   const randomized = useMemo(() => {
