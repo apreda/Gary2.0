@@ -404,12 +404,12 @@ export function GaryHero() {
       <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-[#b8953f]/10 z-10 opacity-70"></div>
 
       {/* Gary image in left corner */}
-      <div className="absolute left-10 top-20 z-20 hidden md:block" style={{ maxWidth: "280px" }}>
+      <div className="absolute left-0 top-12 z-20 hidden md:block" style={{ maxWidth: "250px" }}>
         <img
           src={garyImage}
           alt="Gary AI Bear"
           className="w-full h-auto"
-          style={{ filter: "drop-shadow(0 10px 15px rgba(0,0,0,0.6))" }}
+          style={{ opacity: 0.85, filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))" }}
         />
       </div>
       
@@ -424,13 +424,13 @@ export function GaryHero() {
             </div>
           </div>
 
-          {/* Main headline - Exact Vault typography style */}
-          <h1 className="mb-10 text-center" style={{ fontSize: "clamp(2.8rem, 6vw, 4.2rem)", lineHeight: "1.1", letterSpacing: "-0.02em", maxWidth: "920px" }}>
-            <div className="text-white font-bold">Gary.ai the first to combine</div>
+          {/* Main headline - Simple and impactful */}
+          <h1 className="mb-10 text-center" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em", maxWidth: "920px" }}>
             <div>
-              <span className="text-white font-bold">Modern AI capabilities to make </span>
+              <span className="text-white font-bold">Make </span>
               <span className="italic font-normal text-[#b8953f]">Smarter</span>
-              <span className="text-white font-bold"> Sports Bets</span>
+              <span className="text-white font-bold"> Sports Bets </span>
+              <span className="text-white font-bold">with Gary</span>
             </div>
           </h1>
           
