@@ -19,6 +19,15 @@ function StripeHostedCheckout({ userId, email }) {
       try {
         console.log('Creating checkout session with:', { userId, email });
         
+        // Direct integration with Stripe
+        const stripeCheckoutUrl = `https://buy.stripe.com/test_4gw2a8exS4pA2is000?prefilled_email=${encodeURIComponent(email)}`;
+        
+        console.log('Redirecting to Stripe hosted page:', stripeCheckoutUrl);
+        setCheckoutUrl(stripeCheckoutUrl);
+        return;
+        
+        // Fallback to server API if needed
+        /*
         const response = await fetch('/api/create-checkout-session', {
           method: 'POST',
           headers: {
@@ -48,6 +57,7 @@ function StripeHostedCheckout({ userId, email }) {
         } else {
           throw new Error('No checkout URL returned');
         }
+        */
       } catch (err) {
         console.error('Error creating checkout session:', err);
         setError('Unable to initialize checkout. Please try again.');
