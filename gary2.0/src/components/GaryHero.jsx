@@ -64,15 +64,15 @@ export function GaryHero() {
       
       {/* Gold accents and vignette for depth */}
       <div className="pointer-events-none absolute inset-0 z-1" aria-hidden="true">
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#c19c60]/20 blur-3xl opacity-20" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#c19c60]/20 blur-3xl opacity-20" />
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
+        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
       </div>
 
       {/* Header with logo */}
       <header className="relative z-20 w-full py-4 px-6 lg:px-12 flex justify-between items-center">
         <div className="flex items-center">
           <img src={GaryEmblem} alt="Gary A.I." className="h-12 w-auto" />
-          <span className="ml-3 text-white font-bold text-xl">GARY<span className="text-[#c19c60]">A.I.</span></span>
+          <span className="ml-3 text-white font-bold text-xl">GARY<span className="text-[#b8953f]">A.I.</span></span>
         </div>
       </header>
 
@@ -83,16 +83,16 @@ export function GaryHero() {
           {/* Left side - Headline and CTA */}
           <div className="flex-1 flex flex-col max-w-2xl">
             {/* Newspaper-style headline banner */}
-            <div className="w-full max-w-xs bg-[#c19c60] py-1 mb-6 transform -rotate-1">
+            <div className="w-full max-w-xs bg-[#b8953f] py-1 mb-6 transform -rotate-1">
               <p className="uppercase text-black font-bold tracking-wide text-center text-sm">SPORTS INSIDER EXTRA EDITION</p>
             </div>
             
             {/* Main Headline */}
             <h1 className="font-extrabold text-white leading-tight mb-8">
               <span className="block text-6xl lg:text-7xl font-serif italic mb-2">MAKE SMARTER</span>
-              <div className="w-full h-1 bg-[#c19c60] my-2"></div>
-              <span className="block text-[#c19c60] text-6xl lg:text-7xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
-              <div className="w-full h-1 bg-[#c19c60] my-2"></div>
+              <div className="w-full h-1 bg-[#b8953f] my-2"></div>
+              <span className="block text-[#b8953f] text-6xl lg:text-7xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
+              <div className="w-full h-1 bg-[#b8953f] my-2"></div>
               <span className="block text-white text-lg mt-2 font-bold tracking-widest">THE WINNING EDGE SINCE 2025</span>
             </h1>
 
@@ -104,7 +104,7 @@ export function GaryHero() {
             <div className="flex flex-col sm:flex-row gap-5 mb-10">
               <Link 
                 to="/real-gary-picks" 
-                className="inline-flex items-center justify-center bg-[#c19c60] text-black font-semibold py-3 px-8 rounded-md hover:bg-opacity-90 transition duration-300 text-lg"
+                className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold py-3 px-8 rounded-md hover:bg-opacity-90 transition duration-300 text-lg"
               >
                 Get Today's Picks
               </Link>
@@ -120,8 +120,8 @@ export function GaryHero() {
           {/* Right side - Modern Card Design from Screenshot 2 */}
           <div className="flex justify-center items-center">
             {loading ? (
-              <div className="w-[480px] h-[320px] rounded-xl bg-black/50 flex items-center justify-center border border-[#c19c60]/30">
-                <div className="w-8 h-8 border-4 border-[#c19c60]/20 border-t-[#c19c60] rounded-full animate-spin"></div>
+              <div className="w-[480px] h-[320px] rounded-xl bg-black/50 flex items-center justify-center border border-[#b8953f]/30">
+                <div className="w-8 h-8 border-4 border-[#b8953f]/20 border-t-[#b8953f] rounded-full animate-spin"></div>
               </div>
             ) : featuredPick ? (
               <div className="w-[480px] h-[320px]">
@@ -139,14 +139,14 @@ export function GaryHero() {
                   flexDirection: 'column',
                 }}>
                   {/* Card Header - Today's Picks */}
-                  <div className="w-full text-center py-3 text-[#c19c60] font-bold text-xl tracking-wide">
+                  <div className="w-full text-center py-3 text-[#b8953f] font-bold text-xl tracking-wide">
                     TODAY'S PICKS
                   </div>
                   
                   {/* Card Content */}
                   <div className="flex flex-1 p-4">
                     {/* Left side (70%) */}
-                    <div className="w-[70%] pr-4 border-r border-[#c19c60] flex flex-col">
+                    <div className="w-[70%] pr-4 border-r border-[#b8953f] flex flex-col">
                       {/* League/Matchup/Game Time sections */}
                       <div className="flex justify-between mb-4">
                         <div>
@@ -170,7 +170,7 @@ export function GaryHero() {
                       {/* Gary's Pick */}
                       <div className="mb-4">
                         <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">GARY'S PICK</div>
-                        <div className="text-[#c19c60] text-2xl font-bold">
+                        <div className="text-[#b8953f] text-2xl font-bold">
                           {featuredPick.pick || 'Missing Pick Data'}
                         </div>
                       </div>
@@ -186,7 +186,7 @@ export function GaryHero() {
                         <div className="flex gap-3">
                           <Link 
                             to="/real-gary-picks"
-                            className="flex-1 bg-[#c19c60]/15 text-[#c19c60] font-semibold py-2 text-center rounded border border-[#c19c60]/30 hover:bg-[#c19c60]/25 transition-colors text-sm uppercase tracking-wider"
+                            className="flex-1 bg-[#b8953f]/15 text-[#b8953f] font-semibold py-2 text-center rounded border border-[#b8953f]/30 hover:bg-[#b8953f]/25 transition-colors text-sm uppercase tracking-wider"
                           >
                             Bet
                           </Link>
@@ -203,7 +203,7 @@ export function GaryHero() {
                     {/* Right side (30%) */}
                     <div className="w-[30%] pl-4 flex flex-col items-center justify-center">
                       {/* Gary Coin Image */}
-                      <div className="w-[130px] h-[130px] rounded-full bg-[#c19c60] flex items-center justify-center mb-4 p-1">
+                      <div className="w-[130px] h-[130px] rounded-full bg-[#b8953f] flex items-center justify-center mb-4 p-1">
                         <img 
                           src={GaryEmblem} 
                           alt="Gary Coin" 
@@ -214,7 +214,7 @@ export function GaryHero() {
                       {/* Confidence */}
                       <div className="text-center">
                         <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">CONFIDENCE</div>
-                        <div className="text-[#c19c60] text-xl font-bold">
+                        <div className="text-[#b8953f] text-xl font-bold">
                           {featuredPick.confidence ? 
                             `${Math.round(parseFloat(featuredPick.confidence) * 100)}%` : 
                             '78%'}
@@ -224,7 +224,7 @@ export function GaryHero() {
                       {/* View Analysis Button */}
                       <Link 
                         to="/real-gary-picks"
-                        className="mt-4 w-full bg-[#c19c60]/15 text-[#c19c60] font-semibold py-2 text-center rounded border border-[#c19c60]/30 hover:bg-[#c19c60]/25 transition-colors text-xs uppercase tracking-wider"
+                        className="mt-4 w-full bg-[#b8953f]/15 text-[#b8953f] font-semibold py-2 text-center rounded border border-[#b8953f]/30 hover:bg-[#b8953f]/25 transition-colors text-xs uppercase tracking-wider"
                       >
                         View Analysis
                       </Link>
@@ -232,14 +232,14 @@ export function GaryHero() {
                   </div>
                   
                   {/* Card Footer */}
-                  <div className="text-center pb-2 text-[#c19c60] font-medium">
+                  <div className="text-center pb-2 text-[#b8953f] font-medium">
                     1 / 4
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="w-[480px] h-[320px] rounded-xl bg-black/50 flex items-center justify-center border border-[#c19c60]/30 p-6 text-center">
-                <p className="text-[#c19c60]">Featured pick not available. Visit Gary's Picks to see today's recommendations.</p>
+              <div className="w-[480px] h-[320px] rounded-xl bg-black/50 flex items-center justify-center border border-[#b8953f]/30 p-6 text-center">
+                <p className="text-[#b8953f]">Featured pick not available. Visit Gary's Picks to see today's recommendations.</p>
               </div>
             )}
           </div>
@@ -251,8 +251,8 @@ export function GaryHero() {
         <div className="absolute -top-16 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-[#0e0e0e]"></div>
         <div className="container mx-auto px-8 py-6 flex justify-between items-center">
           <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-[#c19c60] mr-2 animate-pulse"></div>
-            <span className="text-[#c19c60] font-semibold">THE BEARS BRAIN</span>
+            <div className="w-3 h-3 rounded-full bg-[#b8953f] mr-2 animate-pulse"></div>
+            <span className="text-[#b8953f] font-semibold">THE BEARS BRAIN</span>
           </div>
           <div className="text-white/60 text-sm">AI-powered insights analyzing 15+ years of sports data</div>
         </div>
