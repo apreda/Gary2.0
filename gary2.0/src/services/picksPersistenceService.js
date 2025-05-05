@@ -33,8 +33,12 @@ export const picksPersistenceService = {
           return false; // Return failure since we no longer use localStorage as fallback
         }
         
+        // Use Eastern Time consistently for all date operations
         const today = new Date();
-        const dateString = today.toISOString().split('T')[0]; // YYYY-MM-DD
+        // Convert to Eastern Time
+        const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const dateString = easternTime.toISOString().split('T')[0]; // YYYY-MM-DD in Eastern Time
+        console.log(`Saving picks with Eastern Time date: ${dateString}`);
         console.log('Attempting to save picks for date:', dateString);
         
         // Check if entry for today exists
@@ -122,9 +126,12 @@ export const picksPersistenceService = {
       // The Supabase entry has been manually cleared, so new picks will be generated
       // with the updated formatting
       
-      // Get the current date in YYYY-MM-DD format
+      // Use Eastern Time consistently for all date operations
       const today = new Date();
-      const dateString = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      // Convert to Eastern Time
+      const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
+      const dateString = easternTime.toISOString().split('T')[0]; // YYYY-MM-DD in Eastern Time
+      console.log(`Loading picks for Eastern Time date: ${dateString}`);
       
       // Try to load from Supabase first (preferred source of truth for multi-user)
       try {
@@ -164,15 +171,49 @@ export const picksPersistenceService = {
    */
   picksExistForToday: async () => {
     try {
-      // Only using Supabase for data consistency across all devices
+      // Use Eastern Time consistently for all date operations
+      const today = new Date();
+      // Convert to Eastern Time
+      const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
+      const dateString = easternTime.toISOString().split('T')[0];
       
-      // Check Supabase for today's picks
+      // Log Eastern Time information for debugging
+      const easternHour = easternTime.getHours();
+      console.log(`Current Eastern Time: ${easternTime.toLocaleString()} (Hour: ${easternHour})`);
+      console.log(`Checking for picks with date: ${dateString} (Eastern Time)`);
+      
+      // Don't generate new picks before 10am Eastern Time
+      if (easternHour < 10) {
+        console.log("Too early to generate new picks (before 10am Eastern Time)");
+        console.log("Will use yesterday's picks if available");
+        
+        // If it's before 10am, check for yesterday's picks instead
+        const yesterday = new Date(easternTime);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayString = yesterday.toISOString().split('T')[0];
+        console.log(`Looking for yesterday's picks with date: ${yesterdayString}`);
+        
+        // Only using Supabase for data consistency across all devices
+        const connectionVerified = await ensureAnonymousSession();
+        if (connectionVerified) {
+          // Check for yesterday's picks
+          const { data: yesterdayData, error: yesterdayError } = await supabase
+            .from('daily_picks')
+            .select('id')
+            .filter('date', 'eq', yesterdayString)
+            .limit(1);
+          
+          if (!yesterdayError && yesterdayData && yesterdayData.length > 0) {
+            console.log('Using yesterday\'s picks since it\'s before 10am Eastern Time');
+            return true; // Pretend we have today's picks to prevent generation
+          }
+        }
+      }
+      
+      // Only using Supabase for data consistency across all devices
       try {
         const connectionVerified = await ensureAnonymousSession();
         if (connectionVerified) {
-          const today = new Date();
-          const dateString = today.toISOString().split('T')[0];
-          
           const { data, error } = await supabase
             .from('daily_picks')
             .select('id')
@@ -180,7 +221,7 @@ export const picksPersistenceService = {
             .limit(1);
           
           if (!error && data && data.length > 0) {
-            console.log('Picks exist in Supabase for today');
+            console.log('Picks exist in Supabase for today (Eastern Time)');
             return true;
           }
         }
@@ -189,7 +230,7 @@ export const picksPersistenceService = {
       }
       
       // If we get here, no picks found in any source
-      console.log('No picks exist for today from any source');
+      console.log('No picks exist for today (Eastern Time) from any source');
       return false;
     } catch (error) {
       console.error('Error checking if picks exist:', error);
@@ -207,8 +248,13 @@ export const picksPersistenceService = {
       
       // Clear Supabase entry for today
       await ensureAnonymousSession();
+      
+      // Use Eastern Time consistently for all date operations
       const today = new Date();
-      const dateString = today.toISOString().split('T')[0];
+      // Convert to Eastern Time
+      const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
+      const dateString = easternTime.toISOString().split('T')[0]; // YYYY-MM-DD in Eastern Time
+      console.log(`Clearing picks for Eastern Time date: ${dateString}`);
       
       await supabase
         .from('daily_picks')
