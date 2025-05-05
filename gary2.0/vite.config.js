@@ -28,6 +28,13 @@ export default defineConfig(({ mode }) => {
     build: {
       sourcemap: true
     },
+    optimizeDeps: {
+      exclude: ['@vercel/analytics/react']
+    },
+    // Explicitly declare external packages that shouldn't be processed
+    ssr: {
+      external: ['@vercel/analytics/react']
+    },
     css: {
       postcss: {
         plugins: [
