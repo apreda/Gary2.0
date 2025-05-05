@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/dimensional.css';
 import HeroBannerHeadlines from './HeroBannerHeadlines';
-import RetroPickCard from './RetroPickCard';
 import GaryEmblem from '../assets/images/Garyemblem.png';
 import { supabase } from '../supabaseClient';
 
@@ -88,42 +87,155 @@ export function GaryHero() {
               <p className="uppercase text-black font-bold tracking-wide text-center text-sm">SPORTS INSIDER EXTRA EDITION</p>
             </div>
             
-            {/* Main Headline - Styled similar to Revelo in reference image */}
+            {/* Main Headline */}
             <h1 className="font-extrabold text-white leading-tight mb-8">
-              <span className="block text-5xl lg:text-6xl mb-2">All your work,</span>
-              <span className="block text-5xl lg:text-6xl">finally in one place</span>
+              <span className="block text-6xl lg:text-7xl font-serif italic mb-2">MAKE SMARTER</span>
+              <div className="w-full h-1 bg-[#c19c60] my-2"></div>
+              <span className="block text-[#c19c60] text-6xl lg:text-7xl font-black transform -skew-x-6">SPORTS BETS</span>
+              <div className="w-full h-1 bg-[#c19c60] my-2"></div>
+              <span className="block text-white text-lg mt-2 font-bold tracking-widest">THE WINNING EDGE SINCE 2025</span>
             </h1>
 
             <p className="text-white/80 text-lg mb-8 max-w-lg">
               Whether you're tracking teams, analyzing odds, or just keeping up with the latest sports analytics - Gary A.I. has your back with winning picks.
             </p>
             
-            {/* CTA Buttons - Styled similar to reference image */}
+            {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-5 mb-10">
               <Link 
                 to="/real-gary-picks" 
                 className="inline-flex items-center justify-center bg-[#c19c60] text-black font-semibold py-3 px-8 rounded-md hover:bg-opacity-90 transition duration-300 text-lg"
               >
-                Try it free
+                Get Today's Picks
               </Link>
               <Link 
                 to="/how-it-works" 
                 className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold py-3 px-8 rounded-md hover:bg-[#252525] transition duration-300 text-lg"
               >
-                See how it works →
+                How it Works
               </Link>
             </div>
           </div>
           
-          {/* Right side - Actual RetroPickCard */}
+          {/* Right side - Modern Card Design from Screenshot 2 */}
           <div className="flex justify-center items-center">
             {loading ? (
               <div className="w-[480px] h-[320px] rounded-xl bg-black/50 flex items-center justify-center border border-[#c19c60]/30">
                 <div className="w-8 h-8 border-4 border-[#c19c60]/20 border-t-[#c19c60] rounded-full animate-spin"></div>
               </div>
             ) : featuredPick ? (
-              <div className="transform scale-[0.85] origin-center">
-                <RetroPickCard pick={featuredPick} />
+              <div className="w-[480px] h-[320px]">
+                {/* Modern Card Design - Matches Screenshot 2 exactly */}
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                  color: '#ffffff',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}>
+                  {/* Card Header - Today's Picks */}
+                  <div className="w-full text-center py-3 text-[#c19c60] font-bold text-xl tracking-wide">
+                    TODAY'S PICKS
+                  </div>
+                  
+                  {/* Card Content */}
+                  <div className="flex flex-1 p-4">
+                    {/* Left side (70%) */}
+                    <div className="w-[70%] pr-4 border-r border-[#c19c60] flex flex-col">
+                      {/* League/Matchup/Game Time sections */}
+                      <div className="flex justify-between mb-4">
+                        <div>
+                          <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">LEAGUE</div>
+                          <div className="text-white text-lg font-medium">{featuredPick.league || 'NBA'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">MATCHUP</div>
+                          <div className="text-white text-lg font-medium">
+                            {(featuredPick.homeTeam && featuredPick.awayTeam) ? 
+                              `${featuredPick.awayTeam.split(' ').pop()} @ ${featuredPick.homeTeam.split(' ').pop()}` : 
+                              (featuredPick.game ? featuredPick.game : 'TBD')}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">GAME TIME</div>
+                          <div className="text-white text-lg font-medium">{featuredPick.time || '9:30 PM ET'}</div>
+                        </div>
+                      </div>
+                      
+                      {/* Gary's Pick */}
+                      <div className="mb-4">
+                        <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">GARY'S PICK</div>
+                        <div className="text-[#c19c60] text-2xl font-bold">
+                          {featuredPick.pick || 'Missing Pick Data'}
+                        </div>
+                      </div>
+                      
+                      {/* Rationale Preview */}
+                      <div className="text-gray-300 text-sm line-clamp-3 mb-4">
+                        {featuredPick.rationale ? featuredPick.rationale.substring(0, 120) + '...' : 'Analysis not available'}
+                      </div>
+                      
+                      {/* Take Your Pick */}
+                      <div className="mt-auto">
+                        <div className="text-gray-400 uppercase text-xs tracking-wider mb-2">TAKE YOUR PICK</div>
+                        <div className="flex gap-3">
+                          <Link 
+                            to="/real-gary-picks"
+                            className="flex-1 bg-[#c19c60]/15 text-[#c19c60] font-semibold py-2 text-center rounded border border-[#c19c60]/30 hover:bg-[#c19c60]/25 transition-colors text-sm uppercase tracking-wider"
+                          >
+                            Bet
+                          </Link>
+                          <Link 
+                            to="/real-gary-picks"
+                            className="flex-1 bg-gray-800 text-gray-300 font-semibold py-2 text-center rounded border border-gray-700 hover:bg-gray-700 transition-colors text-sm uppercase tracking-wider"
+                          >
+                            Fade
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Right side (30%) */}
+                    <div className="w-[30%] pl-4 flex flex-col items-center justify-center">
+                      {/* Gary Coin Image */}
+                      <div className="w-[130px] h-[130px] rounded-full bg-[#c19c60] flex items-center justify-center mb-4 p-1">
+                        <img 
+                          src={GaryEmblem} 
+                          alt="Gary Coin" 
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      
+                      {/* Confidence */}
+                      <div className="text-center">
+                        <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">CONFIDENCE</div>
+                        <div className="text-[#c19c60] text-xl font-bold">
+                          {featuredPick.confidence ? 
+                            `${Math.round(parseFloat(featuredPick.confidence) * 100)}%` : 
+                            '78%'}
+                        </div>
+                      </div>
+                      
+                      {/* View Analysis Button */}
+                      <Link 
+                        to="/real-gary-picks"
+                        className="mt-4 w-full bg-[#c19c60]/15 text-[#c19c60] font-semibold py-2 text-center rounded border border-[#c19c60]/30 hover:bg-[#c19c60]/25 transition-colors text-xs uppercase tracking-wider"
+                      >
+                        View Analysis
+                      </Link>
+                    </div>
+                  </div>
+                  
+                  {/* Card Footer */}
+                  <div className="text-center pb-2 text-[#c19c60] font-medium">
+                    1 / 4
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="w-[480px] h-[320px] rounded-xl bg-black/50 flex items-center justify-center border border-[#c19c60]/30 p-6 text-center">
