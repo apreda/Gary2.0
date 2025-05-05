@@ -54,8 +54,8 @@ export function GaryHero() {
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible dimension-bg-section">
       {/* Gary logo positioned just under the navbar */}
-      <div className="absolute top-16 left-6 z-10">
-        <img src="/gary_logo.svg" alt="Gary AI Logo" className="w-48 opacity-75" />
+      <div className="absolute top-20 left-6 z-10 mix-blend-overlay">
+        <img src="/gary_logo.svg" alt="Gary AI Logo" className="w-56 opacity-60" />
       </div>
       
       <main className="max-w-[1440px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">

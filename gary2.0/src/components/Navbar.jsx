@@ -62,7 +62,7 @@ export function Navbar() {
                 key={item.path}
                 to={item.path}
                 className={`text-sm uppercase tracking-wide font-medium transition-colors duration-200 ${activeLink === item.path 
-                  ? 'text-[#E0B016]' 
+                  ? 'text-[#E0B016] active' 
                   : 'text-gray-700 hover:text-[#E0B016]'}`}
                 onClick={() => setActiveLink(item.path)}
               >
@@ -150,7 +150,7 @@ export function Navbar() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`px-4 py-2 text-sm uppercase tracking-wide font-medium ${activeLink === item.path ? 'text-[#E0B016]' : 'text-gray-700 hover:text-[#E0B016]'}`}
+                    className={`px-4 py-2 text-sm uppercase tracking-wide font-medium ${activeLink === item.path ? 'text-[#E0B016] active' : 'text-gray-700 hover:text-[#E0B016]'}`}
                     onClick={() => {
                       setActiveLink(item.path);
                       setIsMobileMenuOpen(false);
