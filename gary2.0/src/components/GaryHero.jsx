@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/dimensional.css';
-import HeroBannerHeadlines from './HeroBannerHeadlines';
 import GaryEmblem from '../assets/images/Garyemblem.png';
 import { supabase } from '../supabaseClient';
 
@@ -102,9 +101,14 @@ export function GaryHero() {
             {/* Left side - Headlines and Buttons */}
             <div className="lg:flex-1 p-5 z-10">
               <div className="overflow-hidden">
-                {/* Hero Headlines - Using your existing component */}
-                <div className="relative z-40 newspaper-blender" style={{ height: '180px' }}>
-                  <HeroBannerHeadlines />
+                {/* Hero Headlines - Directly showing the headlines */}
+                <div className="relative z-40" style={{ height: 'auto' }}>
+                  <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">
+                    Make smarter <span className="text-[#b8953f]">Sports Bets</span> with AI-Powered Picks
+                  </h1>
+                  <p className="text-xl text-gray-300 mb-8">
+                    Gary A.I. analyzes 15+ years of data to give you winning picks daily
+                  </p>
                 </div>
               </div>
               
@@ -140,12 +144,12 @@ export function GaryHero() {
                   <div className="w-8 h-8 border-4 border-[#b8953f]/20 border-t-[#b8953f] rounded-full animate-spin"></div>
                 </div>
               ) : featuredPick ? (
-                <div className="w-[576px] h-[800px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
+                <div className="w-[576px] h-[960px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
                   
                   {/* FRONT CARD - positioned at the top */}
                   <div style={{
                     position: 'absolute',
-                    top: '0',
+                    top: '40px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
@@ -449,10 +453,10 @@ export function GaryHero() {
                     }}></div>
                   </div>
                   
-                  {/* BACK CARD - analysis card positioned below */}
+                  {/* BACK CARD - analysis card positioned below with more space */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '80px',
+                    bottom: '0px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
