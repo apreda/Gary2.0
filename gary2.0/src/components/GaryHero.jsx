@@ -202,11 +202,89 @@ export function GaryHero() {
                 <div className="w-8 h-8 border-4 border-[#b8953f]/20 border-t-[#b8953f] rounded-full animate-spin"></div>
               </div>
             ) : featuredPick ? (
-              <div className="w-[576px] h-[384px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
-                {/* FRONT OF CARD - Modern Dark UI Design - Identical to RealGaryPicks page */}
+              <div className="w-[576px] h-[500px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
+                {/* BACK CARD - positioned beneath the front card */}
                 <div style={{
-                  width: '100%',
-                  height: '100%',
+                  position: 'absolute',
+                  bottom: '20px',
+                  left: '50%',
+                  transform: 'translateX(-50%) rotateX(5deg)',
+                  width: '576px',
+                  height: '384px',
+                  background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  zIndex: 1,
+                  padding: '1.5rem',
+                }}>
+                  {/* Card Header - Pick Banner */}
+                  <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
+                    <div style={{ 
+                      backgroundColor: 'rgba(184, 149, 63, 0.15)',
+                      color: '#b8953f',
+                      fontWeight: 'bold',
+                      fontSize: '1.25rem',
+                      padding: '0.8rem 1rem',
+                      textAlign: 'center',
+                      letterSpacing: '0.05rem',
+                      textTransform: 'uppercase',
+                      borderRadius: '8px',
+                    }}>
+                      {featuredPick.pick || 'DENVER NUGGETS +9.5 -110'}
+                    </div>
+                  </div>
+                  
+                  {/* Rationale Section */}
+                  <div style={{ 
+                    flex: '1', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    height: 'calc(100% - 80px)',
+                  }}>
+                    {/* Main Analysis */}
+                    <div style={{ 
+                      backgroundColor: 'rgba(0, 0, 0, 0.2)', 
+                      padding: '1.75rem', 
+                      borderRadius: '0.75rem',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      fontSize: '1.1rem',
+                      lineHeight: '1.7',
+                      color: '#fff',
+                      width: '100%',
+                      height: '100%',
+                      overflowY: 'auto',
+                    }}>
+                      {/* Rationale Heading */}
+                      <div style={{ 
+                        fontSize: '0.8rem', 
+                        opacity: 0.6, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em', 
+                        marginBottom: '0.75rem'
+                      }}>
+                        Rationale
+                      </div>
+                      
+                      {/* Display the rationale */}
+                      <p style={{ margin: 0, fontWeight: 400, opacity: 0.9 }}>
+                        {featuredPick.rationale || 'Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road. Recent matchups between these teams have been close, and Denver\'s defense has been improving. While OKC has home court advantage, the Nuggets\' championship experience will keep this game competitive. The large spread provides value for Denver backers, even if they don\'t win outright.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* FRONT CARD - positioned above the back card */}
+                <div style={{
+                  position: 'absolute',
+                  top: '0',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 2,
+                  boxShadow: '0 15px 35px rgba(0, 0, 0, 0.5)',
+                  width: '576px',
+                  height: '384px',
                   background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
                   borderRadius: '16px',
                   fontFamily: 'Inter, system-ui, sans-serif',
@@ -290,26 +368,26 @@ export function GaryHero() {
                         Gary's Pick
                       </div>
                       <div style={{ 
-                        fontSize: '2rem', 
+                        fontSize: '1.75rem', 
                         fontWeight: 700, 
                         lineHeight: 1.1,
-                        color: '#b8953f', 
+                        color: '#b8953f',
                         wordBreak: 'break-word',
-                        marginBottom: '0.75rem'
+                        marginBottom: '0.5rem'
                       }}>
                         {featuredPick.pick || 'Denver Nuggets +9.5 -110'}
                       </div>
                       
-                      {/* Rationale preview */}
+                      {/* Preview of the rationale */}
                       <div style={{
                         fontSize: '0.85rem',
+                        color: '#fff',
                         opacity: 0.8,
-                        overflow: 'hidden',
                         display: '-webkit-box',
                         WebkitLineClamp: 3,
                         WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        marginBottom: '0.5rem'
                       }}>
                         {featuredPick.rationale ? 
                           featuredPick.rationale.substring(0, 120) + '...' : 
@@ -379,27 +457,22 @@ export function GaryHero() {
                     </div>
                   </div>
                   
-                  {/* Right side content - prominently elevated appearance */}
+                  {/* Right side content */}
                   <div style={{
                     position: 'absolute',
                     right: 0,
                     top: 0,
                     bottom: 0,
-                    width: '30%',
-                    borderLeft: '2.25px solid #b8953f',
+                    width: '33%',
+                    borderLeft: '1px solid rgba(184, 149, 63, 0.3)',
                     padding: '1.5rem 1rem',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)',
-                    boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)',
-                    borderRadius: '0 16px 16px 0',
-                    clipPath: 'inset(0px 0px 0px -20px)',
-                    zIndex: 2,
-                    transform: 'translateZ(10px)',
+                    background: 'linear-gradient(135deg, rgba(45, 45, 48, 1) 0%, rgba(30, 30, 32, 0.95) 100%)',
                   }}>
-                    {/* Game time section */}
+                    {/* Game time */}
                     <div style={{ 
                       textAlign: 'center',
                       marginBottom: '1rem'
@@ -416,25 +489,24 @@ export function GaryHero() {
                       <div style={{ 
                         fontSize: '1.125rem', 
                         fontWeight: 600,
+                        color: '#fff',
                         opacity: 0.9
                       }}>
-                        {featuredPick.time ? 
-                          (featuredPick.time.includes('ET') ? featuredPick.time : `${featuredPick.time} ET`) : 
-                          '9:30 PM ET'}
+                        {featuredPick.time || '9:30 PM ET'}
                       </div>
                     </div>
                     
-                    {/* Coin Image centered */}
+                    {/* Coin Image */}
                     <div style={{
                       display: 'flex',
                       justifyContent: 'center',
-                      marginTop: 'auto',
-                      marginBottom: 'auto',
-                      background: 'transparent'
+                      alignItems: 'center',
+                      width: '130px',
+                      height: '130px',
                     }}>
                       <img 
-                        src="/coin2.png"
-                        alt="Gary Coin"
+                        src="/coin2.png" 
+                        alt="Gary A.I."
                         style={{
                           width: 130,
                           height: 130,
