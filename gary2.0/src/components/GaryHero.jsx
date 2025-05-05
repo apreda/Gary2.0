@@ -54,8 +54,8 @@ export function GaryHero() {
 
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible">
-      {/* Newspaper headlines background with lower opacity and blur */}
-      <div className="absolute inset-0 z-0 overflow-visible opacity-75 blur-[2px]">
+      {/* Newspaper headlines background with improved readability */}
+      <div className="absolute inset-0 z-0 overflow-visible opacity-80">
         <HeroBannerHeadlines />
       </div>
       
