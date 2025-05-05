@@ -60,14 +60,20 @@ export function GaryHero() {
             {/* Left side - Headlines and Buttons */}
             <div className="lg:flex-1 p-5 z-10">
               <div className="overflow-hidden">
-                {/* Hero Headlines */}
+                {/* Hero Headlines - Newspaper Style */}
                 <div className="relative z-40 mt-4" style={{ height: 'auto' }}>
-                  <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">
-                    Make smarter <span className="text-[#b8953f]">Sports Bets</span> with AI-Powered Picks
-                  </h1>
-                  <p className="text-xl text-gray-300 mb-8">
-                    Gary A.I. analyzes 15+ years of data to give you winning picks daily
-                  </p>
+                  <div className="newspaper-style bg-[#171717] rounded-lg p-6 border-b-4 border-[#b8953f]">
+                    <div className="text-center mb-4">
+                      <span className="text-[#b8953f] text-sm uppercase tracking-widest">Sports Extra Edition</span>
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-4 font-serif italic">
+                      Make smarter <span className="text-[#b8953f]">Sports Bets</span> with AI-Powered Picks
+                    </h1>
+                    <div className="h-px w-full bg-gray-700 my-4"></div>
+                    <p className="text-xl text-gray-300 mb-4 font-serif">
+                      Gary A.I. analyzes 15+ years of data to give you winning picks daily
+                    </p>
+                  </div>
                 </div>
               </div>
               
