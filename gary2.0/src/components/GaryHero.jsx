@@ -455,7 +455,7 @@ export function GaryHero() {
                   {/* BACK CARD - analysis card positioned below with proper separation */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '-166px', /* Moved up by 1.75 inches (168px) */
+                    bottom: '-220px', /* Added more space between cards */
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
