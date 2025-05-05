@@ -1,584 +1,188 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import '../styles/dimensional.css';
-import '../styles/hero.css';
-import { supabase } from '../supabaseClient';
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import "../styles/dimensional.css";
+import "../styles/hero.css";
+import { supabase } from "../supabaseClient";
 
 export function GaryHero() {
-  const [featuredPick, setFeaturedPick] = useState(null);
+  const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load a featured pick from the database
+  // Load featured picks from the database
   useEffect(() => {
-    const fetchFeaturedPick = async () => {
+    const fetchFeaturedPicks = async () => {
       try {
         // Get today's date in YYYY-MM-DD format
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toISOString().split("T")[0];
         
         // Query Supabase for today's picks
         const { data, error } = await supabase
-          .from('daily_picks')
-          .select('picks, date')
-          .eq('date', today)
+          .from("daily_picks")
+          .select("picks, date")
+          .eq("date", today)
           .maybeSingle();
           
         if (error) {
-          console.error('Error fetching featured pick:', error);
+          console.error("Error fetching picks:", error);
           return;
         }
         
-        // If we have picks for today, use the first one with high confidence
+        // If we have picks for today, get the top two with highest confidence
         if (data && data.picks) {
-          const picksArray = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
+          const picksArray = typeof data.picks === "string" ? JSON.parse(data.picks) : data.picks;
           
-          // Find a good featured pick - ideally one with high confidence
-          const bestPick = picksArray.find(pick => 
-            pick.confidence && parseFloat(pick.confidence) >= 0.7
-          ) || picksArray[0]; // Fallback to first pick if no high confidence pick
+          // Sort by confidence (high to low) and get top 2
+          const sortedPicks = [...picksArray].sort((a, b) => {
+            const confA = a.confidence ? parseFloat(a.confidence) : 0;
+            const confB = b.confidence ? parseFloat(b.confidence) : 0;
+            return confB - confA;
+          }).slice(0, 2); // Get top 2 picks
           
-          if (bestPick) {
-            console.log('Featured pick found:', bestPick);
-            setFeaturedPick(bestPick);
-          }
+          setFeaturedPicks(sortedPicks);
         }
       } catch (err) {
-        console.error('Error in fetchFeaturedPick:', err);
+        console.error("Error in fetchFeaturedPicks:", err);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchFeaturedPick();
+    fetchFeaturedPicks();
   }, []);
 
+  // Render a pick card
+  const renderPickCard = (pick) => {
+    if (!pick) return null;
+    
+    return (
+      <div className="rounded-xl overflow-hidden shadow-lg" style={{
+        background: "linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)",
+        width: "320px",
+        height: "350px",
+        position: "relative"
+      }}>
+        {/* Card content */}
+        <div className="p-5 h-full flex flex-col">
+          {/* League and matchup */}
+          <div className="mb-3">
+            <div className="text-[#b8953f] text-xs font-semibold mb-1">{pick.league}</div>
+            <div className="text-white text-lg font-bold">{pick.homeTeam} vs {pick.awayTeam}</div>
+          </div>
+          
+          {/* Pick details */}
+          <div className="bg-[#1d1d1d] p-3 rounded-lg mb-4">
+            <div className="text-white/60 text-xs mb-1">Gary's Pick</div>
+            <div className="text-white text-xl font-bold">{pick.betType}: {pick.pick}</div>
+            <div className="text-[#b8953f] text-sm mt-1">{pick.odds}</div>
+          </div>
+          
+          {/* Game time & confidence */}
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <div className="text-white/60 text-xs mb-1">Game Time</div>
+              <div className="text-white text-sm font-medium">{pick.time || "7:00 PM ET"}</div>
+            </div>
+            <div>
+              <div className="text-white/60 text-xs mb-1">Confidence</div>
+              <div className="text-[#b8953f] text-sm font-bold">{Math.round(parseFloat(pick.confidence) * 100)}%</div>
+            </div>
+          </div>
+          
+          {/* Rationale */}
+          <div className="bg-black/20 p-3 rounded-lg mt-auto">
+            <div className="text-white/60 text-xs mb-1">Gary's Reasoning</div>
+            <div className="text-white/90 text-sm line-clamp-3">{pick.rationale}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <section className="hero relative flex flex-col min-h-screen w-full overflow-hidden dimension-bg-section">
+    <section className="hero relative flex flex-col overflow-hidden dimension-bg-section" style={{ width: "100vw", height: "100vh" }}>
       {/* Hero watermark background - Gary Money image */}
       <div className="hero__watermark absolute top-1/2 left-1/2 w-[120%] h-[120%] transform -translate-x-1/2 -translate-y-1/2 scale-110 pointer-events-none z-10">
         <img 
           src="/garymoney.png" 
           alt="" 
           className="w-full h-full object-contain opacity-10 mix-blend-overlay" 
-          style={{ filter: 'saturate(0.8) contrast(1.1)' }}
+          style={{ filter: "saturate(0.8) contrast(1.1)" }}
         />
       </div>
       
-      <main className="max-w-[1440px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-20 relative">
-        {/* Centered Hero Content - Inspired by mymind and Tailscale layouts */}
-        <div className="w-full mx-auto flex flex-col items-center mb-20">
-          {/* AI Analytics Badge */}
-          <div className="flex items-center mb-6 relative justify-center">
-            <div className="w-3 h-3 rounded-full bg-[#b8953f] animate-pulse mr-3"></div>
-            <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
+      <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
+        {/* Centered Hero Content */}
+        <div className="w-full mx-auto flex flex-col items-center mb-8">
+          {/* NEW badge */}
+          <div className="mb-6 relative">
+            <div className="bg-[#b8953f] text-black text-xs font-semibold px-3 py-1 rounded-full flex items-center">
+              <span className="mr-1.5 text-[10px] font-bold">NEW</span>
+              <span>Introducing Gary AI: Intelligent sports betting</span>
+            </div>
           </div>
 
-          {/* Main headline - Large, centered, prominent */}
-          <h1 className="mb-6 text-center max-w-5xl" style={{ fontSize: 'clamp(3rem, 8vw, 4.5rem)', lineHeight: '1.1', letterSpacing: '-0.02em' }}>
-            <span className="text-white font-bold" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>Smarter </span> 
-            <span className="bg-clip-text text-transparent bg-gradient-to-br from-[#d4af37] via-[#b8953f] to-[#e9c96a] font-extrabold" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.2)', WebkitBackgroundClip: 'text' }}>Sports Bets</span>
+          {/* Main headline - Vault-inspired typography */}
+          <h1 className="mb-8 text-center" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)", lineHeight: "1.05", letterSpacing: "-0.02em", maxWidth: "1000px" }}>
+            <span className="text-white font-bold">The gateway to</span><br/> 
+            <span className="italic font-normal text-[#b8953f] mr-2">smart</span>
+            <span className="text-white font-bold">sports bets</span>
           </h1>
           
-          {/* Subheading - Clean, modern formatting */}
-          <div className="text-center mb-10 max-w-3xl">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-3" style={{ lineHeight: '1.3', textShadow: '0 4px 12px rgba(0,0,0,0.4)', letterSpacing: '0.01em' }}>
-              Powered by Gary AI
-            </h2>
-            <p className="text-white/80 text-lg md:text-xl max-w-2xl mx-auto">
-              Make smart, data-driven sports betting decisions with AI-powered analytics
+          {/* Subheading */}
+          <div className="text-center mb-10 max-w-2xl">
+            <p className="text-white/80 text-xl md:text-2xl mx-auto leading-relaxed">
+              With a few clicks you can access AI-powered picks with over 70% win rates across any sport and any league.
             </p>
           </div>
 
-          {/* CTA Buttons - Horizontally centered */}
-          <div className="hero-cta flex flex-col sm:flex-row gap-5 mt-4 justify-center">
-            <Link to="/real-gary-picks" className="hero-cta-primary px-8 py-3 text-lg">Get Today's Picks</Link>
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-5 mt-4 justify-center">
+            <Link to="/real-gary-picks" className="hero-cta-primary px-8 py-3 text-lg">View Today's Picks</Link>
             <Link to="/how-it-works" className="hero-cta-secondary px-8 py-3 text-lg">How it Works</Link>
           </div>
-        </div>
-
-        {/* Feature bullets - Horizontally arranged */}
-        <div className="flex flex-wrap justify-center gap-8 mb-20 max-w-5xl mx-auto">
-          <div className="flex items-start bg-[#1a1a1a]/40 backdrop-blur-sm p-4 rounded-xl border-l-2 border-[#b8953f]/40 shadow-lg w-64">
-            <span className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
-              <span className="text-[#d4af37] text-base">✓</span>
-            </span>
-            <span className="text-white/80 text-base" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>15+ years of sports data analysis</span>
-          </div>
           
-          <div className="flex items-start bg-[#1a1a1a]/40 backdrop-blur-sm p-4 rounded-xl border-l-2 border-[#b8953f]/40 shadow-lg w-64">
-            <span className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
-              <span className="text-[#d4af37] text-base">✓</span>
-            </span>
-            <span className="text-white/80 text-base" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Daily picks with 78%+ confidence</span>
-          </div>
-          
-          <div className="flex items-start bg-[#1a1a1a]/40 backdrop-blur-sm p-4 rounded-xl border-l-2 border-[#b8953f]/40 shadow-lg w-64">
-            <span className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
-              <span className="text-[#d4af37] text-base">✓</span>
-            </span>
-            <span className="text-white/80 text-base" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Detailed analysis & reasoning</span>
+          {/* Powered by section */}
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 mt-8 text-white/50 text-sm">
+            <span>Powered by:</span>
+            <span className="font-medium text-[#b8953f]/90">SportsDB</span>
+            <span className="font-medium text-[#b8953f]/90">The Odds API</span>
+            <span className="font-medium text-[#b8953f]/90">OpenAI</span>
+            <span className="font-medium text-[#b8953f]/90">Perplexity</span>
           </div>
         </div>
 
-        {/* Pick Cards Row - Horizontally arranged with clean modern styling*/}
-        <div className="flex flex-col md:flex-row justify-center items-center gap-8 w-full max-w-6xl mx-auto">
-          {/* Featured Pick Card */}
-          <div className="flex-1 flex items-center justify-center">
-            {!loading && featuredPick ? (
-              <div className="w-[576px] h-[384px] relative">
-                {/* Card container */}
-                <div style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '100%',
-                }}>
-                  {/* FRONT OF CARD - Modern Dark UI Design */}
-                  <div style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
-                    background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                    borderRadius: '16px',
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                    overflow: 'hidden',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                    color: '#ffffff',
-                  }}>
-                    {/* Left side content */}
-                    <div style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: '70%',
-                      padding: '1.5rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      overflow: 'hidden',
-                    }}>
-                      {/* League and Matchup in horizontal layout */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                        {/* League */}
-                        <div>
-                          <div style={{ 
-                            fontSize: '0.75rem', 
-                            opacity: 0.6, 
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em', 
-                            marginBottom: '0.25rem'
-                          }}>
-                            League
-                          </div>
-                          <div style={{ 
-                            fontSize: '1.25rem', 
-                            fontWeight: 600, 
-                            letterSpacing: '0.02em',
-                            opacity: 0.95
-                          }}>
-                            {featuredPick.league || 'MLB'}
-                          </div>
-                        </div>
-                        
-                        {/* Matchup */}
-                        <div style={{ marginLeft: '20px' }}>
-                          <div style={{ 
-                            fontSize: '0.75rem', 
-                            opacity: 0.6, 
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em', 
-                            marginBottom: '0.25rem'
-                          }}>
-                            Matchup
-                          </div>
-                          <div style={{ 
-                            fontSize: '1.25rem', 
-                            fontWeight: 600,
-                            opacity: 0.9
-                          }}>
-                            {(featuredPick.homeTeam && featuredPick.awayTeam) ? 
-                              `${featuredPick.awayTeam.split(' ').pop()} @ ${featuredPick.homeTeam.split(' ').pop()}` : 
-                              (featuredPick.game ? featuredPick.game : 'TBD')}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* The main pick display */}
-                      <div style={{ marginBottom: '1rem' }}>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          opacity: 0.6, 
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em', 
-                          marginBottom: '0.5rem'
-                        }}>
-                          Gary's Pick
-                        </div>
-                        <div style={{ 
-                          fontSize: '2rem', 
-                          fontWeight: 700, 
-                          lineHeight: 1.1,
-                          color: '#bfa142', /* Gold color for the actual pick */
-                          wordBreak: 'break-word',
-                          marginBottom: '0.75rem'
-                        }}>
-                          {featuredPick.pick || 'DENVER NUGGETS +9.5 -110'}
-                        </div>
-                        
-                        {/* Add a preview of the rationale on front card */}
-                        <div style={{
-                          fontSize: '0.85rem',
-                          opacity: 0.8,
-                          overflow: 'hidden',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical',
-                          textOverflow: 'ellipsis',
-                          marginBottom: '0.5rem'
-                        }}>
-                          {featuredPick.rationale ? featuredPick.rationale.substring(0, 120) + '...' : 'View analysis for details'}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Right side content with elevated appearance */}
-                    <div style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: '30%',
-                      borderLeft: '2.25px solid #bfa142', /* Gold border */
-                      padding: '1.5rem 1rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)',
-                      boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)',
-                      borderRadius: '0 16px 16px 0',
-                      clipPath: 'inset(0px 0px 0px -20px)',
-                      zIndex: 2,
-                    }}>
-                      {/* Game time section */}
-                      <div style={{ 
-                        textAlign: 'center',
-                        marginBottom: '1rem'
-                      }}>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          opacity: 0.6, 
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em', 
-                          marginBottom: '0.25rem'
-                        }}>
-                          Game Time
-                        </div>
-                        <div style={{ 
-                          fontSize: '1.125rem', 
-                          fontWeight: 600,
-                          opacity: 0.9
-                        }}>
-                          {featuredPick.time ? 
-                            (function() {
-                              let time = featuredPick.time.includes('ET') ? featuredPick.time : `${featuredPick.time} ET`;
-                              return time.replace(/:([0-9])\s/, ':0$1 ');
-                            })() : '10:10 PM ET'}
-                        </div>
-                      </div>
-                      
-                      {/* Coin Image centered */}
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        marginTop: 'auto',
-                        marginBottom: 'auto',
-                        background: 'transparent'
-                      }}>
-                        <img 
-                          src="/coin2.png" 
-                          alt="Coin Image"
-                          style={{
-                            width: 130,
-                            height: 130,
-                            objectFit: 'contain',
-                            opacity: 1,
-                            background: 'transparent'
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Confidence score with visual indicator */}
-                      <div style={{ 
-                        textAlign: 'center',
-                        marginTop: '1rem',
-                        width: '100%'
-                      }}>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          opacity: 0.6, 
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em', 
-                          marginBottom: '0.25rem'
-                        }}>
-                          Confidence
-                        </div>
-                        
-                        {/* Confidence score display */}
-                        <div style={{
-                          fontSize: '1.2rem',
-                          fontWeight: 700,
-                          opacity: 0.95,
-                          color: '#bfa142', /* Gold for confidence */
-                          marginBottom: '0.5rem'
-                        }}>
-                          {typeof featuredPick.confidence === 'number' ? 
-                            Math.round(featuredPick.confidence * 100) + '%' : 
-                            (featuredPick.confidence || '78%')}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Subtle gradient overlay for depth */}
-                    <div style={{
-                      position: 'absolute',
-                      inset: 0,
-                      background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
-                      opacity: 0.5,
-                      pointerEvents: 'none'
-                    }}></div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="w-[576px] h-[384px] rounded-xl bg-black/50 flex items-center justify-center border border-[#b8953f]/30 p-6 text-center">
-                <p className="text-[#b8953f]">Featured pick not available. Visit Gary's Picks to see today's recommendations.</p>
-              </div>
-            )}
+        {/* Feature highlights - pill style */}
+        <div className="flex flex-wrap justify-center gap-6 mb-8 max-w-4xl mx-auto">
+          <div className="flex items-center bg-[rgba(0,0,0,0.2)] backdrop-blur-sm py-2 px-4 rounded-lg border border-[#b8953f]/20">
+            <span className="text-[#b8953f] mr-2">✓</span>
+            <span className="text-white/90 text-sm font-medium">15+ years of sports data</span>
           </div>
           
-          {/* Second Pick Card (Alternate) */}
-          <div className="flex-1 flex items-center justify-center">
-            {!loading && featuredPick ? (
-              <div className="w-[576px] h-[384px] relative">
-                {/* Card container */}
-                <div style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '100%',
-                }}>
-                  {/* FRONT OF CARD - Modern Dark UI Design */}
-                  <div style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
-                    background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                    borderRadius: '16px',
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                    overflow: 'hidden',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                    color: '#ffffff',
-                  }}>
-                    {/* Left side content */}
-                    <div style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: '70%',
-                      padding: '1.5rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      overflow: 'hidden',
-                    }}>
-                      {/* League and Matchup in horizontal layout */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                        {/* League */}
-                        <div>
-                          <div style={{ 
-                            fontSize: '0.75rem', 
-                            opacity: 0.6, 
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em', 
-                            marginBottom: '0.25rem'
-                          }}>
-                            League
-                          </div>
-                          <div style={{ 
-                            fontSize: '1.25rem', 
-                            fontWeight: 600, 
-                            letterSpacing: '0.02em',
-                            opacity: 0.95
-                          }}>
-                            NBA
-                          </div>
-                        </div>
-                        
-                        {/* Matchup */}
-                        <div style={{ marginLeft: '20px' }}>
-                          <div style={{ 
-                            fontSize: '0.75rem', 
-                            opacity: 0.6, 
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em', 
-                            marginBottom: '0.25rem'
-                          }}>
-                            Matchup
-                          </div>
-                          <div style={{ 
-                            fontSize: '1.25rem', 
-                            fontWeight: 600,
-                            opacity: 0.9
-                          }}>
-                            Wizards @ Suns
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* The main pick display */}
-                      <div style={{ marginBottom: '1rem' }}>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          opacity: 0.6, 
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em', 
-                          marginBottom: '0.5rem'
-                        }}>
-                          Gary's Pick
-                        </div>
-                        <div style={{ 
-                          fontSize: '2rem', 
-                          fontWeight: 700, 
-                          lineHeight: 1.1,
-                          color: '#bfa142', /* Gold color for the actual pick */
-                          wordBreak: 'break-word',
-                          marginBottom: '0.75rem'
-                        }}>
-                          SUNS -3.5 -110
-                        </div>
-                        
-                        {/* Add a preview of the rationale on front card */}
-                        <div style={{
-                          fontSize: '0.85rem',
-                          opacity: 0.8,
-                          overflow: 'hidden',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical',
-                          textOverflow: 'ellipsis',
-                          marginBottom: '0.5rem'
-                        }}>
-                          Phoenix has been dominant at home recently, going 7-1 ATS in their last 8 home games. The matchup favors their backcourt...
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Right side content with elevated appearance */}
-                    <div style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: '30%',
-                      borderLeft: '2.25px solid #bfa142', /* Gold border */
-                      padding: '1.5rem 1rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)',
-                      boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)',
-                      borderRadius: '0 16px 16px 0',
-                      clipPath: 'inset(0px 0px 0px -20px)',
-                      zIndex: 2,
-                    }}>
-                      {/* Game time section */}
-                      <div style={{ 
-                        textAlign: 'center',
-                        marginBottom: '1rem'
-                      }}>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          opacity: 0.6, 
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em', 
-                          marginBottom: '0.25rem'
-                        }}>
-                          Game Time
-                        </div>
-                        <div style={{ 
-                          fontSize: '1.125rem', 
-                          fontWeight: 600,
-                          opacity: 0.9
-                        }}>
-                          7:00 PM ET
-                        </div>
-                      </div>
-                      
-                      {/* Coin Image centered */}
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        marginTop: 'auto',
-                        marginBottom: 'auto',
-                        background: 'transparent'
-                      }}>
-                        <img 
-                          src="/coin2.png" 
-                          alt="Coin Image"
-                          style={{
-                            width: 130,
-                            height: 130,
-                            objectFit: 'contain',
-                            opacity: 1,
-                            background: 'transparent'
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Confidence score with visual indicator */}
-                      <div style={{ 
-                        textAlign: 'center',
-                        marginTop: '1rem',
-                        width: '100%'
-                      }}>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          opacity: 0.6, 
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em', 
-                          marginBottom: '0.25rem'
-                        }}>
-                          Confidence
-                        </div>
-                        
-                        {/* Confidence score display */}
-                        <div style={{
-                          fontSize: '1.2rem',
-                          fontWeight: 700,
-                          opacity: 0.95,
-                          color: '#bfa142', /* Gold for confidence */
-                          marginBottom: '0.5rem'
-                        }}>
-                          72%
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Subtle gradient overlay for depth */}
-                    <div style={{
-                      position: 'absolute',
-                      inset: 0,
-                      background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
-                      opacity: 0.5,
-                      pointerEvents: 'none'
-                    }}></div>
-                  </div>
+          <div className="flex items-center bg-[rgba(0,0,0,0.2)] backdrop-blur-sm py-2 px-4 rounded-lg border border-[#b8953f]/20">
+            <span className="text-[#b8953f] mr-2">✓</span>
+            <span className="text-white/90 text-sm font-medium">78%+ confidence rate</span>
+          </div>
+          
+          <div className="flex items-center bg-[rgba(0,0,0,0.2)] backdrop-blur-sm py-2 px-4 rounded-lg border border-[#b8953f]/20">
+            <span className="text-[#b8953f] mr-2">✓</span>
+            <span className="text-white/90 text-sm font-medium">Advanced analytics</span>
+          </div>
+        </div>
+        
+        {/* Featured Pick Cards - horizontally arranged */}
+        <div className="flex flex-col items-center mt-auto mb-12">
+          <div className="flex flex-col md:flex-row gap-6 justify-center">
+            {loading ? (
+              <div className="text-[#b8953f] text-center">Loading today's top picks...</div>
+            ) : featuredPicks.length > 0 ? (
+              featuredPicks.map((pick, index) => (
+                <div key={index} className="transition-all hover:transform hover:-translate-y-2">
+                  {renderPickCard(pick)}
                 </div>
-              </div>
+              ))
             ) : (
-              <div className="w-[576px] h-[384px] rounded-xl bg-black/50 flex items-center justify-center border border-[#b8953f]/30 p-6 text-center">
-                <p className="text-[#b8953f]">Featured pick not available. Visit Gary's Picks to see today's recommendations.</p>
+              <div className="text-[#b8953f] text-center p-4 bg-black/30 rounded-lg border border-[#b8953f]/20 backdrop-blur-sm">
+                Visit Gary's Picks to see today's recommendations
               </div>
             )}
           </div>
@@ -586,14 +190,14 @@ export function GaryHero() {
       </main>
 
       {/* The Bears Brain Section Peek */}
-      <div className="relative z-5 w-full dimension-bg-section h-24 mt-auto">
+      <div className="relative z-5 w-full dimension-bg-section h-16 mt-auto">
         <div className="absolute -top-16 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-[#0e0e0e]"></div>
-        <div className="container mx-auto px-8 py-6 flex justify-between items-center">
+        <div className="container mx-auto px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
             <div className="w-3 h-3 rounded-full bg-[#b8953f] mr-2 animate-pulse"></div>
             <span className="text-[#b8953f] font-semibold">THE BEARS BRAIN</span>
           </div>
-          <div className="text-white/60 text-sm">AI-powered insights analyzing 15+ years of sports data</div>
+          <div className="text-white/60 text-xs md:text-sm">AI-powered insights analyzing 15+ years of sports data</div>
         </div>
       </div>
     </section>

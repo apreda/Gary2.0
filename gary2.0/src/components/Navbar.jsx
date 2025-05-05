@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useUserPlan } from "../hooks/useUserPlan";
 import { useBetCardProfile } from "../contexts/BetCardProfileContext";
 import { useAuth } from '../contexts/AuthContext';
-import '../styles/navbar.css';
+// We'll style the navbar directly in this file without the external CSS
 
 export function Navbar() {
   const location = useLocation();
@@ -15,12 +15,13 @@ export function Navbar() {
   // Use Supabase auth state to determine if user is logged in
   const session = !!user;
   
-  // Navigation items
+  // Navigation items - simplified for Vault-like style
   const navItems = [
     { path: '/', label: 'Home' },
     { path: '/real-gary-picks', label: 'Gary\'s Picks' },
     { path: '/billfold', label: 'Billfold' },
     { path: '/leaderboard', label: 'Leaderboard' },
+    { path: '/how-it-works', label: 'Docs' },
     { path: '/pricing', label: 'Pricing' },
   ];
   
@@ -38,21 +39,21 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="navbar">
-      <div className="container mx-auto px-8 flex items-center justify-between h-full">
+    <header className="sticky top-0 bg-[#0D1117]/95 backdrop-blur-md z-50 px-6 py-2 border-b border-[#E0B016]/10">
+      <div className="max-w-7xl mx-auto flex items-center justify-between h-14">
         {/* Logo */}
         <Link to="/" className="flex items-center group">
-          <span className="text-[#E0B016] text-2xl md:text-3xl tracking-tight font-light font-mono">GARY</span>
-          <span className="text-gray-900 text-2xl md:text-3xl tracking-wide font-bold font-mono">A.I.</span>
+          <span className="text-[#E0B016] text-2xl tracking-tight font-light font-mono mr-1">GARY</span>
+          <span className="text-white text-2xl tracking-wide font-bold font-mono">A.I.</span>
         </Link>
         
-        {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex space-x-6">
+        {/* Desktop Navigation Links - Vault style */}
+        <nav className="hidden md:flex space-x-8">
           {filteredNavItems.map((item) => (
             item.action ? (
               <button
                 key={item.path}
-                className="text-sm uppercase tracking-wide font-medium text-gray-700 hover:text-[#E0B016] transition-colors duration-200"
+                className="text-sm font-medium text-white/70 hover:text-[#E0B016] transition-colors duration-200"
                 onClick={item.action}
               >
                 {item.label}
@@ -61,9 +62,10 @@ export function Navbar() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`text-sm uppercase tracking-wide font-medium transition-colors duration-200 ${activeLink === item.path 
-                  ? 'text-[#E0B016] active' 
-                  : 'text-gray-700 hover:text-[#E0B016]'}`}
+                className={`text-sm font-medium transition-colors duration-200 ${
+                  activeLink === item.path 
+                  ? 'text-[#E0B016]' 
+                  : 'text-white/70 hover:text-[#E0B016]'}`}
                 onClick={() => setActiveLink(item.path)}
               >
                 {item.label}
@@ -72,39 +74,45 @@ export function Navbar() {
           ))}
         </nav>
       
-        {/* Sign In / Sign Up Buttons */}
-        <div className="flex items-center space-x-4">
+        {/* Sign In / Sign Up Buttons - Vault style */}
+        <div className="flex items-center space-x-5">
           {!session ? (
             <>
               <Link 
                 to="/signin" 
-                className="text-gray-700 hover:text-[#E0B016] font-medium text-sm uppercase tracking-wide"
+                className="text-white/80 hover:text-white font-medium text-sm transition-colors"
                 onClick={() => setActiveLink("/signin")}
               >
-                Log In
+                Sign in
               </Link>
               <Link 
                 to="/pricing" 
-                className="btn-primary text-sm uppercase tracking-wider font-medium"
+                className="bg-white/90 hover:bg-white text-[#0D1117] px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center"
                 onClick={() => setActiveLink("/pricing")}
               >
-                Upgrade →
+                <span>Dashboard</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 ml-1">
+                  <path fillRule="evenodd" d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z" clipRule="evenodd" />
+                </svg>
               </Link>
             </>
           ) : (
             <>
               <button
-                className="text-gray-700 hover:text-[#E0B016] font-medium text-sm uppercase tracking-wide"
+                className="text-white/80 hover:text-white font-medium text-sm transition-colors"
                 onClick={openBetCardProfile}
               >
                 BetCard
               </button>
               <Link 
-                to="/signout" 
-                className="text-white bg-gray-800 px-4 py-2 rounded-md text-sm uppercase tracking-wider font-medium hover:bg-gray-700 transition-all"
-                onClick={() => setActiveLink("/signout")}
+                to="/dashboard" 
+                className="bg-[#E0B016] hover:bg-[#d4af37] text-black px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center"
+                onClick={() => setActiveLink("/dashboard")}
               >
-                Sign Out
+                Dashboard
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 ml-1">
+                  <path fillRule="evenodd" d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z" clipRule="evenodd" />
+                </svg>
               </Link>
             </>
           )}
@@ -112,16 +120,16 @@ export function Navbar() {
           {/* Mobile menu button */}
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="lg:hidden p-2 text-gray-700 hover:text-gray-900 focus:outline-none rounded-md transition-colors duration-200"
+            className="md:hidden p-1.5 text-white/70 hover:text-white/90 focus:outline-none transition-colors duration-200"
             aria-label="Toggle mobile menu"
             aria-expanded={isMobileMenuOpen}
           >
             {!isMobileMenuOpen ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
               </svg>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             )}
@@ -129,16 +137,16 @@ export function Navbar() {
         </div>
       </div>
       
-      {/* Mobile Menu Dropdown */}
+      {/* Mobile Menu Dropdown - Vault style */}
       {isMobileMenuOpen && (
-        <div className="bg-white/90 shadow-lg lg:hidden backdrop-blur-md mt-2 rounded-xl border border-[#E0B016]/10 mx-4 overflow-hidden animate-fadeIn">
-          <div className="container mx-auto px-8 py-5">
-            <div className="flex flex-col space-y-4">
+        <div className="bg-[#0D1117]/95 shadow-lg md:hidden mt-2 border-t border-[#E0B016]/10 overflow-hidden animate-fadeIn absolute left-0 right-0">
+          <div className="max-w-7xl mx-auto py-4 px-6">
+            <div className="flex flex-col space-y-3">
               {filteredNavItems.map((item) => (
                 item.action ? (
                   <button
                     key={item.path}
-                    className="px-4 py-2 text-sm uppercase tracking-wide font-medium text-gray-700 hover:text-[#E0B016] text-left"
+                    className="py-2 text-sm font-medium text-white/70 hover:text-[#E0B016] text-left"
                     onClick={() => {
                       item.action();
                       setIsMobileMenuOpen(false);
@@ -150,7 +158,7 @@ export function Navbar() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`px-4 py-2 text-sm uppercase tracking-wide font-medium ${activeLink === item.path ? 'text-[#E0B016] active' : 'text-gray-700 hover:text-[#E0B016]'}`}
+                    className={`py-2 text-sm font-medium ${activeLink === item.path ? 'text-[#E0B016]' : 'text-white/70 hover:text-[#E0B016]'}`}
                     onClick={() => {
                       setActiveLink(item.path);
                       setIsMobileMenuOpen(false);
