@@ -11,10 +11,9 @@ const __dirname = path.dirname(__filename);
 // Load environment variables with priority for production environment variables
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Initialize Stripe with the secret key (with fallback for direct initialization)
-const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_51REDaW2c9qscDPSLg7CT2hU46aGTmbwf8mkgqzPn6KHU2QMHoMkjyPHm0gTewwdI8znMlwX2KsevxUOEdmPPCq4f00f91VTFO0';
-console.log('Initializing Stripe with key:', STRIPE_KEY.substring(0, 8) + '...');
-const stripe = new Stripe(STRIPE_KEY);
+// Initialize Stripe with the secret key from environment variables
+console.log('Initializing Stripe with environment key');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // For production, we'll skip the Supabase integration for now and focus on Stripe
 let supabase = null;
