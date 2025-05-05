@@ -10,49 +10,39 @@ const HEADLINE_HEIGHT = 60; // height of each headline lane including spacing
 const TOTAL_HEADLINES = 16; // total headlines that will be on rotation
 
 export default function HeroBannerHeadlines() {
-  // Prepare headlines with properly staggered animations to prevent overlap
+  // Prepare headlines with exactly one headline per lane (no overlap)
   const randomized = useMemo(() => {
-    // Shuffle the headlines array
+    // Shuffle the headlines array to get variety
     const shuffled = [...headlines].sort(() => Math.random() - 0.5);
     
-    // Take more headlines than we'll initially show
-    const selected = shuffled.slice(0, TOTAL_HEADLINES);
+    // Only use exactly one headline per lane - take only as many as we have visible lanes
+    const selected = shuffled.slice(0, VISIBLE_HEADLINES);
     
-    // Assign each headline to its own specific lane with precise vertical positioning
+    // Create fixed, evenly spaced lanes for headlines
     const positions = [];
-    
-    // Create evenly spaced lane positions with exact spacing
     const laneHeight = BANNER_HEIGHT / VISIBLE_HEADLINES;
     
+    // Create exactly 12 evenly spaced lanes
     for (let i = 0; i < VISIBLE_HEADLINES; i++) {
-      // Calculate exact position for this lane
+      // Calculate precise position for this lane
       const lanePosition = i * laneHeight + (laneHeight / 2) - (HEADLINE_HEIGHT / 2);
       positions.push(lanePosition);
     }
     
-    // Return headlines with calculated positions and carefully staggered timing
+    // Return one headline per lane with alternating directions
     return selected.map((h, index) => {
-      // Assign vertical position with even distribution
-      const laneIndex = index % VISIBLE_HEADLINES;
-      const top = positions[laneIndex];
+      // Get the exact vertical position for this lane
+      const top = positions[index];
       
-      // Carefully staggered starting positions
-      // Headlines in the same lane will start from opposite sides and at different positions
-      // This ensures they won't overlap during animation
+      // Alternate starting directions (left vs right)
       const startFromRight = index % 2 === 0;
       
-      // Calculate horizontal staggering to prevent overlap
-      // Headlines in the same lane need to be separated in time/space
-      // We create a unique position for each headline within its lane
-      const laneGroup = Math.floor(index / VISIBLE_HEADLINES);
+      // Stagger initial positions within lane to create natural appearance
+      // Different starting progress to avoid all headlines appearing at once
+      const initialProgress = (index * 0.08) % 1.0;
       
-      // This staggers headlines in the same lane to start at different positions
-      // The modulo math ensures that headlines in the same lane are maximally separated
-      const initialProgress = ((laneIndex * 0.07) + (laneGroup * 0.33)) % 1.0;
-      
-      // Slightly vary speed for more natural movement
-      // We avoid making headlines in the same lane have similar speeds
-      const speedVariance = 30 + (laneIndex * 5) + (laneGroup * 15);
+      // Vary speed slightly for more natural movement
+      const speedVariance = 20 + (index * 7);
       const duration = SPEED_BASE + speedVariance;
       
       return {
@@ -61,7 +51,7 @@ export default function HeroBannerHeadlines() {
         startFromRight,
         dur: duration,
         initialProgress,
-        initiallyVisible: true // Make all headlines initially visible for better distribution
+        initiallyVisible: true
       };
     });
   }, []);

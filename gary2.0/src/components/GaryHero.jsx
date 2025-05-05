@@ -104,13 +104,13 @@ export function GaryHero() {
             <div className="flex flex-col sm:flex-row gap-5 mb-10">
               <Link 
                 to="/real-gary-picks" 
-                className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold py-3 px-8 rounded-md hover:bg-opacity-90 transition duration-300 text-lg"
+                className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold py-4 px-12 rounded-lg hover:bg-opacity-90 transition duration-300 text-lg w-64 h-14"
               >
                 Get Today's Picks
               </Link>
               <Link 
                 to="/how-it-works" 
-                className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold py-3 px-8 rounded-md hover:bg-[#252525] transition duration-300 text-lg"
+                className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold py-4 px-12 rounded-lg hover:bg-[#252525] transition duration-300 text-lg w-64 h-14"
               >
                 How it Works
               </Link>
