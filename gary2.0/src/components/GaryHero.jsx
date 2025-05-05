@@ -53,47 +53,6 @@ export function GaryHero() {
 
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible">
-      {/* Massive background matching screenshot colors */}
-      <div className="absolute inset-0 z-0 overflow-hidden bg-[#1e1e1e]">
-        {/* Dark gradient background with charcoal tones */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1e1e1e] via-[#232323] to-[#1a1a1a] opacity-90"></div>
-        
-        {/* Animated wave effect */}
-        <div className="absolute inset-0">
-          {/* Vertical lines for sense of scale */}
-          <div className="absolute inset-0 opacity-10" 
-               style={{ 
-                 background: 'linear-gradient(90deg, transparent 50%, rgba(184, 149, 63, 0.05) 50%), linear-gradient(rgba(184, 149, 63, 0.05) 1px, transparent 1px)', 
-                 backgroundSize: '40px 40px',
-                 animation: 'waveAnimation 20s ease-in-out infinite'
-               }}>
-          </div>
-        </div>
-        
-        {/* Gold/Amber accent waves matching screenshot */}
-        <div className="absolute bottom-0 left-0 right-0 h-[70vh]" 
-             style={{ 
-               background: 'linear-gradient(to top, rgba(184, 149, 63, 0.2) 0%, rgba(184, 149, 63, 0.05) 50%, transparent 100%)',
-               opacity: '0.3',
-               animation: 'pulseGlow 10s ease-in-out infinite'
-             }}>
-        </div>
-        
-        {/* Dark Gradient Accent */}
-        <div className="absolute top-0 right-0 w-1/2 h-[80vh] bg-gradient-to-b from-[#252525]/30 via-[#2c2c2c]/20 to-transparent blur-3xl"
-             style={{ animation: 'pulseGlow 15s ease-in-out infinite', animationDelay: '2s' }}>
-        </div>
-        
-        {/* Gold/Amber Gradient matching coin color */}
-        <div className="absolute bottom-0 left-0 w-2/3 h-[60vh] bg-gradient-to-t from-[#b8953f]/20 via-[#d4af37]/10 to-transparent blur-3xl"
-             style={{ animation: 'pulseGlow 18s ease-in-out infinite', animationDelay: '5s' }}>
-        </div>
-        
-        {/* Darker Gold Gradient for depth */}
-        <div className="absolute bottom-0 right-0 w-2/3 h-[70vh] bg-gradient-to-t from-[#8a6e2f]/20 via-[#a47e3b]/15 to-transparent blur-3xl"
-             style={{ animation: 'pulseGlow 18s ease-in-out infinite', animationDelay: '3s' }}>
-        </div>
-      </div>
       
       <main className="container mx-auto px-5 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">
         <div className="w-full max-w-7xl mx-auto">
