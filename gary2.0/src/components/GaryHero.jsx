@@ -60,19 +60,43 @@ export function GaryHero() {
             {/* Left side - Headlines and Buttons */}
             <div className="lg:flex-1 p-5 z-10">
               <div className="overflow-hidden">
-                {/* Hero Headlines - Newspaper Style */}
+                {/* Modern AI-Focused Hero Headlines */}
                 <div className="relative z-40 mt-4" style={{ height: 'auto' }}>
-                  <div className="newspaper-style bg-[#171717] rounded-lg p-6 border-b-4 border-[#b8953f]">
-                    <div className="text-center mb-4">
-                      <span className="text-[#b8953f] text-sm uppercase tracking-widest">Sports Extra Edition</span>
+                  <div className="bg-gradient-to-r from-black to-[#181818] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg">
+                    <div className="flex items-center mb-6">
+                      <div className="w-3 h-3 rounded-full bg-[#b8953f] animate-pulse mr-3"></div>
+                      <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-4 font-serif italic">
-                      Make smarter <span className="text-[#b8953f]">Sports Bets</span> with AI-Powered Picks
+                    
+                    <h1 className="text-5xl md:text-6xl font-bold mb-6">
+                      <span className="text-white">Smarter </span> 
+                      <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#b8953f] to-[#d4af37] font-extrabold">Sports Bets</span>
                     </h1>
-                    <div className="h-px w-full bg-gray-700 my-4"></div>
-                    <p className="text-xl text-gray-300 mb-4 font-serif">
-                      Gary A.I. analyzes 15+ years of data to give you winning picks daily
-                    </p>
+                    
+                    <h2 className="text-4xl font-bold text-white mb-8">
+                      Powered by Gary AI
+                    </h2>
+                    
+                    <div className="space-y-4 mb-6">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
+                          <span className="text-[#b8953f] text-xs">✓</span>
+                        </div>
+                        <p className="ml-3 text-gray-300">15+ years of sports data analysis</p>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
+                          <span className="text-[#b8953f] text-xs">✓</span>
+                        </div>
+                        <p className="ml-3 text-gray-300">Daily picks with 78%+ confidence</p>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
+                          <span className="text-[#b8953f] text-xs">✓</span>
+                        </div>
+                        <p className="ml-3 text-gray-300">Detailed analysis & reasoning</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
