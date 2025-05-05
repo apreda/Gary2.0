@@ -110,7 +110,7 @@ function Home() {
   const { user } = useAuth();
   
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
+    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible dimension-bg-section">
       {/* Unified, immersive dark background for entire homepage */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
     {/* Layered gold spotlight for depth */}
@@ -130,7 +130,8 @@ function Home() {
     {/* Subtle grid/noise overlay */}
     <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
     {/* Radial vignette for cinematic depth, now deeper */}
-    <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#18181b]/50 to-black/60 opacity-50" />
+    {/* Subtle dimensional depth without blocking pattern */}
+    <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/20 opacity-30" />
   </div>
       <div className="relative z-10">
         <GaryHero />
