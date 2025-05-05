@@ -66,39 +66,42 @@ export function GaryHero() {
               <div className="overflow-hidden">
                 {/* Modern AI-Focused Hero Headlines */}
                 <div className="relative z-40 mt-4" style={{ height: 'auto' }}>
-                  <div className="bg-gradient-to-r from-[#1a1a1a] to-[#252525] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg relative overflow-hidden">
+                  <div className="bg-gradient-to-r from-[#1a1a1a]/90 to-[#252525]/90 p-8 rounded-xl border-l-4 border-[#b8953f] shadow-xl relative overflow-hidden backdrop-blur-sm" style={{ boxShadow: '0 10px 30px -5px rgba(0,0,0,0.5), 0 0 20px rgba(212, 175, 55, 0.1)' }}>
                     <div className="flex items-center mb-6 relative z-10">
                       <div className="w-3 h-3 rounded-full bg-[#b8953f] animate-pulse mr-3"></div>
                       <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
                     </div>
                     
-                    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 relative z-10" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.75rem)', lineHeight: '1.4' }}>
-                      <span className="text-white">Smarter </span> 
-                      <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#b8953f] to-[#d4af37] font-extrabold">Sports Bets</span>
+                    <h1 className="relative z-10 mb-6" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.75rem)', lineHeight: '1.4' }}>
+                      <span className="text-white drop-shadow-[0_2px_3px_rgba(0,0,0,0.7)] font-bold" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>Smarter </span> 
+                      <span className="bg-clip-text text-transparent bg-gradient-to-br from-[#d4af37] via-[#b8953f] to-[#e9c96a] font-extrabold" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))', WebkitBackgroundClip: 'text' }}>Sports Bets</span>
                     </h1>
                     
-                    <h2 className="text-4xl md:text-5xl font-bold text-white mb-10 relative z-10" style={{ lineHeight: '1.4' }}>
-                      Powered by Gary AI
-                    </h2>
+                    <div className="relative mb-10 z-10 overflow-hidden">
+                      <h2 className="text-4xl md:text-5xl font-bold text-white" style={{ lineHeight: '1.4', textShadow: '0 4px 12px rgba(0,0,0,0.3)', letterSpacing: '0.02em' }}>
+                        Powered by Gary AI
+                      </h2>
+                      <div className="absolute -bottom-1 left-0 w-1/2 h-px bg-gradient-to-r from-transparent via-[#b8953f]/60 to-transparent"></div>
+                    </div>
                     
-                    <ul className="space-y-6 text-lg md:text-xl text-white font-light mb-12 relative z-10" style={{ lineHeight: '1.5' }}>
-                      <li className="flex items-start">
-                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
-                          <span className="text-[#b8953f] text-xs">✓</span>
-                        </div>
-                        <p className="ml-3 text-gray-300">15+ years of sports data analysis</p>
+                    <ul className="space-y-6 mb-12 relative z-10" style={{ lineHeight: '1.6' }}>
+                      <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
+                          <span className="text-[#d4af37] text-sm">✓</span>
+                        </span>
+                        <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>15+ years of sports data analysis</span>
                       </li>
-                      <li className="flex items-start">
-                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
-                          <span className="text-[#b8953f] text-xs">✓</span>
-                        </div>
-                        <p className="ml-3 text-gray-300">Daily picks with 78%+ confidence</p>
+                      <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
+                          <span className="text-[#d4af37] text-sm">✓</span>
+                        </span>
+                        <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Daily picks with 78%+ confidence</span>
                       </li>
-                      <li className="flex items-start">
-                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
-                          <span className="text-[#b8953f] text-xs">✓</span>
-                        </div>
-                        <p className="ml-3 text-gray-300">Detailed analysis & reasoning</p>
+                      <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
+                          <span className="text-[#d4af37] text-sm">✓</span>
+                        </span>
+                        <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Detailed analysis & reasoning</span>
                       </li>
                     </ul>
                   </div>
