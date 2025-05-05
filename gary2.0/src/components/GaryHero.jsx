@@ -103,12 +103,12 @@ export function GaryHero() {
                   <div className="w-8 h-8 border-4 border-[#b8953f]/20 border-t-[#b8953f] rounded-full animate-spin"></div>
                 </div>
               ) : featuredPick ? (
-                <div className="w-[576px] h-[960px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
+                <div className="w-[576px] h-[530px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
                   
                   {/* FRONT CARD - positioned at the top */}
                   <div style={{
                     position: 'absolute',
-                    top: '40px',
+                    top: '0px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
@@ -412,10 +412,10 @@ export function GaryHero() {
                     }}></div>
                   </div>
                   
-                  {/* BACK CARD - analysis card positioned below with more space */}
+                  {/* BACK CARD - analysis card positioned below with less space */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '0px',
+                    bottom: '50px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
