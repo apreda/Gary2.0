@@ -124,117 +124,311 @@ export function GaryHero() {
                 <div className="w-8 h-8 border-4 border-[#b8953f]/20 border-t-[#b8953f] rounded-full animate-spin"></div>
               </div>
             ) : featuredPick ? (
-              <div className="w-[480px] h-[320px]">
-                {/* Modern Card Design - Matches Screenshot 2 exactly */}
+              <div className="w-[576px] h-[384px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
+                {/* FRONT OF CARD - Modern Dark UI Design - Identical to RealGaryPicks page */}
                 <div style={{
                   width: '100%',
                   height: '100%',
                   background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
                   borderRadius: '16px',
+                  fontFamily: 'Inter, system-ui, sans-serif',
                   overflow: 'hidden',
                   boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
                   color: '#ffffff',
-                  fontFamily: 'Inter, system-ui, sans-serif',
-                  display: 'flex',
-                  flexDirection: 'column',
+                  position: 'relative'
                 }}>
-                  {/* Card Header - Today's Picks */}
-                  <div className="w-full text-center py-3 text-[#b8953f] font-bold text-xl tracking-wide">
-                    TODAY'S PICKS
-                  </div>
-                  
-                  {/* Card Content */}
-                  <div className="flex flex-1 p-4">
-                    {/* Left side (70%) */}
-                    <div className="w-[70%] pr-4 border-r border-[#b8953f] flex flex-col">
-                      {/* League/Matchup/Game Time sections */}
-                      <div className="flex justify-between mb-4">
-                        <div>
-                          <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">LEAGUE</div>
-                          <div className="text-white text-lg font-medium">{featuredPick.league || 'NBA'}</div>
+                  {/* Left side content */}
+                  <div style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: '70%',
+                    padding: '1.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    overflow: 'hidden',
+                  }}>
+                    {/* League and Matchup in horizontal layout */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                      {/* League */}
+                      <div>
+                        <div style={{ 
+                          fontSize: '0.75rem', 
+                          opacity: 0.6, 
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em', 
+                          marginBottom: '0.25rem'
+                        }}>
+                          League
                         </div>
-                        <div>
-                          <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">MATCHUP</div>
-                          <div className="text-white text-lg font-medium">
-                            {(featuredPick.homeTeam && featuredPick.awayTeam) ? 
-                              `${featuredPick.awayTeam.split(' ').pop()} @ ${featuredPick.homeTeam.split(' ').pop()}` : 
-                              (featuredPick.game ? featuredPick.game : 'TBD')}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">GAME TIME</div>
-                          <div className="text-white text-lg font-medium">{featuredPick.time || '9:30 PM ET'}</div>
+                        <div style={{ 
+                          fontSize: '1.25rem', 
+                          fontWeight: 600, 
+                          letterSpacing: '0.02em',
+                          opacity: 0.95
+                        }}>
+                          {featuredPick.league || 'NBA'}
                         </div>
                       </div>
                       
-                      {/* Gary's Pick */}
-                      <div className="mb-4">
-                        <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">GARY'S PICK</div>
-                        <div className="text-[#b8953f] text-2xl font-bold">
-                          {featuredPick.pick || 'Missing Pick Data'}
+                      {/* Matchup */}
+                      <div style={{ marginLeft: '20px' }}>
+                        <div style={{ 
+                          fontSize: '0.75rem', 
+                          opacity: 0.6, 
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em', 
+                          marginBottom: '0.25rem'
+                        }}>
+                          Matchup
                         </div>
-                      </div>
-                      
-                      {/* Rationale Preview */}
-                      <div className="text-gray-300 text-sm line-clamp-3 mb-4">
-                        {featuredPick.rationale ? featuredPick.rationale.substring(0, 120) + '...' : 'Analysis not available'}
-                      </div>
-                      
-                      {/* Take Your Pick */}
-                      <div className="mt-auto">
-                        <div className="text-gray-400 uppercase text-xs tracking-wider mb-2">TAKE YOUR PICK</div>
-                        <div className="flex gap-3">
-                          <Link 
-                            to="/real-gary-picks"
-                            className="flex-1 bg-[#b8953f]/15 text-[#b8953f] font-semibold py-2 text-center rounded border border-[#b8953f]/30 hover:bg-[#b8953f]/25 transition-colors text-sm uppercase tracking-wider"
-                          >
-                            Bet
-                          </Link>
-                          <Link 
-                            to="/real-gary-picks"
-                            className="flex-1 bg-gray-800 text-gray-300 font-semibold py-2 text-center rounded border border-gray-700 hover:bg-gray-700 transition-colors text-sm uppercase tracking-wider"
-                          >
-                            Fade
-                          </Link>
+                        <div style={{ 
+                          fontSize: '1.25rem', 
+                          fontWeight: 600,
+                          opacity: 0.9
+                        }}>
+                          {(featuredPick.homeTeam && featuredPick.awayTeam) ? 
+                            `${featuredPick.awayTeam.split(' ').pop()} @ ${featuredPick.homeTeam.split(' ').pop()}` : 
+                            (featuredPick.game ? 
+                              featuredPick.game.includes('@') ? 
+                                featuredPick.game : 
+                                `${featuredPick.game.split(' ').slice(-1)} @ ${featuredPick.game.split(' ').slice(0, -2).join(' ')}` 
+                              : 'Nuggets @ Thunder')}
                         </div>
                       </div>
                     </div>
                     
-                    {/* Right side (30%) */}
-                    <div className="w-[30%] pl-4 flex flex-col items-center justify-center">
-                      {/* Gary Coin Image */}
-                      <div className="w-[130px] h-[130px] rounded-full bg-[#b8953f] flex items-center justify-center mb-4 p-1">
-                        <img 
-                          src={GaryEmblem} 
-                          alt="Gary Coin" 
-                          className="w-full h-full object-contain"
-                        />
+                    {/* The main pick display */}
+                    <div style={{ marginBottom: '1rem' }}>
+                      <div style={{ 
+                        fontSize: '0.75rem', 
+                        opacity: 0.6, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em', 
+                        marginBottom: '0.5rem'
+                      }}>
+                        Gary's Pick
+                      </div>
+                      <div style={{ 
+                        fontSize: '2rem', 
+                        fontWeight: 700, 
+                        lineHeight: 1.1,
+                        color: '#b8953f', 
+                        wordBreak: 'break-word',
+                        marginBottom: '0.75rem'
+                      }}>
+                        {featuredPick.pick || 'Denver Nuggets +9.5 -110'}
                       </div>
                       
-                      {/* Confidence */}
-                      <div className="text-center">
-                        <div className="text-gray-400 uppercase text-xs tracking-wider mb-1">CONFIDENCE</div>
-                        <div className="text-[#b8953f] text-xl font-bold">
-                          {featuredPick.confidence ? 
-                            `${Math.round(parseFloat(featuredPick.confidence) * 100)}%` : 
-                            '78%'}
-                        </div>
+                      {/* Rationale preview */}
+                      <div style={{
+                        fontSize: '0.85rem',
+                        opacity: 0.8,
+                        overflow: 'hidden',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: 'vertical',
+                        textOverflow: 'ellipsis',
+                        marginBottom: '0.5rem'
+                      }}>
+                        {featuredPick.rationale ? 
+                          featuredPick.rationale.substring(0, 120) + '...' : 
+                          'Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road. Re...'}
+                      </div>
+                    </div>
+                    
+                    {/* Bet or Fade Buttons */}
+                    <div>
+                      <div style={{ 
+                        fontSize: '0.75rem', 
+                        opacity: 0.6, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em', 
+                        marginBottom: '0.5rem'
+                      }}>
+                        Take Your Pick
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        gap: '0.75rem',
+                        width: '100%',
+                      }}>
+                        <Link 
+                          to="/real-gary-picks"
+                          style={{
+                            background: 'rgba(184, 149, 63, 0.15)',
+                            color: '#b8953f',
+                            fontWeight: '600',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(184, 149, 63, 0.3)',
+                            cursor: 'pointer',
+                            flex: 1,
+                            fontSize: '0.8rem',
+                            letterSpacing: '0.05em',
+                            textTransform: 'uppercase',
+                            transition: 'all 0.2s ease',
+                            textAlign: 'center',
+                            textDecoration: 'none'
+                          }}
+                        >
+                          Bet
+                        </Link>
+                        <Link 
+                          to="/real-gary-picks"
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            fontWeight: '600',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            cursor: 'pointer',
+                            flex: 1,
+                            fontSize: '0.8rem',
+                            letterSpacing: '0.05em',
+                            textTransform: 'uppercase',
+                            transition: 'all 0.2s ease',
+                            textAlign: 'center',
+                            textDecoration: 'none'
+                          }}
+                        >
+                          Fade
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Right side content - prominently elevated appearance */}
+                  <div style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: '30%',
+                    borderLeft: '2.25px solid #b8953f',
+                    padding: '1.5rem 1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)',
+                    boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)',
+                    borderRadius: '0 16px 16px 0',
+                    clipPath: 'inset(0px 0px 0px -20px)',
+                    zIndex: 2,
+                    transform: 'translateZ(10px)',
+                  }}>
+                    {/* Game time section */}
+                    <div style={{ 
+                      textAlign: 'center',
+                      marginBottom: '1rem'
+                    }}>
+                      <div style={{ 
+                        fontSize: '0.75rem', 
+                        opacity: 0.6, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em', 
+                        marginBottom: '0.25rem'
+                      }}>
+                        Game Time
+                      </div>
+                      <div style={{ 
+                        fontSize: '1.125rem', 
+                        fontWeight: 600,
+                        opacity: 0.9
+                      }}>
+                        {featuredPick.time ? 
+                          (featuredPick.time.includes('ET') ? featuredPick.time : `${featuredPick.time} ET`) : 
+                          '9:30 PM ET'}
+                      </div>
+                    </div>
+                    
+                    {/* Coin Image centered */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      marginTop: 'auto',
+                      marginBottom: 'auto',
+                      background: 'transparent'
+                    }}>
+                      <img 
+                        src={GaryEmblem}
+                        alt="Gary Coin"
+                        style={{
+                          width: 130,
+                          height: 130,
+                          objectFit: 'contain',
+                          opacity: 1,
+                          background: 'transparent'
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Confidence score */}
+                    <div style={{ 
+                      textAlign: 'center',
+                      marginTop: '1rem',
+                      width: '100%'
+                    }}>
+                      <div style={{ 
+                        fontSize: '0.75rem', 
+                        opacity: 0.6, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em', 
+                        marginBottom: '0.25rem'
+                      }}>
+                        Confidence
                       </div>
                       
-                      {/* View Analysis Button */}
+                      {/* Confidence score display */}
+                      <div style={{
+                        fontSize: '1.2rem',
+                        fontWeight: 700,
+                        opacity: 0.95,
+                        color: '#b8953f',
+                        marginBottom: '0.5rem'
+                      }}>
+                        {typeof featuredPick.confidence === 'number' ? 
+                          Math.round(featuredPick.confidence * 100) + '%' : 
+                          (featuredPick.confidence || '78%')}
+                      </div>
+                      
+                      {/* View analysis button */}
                       <Link 
                         to="/real-gary-picks"
-                        className="mt-4 w-full bg-[#b8953f]/15 text-[#b8953f] font-semibold py-2 text-center rounded border border-[#b8953f]/30 hover:bg-[#b8953f]/25 transition-colors text-xs uppercase tracking-wider"
+                        style={{
+                          marginTop: '1rem',
+                          fontSize: '0.75rem',
+                          padding: '0.5rem 1rem',
+                          background: 'rgba(184, 149, 63, 0.15)',
+                          color: '#b8953f',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          fontWeight: 500,
+                          transition: 'all 0.2s ease',
+                          display: 'inline-block',
+                          textDecoration: 'none'
+                        }}
                       >
                         View Analysis
                       </Link>
                     </div>
                   </div>
                   
-                  {/* Card Footer */}
-                  <div className="text-center pb-2 text-[#b8953f] font-medium">
-                    1 / 4
-                  </div>
+                  {/* Subtle gradient overlay for depth */}
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
+                    opacity: 0.5,
+                    pointerEvents: 'none'
+                  }}></div>
                 </div>
               </div>
             ) : (
