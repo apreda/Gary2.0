@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Analytics } from '@vercel/analytics/react';
 import { userPickResultsService } from './services/userPickResultsService';
 import { BetCardProfileProvider } from './contexts/BetCardProfileContext';
 import { UserPlanProvider } from './contexts/UserPlanContext';
@@ -172,6 +173,7 @@ export default function App() {
               <ToastProvider>
                 <FontLoader />
                 <AppContent />
+                <Analytics />
               </ToastProvider>
             </BetCardProfileProvider>
           </UserStatsProvider>
