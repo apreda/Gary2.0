@@ -1,25 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/dimensional.css';
-import garyLogo from '../assets/images/gary4.svg';
 import Gary20 from '../assets/images/Gary20.png';
-import newspaperBg from '../assets/images/newspaper.png';
+import HeroBannerHeadlines from './HeroBannerHeadlines';
 
 export function GaryHero() {
   return (
     <div className="relative flex flex-col justify-center items-center min-h-screen w-full px-4 py-20 overflow-hidden">
-      {/* Newspaper background - reduced opacity */}
-      <div className="absolute inset-0 z-0" style={{
-        backgroundImage: `url(${newspaperBg})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        filter: "brightness(0.85) contrast(1.1) sepia(0.15) blur(3px)",
-        opacity: 0.35
-      }}></div>
+      {/* Dynamic newspaper headlines background */}
+      <div className="absolute inset-0 z-0">
+        <HeroBannerHeadlines />
+      </div>
       
       {/* Gradient overlay for better readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/75 to-black/85 z-0"></div>
-      <div className="absolute inset-0 bg-black opacity-60 z-0"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/75 to-black/85 z-1"></div>
+      <div className="absolute inset-0 bg-black opacity-40 z-1"></div>
       {/* Gary20 image top left */}
       <img src={Gary20} alt="Gary 2.0" className="absolute top-4 left-4 w-24 h-auto z-30" />
       {/* Gold vignette accents for depth */}
