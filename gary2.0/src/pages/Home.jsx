@@ -1,18 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
 import ErrorBoundary from "../components/ErrorBoundary";
-import { useUserPlan } from "../hooks/useUserPlan";
-import { useNavigate } from "react-router-dom";
 import { winnersService } from "../services/winnersService";
-import garyLogo from '../assets/images/gary4.svg';
-import garyLogo2 from '../assets/images/gary_logo.svg';
-import gary1 from '../assets/images/gary4.svg';
-import gary5 from '../assets/images/gary5.svg';
-import gary7 from '../assets/images/gary7.svg';
-import garyPromo from '../assets/images/Gary_Promo.png';
-import newspaperBg from '../assets/images/newspaper.png';
-// Using public path for gary-bear-logo.svg
 import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
@@ -81,31 +70,10 @@ function RecentWinnersFeed() {
                   <span className="text-xs text-gray-400">{winner.timestamp ? formatTimeDiff(winner.timestamp) : '—'}</span>
                 </div>
                 
-                {winner.league === 'PARLAY' ? (
-                  <>
-                    <div className="font-bold text-white mb-1">
-                      {winner.pick || `${winner.parlayLegs?.length || 3}-Leg Parlay ${winner.parlayOdds ? `(${winner.parlayOdds})` : ''}`}
-                    </div>
-                    {/* Display parlay legs if available */}
-                    {winner.parlayLegs ? (
-                      winner.parlayLegs.map((leg, legIndex) => (
-                        <div key={legIndex} className="text-xs text-gray-400 mb-1">• {leg.pick} ✓</div>
-                      ))
-                    ) : (
-                      // Fallback for mock data format
-                      <>
-                        <div className="text-xs text-gray-400 mb-1">• Lakers ML ✓</div>
-                        <div className="text-xs text-gray-400 mb-1">• Cowboys -7 ✓</div>
-                        <div className="text-xs text-gray-400">• Dodgers/Giants U8.5 ✓</div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div className="font-bold text-white mb-1">{winner.pick}</div>
-                    <div className="text-sm text-gray-400">{winner.game}</div>
-                  </>
-                )}
+                <div>
+                  <div className="font-bold text-white mb-1">{winner.pick}</div>
+                  <div className="text-sm text-gray-400">{winner.game}</div>
+                </div>
                 
                 <div className="flex justify-between items-center mt-2">
                   <div className="flex items-center">
@@ -140,19 +108,6 @@ function RecentWinnersFeed() {
 
 function Home() {
   const { user } = useAuth();
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  
-  // Track mouse movement for parallax effect on the card
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      const x = (e.clientX / window.innerWidth) - 0.5;
-      const y = (e.clientY / window.innerHeight) - 0.5;
-      setMousePosition({ x, y });
-    };
-    
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
   
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
