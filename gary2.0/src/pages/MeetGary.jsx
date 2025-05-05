@@ -170,12 +170,12 @@ export function MeetGary() {
                   <div className="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
                 </Link>
                 
-                <Link 
-                  to="/upgrade" 
+                <a 
+                  href="https://buy.stripe.com/dR603v2UndMebrq144" 
                   className="bg-transparent border-2 border-[#d4af37] text-[#d4af37] hover:text-[#e5c349] hover:border-[#e5c349] font-semibold px-6 py-3 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
                 >
                   Upgrade to Pro
-                </Link>
+                </a>
               </div>
             </div>
             

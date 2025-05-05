@@ -558,12 +558,12 @@ function RealGaryPicks() {
                                       </div>
                                       <h3 className="text-[#b8953f] text-2xl font-bold mb-3">Unlock Premium Picks</h3>
                                       <p className="text-white mb-6 max-w-sm">Upgrade to Pro to see all of Gary's premium picks with detailed analysis and reasoning.</p>
-                                      <Link 
-                                        to="/checkout"
+                                      <a 
+                                        href="https://buy.stripe.com/dR603v2UndMebrq144"
                                         className="block py-4 px-8 bg-[#b8953f] hover:bg-[#c5a030] text-black font-medium rounded-lg transition-colors focus:ring-2 focus:ring-[#b8953f]/50 focus:outline-none w-64 mx-auto text-center"
                                       >
                                         Upgrade to Pro — $29/month
-                                      </Link>
+                                      </a>
                                       <p className="mt-4 text-gray-400 text-sm">Cancel anytime</p>
                                     </div>
                                   </div>

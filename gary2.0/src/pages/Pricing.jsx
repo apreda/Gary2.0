@@ -169,11 +169,11 @@ export function Pricing() {
               </div>
               
               <div className="w-full py-3 px-4 bg-[#b8953f] text-center rounded-md">
-                <Link to="/checkout" className="no-underline">
+                <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="no-underline">
                   <div className="text-xl text-black font-sans tracking-wider">
                     SELECT PLAN
                   </div>
-                </Link>
+                </a>
               </div>
               
               {/* VIP punch hole */}
