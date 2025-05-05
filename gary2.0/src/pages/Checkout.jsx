@@ -13,9 +13,9 @@ function StripeCheckout({ userId, email }) {
     setError(null);
     
     try {
-      // Direct redirect to your live Stripe product URL
+      // Direct redirect to your live Stripe payment link
       // This is the most reliable method - no API calls needed
-      window.location.href = 'https://buy.stripe.com/14k5n20mReER4N228a';
+      window.location.href = 'https://buy.stripe.com/dR603v2UndMebrq144';
       
       // Log for tracking
       console.log('Redirecting to Stripe product page with email:', email);
