@@ -54,7 +54,7 @@ export function GaryHero() {
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible dimension-bg-section">
       
-      <main className="max-w-[1280px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">
+      <main className="max-w-[1440px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">
         <div className="w-full mx-auto">
           <div className="flex flex-col lg:flex-row gap-8 items-center">
             {/* Left side - Headlines and Buttons */}
@@ -62,9 +62,9 @@ export function GaryHero() {
               <div className="overflow-hidden">
                 {/* Modern AI-Focused Hero Headlines */}
                 <div className="relative z-40 mt-4" style={{ height: 'auto' }}>
-                  <div className="bg-gradient-to-r from-black to-[#181818] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg relative overflow-hidden">
-                    {/* Gary logo as a background element */}
-                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/4 opacity-15 pointer-events-none z-0" style={{ width: '80%', height: 'auto' }}>
+                  <div className="bg-gradient-to-r from-[#1a1a1a] to-[#252525] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg relative overflow-hidden">
+                    {/* Gary logo as a background element - moved to upper left */}
+                    <div className="absolute left-0 top-0 transform -translate-x-1/4 opacity-15 pointer-events-none z-0" style={{ width: '80%', height: 'auto' }}>
                       <img src="/gary_logo.svg" alt="" className="w-full h-full" />
                     </div>
                     <div className="flex items-center mb-6 relative z-10">
