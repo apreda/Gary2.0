@@ -62,7 +62,7 @@ export function GaryHero() {
               <div className="overflow-hidden">
                 {/* Modern AI-Focused Hero Headlines */}
                 <div className="relative z-40 mt-4" style={{ height: 'auto' }}>
-                  <div className="bg-gradient-to-r from-black to-[#181818] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg">
+                  <div className="bg-gradient-to-r from-[#0e0e0e] to-[#121212] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg">
                     <div className="flex items-center mb-6">
                       <div className="w-3 h-3 rounded-full bg-[#b8953f] animate-pulse mr-3"></div>
                       <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
@@ -123,7 +123,7 @@ export function GaryHero() {
                 <div className="flex">
                   <Link 
                     to="/how-it-works" 
-                    className="group flex items-center justify-center bg-black/60 backdrop-blur-sm border border-[#b8953f]/30 text-white font-semibold rounded-xl hover:border-[#b8953f] hover:bg-black/80 transition-all duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
+                    className="group flex items-center justify-center bg-[#0e0e0e]/80 backdrop-blur-sm border border-[#b8953f]/30 text-white font-semibold rounded-xl hover:border-[#b8953f] hover:bg-[#0e0e0e] transition-all duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
                   >
                     <span className="flex items-center">
                       How it Works
