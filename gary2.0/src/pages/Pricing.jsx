@@ -156,10 +156,6 @@ export function Pricing() {
                 </li>
                 <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
                   <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>PRIORITY SUPPORT</span>
-                </li>
-                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
-                  <span className="mr-2" style={{color: 'black'}}>•</span>
                   <span style={{color: 'black'}}>UNIT SIZING</span>
                 </li>
               </ul>
