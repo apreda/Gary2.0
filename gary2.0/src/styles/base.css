@@ -8,7 +8,7 @@
 @layer base {
   /* Basic document styling */
   body {
-    background-color: #000000;
+    /* Removed default black background to allow page-specific styling */
     color: #ffffff;
     font-family: 'Inter', sans-serif;
     line-height: var(--line-height-normal);

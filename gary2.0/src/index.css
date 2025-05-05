@@ -25,7 +25,7 @@
   .dark {
     color-scheme: dark;
     color: rgba(255, 255, 255, 0.87);
-    background-color: #000000;
+    /* Removed default black background to allow page-specific styling */
   }
 
   html, body {
@@ -38,7 +38,7 @@
     padding: 0;
     min-width: 320px;
     min-height: 100vh;
-    background-color: #000000;
+    /* Removed default black background to allow page-specific styling */
   }
 
   /* Better focus states */
