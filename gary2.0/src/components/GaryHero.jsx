@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import "../styles/dimensional.css";
 import "../styles/hero.css";
 import { supabase } from "../supabaseClient";
+import garyImage from "../assets/images/gary23.png";
 
 export function GaryHero() {
   const [featuredPicks, setFeaturedPicks] = useState([]);
@@ -401,10 +402,20 @@ export function GaryHero() {
       
       {/* Subtle blue gradient overlay similar to Vault but using gold/black scheme */}
       <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-[#b8953f]/10 z-10 opacity-70"></div>
+
+      {/* Gary image in left corner */}
+      <div className="absolute left-10 top-20 z-20 hidden md:block" style={{ maxWidth: "280px" }}>
+        <img
+          src={garyImage}
+          alt="Gary AI Bear"
+          className="w-full h-auto"
+          style={{ filter: "drop-shadow(0 10px 15px rgba(0,0,0,0.6))" }}
+        />
+      </div>
       
       <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
-        {/* Centered Hero Content - Exactly following Vault layout */}
-        <div className="w-full mx-auto flex flex-col items-center mt-10 md:mt-16">
+        {/* Centered Hero Content - Text shifted slightly right to account for Gary image */}
+        <div className="w-full mx-auto flex flex-col items-center mt-0 md:mt-8" style={{ paddingLeft: "0", paddingRight: "0" }}>
           {/* NEW badge - using the pill style from Vault */}
           <div className="mb-8 relative">
             <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
@@ -424,14 +435,14 @@ export function GaryHero() {
           </h1>
           
           {/* Subheading - Matching Vault's font weight and spacing */}
-          <div className="text-center mb-14 max-w-2xl">
+          <div className="text-center mb-8 max-w-2xl">
             <p className="text-white/75 text-xl md:text-2xl mx-auto leading-relaxed font-light">
               Gary's Trained on the most up-to-date stats and is built on a unique algorithm specifically for picking winners.
             </p>
           </div>
 
           {/* CTA Buttons - Exact Vault style */}
-          <div className="flex flex-col sm:flex-row gap-4 mt-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center">
             <Link 
               to="/real-gary-picks" 
               className="bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-md transition duration-200 ease-in-out"
@@ -450,7 +461,7 @@ export function GaryHero() {
         </div>
         
         {/* Vault-style dashboard preview with our pick cards inside */}
-        <div className="mt-16 mb-auto w-full flex justify-center items-center">
+        <div className="mt-2 mb-auto w-full flex justify-center items-center">
           <div className="relative w-full max-w-5xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
                style={{ height: "520px" }}>
             {/* Dark glossy header bar */}
