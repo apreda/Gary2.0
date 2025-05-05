@@ -39,7 +39,7 @@ export function Navbar() {
   
   return (
     <header className="navbar">
-      <div className="container mx-auto px-6 flex items-center justify-between">
+      <div className="container mx-auto px-8 flex items-center justify-between h-full">
         {/* Logo */}
         <Link to="/" className="flex items-center group">
           <span className="text-[#E0B016] text-2xl md:text-3xl tracking-tight font-light font-mono">GARY</span>
@@ -131,8 +131,8 @@ export function Navbar() {
       
       {/* Mobile Menu Dropdown */}
       {isMobileMenuOpen && (
-        <div className="bg-white shadow-lg lg:hidden border-t border-gray-100 backdrop-blur-md">
-          <div className="container mx-auto px-6 py-4">
+        <div className="bg-white/90 shadow-lg lg:hidden backdrop-blur-md mt-2 rounded-xl border border-[#E0B016]/10 mx-4 overflow-hidden animate-fadeIn">
+          <div className="container mx-auto px-8 py-5">
             <div className="flex flex-col space-y-4">
               {filteredNavItems.map((item) => (
                 item.action ? (
