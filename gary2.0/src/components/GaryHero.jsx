@@ -64,147 +64,132 @@ export function GaryHero() {
       </div>
       
       <main className="max-w-[1440px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-20 relative">
-        <div className="w-full mx-auto">
-          <div className="flex flex-col lg:flex-row gap-8 items-center">
-            {/* Left side - Headlines and Buttons */}
-            <div className="hero__content lg:flex-1 p-5 z-20 relative max-w-3xl mx-auto lg:mx-0">
-              {/* AI Analytics Badge */}
-              <div className="flex items-center mb-6 relative">
-                <div className="w-3 h-3 rounded-full bg-[#b8953f] animate-pulse mr-3"></div>
-                <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
+  <div className="w-full mx-auto flex flex-col items-center">
+    {/* Centered Hero Content */}
+    <div className="hero__content p-5 z-20 relative max-w-3xl w-full flex flex-col items-center text-center">
+      {/* AI Analytics Badge */}
+      <div className="flex items-center mb-6 relative justify-center">
+        <div className="w-3 h-3 rounded-full bg-[#b8953f] animate-pulse mr-3"></div>
+        <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
+      </div>
+
+      {/* Main heading with gold accent */}
+      <h1 className="mb-6" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.75rem)', lineHeight: '1.4' }}>
+        <span className="text-white font-bold" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>Smarter </span>
+        <span className="bg-clip-text text-transparent bg-gradient-to-br from-[#d4af37] via-[#b8953f] to-[#e9c96a] font-extrabold" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.2)', WebkitBackgroundClip: 'text' }}>Sports Bets</span>
+      </h1>
+
+      {/* Subheading with decorative line */}
+      <div className="relative mb-10 overflow-hidden w-full flex flex-col items-center">
+        <h2 className="text-4xl md:text-5xl font-bold text-white" style={{ lineHeight: '1.4', textShadow: '0 4px 12px rgba(0,0,0,0.4)', letterSpacing: '0.02em' }}>
+          Powered by Gary AI
+        </h2>
+        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-[#b8953f]/60 to-transparent"></div>
+      </div>
+
+      {/* Optional content backdrop for better readability */}
+      <div className="bg-[#1a1a1a]/75 backdrop-blur-sm p-8 rounded-xl border-l-4 border-[#b8953f] shadow-2xl relative overflow-hidden mb-8 w-full max-w-2xl mx-auto">
+        {/* Feature bullets */}
+        <ul className="space-y-6 relative" style={{ lineHeight: '1.6' }}>
+          <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
+            <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
+              <span className="text-[#d4af37] text-sm">✓</span>
+            </span>
+            <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>15+ years of sports data analysis</span>
+          </li>
+          <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
+            <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
+              <span className="text-[#d4af37] text-sm">✓</span>
+            </span>
+            <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Daily picks with 78%+ confidence</span>
+          </li>
+          <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
+            <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
+              <span className="text-[#d4af37] text-sm">✓</span>
+            </span>
+            <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Detailed analysis & reasoning</span>
+          </li>
+        </ul>
+      </div>
+
+      {/* CTA Buttons */}
+      <div className="hero-cta flex flex-col sm:flex-row gap-4 mt-8 justify-center">
+        <Link to="/real-gary-picks" className="hero-cta-primary">Get Today's Picks</Link>
+        <Link to="/how-it-works" className="hero-cta-secondary">How it Works</Link>
+      </div>
+    </div>
+
+    {/* Pick Cards Row */}
+    <div className="flex flex-col md:flex-row justify-center items-stretch gap-8 mt-16 w-full max-w-5xl">
+      {/* Featured Pick Card */}
+      <div className="flex-1 flex items-center justify-center">
+        {!loading && featuredPick ? (
+          <div className="w-full max-w-[480px] min-h-[340px] relative">
+            {/* FRONT CARD */}
+            <div style={{
+              width: '100%',
+              minHeight: '340px',
+              background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 15px 35px rgba(0, 0, 0, 0.5)',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              color: '#ffffff',
+              zIndex: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              padding: '40px',
+            }}>
+              {/* PICK HEADER */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '16px',
+                opacity: 0.7,
+              }}>
+                <div style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  backgroundColor: '#b8953f',
+                  marginRight: '10px',
+                }}></div>
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#b8953f',
+                }}>Featured Pick</span>
               </div>
-              
-              {/* Main heading with gold accent */}
-              <h1 className="mb-6" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.75rem)', lineHeight: '1.4' }}>
-                <span className="text-white font-bold" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>Smarter </span> 
-                <span className="bg-clip-text text-transparent bg-gradient-to-br from-[#d4af37] via-[#b8953f] to-[#e9c96a] font-extrabold" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.2)', WebkitBackgroundClip: 'text' }}>Sports Bets</span>
-              </h1>
-              
-              {/* Subheading with decorative line */}
-              <div className="relative mb-10 overflow-hidden">
-                <h2 className="text-4xl md:text-5xl font-bold text-white" style={{ lineHeight: '1.4', textShadow: '0 4px 12px rgba(0,0,0,0.4)', letterSpacing: '0.02em' }}>
-                  Powered by Gary AI
-                </h2>
-                <div className="absolute -bottom-1 left-0 w-1/2 h-px bg-gradient-to-r from-transparent via-[#b8953f]/60 to-transparent"></div>
-              </div>
-              
-              {/* Optional content backdrop for better readability */}
-              <div className="bg-[#1a1a1a]/75 backdrop-blur-sm p-8 rounded-xl border-l-4 border-[#b8953f] shadow-2xl relative overflow-hidden mb-8" style={{ boxShadow: '0 15px 35px -5px rgba(0,0,0,0.5), 0 0 25px rgba(212, 175, 55, 0.08)' }}>
-                {/* Feature bullets */}
-                <ul className="space-y-6 relative" style={{ lineHeight: '1.6' }}>
-                  <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
-                    <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
-                      <span className="text-[#d4af37] text-sm">✓</span>
-                    </span>
-                    <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>15+ years of sports data analysis</span>
-                  </li>
-                  <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
-                    <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
-                      <span className="text-[#d4af37] text-sm">✓</span>
-                    </span>
-                    <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Daily picks with 78%+ confidence</span>
-                  </li>
-                  <li className="flex items-start group transition-all duration-300 hover:translate-x-1">
-                    <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-[#b8953f]/30 to-[#d4af37]/20 rounded-full flex items-center justify-center mt-1 mr-3 backdrop-blur-sm border border-[#b8953f]/10">
-                      <span className="text-[#d4af37] text-sm">✓</span>
-                    </span>
-                    <span className="text-white/90 text-lg md:text-xl font-light" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>Detailed analysis & reasoning</span>
-                  </li>
-                </ul>
-              </div>
-              
-              {/* CTA Buttons */}
-              <div className="hero-cta flex flex-col sm:flex-row gap-4 mt-8">
-                <Link to="/real-gary-picks" className="hero-cta-primary">Get Today's Picks</Link>
-                <Link to="/how-it-works" className="hero-cta-secondary">How it Works</Link>
-              </div>
-            </div>
-              
-            {/* Right side - Featured Pick Cards in vertical stack */}
-            <div className="lg:flex-1 md:p-5 justify-center">
-              {/* Featured Pick Cards for Today */}
-              {!loading && featuredPick ? (
-                <div className="w-[576px] h-[530px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
-                  
-                  {/* FRONT CARD - positioned at the top */}
+              {/* PICK INFO CONTENT */}
+              <div>
+                <div style={{
+                  background: 'rgba(184, 149, 63, 0.15)',
+                  borderRadius: '6px',
+                  padding: '10px 16px',
+                  marginBottom: '24px',
+                  display: 'inline-block',
+                }}>
+                  <span style={{
+                    color: '#b8953f',
+                    fontWeight: '600',
+                    fontSize: '20px',
+                    textTransform: 'uppercase',
+                  }}>{featuredPick.pick || 'DENVER NUGGETS +9.5 -110'}</span>
+                </div>
+                <div style={{ marginBottom: '24px' }}>
                   <div style={{
-                    position: 'absolute',
-                    top: '-148px', /* Moved down by half an inch */
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: '576px',
-                    height: '384px',
-                    background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                    borderRadius: '16px',
-                    overflow: 'hidden',
-                    boxShadow: '0 15px 35px rgba(0, 0, 0, 0.5)',
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                    color: '#ffffff',
-                    zIndex: 2
-                  }}>
-                    {/* Left side content */}
-                    <div style={{
-                      position: 'absolute',
-                      left: '0',
-                      top: '0',
-                      width: '50%',
-                      height: '100%',
-                      padding: '40px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                    }}>
-                      {/* PICK HEADER */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        marginBottom: '16px',
-                        opacity: 0.7,
-                      }}>
-                        <div style={{
-                          width: '10px',
-                          height: '10px',
-                          borderRadius: '50%',
-                          backgroundColor: '#b8953f',
-                          marginRight: '10px',
-                        }}></div>
-                        <span style={{
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          color: '#b8953f',
-                        }}>Featured Pick</span>
-                      </div>
-
-                      {/* PICK INFO CONTENT */}
-                      <div>
-                        <div style={{
-                          background: 'rgba(184, 149, 63, 0.15)',
-                          borderRadius: '6px',
-                          padding: '10px 16px',
-                          marginBottom: '24px',
-                          display: 'inline-block',
-                        }}>
-                          <span style={{
-                            color: '#b8953f',
-                            fontWeight: '600',
-                            fontSize: '20px',
-                            textTransform: 'uppercase',
-                          }}>{featuredPick.pick || 'DENVER NUGGETS +9.5 -110'}</span>
-                        </div>
-
-                        <div style={{ marginBottom: '24px' }}>
-                          <div style={{
-                            fontSize: '12px',
-                            color: 'rgba(255, 255, 255, 0.6)',
-                            marginBottom: '6px',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}>Confidence</div>
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
+                    fontSize: '12px',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}>Confidence</div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
                           }}>
                             <span style={{
                               fontSize: '36px',
