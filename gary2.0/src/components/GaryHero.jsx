@@ -54,18 +54,60 @@ export function GaryHero() {
 
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible">
+      {/* Massive background inspired by reference images */}
+      <div className="absolute inset-0 z-0 overflow-hidden bg-[#060d21]">
+        {/* Deep gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0a1228] via-[#101b36] to-[#1a1028] opacity-80"></div>
+        
+        {/* Animated wave effect */}
+        <div className="absolute inset-0">
+          {/* Vertical lines for sense of scale - similar to example */}
+          <div className="absolute inset-0 opacity-10" 
+               style={{ 
+                 background: 'linear-gradient(90deg, transparent 50%, rgba(80, 80, 255, 0.05) 50%), linear-gradient(rgba(20, 20, 60, 0.1) 1px, transparent 1px)', 
+                 backgroundSize: '40px 40px',
+                 animation: 'waveAnimation 20s ease-in-out infinite'
+               }}>
+          </div>
+        </div>
+        
+        {/* Vibrant color waves/visualizations */}
+        <div className="absolute bottom-0 left-0 right-0 h-[70vh]" 
+             style={{ 
+               background: 'linear-gradient(to top, rgba(76, 29, 149, 0.3) 0%, rgba(180, 83, 9, 0.1) 50%, transparent 100%)',
+               opacity: '0.3',
+               animation: 'pulseGlow 10s ease-in-out infinite'
+             }}>
+        </div>
+        
+        {/* Blue Gradient (inspired by example image 3) */}
+        <div className="absolute top-0 right-0 w-1/2 h-[80vh] bg-gradient-to-b from-[#0c4a6e]/30 via-[#0369a1]/20 to-transparent blur-3xl"
+             style={{ animation: 'pulseGlow 15s ease-in-out infinite', animationDelay: '2s' }}>
+        </div>
+        
+        {/* Orange/Gold Gradient (inspired by example image 2) */}
+        <div className="absolute bottom-0 left-0 w-2/3 h-[60vh] bg-gradient-to-t from-[#b45309]/30 via-[#d97706]/20 to-transparent blur-3xl"
+             style={{ animation: 'pulseGlow 18s ease-in-out infinite', animationDelay: '5s' }}>
+        </div>
+        
+        {/* Purple Gradient */}
+        <div className="absolute bottom-0 right-0 w-2/3 h-[70vh] bg-gradient-to-t from-[#4c1d95]/30 via-[#7e22ce]/20 to-transparent blur-3xl"
+             style={{ animation: 'pulseGlow 20s ease-in-out infinite', animationDelay: '7s' }}>
+        </div>
+      </div>
+
       {/* Newspaper headlines background - lower z-index so they go behind content */}
-      <div className="absolute inset-0 z-5 overflow-visible opacity-100">
+      <div className="absolute inset-0 z-5 overflow-visible opacity-60">
         <HeroBannerHeadlines />
       </div>
       
       {/* Gradient overlay for better readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/60 z-10"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/70 to-black/80 z-10"></div>
       
       {/* Gold accents and vignette for depth */}
       <div className="pointer-events-none absolute inset-0 z-15" aria-hidden="true">
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
+        <div className="absolute -bottom-32 -right-32 w-[700px] h-[700px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
       </div>
 
       {/* Header with logo */}
@@ -81,22 +123,30 @@ export function GaryHero() {
           
           {/* Left side - Headline and CTA with high-tech container */}
           <div className="flex-1 flex flex-col max-w-2xl relative z-30">
-            {/* High-tech container with glass morphism effects */}
-            <div className="absolute inset-0 z-20 bg-black/50 backdrop-blur-md rounded-2xl border border-[#333] shadow-2xl overflow-hidden">
+            {/* High-tech container with solid background - completely opaque */}
+            <div className="absolute inset-0 z-20 bg-[#060d21] rounded-2xl border border-[#333] shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-hidden">
+              {/* Solid background layer to completely hide headlines - multiple layers for guaranteed opacity */}
+              <div className="absolute inset-0 bg-[#080f23] z-10"></div>
+              <div className="absolute inset-0 bg-[#060d21] z-11"></div> {/* Double layer for full opacity */}
+              <div className="absolute inset-0 bg-[#071026] z-12"></div> {/* Triple layer for guaranteed opacity */}
+              
               {/* Edge glow effect */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-[#b8953f]/20 opacity-70"></div>
+              <div className="absolute inset-0 z-20 bg-gradient-to-tr from-[#0a1228] via-[#101b36] to-[#1a1028] opacity-100"></div> {/* Increased opacity */}
+
+              {/* Subtle pattern overlay */}
+              <div className="absolute inset-0 z-25 opacity-5" style={{ backgroundImage: 'radial-gradient(circle, #b8953f 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
               
               {/* Top tech line accent */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[2px] bg-gradient-to-r from-transparent via-[#b8953f] to-transparent"></div>
+              <div className="absolute z-30 top-0 left-1/2 -translate-x-1/2 w-[80%] h-[2px] bg-gradient-to-r from-transparent via-[#b8953f] to-transparent"></div>
               
               {/* Corner accents */}
-              <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-[#b8953f]/60 rounded-tl-lg"></div>
-              <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-[#b8953f]/60 rounded-tr-lg"></div>
-              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-[#b8953f]/60 rounded-bl-lg"></div>
-              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-[#b8953f]/60 rounded-br-lg"></div>
+              <div className="absolute z-30 top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-[#b8953f]/60 rounded-tl-lg"></div>
+              <div className="absolute z-30 top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-[#b8953f]/60 rounded-tr-lg"></div>
+              <div className="absolute z-30 bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-[#b8953f]/60 rounded-bl-lg"></div>
+              <div className="absolute z-30 bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-[#b8953f]/60 rounded-br-lg"></div>
               
               {/* Side accent line */}
-              <div className="absolute left-0 top-1/4 bottom-1/4 w-[2px] bg-gradient-to-b from-transparent via-[#b8953f]/60 to-transparent"></div>
+              <div className="absolute z-30 left-0 top-1/4 bottom-1/4 w-[2px] bg-gradient-to-b from-transparent via-[#b8953f]/60 to-transparent"></div>
             </div>
             
             {/* Content inside container */}
