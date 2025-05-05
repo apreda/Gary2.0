@@ -54,69 +54,90 @@ export function GaryHero() {
 
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible">
-      {/* Newspaper headlines background with improved readability */}
-      <div className="absolute inset-0 z-0 overflow-visible opacity-80">
+      {/* Newspaper headlines background - lower z-index so they go behind content */}
+      <div className="absolute inset-0 z-5 overflow-visible opacity-100">
         <HeroBannerHeadlines />
       </div>
       
       {/* Gradient overlay for better readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/80 to-black/95 z-1"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/60 z-10"></div>
       
       {/* Gold accents and vignette for depth */}
-      <div className="pointer-events-none absolute inset-0 z-1" aria-hidden="true">
+      <div className="pointer-events-none absolute inset-0 z-15" aria-hidden="true">
         <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
         <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/20 blur-3xl opacity-20" />
       </div>
 
       {/* Header with logo */}
-      <header className="relative z-20 w-full py-4 px-6 lg:px-12 flex justify-between items-center">
+      <header className="relative z-40 w-full py-4 px-6 lg:px-12 flex justify-between items-center">
         <div className="flex items-center">
-          <img src="/coin2.png" alt="Gary A.I." className="h-16 w-auto" />
+          <img src="/coin2.png" alt="Gary A.I." className="h-16 w-auto drop-shadow-lg" />
         </div>
       </header>
 
       {/* Main content area */}
-      <main className="relative z-10 flex flex-1 w-full">
+      <main className="relative flex flex-1 w-full">
         <div className="container mx-auto px-4 lg:px-8 flex flex-col lg:flex-row items-center py-12 lg:py-16 gap-8 lg:gap-12">
           
-          {/* Left side - Headline and CTA */}
-          <div className="flex-1 flex flex-col max-w-2xl">
-            {/* Newspaper-style headline banner */}
-            <div className="w-full max-w-xs bg-[#b8953f] py-1 mb-6 transform -rotate-1">
-              <p className="uppercase text-black font-bold tracking-wide text-center text-sm">SPORTS INSIDER EXTRA EDITION</p>
+          {/* Left side - Headline and CTA with high-tech container */}
+          <div className="flex-1 flex flex-col max-w-2xl relative z-30">
+            {/* High-tech container with glass morphism effects */}
+            <div className="absolute inset-0 z-20 bg-black/50 backdrop-blur-md rounded-2xl border border-[#333] shadow-2xl overflow-hidden">
+              {/* Edge glow effect */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-[#b8953f]/20 opacity-70"></div>
+              
+              {/* Top tech line accent */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[2px] bg-gradient-to-r from-transparent via-[#b8953f] to-transparent"></div>
+              
+              {/* Corner accents */}
+              <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-[#b8953f]/60 rounded-tl-lg"></div>
+              <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-[#b8953f]/60 rounded-tr-lg"></div>
+              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-[#b8953f]/60 rounded-bl-lg"></div>
+              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-[#b8953f]/60 rounded-br-lg"></div>
+              
+              {/* Side accent line */}
+              <div className="absolute left-0 top-1/4 bottom-1/4 w-[2px] bg-gradient-to-b from-transparent via-[#b8953f]/60 to-transparent"></div>
             </div>
             
-            {/* Main Headline */}
-            <h1 className="font-extrabold text-white leading-tight mb-8">
-              <span className="block text-6xl lg:text-7xl font-serif italic mb-2">MAKE SMARTER</span>
-              <div className="w-full h-1 bg-[#b8953f] my-2"></div>
-              <span className="block text-[#b8953f] text-6xl lg:text-7xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
-              <div className="w-full h-1 bg-[#b8953f] my-2"></div>
-              <span className="block text-white text-lg mt-2 font-bold tracking-widest">THE WINNING EDGE SINCE 2025</span>
-            </h1>
-
-            <p className="text-white/80 text-lg mb-8 max-w-lg">
-              Whether you're tracking teams, analyzing odds, or just keeping up with the latest sports analytics - Gary A.I. has your back with winning picks.
-            </p>
-            
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-5 mb-10">
-              {/* Wrapper to enforce exact same dimensions */}
-              <div className="w-[280px] h-[60px]">
-                <Link 
-                  to="/real-gary-picks" 
-                  className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold rounded-xl hover:bg-opacity-90 transition duration-300 text-lg w-full h-full"
-                >
-                  Get Today's Picks
-                </Link>
+            {/* Content inside container */}
+            <div className="relative z-30 p-8">
+              {/* Newspaper-style headline banner */}
+              <div className="w-full max-w-xs bg-[#b8953f] py-1 mb-6 transform -rotate-1">
+                <p className="uppercase text-black font-bold tracking-wide text-center text-sm">SPORTS INSIDER EXTRA EDITION</p>
               </div>
-              <div className="w-[280px] h-[60px]">
-                <Link 
-                  to="/how-it-works" 
-                  className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold rounded-xl hover:bg-[#252525] transition duration-300 text-lg w-full h-full"
-                >
-                  How it Works
-                </Link>
+              
+              {/* Main Headline */}
+              <h1 className="font-extrabold text-white leading-tight mb-8">
+                <span className="block text-6xl lg:text-7xl font-serif italic mb-2">MAKE SMARTER</span>
+                <div className="w-full h-1 bg-[#b8953f] my-2"></div>
+                <span className="block text-[#b8953f] text-6xl lg:text-7xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
+                <div className="w-full h-1 bg-[#b8953f] my-2"></div>
+                <span className="block text-white text-lg mt-2 font-bold tracking-widest">THE WINNING EDGE SINCE 2025</span>
+              </h1>
+
+              <p className="text-white/80 text-lg mb-8 max-w-lg">
+                Whether you're tracking teams, analyzing odds, or just keeping up with the latest sports analytics - Gary A.I. has your back with winning picks.
+              </p>
+              
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-5 mb-10">
+                {/* Wrapper to enforce exact same dimensions */}
+                <div className="w-[280px] h-[60px]">
+                  <Link 
+                    to="/real-gary-picks" 
+                    className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold rounded-xl hover:bg-opacity-90 transition duration-300 text-lg w-full h-full"
+                  >
+                    Get Today's Picks
+                  </Link>
+                </div>
+                <div className="w-[280px] h-[60px]">
+                  <Link 
+                    to="/how-it-works" 
+                    className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold rounded-xl hover:bg-[#252525] transition duration-300 text-lg w-full h-full"
+                  >
+                    How it Works
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
