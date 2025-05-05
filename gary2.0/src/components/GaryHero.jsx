@@ -414,18 +414,19 @@ export function GaryHero() {
           </div>
 
           {/* Main headline - Exact Vault typography style */}
-          <h1 className="mb-10 text-center" style={{ fontSize: "clamp(3.2rem, 7vw, 4.5rem)", lineHeight: "1.05", letterSpacing: "-0.02em", maxWidth: "900px" }}>
-            <div className="text-white font-bold">The gateway to</div>
+          <h1 className="mb-10 text-center" style={{ fontSize: "clamp(2.8rem, 6vw, 4.2rem)", lineHeight: "1.1", letterSpacing: "-0.02em", maxWidth: "920px" }}>
+            <div className="text-white font-bold">Gary.ai the first to combine</div>
             <div>
-              <span className="italic font-normal text-[#b8953f]">smart</span>
-              <span className="text-white font-bold"> sports bets</span>
+              <span className="text-white font-bold">Modern AI capabilities to make </span>
+              <span className="italic font-normal text-[#b8953f]">Smarter</span>
+              <span className="text-white font-bold"> Sports Bets</span>
             </div>
           </h1>
           
           {/* Subheading - Matching Vault's font weight and spacing */}
           <div className="text-center mb-14 max-w-2xl">
             <p className="text-white/75 text-xl md:text-2xl mx-auto leading-relaxed font-light">
-              With a few lines of data you can integrate betting insights from any sport, in any league, on any team.
+              Gary's Trained on the most up-to-date stats and is built on a unique algorithm specifically for picking winners.
             </p>
           </div>
 
