@@ -7,8 +7,8 @@ import HeroBannerHeadlines from './HeroBannerHeadlines';
 export function GaryHero() {
   return (
     <div className="relative flex flex-col justify-center items-center min-h-screen w-full px-4 py-20 overflow-hidden">
-      {/* Dynamic newspaper headlines background */}
-      <div className="absolute inset-0 z-0">
+      {/* Dynamic newspaper headlines background - ensure no clipping */}
+      <div className="absolute inset-0 z-0 overflow-visible">
         <HeroBannerHeadlines />
       </div>
       
