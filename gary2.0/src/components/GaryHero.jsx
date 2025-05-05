@@ -71,8 +71,7 @@ export function GaryHero() {
       {/* Header with logo */}
       <header className="relative z-20 w-full py-4 px-6 lg:px-12 flex justify-between items-center">
         <div className="flex items-center">
-          <img src={GaryEmblem} alt="Gary A.I." className="h-12 w-auto" />
-          <span className="ml-3 text-white font-bold text-xl">GARY<span className="text-[#b8953f]">A.I.</span></span>
+          <img src="/coin2.png" alt="Gary A.I." className="h-16 w-auto" />
         </div>
       </header>
 
