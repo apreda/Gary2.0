@@ -101,18 +101,23 @@ export function GaryHero() {
             
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-5 mb-10">
-              <Link 
-                to="/real-gary-picks" 
-                className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold py-4 px-12 rounded-xl hover:bg-opacity-90 transition duration-300 text-lg w-[250px] h-[60px]"
-              >
-                Get Today's Picks
-              </Link>
-              <Link 
-                to="/how-it-works" 
-                className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold py-4 px-12 rounded-xl hover:bg-[#252525] transition duration-300 text-lg w-[250px] h-[60px]"
-              >
-                How it Works
-              </Link>
+              {/* Wrapper to enforce exact same dimensions */}
+              <div className="w-[280px] h-[60px]">
+                <Link 
+                  to="/real-gary-picks" 
+                  className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold rounded-xl hover:bg-opacity-90 transition duration-300 text-lg w-full h-full"
+                >
+                  Get Today's Picks
+                </Link>
+              </div>
+              <div className="w-[280px] h-[60px]">
+                <Link 
+                  to="/how-it-works" 
+                  className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold rounded-xl hover:bg-[#252525] transition duration-300 text-lg w-full h-full"
+                >
+                  How it Works
+                </Link>
+              </div>
             </div>
           </div>
           

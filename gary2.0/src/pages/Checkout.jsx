@@ -19,10 +19,10 @@ function StripeHostedCheckout({ userId, email }) {
       try {
         console.log('Creating checkout session with:', { userId, email });
         
-        // Direct integration with Stripe
-        const stripeCheckoutUrl = `https://buy.stripe.com/test_4gw2a8exS4pA2is000?prefilled_email=${encodeURIComponent(email)}`;
+        // Direct integration with Stripe - using LIVE environment
+        const stripeCheckoutUrl = `https://buy.stripe.com/14k5n20mReER4N228a?prefilled_email=${encodeURIComponent(email)}`;
         
-        console.log('Redirecting to Stripe hosted page:', stripeCheckoutUrl);
+        console.log('Redirecting to Stripe live checkout:', stripeCheckoutUrl);
         setCheckoutUrl(stripeCheckoutUrl);
         return;
         
