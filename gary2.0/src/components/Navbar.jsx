@@ -39,21 +39,28 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="sticky top-0 bg-[#0D1117]/95 backdrop-blur-md z-50 px-6 py-2 border-b border-[#E0B016]/10">
-      <div className="max-w-7xl mx-auto flex items-center justify-between h-14">
-        {/* Logo */}
+    <header className="sticky top-0 bg-white z-50 shadow-sm py-4">
+      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+        {/* Logo with blue dot (Hashnode style) */}
         <Link to="/" className="flex items-center group">
-          <span className="text-[#E0B016] text-2xl tracking-tight font-light font-mono mr-1">GARY</span>
-          <span className="text-white text-2xl tracking-wide font-bold font-mono">A.I.</span>
+          <div className="mr-2 relative">
+            <div className="w-8 h-8 rounded-full bg-[#0066ff] flex items-center justify-center">
+              <span className="text-white font-bold text-sm">G</span>
+            </div>
+            {/* Keep our color scheme with the gold accent */}
+            <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#E0B016]"></div>
+          </div>
+          <span className="text-black text-lg font-bold">GARY</span>
+          <span className="text-[#E0B016] text-lg font-bold ml-1">AI</span>
         </Link>
         
-        {/* Desktop Navigation Links - Vault style */}
-        <nav className="hidden md:flex space-x-8">
+        {/* Desktop Navigation Links - Hashnode style with center positioning */}
+        <nav className="hidden md:flex space-x-8 mx-auto">
           {filteredNavItems.map((item) => (
             item.action ? (
               <button
                 key={item.path}
-                className="text-sm font-medium text-white/70 hover:text-[#E0B016] transition-colors duration-200"
+                className="text-sm font-medium text-gray-600 hover:text-[#E0B016] transition-colors duration-200"
                 onClick={item.action}
               >
                 {item.label}
@@ -64,8 +71,8 @@ export function Navbar() {
                 to={item.path}
                 className={`text-sm font-medium transition-colors duration-200 ${
                   activeLink === item.path 
-                  ? 'text-[#E0B016]' 
-                  : 'text-white/70 hover:text-[#E0B016]'}`}
+                  ? 'text-[#E0B016] font-semibold' 
+                  : 'text-gray-600 hover:text-[#E0B016]'}`}
                 onClick={() => setActiveLink(item.path)}
               >
                 {item.label}
@@ -74,53 +81,47 @@ export function Navbar() {
           ))}
         </nav>
       
-        {/* Sign In / Sign Up Buttons - Vault style */}
-        <div className="flex items-center space-x-5">
+        {/* Sign In / Sign Up Buttons - Hashnode style */}
+        <div className="flex items-center space-x-4">
           {!session ? (
             <>
               <Link 
                 to="/signin" 
-                className="text-white/80 hover:text-white font-medium text-sm transition-colors"
+                className="text-gray-700 hover:text-[#E0B016] font-medium text-sm transition-colors"
                 onClick={() => setActiveLink("/signin")}
               >
                 Sign in
               </Link>
               <Link 
                 to="/pricing" 
-                className="bg-white/90 hover:bg-white text-[#0D1117] px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center"
+                className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm font-medium transition-all"
                 onClick={() => setActiveLink("/pricing")}
               >
-                <span>Dashboard</span>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 ml-1">
-                  <path fillRule="evenodd" d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z" clipRule="evenodd" />
-                </svg>
+                Sign up for free
               </Link>
             </>
           ) : (
             <>
               <button
-                className="text-white/80 hover:text-white font-medium text-sm transition-colors"
+                className="text-gray-700 hover:text-[#E0B016] font-medium text-sm transition-colors"
                 onClick={openBetCardProfile}
               >
                 BetCard
               </button>
               <Link 
                 to="/dashboard" 
-                className="bg-[#E0B016] hover:bg-[#d4af37] text-black px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center"
+                className="bg-[#E0B016] hover:bg-[#d4af37] text-black px-4 py-2 rounded-md text-sm font-medium transition-all"
                 onClick={() => setActiveLink("/dashboard")}
               >
                 Dashboard
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 ml-1">
-                  <path fillRule="evenodd" d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z" clipRule="evenodd" />
-                </svg>
               </Link>
             </>
           )}
           
-          {/* Mobile menu button */}
+          {/* Mobile menu button - Hashnode style */}
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-1.5 text-white/70 hover:text-white/90 focus:outline-none transition-colors duration-200"
+            className="md:hidden p-1.5 text-gray-700 hover:text-gray-900 focus:outline-none transition-colors duration-200"
             aria-label="Toggle mobile menu"
             aria-expanded={isMobileMenuOpen}
           >
@@ -137,16 +138,16 @@ export function Navbar() {
         </div>
       </div>
       
-      {/* Mobile Menu Dropdown - Vault style */}
+      {/* Mobile Menu Dropdown - Hashnode style */}
       {isMobileMenuOpen && (
-        <div className="bg-[#0D1117]/95 shadow-lg md:hidden mt-2 border-t border-[#E0B016]/10 overflow-hidden animate-fadeIn absolute left-0 right-0">
-          <div className="max-w-7xl mx-auto py-4 px-6">
+        <div className="bg-white shadow-lg md:hidden mt-1 border-t border-gray-100 overflow-hidden animate-fadeIn absolute left-0 right-0 z-50">
+          <div className="py-4 px-6">
             <div className="flex flex-col space-y-3">
               {filteredNavItems.map((item) => (
                 item.action ? (
                   <button
                     key={item.path}
-                    className="py-2 text-sm font-medium text-white/70 hover:text-[#E0B016] text-left"
+                    className="py-2 text-sm font-medium text-gray-700 hover:text-[#E0B016] text-left"
                     onClick={() => {
                       item.action();
                       setIsMobileMenuOpen(false);
@@ -158,7 +159,7 @@ export function Navbar() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`py-2 text-sm font-medium ${activeLink === item.path ? 'text-[#E0B016]' : 'text-white/70 hover:text-[#E0B016]'}`}
+                    className={`py-2 text-sm font-medium ${activeLink === item.path ? 'text-[#E0B016]' : 'text-gray-700 hover:text-[#E0B016]'}`}
                     onClick={() => {
                       setActiveLink(item.path);
                       setIsMobileMenuOpen(false);
@@ -168,6 +169,45 @@ export function Navbar() {
                   </Link>
                 )
               ))}
+              
+              {/* Add mobile sign in buttons */}
+              <div className="pt-3 mt-3 border-t border-gray-100">
+                {!session ? (
+                  <>
+                    <Link 
+                      to="/signin" 
+                      className="block py-2 text-sm font-medium text-gray-700 hover:text-[#E0B016]"
+                      onClick={() => {
+                        setActiveLink("/signin");
+                        setIsMobileMenuOpen(false);
+                      }}
+                    >
+                      Sign in
+                    </Link>
+                    <Link 
+                      to="/pricing" 
+                      className="mt-2 block text-center bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm font-medium transition-all"
+                      onClick={() => {
+                        setActiveLink("/pricing");
+                        setIsMobileMenuOpen(false);
+                      }}
+                    >
+                      Sign up for free
+                    </Link>
+                  </>
+                ) : (
+                  <Link 
+                    to="/dashboard" 
+                    className="mt-2 block text-center bg-[#E0B016] hover:bg-[#d4af37] text-black px-4 py-2 rounded-md text-sm font-medium transition-all"
+                    onClick={() => {
+                      setActiveLink("/dashboard");
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    Dashboard
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
         </div>
