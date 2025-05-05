@@ -82,8 +82,8 @@ export default function HeroBannerHeadlines() {
   }, []);
 
   return (
-    <section className="relative w-full overflow-hidden bg-black" aria-hidden="true">
-      <div className="relative h-full" style={{ height: `${BANNER_HEIGHT}px` }}>
+    <section className="relative w-full overflow-visible bg-black" aria-hidden="true">
+      <div className="relative h-full overflow-visible" style={{ height: `${BANNER_HEIGHT}px` }}>
         {randomized.map((h, i) => (
           <motion.div
             key={i}
