@@ -355,7 +355,7 @@ export function GaryHero() {
                       background: 'transparent'
                     }}>
                       <img 
-                        src={GaryEmblem}
+                        src="/coin2.png"
                         alt="Gary Coin"
                         style={{
                           width: 130,
