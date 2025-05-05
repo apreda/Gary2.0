@@ -23,11 +23,18 @@ console.log(`Running in ${process.env.NODE_ENV || 'development'} mode`);
 console.log('Stripe initialized successfully.');
 
 // Create a checkout session
-export async function createCheckoutSession(req, res) {
+export async function createCheckoutSession(req) {
   try {
-    const { priceId, userId, successUrl, cancelUrl } = req.body;
+    // Handle both direct requests and those passed through from express
+    const body = req.body || req;
+    const { priceId, userId, successUrl, cancelUrl, email } = body;
     
-    console.log('Creating checkout session with:', { priceId, userId });
+    console.log('Creating checkout session with:', { priceId, userId, email });
+
+    if (!priceId) {
+      console.error('Missing priceId in checkout request');
+      throw new Error('Missing required parameter: priceId');
+    }
 
     // Create a checkout session with the provided price ID
     const session = await stripe.checkout.sessions.create({
@@ -39,10 +46,10 @@ export async function createCheckoutSession(req, res) {
         },
       ],
       mode: 'subscription',
-      success_url: successUrl || process.env.STRIPE_SUCCESS_URL,
-      cancel_url: cancelUrl || process.env.STRIPE_CANCEL_URL,
+      success_url: successUrl || process.env.STRIPE_SUCCESS_URL || `${process.env.FRONTEND_URL}/checkout/success`,
+      cancel_url: cancelUrl || process.env.STRIPE_CANCEL_URL || `${process.env.FRONTEND_URL}/checkout/cancel`,
       client_reference_id: userId,
-      customer_email: req.body.email,
+      customer_email: email,
       metadata: {
         userId: userId,
       },
@@ -53,7 +60,7 @@ export async function createCheckoutSession(req, res) {
     console.log('Checkout session created successfully:', session.id);
     return { id: session.id, url: session.url };
   } catch (error) {
-    console.error('Error creating checkout session:', error.message);
+    console.error('Error creating checkout session:', error.message, error.stack);
     throw new Error(`Error creating checkout session: ${error.message}`);
   }
 }

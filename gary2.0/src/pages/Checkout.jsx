@@ -19,12 +19,30 @@ function StripeHostedCheckout({ userId, email }) {
       try {
         console.log('Creating checkout session with:', { userId, email });
         
-        // Direct integration with Stripe - using LIVE environment
-        const stripeCheckoutUrl = `https://buy.stripe.com/14k5n20mReER4N228a?prefilled_email=${encodeURIComponent(email)}`;
+        // Use proper Stripe API integration
+        const response = await fetch('/api/create-checkout-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId,
+            email: email,
+            priceId: 'price_1RL6F2KIQvF46lkOjqnjUPE1', // Live price ID
+            successUrl: `${window.location.origin}/checkout/success`,
+            cancelUrl: `${window.location.origin}/checkout/cancel`,
+          }),
+        });
         
-        console.log('Redirecting to Stripe live checkout:', stripeCheckoutUrl);
-        setCheckoutUrl(stripeCheckoutUrl);
-        return;
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error creating checkout session:', errorText);
+          throw new Error(`Failed to create checkout session: ${response.status} ${errorText}`);
+        }
+        
+        const { url } = await response.json();
+        console.log('Redirecting to Stripe checkout:', url);
+        setCheckoutUrl(url);
         
         // Fallback to server API if needed
         /*

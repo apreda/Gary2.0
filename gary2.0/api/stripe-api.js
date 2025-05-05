@@ -28,16 +28,23 @@ app.use(express.json());
 // Create checkout session
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
+    // Validate required fields
     const { priceId, userId, email, successUrl, cancelUrl } = req.body;
     
-    const session = await createCheckoutSession({
-      body: { priceId, userId, email, successUrl, cancelUrl }
-    });
+    if (!priceId) {
+      return res.status(400).json({ error: 'Missing required parameter: priceId' });
+    }
     
+    console.log('API received checkout request with:', { userId, email, priceId });
+    
+    // Pass the request directly to the createCheckoutSession function
+    const session = await createCheckoutSession(req);
+    
+    // Return the session URL that the client will redirect to
     res.status(200).json(session);
   } catch (error) {
     console.error('Error creating checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    res.status(500).json({ error: `Failed to create checkout session: ${error.message}` });
   }
 });
 
