@@ -11,6 +11,40 @@
   opacity: 1; /* Full opacity for better readability */
   pointer-events: none; /* Ensures headlines don't interfere with user interaction */
   filter: none; /* Remove any blur effects */
+  /* Animation for moving headlines */
+  @keyframes scrollHeadlines {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+}
+
+/* Massive background wave animations */
+@keyframes waveAnimation {
+  0% {
+    transform: translateX(0) translateY(0);
+  }
+  50% {
+    transform: translateX(-25px) translateY(10px);
+  }
+  100% {
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0.2;
+  }
 }
 
 /* Headline container with clean styling */
@@ -20,15 +54,15 @@
   max-width: fit-content;
 }
 
-/* Classic newspaper headline text */
+/* Classic newspaper headline text - colors matching the screenshot */
 .headline-text {
   font-family: 'Playfair Display', 'Times New Roman', serif; /* Classic newspaper font */
   font-weight: 900; /* Extra bold for headlines */
   font-size: 32px;
   letter-spacing: -0.01em;
   line-height: 1.2;
-  color: rgba(255, 255, 255, 1); /* Full opacity for perfect readability */
-  text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 1), 0 0 20px rgba(184, 149, 63, 0.5); /* Enhanced shadow with gold glow */
+  color: rgba(184, 149, 63, 0.9); /* Gold color from screenshot with transparency */
+  text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 1), 0 0 10px rgba(184, 149, 63, 0.3); /* Enhanced shadow with gold glow */
   -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.5); /* Subtle outline for improved visibility */
 }
 
