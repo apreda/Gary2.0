@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 5000;
 
 // CORS Configuration
 const corsOptions = {
-  origin: ['https://betwithgary.ai', 'https://www.betwithgary.ai', process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : null].filter(Boolean),
+  origin: '*', // Allow all origins in production for now
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
