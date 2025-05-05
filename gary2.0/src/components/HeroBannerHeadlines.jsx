@@ -62,12 +62,12 @@ export default function HeroBannerHeadlines() {
         {randomized.map((h, i) => (
           <motion.div
             key={i}
-            // Start positioned well off-screen to prevent visible jumps
+            // Start positioned in the middle of the screen
             initial={{ 
-              x: h.startFromRight ? "130vw" : "-130vw", 
+              x: 0, 
               opacity: 1
             }}
-            // Animate to the opposite edge
+            // Animate to the opposite edge based on direction
             animate={{ 
               x: h.startFromRight ? "-130vw" : "130vw",
               opacity: 1 
@@ -77,7 +77,8 @@ export default function HeroBannerHeadlines() {
               ease: "linear",
               duration: h.dur,
               repeatDelay: 0,
-              progress: h.initialProgress,
+              // No initial progress - headlines start from visible position
+              delay: 2 // Short delay before movement starts
             }}
             className="banner-headline absolute whitespace-nowrap"
             style={{ top: h.top }}
