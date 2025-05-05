@@ -412,10 +412,10 @@ export function GaryHero() {
                     }}></div>
                   </div>
                   
-                  {/* BACK CARD - analysis card positioned below with less space */}
+                  {/* BACK CARD - analysis card positioned below with proper separation */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '50px',
+                    bottom: '-380px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
