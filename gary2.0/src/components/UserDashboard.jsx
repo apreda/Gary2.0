@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
-import garyLogo from '../assets/images/gary_logo.svg';
+// The logo was moved to public directory
+import garyLogo from '/gary_logo.svg';
 
 export function UserDashboard() {
   const { user, signOut } = useAuth();

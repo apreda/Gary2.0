@@ -1,0 +1,70 @@
+/* CSS Variables for Design Tokens */
+:root {
+  /* Colors */
+  --color-black: #000000;
+  --color-white: #ffffff;
+  --color-gold: #b8953f;
+  --color-gold-light: #d4af37;
+  --color-dark-bg: #0e0e0e;
+  --color-dark-overlay: rgba(0, 0, 0, 0.5);
+  
+  /* Typography */
+  --font-primary: 'Inter', sans-serif;
+  --font-serif: serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  
+  /* Spacing */
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  
+  /* Border Radius */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  
+  /* Z-Index Layers */
+  --z-index-base: 0;
+  --z-index-above: 10; 
+  --z-index-modal: 50;
+  --z-index-tooltip: 100;
+}
+
+/* Dark theme values */
+.dark {
+  /* Colors in dark mode */
+  --text-color: rgba(255, 255, 255, 0.87);
+  --text-color-muted: rgba(255, 255, 255, 0.6);
+  --text-color-subtle: rgba(255, 255, 255, 0.4);
+}
+
+/* Light theme values - we can add these later if needed */
+.light {
+  /* Colors in light mode */
+  --text-color: rgba(0, 0, 0, 0.87);
+  --text-color-muted: rgba(0, 0, 0, 0.6);
+  --text-color-subtle: rgba(0, 0, 0, 0.4);
+}
