@@ -101,26 +101,36 @@ export function GaryHero() {
                 </div>
               </div>
               
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-5 mb-10">
-                {/* Use a shared parent style to ensure identical sizing */}
+              {/* CTA Buttons - Redesigned to match modern AI style */}
+              <div className="flex flex-col sm:flex-row gap-5 mb-10 mt-8">
+                {/* Primary button - gold gradient */}
                 <div className="flex">
-                  {/* First button - gold background */}
                   <Link 
                     to="/real-gary-picks" 
-                    className="flex items-center justify-center bg-[#b8953f] text-black font-semibold rounded-xl hover:bg-opacity-90 transition duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
+                    className="group flex items-center justify-center bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black font-bold rounded-xl hover:shadow-lg hover:shadow-[#b8953f]/30 transition-all duration-300 text-lg w-[280px] h-[60px] min-w-[280px] relative overflow-hidden"
                   >
-                    Get Today's Picks
+                    <span className="absolute inset-0 bg-white/10 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></span>
+                    <span className="relative flex items-center">
+                      <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Get Today's Picks
+                    </span>
                   </Link>
                 </div>
                 
-                {/* Second button - dark background with border */}
+                {/* Secondary button - dark with gold accent */}
                 <div className="flex">
                   <Link 
                     to="/how-it-works" 
-                    className="flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold rounded-xl hover:bg-[#252525] transition duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
+                    className="group flex items-center justify-center bg-black/60 backdrop-blur-sm border border-[#b8953f]/30 text-white font-semibold rounded-xl hover:border-[#b8953f] hover:bg-black/80 transition-all duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
                   >
-                    How it Works
+                    <span className="flex items-center">
+                      How it Works
+                      <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform duration-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 18L15 12L9 6" stroke="#b8953f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
                   </Link>
                 </div>
               </div>
