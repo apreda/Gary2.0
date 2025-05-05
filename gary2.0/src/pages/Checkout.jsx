@@ -1,115 +1,138 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/dimensional.css';
 
-// Initialize Stripe with your publishable key
-const stripePromise = loadStripe('pk_live_51REDaOKIQvF46lkOGskP0wAg7YfZK3mwpKA78i7tq1VOPSNU828a1l87vom6spat0Vzb6Gj7SOfbspqb4zlHsom600hhNxsv3v');
+// Stripe embedded checkout script URL
+const STRIPE_EMBED_SCRIPT = "https://js.stripe.com/v3/stripe-embed.js";
 
-// The actual checkout form that handles payment submission
-function CheckoutForm({ priceId }) {
-  const [loading, setLoading] = useState(false);
+// Stripe Embedded Checkout component
+function StripeEmbeddedCheckout({ priceId, userId, email }) {
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const stripe = useStripe();
-  const elements = useElements();
-  const { user } = useAuth();
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!stripe || !elements) {
-      // Stripe.js has not yet loaded.
-      // Make sure to disable form submission until Stripe.js has loaded.
-      return;
+  const [checkoutSessionId, setCheckoutSessionId] = useState(null);
+  const checkoutElementRef = useRef(null);
+  
+  // Load Stripe embed script
+  useEffect(() => {
+    if (!document.querySelector(`script[src="${STRIPE_EMBED_SCRIPT}"]`)) {
+      const script = document.createElement('script');
+      script.src = STRIPE_EMBED_SCRIPT;
+      script.async = true;
+      document.body.appendChild(script);
+      
+      return () => {
+        document.body.removeChild(script);
+      };
     }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Create a checkout session on your server
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          priceId: priceId, // The price ID for Pro subscription
-          userId: user.id,
-          email: user.email,
-          successUrl: `${window.location.origin}/checkout/success`,
-          cancelUrl: `${window.location.origin}/checkout/cancel`,
-        }),
-      });
-
-      const session = await response.json();
-
-      // Redirect to Stripe Checkout
-      const result = await stripe.redirectToCheckout({
-        sessionId: session.id,
-      });
-
-      if (result.error) {
-        setError(result.error.message);
+  }, []);
+  
+  // Create checkout session and initialize embedded checkout
+  useEffect(() => {
+    // Don't try to initialize if no user info or if we already have a session
+    if (!userId || !email || checkoutSessionId) return;
+    
+    const createCheckoutSession = async () => {
+      try {
+        const response = await fetch('/api/create-checkout-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            priceId: priceId,
+            userId: userId,
+            email: email,
+            successUrl: `${window.location.origin}/checkout/success`,
+            cancelUrl: `${window.location.origin}/checkout/cancel`,
+            uiMode: 'embedded', // Required for embedded checkout
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to create checkout session');
+        }
+        
+        const data = await response.json();
+        // For embedded checkout, we need the clientSecret, not the id
+        setCheckoutSessionId(data.clientSecret);
+      } catch (err) {
+        console.error('Error creating checkout session:', err);
+        setError('Unable to initialize checkout. Please try again.');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error during checkout:', err);
-      setError('An error occurred during checkout. Please try again.');
-    } finally {
-      setLoading(false);
+    };
+    
+    createCheckoutSession();
+  }, [priceId, userId, email, checkoutSessionId]);
+  
+  // Initialize Stripe Embedded Checkout when sessionId becomes available
+  useEffect(() => {
+    if (!checkoutSessionId || !window.Stripe) return;
+    
+    // Clean up any previous instance
+    if (checkoutElementRef.current?.innerHTML) {
+      checkoutElementRef.current.innerHTML = '';
     }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-black/50 p-4 rounded-md">
-        <CardElement
-          options={{
-            style: {
-              base: {
-                fontSize: '16px',
-                color: '#ffffff',
-                '::placeholder': {
-                  color: '#aab7c4',
-                },
-              },
-              invalid: {
-                color: '#fa755a',
-                iconColor: '#fa755a',
-              },
-            },
-          }}
-          className="p-3 border border-gray-700 rounded-md"
-        />
+    
+    // Initialize new checkout
+    const stripe = window.Stripe('pk_live_51REDaOKIQvF46lkOGskP0wAg7YfZK3mwpKA78i7tq1VOPSNU828a1l87vom6spat0Vzb6Gj7SOfbspqb4zlHsom600hhNxsv3v');
+    const options = {
+      clientSecret: checkoutSessionId,
+      appearance: {
+        theme: 'night',
+        variables: {
+          colorPrimary: '#d4af37',
+          colorBackground: '#111111',
+          colorText: '#ffffff',
+          colorDanger: '#ff5252',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          borderRadius: '8px',
+        },
+      },
+    };
+    
+    try {
+      stripe.initEmbeddedCheckout(options).mount(checkoutElementRef.current);
+    } catch (err) {
+      console.error('Error mounting Stripe Checkout:', err);
+      setError('Failed to load checkout form. Please refresh the page.');
+    }
+    
+    return () => {
+      stripe.cancelEmbeddedCheckout();
+    };
+  }, [checkoutSessionId]);
+  
+  if (error) {
+    return (
+      <div className="p-6 bg-red-900/20 border border-red-500/30 rounded-lg text-center">
+        <p className="text-red-400 mb-3">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-red-500/30 hover:bg-red-500/40 text-white rounded-md transition-colors"
+        >
+          Try Again
+        </button>
       </div>
-      
-      {error && (
-        <div className="text-red-500 text-sm mt-2">
-          {error}
-        </div>
-      )}
-      
-      <button
-        type="submit"
-        disabled={loading || !stripe}
-        className="w-full py-4 px-6 bg-[#d4af37] text-black font-medium rounded-md transition-all duration-300 hover:bg-[#c4a127] disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
-      >
-        {loading ? (
-          <div className="flex items-center justify-center">
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Processing...
-          </div>
-        ) : (
-          'Complete Purchase'
-        )}
-      </button>
-    </form>
+    );
+  }
+  
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#d4af37]"></div>
+        <p className="text-gray-400">Initializing checkout...</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div
+      ref={checkoutElementRef}
+      className="w-full min-h-[400px] rounded-lg overflow-hidden"
+    />
   );
 }
 
@@ -120,41 +143,23 @@ export function Checkout() {
   const { user } = useAuth();
   const navigate = useNavigate();
   
+  // Check if user is authenticated, if not redirect to login
   useEffect(() => {
-    // Redirect to sign in if no user is logged in
     if (!user) {
-      navigate('/signin?redirect=checkout');
+      navigate('/login?redirect=checkout');
     } else {
-      setLoading(false);
+      // Simulate loading content
+      const timer = setTimeout(() => {
+        setLoading(false);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
     }
   }, [user, navigate]);
-  
+
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
-      {/* GaryHero-style immersive background */}
-      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        {/* Subtle cream/white haze gradients */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#f7f4ed]/20 via-transparent to-transparent" />
-        <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-br from-[#fffbe9]/15 via-transparent to-transparent" />
-        {/* Faint cream highlight behind main content */}
-        <div className="absolute bottom-24 left-0 w-full h-24 bg-gradient-to-t from-[#f7f4ed]/15 via-transparent to-transparent blur-2xl opacity-60" />
-        {/* Gold vignette corners */}
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#d4af37]/10 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#d4af37]/10 blur-3xl" />
-        {/* Subtle grid/noise overlay */}
-        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
-        {/* Radial vignette for cinematic depth */}
-        <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#18181b]/80 to-black/95 opacity-95" />
-      </div>
-      
-      {/* Background depth elements */}
-      <div className="absolute inset-0 z-0 overflow-hidden opacity-20">
-        <div className="absolute top-0 -left-40 w-80 h-80 bg-[#d4af37]/10 rounded-full filter blur-[100px]"></div>
-        <div className="absolute bottom-40 -right-40 w-80 h-80 bg-[#d4af37]/10 rounded-full filter blur-[100px]"></div>
-        <div className="absolute inset-0 bg-[url('/src/assets/images/grid.svg')] bg-repeat opacity-10"></div>
-      </div>
-      
-      <div className="max-w-3xl mx-auto relative z-10 pt-10">
+    <div className="min-h-screen bg-black bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-black to-black text-white p-6">
+      <div className="max-w-5xl mx-auto pt-16 pb-24">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#d4af37] to-yellow-300 mb-2">
@@ -177,10 +182,14 @@ export function Checkout() {
               <div className="bg-[#111]/80 backdrop-blur-sm rounded-xl overflow-hidden p-8 border border-[#d4af37]/20">
                 <h2 className="text-xl font-medium text-white mb-6">Payment Details</h2>
                 
-                {/* Stripe Elements wrapper */}
-                <Elements stripe={stripePromise}>
-                  <CheckoutForm priceId={priceId} />
-                </Elements>
+                {/* Stripe Embedded Checkout */}
+                {user && (
+                  <StripeEmbeddedCheckout 
+                    priceId={priceId}
+                    userId={user.id}
+                    email={user.email}
+                  />
+                )}
               </div>
             </div>
             
