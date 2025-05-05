@@ -4,31 +4,61 @@ import { useMemo } from "react";
 import "../styles/newspaper.css";
 
 const BANNER_HEIGHT = 600; // px - increased height to match hero
-const SPEED_BASE = 70;   // seconds for full traverse - slowed down
-const VISIBLE_HEADLINES = 10; // reduced number of headlines visible at once
+const SPEED_BASE = 80;   // seconds for full traverse - slowed down more
+const VISIBLE_HEADLINES = 8; // further reduced number of initial headlines visible
+const TOTAL_HEADLINES = 12; // total headlines that will be on rotation
 
 export default function HeroBannerHeadlines() {
-  // Prepare a subset of headlines with even vertical distribution
+  // Prepare headlines with random distribution and varying starting positions
   const randomized = useMemo(() => {
     // Shuffle the headlines array
     const shuffled = [...headlines].sort(() => Math.random() - 0.5);
     
-    // Take only the number we want to show
-    const selected = shuffled.slice(0, VISIBLE_HEADLINES);
+    // Take more headlines than we'll initially show
+    const selected = shuffled.slice(0, TOTAL_HEADLINES);
     
-    // Calculate section height for even distribution
-    const sectionHeight = BANNER_HEIGHT / VISIBLE_HEADLINES;
+    // Create vertical zones to ensure coverage of entire banner
+    // Include specific zones for top, middle, and bottom areas
+    const verticalZones = [
+      [0, BANNER_HEIGHT * 0.2],          // Top zone
+      [BANNER_HEIGHT * 0.2, BANNER_HEIGHT * 0.4],  // Upper middle
+      [BANNER_HEIGHT * 0.4, BANNER_HEIGHT * 0.6],  // Middle
+      [BANNER_HEIGHT * 0.6, BANNER_HEIGHT * 0.8],  // Lower middle
+      [BANNER_HEIGHT * 0.8, BANNER_HEIGHT]         // Bottom zone
+    ];
     
-    // Return headlines with calculated positions
-    return selected.map((h, index) => ({
-      ...h,
-      // Position within its vertical section plus a small random offset
-      top: (index * sectionHeight) + (Math.random() * 40 - 20),
-      // More variance in duration for a natural feel
-      dur: SPEED_BASE + (Math.random() * 30),
-      // Staggered delays so they don't all move at once
-      delay: (Math.random() * SPEED_BASE * 0.5) - (SPEED_BASE * 0.25)
-    }));
+    // Return headlines with randomized positions and timing
+    return selected.map((h, index) => {
+      // Determine which vertical zone this headline belongs to
+      // Distribute across zones to ensure coverage
+      const zoneIndex = index % verticalZones.length;
+      const [minY, maxY] = verticalZones[zoneIndex];
+      
+      // Random positioning within its assigned zone
+      const top = minY + Math.random() * (maxY - minY);
+      
+      // Alternate starting directions
+      // Some headlines start from left, others from right
+      const startFromRight = index % 2 === 0;
+      
+      // Calculate initial progress based on index
+      // This makes it appear like the animation was already in progress
+      // when the page loaded
+      const initialProgress = (index * 0.12) % 1.0; // Staggered starting positions
+      
+      return {
+        ...h,
+        top,
+        startFromRight,
+        // More variance in duration for a natural feel
+        dur: SPEED_BASE + (Math.random() * 40), 
+        // Staggered delays for continuous movement effect
+        // First few headlines are already in motion when component loads
+        initialProgress,
+        // Whether this headline should be initially visible
+        initiallyVisible: index < VISIBLE_HEADLINES
+      };
+    });
   }, []);
 
   return (
@@ -37,13 +67,25 @@ export default function HeroBannerHeadlines() {
         {randomized.map((h, i) => (
           <motion.div
             key={i}
-            initial={{ x: "100vw" }}
-            animate={{ x: "-100vw" }}
+            // Initial position based on direction (left or right side)
+            initial={{ 
+              x: h.startFromRight ? "100vw" : "-100vw",
+              opacity: h.initiallyVisible ? 1 : 0 
+            }}
+            // Animate to the opposite side
+            animate={{ 
+              x: h.startFromRight ? "-100vw" : "100vw",
+              opacity: 1 
+            }}
             transition={{
               repeat: Infinity,
               ease: "linear",
               duration: h.dur,
-              delay: h.delay,
+              // Start the animation from initial progress point to create
+              // the impression of continuous movement
+              repeatDelay: 0,
+              // Important: this makes it look like animation was already happening
+              progress: h.initialProgress,
             }}
             className="banner-headline absolute whitespace-nowrap"
             style={{ top: h.top }}
