@@ -171,19 +171,22 @@ export function GaryHero() {
               
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-5 mb-10">
-                {/* Wrapper to enforce exact same dimensions */}
-                <div className="w-[280px] h-[60px]">
+                {/* Use a shared parent style to ensure identical sizing */}
+                <div className="flex">
+                  {/* First button - gold background */}
                   <Link 
                     to="/real-gary-picks" 
-                    className="inline-flex items-center justify-center bg-[#b8953f] text-black font-semibold rounded-xl hover:bg-opacity-90 transition duration-300 text-lg w-full h-full"
+                    className="flex items-center justify-center bg-[#b8953f] text-black font-semibold rounded-xl hover:bg-opacity-90 transition duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
                   >
                     Get Today's Picks
                   </Link>
                 </div>
-                <div className="w-[280px] h-[60px]">
+                
+                {/* Second button - dark background with border */}
+                <div className="flex">
                   <Link 
                     to="/how-it-works" 
-                    className="inline-flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold rounded-xl hover:bg-[#252525] transition duration-300 text-lg w-full h-full"
+                    className="flex items-center justify-center bg-[#1e1e1e] border border-[#333] text-white font-semibold rounded-xl hover:bg-[#252525] transition duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
                   >
                     How it Works
                   </Link>
