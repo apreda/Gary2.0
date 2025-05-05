@@ -91,7 +91,7 @@ export function GaryHero() {
             <h1 className="font-extrabold text-white leading-tight mb-8">
               <span className="block text-6xl lg:text-7xl font-serif italic mb-2">MAKE SMARTER</span>
               <div className="w-full h-1 bg-[#c19c60] my-2"></div>
-              <span className="block text-[#c19c60] text-6xl lg:text-7xl font-black transform -skew-x-6">SPORTS BETS</span>
+              <span className="block text-[#c19c60] text-6xl lg:text-7xl font-black transform -skew-x-6 animate-goldFlicker">SPORTS BETS</span>
               <div className="w-full h-1 bg-[#c19c60] my-2"></div>
               <span className="block text-white text-lg mt-2 font-bold tracking-widest">THE WINNING EDGE SINCE 2025</span>
             </h1>
