@@ -41,18 +41,18 @@ export function Navbar() {
     <header className="navbar">
       <div className="container mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="text-lg font-bold flex items-center group">
-          <span className="text-[#E0B016] text-lg tracking-tight font-light">GARY</span>
-          <span className="text-gray-900 text-lg tracking-wide font-bold">A.I.</span>
+        <Link to="/" className="flex items-center group">
+          <span className="text-[#E0B016] text-2xl md:text-3xl tracking-tight font-light font-mono">GARY</span>
+          <span className="text-gray-900 text-2xl md:text-3xl tracking-wide font-bold font-mono">A.I.</span>
         </Link>
         
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex space-x-8">
+        <nav className="hidden lg:flex space-x-6">
           {filteredNavItems.map((item) => (
             item.action ? (
               <button
                 key={item.path}
-                className="text-lg font-medium text-gray-800 hover:underline transition-colors duration-200"
+                className="text-sm uppercase tracking-wide font-medium text-gray-700 hover:text-[#E0B016] transition-colors duration-200"
                 onClick={item.action}
               >
                 {item.label}
@@ -61,9 +61,9 @@ export function Navbar() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`text-lg font-medium transition-colors duration-200 ${activeLink === item.path 
-                  ? 'text-[#E0B016] hover:underline' 
-                  : 'text-gray-800 hover:underline'}`}
+                className={`text-sm uppercase tracking-wide font-medium transition-colors duration-200 ${activeLink === item.path 
+                  ? 'text-[#E0B016]' 
+                  : 'text-gray-700 hover:text-[#E0B016]'}`}
                 onClick={() => setActiveLink(item.path)}
               >
                 {item.label}
@@ -78,14 +78,14 @@ export function Navbar() {
             <>
               <Link 
                 to="/signin" 
-                className="text-gray-700 hover:text-gray-900 font-medium"
+                className="text-gray-700 hover:text-[#E0B016] font-medium text-sm uppercase tracking-wide"
                 onClick={() => setActiveLink("/signin")}
               >
                 Log In
               </Link>
               <Link 
                 to="/pricing" 
-                className="btn-primary"
+                className="btn-primary text-sm uppercase tracking-wider font-medium"
                 onClick={() => setActiveLink("/pricing")}
               >
                 Upgrade →
@@ -94,14 +94,14 @@ export function Navbar() {
           ) : (
             <>
               <button
-                className="text-gray-700 hover:text-gray-900 font-medium"
+                className="text-gray-700 hover:text-[#E0B016] font-medium text-sm uppercase tracking-wide"
                 onClick={openBetCardProfile}
               >
                 BetCard
               </button>
               <Link 
                 to="/signout" 
-                className="text-white bg-gray-800 px-4 py-2 rounded-md font-semibold hover:bg-gray-700 transition-all"
+                className="text-white bg-gray-800 px-4 py-2 rounded-md text-sm uppercase tracking-wider font-medium hover:bg-gray-700 transition-all"
                 onClick={() => setActiveLink("/signout")}
               >
                 Sign Out
@@ -131,14 +131,14 @@ export function Navbar() {
       
       {/* Mobile Menu Dropdown */}
       {isMobileMenuOpen && (
-        <div className="bg-white shadow-lg lg:hidden border-t border-gray-100">
-          <div className="container mx-auto px-6 py-3">
-            <div className="flex flex-col space-y-3">
+        <div className="bg-white shadow-lg lg:hidden border-t border-gray-100 backdrop-blur-md">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex flex-col space-y-4">
               {filteredNavItems.map((item) => (
                 item.action ? (
                   <button
                     key={item.path}
-                    className="px-4 py-3 text-lg font-medium text-gray-800 hover:text-[#E0B016] text-left"
+                    className="px-4 py-2 text-sm uppercase tracking-wide font-medium text-gray-700 hover:text-[#E0B016] text-left"
                     onClick={() => {
                       item.action();
                       setIsMobileMenuOpen(false);
@@ -150,7 +150,7 @@ export function Navbar() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`px-4 py-3 text-lg font-medium ${activeLink === item.path ? 'text-[#E0B016]' : 'text-gray-800 hover:text-[#E0B016]'}`}
+                    className={`px-4 py-2 text-sm uppercase tracking-wide font-medium ${activeLink === item.path ? 'text-[#E0B016]' : 'text-gray-700 hover:text-[#E0B016]'}`}
                     onClick={() => {
                       setActiveLink(item.path);
                       setIsMobileMenuOpen(false);
