@@ -397,6 +397,25 @@ export function GaryHero() {
             </p>
           </div>
 
+          {/* Technology badges - similar to the NEW badge above */}
+          <div className="flex flex-wrap justify-center gap-3 mb-8">
+            <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
+              <span>Odds API</span>
+            </div>
+            <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
+              <span>SportsDB</span>
+            </div>
+            <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
+              <span>Turbo 3.5 Mini</span>
+            </div>
+            <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
+              <span>Perplexity</span>
+            </div>
+            <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
+              <span>StatCast API</span>
+            </div>
+          </div>
+
           {/* CTA Buttons - Exact Vault style */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center">
             <Link 
