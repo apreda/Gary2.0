@@ -130,7 +130,7 @@ function Home() {
     {/* Subtle grid/noise overlay */}
     <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
     {/* Radial vignette for cinematic depth, now deeper */}
-    <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#18181b]/80 to-black/95 opacity-95" />
+    <div className="absolute inset-0 bg-gradient-radial from-transparent via-[#18181b]/50 to-black/60 opacity-50" />
   </div>
       <div className="relative z-10">
         <GaryHero />
