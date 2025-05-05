@@ -3,96 +3,28 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/dimensional.css';
 
-// Stripe Hosted Checkout component
-function StripeHostedCheckout({ userId, email }) {
-  const [loading, setLoading] = useState(true);
+// Stripe Checkout Component with direct Stripe integration
+function StripeCheckout({ userId, email }) {
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [checkoutUrl, setCheckoutUrl] = useState(null);
-  const navigate = useNavigate();
   
-  // Create checkout session for hosted checkout
-  useEffect(() => {
-    // Don't try to initialize if no user info
-    if (!userId || !email) return;
+  const handleCheckout = async () => {
+    setLoading(true);
+    setError(null);
     
-    const createCheckoutSession = async () => {
-      try {
-        console.log('Creating checkout session with:', { userId, email });
-        
-        // Use proper Stripe API integration
-        const response = await fetch('/api/create-checkout-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: userId,
-            email: email,
-            priceId: 'price_1RL6F2KIQvF46lkOjqnjUPE1', // Live price ID
-            successUrl: `${window.location.origin}/checkout/success`,
-            cancelUrl: `${window.location.origin}/checkout/cancel`,
-          }),
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Error creating checkout session:', errorText);
-          throw new Error(`Failed to create checkout session: ${response.status} ${errorText}`);
-        }
-        
-        const { url } = await response.json();
-        console.log('Redirecting to Stripe checkout:', url);
-        setCheckoutUrl(url);
-        
-        // Fallback to server API if needed
-        /*
-        const response = await fetch('/api/create-checkout-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: userId,
-            email: email,
-            priceId: 'price_1RL6F2KIQvF46lkOjqnjUPE1', // Production Price ID
-            successUrl: `${window.location.origin}/checkout/success`,
-            cancelUrl: `${window.location.origin}/checkout/cancel`,
-          }),
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Server response:', errorText);
-          throw new Error('Failed to create checkout session');
-        }
-        
-        const data = await response.json();
-        console.log('Checkout session created:', data);
-        
-        // For hosted checkout, we use the URL
-        if (data.url) {
-          setCheckoutUrl(data.url);
-        } else {
-          throw new Error('No checkout URL returned');
-        }
-        */
-      } catch (err) {
-        console.error('Error creating checkout session:', err);
-        setError('Unable to initialize checkout. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    createCheckoutSession();
-  }, [userId, email, navigate]);
-  
-  // Redirect to Stripe once URL is available
-  useEffect(() => {
-    if (checkoutUrl) {
-      window.location.href = checkoutUrl;
+    try {
+      // Direct redirect to your live Stripe product URL
+      // This is the most reliable method - no API calls needed
+      window.location.href = 'https://buy.stripe.com/14k5n20mReER4N228a';
+      
+      // Log for tracking
+      console.log('Redirecting to Stripe product page with email:', email);
+    } catch (err) {
+      console.error('Error during checkout redirect:', err);
+      setError('Unable to redirect to checkout. Please try again.');
+      setLoading(false);
     }
-  }, [checkoutUrl]);
+  };
   
   if (error) {
     return (
@@ -109,9 +41,25 @@ function StripeHostedCheckout({ userId, email }) {
   }
   
   return (
-    <div className="p-6 bg-[#111]/80 border border-[#d4af37]/20 rounded-lg flex flex-col items-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#d4af37] mb-4"></div>
-      <p className="text-white">Preparing checkout page...</p>
+    <div className="w-full">
+      <button
+        onClick={handleCheckout}
+        disabled={loading}
+        className="w-full py-4 bg-[#d4af37] hover:bg-[#c5a030] text-black font-medium rounded-md transition-colors flex items-center justify-center focus:ring-2 focus:ring-[#d4af37]/50 focus:outline-none"
+      >
+        {loading ? (
+          <>
+            <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black mr-3"></div>
+            Processing...
+          </>
+        ) : (
+          <>Proceed to Checkout</>  
+        )}
+      </button>
+      <div className="mt-4 flex items-center justify-center space-x-2">
+        <img src="/secure-badge.svg" alt="Secure" className="h-5 w-auto" />
+        <span className="text-sm text-gray-400">Secure payment via Stripe</span>
+      </div>
     </div>
   );
 }
@@ -156,9 +104,9 @@ export function Checkout() {
                 <div className="bg-[#111]/80 backdrop-blur-sm rounded-xl overflow-hidden p-8 border border-[#d4af37]/20">
                   <h2 className="text-xl font-medium text-white mb-6">Payment Details</h2>
                   
-                  {/* Stripe Hosted Checkout */}
+                  {/* Stripe Checkout */}
                   {user && (
-                    <StripeHostedCheckout 
+                    <StripeCheckout 
                       userId={user.id}
                       email={user.email}
                     />
