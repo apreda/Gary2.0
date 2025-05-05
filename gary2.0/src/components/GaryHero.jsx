@@ -54,8 +54,8 @@ export function GaryHero() {
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-visible">
       
-      <main className="container mx-auto px-5 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">
-        <div className="w-full max-w-7xl mx-auto">
+      <main className="max-w-[1280px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">
+        <div className="w-full mx-auto">
           <div className="flex flex-col lg:flex-row gap-8 items-center">
             {/* Left side - Headlines and Buttons */}
             <div className="lg:flex-1 p-5 z-10">
@@ -68,16 +68,16 @@ export function GaryHero() {
                       <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
                     </div>
                     
-                    <h1 className="text-5xl md:text-6xl font-bold mb-6">
+                    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.75rem)', lineHeight: '1.4' }}>
                       <span className="text-white">Smarter </span> 
                       <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#b8953f] to-[#d4af37] font-extrabold">Sports Bets</span>
                     </h1>
                     
-                    <h2 className="text-4xl font-bold text-white mb-8">
+                    <h2 className="text-4xl md:text-5xl font-bold text-white mb-10" style={{ lineHeight: '1.4' }}>
                       Powered by Gary AI
                     </h2>
                     
-                    <div className="space-y-4 mb-6">
+                    <div className="space-y-6 mb-8" style={{ lineHeight: '1.5' }}>
                       <div className="flex items-start">
                         <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
                           <span className="text-[#b8953f] text-xs">✓</span>
@@ -102,12 +102,12 @@ export function GaryHero() {
               </div>
               
               {/* CTA Buttons - Redesigned to match modern AI style */}
-              <div className="flex flex-col sm:flex-row gap-5 mb-10 mt-8">
+              <div className="flex flex-col sm:flex-row gap-6 mb-12 mt-10">
                 {/* Primary button - gold gradient */}
                 <div className="flex">
                   <Link 
                     to="/real-gary-picks" 
-                    className="group flex items-center justify-center bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black font-bold rounded-xl hover:shadow-lg hover:shadow-[#b8953f]/30 transition-all duration-300 text-lg w-[280px] h-[60px] min-w-[280px] relative overflow-hidden"
+                    className="group flex items-center justify-center bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black font-bold rounded-xl hover:shadow-lg hover:shadow-[#b8953f]/30 hover:scale-105 transition-all duration-300 text-lg w-[300px] h-[64px] min-w-[300px] relative overflow-hidden" style={{ padding: '1rem 2rem' }}
                   >
                     <span className="absolute inset-0 bg-white/10 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></span>
                     <span className="relative flex items-center">
@@ -123,7 +123,7 @@ export function GaryHero() {
                 <div className="flex">
                   <Link 
                     to="/how-it-works" 
-                    className="group flex items-center justify-center bg-[#0e0e0e]/80 backdrop-blur-sm border border-[#b8953f]/30 text-white font-semibold rounded-xl hover:border-[#b8953f] hover:bg-[#0e0e0e] transition-all duration-300 text-lg w-[280px] h-[60px] min-w-[280px]"
+                    className="group flex items-center justify-center bg-[#0e0e0e]/80 backdrop-blur-sm border border-[#b8953f]/30 text-white font-semibold rounded-xl hover:border-[#b8953f] hover:bg-[#0e0e0e] hover:scale-105 transition-all duration-300 text-lg w-[300px] h-[64px] min-w-[300px]" style={{ padding: '1rem 2rem' }}
                   >
                     <span className="flex items-center">
                       How it Works
@@ -455,7 +455,7 @@ export function GaryHero() {
                   {/* BACK CARD - analysis card positioned below with proper separation */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '-334px',
+                    bottom: '-166px', /* Moved up by 1.75 inches (168px) */
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
