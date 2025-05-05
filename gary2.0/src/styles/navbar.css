@@ -1,0 +1,54 @@
+/* Navbar styling following the design guide */
+
+.navbar {
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 64px; /* Fixed height for consistency */
+}
+
+.container {
+  max-width: 1280px;
+  height: 100%;
+}
+
+/* Primary button styling */
+.btn-primary {
+  background-color: #E0B016; /* Gary gold */
+  color: #000;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  transition: transform 0.1s, box-shadow 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure buttons in the screenshot have the right size and shape */
+.btn-primary {
+  min-width: 120px;
+  height: 40px;
+}
+
+/* For dark buttons like in the screenshot */
+.btn-dark {
+  background-color: #1a1a1a;
+  color: white;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.btn-dark:hover {
+  background-color: #333;
+}
