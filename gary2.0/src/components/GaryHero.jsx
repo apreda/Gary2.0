@@ -137,7 +137,7 @@ export function GaryHero() {
             </div>
 
             {/* Right side - Featured Pick Cards (front and back) */}
-            <div className="lg:flex-1 flex justify-center items-center mt-12 lg:mt-0">
+            <div className="lg:flex-1 flex justify-center items-center mt-0 lg:mt-0">
               {loading ? (
                 <div className="w-[480px] h-[320px] rounded-xl bg-black/50 flex items-center justify-center border border-[#b8953f]/30">
                   <div className="w-8 h-8 border-4 border-[#b8953f]/20 border-t-[#b8953f] rounded-full animate-spin"></div>
@@ -148,7 +148,7 @@ export function GaryHero() {
                   {/* FRONT CARD - positioned at the top */}
                   <div style={{
                     position: 'absolute',
-                    top: '0px',
+                    top: '-50px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
@@ -455,7 +455,7 @@ export function GaryHero() {
                   {/* BACK CARD - analysis card positioned below with proper separation */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '-284px',
+                    bottom: '-334px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
