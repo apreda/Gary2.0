@@ -76,8 +76,8 @@ export function GaryHero() {
     
     return (
       <div style={{
-        width: 380,
-        height: 465,
+        width: 500,
+        height: 400,
         perspective: '1000px',
         marginTop: '20px',
         cursor: 'pointer'
@@ -89,8 +89,9 @@ export function GaryHero() {
           height: '100%',
           transformStyle: 'preserve-3d',
           transform: 'rotateY(0deg)',
+          boxShadow: '0 20px 30px rgba(0, 0, 0, 0.5)',
         }}>
-          {/* FRONT OF CARD - Exactly matching RealGaryPicks */}
+          {/* FRONT OF CARD - Wider version matching RealGaryPicks */}
           <div style={{
             position: 'absolute',
             width: '100%',
@@ -100,17 +101,17 @@ export function GaryHero() {
             borderRadius: '16px',
             fontFamily: 'Inter, system-ui, sans-serif',
             overflow: 'hidden',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+            border: '1px solid rgba(255,255,255,0.1)',
             color: '#ffffff',
           }}>
-            {/* Left side content */}
+            {/* Left side content - wider proportion */}
             <div style={{
               position: 'absolute',
               left: 0,
               top: 0,
               bottom: 0,
-              width: '70%',
-              padding: '1.5rem',
+              width: '75%',
+              padding: '1.75rem',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
@@ -261,116 +262,71 @@ export function GaryHero() {
               </div>
             </div>
             
-            {/* Right side content - prominently elevated appearance */}
+            {/* Right side gold gradient for Confidence */}
             <div style={{
               position: 'absolute',
               right: 0,
               top: 0,
               bottom: 0,
-              width: '30%',
-              borderLeft: '2.25px solid #bfa142',
-              padding: '1.5rem 1rem',
+              width: '25%',
+              background: 'linear-gradient(135deg, #9e7e35 0%, #d4af37 50%, #b8953f 100%)',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
+              justifyContent: 'center',
               alignItems: 'center',
-              background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)',
-              boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)',
-              borderRadius: '0 16px 16px 0',
-              clipPath: 'inset(0px 0px 0px -20px)',
-              zIndex: 2,
-              transform: 'translateZ(10px)',
+              padding: '1.75rem',
+              borderLeft: '1px solid rgba(255,255,255,0.1)'
             }}>
-              {/* Game time section */}
               <div style={{ 
-                textAlign: 'center',
-                marginBottom: '1rem'
+                fontSize: '0.75rem', 
+                opacity: 0.8, 
+                textTransform: 'uppercase', 
+                marginBottom: '0.5rem',
+                letterSpacing: '0.05em',
+                fontWeight: 600,
+                color: '#000'
               }}>
-                <div style={{ 
-                  fontSize: '0.75rem', 
-                  opacity: 0.6, 
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em', 
-                  marginBottom: '0.25rem'
-                }}>
-                  Game Time
-                </div>
-                <div style={{ 
-                  fontSize: '1.125rem', 
-                  fontWeight: 600,
-                  opacity: 0.9
-                }}>
-                  {displayPick.time}
-                </div>
+                Confidence
+              </div>
+              <div style={{ 
+                fontSize: '2.25rem', 
+                fontWeight: 800,
+                color: '#000',
+                marginBottom: '0.75rem'
+              }}>
+                {Math.round(displayPick.confidence * 100)}%
               </div>
               
-              {/* Coin Image centered */}
+              {/* Badge */}
               <div style={{
+                marginTop: '1rem',
+                background: 'rgba(0,0,0,0.2)',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '4px',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: '#fff',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
                 display: 'flex',
-                justifyContent: 'center',
-                marginTop: 'auto',
-                marginBottom: 'auto',
-                background: 'transparent'
+                alignItems: 'center',
+                justifyContent: 'center'
               }}>
-                <img 
-                  src="/coin2.png" 
-                  alt="Gary AI Coin"
-                  style={{
-                    width: 130,
-                    height: 130,
-                    objectFit: 'contain',
-                    opacity: 1,
-                    background: 'transparent'
-                  }}
-                />
+                PREMIUM PICK
               </div>
               
-              {/* Confidence score with visual indicator */}
+              {/* Watermark */}
               <div style={{ 
-                textAlign: 'center',
-                marginTop: '1rem',
-                width: '100%'
+                position: 'absolute', 
+                bottom: '1.2rem', 
+                fontSize: '0.65rem', 
+                fontWeight: 700,
+                opacity: 0.4,
+                color: '#000',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase'
               }}>
-                <div style={{ 
-                  fontSize: '0.75rem', 
-                  opacity: 0.6, 
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em', 
-                  marginBottom: '0.25rem'
-                }}>
-                  Confidence
-                </div>
-                
-                {/* Confidence score display */}
-                <div style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 700,
-                  opacity: 0.95,
-                  color: '#bfa142',
-                  marginBottom: '0.5rem'
-                }}>
-                  {typeof displayPick.confidence === 'number' ? 
-                    Math.round(displayPick.confidence * 100) + '%' : 
-                    (displayPick.confidence || '78%')}
-                </div>
-                
-                {/* View Analysis button */}
-                <button style={{
-                  marginTop: '1rem',
-                  fontSize: '0.75rem',
-                  padding: '0.5rem 1rem',
-                  background: 'rgba(191, 161, 66, 0.15)',
-                  color: '#bfa142',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  fontWeight: 500,
-                  transition: 'all 0.2s ease'
-                }}>
-                  View Analysis
-                </button>
+                GARY.AI
               </div>
             </div>
             
@@ -460,10 +416,10 @@ export function GaryHero() {
           </div>
         </div>
         
-        {/* Vault-style dashboard preview with our pick cards inside */}
-        <div className="mt-2 mb-auto w-full flex justify-center items-center">
-          <div className="relative w-full max-w-5xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
-               style={{ height: "520px" }}>
+        {/* Premium pick preview - moved higher and wider */}
+        <div className="mt-4 mb-auto w-full flex justify-center items-center">
+          <div className="relative w-full max-w-4xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
+               style={{ height: "450px" }}>
             {/* Dark glossy header bar */}
             <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center px-4">
               <div className="flex space-x-2">
@@ -471,46 +427,29 @@ export function GaryHero() {
                 <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
                 <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
               </div>
-              <div className="text-white/30 text-xs ml-4 font-medium">Gary's Premium Picks</div>
+              <div className="text-white/30 text-xs ml-4 font-medium">Today's Premium Pick</div>
             </div>
             
-            {/* Pick Cards inside the dashboard frame */}
-            <div className="flex justify-center items-center h-full pt-10">
-              <div className="flex flex-col md:flex-row gap-12 justify-center">
-                {loading ? (
-                  <div className="text-[#b8953f] text-center">Loading today's top picks...</div>
-                ) : featuredPicks.length > 0 ? (
-                  featuredPicks.map((pick, index) => (
-                    <div key={index} className="transition-all hover:transform hover:-translate-y-2">
-                      {renderPickCard(pick)}
-                    </div>
-                  ))
-                ) : (
-                  <>
-                    {/* Display two mock cards side by side with the exact data from screenshots */}
-                    <div className="transition-all hover:transform hover:-translate-y-2">
-                      {renderPickCard({
-                        league: "NBA",
-                        game: "Nuggets @ Thunder",
-                        pick: "Denver Nuggets +9.5 -110",
-                        time: "9:30 PM ET",
-                        confidence: 0.78,
-                        rationale: "Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road."
-                      })}
-                    </div>
-                    <div className="transition-all hover:transform hover:-translate-y-2">
-                      {renderPickCard({
-                        league: "MLB",
-                        game: "Yankees @ Padres",
-                        pick: "New York Yankees ML -142",
-                        time: "7:10 PM ET",
-                        confidence: 0.82,
-                        rationale: "Yankees have the pitching edge and their lineup's been mashing righties all month. Padres are ice cold at home, and the line is holding steady—no trap here, just value on the better squad. Gary's system and gut both point Bronx."
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
+            {/* Single wider pick card */}
+            <div className="flex justify-center items-center h-full pt-12">
+              {loading ? (
+                <div className="text-[#b8953f] text-center">Loading today's top pick...</div>
+              ) : featuredPicks.length > 0 ? (
+                <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
+                  {renderPickCard(featuredPicks[0])}
+                </div>
+              ) : (
+                <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
+                  {renderPickCard({
+                    league: "MLB",
+                    game: "Yankees @ Padres",
+                    pick: "New York Yankees ML -142",
+                    time: "7:10 PM ET",
+                    confidence: 0.82,
+                    rationale: "Yankees have the pitching edge and their lineup's been mashing righties all month. Padres are ice cold at home, and the line is holding steady—no trap here, just value on the better squad. Gary's system and gut both point Bronx."
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
