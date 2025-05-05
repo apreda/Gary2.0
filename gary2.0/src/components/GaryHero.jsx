@@ -202,13 +202,13 @@ export function GaryHero() {
                 <div className="w-8 h-8 border-4 border-[#b8953f]/20 border-t-[#b8953f] rounded-full animate-spin"></div>
               </div>
             ) : featuredPick ? (
-              <div className="w-[576px] h-[500px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
-                {/* BACK CARD - positioned beneath the front card */}
+              <div className="w-[576px] h-[560px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
+                {/* BACK CARD - positioned beneath the front card with space */}
                 <div style={{
                   position: 'absolute',
-                  bottom: '20px',
+                  bottom: '30px',
                   left: '50%',
-                  transform: 'translateX(-50%) rotateX(5deg)',
+                  transform: 'translateX(-50%) rotateX(5deg) translateY(30px)',
                   width: '576px',
                   height: '384px',
                   background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',

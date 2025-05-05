@@ -539,8 +539,35 @@ function RealGaryPicks() {
                                 style={{
                                   perspective: '1000px',
                                 }}
-                                onClick={toggleFlip}
+                                onClick={userPlan === 'pro' ? toggleFlip : null}
                               >
+                                {/* Blur overlay for FREE users */}
+                                {userPlan !== 'pro' && (
+                                  <div 
+                                    className="absolute inset-0 z-50 flex flex-col items-center justify-center" 
+                                    style={{
+                                      background: 'rgba(0, 0, 0, 0.7)',
+                                      backdropFilter: 'blur(15px)',
+                                      borderRadius: '16px',
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="text-center px-6">
+                                      <div className="mb-4">
+                                        <img src="/coin2.png" alt="Gary A.I." className="w-24 h-24 mx-auto" />
+                                      </div>
+                                      <h3 className="text-[#b8953f] text-2xl font-bold mb-3">Unlock Premium Picks</h3>
+                                      <p className="text-white mb-6 max-w-sm">Upgrade to Pro to see all of Gary's premium picks with detailed analysis and reasoning.</p>
+                                      <Link 
+                                        to="/checkout"
+                                        className="block py-4 px-8 bg-[#b8953f] hover:bg-[#c5a030] text-black font-medium rounded-lg transition-colors focus:ring-2 focus:ring-[#b8953f]/50 focus:outline-none w-64 mx-auto text-center"
+                                      >
+                                        Upgrade to Pro — $29/month
+                                      </Link>
+                                      <p className="mt-4 text-gray-400 text-sm">Cancel anytime</p>
+                                    </div>
+                                  </div>
+                                )}
                                 <div 
                                   style={{
                                     position: 'relative',
