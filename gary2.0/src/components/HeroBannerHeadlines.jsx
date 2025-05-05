@@ -67,14 +67,14 @@ export default function HeroBannerHeadlines() {
         {randomized.map((h, i) => (
           <motion.div
             key={i}
-            // Initial position based on direction (left or right side)
+            // Start positioned randomly within the visible area
             initial={{ 
-              x: h.startFromRight ? "100vw" : "-100vw",
+              x: `${-50 + Math.random() * 100}vw`,
               opacity: h.initiallyVisible ? 1 : 0 
             }}
-            // Animate to the opposite side
+            // Animate to the end position
             animate={{ 
-              x: h.startFromRight ? "-100vw" : "100vw",
+              x: h.startFromRight ? "-150vw" : "150vw",
               opacity: 1 
             }}
             transition={{
