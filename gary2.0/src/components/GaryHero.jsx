@@ -62,41 +62,45 @@ export function GaryHero() {
               <div className="overflow-hidden">
                 {/* Modern AI-Focused Hero Headlines */}
                 <div className="relative z-40 mt-4" style={{ height: 'auto' }}>
-                  <div className="bg-gradient-to-r from-black to-[#181818] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg">
-                    <div className="flex items-center mb-6">
+                  <div className="bg-gradient-to-r from-black to-[#181818] p-8 rounded-xl border-l-4 border-[#b8953f] shadow-lg relative overflow-hidden">
+                    {/* Gary logo as a background element */}
+                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/4 opacity-15 pointer-events-none z-0" style={{ width: '80%', height: 'auto' }}>
+                      <img src="/gary_logo.svg" alt="" className="w-full h-full" />
+                    </div>
+                    <div className="flex items-center mb-6 relative z-10">
                       <div className="w-3 h-3 rounded-full bg-[#b8953f] animate-pulse mr-3"></div>
                       <span className="text-[#b8953f] text-sm font-medium tracking-widest uppercase">AI-Powered Analytics</span>
                     </div>
                     
-                    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.75rem)', lineHeight: '1.4' }}>
+                    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 relative z-10" style={{ fontSize: 'clamp(2.5rem, 6vw, 3.75rem)', lineHeight: '1.4' }}>
                       <span className="text-white">Smarter </span> 
                       <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#b8953f] to-[#d4af37] font-extrabold">Sports Bets</span>
                     </h1>
                     
-                    <h2 className="text-4xl md:text-5xl font-bold text-white mb-10" style={{ lineHeight: '1.4' }}>
+                    <h2 className="text-4xl md:text-5xl font-bold text-white mb-10 relative z-10" style={{ lineHeight: '1.4' }}>
                       Powered by Gary AI
                     </h2>
                     
-                    <div className="space-y-6 mb-8" style={{ lineHeight: '1.5' }}>
-                      <div className="flex items-start">
+                    <ul className="space-y-6 text-lg md:text-xl text-white font-light mb-12 relative z-10" style={{ lineHeight: '1.5' }}>
+                      <li className="flex items-start">
                         <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
                           <span className="text-[#b8953f] text-xs">✓</span>
                         </div>
                         <p className="ml-3 text-gray-300">15+ years of sports data analysis</p>
-                      </div>
-                      <div className="flex items-start">
+                      </li>
+                      <li className="flex items-start">
                         <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
                           <span className="text-[#b8953f] text-xs">✓</span>
                         </div>
                         <p className="ml-3 text-gray-300">Daily picks with 78%+ confidence</p>
-                      </div>
-                      <div className="flex items-start">
+                      </li>
+                      <li className="flex items-start">
                         <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#b8953f]/20 flex items-center justify-center mt-1">
                           <span className="text-[#b8953f] text-xs">✓</span>
                         </div>
                         <p className="ml-3 text-gray-300">Detailed analysis & reasoning</p>
-                      </div>
-                    </div>
+                      </li>
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -148,7 +152,7 @@ export function GaryHero() {
                   {/* FRONT CARD - positioned at the top */}
                   <div style={{
                     position: 'absolute',
-                    top: '-50px',
+                    top: '-100px', /* Moved up closer to top of page */
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
@@ -455,7 +459,7 @@ export function GaryHero() {
                   {/* BACK CARD - analysis card positioned below with proper separation */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '-220px', /* Added more space between cards */
+                    bottom: '-270px', /* Maintained spacing while moving up */
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: '576px',
