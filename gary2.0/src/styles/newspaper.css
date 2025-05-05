@@ -1,17 +1,36 @@
 .banner-headline {
   font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
-  color: rgba(255, 255, 255, 0.7);
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 2px 2px 3px rgba(0, 0, 0, 0.9);
   transform: scale(0.95);
   transform-origin: left center;
+  opacity: 0.8;
+  height: 40px; /* Fixed height for headlines */
+  display: flex;
+  align-items: center;
 }
 
 .banner-headline span {
   font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
 }
 
+.banner-headline span:first-child {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.banner-headline span:last-child {
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* Add a subtle glow effect to some headlines */
+.banner-headline:nth-child(odd) {
+  text-shadow: 0 0 8px rgba(184, 149, 63, 0.3), 2px 2px 3px rgba(0, 0, 0, 0.9);
+}
+
 @media (max-width: 640px) {
   .banner-headline {
-    transform: scale(0.85);
+    transform: scale(0.8);
   }
 }
