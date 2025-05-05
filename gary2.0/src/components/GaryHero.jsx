@@ -60,8 +60,8 @@ export function GaryHero() {
             {/* Left side - Headlines and Buttons */}
             <div className="lg:flex-1 p-5 z-10">
               <div className="overflow-hidden">
-                {/* Hero Headlines - Directly showing the headlines */}
-                <div className="relative z-40" style={{ height: 'auto' }}>
+                {/* Hero Headlines */}
+                <div className="relative z-40 mt-4" style={{ height: 'auto' }}>
                   <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">
                     Make smarter <span className="text-[#b8953f]">Sports Bets</span> with AI-Powered Picks
                   </h1>
