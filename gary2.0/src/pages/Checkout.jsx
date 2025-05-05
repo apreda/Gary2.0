@@ -27,9 +27,9 @@ function StripeHostedCheckout({ userId, email }) {
           body: JSON.stringify({
             userId: userId,
             email: email,
+            priceId: 'price_1RL6F2KIQvF46lkOjqnjUPE1', // Production Price ID
             successUrl: `${window.location.origin}/checkout/success`,
             cancelUrl: `${window.location.origin}/checkout/cancel`,
-            // No uiMode needed for hosted checkout
           }),
         });
         
