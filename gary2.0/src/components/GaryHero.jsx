@@ -52,7 +52,7 @@ export function GaryHero() {
   }, []);
 
   return (
-    <div className="relative flex flex-col min-h-screen w-full overflow-visible bg-[#0e0e0e]">
+    <div className="relative flex flex-col min-h-screen w-full overflow-visible dimension-bg-section">
       
       <main className="max-w-[1280px] mx-auto px-6 md:px-8 py-24 flex flex-col flex-grow z-10 relative overflow-hidden">
         <div className="w-full mx-auto">
@@ -540,7 +540,7 @@ export function GaryHero() {
       </main>
 
       {/* The Bears Brain Section Peek */}
-      <div className="relative z-5 w-full bg-[#0e0e0e] h-24 mt-auto">
+      <div className="relative z-5 w-full dimension-bg-section h-24 mt-auto">
         <div className="absolute -top-16 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-[#0e0e0e]"></div>
         <div className="container mx-auto px-8 py-6 flex justify-between items-center">
           <div className="flex items-center">
