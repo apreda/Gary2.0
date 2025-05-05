@@ -120,30 +120,253 @@ export function GaryHero() {
               </div>
             </div>
               
-            {/* Right side - Featured Pick Card */}
-            <div className="lg:flex-1 md:p-5 justify-center flex">
-              {/* Featured Pick Card for Today */}
+            {/* Right side - Featured Pick Cards in vertical stack */}
+            <div className="lg:flex-1 md:p-5 justify-center">
+              {/* Featured Pick Cards for Today */}
               {!loading && featuredPick ? (
-                <div className="w-full max-w-[500px] bg-gradient-to-b from-[#1e1e1e] to-[#131313] rounded-xl p-8 shadow-2xl border border-white/5 flex flex-col">
-                  {/* Card Header - Pick Banner */}
-                  <div className="mb-6">
-                    <div className="bg-[rgba(184,149,63,0.15)] text-[#b8953f] font-bold text-xl py-3 px-4 text-center tracking-wider uppercase rounded-lg">
-                      {featuredPick.pick || 'DENVER NUGGETS +9.5 -110'}
+                <div className="w-[576px] h-[530px] relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
+                  
+                  {/* FRONT CARD - positioned at the top */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '-148px', /* Moved down by half an inch */
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '576px',
+                    height: '384px',
+                    background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    boxShadow: '0 15px 35px rgba(0, 0, 0, 0.5)',
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    color: '#ffffff',
+                    zIndex: 2
+                  }}>
+                    {/* Left side content */}
+                    <div style={{
+                      position: 'absolute',
+                      left: '0',
+                      top: '0',
+                      width: '50%',
+                      height: '100%',
+                      padding: '40px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                    }}>
+                      {/* PICK HEADER */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        marginBottom: '16px',
+                        opacity: 0.7,
+                      }}>
+                        <div style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: '#b8953f',
+                          marginRight: '10px',
+                        }}></div>
+                        <span style={{
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          color: '#b8953f',
+                        }}>Featured Pick</span>
+                      </div>
+
+                      {/* PICK INFO CONTENT */}
+                      <div>
+                        <div style={{
+                          background: 'rgba(184, 149, 63, 0.15)',
+                          borderRadius: '6px',
+                          padding: '10px 16px',
+                          marginBottom: '24px',
+                          display: 'inline-block',
+                        }}>
+                          <span style={{
+                            color: '#b8953f',
+                            fontWeight: '600',
+                            fontSize: '20px',
+                            textTransform: 'uppercase',
+                          }}>{featuredPick.pick || 'DENVER NUGGETS +9.5 -110'}</span>
+                        </div>
+
+                        <div style={{ marginBottom: '24px' }}>
+                          <div style={{
+                            fontSize: '12px',
+                            color: 'rgba(255, 255, 255, 0.6)',
+                            marginBottom: '6px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}>Confidence</div>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}>
+                            <span style={{
+                              fontSize: '36px',
+                              fontWeight: '700',
+                              backgroundImage: 'linear-gradient(135deg, #d4af37 0%, #b8953f 100%)',
+                              WebkitBackgroundClip: 'text',
+                              WebkitTextFillColor: 'transparent',
+                              marginRight: '8px',
+                            }}>{featuredPick.confidence || '78%'}</span>
+                            <div style={{
+                              width: '120px',
+                              height: '6px',
+                              borderRadius: '3px',
+                              background: 'rgba(255, 255, 255, 0.1)',
+                              overflow: 'hidden',
+                            }}>
+                              <div style={{
+                                height: '100%',
+                                width: featuredPick.confidence || '78%',
+                                background: 'linear-gradient(to right, #b8953f, #d4af37)',
+                                borderRadius: '3px',
+                              }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right side content - Rationale */}
+                    <div style={{
+                      position: 'absolute',
+                      right: '0',
+                      top: '0',
+                      width: '50%',
+                      height: '100%',
+                      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                      padding: '40px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      backdropFilter: 'blur(5px)',
+                    }}>
+                      <div style={{
+                        fontSize: '12px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: 'rgba(255, 255, 255, 0.6)',
+                        marginBottom: '12px',
+                      }}>Rationale</div>
+
+                      <div style={{
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                        color: 'rgba(255, 255, 255, 0.9)',
+                        maxHeight: '250px',
+                        overflow: 'auto',
+                      }}>
+                        {featuredPick.rationale || 'Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road. Recent matchups between these teams have been close, and Denver\'s defense has been improving. While OKC has home court advantage, the Nuggets\' championship experience will keep this game competitive. The large spread provides value for Denver backers, even if they don\'t win outright.'}
+                      </div>
                     </div>
                   </div>
                   
-                  {/* Rationale Section */}
-                  <div className="flex-1 flex flex-col">
-                    <div className="bg-black/20 p-7 rounded-md border border-white/10 text-lg leading-relaxed text-white w-full h-full overflow-y-auto">
-                      {/* Rationale Heading */}
-                      <div className="text-xs opacity-60 uppercase tracking-widest mb-3">
-                        Rationale
+                  {/* BACK CARD - positioned below the front card */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '186px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '576px',
+                    height: '300px',
+                    background: 'linear-gradient(135deg, #1a1a1a 0%, #252525 100%)',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    boxShadow: '0 15px 35px rgba(0, 0, 0, 0.5)',
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    padding: '30px',
+                    color: '#ffffff',
+                    zIndex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginBottom: '20px',
+                    }}>
+                      <div style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: '#b8953f',
+                        marginRight: '10px',
+                      }}></div>
+                      <span style={{
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: '#b8953f',
+                      }}>ALTERNATE PICK</span>
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: '30px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          background: 'rgba(184, 149, 63, 0.15)',
+                          borderRadius: '6px',
+                          padding: '10px 16px',
+                          marginBottom: '16px',
+                          display: 'inline-block',
+                        }}>
+                          <span style={{
+                            color: '#b8953f',
+                            fontWeight: '600',
+                            fontSize: '18px',
+                            textTransform: 'uppercase',
+                          }}>SUNS -3.5 -110</span>
+                        </div>
+                        
+                        <div style={{ marginBottom: '16px' }}>
+                          <div style={{
+                            fontSize: '12px',
+                            color: 'rgba(255, 255, 255, 0.6)',
+                            marginBottom: '4px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}>Confidence</div>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <span style={{
+                              fontSize: '28px',
+                              fontWeight: '700',
+                              backgroundImage: 'linear-gradient(135deg, #d4af37 0%, #b8953f 100%)',
+                              WebkitBackgroundClip: 'text',
+                              WebkitTextFillColor: 'transparent',
+                              marginRight: '8px',
+                            }}>72%</span>
+                          </div>
+                        </div>
                       </div>
                       
-                      {/* Display the rationale */}
-                      <p className="m-0 font-normal opacity-90">
-                        {featuredPick.rationale || 'Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road. Recent matchups between these teams have been close, and Denver\'s defense has been improving. While OKC has home court advantage, the Nuggets\' championship experience will keep this game competitive. The large spread provides value for Denver backers, even if they don\'t win outright.'}
-                      </p>
+                      <div style={{
+                        flex: 1.5,
+                        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                        borderRadius: '10px',
+                        padding: '20px',
+                      }}>
+                        <div style={{
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          color: 'rgba(255, 255, 255, 0.6)',
+                          marginBottom: '8px',
+                        }}>Quick Analysis</div>
+                        <div style={{
+                          fontSize: '13px',
+                          lineHeight: '1.5',
+                          color: 'rgba(255, 255, 255, 0.9)',
+                        }}>
+                          Phoenix has been dominant at home recently, going 7-1 ATS in their last 8 home games. The matchup favors their backcourt, and the Wizards' defense ranks 28th in efficiency.
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
