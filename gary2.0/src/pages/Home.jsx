@@ -393,9 +393,7 @@ function Home() {
         {/* Subtle stars/shimmer effect */}
         <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.15] mix-blend-soft-light" />
         
-        {/* White highlight streak */}
-        <div className="absolute -top-10 left-1/3 w-1 h-[30%] bg-gradient-to-b from-transparent via-white/5 to-transparent transform rotate-[15deg] blur-sm" />
-        <div className="absolute bottom-0 right-1/4 w-1 h-[20%] bg-gradient-to-b from-white/3 via-white/5 to-transparent transform -rotate-[20deg] blur-sm" />
+        {/* White highlight streaks removed */}
         
         {/* Radial vignette for cinematic depth - slightly enhanced */}
         <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/20 opacity-30" />
