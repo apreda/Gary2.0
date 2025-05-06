@@ -67,22 +67,22 @@ export function Navbar() {
             BetCard
           </button>
           
-          {/* Sign In button */}
+          {/* Auth button */}
           {!session ? (
             <Link 
               to="/signin" 
-              className="text-white bg-transparent hover:bg-[#1E2330] font-medium text-sm transition-colors rounded-full px-4 py-2 border border-[#1E2330]"
+              className="text-black bg-[#b8953f] hover:bg-[#d4af37] font-medium text-sm transition-colors rounded-full px-4 py-2"
               onClick={() => setActiveLink("/signin")}
             >
               Sign in
             </Link>
           ) : (
             <Link 
-              to="/dashboard" 
-              className="bg-[#E0B016] hover:bg-[#d4af37] text-black px-4 py-2 rounded-full text-sm font-medium transition-all"
-              onClick={() => setActiveLink("/dashboard")}
+              to="/signout" 
+              className="text-black bg-[#b8953f] hover:bg-[#d4af37] font-medium text-sm transition-colors rounded-full px-4 py-2"
+              onClick={() => setActiveLink("/signout")}
             >
-              Dashboard
+              Sign out
             </Link>
           )}
           
