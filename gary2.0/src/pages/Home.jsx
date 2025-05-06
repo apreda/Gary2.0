@@ -348,7 +348,7 @@ function Home() {
           
           <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
             {/* Centered Hero Content */}
-            <div className="w-full mx-auto flex flex-col items-center mt-12 md:mt-16" style={{ paddingLeft: "0", paddingRight: "0" }}>
+            <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
               {/* NEW badge */}
               <div className="mb-8 relative">
                 <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
@@ -453,13 +453,13 @@ function Home() {
         </section>
         
         {/* Natural spacing between sections */}
-        <div className="h-8"></div>
+        <div className="h-4"></div>
         
-        <section className="relative py-8 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
-          {/* Newspaper-style container */}
-          <div className="w-full max-w-6xl mx-auto p-6 pb-12 bg-[#f6f2e8] shadow-2xl relative">
-            {/* The Bears Brain heading */}
-            <div className="mt-6 mb-8 border-2 border-[#b8953f] p-4 rounded-lg shadow-lg bg-[#f6f2e8]">
+        <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+          {/* Sleek newspaper-style container */}
+          <div className="w-full max-w-6xl mx-auto p-4 pb-8 bg-[#f6f2e8]/95 shadow-lg relative rounded-t-lg border-t-4 border-[#b8953f]">
+            {/* The Bears Brain heading - more integrated design */}
+            <div className="mt-4 mb-6 border-b-2 border-[#b8953f]/50 p-4 rounded-t-lg bg-gradient-to-b from-[#f6f2e8] to-[#f6f2e8]/80">
               <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
                 The Bears Brain
               </h2>
