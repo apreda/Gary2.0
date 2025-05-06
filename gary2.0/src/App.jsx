@@ -8,7 +8,7 @@ import { UserPlanProvider } from './contexts/UserPlanContext';
 import { UserStatsProvider } from './contexts/UserStatsContext';
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Navbar } from "./components/Navbar";
-import { Home } from "./pages/Home";
+import Home from "./pages/Home";
 import { MeetGary } from "./pages/MeetGary";
 import RealGaryPicks from "./pages/RealGaryPicks";
 import { Pricing } from "./pages/Pricing";
