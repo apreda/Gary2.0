@@ -5,7 +5,6 @@ import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import { supabase } from "../supabaseClient";
 import garyImage from "../assets/images/gary23.png";
-import coinImage from "/coin2.png";
 
 function Home() {
   const { user } = useAuth();
@@ -262,7 +261,7 @@ function Home() {
                 background: 'transparent'
               }}>
                 <img 
-                  src={coinImage} 
+                  src="/coin2.png" 
                   alt="Gary A.I. Coin" 
                   style={{ 
                     width: '130px',
