@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
-import ErrorBoundary from "../components/ErrorBoundary";
 import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
@@ -414,79 +413,80 @@ function Home() {
 
             {/* Premium pick preview - exactly as in original GaryHero */}
             <div className="mt-2 mb-24 w-full flex justify-center items-center">
-            
-        <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
-          {/* Single container layout */}
-          <div className="w-full max-w-6xl mx-auto px-4 pb-8 bg-[#f6f2e8] border border-[#b8953f] rounded-lg shadow-md">
-            {/* Section Heading */}
-            <div className="mt-4 mb-6 p-4 rounded-t-lg">
-              <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
-                The Bears Brain
-              </h2>
-            </div>
+              <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+                {/* Single container layout */}
+                <div className="w-full max-w-6xl mx-auto px-4 pb-8 bg-[#f6f2e8] border border-[#b8953f] rounded-lg shadow-md">
+                  {/* Section Heading */}
+                  <div className="mt-4 mb-6 p-4 rounded-t-lg">
+                    <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
+                      The Bears Brain
+                    </h2>
+                  </div>
 
-            {/* Combined content */}
-            <div className="p-6 space-y-6">
-              <p className="text-[#2D3A4B] text-center italic">
-                "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
-              </p>
-              
-              {/* Original content sections would go here */}
-              {/* Statistical Brain */}
-              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Statistical Brain</h3>
-                <p className="text-[#2D3A4B] text-base leading-relaxed">
-                  Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
-                </p>
-              </div>
+                  {/* Combined content */}
+                  <div className="p-6 space-y-6">
+                    <p className="text-[#2D3A4B] text-center italic">
+                      "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
+                    </p>
+                    
+                    {/* Original content sections would go here */}
+                    {/* Statistical Brain */}
+                    <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                      <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Statistical Brain</h3>
+                      <p className="text-[#2D3A4B] text-base leading-relaxed">
+                        Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
+                      </p>
+                    </div>
 
-              {/* Fan Brain */}
-              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Fan Brain</h3>
-                <p className="text-[#2D3A4B] text-base leading-relaxed">
-                  Tracking social sentiment, ticket splits, and sharp money moves to separate hype from true value.
-                </p>
-              </div>
+                    {/* Fan Brain */}
+                    <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                      <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Fan Brain</h3>
+                      <p className="text-[#2D3A4B] text-base leading-relaxed">
+                        Tracking social sentiment, ticket splits, and sharp money moves to separate hype from true value.
+                      </p>
+                    </div>
 
-              {/* Narrative Tracker */}
-              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Narrative Tracker</h3>
-                <p className="text-[#2D3A4B] text-base leading-relaxed">
-                  Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
-                </p>
-              </div>
+                    {/* Narrative Tracker */}
+                    <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                      <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Narrative Tracker</h3>
+                      <p className="text-[#2D3A4B] text-base leading-relaxed">
+                        Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
+                      </p>
+                    </div>
 
-              {/* Street Smart */}
-              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Street Smart</h3>
-                <p className="text-[#2D3A4B] text-base leading-relaxed">
-                  Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
-                </p>
-              </div>
+                    {/* Street Smart */}
+                    <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                      <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Street Smart</h3>
+                      <p className="text-[#2D3A4B] text-base leading-relaxed">
+                        Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
+                      </p>
+                    </div>
 
-              {/* Three-Layered Core */}
-              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Three-Layered Core</h3>
-                <p className="text-[#2D3A4B] text-base leading-relaxed">
-                  Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
-                </p>
-              </div>
+                    {/* Three-Layered Core */}
+                    <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                      <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Three-Layered Core</h3>
+                      <p className="text-[#2D3A4B] text-base leading-relaxed">
+                        Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
+                      </p>
+                    </div>
 
-              {/* Quote Card */}
-              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                <div className="flex">
-                  <div className="w-1 bg-[#b8953f] mr-4"></div>
-                  <p className="text-[#2D3A4B] italic text-base leading-relaxed">
-                    "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
-                  </p>
+                    {/* Quote Card */}
+                    <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                      <div className="flex">
+                        <div className="w-1 bg-[#b8953f] mr-4"></div>
+                        <p className="text-[#2D3A4B] italic text-base leading-relaxed">
+                          "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </section>
             </div>
-          </div>
-        </div>
+          </main>
+        </section>
       </div>
-    </section>
-  </div>
+    </div>
   );
 }
 
