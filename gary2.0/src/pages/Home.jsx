@@ -486,6 +486,9 @@ function Home() {
         </section>
       </div>
     </div>
+  </main>
+</section>
+</div>
   );
 }
 
