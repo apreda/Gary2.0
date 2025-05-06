@@ -1,39 +1,18 @@
-/* Hero section with watermark styling */
+/* Minimal hero styling - only keeping necessary styles that are still in use */
+
+/* Core hero structure - used in GaryHero.jsx */
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 4rem 2rem;
-  background-color: #212121;
 }
 
+/* Hero watermark stylings - used for background elements */
 .hero__watermark {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 120%;
-  height: 120%;
-  transform: translate(-50%, -50%) scale(1.1);
-  opacity: 0.08;
-  pointer-events: none;
   z-index: 1;
 }
 
-.hero__content {
-  position: relative;
-  z-index: 2;
-  max-width: 600px;
-  margin: 0 auto;
-  color: white;
-}
-
-.hero__content h1,
-.hero__content h2,
-.hero__content p,
-.hero__content ul {
-  text-shadow: 0 2px 6px rgba(0,0,0,0.6);
-}
-
-/* Animation for the hero content */
+/* Animation for hero content */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -45,23 +24,7 @@
   }
 }
 
-.hero__content > * {
-  animation: fadeInUp 0.5s ease-out forwards;
-  opacity: 0;
-}
-
-.hero__content > *:nth-child(1) { animation-delay: 0.1s; }
-.hero__content > *:nth-child(2) { animation-delay: 0.3s; }
-.hero__content > *:nth-child(3) { animation-delay: 0.5s; }
-.hero__content > *:nth-child(4) { animation-delay: 0.7s; }
-
-/* CTA buttons styling */
-.hero-cta {
-  display: flex;
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
+/* Button styling - for CTA buttons */
 .hero-cta-primary, 
 .hero-cta-secondary {
   padding: 1rem 1.5rem;
