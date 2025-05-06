@@ -35,8 +35,8 @@ export function Navbar() {
         {/* Modern high-tech logo without the G circle */}
         <div className="flex items-center">
           <Link to="/" className="flex items-center group">
-            <span className="text-white text-xl font-light tracking-tight" style={{ fontFamily: 'Arial, sans-serif', letterSpacing: '0.05em' }}>GARY</span>
-            <span className="text-[#E0B016] text-xl font-bold" style={{ fontFamily: 'Arial, sans-serif' }}>.ai</span>
+            <span className="text-white text-xl font-light tracking-tight" style={{ fontFamily: 'Arial, sans-serif', letterSpacing: '0.05em' }}>Gary</span>
+            <span className="text-[#E0B016] text-xl font-bold" style={{ fontFamily: 'Arial, sans-serif' }}>.AI</span>
           </Link>
         </div>
         
