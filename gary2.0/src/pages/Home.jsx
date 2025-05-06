@@ -399,8 +399,8 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image - repositioned higher and further left */}
-          <div className="absolute -left-16 top-12 z-20 hidden md:block" style={{ maxWidth: "450px" }}>
+          {/* Gary image - repositioned further left and down */}
+          <div className="absolute -left-16 top-32 z-20 hidden md:block" style={{ maxWidth: "450px" }}>
             <img
               src={garyImage}
               alt="Gary AI Bear"
