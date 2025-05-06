@@ -46,8 +46,8 @@ function Home() {
     
     return (
       <div style={{
-        width: 450,
-        height: 300,
+        width: 576,
+        height: 384,
         perspective: '1000px',
         cursor: 'pointer'
       }}>
@@ -83,7 +83,7 @@ function Home() {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              overflow: 'hidden',
+              overflow: 'hidden'
             }}>
               {/* League and Matchup in horizontal layout */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -96,7 +96,7 @@ function Home() {
                     letterSpacing: '0.05em', 
                     marginBottom: '0.25rem'
                   }}>
-                    League
+                    LEAGUE
                   </div>
                   <div style={{ 
                     fontSize: '1.25rem', 
@@ -117,7 +117,7 @@ function Home() {
                     letterSpacing: '0.05em', 
                     marginBottom: '0.25rem'
                   }}>
-                    Matchup
+                    MATCHUP
                   </div>
                   <div style={{ 
                     fontSize: '1.25rem', 
@@ -140,7 +140,7 @@ function Home() {
                   letterSpacing: '0.05em', 
                   marginBottom: '0.5rem'
                 }}>
-                  Gary's Pick
+                  GARY'S PICK
                 </div>
                 <div style={{ 
                   fontSize: '2rem', 
@@ -164,7 +164,7 @@ function Home() {
                   textOverflow: 'ellipsis',
                   marginBottom: '0.5rem'
                 }}>
-                  {displayPick.rationale ? displayPick.rationale.substring(0, 120) + '...' : 'Analysis not available'}
+                  {displayPick.rationale ? displayPick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
                 </div>
               </div>
             </div>
@@ -172,28 +172,24 @@ function Home() {
             {/* Right side content - prominently elevated appearance */}
             <div style={{
               position: 'absolute',
+              top: 0,
               right: 0,
-              top: 0,  /* Aligned to card edge */
-              bottom: 0, /* Aligned to card edge */
+              bottom: 0,
               width: '30%',
-              borderLeft: '2.25px solid #bfa142', /* Gold border */
-              padding: '1.5rem 1rem',
+              backgroundImage: 'linear-gradient(to bottom right, rgba(34, 34, 34, 0.95), rgba(17, 17, 17, 0.98))',
+              backdropFilter: 'blur(5px)',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
               alignItems: 'center',
-              background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
-              boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
-              borderRadius: '0 16px 16px 0', /* Rounded on right side only */
-              clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
-              zIndex: 2, /* Ensure it appears above other content */
+              justifyContent: 'space-between',
+              padding: '1.5rem',
+              borderLeft: '2.25px solid #b8953f',
+              textAlign: 'center',
+              boxShadow: '-5px 0 15px rgba(0, 0, 0, 0.3)',
               transform: 'translateZ(10px)', /* 3D effect */
+              zIndex: 1
             }}>
-              {/* Game time section */}
-              <div style={{ 
-                textAlign: 'center',
-                marginBottom: '1rem'
-              }}>
+              <div>
                 <div style={{ 
                   fontSize: '0.75rem', 
                   opacity: 0.6, 
@@ -201,18 +197,19 @@ function Home() {
                   letterSpacing: '0.05em', 
                   marginBottom: '0.25rem'
                 }}>
-                  Game Time
+                  GAME TIME
                 </div>
                 <div style={{ 
-                  fontSize: '1.125rem', 
-                  fontWeight: 600,
-                  opacity: 0.9
+                  fontSize: '1.25rem', 
+                  fontWeight: 600, 
+                  letterSpacing: '0.02em',
+                  opacity: 0.95
                 }}>
                   {formattedTime}
                 </div>
               </div>
               
-              {/* Coin Image centered - no background */}
+              {/* Coin Image centered */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
@@ -222,13 +219,12 @@ function Home() {
               }}>
                 <img 
                   src="/coin2.png" 
-                  alt="Coin Image"
-                  style={{
-                    width: 110, 
-                    height: 110, 
-                    objectFit: 'contain',
-                    opacity: 1,
-                    background: 'transparent'
+                  alt="Gary A.I. Coin" 
+                  style={{ 
+                    width: '130px',
+                    height: '130px',
+                    marginBottom: '1rem',
+                    filter: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.5))'
                   }}
                 />
               </div>
@@ -246,16 +242,13 @@ function Home() {
                   letterSpacing: '0.05em', 
                   marginBottom: '0.25rem'
                 }}>
-                  Confidence
+                  CONFIDENCE
                 </div>
-                
-                {/* Confidence score display */}
-                <div style={{
-                  fontSize: '1.2rem',
-                  fontWeight: 700,
-                  opacity: 0.95,
-                  color: '#bfa142', /* Gold for confidence */
-                  marginBottom: '0.5rem'
+                <div style={{ 
+                  fontSize: '2rem', 
+                  fontWeight: 600, 
+                  color: '#bfa142',
+                  opacity: 0.95
                 }}>
                   {confidencePercentage}
                 </div>
