@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import { supabase } from "../supabaseClient";
-import garyImage from "../assets/images/gary23.png";
+// Using the public Gary50.png image from the public folder
 
 function Home() {
   const { user } = useAuth();
@@ -401,11 +401,11 @@ function Home() {
           {/* Gary image - adjusted position (down 3.5 inches, right 1 inch) */}
           <div className="absolute -left-0 top-0 z-20 hidden md:block" style={{ maxWidth: "135px", marginTop: "96px", marginLeft: "16px" }}>
             <img
-              src={garyImage}
+              src="/Gary50.png"
               alt="Gary AI Bear"
               className="w-full h-auto"
               style={{ 
-                opacity: 0.65, 
+                opacity: 0.85, 
                 filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))"
               }}
             />
@@ -515,28 +515,31 @@ function Home() {
 
                 {/* 2. Section heading */}
                 <div className="text-center mb-14 px-6">
+                  <h2 className="text-white text-5xl font-bold leading-tight mb-2">
+                    Track your current results, <span className="text-white">set goals</span>
+                  </h2>
                   <h2 className="text-white text-5xl font-bold leading-tight mb-6">
-                    Track your performance and <span className="text-[#b8953f]">find value others miss</span>
+                    and <span className="text-[#B8953F]">achieve them with community</span>
                   </h2>
                   <p className="text-white/70 text-lg max-w-2xl mx-auto">
                     The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss.
                   </p>
                 </div>
 
-                {/* Cards grid - dark theme with purple backgrounds */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-6">
+                {/* Cards grid like the provided image */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 mb-6">
                   
-                  {/* Card 1: Grow your business - Statistical Brain */}
+                  {/* Card 1: Statistical Brain */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Grow Your Business
+                      Statistical Brain
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
+                      Leverages a dozen sportsbooks' worth of raw odds, player metrics, weather factors and arena-specific performance data to spot mispriced lines.
                     </p>
-                    <div className="relative mt-12">
+                    <div className="relative mt-6">
                       <div className="flex justify-end mb-1">
-                        <div className="bg-[#b8953f] text-black text-xs font-bold rounded-full px-2 py-1">+48%</div>
+                        <div className="bg-[#B8953F] text-black text-xs font-bold rounded-full px-2 py-1">+48%</div>
                       </div>
                       <div className="relative h-20">
                         <svg className="w-full h-full" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -547,13 +550,13 @@ function Home() {
                     </div>
                   </div>
                   
-                  {/* Card 2: Get real-time help - Fan Brain */}
+                  {/* Card 2: Fan Brain */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Get Real-Time Help
+                      Fan Brain
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Tracking social sentiment, ticket splits, and sharp-money moves to separate hype from true value.
+                      Reads social sentiment, ticket-split data and "sharp money" flows to separate the crowd's hype from true betting value.
                     </p>
                     <div className="space-y-3 mt-6">
                       <div className="flex justify-end">
@@ -566,76 +569,82 @@ function Home() {
                       <div className="flex">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F] mr-2 flex items-center justify-center text-xs font-bold text-black">AI</div>
                         <div className="bg-[#B8953F]/20 rounded-2xl px-4 py-2 max-w-xs border border-[#B8953F]/30">
-                          <p className="text-white text-sm">Public heavily on Chiefs -7, but sharp money coming in on Broncos +7</p>
+                          <p className="text-white text-sm">Sharp money coming in on Broncos +7</p>
                         </div>
-                      </div>
-                      
-                      <div className="flex justify-end">
-                        <div className="bg-[#2a2a2a] rounded-2xl px-4 py-2 max-w-xs">
-                          <p className="text-white text-sm">Perfect, I'll look for a better line</p>
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-[#B8953F] ml-2 flex items-center justify-center text-xs font-bold text-black">GB</div>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Card 3: Tight-knit support network - Narrative Tracker */}
+                </div>
+                
+                {/* Second row of cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6">
+                  {/* Card 3: Narrative Tracker */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Tight-Knit Support Network
+                      Narrative Tracker
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
+                      Detects when media storylines—big games, star players, revenge matchups—are skewing lines, then factors those emotional weights back into the model.
                     </p>
-                    <div className="mt-6 relative h-48 flex items-center justify-center">
-                      <div className="absolute w-36 h-36 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full bg-[#B8953F]/40 flex items-center justify-center">
-                          <span className="text-[#B8953F] font-bold text-2xl">GB</span>
+                    <div className="mt-4 relative h-36 flex items-center justify-center">
+                      <div className="absolute w-24 h-24 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-[#B8953F]/40 flex items-center justify-center">
+                          <span className="text-[#B8953F] font-bold text-lg">NT</span>
                         </div>
                       </div>
                       
                       {/* Network nodes */}
                       <div className="absolute top-1/4 right-1/4 bg-[#2a2a2a] rounded-full py-1 px-3 border border-[#B8953F]/30">
-                        <span className="text-xs text-white">ESPN Analysis</span>
+                        <span className="text-xs text-white">ESPN</span>
                       </div>
                       
                       <div className="absolute bottom-1/4 left-1/4 bg-[#2a2a2a] rounded-full py-1 px-3 border border-[#B8953F]/30">
-                        <span className="text-xs text-white">Twitter Trends</span>
-                      </div>
-                      
-                      <div className="absolute bottom-1/3 right-1/4 bg-[#2a2a2a] rounded-full py-1 px-3 border border-[#B8953F]/30">
-                        <span className="text-xs text-white">Media Bias</span>
+                        <span className="text-xs text-white">Twitter</span>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Card 4: Learn and use our systems - Street Smart */}
+                  {/* Card 4: Street Smart */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Learn And Use Our Systems
+                      Street Smart
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
+                      Blends old-school handicapping instincts with real-time injury reports, lineup swaps and venue quirks, nabbing opportunities before the public catches on.
                     </p>
-                    <div className="mt-6 relative h-48">
+                    <div className="mt-4 relative h-36">
                       <div className="absolute top-0 left-1/4 transform -translate-x-1/2 bg-[#2a2a2a] rounded-full px-3 py-1 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">Injury Report</span>
+                        <span className="text-[#B8953F] text-xs">Injury Alert</span>
                       </div>
                       
                       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-[#2a2a2a] rounded-full px-3 py-1 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">Line Movement</span>
+                        <span className="text-[#B8953F] text-xs">Venue Data</span>
                       </div>
-                      
-                      <div className="absolute bottom-1/4 left-1/2 transform -translate-x-1/2 bg-[#2a2a2a] rounded-full px-3 py-1 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">Weather Impact</span>
-                      </div>
-                      
-                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M50,40 C100,40 100,100 100,100 C100,100 100,160 50,160" stroke="#B8953F" strokeWidth="1" strokeDasharray="4 4" fill="none" strokeLinecap="round"/>
-                      </svg>
                     </div>
                   </div>
-
+                </div>
+                
+                {/* Fifth card in its own row */}
+                <div className="px-6 mt-8">
+                  <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
+                      Three-Layered Core
+                    </h3>
+                    <p className="text-white/70 mb-6">
+                      Gary's secret sauce: three distinct processing layers—Sports Odds & Stats, Real-Time Storylines, and a Deep Reasoning Engine—that together crank your prediction accuracy through the roof.
+                    </p>
+                    <div className="mt-4 flex justify-center space-x-12 py-4">
+                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-sm">Sports Odds & Stats</span>
+                      </div>
+                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-sm">Real-Time Storylines</span>
+                      </div>
+                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-sm">Deep Reasoning Engine</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </section>
             </div>
