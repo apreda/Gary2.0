@@ -32,7 +32,7 @@ export function Navbar() {
   return (
     <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#E0B016]/20 py-3 rounded-xl shadow-xl w-11/12 max-w-6xl">
       <div className="w-full px-6 flex items-center justify-between">
-        {/* Logo in Hashnode style but with our colors */}
+        {/* Logo with GARY in all caps and white, .ai in yellow */}
         <div className="flex items-center">
           <Link to="/" className="flex items-center group">
             <div className="relative rounded-full bg-[#111827] p-1 shadow-sm mr-1">
@@ -40,7 +40,7 @@ export function Navbar() {
                 <span className="text-[#111827] font-bold text-xs">G</span>
               </div>
             </div>
-            <span className="text-white text-lg font-bold ml-1">gary</span>
+            <span className="text-white text-lg font-bold ml-1 tracking-widest font-mono">GARY</span>
             <span className="text-[#E0B016] text-lg font-bold">.ai</span>
           </Link>
         </div>

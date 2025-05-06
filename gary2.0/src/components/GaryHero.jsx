@@ -419,9 +419,9 @@ export function GaryHero() {
         </div>
         
         {/* Premium pick preview - positioned for full card visibility */}
-        <div className="mt-2 mb-auto w-full flex justify-center items-center">
+        <div className="mt-2 mb-20 w-full flex justify-center items-center">
           <div className="relative w-full max-w-4xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
-               style={{ height: "540px" }}>
+               style={{ height: "580px" }}>
             {/* Dark glossy header bar */}
             <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center px-4">
               <div className="flex space-x-2">
