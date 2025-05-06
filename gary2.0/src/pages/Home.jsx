@@ -463,7 +463,7 @@ function Home() {
               <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center">
                 <Link 
                   to="/picks" 
-                  className="bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-md transition duration-200 ease-in-out"
+                  className="bg-[#B8953F] hover:bg-[#d0aa4e] text-black font-medium rounded-md transition duration-200 ease-in-out"
                   style={{ padding: "10px 20px" }}
                 >
                   View Picks
