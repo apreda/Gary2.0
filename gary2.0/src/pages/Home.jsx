@@ -35,6 +35,10 @@ function Home() {
   </div>
       <div className="relative z-10">
         <GaryHero />
+        
+        {/* Large spacer to ensure pick card is fully visible */}
+        <div className="h-[600px]"></div>
+        
         {/* Gary's Winning System Section with Hot Pick Card */}
         <section className="relative py-16 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
           {/* Cream newspaper content background for The Bear's Brain section */}
