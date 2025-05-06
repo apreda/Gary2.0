@@ -297,7 +297,7 @@ function Home() {
             const confA = a.confidence ? parseFloat(a.confidence) : 0;
             const confB = b.confidence ? parseFloat(b.confidence) : 0;
             return confB - confA;
-          }).slice(0, 2); // Get top 2 picks
+          }).slice(0, 1); // Get only top 1 pick
           
           setFeaturedPicks(sortedPicks);
         } else {
@@ -416,21 +416,19 @@ function Home() {
               </div>
             </div>
 
-            {/* Featured Pick Cards Preview */}
+            {/* Featured Pick Card Preview - Single Card Only */}
             <div className="mt-12 mb-24 w-full flex flex-col items-center justify-center">
-              <h2 className="text-white text-3xl font-bold mb-8">Today's Top Picks</h2>
+              <h2 className="text-white text-3xl font-bold mb-8">Today's Top Pick</h2>
               
-              <div className="flex flex-wrap justify-center gap-8">
+              <div className="flex justify-center">
                 {loading ? (
                   <div className="animate-pulse p-8 rounded bg-black/30 backdrop-blur-sm">
-                    <p className="text-white/70">Loading today's picks...</p>
+                    <p className="text-white/70">Loading today's pick...</p>
                   </div>
                 ) : featuredPicks.length > 0 ? (
-                  featuredPicks.map((pick, index) => (
-                    <div key={index} className="transform hover:scale-[1.02] transition-all duration-300">
-                      {renderPickCard(pick)}
-                    </div>
-                  ))
+                  <div className="transform hover:scale-[1.02] transition-all duration-300">
+                    {renderPickCard(featuredPicks[0])}
+                  </div>
                 ) : (
                   <div className="p-8 rounded bg-black/30 backdrop-blur-sm">
                     <p className="text-white/70">New picks coming soon!</p>
