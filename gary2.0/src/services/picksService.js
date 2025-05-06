@@ -158,7 +158,30 @@ const picksService = {
   },
   
   /**
-   * Store the daily picks in the database for persistence
+   * Check if picks for today already exist in the database
+   */
+  checkForExistingPicks: async (dateString) => {
+    try {
+      const { data, error } = await supabase
+        .from('daily_picks')
+        .select('id')
+        .eq('date', dateString)
+        .maybeSingle();
+        
+      if (error) {
+        console.error('Error checking for existing picks:', error);
+        return false;
+      }
+      
+      return data !== null;
+    } catch (err) {
+      console.error('Error in checkForExistingPicks:', err);
+      return false;
+    }
+  },
+  
+  /**
+   * Store the daily picks in the database for persistence, with error handling for missing bankroll table
    */
   storeDailyPicksInDatabase: async (picks) => {
     try {
@@ -173,6 +196,13 @@ const picksService = {
       // Current date in YYYY-MM-DD format for database storage
       const currentDate = new Date();
       const currentDateString = currentDate.toISOString().split('T')[0];
+      
+      // Check if picks for today already exist
+      const picksExist = await picksService.checkForExistingPicks(currentDateString);
+      if (picksExist) {
+        console.log(`Picks for ${currentDateString} already exist in database, skipping insertion`);
+        return { success: true, count: 0, message: 'Picks already exist for today' };
+      }
       
       // Filter to only the successful picks with raw OpenAI output
       const rawJsonOutputs = picks
@@ -278,19 +308,80 @@ const picksService = {
       // Ensure there's a valid Supabase session before database operation
       await picksService.ensureValidSupabaseSession();
       
-      console.log(`Inserting raw JSON outputs directly into daily_picks table...`);
-      const { error: insertError } = await supabase
-        .from('daily_picks')
-        .insert(pickData)
-        .select(); // Add select to get return data for confirmation
+      try {
+        console.log(`Inserting raw JSON outputs directly into daily_picks table...`);
+        const { error: insertError } = await supabase
+          .from('daily_picks')
+          .insert(pickData)
+          .select(); // Add select to get return data for confirmation
+          
+        if (insertError) {
+          // Check if the error is specifically about the bankroll table
+          if (insertError.code === '42P01' && insertError.message.includes('bankroll')) {
+            console.warn('Bankroll table does not exist - using alternative approach without bankroll reference');
+            
+            // Alternative approach: Use a simplified object that doesn't trigger any bankroll references
+            const simplifiedPickData = {
+              date: currentDateString,
+              picks: JSON.stringify(rawJsonOutputs) // Convert to string to ensure compatibility
+            };
+            
+            // Try direct insert without any triggers/functions that might access bankroll
+            const { error: simplifiedInsertError } = await supabase
+              .from('daily_picks')
+              .insert(simplifiedPickData);
+              
+            if (simplifiedInsertError) {
+              console.error('Error inserting simplified picks:', simplifiedInsertError);
+              throw new Error(`Failed to store simplified picks: ${simplifiedInsertError.message}`);
+            }
+            
+            console.log('Picks stored successfully using simplified approach');
+            return { success: true, count: rawJsonOutputs.length, method: 'simplified' };
+          } else {
+            // Some other database error occurred
+            console.error('Error inserting picks:', insertError);
+            throw new Error(`Failed to store picks in database: ${insertError.message}`);
+          }
+        }
         
-      if (insertError) {
-        console.error('Error inserting picks:', insertError);
-        throw new Error(`Failed to store picks in database: ${insertError.message}`);
+        console.log('Picks stored successfully in database');
+        return { success: true, count: rawJsonOutputs.length };
+      } catch (dbError) {
+        // Catch any errors during the database operations
+        console.error('Database error while storing picks:', dbError);
+        
+        // If the error relates to the bankroll table, handle it specially
+        if (dbError.message && dbError.message.includes('bankroll')) {
+          console.warn('Detected bankroll table reference in error - attempting alternative storage method');
+          
+          try {
+            // Try a simpler approach with the picks as a JSON string
+            const backupPickData = {
+              date: currentDateString,
+              picks: JSON.stringify(rawJsonOutputs)
+            };
+            
+            const { error: backupInsertError } = await supabase
+              .from('daily_picks')
+              .insert(backupPickData);
+              
+            if (backupInsertError) {
+              console.error('Error with backup insert method:', backupInsertError);
+              throw new Error(`Failed with backup method: ${backupInsertError.message}`);
+            }
+            
+            console.log('Successfully stored picks using backup method');
+            return { success: true, count: rawJsonOutputs.length, method: 'backup' };
+          } catch (backupError) {
+            console.error('Backup method also failed:', backupError);
+            throw new Error(`All approaches failed to store picks: ${backupError.message}`);
+          }
+        }
+        
+        // Re-throw the original error
+        throw new Error(`Failed to store picks in database: ${dbError.message}`);
       }
-      
-      console.log('Picks stored successfully in database');
-      return { success: true, count: rawJsonOutputs.length };
     } catch (error) {
       console.error('Error storing picks:', error);
       throw new Error(`Failed to store picks in database: ${error.message}`);
