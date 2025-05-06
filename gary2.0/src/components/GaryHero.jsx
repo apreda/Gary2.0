@@ -73,8 +73,8 @@ export function GaryHero() {
     
     return (
       <div style={{
-        width: 576,
-        height: 384,
+        width: 450,
+        height: 300,
         perspective: '1000px',
         cursor: 'pointer'
       }}>
@@ -117,7 +117,7 @@ export function GaryHero() {
                 {/* League */}
                 <div>
                   <div style={{ 
-                    fontSize: '0.75rem', 
+                    fontSize: '0.65rem', 
                     opacity: 0.6, 
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em', 
@@ -126,10 +126,9 @@ export function GaryHero() {
                     LEAGUE
                   </div>
                   <div style={{ 
-                    fontSize: '1.25rem', 
-                    fontWeight: 600, 
-                    letterSpacing: '0.02em',
-                    opacity: 0.95
+                    fontSize: '1rem', 
+                    fontWeight: 600,
+                    color: '#ffffff'
                   }}>
                     {displayPick.league || 'NBA'}
                   </div>
@@ -138,7 +137,7 @@ export function GaryHero() {
                 {/* Matchup */}
                 <div style={{ marginLeft: '20px' }}>
                   <div style={{ 
-                    fontSize: '0.75rem', 
+                    fontSize: '0.65rem', 
                     opacity: 0.6, 
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em', 
@@ -147,9 +146,10 @@ export function GaryHero() {
                     MATCHUP
                   </div>
                   <div style={{ 
-                    fontSize: '1.25rem', 
+                    fontSize: '1rem', 
                     fontWeight: 600,
-                    opacity: 0.9
+                    letterSpacing: '0.02em',
+                    opacity: 0.95
                   }}>
                     {(displayPick.homeTeam && displayPick.awayTeam) ? 
                       `${displayPick.awayTeam.split(' ').pop()} @ ${displayPick.homeTeam.split(' ').pop()}` : 
@@ -170,23 +170,23 @@ export function GaryHero() {
                   Gary's Pick
                 </div>
                 <div style={{ 
-                  fontSize: '2rem', 
+                  fontSize: '1.5rem', 
                   fontWeight: 700, 
                   lineHeight: 1.1,
                   color: '#bfa142', /* Keeping gold color for the actual pick */
                   wordBreak: 'break-word',
-                  marginBottom: '0.75rem'
+                  marginBottom: '0.5rem'
                 }}>
                   {displayPick.pick || 'MISSING PICK'}
                 </div>
                 
                 {/* Add a preview of the rationale on front card */}
                 <div style={{
-                  fontSize: '0.85rem',
+                  fontSize: '0.75rem',
                   opacity: 0.8,
                   overflow: 'hidden',
                   display: '-webkit-box',
-                  WebkitLineClamp: 3,
+                  WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
                   textOverflow: 'ellipsis',
                   marginBottom: '0.5rem'
@@ -198,11 +198,11 @@ export function GaryHero() {
               {/* Bet or Fade Buttons */}
               <div>
                 <div style={{ 
-                  fontSize: '0.75rem', 
+                  fontSize: '0.65rem', 
                   opacity: 0.6, 
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em', 
-                  marginBottom: '0.5rem'
+                  marginBottom: '0.25rem'
                 }}>
                   Take Your Pick
                 </div>
@@ -216,12 +216,12 @@ export function GaryHero() {
                       background: 'rgba(191, 161, 66, 0.15)',
                       color: '#bfa142',
                       fontWeight: '600',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '8px',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '6px',
                       border: '1px solid rgba(191, 161, 66, 0.3)',
                       cursor: 'pointer',
                       flex: 1,
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       letterSpacing: '0.05em',
                       textTransform: 'uppercase',
                       transition: 'all 0.2s ease'
@@ -238,12 +238,12 @@ export function GaryHero() {
                       background: 'rgba(255, 255, 255, 0.05)',
                       color: 'rgba(255, 255, 255, 0.8)',
                       fontWeight: '600',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '8px',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '6px',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                       cursor: 'pointer',
                       flex: 1,
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       letterSpacing: '0.05em',
                       textTransform: 'uppercase',
                       transition: 'all 0.2s ease'
@@ -266,8 +266,8 @@ export function GaryHero() {
               top: 0,  /* Aligned to card edge */
               bottom: 0, /* Aligned to card edge */
               width: '30%',
-              borderLeft: '2.25px solid #bfa142', /* Gold border */
-              padding: '1.5rem 1rem',
+              borderLeft: '2px solid #bfa142', /* Gold border */
+              padding: '1rem 0.75rem',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
@@ -285,7 +285,7 @@ export function GaryHero() {
                 marginBottom: '1rem'
               }}>
                 <div style={{ 
-                  fontSize: '0.75rem', 
+                  fontSize: '0.65rem', 
                   opacity: 0.6, 
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em', 
@@ -294,7 +294,7 @@ export function GaryHero() {
                   Game Time
                 </div>
                 <div style={{ 
-                  fontSize: '1.125rem', 
+                  fontSize: '0.95rem', 
                   fontWeight: 600,
                   opacity: 0.9
                 }}>
@@ -318,8 +318,8 @@ export function GaryHero() {
                   src="/coin2.png" 
                   alt="Coin Image"
                   style={{
-                    width: 130, /* 20% bigger than previous 108px */
-                    height: 130, /* 20% bigger than previous 108px */
+                    width: 100, 
+                    height: 100, 
                     objectFit: 'contain',
                     opacity: 1,
                     background: 'transparent'
@@ -334,7 +334,7 @@ export function GaryHero() {
                 width: '100%'
               }}>
                 <div style={{ 
-                  fontSize: '0.75rem', 
+                  fontSize: '0.65rem', 
                   opacity: 0.6, 
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em', 
@@ -345,7 +345,7 @@ export function GaryHero() {
                 
                 {/* Confidence score display */}
                 <div style={{
-                  fontSize: '1.2rem',
+                  fontSize: '1rem',
                   fontWeight: 700,
                   opacity: 0.95,
                   color: '#bfa142', /* Gold for confidence */
@@ -361,11 +361,11 @@ export function GaryHero() {
                   width: '100%',
                   backgroundColor: 'rgba(191, 161, 66, 0.15)',
                   border: '1px solid rgba(191, 161, 66, 0.3)',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   color: '#bfa142',
-                  fontSize: '0.8rem',
+                  fontSize: '0.7rem',
                   fontWeight: 600,
-                  padding: '0.5rem',
+                  padding: '0.35rem',
                   textTransform: 'uppercase',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease-in-out',
@@ -471,7 +471,7 @@ export function GaryHero() {
         {/* Premium pick preview - positioned for full card visibility */}
         <div className="mt-2 mb-36 w-full flex justify-center items-center">
           <div className="relative w-full max-w-4xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
-               style={{ height: "600px", paddingBottom: "40px" }}>
+               style={{ height: "420px", paddingBottom: "20px" }}>
             {/* Dark glossy header bar */}
             <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center px-4">
               <div className="flex space-x-2">
@@ -483,7 +483,7 @@ export function GaryHero() {
             </div>
             
             {/* Single wider pick card */}
-            <div className="flex justify-center items-center h-full pt-14">
+            <div className="flex justify-center items-center h-full pt-10">
               {loading ? (
                 <div className="text-[#b8953f] text-center">Loading today's top pick...</div>
               ) : featuredPicks.length > 0 ? (
