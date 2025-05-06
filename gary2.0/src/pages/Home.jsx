@@ -508,9 +508,29 @@ function Home() {
             {/* The Bears Brain Section - Dark theme matching homepage - moved up 2.5 inches */}
             <div className="-mt-4 mb-36 w-full">
               <section className="relative py-16 max-w-[1400px] mx-auto">
+                {/* Gary50.png as background specifically for The Bears Brain section */}
+                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                  <img
+                    src="/Gary50.png"
+                    alt="Gary AI Bear"
+                    className="w-full h-full object-cover"
+                    style={{ 
+                      opacity: 0.15, 
+                      filter: "blur(1px) saturate(0.8)",
+                      mixBlendMode: "overlay",
+                      transform: "scale(1.2)",
+                      position: "absolute",
+                      top: "0",
+                      left: "0",
+                      width: "100%",
+                      height: "100%"
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-40 z-10"></div>
+                </div>
 
                 {/* Benefits pill at top like in screenshot */}
-                <div className="flex justify-center mb-6">
+                <div className="flex justify-center mb-6 relative z-20">
                   <div className="inline-block bg-[#171717] py-1.5 px-4 rounded-full">
                     <span className="text-[#B8953F] font-medium text-sm flex items-center">
                       <span className="mr-2 w-3 h-3 bg-[#B8953F] rounded-sm inline-block"></span>
@@ -520,7 +540,7 @@ function Home() {
                 </div>
 
                 {/* 2. Section heading */}
-                <div className="text-center mb-14 px-6">
+                <div className="text-center mb-14 px-6 relative z-20">
                   <h2 className="text-white text-5xl font-bold leading-tight mb-6">
                     The <span className="text-[#B8953F]">Bears Brain</span>
                   </h2>
@@ -530,7 +550,7 @@ function Home() {
                 </div>
 
                 {/* Cards grid like the provided image */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 mb-6 relative z-20">
                   
                   {/* Card 1: Statistical Brain */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
@@ -580,7 +600,7 @@ function Home() {
                 </div>
                 
                 {/* Second row of cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 relative z-20">
                   {/* Card 3: Narrative Tracker */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
@@ -628,7 +648,7 @@ function Home() {
                 </div>
                 
                 {/* Fifth card in its own row */}
-                <div className="px-6 mt-8">
+                <div className="px-6 mt-8 relative z-20">
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
                       Three-Layered Core
