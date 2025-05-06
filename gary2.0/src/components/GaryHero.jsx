@@ -469,9 +469,9 @@ export function GaryHero() {
         </div>
         
         {/* Premium pick preview - positioned for full card visibility */}
-        <div className="mt-2 mb-36 w-full flex justify-center items-center">
+        <div className="mt-2 mb-48 w-full flex justify-center items-center">
           <div className="relative w-full max-w-4xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
-               style={{ height: "420px", paddingBottom: "20px" }}>
+               style={{ height: "380px", paddingBottom: "10px" }}>
             {/* Dark glossy header bar */}
             <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center px-4">
               <div className="flex space-x-2">
@@ -508,7 +508,7 @@ export function GaryHero() {
       </main>
 
       {/* The Bears Brain Section Peek */}
-      <div className="relative z-5 w-full dimension-bg-section h-16 mt-auto" style={{ marginTop: '100px' }}>
+      <div className="relative z-5 w-full dimension-bg-section h-16 mt-auto" style={{ marginTop: '150px' }}>
         <div className="absolute -top-16 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-[#0e0e0e]"></div>
         <div className="container mx-auto px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
