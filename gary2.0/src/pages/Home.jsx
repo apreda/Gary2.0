@@ -489,7 +489,7 @@ function Home() {
 
             {/* Featured Pick Card Preview - Single Card Only */}
             <div className="mt-12 mb-24 w-full flex flex-col items-center justify-center">
-              <h2 className="text-white text-3xl font-bold mb-8">Today's Top Pick</h2>
+              <h2 className="text-white text-3xl font-bold mb-8">Today's Free Pick</h2>
               
               <div className="flex justify-center">
                 {loading ? (
