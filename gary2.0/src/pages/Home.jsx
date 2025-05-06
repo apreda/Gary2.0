@@ -183,11 +183,12 @@ function Home() {
                       style={{
                         flex: 1,
                         padding: '0.75rem',
-                        background: 'rgba(184, 149, 63, 0.2)',
+                        background: 'rgba(184, 149, 63, 0.1)',
                         border: '1px solid #b8953f',
                         borderRadius: '0.25rem',
                         color: '#b8953f',
                         fontWeight: '600',
+                        fontSize: '0.875rem',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                       }}
@@ -203,6 +204,7 @@ function Home() {
                         borderRadius: '0.25rem',
                         color: 'white',
                         fontWeight: '600',
+                        fontSize: '0.875rem',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                       }}
@@ -214,24 +216,21 @@ function Home() {
               </div>
             </div>
 
-            {/* Right side content - prominently elevated appearance */}
+            {/* Right side content */}
             <div style={{
               position: 'absolute',
               top: 0,
               right: 0,
               bottom: 0,
               width: '30%',
-              backgroundImage: 'linear-gradient(to bottom right, rgba(34, 34, 34, 0.95), rgba(17, 17, 17, 0.98))',
-              backdropFilter: 'blur(5px)',
+              backgroundColor: '#1a1a1a',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '1.5rem',
-              borderLeft: '2.25px solid #b8953f',
+              borderLeft: '2px solid #b8953f',
               textAlign: 'center',
-              boxShadow: '-5px 0 15px rgba(0, 0, 0, 0.3)',
-              transform: 'translateZ(10px)', /* 3D effect */
               zIndex: 1
             }}>
               <div>
@@ -304,11 +303,12 @@ function Home() {
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    backgroundColor: 'rgba(184, 149, 63, 0.15)',
+                    backgroundColor: 'rgba(184, 149, 63, 0.1)',
                     border: '1px solid #b8953f',
                     borderRadius: '0.25rem',
                     color: '#b8953f',
                     fontWeight: '600',
+                    fontSize: '0.875rem',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                   }}
@@ -501,7 +501,7 @@ function Home() {
             </div>
 
             {/* The Bears Brain Section - Redesigned with dark theme */}
-            <div className="mt-36 mb-24 w-full">
+            <div className="mt-24 mb-24 w-full">
               <section className="relative py-12 flex flex-col items-center overflow-hidden">
                 {/* Section Header with gold accent */}
                 <div className="text-center mb-12">
