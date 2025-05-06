@@ -425,8 +425,8 @@ export function GaryHero() {
           
           {/* Subheading - Matching Vault's font weight and spacing */}
           <div className="text-center mb-8 max-w-2xl">
-            <p className="text-white/75 text-xl md:text-2xl mx-auto leading-relaxed font-light">
-              Gary's Trained on the most up-to-date stats and is built on a unique algorithm specifically for picking winners.
+            <p className="text-white/75 text-base md:text-lg mx-auto leading-relaxed font-light">
+              Powered by AI analysis of real-time sports data to identify high-confidence betting opportunities.
             </p>
           </div>
 
