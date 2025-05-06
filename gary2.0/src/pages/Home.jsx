@@ -430,7 +430,7 @@ function Home() {
                   <span className="italic font-normal text-[#B8953F]">Smarter</span>
                   <span className="text-white font-bold"> Sports Bets </span>
                   <span className="text-white font-bold">with </span>
-                  <span className="italic font-normal text-[#B8953F]">GARY.AI</span>
+                  <span className="italic font-normal text-[#B8953F]">GARY.ai</span>
                 </div>
               </h1>
               
@@ -442,7 +442,7 @@ function Home() {
               </div>
 
               {/* Technology badges - using original tags from GaryHero */}
-              <div className="flex flex-wrap justify-center p-4 mb-8 border border-[#B8953F]/40 rounded-lg mx-auto max-w-3xl">
+              <div className="flex flex-wrap justify-center p-4 mb-8 mx-auto max-w-3xl">
                 <div className="flex gap-4 flex-wrap justify-center">
                   <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
                     <span>Odds API</span>
