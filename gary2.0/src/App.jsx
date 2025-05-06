@@ -173,7 +173,7 @@ export default function App() {
               <ToastProvider>
                 <FontLoader />
                 <AppContent />
-                {/* Analytics will be loaded via script tag for better compatibility */}
+                {/* Vercel Analytics is automatically injected at runtime */}
               </ToastProvider>
             </BetCardProfileProvider>
           </UserStatsProvider>
