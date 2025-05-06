@@ -410,7 +410,7 @@ function Home() {
                 opacity: 0.15, 
                 filter: "blur(1px) saturate(0.8)",
                 mixBlendMode: "overlay",
-                transform: "scale(1.2)",
+                transform: "scale(0.6)",
                 position: "absolute",
                 top: "0",
                 left: "0",
@@ -418,7 +418,7 @@ function Home() {
                 height: "100%"
               }}
             />
-            <div className="absolute inset-0 bg-black bg-opacity-40 z-10"></div>
+            <div className="absolute inset-0 bg-black bg-opacity-30 z-10"></div>
           </div>
           
           <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
