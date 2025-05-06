@@ -382,14 +382,22 @@ function Home() {
     <div className="min-h-screen relative flex flex-col overflow-x-hidden">
       {/* Fixed background with all effects - spans the entire viewport */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#18181a] z-0">
-        {/* Gold vignette corners */}
+        {/* Gold vignette corners - enhanced with white glow */}
         <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl" />
         <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/10 blur-3xl" />
         
-        {/* Subtle grid/noise overlay */}
-        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
+        {/* Subtle white accent areas for contrast */}
+        <div className="absolute top-1/4 right-1/3 w-[300px] h-[300px] rounded-full bg-white/[0.03] blur-3xl" />
+        <div className="absolute bottom-1/3 left-1/4 w-[400px] h-[400px] rounded-full bg-white/[0.02] blur-3xl" />
         
-        {/* Radial vignette for cinematic depth */}
+        {/* Subtle stars/shimmer effect */}
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.15] mix-blend-soft-light" />
+        
+        {/* White highlight streak */}
+        <div className="absolute -top-10 left-1/3 w-1 h-[30%] bg-gradient-to-b from-transparent via-white/5 to-transparent transform rotate-[15deg] blur-sm" />
+        <div className="absolute bottom-0 right-1/4 w-1 h-[20%] bg-gradient-to-b from-white/3 via-white/5 to-transparent transform -rotate-[20deg] blur-sm" />
+        
+        {/* Radial vignette for cinematic depth - slightly enhanced */}
         <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/20 opacity-30" />
       </div>
       <div className="relative z-10">
