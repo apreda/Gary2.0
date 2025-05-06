@@ -162,9 +162,54 @@ function Home() {
                   WebkitLineClamp: 3,
                   WebkitBoxOrient: 'vertical',
                   textOverflow: 'ellipsis',
-                  marginBottom: '0.5rem'
+                  marginBottom: '1.5rem'
                 }}>
                   {displayPick.rationale ? displayPick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
+                </div>
+                
+                {/* Take Your Pick section with BET and FADE buttons */}
+                <div style={{ marginTop: 'auto' }}>
+                  <div style={{ 
+                    fontSize: '0.75rem', 
+                    opacity: 0.6, 
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em', 
+                    marginBottom: '0.5rem'
+                  }}>
+                    TAKE YOUR PICK
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      style={{
+                        flex: 1,
+                        padding: '0.75rem',
+                        background: 'rgba(184, 149, 63, 0.2)',
+                        border: '1px solid #b8953f',
+                        borderRadius: '0.25rem',
+                        color: '#b8953f',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      BET
+                    </button>
+                    <button
+                      style={{
+                        flex: 1,
+                        padding: '0.75rem',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '0.25rem',
+                        color: 'white',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      FADE
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -248,10 +293,28 @@ function Home() {
                   fontSize: '2rem', 
                   fontWeight: 600, 
                   color: '#bfa142',
-                  opacity: 0.95
+                  opacity: 0.95,
+                  marginBottom: '1.5rem'
                 }}>
                   {confidencePercentage}
                 </div>
+                
+                {/* View Analysis Button */}
+                <button
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    backgroundColor: 'rgba(184, 149, 63, 0.15)',
+                    border: '1px solid #b8953f',
+                    borderRadius: '0.25rem',
+                    color: '#b8953f',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  VIEW ANALYSIS
+                </button>
               </div>
             </div>
             
