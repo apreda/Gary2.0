@@ -444,20 +444,20 @@ function Home() {
               {/* Technology badges - using original tags from GaryHero */}
               <div className="flex flex-wrap justify-center p-4 mb-8 mx-auto max-w-3xl">
                 <div className="flex gap-4 flex-wrap justify-center">
-                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
-                    <span>Odds API</span>
+                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                    <span style={{ color: '#000000' }}>Odds API</span>
                   </div>
-                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
-                    <span>SportsDB</span>
+                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                    <span style={{ color: '#000000' }}>SportsDB</span>
                   </div>
-                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
-                    <span>Turbo 3.5 Mini</span>
+                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                    <span style={{ color: '#000000' }}>Turbo 3.5 Mini</span>
                   </div>
-                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
-                    <span>Perplexity</span>
+                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                    <span style={{ color: '#000000' }}>Perplexity</span>
                   </div>
-                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
-                    <span>StatCast API</span>
+                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                    <span style={{ color: '#000000' }}>StatCast API</span>
                   </div>
                 </div>
               </div>
@@ -466,7 +466,7 @@ function Home() {
               <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center">
                 <Link 
                   to="/picks" 
-                  className="bg-[#B8953F] hover:bg-[#d0aa4e] text-black font-medium rounded-md transition duration-200 ease-in-out"
+                  className="bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] text-white font-medium rounded-md border border-[rgba(255,255,255,0.1)] backdrop-blur-sm transition duration-200 ease-in-out"
                   style={{ padding: "10px 20px" }}
                 >
                   View Picks
