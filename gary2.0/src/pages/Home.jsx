@@ -413,7 +413,7 @@ function Home() {
             </div>
 
             {/* Premium pick preview - exactly as in original GaryHero */}
-            <div className="mt-2 mb-24 w-full flex justify-center items-center">
+            <div className="mt-72 mb-24 w-full flex justify-center items-center">
               <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
                 {/* Single container layout */}
                 <div className="w-full max-w-6xl mx-auto px-4 pb-8 bg-[#f6f2e8] border border-[#b8953f] rounded-lg shadow-md">
