@@ -12,7 +12,7 @@ function Home() {
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Render a pick card - IDENTICAL to GaryHero implementation
+  // Render a pick card - IDENTICAL to RealGaryPicks implementation
   const renderPickCard = (pick) => {
     // Mock data fallback if pick data is incomplete
     const mockPick = {
@@ -32,6 +32,18 @@ function Home() {
       ...pick
     };
     
+    // Format displayed time properly
+    const formattedTime = displayPick.time ? 
+      (function() {
+        let time = displayPick.time.includes('ET') ? displayPick.time : `${displayPick.time} ET`;
+        return time.replace(/:([0-9])\s/, ':0$1 ');
+      })() : '9:30 PM ET';
+      
+    // Calculate confidence percentage for display
+    const confidencePercentage = typeof displayPick.confidence === 'number' ? 
+      Math.round(displayPick.confidence * 100) + '%' : 
+      (displayPick.confidence || '78%');
+    
     return (
       <div style={{
         width: 450,
@@ -47,7 +59,7 @@ function Home() {
           transformStyle: 'preserve-3d',
           boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
         }}>
-          {/* FRONT OF CARD - Modern Dark UI Design */}
+          {/* FRONT OF CARD - Modern Dark UI Design matching RealGaryPicks */}
           <div style={{
             position: 'absolute',
             width: '100%',
@@ -78,18 +90,19 @@ function Home() {
                 {/* League */}
                 <div>
                   <div style={{ 
-                    fontSize: '0.65rem', 
+                    fontSize: '0.75rem', 
                     opacity: 0.6, 
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em', 
                     marginBottom: '0.25rem'
                   }}>
-                    LEAGUE
+                    League
                   </div>
                   <div style={{ 
-                    fontSize: '1rem', 
-                    fontWeight: 600,
-                    color: '#ffffff'
+                    fontSize: '1.25rem', 
+                    fontWeight: 600, 
+                    letterSpacing: '0.02em',
+                    opacity: 0.95
                   }}>
                     {displayPick.league || 'NBA'}
                   </div>
@@ -98,135 +111,165 @@ function Home() {
                 {/* Matchup */}
                 <div style={{ marginLeft: '20px' }}>
                   <div style={{ 
-                    fontSize: '0.65rem', 
+                    fontSize: '0.75rem', 
                     opacity: 0.6, 
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em', 
                     marginBottom: '0.25rem'
                   }}>
-                    MATCHUP
+                    Matchup
                   </div>
                   <div style={{ 
-                    fontSize: '1rem', 
+                    fontSize: '1.25rem', 
                     fontWeight: 600,
-                    letterSpacing: '0.02em',
-                    opacity: 0.95
+                    opacity: 0.9
                   }}>
-                    {displayPick.game || 'Nuggets @ Thunder'}
+                    {(displayPick.homeTeam && displayPick.awayTeam) ? 
+                      `${displayPick.awayTeam.split(' ').pop()} @ ${displayPick.homeTeam.split(' ').pop()}` : 
+                      (displayPick.game ? displayPick.game : 'Nuggets @ Thunder')}
                   </div>
                 </div>
               </div>
               
-              {/* Gary's Pick section */}
-              <div style={{ marginTop: '1.75rem' }}>
+              {/* The main pick display */}
+              <div style={{ marginBottom: '1rem' }}>
                 <div style={{ 
-                  fontSize: '0.65rem', 
+                  fontSize: '0.75rem', 
                   opacity: 0.6, 
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em', 
-                  marginBottom: '0.25rem'
+                  marginBottom: '0.5rem'
                 }}>
-                  GARY'S PICK
+                  Gary's Pick
                 </div>
                 <div style={{ 
-                  fontSize: '1.5rem', 
-                  fontWeight: 600,
-                  color: '#d4af37',
+                  fontSize: '2rem', 
+                  fontWeight: 700, 
                   lineHeight: 1.1,
-                  marginBottom: '0.25rem',
-                  maxWidth: '90%'
+                  color: '#bfa142', /* Gold color for the actual pick */
+                  wordBreak: 'break-word',
+                  marginBottom: '0.75rem'
                 }}>
                   {displayPick.pick || 'Denver Nuggets +9.5 -110'}
                 </div>
-              </div>
-              
-              {/* Bottom section with rationale */}
-              <div>
-                <div style={{ 
-                  fontSize: '0.65rem',
-                  opacity: 0.5,
-                  marginBottom: '0.25rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}>
-                  RATIONALE
-                </div>
-                <div style={{ 
-                  fontSize: '0.75rem',
-                  lineHeight: 1.5,
+                
+                {/* Add a preview of the rationale on front card */}
+                <div style={{
+                  fontSize: '0.85rem',
                   opacity: 0.8,
-                  maxHeight: '3.5rem',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
                   display: '-webkit-box',
                   WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical'
+                  WebkitBoxOrient: 'vertical',
+                  textOverflow: 'ellipsis',
+                  marginBottom: '0.5rem'
                 }}>
-                  {displayPick.rationale}
+                  {displayPick.rationale ? displayPick.rationale.substring(0, 120) + '...' : 'Analysis not available'}
                 </div>
               </div>
             </div>
 
-            {/* Right side with game time and confidence meter */}
+            {/* Right side content - prominently elevated appearance */}
             <div style={{
               position: 'absolute',
               right: 0,
-              top: 0,
-              bottom: 0,
+              top: 0,  /* Aligned to card edge */
+              bottom: 0, /* Aligned to card edge */
               width: '30%',
-              background: 'linear-gradient(to right, rgba(26,26,26,0) 0%, rgba(26,26,26,1) 20%, rgba(26,26,26,1) 100%)',
-              borderLeft: '1px solid rgba(255,255,255,0.1)',
+              borderLeft: '2.25px solid #bfa142', /* Gold border */
               padding: '1.5rem 1rem',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center'
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
+              boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
+              borderRadius: '0 16px 16px 0', /* Rounded on right side only */
+              clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
+              zIndex: 2, /* Ensure it appears above other content */
+              transform: 'translateZ(10px)', /* 3D effect */
             }}>
-              {/* Game Time */}
-              <div style={{
-                marginBottom: '2rem',
-                textAlign: 'center'
+              {/* Game time section */}
+              <div style={{ 
+                textAlign: 'center',
+                marginBottom: '1rem'
               }}>
                 <div style={{ 
-                  fontSize: '0.65rem', 
+                  fontSize: '0.75rem', 
                   opacity: 0.6, 
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em', 
                   marginBottom: '0.25rem'
                 }}>
-                  GAME TIME
+                  Game Time
                 </div>
                 <div style={{ 
-                  fontSize: '0.9rem', 
+                  fontSize: '1.125rem', 
                   fontWeight: 600,
-                  letterSpacing: '0.02em'
+                  opacity: 0.9
                 }}>
-                  {displayPick.time || '9:30 PM ET'}
+                  {formattedTime}
                 </div>
               </div>
-
-              {/* Gary AI Seal with Confidence */}
+              
+              {/* Coin Image centered - no background */}
               <div style={{
-                width: '90px',
-                height: '90px',
-                borderRadius: '50%',
-                border: '2px solid #d4af37',
                 display: 'flex',
                 justifyContent: 'center',
-                alignItems: 'center',
-                position: 'relative',
-                overflow: 'hidden'
+                marginTop: 'auto',
+                marginBottom: 'auto',
+                background: 'transparent'
               }}>
                 <img 
-                  src="/gary-ai-seal.png" 
-                  alt="Gary AI Seal" 
+                  src="/coin2.png" 
+                  alt="Coin Image"
                   style={{
-                    width: '75%',
-                    height: 'auto'
+                    width: 110, 
+                    height: 110, 
+                    objectFit: 'contain',
+                    opacity: 1,
+                    background: 'transparent'
                   }}
                 />
               </div>
+              
+              {/* Confidence score with visual indicator */}
+              <div style={{ 
+                textAlign: 'center',
+                marginTop: '1rem',
+                width: '100%'
+              }}>
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  opacity: 0.6, 
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em', 
+                  marginBottom: '0.25rem'
+                }}>
+                  Confidence
+                </div>
+                
+                {/* Confidence score display */}
+                <div style={{
+                  fontSize: '1.2rem',
+                  fontWeight: 700,
+                  opacity: 0.95,
+                  color: '#bfa142', /* Gold for confidence */
+                  marginBottom: '0.5rem'
+                }}>
+                  {confidencePercentage}
+                </div>
+              </div>
             </div>
+            
+            {/* Subtle gradient overlay for depth */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
+              opacity: 0.5,
+              pointerEvents: 'none'
+            }}></div>
           </div>
         </div>
       </div>
