@@ -13,13 +13,13 @@ export function Navbar() {
   const { user } = useAuth();
   const session = !!user;
   
-  // Navigation items - exact Hashnode style
+  // Navigation items matching user requirements
   const navItems = [
-    { path: '/real-gary-picks', label: 'Products' },
-    { path: '/how-it-works', label: 'How It Works' },
+    { path: '/', label: 'Home' },
+    { path: '/real-gary-picks', label: 'Gary\'s Picks' },
+    { path: '/billfold', label: 'Billfold' },
+    { path: '/leaderboard', label: 'Leaderboard' },
     { path: '/pricing', label: 'Pricing' },
-    { path: '/leaderboard', label: 'Changelog' },
-    { path: '/billfold', label: 'Community' },
   ];
   
   const signedInNavItems = [...navItems];
@@ -30,8 +30,8 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="sticky top-0 bg-[#0D1117] z-50 border-b border-[#1E2330] py-3">
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+    <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-[#0D1117] z-50 border border-[#1E2330] py-3 rounded-xl shadow-xl w-11/12 max-w-6xl">
+      <div className="w-full px-6 flex items-center justify-between">
         {/* Logo in Hashnode style but with our colors */}
         <div className="flex items-center">
           <Link to="/" className="flex items-center group">
@@ -102,9 +102,9 @@ export function Navbar() {
         </div>
       </div>
       
-      {/* Mobile Menu Dropdown - Hashnode dark theme style */}
+      {/* Mobile Menu Dropdown - Floating style with black and gold */}
       {isMobileMenuOpen && (
-        <div className="bg-[#0D1117] border-b border-[#1E2330] md:hidden mt-0 overflow-hidden absolute left-0 right-0 z-50">
+        <div className="bg-[#0D1117] border border-[#1E2330] md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-xl shadow-xl w-11/12 max-w-6xl">
           <div className="py-4 px-6">
             <div className="flex flex-col space-y-3">
               {filteredNavItems.map((item) => (
