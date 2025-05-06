@@ -398,16 +398,15 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image - repositioned further left and moved down significantly */}
-          <div className="absolute -left-16 top-80 z-20 hidden md:block" style={{ maxWidth: "450px" }}>
+          {/* Gary image - made 70% smaller and moved up 4 inches */}
+          <div className="absolute -left-16 top-0 z-20 hidden md:block" style={{ maxWidth: "135px", marginTop: "-64px" }}>
             <img
               src={garyImage}
               alt="Gary AI Bear"
               className="w-full h-auto"
               style={{ 
                 opacity: 0.65, 
-                filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))",
-                transform: "scale(0.9)" 
+                filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))"
               }}
             />
           </div>
