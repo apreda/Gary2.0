@@ -502,8 +502,8 @@ function Home() {
               </div>
             </div>
 
-            {/* The Bears Brain Section - Dark theme matching homepage */}
-            <div className="mt-24 mb-36 w-full">
+            {/* The Bears Brain Section - Dark theme matching homepage - moved up 2 inches */}
+            <div className="mt-4 mb-36 w-full">
               <section className="relative py-16 max-w-[1400px] mx-auto">
 
                 {/* Benefits pill at top like in screenshot */}
@@ -518,11 +518,8 @@ function Home() {
 
                 {/* 2. Section heading */}
                 <div className="text-center mb-14 px-6">
-                  <h2 className="text-white text-5xl font-bold leading-tight mb-2">
-                    Track your current results, <span className="text-white">set goals</span>
-                  </h2>
                   <h2 className="text-white text-5xl font-bold leading-tight mb-6">
-                    and <span className="text-[#B8953F]">achieve them with community</span>
+                    The <span className="text-[#B8953F]">Bears Brain</span>
                   </h2>
                   <p className="text-white/70 text-lg max-w-2xl mx-auto">
                     The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss.
