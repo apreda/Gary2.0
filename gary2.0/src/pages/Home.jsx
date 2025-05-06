@@ -443,11 +443,8 @@ function Home() {
                 </div>
               </h1>
               
-              {/* Subheading - Matching Vault's font weight and spacing */}
-              <div className="text-center mb-8 max-w-2xl">
-                <p className="text-white/75 text-base md:text-lg mx-auto leading-relaxed font-light">
-                  Powered by AI:
-                </p>
+              {/* Subheading container - now empty but maintaining spacing */}
+              <div className="text-center mb-4 max-w-2xl">
               </div>
 
               {/* Technology badges - using original tags from GaryHero */}
