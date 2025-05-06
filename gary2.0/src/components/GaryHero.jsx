@@ -508,7 +508,7 @@ export function GaryHero() {
       </main>
 
       {/* The Bears Brain Section Peek */}
-      <div className="relative z-5 w-full dimension-bg-section h-16 mt-auto" style={{ marginTop: '250px' }}>
+      <div className="relative z-5 w-full dimension-bg-section h-16 mt-auto" style={{ marginTop: '640px' }}>
         <div className="absolute -top-16 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-[#0e0e0e]"></div>
         <div className="container mx-auto px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
