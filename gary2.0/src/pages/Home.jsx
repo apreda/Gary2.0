@@ -10,46 +10,48 @@ function Home() {
   const { user } = useAuth();
   
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible dimension-bg-section">
-      {/* Unified, immersive dark background for entire homepage */}
-      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-    {/* Layered gold spotlight for depth */}
-    <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-[#b8953f]/20 blur-[120px] opacity-40 z-10" />
-    {/* Subtle glass reflection at top edge */}
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-16 bg-white/10 rounded-b-full blur-2xl opacity-30 z-10" />
-    {/* Subtle shadow at bottom edge */}
-    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-10 bg-black/40 rounded-t-full blur-xl opacity-30 z-10" />
-    {/* Subtle cream/white haze gradients (less intense, seamless) */}
-    <div className="absolute inset-0 bg-gradient-to-b from-[#f7f4ed]/20 via-transparent to-transparent" />
-    <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-br from-[#fffbe9]/15 via-transparent to-transparent" />
-    {/* Faint cream highlight behind main content */}
-    <div className="absolute bottom-24 left-0 w-full h-24 bg-gradient-to-t from-[#f7f4ed]/15 via-transparent to-transparent blur-2xl opacity-60" />
-    {/* Gold vignette corners */}
-    <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl" />
-    <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/10 blur-3xl" />
-    {/* Subtle grid/noise overlay */}
-    <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
-    {/* Radial vignette for cinematic depth, now deeper */}
-    {/* Subtle dimensional depth without blocking pattern */}
-    <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/20 opacity-30" />
-  </div>
+    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
+      {/* Unified, continuous background for entire homepage */}
+      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden="true">
+        {/* Base dark gradient background that spans the entire page */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#121212] via-[#121212] to-[#1a1a1a]" />
+        
+        {/* Subtle paper texture overlay */}
+        <div className="absolute inset-0 opacity-5" style={{
+          backgroundImage: `radial-gradient(#fff 1px, transparent 1px)`,
+          backgroundSize: `30px 30px`
+        }} />
+        
+        {/* Layered gold spotlight for depth */}
+        <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-[#b8953f]/20 blur-[120px] opacity-40 z-10" />
+        
+        {/* Subtle glass reflection at top edge */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-16 bg-white/10 rounded-b-full blur-2xl opacity-30 z-10" />
+        
+        {/* Gold vignette corners */}
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/10 blur-3xl" />
+        
+        {/* Subtle grid/noise overlay */}
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-soft-light" />
+        
+        {/* Radial vignette for cinematic depth */}
+        <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/20 opacity-30" />
+      </div>
       <div className="relative z-10">
         <GaryHero />
         
         {/* The Bears Brain Section starts here - with added spacing to avoid overlap with pick cards */}
         <div className="h-[600px]"></div>
         
-        <section className="relative py-16 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden" style={{ marginTop: "200px" }}>
-          {/* Cream newspaper content background for The Bear's Brain section */}
-          <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-            {/* Cream background */}
-            <div className="absolute inset-0 z-0 bg-[#f7f3e8]">
-              {/* Subtle paper texture - dot pattern overlay */}
-              <div className="absolute inset-0 opacity-10" style={{
-                backgroundImage: `radial-gradient(#000 1px, transparent 1px)`,
-                backgroundSize: `20px 20px`
-              }}></div>
-            </div>
+        <section className="relative py-16 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+          {/* Newspaper-style container with cream background that appears as part of the flow */}
+          <div className="relative z-10 w-full max-w-7xl mx-auto bg-[#f7f3e8] rounded-2xl shadow-xl overflow-hidden">
+            {/* Subtle paper texture overlay */}
+            <div className="absolute inset-0 opacity-10" style={{
+              backgroundImage: `radial-gradient(#000 1px, transparent 1px)`,
+              backgroundSize: `20px 20px`
+            }}></div>
             
             {/* Subtle gold vignette corners for depth */}
             <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl opacity-20" />
@@ -57,7 +59,6 @@ function Home() {
             
             {/* Thin vertical divider line to give a newspaper column feel */}
             <div className="absolute top-[5%] bottom-[5%] left-1/2 w-px bg-[#b8953f]/20"></div>
-          </div>
           {/* Unified Section Content */}
           <div className="relative z-10 flex flex-col items-center w-full max-w-6xl px-2 md:px-8">
             {/* Newspaper-style headline banner */}
@@ -126,6 +127,7 @@ function Home() {
             </div>
 
 
+            </div>
           </div>
         </section>
       </div>
