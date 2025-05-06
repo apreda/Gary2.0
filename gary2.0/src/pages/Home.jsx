@@ -300,19 +300,21 @@ function Home() {
                 {/* Click to flip instruction with subtle design */}
                 <button
                   style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    backgroundColor: 'rgba(184, 149, 63, 0.1)',
-                    border: '1px solid #b8953f',
-                    borderRadius: '0.25rem',
-                    color: '#b8953f',
-                    fontWeight: '600',
-                    fontSize: '0.875rem',
+                    marginTop: '1rem',
+                    fontSize: '0.75rem',
+                    padding: '0.5rem 1rem',
+                    background: 'rgba(191, 161, 66, 0.15)',
+                    color: '#bfa142',
+                    border: 'none',
+                    borderRadius: '4px',
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    fontWeight: 500,
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  VIEW ANALYSIS
+                  View Analysis
                 </button>
               </div>
             </div>

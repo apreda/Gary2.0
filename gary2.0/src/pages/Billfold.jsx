@@ -266,10 +266,10 @@ export const Billfold = () => {
         </div>
       </div>
       
-      <div className="max-w-screen-lg mx-auto px-4 py-6 border-x border-gray-700/30 shadow-lg backdrop-blur-sm relative z-10">
+      <div className="max-w-screen-2xl mx-auto px-8 py-8 border-x border-gray-700/30 shadow-lg backdrop-blur-sm relative z-10">
         {/* Enhanced Header with GARY A.I. and garymoney image */}
-        <div className="billfold-header mb-4 relative">
-          <div className="flex items-center justify-between">
+        <div className="billfold-header mb-8 relative">
+          <div className="flex items-center justify-between space-x-8">
             <div>
               <h2 className="mb-1 flex items-center relative">
                 <span className="font-bold tracking-wide" style={{ color: '#b8953f', fontSize: '28px', opacity: 0.95 }}>GARY</span>
@@ -292,7 +292,7 @@ export const Billfold = () => {
         </div>
         
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
-        <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginBottom: 'var(--space-xl)' }}>
+        <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', marginBottom: 'var(--space-xl)' }}>
           {/* RECORD - With enhanced styling */}
           <div className="gary-card-accent p-5">
             <h5 className="gary-text-small uppercase tracking-wider mb-1">RECORD</h5>
@@ -328,8 +328,8 @@ export const Billfold = () => {
           )}
         </div>
         
-        {/* Recent Picks - now in a single column with improved styling */}
-        <div className="gary-grid" style={{ marginBottom: 'var(--space-xl)' }}>
+        {/* Recent Picks - now in a single column with improved spacing */}
+        <div className="gary-grid" style={{ marginBottom: 'var(--space-xl)', gap: '2rem' }}>
           {/* Recent Picks Table - Enhanced */}
           <div className="gary-card-accent overflow-hidden">
             <div className="gary-card-header">
@@ -348,16 +348,16 @@ export const Billfold = () => {
               <tbody>
                 {bettingLog.slice(0, 5).map((bet, index) => (
                   <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-800/50 transition-colors">
-                    <td className="py-3 px-4 text-gray-400">{new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
-                    <td className="py-3 px-4 text-gray-400">{bet.sport}</td>
-                    <td className="py-3 px-4 text-gray-200">{bet.matchup || 'Game not found'}</td>
-                    <td className="py-3 px-4">
+                    <td className="py-4 px-6 text-gray-400">{new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                    <td className="py-4 px-6 text-gray-400">{bet.sport}</td>
+                    <td className="py-4 px-6 text-gray-200">{bet.matchup || 'Game not found'}</td>
+                    <td className="py-4 px-6">
                       <div className="flex items-center">
                         <span className="inline-block w-2 h-2 rounded-sm bg-[#b8953f]"></span>
                         <span className="ml-2 text-gray-200">{bet.pick || 'No pick data'}</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-4 px-6 text-right">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${bet.result === 'won' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : bet.result === 'push' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
                         {bet.result === 'won' ? 'WON' : bet.result === 'push' ? 'PUSH' : 'LOST'}
                       </span>
@@ -372,7 +372,7 @@ export const Billfold = () => {
         </div>
           
         {/* Two-column layout for Sport Performance and Bet Type Distribution - Enhanced */}
-        <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginBottom: 'var(--space-xl)' }}>
+        <div className="gary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '2rem', marginBottom: 'var(--space-xl)' }}>
           {/* Sport Performance - Enhanced */}
           <div className="gary-card-accent overflow-hidden">
             <div className="gary-card-header">
