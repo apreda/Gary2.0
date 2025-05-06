@@ -413,7 +413,7 @@ function Home() {
             </div>
 
             {/* Premium pick preview - exactly as in original GaryHero */}
-            <div className="mt-2 mb-40 w-full flex justify-center items-center">
+            <div className="mt-2 mb-32 w-full flex justify-center items-center">
               <div className="relative w-full max-w-4xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
                    style={{ height: "480px", paddingBottom: "0px" }}>
                 {/* Dark glossy header bar */}
@@ -452,7 +452,7 @@ function Home() {
           </main>
         </section>
         
-        <section className="relative -mt-16 pt-0 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+        <section className="relative -mt-20 pt-0 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
           {/* Container with padding */}
           <div className="w-full max-w-6xl mx-auto px-4 pb-8">
             {/* Section Heading */}
