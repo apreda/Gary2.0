@@ -416,9 +416,9 @@ function Home() {
           <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
             {/* Centered Hero Content */}
             <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
-              {/* NEW badge - gold-colored and oval-shaped */}
-              <div className="mb-8 relative mt-6">  {/* maintained mt-6 (1.5rem / 24px) to keep it moved down */}
-                <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center" 
+              {/* NEW badge - gold-colored and oval-shaped with border */}
+              <div className="mb-8 relative mt-12">  {/* changed mt-6 to mt-12 to move down another 0.25 inches */}
+                <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center border border-gray-800" 
                      style={{ background: '#b8953f', color: '#1a1a1a' }}>
                   <span className="mr-2 font-bold">NEW</span>
                   <span>Introducing Gary AI: Intelligent sports betting</span>
