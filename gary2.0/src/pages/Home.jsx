@@ -398,15 +398,16 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image - adjusted position (down 3.5 inches, right 1 inch) */}
-          <div className="absolute -left-0 top-0 z-20 hidden md:block" style={{ maxWidth: "135px", marginTop: "96px", marginLeft: "16px" }}>
+          {/* Gary image - larger and positioned to overlap with text */}
+          <div className="absolute top-0 left-0 z-10 hidden md:block" style={{ maxWidth: "230px", marginTop: "50px", marginLeft: "-20px" }}>
             <img
               src="/Gary50.png"
               alt="Gary AI Bear"
               className="w-full h-auto"
               style={{ 
-                opacity: 0.85, 
-                filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))"
+                opacity: 0.7, 
+                filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))",
+                transform: "rotate(2deg)"
               }}
             />
           </div>
@@ -430,7 +431,7 @@ function Home() {
                   <span className="italic font-normal text-[#B8953F]">Smarter</span>
                   <span className="text-white font-bold"> Sports Bets </span>
                   <span className="text-white font-bold">with </span>
-                  <span className="italic font-normal text-white">GARY.AI</span>
+                  <span className="italic font-normal"><span className="text-white">GARY</span><span className="text-[#B8953F]">.AI</span></span>
                 </div>
               </h1>
               
