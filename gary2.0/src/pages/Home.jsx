@@ -453,13 +453,13 @@ function Home() {
         </section>
         
         {/* Natural spacing between sections */}
-        <div className="h-32"></div>
+        <div className="h-16"></div>
         
-        <section className="relative py-16 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
-          {/* Newspaper-style container with cream background that appears as part of the flow */}
-          <div className="w-full max-w-6xl mx-auto p-10 pb-20 bg-[#f6f2e8] shadow-2xl relative">
-            {/* The Bears Brain heading - with enhanced padding and border box */}
-            <div className="mt-10 mb-14 border-2 border-[#b8953f] p-8 rounded-lg shadow-lg bg-[#f6f2e8]">
+        <section className="relative py-12 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+          {/* Newspaper-style container with cream background */}
+          <div className="w-full max-w-6xl mx-auto p-8 pb-16 bg-[#f6f2e8] shadow-2xl relative">
+            {/* The Bears Brain heading */}
+            <div className="mt-8 mb-10 border-2 border-[#b8953f] p-6 rounded-lg shadow-lg bg-[#f6f2e8]">
               <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
                 The Bears Brain
               </h2>
