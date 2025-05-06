@@ -400,36 +400,15 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image - as full background for the landing section */}
-          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-            <img
-              src="/Gary50.png"
-              alt="Gary AI Bear"
-              className="w-full h-full object-cover"
-              style={{ 
-                opacity: 0.15, 
-                filter: "blur(1px) saturate(0.8)",
-                mixBlendMode: "overlay",
-                transform: "scale(1.2)",
-                position: "absolute",
-                top: "0",
-                left: "0",
-                width: "100%",
-                height: "100%"
-              }}
-            />
-            <div className="absolute inset-0 bg-black bg-opacity-40 z-10"></div>
-          </div>
+          {/* This section formerly contained the Gary50.png background */}
           
           {/* Coin2 image on the left side under navbar */}
           <div className="absolute top-24 left-6 z-30 hidden md:block">
             <img
               src="/coin2.png"
               alt="Gold Coin"
-              className="w-32 h-32"
+              className="w-32 h-32 object-contain"
               style={{ 
-                opacity: 0.9, 
-                filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.25))",
                 animation: "float 6s ease-in-out infinite"
               }}
             />
