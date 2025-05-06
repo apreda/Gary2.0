@@ -526,44 +526,105 @@ function Home() {
 
                 {/* 3. Cards grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-6">
-
-                  {/* Card template */}
-                  {[
-                    {
-                      title: "1. Statistical Brain",
-                      body: "Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams."
-                    },
-                    {
-                      title: "2. Fan Brain",
-                      body: "Tracking social sentiment, ticket splits, and sharp-money moves to separate hype from true value."
-                    },
-                    {
-                      title: "3. Narrative Tracker",
-                      body: "Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players."
-                    },
-                    {
-                      title: "4. Street Smart",
-                      body: "Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on."
-                    }
-                  ].map((card, i) => (
-                    <div
-                      key={i}
-                      className="
-                        relative bg-white bg-opacity-90 backdrop-blur-sm
-                        border border-[#B8953F]
-                        rounded-2xl p-8
-                        text-[#2D3A4B]
-                        shadow-md hover:shadow-xl transition-shadow
-                      "
-                    >
-                      <h3 className="text-[#B8953F] font-semibold text-2xl mb-4">
-                        {card.title}
-                      </h3>
-                      <p className="text-base leading-relaxed">
-                        {card.body}
-                      </p>
+                  
+                  {/* Card 1: Statistical Brain with graph visualization */}
+                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
+                      1. Statistical Brain
+                    </h3>
+                    <p className="text-base leading-relaxed mb-6">
+                      Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
+                    </p>
+                    <div className="mt-4 relative h-20">
+                      <div className="absolute right-0 top-0 bg-[#B8953F] text-[#F5EFE8] text-xs font-bold rounded-full px-2 py-1">+38%</div>
+                      <svg className="w-full h-full" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M0,80 C50,80 70,40 120,40 C170,40 180,20 225,20 C270,20 280,60 300,60" stroke="#B8953F" strokeWidth="3" fill="none" strokeLinecap="round"/>
+                        <circle cx="225" cy="20" r="6" fill="#B8953F" />
+                      </svg>
                     </div>
-                  ))}
+                  </div>
+                  
+                  {/* Card 2: Fan Brain with chat visualization */}
+                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
+                      2. Fan Brain
+                    </h3>
+                    <p className="text-base leading-relaxed mb-6">
+                      Tracking social sentiment, ticket splits, and sharp-money moves to separate hype from true value.
+                    </p>
+                    <div className="space-y-3 mt-4">
+                      <div className="flex">
+                        <div className="w-8 h-8 rounded-full bg-[#B8953F] mr-2 flex items-center justify-center text-xs font-bold text-white">FB</div>
+                        <div className="bg-[#B8953F]/10 rounded-2xl px-4 py-2 max-w-xs border border-[#B8953F]/20">
+                          <p className="text-[#2D3A4B] text-sm">Analyzing social sentiment trends for Bills vs Dolphins...</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end">
+                        <div className="bg-gray-200/70 rounded-2xl px-4 py-2 max-w-xs">
+                          <p className="text-[#2D3A4B] text-sm">Line is moving toward Miami +3</p>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-[#2D3A4B] ml-2 flex items-center justify-center text-xs font-bold text-white">GB</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Card 3: Narrative Tracker with network visualization */}
+                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
+                      3. Narrative Tracker
+                    </h3>
+                    <p className="text-base leading-relaxed mb-4">
+                      Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
+                    </p>
+                    <div className="mt-2 relative h-36 flex items-center justify-center">
+                      <div className="absolute w-24 h-24 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-[#B8953F]/40 flex items-center justify-center">
+                          <span className="text-[#B8953F] font-bold text-lg">NT</span>
+                        </div>
+                      </div>
+                      
+                      {/* Connection lines */}
+                      <div className="absolute top-1/4 -right-4 bg-[#B8953F]/20 rounded-full py-1 px-3 transform rotate-6">
+                        <span className="text-xs text-[#2D3A4B]">ESPN</span>
+                      </div>
+                      
+                      <div className="absolute bottom-1/4 -left-4 bg-[#B8953F]/20 rounded-full py-1 px-3 transform -rotate-6">
+                        <span className="text-xs text-[#2D3A4B]">Twitter</span>
+                      </div>
+                      
+                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 bg-[#B8953F]/20 rounded-full py-1 px-3">
+                        <span className="text-xs text-[#2D3A4B]">Sports Media</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Card 4: Street Smart with step visualization */}
+                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
+                      4. Street Smart
+                    </h3>
+                    <p className="text-base leading-relaxed mb-4">
+                      Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
+                    </p>
+                    <div className="mt-2 relative h-36">
+                      <div className="absolute top-0 left-1/4 transform -translate-x-1/2 bg-[#B8953F]/20 rounded-full px-3 py-1 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-xs font-medium">Injury Alert</span>
+                      </div>
+                      
+                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-[#B8953F]/20 rounded-full px-3 py-1 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-xs font-medium">Weather Impact</span>
+                      </div>
+                      
+                      <div className="absolute bottom-1/4 left-3/4 transform -translate-x-1/2 bg-[#B8953F]/20 rounded-full px-3 py-1 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-xs font-medium">Line Movement</span>
+                      </div>
+                      
+                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M50,30 L100,75 L150,110" stroke="#B8953F" strokeWidth="1.5" strokeDasharray="4 4" fill="none" strokeLinecap="round"/>
+                      </svg>
+                    </div>
+                  </div>
 
                 </div>
               </section>
