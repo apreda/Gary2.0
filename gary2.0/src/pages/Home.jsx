@@ -4,7 +4,6 @@ import ErrorBoundary from "../components/ErrorBoundary";
 import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
-import '../styles/hero.css';
 import { supabase } from "../supabaseClient";
 import garyImage from "../assets/images/gary23.png";
 
@@ -12,6 +11,227 @@ function Home() {
   const { user } = useAuth();
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Render a pick card - IDENTICAL to GaryHero implementation
+  const renderPickCard = (pick) => {
+    // Mock data fallback if pick data is incomplete
+    const mockPick = {
+      league: pick.league || 'NBA',
+      homeTeam: pick.homeTeam || 'Thunder',
+      awayTeam: pick.awayTeam || 'Nuggets',
+      time: pick.time || '9:30 PM ET',
+      confidence: pick.confidence || 0.78,
+      pick: pick.pick || 'Denver Nuggets +9.5 -110',
+      rationale: pick.rationale || 'Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road.',
+      game: pick.game || 'Nuggets @ Thunder'
+    };
+    
+    // Use provided data or fallback to mock data
+    const displayPick = {
+      ...mockPick,
+      ...pick
+    };
+    
+    return (
+      <div style={{
+        width: 450,
+        height: 300,
+        perspective: '1000px',
+        cursor: 'pointer'
+      }}>
+        {/* Card container with 3D effect */}
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          transformStyle: 'preserve-3d',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+        }}>
+          {/* FRONT OF CARD - Modern Dark UI Design */}
+          <div style={{
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            backfaceVisibility: 'hidden',
+            background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+            borderRadius: '16px',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            overflow: 'hidden',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+            color: '#ffffff',
+          }}>
+            {/* Left side content */}
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: '70%',
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              overflow: 'hidden',
+            }}>
+              {/* League and Matchup in horizontal layout */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                {/* League */}
+                <div>
+                  <div style={{ 
+                    fontSize: '0.65rem', 
+                    opacity: 0.6, 
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em', 
+                    marginBottom: '0.25rem'
+                  }}>
+                    LEAGUE
+                  </div>
+                  <div style={{ 
+                    fontSize: '1rem', 
+                    fontWeight: 600,
+                    color: '#ffffff'
+                  }}>
+                    {displayPick.league || 'NBA'}
+                  </div>
+                </div>
+                
+                {/* Matchup */}
+                <div style={{ marginLeft: '20px' }}>
+                  <div style={{ 
+                    fontSize: '0.65rem', 
+                    opacity: 0.6, 
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em', 
+                    marginBottom: '0.25rem'
+                  }}>
+                    MATCHUP
+                  </div>
+                  <div style={{ 
+                    fontSize: '1rem', 
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    opacity: 0.95
+                  }}>
+                    {displayPick.game || 'Nuggets @ Thunder'}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Gary's Pick section */}
+              <div style={{ marginTop: '1.75rem' }}>
+                <div style={{ 
+                  fontSize: '0.65rem', 
+                  opacity: 0.6, 
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em', 
+                  marginBottom: '0.25rem'
+                }}>
+                  GARY'S PICK
+                </div>
+                <div style={{ 
+                  fontSize: '1.5rem', 
+                  fontWeight: 600,
+                  color: '#d4af37',
+                  lineHeight: 1.1,
+                  marginBottom: '0.25rem',
+                  maxWidth: '90%'
+                }}>
+                  {displayPick.pick || 'Denver Nuggets +9.5 -110'}
+                </div>
+              </div>
+              
+              {/* Bottom section with rationale */}
+              <div>
+                <div style={{ 
+                  fontSize: '0.65rem',
+                  opacity: 0.5,
+                  marginBottom: '0.25rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  RATIONALE
+                </div>
+                <div style={{ 
+                  fontSize: '0.75rem',
+                  lineHeight: 1.5,
+                  opacity: 0.8,
+                  maxHeight: '3.5rem',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical'
+                }}>
+                  {displayPick.rationale}
+                </div>
+              </div>
+            </div>
+
+            {/* Right side with game time and confidence meter */}
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: '30%',
+              background: 'linear-gradient(to right, rgba(26,26,26,0) 0%, rgba(26,26,26,1) 20%, rgba(26,26,26,1) 100%)',
+              borderLeft: '1px solid rgba(255,255,255,0.1)',
+              padding: '1.5rem 1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              {/* Game Time */}
+              <div style={{
+                marginBottom: '2rem',
+                textAlign: 'center'
+              }}>
+                <div style={{ 
+                  fontSize: '0.65rem', 
+                  opacity: 0.6, 
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em', 
+                  marginBottom: '0.25rem'
+                }}>
+                  GAME TIME
+                </div>
+                <div style={{ 
+                  fontSize: '0.9rem', 
+                  fontWeight: 600,
+                  letterSpacing: '0.02em'
+                }}>
+                  {displayPick.time || '9:30 PM ET'}
+                </div>
+              </div>
+
+              {/* Gary AI Seal with Confidence */}
+              <div style={{
+                width: '90px',
+                height: '90px',
+                borderRadius: '50%',
+                border: '2px solid #d4af37',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <img 
+                  src="/gary-ai-seal.png" 
+                  alt="Gary AI Seal" 
+                  style={{
+                    width: '75%',
+                    height: 'auto'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Load featured picks from the database
   useEffect(() => {
@@ -57,162 +277,11 @@ function Home() {
 
     fetchFeaturedPicks();
   }, []);
-  
-  // Render a pick card with all details
-  const renderPickCard = (pick) => {
-    const confidence = pick.confidence ? parseFloat(pick.confidence) * 100 : 78;
-    // Get the team name from the pick string ("Team Name -X.X")
-    const pickParts = pick.pick ? pick.pick.split(" ") : [];
-    // Combine team name parts until we hit a dash/plus symbol
-    let teamName = [];
-    for (let part of pickParts) {
-      if (part.startsWith("-") || part.startsWith("+")) break;
-      teamName.push(part);
-    }
-    teamName = teamName.join(" ");
-    
-    // Extract the spread value and odds
-    const spreadOdds = pick.pick ? pick.pick.replace(teamName, "").trim() : "-1.5 -175";
-    
-    // Pick card container with team color theme
-    return (
-      <div className="w-full overflow-hidden bg-[#1d2025] rounded-lg shadow-xl transition-all duration-300 hover:shadow-2xl">
-        {/* MAC OS Style toolbar with dots */}
-        <div className="flex items-center px-2 py-1 bg-[#0a0a0a]">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#FF605C] mr-1.5"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-[#FFBD44] mr-1.5"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-[#00CA4E] mr-2"></div>
-          <div className="text-white/30 text-xs ml-4 font-medium">Today's Premium Pick</div>
-        </div>
-
-        {/* Card content with betting data */}
-        <div className="flex">
-          {/* Left side - League and Team Info */}
-          <div className="flex-1 p-4 flex flex-col">
-            {/* League Category */}
-            <div 
-              style={{ 
-                background: "linear-gradient(to right, rgba(10,10,10,0.9), transparent)",
-                borderLeft: "4px solid #d4af37"
-              }}
-              className="flex items-start justify-between mb-3 pl-2 py-1"    
-            >
-              <div>
-                <div style={{ 
-                  fontSize: '0.65rem', 
-                  opacity: 0.6, 
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em', 
-                  marginBottom: '0.25rem'
-                }}>
-                  LEAGUE
-                </div>
-                <div style={{ 
-                  fontSize: '1rem', 
-                  fontWeight: 600,
-                  letterSpacing: '0.02em',
-                }}>
-                  {pick.league || "MLB"}
-                </div>
-              </div>
-            </div>
-            
-            {/* Pick title and description */}
-            <div className="pl-2 mb-4">
-              <div style={{ 
-                fontSize: '0.65rem', 
-                opacity: 0.6, 
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em', 
-                marginBottom: '0.25rem'
-              }}>
-                GARY'S PICK
-              </div>
-              <div className="text-[#d4af37] text-xl font-bold mb-1">
-                {teamName || "Los Angeles Dodgers"} 
-                <span className="opacity-80">{spreadOdds}</span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Middle - Matchup Info */}
-          <div className="flex-1 p-4 flex flex-col">
-            <div 
-              style={{ 
-                background: "linear-gradient(to right, rgba(10,10,10,0.9), transparent)",
-                borderLeft: "4px solid #444" 
-              }}
-              className="flex items-start justify-between mb-3 pl-2 py-1"    
-            >
-              <div>
-                <div style={{ 
-                  fontSize: '0.65rem', 
-                  opacity: 0.6, 
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em', 
-                  marginBottom: '0.25rem'
-                }}>
-                  MATCHUP
-                </div>
-                <div style={{ 
-                  fontSize: '1rem', 
-                  fontWeight: 600,
-                  letterSpacing: '0.02em',
-                }}>
-                  {pick.game || "Marlins @ Dodgers"}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Right side - Game time, confidence meter */}
-          <div className="bg-[#1a1b1f] p-4 flex flex-col items-center justify-center w-32">
-            <div className="mb-4 text-center">
-              <div style={{ 
-                fontSize: '0.65rem', 
-                opacity: 0.6, 
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em', 
-                marginBottom: '0.25rem' 
-              }}>
-                GAME TIME
-              </div>
-              <div className="text-white font-medium">
-                {pick.time || "10:10 PM ET"}
-              </div>
-            </div>
-            
-            {/* Gary seal of approval */}
-            <div className="w-20 h-20 bg-[#d4af37] rounded-full flex items-center justify-center">
-              <div className="w-[74px] h-[74px] bg-[#161718] rounded-full flex items-center justify-center">
-                <img src="/gary-seal.png" alt="Gary AI Seal" className="w-16 h-16" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-visible">
-      {/* Unified, continuous background for entire homepage */}
-      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden="true">
-        {/* Base dark gradient background that spans the entire page */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#121212] via-[#121212] to-[#1a1a1a]" />
-        
-        {/* Subtle paper texture overlay */}
-        <div className="absolute inset-0 opacity-5" style={{
-          backgroundImage: `radial-gradient(#fff 1px, transparent 1px)`,
-          backgroundSize: `30px 30px`
-        }} />
-        
-        {/* Layered gold spotlight for depth */}
-        <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-[#b8953f]/20 blur-[120px] opacity-40 z-10" />
-        
-        {/* Subtle glass reflection at top edge */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-16 bg-white/10 rounded-b-full blur-2xl opacity-30 z-10" />
-        
+    <div className="min-h-screen relative flex flex-col overflow-x-hidden">
+      {/* Fixed background with all effects - spans the entire viewport */}
+      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#18181a] z-0">
         {/* Gold vignette corners */}
         <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl" />
         <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/10 blur-3xl" />
@@ -231,13 +300,13 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image in left corner */}
-          <div className="absolute left-0 top-12 z-20 hidden md:block" style={{ maxWidth: "250px" }}>
+          {/* Gary image - positioned down and to the right with reduced opacity */}
+          <div className="absolute left-16 top-36 z-20 hidden md:block" style={{ maxWidth: "250px" }}>
             <img
               src={garyImage}
               alt="Gary AI Bear"
               className="w-full h-auto"
-              style={{ opacity: 0.85, filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))" }}
+              style={{ opacity: 0.65, filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))" }}
             />
           </div>
           
@@ -269,70 +338,79 @@ function Home() {
                 </p>
               </div>
 
-              {/* Technology badges - similar to the NEW badge above */}
+              {/* Technology badges - using original tags from GaryHero */}
               <div className="flex flex-wrap justify-center gap-3 mb-8">
                 <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>Computer Vision</span>
+                  <span>Odds API</span>
                 </div>
                 <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>Machine Learning</span>
+                  <span>SportsDB</span>
                 </div>
                 <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>Advanced Statistics</span>
+                  <span>Turbo 3.5 Mini</span>
+                </div>
+                <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
+                  <span>Perplexity</span>
+                </div>
+                <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
+                  <span>StatCast API</span>
                 </div>
               </div>
               
-              {/* CTA buttons - Using the tailwind classes but styled per mockups */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-16">
-                <Link to="/picks" className="hero-cta-primary px-8 py-3 rounded-md text-base font-semibold">
+              {/* CTA Buttons - Exact Vault style from original GaryHero */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center">
+                <Link 
+                  to="/picks" 
+                  className="bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-md transition duration-200 ease-in-out"
+                  style={{ padding: "10px 20px" }}
+                >
                   View Picks
                 </Link>
-                <Link to="/how-it-works" className="hero-cta-secondary px-8 py-3 rounded-md text-base font-semibold">
+                <Link 
+                  to="/how-it-works" 
+                  className="bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] text-white font-medium rounded-md border border-[rgba(255,255,255,0.1)] backdrop-blur-sm transition duration-200 ease-in-out"
+                  style={{ padding: "10px 20px" }}
+                >
                   How it Works
                 </Link>
               </div>
             </div>
 
-            {/* Featured Picks - Using modern card design */}
-            <div className="mb-16 mt-4 w-full">
-              {/* Pick category selector - Simple tabs */}
-              <div className="flex justify-center mb-8">
-                <div className="inline-flex items-center bg-black/30 backdrop-blur-sm p-1 rounded-md">
-                  <button className="px-4 py-1.5 text-sm font-medium text-white bg-[#b8953f]/90 rounded focus:outline-none">
-                    Featured
-                  </button>
-                  <button className="px-4 py-1.5 text-sm font-medium text-white/60 hover:text-white rounded focus:outline-none">
-                    All Picks
-                  </button>
+            {/* Premium pick preview - exactly as in original GaryHero */}
+            <div className="mt-2 mb-80 w-full flex justify-center items-center">
+              <div className="relative w-full max-w-4xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
+                   style={{ height: "480px", paddingBottom: "0px" }}>
+                {/* Dark glossy header bar */}
+                <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center px-4">
+                  <div className="flex space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+                  </div>
+                  <div className="text-white/30 text-xs ml-4 font-medium">Today's Premium Pick</div>
                 </div>
-              </div>
-
-              {/* Hot pick indicator with badge */}
-              <div className="flex items-center justify-center mb-4">
-                <div className="w-2 h-2 bg-[#d4af37] rounded-full animate-pulse mr-2"></div>
-                <div className="text-white/30 text-xs ml-4 font-medium">Today's Premium Pick</div>
-              </div>
-              
-              {/* Single wider pick card */}
-              <div className="flex justify-center items-center h-full pt-10">
-                {loading ? (
-                  <div className="text-[#b8953f] text-center">Loading today's top pick...</div>
-                ) : featuredPicks.length > 0 ? (
-                  <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
-                    {renderPickCard(featuredPicks[0])}
-                  </div>
-                ) : (
-                  <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
-                    {renderPickCard({
-                      league: "MLB",
-                      game: "Marlins @ Dodgers",
-                      pick: "Los Angeles Dodgers -1.5 -175",
-                      time: "10:10 PM ET",
-                      confidence: 0.78,
-                      rationale: "Dodgers have been dominant at home, and their offense should overpower Miami's pitching staff. Look for LA to win by at least 2 runs."
-                    })}
-                  </div>
-                )}
+                
+                {/* Single wider pick card */}
+                <div className="flex justify-center items-center h-full pt-10">
+                  {loading ? (
+                    <div className="text-[#b8953f] text-center">Loading today's top pick...</div>
+                  ) : featuredPicks.length > 0 ? (
+                    <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
+                      {renderPickCard(featuredPicks[0])}
+                    </div>
+                  ) : (
+                    <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
+                      {renderPickCard({
+                        league: "NBA",
+                        game: "Nuggets @ Thunder",
+                        pick: "Denver Nuggets +9.5 -110",
+                        time: "9:30 PM ET",
+                        confidence: 0.78,
+                        rationale: "Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road."
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </main>
@@ -343,87 +421,76 @@ function Home() {
         
         <section className="relative py-16 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
           {/* Newspaper-style container with cream background that appears as part of the flow */}
-          <div className="relative z-10 w-full max-w-7xl mx-auto bg-[#f7f3e8] rounded-2xl shadow-xl overflow-hidden">
-            {/* Subtle paper texture overlay */}
-            <div className="absolute inset-0 opacity-10" style={{
-              backgroundImage: `radial-gradient(#000 1px, transparent 1px)`,
-              backgroundSize: `20px 20px`
-            }}></div>
-            
-            {/* Subtle gold vignette corners for depth */}
-            <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl opacity-20" />
-            <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/10 blur-3xl opacity-20" />
-            
-            {/* Thin vertical divider line to give a newspaper column feel */}
-            <div className="absolute top-[5%] bottom-[5%] left-1/2 w-px bg-[#b8953f]/20"></div>
-          {/* Unified Section Content */}
-          <div className="relative z-10 flex flex-col items-center w-full max-w-6xl px-2 md:px-8">
-            {/* Newspaper-style headline banner */}
-            <h2 className="font-extrabold mb-8 text-black leading-tight text-center">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#b8953f] to-[#d4af37] font-extrabold font-serif italic text-5xl md:text-6xl lg:text-7xl">The Bears Brain</span>
-            </h2>
-            
-            <h3 className="text-2xl md:text-3xl font-serif text-center mb-12 text-gray-700 max-w-5xl mx-auto">Gary combines decades of betting expertise with cutting-edge AI to identify value others miss.</h3>
-            
-            <div className="text-sm font-serif text-gray-500 mb-10 flex items-center">
-              <span className="mr-2">By</span>
-              <span className="font-semibold">GARY A.I. STAFF</span>
-              <span className="mx-2">|</span>
-              <span>APRIL 23, 2025</span>
+          <div className="w-full max-w-6xl mx-auto p-10 pb-20 bg-[#f6f2e8] shadow-2xl relative">
+            {/* The Bears Brain heading - with enhanced padding and border box */}
+            <div className="mt-10 mb-14 border-2 border-[#b8953f] p-8 rounded-lg shadow-lg bg-[#f6f2e8]">
+              <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
+                The Bears Brain
+              </h2>
             </div>
             
-            <p className="text-gray-500 font-serif leading-relaxed mb-10 text-center max-w-2xl px-4 py-3">
-              Experience the revolutionary handicapping system that's changing the game for sports bettors everywhere—powered by the most advanced AI in the industry.
-            </p>
-            {/* Features as newspaper columns */}
-              <div className="bg-[#f9f6ed] shadow-lg p-10 rounded border border-[#b8953f]/20 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16">
-                  {/* Left column */}
-                  <div className="text-left">
-                    {/* Data Aware */}
-                    <div className="mb-12">
-                      <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>1. Data Aware</h3>
-                      <p className="text-gray-500 font-serif text-lg leading-relaxed mb-3">Legacy data enhanced with real-time details that impact the odds. Gary treats each new stat update as a crucial piece of the betting puzzle.</p>
-                      <p className="text-gray-500 font-serif text-lg leading-relaxed">Unlike static models that simply crunch historical data, Gary's system integrates player sentiment, weather impact factors, and arena-specific performance indicators to create a dynamic predictive model.</p>
-                    </div>
-                  
-                  {/* Fan Brain */}
-                  <div className="mb-10">
-                    <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>2. Fan Brain</h3>
-                    <p className="text-gray-500 font-serif text-lg leading-relaxed">Reads team loyalty, emotional bias, and fan storylines to spot hidden angles. Gary's system analyzes how public perception influences betting lines, creating opportunities for value bets that go against the crowd.</p>
-                  </div>
-                  {/* Narrative Tracker */}
-                  <div className="mb-12">
-                    <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>3. Narrative Tracker</h3>
-                    <p className="text-gray-500 font-serif text-lg leading-relaxed">Uncovers hidden motivations and emotional weights that move the lines. When a player faces their former team or a coach returns to a city where they previously worked, Gary factors these emotional elements into the prediction model.</p>
-                  </div>
+            <h3 className="text-center text-gray-700 font-bold mb-16 text-2xl md:text-3xl">
+              Gary combines decades of betting expertise with cutting-edge AI<br />
+              to identify value others miss.
+            </h3>
+            
+            <div className="py-4 px-6 bg-[#f7f3e9] mb-10 border-l-4 border-[#b8953f]">
+              <div className="flex items-center mb-2">
+                <div className="text-xs text-gray-500">By</div>
+                <div className="ml-2 font-medium text-gray-700">GARY A.I. STAFF</div>
+                <div className="mx-2 text-gray-400">|</div>
+                <div className="text-xs text-gray-500">APRIL 23, 2025</div>
+              </div>
+              
+              <p className="text-gray-600 italic">
+                Experience the revolutionary handicapping system that's changing the game for sports
+                bettors everywhere—powered by the most advanced AI in the industry.
+              </p>
+            </div>
+            
+            {/* Two column layout */}
+            <div className="flex flex-col md:flex-row gap-10 mt-16">
+              {/* Left column */}
+              <div className="text-left">
+                {/* Statistical Brain */}
+                <div className="mb-12">
+                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>1. Statistical Brain</h3>
+                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Unlike static models that simply crunch historical data, Gary's system integrates player sentiment, weather impact factors, and arena-specific performance indicators to create a dynamic predictive model.</p>
                 </div>
-                
-                {/* Right column */}
-                <div className="text-left">
-                  {/* Street Smart */}
-                  <div className="mb-12">
-                    <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>4. Street Smart</h3>
-                    <p className="text-gray-500 font-serif text-lg leading-relaxed mb-3">Old-school instincts meet AI precision to sniff out real betting value. Gary doesn't just follow the math—he understands the human element that often defies the numbers.</p>
-                    <p className="text-gray-500 font-serif text-lg leading-relaxed">By combining decades of handicapping wisdom with cutting-edge machine learning, Gary can identify value opportunities that purely statistical models miss.</p>
-                  </div>
-                  
-                  {/* Three-Layered Core */}
-                  <div className="mb-12">
-                    <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>5. Three-Layered Core</h3>
-                    <p className="text-gray-500 font-serif text-lg leading-relaxed">Sports Odds & Stats, Real-Time Storylines, and Reasoning Engine—Gary's secret sauce. This proprietary system processes information through three distinct layers, each adding depth to the analysis and improving prediction accuracy.</p>
-                  </div>
-                  
-                  {/* Pull quote */}
-                  <div className="border-l-4 border-[#b8953f] pl-6 italic my-8">
-                    <p className="text-gray-600 font-serif text-xl leading-relaxed">"Our system doesn't just predict outcomes—it understands the game at a fundamental level that most handicappers can't match."</p>
-                    <p className="text-gray-500 font-serif text-base mt-3">— Gary A.I. Development Team</p>
-                  </div>
+              
+                {/* Fan Brain */}
+                <div className="mb-10">
+                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>2. Fan Brain</h3>
+                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Reads team loyalty, emotional bias, and fan storylines to spot hidden angles. Gary's system analyzes how public perception influences betting lines, creating opportunities for value bets that go against the crowd.</p>
+                </div>
+                {/* Narrative Tracker */}
+                <div className="mb-12">
+                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>3. Narrative Tracker</h3>
+                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Uncovers hidden motivations and emotional weights that move the lines. When a player faces their former team or a coach returns to a city where they previously worked, Gary factors these emotional elements into the prediction model.</p>
                 </div>
               </div>
-            </div>
-
-
+              
+              {/* Right column */}
+              <div className="text-left">
+                {/* Street Smart */}
+                <div className="mb-12">
+                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>4. Street Smart</h3>
+                  <p className="text-gray-500 font-serif text-lg leading-relaxed mb-3">Old-school instincts meet AI precision to sniff out real betting value. Gary doesn't just follow the math—he understands the human element that often defies the numbers.</p>
+                  <p className="text-gray-500 font-serif text-lg leading-relaxed">By combining decades of handicapping wisdom with cutting-edge machine learning, Gary can identify value opportunities that purely statistical models miss.</p>
+                </div>
+                
+                {/* Three-Layered Core */}
+                <div className="mb-12">
+                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>5. Three-Layered Core</h3>
+                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Sports Odds & Stats, Real-Time Storylines, and Reasoning Engine—Gary's secret sauce. This proprietary system processes information through three distinct layers, each adding depth to the analysis and improving prediction accuracy.</p>
+                </div>
+                
+                {/* Pull quote */}
+                <div className="border-l-4 border-[#b8953f] pl-6 italic my-8">
+                  <p className="text-gray-600 font-serif text-xl leading-relaxed">"Our system doesn't just predict outcomes—it understands the game at a fundamental level that most handicappers can't match."</p>
+                  <p className="text-gray-500 font-serif text-base mt-3">— Gary A.I. Development Team</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -432,5 +499,4 @@ function Home() {
   );
 }
 
-export { Home };
 export default Home;

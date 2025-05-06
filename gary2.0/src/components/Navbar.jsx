@@ -30,18 +30,13 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#E0B016]/20 py-3 rounded-xl shadow-xl w-11/12 max-w-6xl">
+    <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#E0B016]/20 py-3 rounded-3xl shadow-xl w-11/12 max-w-6xl">
       <div className="w-full px-6 flex items-center justify-between">
-        {/* Logo with GARY in all caps and white, .ai in yellow */}
+        {/* Modern high-tech logo without the G circle */}
         <div className="flex items-center">
           <Link to="/" className="flex items-center group">
-            <div className="relative rounded-full bg-[#111827] p-1 shadow-sm mr-1">
-              <div className="w-7 h-7 rounded-full bg-[#E0B016] flex items-center justify-center">
-                <span className="text-[#111827] font-bold text-xs">G</span>
-              </div>
-            </div>
-            <span className="text-white text-lg font-bold ml-1 tracking-widest font-mono">GARY</span>
-            <span className="text-[#E0B016] text-lg font-bold">.ai</span>
+            <span className="text-white text-xl font-light tracking-tight" style={{ fontFamily: 'Arial, sans-serif', letterSpacing: '0.05em' }}>GARY</span>
+            <span className="text-[#E0B016] text-xl font-bold" style={{ fontFamily: 'Arial, sans-serif' }}>.ai</span>
           </Link>
         </div>
         
@@ -113,7 +108,7 @@ export function Navbar() {
       
       {/* Mobile Menu Dropdown - Floating style with black and gold */}
       {isMobileMenuOpen && (
-        <div className="bg-black border border-[#E0B016]/20 md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-xl shadow-xl w-11/12 max-w-6xl">
+        <div className="bg-black border border-[#E0B016]/20 md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-3xl shadow-xl w-11/12 max-w-6xl">
           <div className="py-4 px-6">
             <div className="flex flex-col space-y-3">
               {filteredNavItems.map((item) => (
