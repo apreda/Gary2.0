@@ -501,104 +501,200 @@ function Home() {
               </div>
             </div>
 
-            {/* The Bears Brain Section - Redesigned with dark theme */}
+            {/* The Bears Brain Section - Redesigned with glass cards effect */}
             <div className="mt-24 mb-24 w-full">
               <section className="relative py-12 flex flex-col items-center overflow-hidden">
-                {/* Section Header with gold accent */}
+                {/* Section Header with animated gold accent */}
                 <div className="text-center mb-12">
-                  <h2 className="text-[#b8953f] font-bold tracking-tight mb-4" style={{ fontSize: "clamp(3rem, 5vw, 4.5rem)", textShadow: "0 0 20px rgba(184, 149, 63, 0.3)" }}>
+                  <h2 className="bears-brain__title text-[#b8953f] font-bold tracking-tight mb-4" 
+                      style={{ fontSize: "clamp(3rem, 5vw, 4.5rem)", textShadow: "0 0 20px rgba(184, 149, 63, 0.3)" }}>
                     <span className="inline-block transform hover:scale-105 transition-all duration-500">The Bears Brain</span>
                   </h2>
-                  <div className="w-24 h-1 bg-gradient-to-r from-[#b8953f]/20 via-[#b8953f] to-[#b8953f]/20 mx-auto"></div>
+                  {/* Animated underline that appears on view */}
+                  <div className="relative h-1 mx-auto">
+                    <div className="w-60 h-4 absolute left-1/2 -translate-x-1/2 overflow-hidden">
+                      <div className="w-60 h-4 bg-[#b8953f] animate-widthGrow absolute left-0 top-0 rounded-full" 
+                           style={{ transform: 'scaleX(0)', transformOrigin: 'center', animation: 'widthGrow 1.2s ease-out forwards' }}></div>
+                    </div>
+                  </div>
                 </div>
                 
                 {/* Quote introductory card */}
-                <div className="max-w-4xl mx-auto mb-10 text-center px-4">
-                  <p className="text-white/80 text-xl italic font-light">
-                    "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
-                  </p>
+                <div className="max-w-4xl mx-auto mb-10 text-center px-8">
+                  <div className="backdrop-blur-md bg-black/40 p-6 rounded-xl border border-[#b8953f] shadow-lg">
+                    <div className="flex justify-center mb-4">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#b8953f" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 10C9.5 8.89 10.39 8 11.5 8H12.5C13.6 8 14.5 8.9 14.5 10C14.5 11.11 13.61 12 12.5 12H12C11.45 12 11 12.45 11 13V13.5M12 17H12.01M5 3H19C20.1 3 21 3.9 21 5V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3Z" stroke="#b8953f" strokeWidth="1.5"/>
+                      </svg>
+                    </div>
+                    <p className="text-white/90 text-xl italic font-light">
+                      "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
+                    </p>
+                  </div>
                 </div>
 
-                {/* Cards Grid - Two Column on Desktop */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto px-4">
-                  {/* Statistical Brain */}
-                  <div className="bg-[#0f0f0f] border border-[#b8953f]/30 rounded-lg p-6 shadow-lg hover:shadow-[0_0_25px_rgba(184,149,63,0.15)] hover:-translate-y-1 transition-all duration-300">
+                {/* Cards Grid - Two Column on Desktop with consistent gutters */}
+                <div className="bears-brain__grid grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto px-4 mt-12">
+                  {/* Statistical Brain - Glass Card */}
+                  <div className="glass-card backdrop-blur-md bg-black/40 border border-[#b8953f] rounded-lg p-6 shadow-lg transition-all duration-200"
+                       style={{ boxShadow: '0 8px 16px rgba(0,0,0,0.25)' }}
+                       onMouseEnter={(e) => {
+                         e.currentTarget.style.transform = 'translateY(-4px)';
+                         e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.35)';
+                       }}
+                       onMouseLeave={(e) => {
+                         e.currentTarget.style.transform = 'translateY(0)';
+                         e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.25)';
+                       }}>
                     <div className="flex items-center mb-4">
-                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/10 flex items-center justify-center mr-4">
-                        <span className="text-[#b8953f] text-xl">1</span>
+                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/20 flex items-center justify-center mr-4 border border-[#b8953f]/50">
+                        <span className="text-[#b8953f] text-xl font-bold">1</span>
                       </div>
                       <h3 className="text-[#b8953f] font-semibold text-2xl">Statistical Brain</h3>
                     </div>
-                    <p className="text-white/70 text-base leading-relaxed pl-14">
+                    <p className="text-white/90 text-base leading-relaxed pl-14" style={{ lineHeight: '1.6' }}>
                       Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
                     </p>
                   </div>
 
-                  {/* Fan Brain */}
-                  <div className="bg-[#0f0f0f] border border-[#b8953f]/30 rounded-lg p-6 shadow-lg hover:shadow-[0_0_25px_rgba(184,149,63,0.15)] hover:-translate-y-1 transition-all duration-300">
+                  {/* Fan Brain - Glass Card */}
+                  <div className="glass-card backdrop-blur-md bg-black/40 border border-[#b8953f] rounded-lg p-6 shadow-lg transition-all duration-200"
+                       style={{ boxShadow: '0 8px 16px rgba(0,0,0,0.25)' }}
+                       onMouseEnter={(e) => {
+                         e.currentTarget.style.transform = 'translateY(-4px)';
+                         e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.35)';
+                       }}
+                       onMouseLeave={(e) => {
+                         e.currentTarget.style.transform = 'translateY(0)';
+                         e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.25)';
+                       }}>
                     <div className="flex items-center mb-4">
-                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/10 flex items-center justify-center mr-4">
-                        <span className="text-[#b8953f] text-xl">2</span>
+                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/20 flex items-center justify-center mr-4 border border-[#b8953f]/50">
+                        <span className="text-[#b8953f] text-xl font-bold">2</span>
                       </div>
                       <h3 className="text-[#b8953f] font-semibold text-2xl">Fan Brain</h3>
                     </div>
-                    <p className="text-white/70 text-base leading-relaxed pl-14">
+                    <p className="text-white/90 text-base leading-relaxed pl-14" style={{ lineHeight: '1.6' }}>
                       Tracking social sentiment, ticket splits, and sharp money moves to separate hype from true value.
                     </p>
                   </div>
 
-                  {/* Narrative Tracker */}
-                  <div className="bg-[#0f0f0f] border border-[#b8953f]/30 rounded-lg p-6 shadow-lg hover:shadow-[0_0_25px_rgba(184,149,63,0.15)] hover:-translate-y-1 transition-all duration-300">
+                  {/* Narrative Tracker - Glass Card */}
+                  <div className="glass-card backdrop-blur-md bg-black/40 border border-[#b8953f] rounded-lg p-6 shadow-lg transition-all duration-200"
+                       style={{ boxShadow: '0 8px 16px rgba(0,0,0,0.25)' }}
+                       onMouseEnter={(e) => {
+                         e.currentTarget.style.transform = 'translateY(-4px)';
+                         e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.35)';
+                       }}
+                       onMouseLeave={(e) => {
+                         e.currentTarget.style.transform = 'translateY(0)';
+                         e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.25)';
+                       }}>
                     <div className="flex items-center mb-4">
-                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/10 flex items-center justify-center mr-4">
-                        <span className="text-[#b8953f] text-xl">3</span>
+                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/20 flex items-center justify-center mr-4 border border-[#b8953f]/50">
+                        <span className="text-[#b8953f] text-xl font-bold">3</span>
                       </div>
                       <h3 className="text-[#b8953f] font-semibold text-2xl">Narrative Tracker</h3>
                     </div>
-                    <p className="text-white/70 text-base leading-relaxed pl-14">
+                    <p className="text-white/90 text-base leading-relaxed pl-14" style={{ lineHeight: '1.6' }}>
                       Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
                     </p>
                   </div>
 
-                  {/* Street Smart */}
-                  <div className="bg-[#0f0f0f] border border-[#b8953f]/30 rounded-lg p-6 shadow-lg hover:shadow-[0_0_25px_rgba(184,149,63,0.15)] hover:-translate-y-1 transition-all duration-300">
+                  {/* Street Smart - Glass Card */}
+                  <div className="glass-card backdrop-blur-md bg-black/40 border border-[#b8953f] rounded-lg p-6 shadow-lg transition-all duration-200"
+                       style={{ boxShadow: '0 8px 16px rgba(0,0,0,0.25)' }}
+                       onMouseEnter={(e) => {
+                         e.currentTarget.style.transform = 'translateY(-4px)';
+                         e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.35)';
+                       }}
+                       onMouseLeave={(e) => {
+                         e.currentTarget.style.transform = 'translateY(0)';
+                         e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.25)';
+                       }}>
                     <div className="flex items-center mb-4">
-                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/10 flex items-center justify-center mr-4">
-                        <span className="text-[#b8953f] text-xl">4</span>
+                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/20 flex items-center justify-center mr-4 border border-[#b8953f]/50">
+                        <span className="text-[#b8953f] text-xl font-bold">4</span>
                       </div>
                       <h3 className="text-[#b8953f] font-semibold text-2xl">Street Smart</h3>
                     </div>
-                    <p className="text-white/70 text-base leading-relaxed pl-14">
+                    <p className="text-white/90 text-base leading-relaxed pl-14" style={{ lineHeight: '1.6' }}>
                       Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
                     </p>
                   </div>
 
-                  {/* Three-Layered Core */}
-                  <div className="bg-[#0f0f0f] border border-[#b8953f]/30 rounded-lg p-6 shadow-lg hover:shadow-[0_0_25px_rgba(184,149,63,0.15)] hover:-translate-y-1 transition-all duration-300 md:col-span-2">
+                  {/* Three-Layered Core - Glass Card */}
+                  <div className="glass-card backdrop-blur-md bg-black/40 border border-[#b8953f] rounded-lg p-6 shadow-lg transition-all duration-200 md:col-span-2"
+                       style={{ boxShadow: '0 8px 16px rgba(0,0,0,0.25)' }}
+                       onMouseEnter={(e) => {
+                         e.currentTarget.style.transform = 'translateY(-4px)';
+                         e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.35)';
+                       }}
+                       onMouseLeave={(e) => {
+                         e.currentTarget.style.transform = 'translateY(0)';
+                         e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.25)';
+                       }}>
                     <div className="flex items-center mb-4">
-                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/10 flex items-center justify-center mr-4">
-                        <span className="text-[#b8953f] text-xl">5</span>
+                      <div className="w-10 h-10 rounded-full bg-[#b8953f]/20 flex items-center justify-center mr-4 border border-[#b8953f]/50">
+                        <span className="text-[#b8953f] text-xl font-bold">5</span>
                       </div>
                       <h3 className="text-[#b8953f] font-semibold text-2xl">Three-Layered Core</h3>
                     </div>
-                    <p className="text-white/70 text-base leading-relaxed pl-14">
+                    <p className="text-white/90 text-base leading-relaxed pl-14" style={{ lineHeight: '1.6' }}>
                       Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
                     </p>
                   </div>
                   
-                  {/* Featured Quote - Bottom Full Width */}
-                  <div className="md:col-span-2 bg-gradient-to-br from-[#0f0f0f] to-[#181818] border border-[#b8953f]/20 rounded-lg p-6 mt-4">
-                    <div className="flex">
-                      <div className="w-1 bg-gradient-to-b from-[#b8953f]/30 via-[#b8953f] to-[#b8953f]/30 mr-6 self-stretch"></div>
-                      <p className="text-white/80 italic text-lg leading-relaxed">
-                        "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
-                      </p>
-                    </div>
+                  {/* CTA Button - Glass Style */}
+                  <div className="md:col-span-2 flex justify-center mt-8">
+                    <button className="glass-card backdrop-blur-md bg-black/30 border border-[#b8953f] rounded-full px-8 py-3 shadow-lg transition-all duration-200"
+                           style={{ boxShadow: '0 4px 12px rgba(184,149,63,0.25)' }}
+                           onMouseEnter={(e) => {
+                             e.currentTarget.style.transform = 'translateY(-2px)';
+                             e.currentTarget.style.boxShadow = '0 8px 16px rgba(184,149,63,0.35)';
+                           }}
+                           onMouseLeave={(e) => {
+                             e.currentTarget.style.transform = 'translateY(0)';
+                             e.currentTarget.style.boxShadow = '0 4px 12px rgba(184,149,63,0.25)';
+                           }}>
+                      <span className="text-[#b8953f] font-bold">Learn More About The Bears Brain</span>
+                    </button>
                   </div>
                 </div>
                 
-                {/* Subtle tech pattern background */}
-                <div className="absolute inset-0 -z-10 opacity-5 bg-[url('/circuit-board.svg')] bg-repeat pointer-events-none"></div>
+                {/* Subtle constellation pattern in the background */}
+                <div className="absolute inset-0 -z-10 opacity-10 bg-[url('/circuit-board.svg')] bg-cover bg-center pointer-events-none"></div>
+                
+                {/* Add CSS for animations */}
+                <style jsx>{`
+                  @keyframes fadeInUp {
+                    from {
+                      opacity: 0;
+                      transform: translateY(20px);
+                    }
+                    to {
+                      opacity: 1;
+                      transform: translateY(0);
+                    }
+                  }
+                  
+                  @keyframes widthGrow {
+                    from { transform: scaleX(0); }
+                    to { transform: scaleX(1); }
+                  }
+                  
+                  .glass-card {
+                    animation: fadeInUp 0.8s ease-out forwards;
+                    opacity: 0;
+                  }
+                  
+                  .glass-card:nth-child(1) { animation-delay: 0.1s; }
+                  .glass-card:nth-child(2) { animation-delay: 0.2s; }
+                  .glass-card:nth-child(3) { animation-delay: 0.3s; }
+                  .glass-card:nth-child(4) { animation-delay: 0.4s; }
+                  .glass-card:nth-child(5) { animation-delay: 0.5s; }
+                  .glass-card:nth-child(6) { animation-delay: 0.6s; }
+                `}</style>
               </section>
             </div>
           </main>
