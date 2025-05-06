@@ -4,7 +4,7 @@
  */
 import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService';
-import { supabase, storeDailyPicks } from '../supabaseClient.js';
+import { supabase } from '../supabaseClient.js';
 
 const picksService = {
   /**
@@ -299,18 +299,87 @@ const picksService = {
         return { success: false, message: 'No valid picks to store' };
       }
       
-      console.log('Using specialized storeDailyPicks function to bypass bankroll table issues');
+      // Create data structure for Supabase - only include fields that exist in the schema
+      const pickData = {
+        date: currentDateString,
+        picks: rawJsonOutputs
+      };
       
-      // Use the specialized storeDailyPicks function from supabaseClient.js
-      // This function is specifically designed to bypass the bankroll table issues
-      const result = await storeDailyPicks(currentDateString, rawJsonOutputs);
+      // Ensure there's a valid Supabase session before database operation
+      await picksService.ensureValidSupabaseSession();
       
-      if (result.success) {
-        console.log('Picks stored successfully using specialized function');
+      try {
+        console.log(`Inserting raw JSON outputs directly into daily_picks table...`);
+        const { error: insertError } = await supabase
+          .from('daily_picks')
+          .insert(pickData);
+          
+        if (insertError) {
+          // Check if the error is specifically about the bankroll table
+          if (insertError.code === '42P01' && insertError.message.includes('bankroll')) {
+            console.warn('Bankroll table does not exist - using alternative approach without bankroll reference');
+            
+            // Alternative approach: Use a simplified object that doesn't trigger any bankroll references
+            const simplifiedPickData = {
+              date: currentDateString,
+              picks: JSON.stringify(rawJsonOutputs) // Convert to string to ensure compatibility
+            };
+            
+            // Try direct insert without any triggers/functions that might access bankroll
+            const { error: simplifiedInsertError } = await supabase
+              .from('daily_picks')
+              .insert(simplifiedPickData);
+              
+            if (simplifiedInsertError) {
+              console.error('Error inserting simplified picks:', simplifiedInsertError);
+              throw new Error(`Failed to store simplified picks: ${simplifiedInsertError.message}`);
+            }
+            
+            console.log('Picks stored successfully using simplified approach');
+            return { success: true, count: rawJsonOutputs.length, method: 'simplified' };
+          } else {
+            // Some other database error occurred
+            console.error('Error inserting picks:', insertError);
+            throw new Error(`Failed to store picks in database: ${insertError.message}`);
+          }
+        }
+        
+        console.log('Picks stored successfully in database');
         return { success: true, count: rawJsonOutputs.length };
-      } else {
-        console.error('Error with specialized storage function:', result.error || 'Unknown error');
-        throw new Error(`Failed with specialized storage function: ${result.message || 'Unknown error'}`);
+      } catch (dbError) {
+        // Catch any errors during the database operations
+        console.error('Database error while storing picks:', dbError);
+        
+        // If the error relates to the bankroll table, handle it specially
+        if (dbError.message && dbError.message.includes('bankroll')) {
+          console.warn('Detected bankroll table reference in error - attempting alternative storage method');
+          
+          try {
+            // Try a simpler approach with the picks as a JSON string
+            const backupPickData = {
+              date: currentDateString,
+              picks: JSON.stringify(rawJsonOutputs)
+            };
+            
+            const { error: backupInsertError } = await supabase
+              .from('daily_picks')
+              .insert(backupPickData);
+              
+            if (backupInsertError) {
+              console.error('Error with backup insert method:', backupInsertError);
+              throw new Error(`Failed with backup method: ${backupInsertError.message}`);
+            }
+            
+            console.log('Successfully stored picks using backup method');
+            return { success: true, count: rawJsonOutputs.length, method: 'backup' };
+          } catch (backupError) {
+            console.error('Backup method also failed:', backupError);
+            throw new Error(`All approaches failed to store picks: ${backupError.message}`);
+          }
+        }
+        
+        // Re-throw the original error
+        throw new Error(`Failed to store picks in database: ${dbError.message}`);
       }
     } catch (error) {
       console.error('Error storing picks:', error);
