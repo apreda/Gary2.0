@@ -337,12 +337,16 @@ function Home() {
           </div>
 
           {/* Gary image - repositioned higher and further left */}
-          <div className="absolute left-4 top-24 z-20 hidden md:block" style={{ maxWidth: "500px" }}>
+          <div className="absolute -left-16 top-12 z-20 hidden md:block" style={{ maxWidth: "450px" }}>
             <img
               src={garyImage}
               alt="Gary AI Bear"
               className="w-full h-auto"
-              style={{ opacity: 0.65, filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))" }}
+              style={{ 
+                opacity: 0.65, 
+                filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))",
+                transform: "scale(0.9)" 
+              }}
             />
           </div>
           
