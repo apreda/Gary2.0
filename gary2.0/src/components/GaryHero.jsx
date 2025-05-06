@@ -382,15 +382,11 @@ export function GaryHero() {
   };
 
   return (
-    <section className="hero relative flex flex-col overflow-hidden" style={{ width: "100vw", height: "100vh", background: "linear-gradient(110deg, #0a0a0a 0%, #121212 50%, #0a0a0a 100%)" }}>
+    <section className="hero relative flex flex-col overflow-hidden" style={{ width: "100vw", height: "100vh" }}>
       {/* Hero watermark background - Gary Money image with a subtle gradient overlay */}
       <div className="hero__watermark absolute top-1/2 left-1/2 w-[120%] h-[120%] transform -translate-x-1/2 -translate-y-1/2 scale-110 pointer-events-none z-10">
         <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
       </div>
-      
-      {/* Animated gradient overlay - Creates a subtle flowing effect */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-[#0c0c0c] via-transparent to-[#0c0c0c] z-10 opacity-80"></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-[#b8953f]/10 z-10 opacity-70"></div>
 
       {/* Gary image in left corner */}
       <div className="absolute left-0 top-12 z-20 hidden md:block" style={{ maxWidth: "250px" }}>
