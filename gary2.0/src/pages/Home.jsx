@@ -412,8 +412,31 @@ function Home() {
               </div>
             </div>
 
+            {/* Featured Pick Cards Preview */}
+            <div className="mt-12 mb-24 w-full flex flex-col items-center justify-center">
+              <h2 className="text-white text-3xl font-bold mb-8">Today's Top Picks</h2>
+              
+              <div className="flex flex-wrap justify-center gap-8">
+                {loading ? (
+                  <div className="animate-pulse p-8 rounded bg-black/30 backdrop-blur-sm">
+                    <p className="text-white/70">Loading today's picks...</p>
+                  </div>
+                ) : featuredPicks.length > 0 ? (
+                  featuredPicks.map((pick, index) => (
+                    <div key={index} className="transform hover:scale-[1.02] transition-all duration-300">
+                      {renderPickCard(pick)}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-8 rounded bg-black/30 backdrop-blur-sm">
+                    <p className="text-white/70">New picks coming soon!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Premium pick preview - exactly as in original GaryHero */}
-            <div className="mt-72 mb-24 w-full flex justify-center items-center">
+            <div className="mt-36 mb-24 w-full flex justify-center items-center">
               <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
                 {/* Single container layout */}
                 <div className="w-full max-w-6xl mx-auto px-4 pb-8 bg-[#f6f2e8] border border-[#b8953f] rounded-lg shadow-md">
