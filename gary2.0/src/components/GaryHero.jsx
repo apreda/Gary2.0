@@ -506,9 +506,6 @@ export function GaryHero() {
           </div>
         </div>
       </main>
-
-      {/* Create extra space at the bottom - no Bears Brain section here */}
-      <div className="relative h-96"></div>
     </section>
   );
 }
