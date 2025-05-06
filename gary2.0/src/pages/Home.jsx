@@ -453,7 +453,7 @@ function Home() {
         </section>
         
         {/* Natural spacing between sections */}
-        <div className="h-0"></div>
+        <div className="-mt-16"></div>
         
         <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
           {/* Container with padding */}
