@@ -386,9 +386,9 @@ function Home() {
         <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl" />
         <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] rounded-full bg-[#b8953f]/10 blur-3xl" />
         
-        {/* Subtle white accent areas for contrast */}
-        <div className="absolute top-1/4 right-1/3 w-[300px] h-[300px] rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="absolute bottom-1/3 left-1/4 w-[400px] h-[400px] rounded-full bg-white/[0.02] blur-3xl" />
+        {/* White accent areas for contrast - increased to 10% opacity */}
+        <div className="absolute top-1/4 right-1/3 w-[300px] h-[300px] rounded-full bg-white/[0.1] blur-3xl" />
+        <div className="absolute bottom-1/3 left-1/4 w-[400px] h-[400px] rounded-full bg-white/[0.1] blur-3xl" />
         
         {/* Subtle stars/shimmer effect */}
         <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.15] mix-blend-soft-light" />
