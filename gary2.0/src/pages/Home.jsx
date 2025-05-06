@@ -467,8 +467,7 @@ function Home() {
               {/* Three-Layered Core */}
               <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
                 <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Three-Layered Core</h3>
-                <p className="text-[#2D3A4B] text-base leading-relaxed">
-                  Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
+                Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
                 </p>
               </div>
 
@@ -483,12 +482,10 @@ function Home() {
               </div>
             </div>
           </div>
-        </section>
+        </div>
       </div>
-    </div>
-  </main>
-</section>
-</div>
+    </section>
+  </div>
   );
 }
 
