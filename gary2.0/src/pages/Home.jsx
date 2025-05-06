@@ -430,7 +430,7 @@ function Home() {
                   <span className="italic font-normal text-[#B8953F]">Smarter</span>
                   <span className="text-white font-bold"> Sports Bets </span>
                   <span className="text-white font-bold">with </span>
-                  <span className="italic font-normal text-[#B8953F]">GARY.ai</span>
+                  <span className="italic font-normal text-white">GARY.AI</span>
                 </div>
               </h1>
               
@@ -656,7 +656,7 @@ function Home() {
               <a href="/terms" className="hover:text-gray-300 transition-colors duration-200">Terms of Service</a>
               <a href="/privacy" className="hover:text-gray-300 transition-colors duration-200">Privacy Policy</a>
             </div>
-            <div className="mt-2">© {new Date().getFullYear()} GARY.ai. All rights reserved.</div>
+            <div className="mt-2">© {new Date().getFullYear()} GARY.AI. All rights reserved.</div>
           </footer>
         </section>
       </div>
