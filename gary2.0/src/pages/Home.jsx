@@ -400,18 +400,25 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image - larger and positioned to overlap with text */}
-          <div className="absolute top-0 left-0 z-10 hidden md:block" style={{ maxWidth: "230px", marginTop: "50px", marginLeft: "-20px" }}>
+          {/* Gary image - as full background for the landing section */}
+          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
             <img
               src="/Gary50.png"
               alt="Gary AI Bear"
-              className="w-full h-auto"
+              className="w-full h-full object-cover"
               style={{ 
-                opacity: 0.7, 
-                filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.4))",
-                transform: "rotate(2deg)"
+                opacity: 0.15, 
+                filter: "blur(1px) saturate(0.8)",
+                mixBlendMode: "overlay",
+                transform: "scale(1.2)",
+                position: "absolute",
+                top: "0",
+                left: "0",
+                width: "100%",
+                height: "100%"
               }}
             />
+            <div className="absolute inset-0 bg-black bg-opacity-40 z-10"></div>
           </div>
           
           <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
