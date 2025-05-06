@@ -413,48 +413,11 @@ function Home() {
             </div>
 
             {/* Premium pick preview - exactly as in original GaryHero */}
-            <div className="mt-2 mb-32 w-full flex justify-center items-center">
-              <div className="relative w-full max-w-4xl bg-black/30 rounded-xl overflow-hidden shadow-2xl border border-gray-800/50" 
-                   style={{ height: "480px", paddingBottom: "0px" }}>
-                {/* Dark glossy header bar */}
-                <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center px-4">
-                  <div className="flex space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                    <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-                    <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-                  </div>
-                  <div className="text-white/30 text-xs ml-4 font-medium">Today's Premium Pick</div>
-                </div>
-                
-                {/* Single wider pick card */}
-                <div className="flex justify-center items-center h-full pt-10">
-                  {loading ? (
-                    <div className="text-[#b8953f] text-center">Loading today's top pick...</div>
-                  ) : featuredPicks.length > 0 ? (
-                    <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
-                      {renderPickCard(featuredPicks[0])}
-                    </div>
-                  ) : (
-                    <div className="w-full max-w-lg transition-all hover:transform hover:-translate-y-2">
-                      {renderPickCard({
-                        league: "NBA",
-                        game: "Nuggets @ Thunder",
-                        pick: "Denver Nuggets +9.5 -110",
-                        time: "9:30 PM ET",
-                        confidence: 0.78,
-                        rationale: "Thunder are the better squad, but a 9.5-point line is disrespectful to a battle-tested Nuggets team even on the road."
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </main>
-        </section>
-        
-        <section className="relative -mt-20 pt-0 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
-          {/* Container with padding */}
-          <div className="w-full max-w-6xl mx-auto px-4 pb-8">
+            <div className="mt-2 mb-24 w-full flex justify-center items-center">
+            
+        <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+          {/* Single container layout */}
+          <div className="w-full max-w-6xl mx-auto px-4 pb-8 bg-[#f6f2e8] border border-[#b8953f] rounded-lg shadow-md">
             {/* Section Heading */}
             <div className="mt-4 mb-6 p-4 rounded-t-lg">
               <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
@@ -462,66 +425,60 @@ function Home() {
               </h2>
             </div>
 
-            {/* Byline Banner */}
-            <div className="bg-[#f6f2e8] border-y border-[#b8953f] py-3 px-6 mb-8 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
-              <p className="text-center text-[#2D3A4B] text-sm">By GARY A.I. STAFF • Updated May 6, 2025</p>
-            </div>
-
-            {/* Cards Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column */}
-              <div className="space-y-6">
-                {/* Statistical Brain */}
-                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Statistical Brain</h3>
-                  <p className="text-[#2D3A4B] text-base leading-relaxed">
-                    Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
-                  </p>
-                </div>
-
-                {/* Fan Brain */}
-                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Fan Brain</h3>
-                  <p className="text-[#2D3A4B] text-base leading-relaxed">
-                    Tracking social sentiment, ticket splits, and sharp money moves to separate hype from true value.
-                  </p>
-                </div>
-
-                {/* Narrative Tracker */}
-                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Narrative Tracker</h3>
-                  <p className="text-[#2D3A4B] text-base leading-relaxed">
-                    Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
-                  </p>
-                </div>
+            {/* Combined content */}
+            <div className="p-6 space-y-6">
+              <p className="text-[#2D3A4B] text-center italic">
+                "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
+              </p>
+              
+              {/* Original content sections would go here */}
+              {/* Statistical Brain */}
+              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Statistical Brain</h3>
+                <p className="text-[#2D3A4B] text-base leading-relaxed">
+                  Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
+                </p>
               </div>
 
-              {/* Right Column */}
-              <div className="space-y-6">
-                {/* Street Smart */}
-                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Street Smart</h3>
-                  <p className="text-[#2D3A4B] text-base leading-relaxed">
-                    Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
-                  </p>
-                </div>
+              {/* Fan Brain */}
+              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Fan Brain</h3>
+                <p className="text-[#2D3A4B] text-base leading-relaxed">
+                  Tracking social sentiment, ticket splits, and sharp money moves to separate hype from true value.
+                </p>
+              </div>
 
-                {/* Three-Layered Core */}
-                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Three-Layered Core</h3>
-                  <p className="text-[#2D3A4B] text-base leading-relaxed">
-                    Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
-                  </p>
-                </div>
+              {/* Narrative Tracker */}
+              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Narrative Tracker</h3>
+                <p className="text-[#2D3A4B] text-base leading-relaxed">
+                  Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
+                </p>
+              </div>
 
-                {/* Quote Card */}
-                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                  <div className="flex">
-                    <div className="w-1 bg-[#b8953f] mr-4"></div>
-                    <p className="text-[#2D3A4B] italic text-base leading-relaxed">
-                      "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
-                    </p>
-                  </div>
+              {/* Street Smart */}
+              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Street Smart</h3>
+                <p className="text-[#2D3A4B] text-base leading-relaxed">
+                  Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
+                </p>
+              </div>
+
+              {/* Three-Layered Core */}
+              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Three-Layered Core</h3>
+                <p className="text-[#2D3A4B] text-base leading-relaxed">
+                  Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
+                </p>
+              </div>
+
+              {/* Quote Card */}
+              <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                <div className="flex">
+                  <div className="w-1 bg-[#b8953f] mr-4"></div>
+                  <p className="text-[#2D3A4B] italic text-base leading-relaxed">
+                    "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
+                  </p>
                 </div>
               </div>
             </div>
