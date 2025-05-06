@@ -421,6 +421,20 @@ function Home() {
             <div className="absolute inset-0 bg-black bg-opacity-40 z-10"></div>
           </div>
           
+          {/* Coin2 image on the left side under navbar */}
+          <div className="absolute top-24 left-6 z-30 hidden md:block">
+            <img
+              src="/coin2.png"
+              alt="Gold Coin"
+              className="w-32 h-32"
+              style={{ 
+                opacity: 0.9, 
+                filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.25))",
+                animation: "float 6s ease-in-out infinite"
+              }}
+            />
+          </div>
+          
           <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
             {/* Centered Hero Content */}
             <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
