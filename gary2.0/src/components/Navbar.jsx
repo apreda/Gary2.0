@@ -30,7 +30,7 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-[#0D1117] z-50 border border-[#1E2330] py-3 rounded-xl shadow-xl w-11/12 max-w-6xl">
+    <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#E0B016]/20 py-3 rounded-xl shadow-xl w-11/12 max-w-6xl">
       <div className="w-full px-6 flex items-center justify-between">
         {/* Logo in Hashnode style but with our colors */}
         <div className="flex items-center">
@@ -104,7 +104,7 @@ export function Navbar() {
       
       {/* Mobile Menu Dropdown - Floating style with black and gold */}
       {isMobileMenuOpen && (
-        <div className="bg-[#0D1117] border border-[#1E2330] md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-xl shadow-xl w-11/12 max-w-6xl">
+        <div className="bg-black border border-[#E0B016]/20 md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-xl shadow-xl w-11/12 max-w-6xl">
           <div className="py-4 px-6">
             <div className="flex flex-col space-y-3">
               {filteredNavItems.map((item) => (
