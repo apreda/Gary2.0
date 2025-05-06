@@ -456,75 +456,75 @@ function Home() {
         <div className="h-0"></div>
         
         <section className="relative py-6 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
-          {/* Sleek newspaper-style container */}
-          <div className="w-full max-w-6xl mx-auto p-4 pb-8 bg-[#f6f2e8]/95 shadow-lg relative rounded-t-lg border-t-4 border-[#b8953f]">
-            {/* The Bears Brain heading - more integrated design */}
-            <div className="mt-4 mb-6 border-b-2 border-[#b8953f]/50 p-4 rounded-t-lg bg-gradient-to-b from-[#f6f2e8] to-[#f6f2e8]/80">
+          {/* Container with padding */}
+          <div className="w-full max-w-6xl mx-auto px-4 pb-8">
+            {/* Section Heading */}
+            <div className="mt-4 mb-6 p-4 rounded-t-lg">
               <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
                 The Bears Brain
               </h2>
             </div>
-            
-            <h3 className="text-center text-gray-700 font-bold mb-16 text-2xl md:text-3xl">
-              Gary combines decades of betting expertise with cutting-edge AI<br />
-              to identify value others miss.
-            </h3>
-            
-            <div className="py-4 px-6 bg-[#f7f3e9] mb-10 border-l-4 border-[#b8953f]">
-              <div className="flex items-center mb-2">
-                <div className="text-xs text-gray-500">By</div>
-                <div className="ml-2 font-medium text-gray-700">GARY A.I. STAFF</div>
-                <div className="mx-2 text-gray-400">|</div>
-                <div className="text-xs text-gray-500">APRIL 23, 2025</div>
-              </div>
-              
-              <p className="text-gray-600 italic">
-                Experience the revolutionary handicapping system that's changing the game for sports
-                bettors everywhere—powered by the most advanced AI in the industry.
-              </p>
+
+            {/* Byline Banner */}
+            <div className="bg-[#f6f2e8] border-y border-[#b8953f] py-3 px-6 mb-8 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+              <p className="text-center text-[#2D3A4B] text-sm">By GARY A.I. STAFF • Updated May 6, 2025</p>
             </div>
-            
-            {/* Two column layout */}
-            <div className="flex flex-col md:flex-row gap-10 mt-16">
-              {/* Left column */}
-              <div className="text-left">
+
+            {/* Cards Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column */}
+              <div className="space-y-6">
                 {/* Statistical Brain */}
-                <div className="mb-12">
-                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>1. Statistical Brain</h3>
-                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Unlike static models that simply crunch historical data, Gary's system integrates player sentiment, weather impact factors, and arena-specific performance indicators to create a dynamic predictive model.</p>
+                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Statistical Brain</h3>
+                  <p className="text-[#2D3A4B] text-base leading-relaxed">
+                    Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
+                  </p>
                 </div>
-              
+
                 {/* Fan Brain */}
-                <div className="mb-10">
-                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>2. Fan Brain</h3>
-                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Reads team loyalty, emotional bias, and fan storylines to spot hidden angles. Gary's system analyzes how public perception influences betting lines, creating opportunities for value bets that go against the crowd.</p>
+                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Fan Brain</h3>
+                  <p className="text-[#2D3A4B] text-base leading-relaxed">
+                    Tracking social sentiment, ticket splits, and sharp money moves to separate hype from true value.
+                  </p>
                 </div>
+
                 {/* Narrative Tracker */}
-                <div className="mb-12">
-                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>3. Narrative Tracker</h3>
-                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Uncovers hidden motivations and emotional weights that move the lines. When a player faces their former team or a coach returns to a city where they previously worked, Gary factors these emotional elements into the prediction model.</p>
+                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Narrative Tracker</h3>
+                  <p className="text-[#2D3A4B] text-base leading-relaxed">
+                    Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
+                  </p>
                 </div>
               </div>
-              
-              {/* Right column */}
-              <div className="text-left">
+
+              {/* Right Column */}
+              <div className="space-y-6">
                 {/* Street Smart */}
-                <div className="mb-12">
-                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>4. Street Smart</h3>
-                  <p className="text-gray-500 font-serif text-lg leading-relaxed mb-3">Old-school instincts meet AI precision to sniff out real betting value. Gary doesn't just follow the math—he understands the human element that often defies the numbers.</p>
-                  <p className="text-gray-500 font-serif text-lg leading-relaxed">By combining decades of handicapping wisdom with cutting-edge machine learning, Gary can identify value opportunities that purely statistical models miss.</p>
+                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Street Smart</h3>
+                  <p className="text-[#2D3A4B] text-base leading-relaxed">
+                    Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
+                  </p>
                 </div>
-                
+
                 {/* Three-Layered Core */}
-                <div className="mb-12">
-                  <h3 className="text-2xl font-bold border-b border-[#b8953f] pb-3 mb-4 font-serif italic text-[#b8953f]" style={{ textShadow: "-0.5px -0.5px 0 white, 0.5px -0.5px 0 white, -0.5px 0.5px 0 white, 0.5px 0.5px 0 white" }}>5. Three-Layered Core</h3>
-                  <p className="text-gray-500 font-serif text-lg leading-relaxed">Sports Odds & Stats, Real-Time Storylines, and Reasoning Engine—Gary's secret sauce. This proprietary system processes information through three distinct layers, each adding depth to the analysis and improving prediction accuracy.</p>
+                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <h3 className="text-[#b8953f] font-serif italic text-2xl mb-4">Three-Layered Core</h3>
+                  <p className="text-[#2D3A4B] text-base leading-relaxed">
+                    Combining statistical models, situational context, and market intelligence for our highest-confidence picks.
+                  </p>
                 </div>
-                
-                {/* Pull quote */}
-                <div className="border-l-4 border-[#b8953f] pl-6 italic my-8">
-                  <p className="text-gray-600 font-serif text-xl leading-relaxed">"Our system doesn't just predict outcomes—it understands the game at a fundamental level that most handicappers can't match."</p>
-                  <p className="text-gray-500 font-serif text-base mt-3">— Gary A.I. Development Team</p>
+
+                {/* Quote Card */}
+                <div className="bg-[#f6f2e8] border border-[#b8953f] rounded p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <div className="flex">
+                    <div className="w-1 bg-[#b8953f] mr-4"></div>
+                    <p className="text-[#2D3A4B] italic text-base leading-relaxed">
+                      "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
