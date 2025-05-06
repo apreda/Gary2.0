@@ -427,9 +427,10 @@ function Home() {
               <h1 className="mb-10 text-center" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em", maxWidth: "920px" }}>
                 <div>
                   <span className="text-white font-bold">Make </span>
-                  <span className="italic font-normal text-[#b8953f]">Smarter</span>
+                  <span className="italic font-normal text-[#B8953F]">Smarter</span>
                   <span className="text-white font-bold"> Sports Bets </span>
-                  <span className="text-white font-bold">with Gary</span>
+                  <span className="text-white font-bold">with </span>
+                  <span className="italic font-normal text-[#B8953F]">GARY.AI</span>
                 </div>
               </h1>
               
@@ -441,21 +442,23 @@ function Home() {
               </div>
 
               {/* Technology badges - using original tags from GaryHero */}
-              <div className="flex flex-wrap justify-center gap-3 mb-8">
-                <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>Odds API</span>
-                </div>
-                <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>SportsDB</span>
-                </div>
-                <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>Turbo 3.5 Mini</span>
-                </div>
-                <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>Perplexity</span>
-                </div>
-                <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  <span>StatCast API</span>
+              <div className="flex flex-wrap justify-center p-4 mb-8 border border-[#B8953F]/40 rounded-lg mx-auto max-w-3xl">
+                <div className="flex gap-4 flex-wrap justify-center">
+                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
+                    <span>Odds API</span>
+                  </div>
+                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
+                    <span>SportsDB</span>
+                  </div>
+                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
+                    <span>Turbo 3.5 Mini</span>
+                  </div>
+                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
+                    <span>Perplexity</span>
+                  </div>
+                  <div className="bg-[#B8953F] text-black text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80">
+                    <span>StatCast API</span>
+                  </div>
                 </div>
               </div>
               
