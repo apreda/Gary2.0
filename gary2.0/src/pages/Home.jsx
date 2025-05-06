@@ -499,129 +499,139 @@ function Home() {
               </div>
             </div>
 
-            {/* The Bears Brain Section – Light-cream base with gold & black cards */}
+            {/* The Bears Brain Section - Dark theme matching homepage */}
             <div className="mt-24 mb-36 w-full">
               <section className="relative py-16 max-w-[1400px] mx-auto">
 
-                {/* 1. Light‐cream base + grain texture */}
-                <div 
-                  className="absolute inset-0 -z-10 bg-[#F5EFE8]"
-                  aria-hidden="true"
-                />
-                <div
-                  className="absolute inset-0 -z-10 bg-[url('/paper-grain.png')] bg-repeat opacity-10"
-                  aria-hidden="true"
-                />
+                {/* Benefits pill at top like in screenshot */}
+                <div className="flex justify-center mb-6">
+                  <div className="inline-block bg-[#2b1e5a] py-1.5 px-4 rounded-full">
+                    <span className="text-[#b8953f] font-medium text-sm flex items-center">
+                      <span className="mr-2 w-3 h-3 bg-[#b8953f] rounded-sm inline-block"></span>
+                      Benefits
+                    </span>
+                  </div>
+                </div>
 
                 {/* 2. Section heading */}
-                <div className="text-center mb-12 px-6">
-                  <h2 className="text-[#2D3A4B] text-5xl font-bold mb-2">
-                    The Bears Brain
+                <div className="text-center mb-14 px-6">
+                  <h2 className="text-white text-5xl font-bold leading-tight mb-6">
+                    Track your performance and <span className="text-[#b8953f]">find value others miss</span>
                   </h2>
-                  <div className="w-16 h-1 mx-auto bg-[#B8953F] mb-6"></div>
-                  <p className="text-[#2D3A4B] text-lg max-w-2xl mx-auto italic">
-                    "The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss."
+                  <p className="text-white/70 text-lg max-w-2xl mx-auto">
+                    The Bears Brain combines decades of betting expertise with cutting-edge AI to identify value others miss.
                   </p>
                 </div>
 
-                {/* 3. Cards grid */}
+                {/* Cards grid - dark theme with purple backgrounds */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-6">
                   
-                  {/* Card 1: Statistical Brain with graph visualization */}
-                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
-                      1. Statistical Brain
+                  {/* Card 1: Grow your business - Statistical Brain */}
+                  <div className="relative bg-[#1c1333] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#b8953f] font-bold text-2xl mb-3">
+                      Grow your business
                     </h3>
-                    <p className="text-base leading-relaxed mb-6">
+                    <p className="text-white/70 mb-6">
                       Our proprietary algorithms analyze 72 statistical dimensions across 12 sportsbooks to identify mispriced lines and undervalued teams.
                     </p>
-                    <div className="mt-4 relative h-20">
-                      <div className="absolute right-0 top-0 bg-[#B8953F] text-[#F5EFE8] text-xs font-bold rounded-full px-2 py-1">+38%</div>
-                      <svg className="w-full h-full" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M0,80 C50,80 70,40 120,40 C170,40 180,20 225,20 C270,20 280,60 300,60" stroke="#B8953F" strokeWidth="3" fill="none" strokeLinecap="round"/>
-                        <circle cx="225" cy="20" r="6" fill="#B8953F" />
-                      </svg>
+                    <div className="relative mt-12">
+                      <div className="flex justify-end mb-1">
+                        <div className="bg-[#b8953f] text-black text-xs font-bold rounded-full px-2 py-1">+48%</div>
+                      </div>
+                      <div className="relative h-20">
+                        <svg className="w-full h-full" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M0,80 C50,80 70,40 120,40 C170,40 180,20 225,20 C270,20 280,60 300,60" stroke="#b8953f" strokeWidth="3" fill="none" strokeLinecap="round"/>
+                          <circle cx="225" cy="20" r="8" fill="#b8953f" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                   
-                  {/* Card 2: Fan Brain with chat visualization */}
-                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
-                      2. Fan Brain
+                  {/* Card 2: Get real-time help - Fan Brain */}
+                  <div className="relative bg-[#1c1333] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#b8953f] font-bold text-2xl mb-3">
+                      Get real-time help
                     </h3>
-                    <p className="text-base leading-relaxed mb-6">
+                    <p className="text-white/70 mb-6">
                       Tracking social sentiment, ticket splits, and sharp-money moves to separate hype from true value.
                     </p>
-                    <div className="space-y-3 mt-4">
+                    <div className="space-y-3 mt-6">
+                      <div className="flex justify-end">
+                        <div className="bg-gray-500/30 rounded-2xl px-4 py-2 max-w-xs">
+                          <p className="text-white text-sm">What's the sentiment for Chiefs vs Broncos?</p>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-[#b8953f] ml-2 flex items-center justify-center text-xs font-bold">GB</div>
+                      </div>
+                      
                       <div className="flex">
-                        <div className="w-8 h-8 rounded-full bg-[#B8953F] mr-2 flex items-center justify-center text-xs font-bold text-white">FB</div>
-                        <div className="bg-[#B8953F]/10 rounded-2xl px-4 py-2 max-w-xs border border-[#B8953F]/20">
-                          <p className="text-[#2D3A4B] text-sm">Analyzing social sentiment trends for Bills vs Dolphins...</p>
+                        <div className="w-8 h-8 rounded-full bg-[#b8953f] mr-2 flex items-center justify-center text-xs font-bold">AI</div>
+                        <div className="bg-[#b8953f]/20 rounded-2xl px-4 py-2 max-w-xs">
+                          <p className="text-white text-sm">Public heavily on Chiefs -7, but sharp money coming in on Broncos +7</p>
                         </div>
                       </div>
                       
                       <div className="flex justify-end">
-                        <div className="bg-gray-200/70 rounded-2xl px-4 py-2 max-w-xs">
-                          <p className="text-[#2D3A4B] text-sm">Line is moving toward Miami +3</p>
+                        <div className="bg-gray-500/30 rounded-2xl px-4 py-2 max-w-xs">
+                          <p className="text-white text-sm">Perfect, I'll look for a better line</p>
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-[#2D3A4B] ml-2 flex items-center justify-center text-xs font-bold text-white">GB</div>
+                        <div className="w-8 h-8 rounded-full bg-[#b8953f] ml-2 flex items-center justify-center text-xs font-bold">GB</div>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Card 3: Narrative Tracker with network visualization */}
-                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
-                      3. Narrative Tracker
+                  {/* Card 3: Tight-knit support network - Narrative Tracker */}
+                  <div className="relative bg-[#1c1333] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#b8953f] font-bold text-2xl mb-3">
+                      Tight-knit support network
                     </h3>
-                    <p className="text-base leading-relaxed mb-4">
+                    <p className="text-white/70 mb-6">
                       Identifying when media narratives create betting opportunities by overemphasizing recent performance or star players.
                     </p>
-                    <div className="mt-2 relative h-36 flex items-center justify-center">
-                      <div className="absolute w-24 h-24 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-[#B8953F]/40 flex items-center justify-center">
-                          <span className="text-[#B8953F] font-bold text-lg">NT</span>
+                    <div className="mt-6 relative h-48 flex items-center justify-center">
+                      <div className="absolute w-36 h-36 rounded-full bg-[#b8953f]/20 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-[#b8953f]/40 flex items-center justify-center">
+                          <span className="text-[#b8953f] font-bold text-2xl">GB</span>
                         </div>
                       </div>
                       
-                      {/* Connection lines */}
-                      <div className="absolute top-1/4 -right-4 bg-[#B8953F]/20 rounded-full py-1 px-3 transform rotate-6">
-                        <span className="text-xs text-[#2D3A4B]">ESPN</span>
+                      {/* Network nodes */}
+                      <div className="absolute top-1/4 right-1/4 bg-gray-500/30 rounded-full py-1 px-3">
+                        <span className="text-xs text-white">ESPN Analysis</span>
                       </div>
                       
-                      <div className="absolute bottom-1/4 -left-4 bg-[#B8953F]/20 rounded-full py-1 px-3 transform -rotate-6">
-                        <span className="text-xs text-[#2D3A4B]">Twitter</span>
+                      <div className="absolute bottom-1/4 left-1/4 bg-gray-500/30 rounded-full py-1 px-3">
+                        <span className="text-xs text-white">Twitter Trends</span>
                       </div>
                       
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 bg-[#B8953F]/20 rounded-full py-1 px-3">
-                        <span className="text-xs text-[#2D3A4B]">Sports Media</span>
+                      <div className="absolute bottom-1/3 right-1/4 bg-gray-500/30 rounded-full py-1 px-3">
+                        <span className="text-xs text-white">Media Bias</span>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Card 4: Street Smart with step visualization */}
-                  <div className="relative bg-white bg-opacity-90 backdrop-blur-sm border border-[#B8953F] rounded-3xl p-8 text-[#2D3A4B] shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                    <h3 className="text-[#B8953F] font-semibold text-2xl mb-3">
-                      4. Street Smart
+                  {/* Card 4: Learn and use our systems - Street Smart */}
+                  <div className="relative bg-[#1c1333] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <h3 className="text-[#b8953f] font-bold text-2xl mb-3">
+                      Learn and use our systems
                     </h3>
-                    <p className="text-base leading-relaxed mb-4">
+                    <p className="text-white/70 mb-6">
                       Real-time injury reports, weather impacts, and lineup changes that move lines before the public catches on.
                     </p>
-                    <div className="mt-2 relative h-36">
-                      <div className="absolute top-0 left-1/4 transform -translate-x-1/2 bg-[#B8953F]/20 rounded-full px-3 py-1 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs font-medium">Injury Alert</span>
+                    <div className="mt-6 relative h-48">
+                      <div className="absolute top-0 left-1/4 transform -translate-x-1/2 bg-[#b8953f]/20 rounded-full px-3 py-1">
+                        <span className="text-[#b8953f] text-xs">Injury Report</span>
                       </div>
                       
-                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-[#B8953F]/20 rounded-full px-3 py-1 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs font-medium">Weather Impact</span>
+                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-[#b8953f]/20 rounded-full px-3 py-1">
+                        <span className="text-[#b8953f] text-xs">Line Movement</span>
                       </div>
                       
-                      <div className="absolute bottom-1/4 left-3/4 transform -translate-x-1/2 bg-[#B8953F]/20 rounded-full px-3 py-1 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs font-medium">Line Movement</span>
+                      <div className="absolute bottom-1/4 left-1/2 transform -translate-x-1/2 bg-[#b8953f]/20 rounded-full px-3 py-1">
+                        <span className="text-[#b8953f] text-xs">Weather Impact</span>
                       </div>
                       
-                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 150" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M50,30 L100,75 L150,110" stroke="#B8953F" strokeWidth="1.5" strokeDasharray="4 4" fill="none" strokeLinecap="round"/>
+                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M50,40 C100,40 100,100 100,100 C100,100 100,160 50,160" stroke="#b8953f" strokeWidth="1" strokeDasharray="4 4" fill="none" strokeLinecap="round"/>
                       </svg>
                     </div>
                   </div>
