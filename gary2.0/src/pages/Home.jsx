@@ -37,8 +37,9 @@ function Home() {
         <GaryHero />
         
         {/* The Bears Brain Section starts here - with added spacing to avoid overlap with pick cards */}
-        <div style={{ marginTop: "400px" }}>
-        <section className="relative py-16 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+        <div className="h-[600px]"></div>
+        
+        <section className="relative py-16 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden" style={{ marginTop: "200px" }}>
           {/* Cream newspaper content background for The Bear's Brain section */}
           <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
             {/* Cream background */}
@@ -127,7 +128,6 @@ function Home() {
 
           </div>
         </section>
-        </div> {/* Close the Bears Brain spacing div */}
       </div>
     </div>
   );
