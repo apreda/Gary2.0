@@ -30,35 +30,12 @@ function Home() {
       ...mockPick,
       ...pick
     };
-    
-    // Format displayed time properly
-    const formattedTime = displayPick.time ? 
-      (function() {
-        let time = displayPick.time.includes('ET') ? displayPick.time : `${displayPick.time} ET`;
-        return time.replace(/:([0-9])\s/, ':0$1 ');
-      })() : '9:30 PM ET';
-      
-    // Calculate confidence percentage for display
-    const confidencePercentage = typeof displayPick.confidence === 'number' ? 
-      Math.round(displayPick.confidence * 100) + '%' : 
-      (displayPick.confidence || '78%');
-    
+
     return (
-      <div style={{
-        width: 576,
-        height: 384,
-        perspective: '1000px',
-        cursor: 'pointer'
-      }}>
+      <div style={{ width: 576, height: 384, perspective: '1000px', cursor: 'pointer' }}>
         {/* Card container with 3D effect */}
-        <div style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          transformStyle: 'preserve-3d',
-          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-        }}>
-          {/* FRONT OF CARD - Modern Dark UI Design matching RealGaryPicks */}
+        <div style={{ position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)' }}>
+          {/* FRONT OF CARD - Modern Dark UI Design */}
           <div style={{
             position: 'absolute',
             width: '100%',
@@ -82,7 +59,7 @@ function Home() {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              overflow: 'hidden'
+              overflow: 'hidden',
             }}>
               {/* League and Matchup in horizontal layout */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -95,7 +72,7 @@ function Home() {
                     letterSpacing: '0.05em', 
                     marginBottom: '0.25rem'
                   }}>
-                    LEAGUE
+                    League
                   </div>
                   <div style={{ 
                     fontSize: '1.25rem', 
@@ -103,7 +80,7 @@ function Home() {
                     letterSpacing: '0.02em',
                     opacity: 0.95
                   }}>
-                    {displayPick.league || 'NBA'}
+                    {displayPick.league || 'MLB'}
                   </div>
                 </div>
                 
@@ -116,7 +93,7 @@ function Home() {
                     letterSpacing: '0.05em', 
                     marginBottom: '0.25rem'
                   }}>
-                    MATCHUP
+                    Matchup
                   </div>
                   <div style={{ 
                     fontSize: '1.25rem', 
@@ -125,7 +102,7 @@ function Home() {
                   }}>
                     {(displayPick.homeTeam && displayPick.awayTeam) ? 
                       `${displayPick.awayTeam.split(' ').pop()} @ ${displayPick.homeTeam.split(' ').pop()}` : 
-                      (displayPick.game ? displayPick.game : 'Nuggets @ Thunder')}
+                      (displayPick.game ? displayPick.game : 'TBD')}
                   </div>
                 </div>
               </div>
@@ -139,17 +116,17 @@ function Home() {
                   letterSpacing: '0.05em', 
                   marginBottom: '0.5rem'
                 }}>
-                  GARY'S PICK
+                  Gary's Pick
                 </div>
                 <div style={{ 
                   fontSize: '2rem', 
                   fontWeight: 700, 
                   lineHeight: 1.1,
-                  color: '#bfa142', /* Gold color for the actual pick */
+                  color: '#bfa142', /* Keeping gold color for the actual pick */
                   wordBreak: 'break-word',
                   marginBottom: '0.75rem'
                 }}>
-                  {displayPick.pick || 'Denver Nuggets +9.5 -110'}
+                  {displayPick.pick || 'MISSING PICK'}
                 </div>
                 
                 {/* Add a preview of the rationale on front card */}
@@ -161,78 +138,93 @@ function Home() {
                   WebkitLineClamp: 3,
                   WebkitBoxOrient: 'vertical',
                   textOverflow: 'ellipsis',
-                  marginBottom: '1.5rem'
+                  marginBottom: '0.5rem'
                 }}>
                   {displayPick.rationale ? displayPick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
                 </div>
-                
-                {/* Take Your Pick section with BET and FADE buttons */}
-                <div style={{ marginTop: 'auto' }}>
-                  <div style={{ 
-                    fontSize: '0.75rem', 
-                    opacity: 0.6, 
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em', 
-                    marginBottom: '0.5rem'
-                  }}>
-                    TAKE YOUR PICK
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                      style={{
-                        flex: 1,
-                        padding: '0.75rem',
-                        background: 'rgba(184, 149, 63, 0.1)',
-                        border: '1px solid #b8953f',
-                        borderRadius: '0.25rem',
-                        color: '#b8953f',
-                        fontWeight: '600',
-                        fontSize: '0.875rem',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      BET
-                    </button>
-                    <button
-                      style={{
-                        flex: 1,
-                        padding: '0.75rem',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '0.25rem',
-                        color: 'white',
-                        fontWeight: '600',
-                        fontSize: '0.875rem',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      FADE
-                    </button>
-                  </div>
+              </div>
+              
+              {/* Bet or Fade Buttons */}
+              <div>
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  opacity: 0.6, 
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em', 
+                  marginBottom: '0.5rem'
+                }}>
+                  Take Your Pick
+                </div>
+                <div style={{
+                  display: 'flex',
+                  gap: '0.75rem',
+                  width: '100%',
+                }}>
+                  <button 
+                    style={{
+                      background: 'rgba(191, 161, 66, 0.15)',
+                      color: '#bfa142',
+                      fontWeight: '600',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(191, 161, 66, 0.3)',
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontSize: '0.8rem',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Bet
+                  </button>
+                  <button 
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      fontWeight: '600',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontSize: '0.8rem',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Fade
+                  </button>
                 </div>
               </div>
             </div>
-
-            {/* Right side content */}
+            
+            {/* Right side content - prominently elevated appearance */}
             <div style={{
               position: 'absolute',
-              top: 0,
               right: 0,
-              bottom: 0,
+              top: 0,  /* Aligned to card edge */
+              bottom: 0, /* Aligned to card edge */
               width: '30%',
-              backgroundColor: '#1a1a1a',
+              borderLeft: '2.25px solid #bfa142', /* Gold border */
+              padding: '1.5rem 1rem',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '1.5rem',
-              borderLeft: '2px solid #b8953f',
-              textAlign: 'center',
-              zIndex: 1
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
+              boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
+              borderRadius: '0 16px 16px 0', /* Rounded on right side only */
+              clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
+              zIndex: 2, /* Ensure it appears above other content */
+              transform: 'translateZ(10px)', /* 3D effect */
             }}>
-              <div>
+              {/* Game time section */}
+              <div style={{ 
+                textAlign: 'center',
+                marginBottom: '1rem'
+              }}>
                 <div style={{ 
                   fontSize: '0.75rem', 
                   opacity: 0.6, 
@@ -240,19 +232,22 @@ function Home() {
                   letterSpacing: '0.05em', 
                   marginBottom: '0.25rem'
                 }}>
-                  GAME TIME
+                  Game Time
                 </div>
                 <div style={{ 
-                  fontSize: '1.25rem', 
-                  fontWeight: 600, 
-                  letterSpacing: '0.02em',
-                  opacity: 0.95
+                  fontSize: '1.125rem', 
+                  fontWeight: 600,
+                  opacity: 0.9
                 }}>
-                  {formattedTime}
+                  {displayPick.time ? 
+                    (function() {
+                      let time = displayPick.time.includes('ET') ? displayPick.time : `${displayPick.time} ET`;
+                      return time.replace(/:([0-9])\s/, ':0$1 ');
+                    })() : '10:10 PM ET'}
                 </div>
               </div>
               
-              {/* Coin Image centered */}
+              {/* Coin Image centered - no background */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
@@ -262,12 +257,13 @@ function Home() {
               }}>
                 <img 
                   src="/coin2.png" 
-                  alt="Gary A.I. Coin" 
-                  style={{ 
-                    width: '130px',
-                    height: '130px',
-                    marginBottom: '1rem',
-                    filter: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.5))'
+                  alt="Coin Image"
+                  style={{
+                    width: 130, /* 20% bigger than previous 108px */
+                    height: 130, /* 20% bigger than previous 108px */
+                    objectFit: 'contain',
+                    opacity: 1,
+                    background: 'transparent'
                   }}
                 />
               </div>
@@ -285,19 +281,23 @@ function Home() {
                   letterSpacing: '0.05em', 
                   marginBottom: '0.25rem'
                 }}>
-                  CONFIDENCE
-                </div>
-                <div style={{ 
-                  fontSize: '2rem', 
-                  fontWeight: 600, 
-                  color: '#bfa142',
-                  opacity: 0.95,
-                  marginBottom: '1.5rem'
-                }}>
-                  {confidencePercentage}
+                  Confidence
                 </div>
                 
-                {/* View Analysis Button */}
+                {/* Confidence score display */}
+                <div style={{
+                  fontSize: '1.2rem',
+                  fontWeight: 700,
+                  opacity: 0.95,
+                  color: '#bfa142', /* Gold for confidence */
+                  marginBottom: '0.5rem'
+                }}>
+                  {typeof displayPick.confidence === 'number' ? 
+                    Math.round(displayPick.confidence * 100) + '%' : 
+                    (displayPick.confidence || '75%')}
+                </div>
+                
+                {/* Click to flip instruction with subtle design */}
                 <button
                   style={{
                     width: '100%',
@@ -415,7 +415,7 @@ function Home() {
             {/* Centered Hero Content */}
             <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
               {/* NEW badge - gold-colored and oval-shaped with border */}
-              <div className="mb-8 relative mt-12">  {/* changed mt-6 to mt-12 to move down another 0.25 inches */}
+              <div className="mb-8 relative mt-16">  {/* moved down a quarter inch */}
                 <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center border border-gray-800" 
                      style={{ background: '#b8953f', color: '#1a1a1a' }}>
                   <span className="mr-2 font-bold">NEW</span>
@@ -502,8 +502,8 @@ function Home() {
               </div>
             </div>
 
-            {/* The Bears Brain Section - Dark theme matching homepage - moved up 2 inches */}
-            <div className="mt-4 mb-36 w-full">
+            {/* The Bears Brain Section - Dark theme matching homepage - moved up 2.5 inches */}
+            <div className="-mt-4 mb-36 w-full">
               <section className="relative py-16 max-w-[1400px] mx-auto">
 
                 {/* Benefits pill at top like in screenshot */}
@@ -649,6 +649,15 @@ function Home() {
               </section>
             </div>
           </main>
+          
+          {/* Terms and Privacy links */}
+          <footer className="py-8 text-center text-gray-500 text-sm">
+            <div className="flex justify-center space-x-6">
+              <a href="/terms" className="hover:text-gray-300 transition-colors duration-200">Terms of Service</a>
+              <a href="/privacy" className="hover:text-gray-300 transition-colors duration-200">Privacy Policy</a>
+            </div>
+            <div className="mt-2">© {new Date().getFullYear()} GARY.ai. All rights reserved.</div>
+          </footer>
         </section>
       </div>
     </div>
