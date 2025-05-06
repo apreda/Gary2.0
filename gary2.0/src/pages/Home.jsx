@@ -508,26 +508,7 @@ function Home() {
             {/* The Bears Brain Section - Dark theme matching homepage - moved up 2.5 inches */}
             <div className="-mt-4 mb-36 w-full">
               <section className="relative py-16 max-w-[1400px] mx-auto">
-                {/* Gary50.png as background specifically for The Bears Brain section */}
-                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-                  <img
-                    src="/Gary50.png"
-                    alt="Gary AI Bear"
-                    className="w-full h-full object-cover"
-                    style={{ 
-                      opacity: 0.15, 
-                      filter: "blur(1px) saturate(0.8)",
-                      mixBlendMode: "overlay",
-                      transform: "scale(1.2)",
-                      position: "absolute",
-                      top: "0",
-                      left: "0",
-                      width: "100%",
-                      height: "100%"
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-black bg-opacity-40 z-10"></div>
-                </div>
+                {/* This section formerly contained the Gary50.png background */}
 
                 {/* Benefits pill at top like in screenshot */}
                 <div className="flex justify-center mb-6 relative z-20">
