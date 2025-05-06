@@ -398,8 +398,8 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image - made 70% smaller and moved up 4 inches */}
-          <div className="absolute -left-16 top-0 z-20 hidden md:block" style={{ maxWidth: "135px", marginTop: "-64px" }}>
+          {/* Gary image - 70% smaller, adjusted position (down 3 inches, right 1 inch) */}
+          <div className="absolute -left-0 top-0 z-20 hidden md:block" style={{ maxWidth: "135px", marginTop: "48px", marginLeft: "16px" }}>
             <img
               src={garyImage}
               alt="Gary AI Bear"
