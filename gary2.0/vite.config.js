@@ -28,8 +28,10 @@ export default defineConfig(({ mode }) => {
     build: {
       sourcemap: true
     },
-    // Analytics will be injected by Vercel at runtime
-    // No need for explicit configuration
+    // Configure optimizations for Vercel Analytics
+    optimizeDeps: {
+      include: ['@vercel/analytics/react']
+    },
     css: {
       postcss: {
         plugins: [
