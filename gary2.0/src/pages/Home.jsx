@@ -336,8 +336,8 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* Gary image - positioned down and to the right with reduced opacity */}
-          <div className="absolute left-16 top-36 z-20 hidden md:block" style={{ maxWidth: "250px" }}>
+          {/* Gary image - larger and left-aligned */}
+          <div className="absolute left-8 top-36 z-20 hidden md:block" style={{ maxWidth: "500px" }}>
             <img
               src={garyImage}
               alt="Gary AI Bear"
@@ -347,9 +347,9 @@ function Home() {
           </div>
           
           <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
-            {/* Centered Hero Content - Text shifted slightly right to account for Gary image */}
-            <div className="w-full mx-auto flex flex-col items-center mt-0 md:mt-8" style={{ paddingLeft: "0", paddingRight: "0" }}>
-              {/* NEW badge - using the pill style from Vault */}
+            {/* Centered Hero Content */}
+            <div className="w-full mx-auto flex flex-col items-center mt-12 md:mt-16" style={{ paddingLeft: "0", paddingRight: "0" }}>
+              {/* NEW badge */}
               <div className="mb-8 relative">
                 <div className="bg-[#b8953f]/90 text-black text-xs font-medium px-3 py-1 rounded-full flex items-center">
                   <span className="mr-1.5 text-[10px] font-bold">NEW</span>
@@ -453,13 +453,13 @@ function Home() {
         </section>
         
         {/* Natural spacing between sections */}
-        <div className="h-16"></div>
+        <div className="h-8"></div>
         
-        <section className="relative py-12 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
-          {/* Newspaper-style container with cream background */}
-          <div className="w-full max-w-6xl mx-auto p-8 pb-16 bg-[#f6f2e8] shadow-2xl relative">
+        <section className="relative py-8 min-h-[110vh] flex flex-col items-center justify-center overflow-hidden">
+          {/* Newspaper-style container */}
+          <div className="w-full max-w-6xl mx-auto p-6 pb-12 bg-[#f6f2e8] shadow-2xl relative">
             {/* The Bears Brain heading */}
-            <div className="mt-8 mb-10 border-2 border-[#b8953f] p-6 rounded-lg shadow-lg bg-[#f6f2e8]">
+            <div className="mt-6 mb-8 border-2 border-[#b8953f] p-4 rounded-lg shadow-lg bg-[#f6f2e8]">
               <h2 className="text-center text-[#b8953f] font-serif italic tracking-wide" style={{ fontSize: "clamp(3.5rem, 8vw, 5rem)" }}>
                 The Bears Brain
               </h2>
