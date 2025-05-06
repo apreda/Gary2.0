@@ -507,17 +507,8 @@ export function GaryHero() {
         </div>
       </main>
 
-      {/* The Bears Brain Section Peek */}
-      <div className="relative z-5 w-full dimension-bg-section h-16 mt-auto" style={{ marginTop: '1100px' }}>
-        <div className="absolute -top-16 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-[#0e0e0e]"></div>
-        <div className="container mx-auto px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-[#b8953f] mr-2 animate-pulse"></div>
-            <span className="text-[#b8953f] font-semibold">THE BEARS BRAIN</span>
-          </div>
-          <div className="text-white/60 text-xs md:text-sm">AI-powered insights analyzing 15+ years of sports data</div>
-        </div>
-      </div>
+      {/* Create extra space at the bottom - no Bears Brain section here */}
+      <div className="relative h-96"></div>
     </section>
   );
 }
