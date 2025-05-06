@@ -123,15 +123,52 @@ export const picksPersistenceService = {
     try {
       console.log('Loading picks from persistence service...');
       
-      // The Supabase entry has been manually cleared, so new picks will be generated
-      // with the updated formatting
-      
       // Use Eastern Time consistently for all date operations
       const today = new Date();
       // Convert to Eastern Time
       const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
       const dateString = easternTime.toISOString().split('T')[0]; // YYYY-MM-DD in Eastern Time
-      console.log(`Loading picks for Eastern Time date: ${dateString}`);
+      const easternHour = easternTime.getHours();
+      
+      console.log(`Current Eastern Time: ${easternTime.toLocaleString()} (Hour: ${easternHour})`);
+      
+      // Before 10am EST, always use yesterday's picks if available
+      if (easternHour < 10) {
+        console.log("It's before 10am Eastern Time - looking for yesterday's picks");
+        
+        // Calculate yesterday's date
+        const yesterday = new Date(easternTime);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayString = yesterday.toISOString().split('T')[0];
+        console.log(`Looking for picks from previous day: ${yesterdayString}`);
+        
+        // Try to load yesterday's picks from Supabase
+        try {
+          // Ensure anonymous session for Supabase access
+          const connectionVerified = await ensureAnonymousSession();
+          if (connectionVerified) {
+            const { data: yesterdayData, error: yesterdayError } = await supabase
+              .from('daily_picks')
+              .select('*')
+              .filter('date', 'eq', yesterdayString)
+              .single();
+            
+            if (!yesterdayError && yesterdayData && yesterdayData.picks && 
+                Array.isArray(yesterdayData.picks) && yesterdayData.picks.length > 0) {
+              console.log(`Loaded ${yesterdayData.picks.length} picks from previous day (${yesterdayString}) since it's before 10am`);
+              return yesterdayData.picks;
+            } else {
+              console.log(`No valid picks found for previous day ${yesterdayString}`);
+              // If yesterday's picks aren't available, only then check for today's picks
+            }
+          }
+        } catch (supabaseError) {
+          console.error('Error retrieving previous day picks from Supabase:', supabaseError);
+        }
+      }
+      
+      // If it's after 10am or if no picks found for yesterday before 10am, try today's picks
+      console.log(`Looking for picks from today: ${dateString}`);
       
       // Try to load from Supabase first (preferred source of truth for multi-user)
       try {
@@ -145,19 +182,17 @@ export const picksPersistenceService = {
             .single();
           
           if (!error && data && data.picks && Array.isArray(data.picks) && data.picks.length > 0) {
-            console.log(`Loaded ${data.picks.length} picks from Supabase`);
+            console.log(`Loaded ${data.picks.length} picks from today (${dateString})`);
             return data.picks;
           } else {
-            console.log('No valid picks found in Supabase for today');
+            console.log(`No valid picks found for today (${dateString})`);
           }
         }
       } catch (supabaseError) {
-        console.error('Error retrieving picks from Supabase:', supabaseError);
+        console.error('Error retrieving today\'s picks from Supabase:', supabaseError);
       }
       
-      // We only rely on Supabase for data consistency across all devices
-      
-      console.log('No saved picks found in any storage');
+      console.log('No saved picks found in any storage for either yesterday or today');
       return [];
     } catch (error) {
       console.error('Error loading picks:', error);
@@ -182,16 +217,15 @@ export const picksPersistenceService = {
       console.log(`Current Eastern Time: ${easternTime.toLocaleString()} (Hour: ${easternHour})`);
       console.log(`Checking for picks with date: ${dateString} (Eastern Time)`);
       
-      // Don't generate new picks before 10am Eastern Time
+      // Always use yesterday's picks before 10am Eastern Time, even if today's picks exist
       if (easternHour < 10) {
-        console.log("Too early to generate new picks (before 10am Eastern Time)");
-        console.log("Will use yesterday's picks if available");
+        console.log("It's before 10am Eastern Time - always using yesterday's picks if available");
         
         // If it's before 10am, check for yesterday's picks instead
         const yesterday = new Date(easternTime);
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayString = yesterday.toISOString().split('T')[0];
-        console.log(`Looking for yesterday's picks with date: ${yesterdayString}`);
+        console.log(`Looking for previous day's picks with date: ${yesterdayString}`);
         
         // Only using Supabase for data consistency across all devices
         const connectionVerified = await ensureAnonymousSession();
@@ -204,8 +238,11 @@ export const picksPersistenceService = {
             .limit(1);
           
           if (!yesterdayError && yesterdayData && yesterdayData.length > 0) {
-            console.log('Using yesterday\'s picks since it\'s before 10am Eastern Time');
+            console.log(`Using picks from ${yesterdayString} since it's before 10am Eastern Time`);
             return true; // Pretend we have today's picks to prevent generation
+          } else {
+            console.log(`No picks found for previous day ${yesterdayString}`);
+            // Fall through to check for today's picks
           }
         }
       }
@@ -221,7 +258,7 @@ export const picksPersistenceService = {
             .limit(1);
           
           if (!error && data && data.length > 0) {
-            console.log('Picks exist in Supabase for today (Eastern Time)');
+            console.log(`Picks exist in Supabase for today (${dateString})`);
             return true;
           }
         }
@@ -230,8 +267,13 @@ export const picksPersistenceService = {
       }
       
       // If we get here, no picks found in any source
-      console.log('No picks exist for today (Eastern Time) from any source');
-      return false;
+      if (easternHour < 10) {
+        console.log(`No picks found for yesterday or today, and it's before 10am. Will not generate new picks until 10am.`);
+        return true; // Prevent generation before 10am even if no picks exist
+      } else {
+        console.log(`No picks exist for today (${dateString}) and it's after 10am - will generate new picks`);
+        return false;
+      }
     } catch (error) {
       console.error('Error checking if picks exist:', error);
       return false;
