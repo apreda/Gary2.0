@@ -456,14 +456,14 @@ export function GaryHero() {
               className="bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-md transition duration-200 ease-in-out"
               style={{ padding: "10px 20px" }}
             >
-              Get started
+              View Picks
             </Link>
             <Link 
               to="/how-it-works" 
               className="bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] text-white font-medium rounded-md border border-[rgba(255,255,255,0.1)] backdrop-blur-sm transition duration-200 ease-in-out"
               style={{ padding: "10px 20px" }}
             >
-              View demo
+              How it Works
             </Link>
           </div>
         </div>

@@ -62,8 +62,17 @@ export function Navbar() {
           ))}
         </nav>
       
-        {/* Sign In button exactly like Hashnode */}
-        <div className="flex items-center">
+        {/* BetCard and Sign In buttons */}
+        <div className="flex items-center space-x-2">
+          {/* BetCard Link - Always visible */}
+          <button
+            onClick={() => openBetCardProfile()}
+            className="text-white bg-[#1E2330] hover:bg-[#2a334a] font-medium text-sm transition-colors rounded-full px-4 py-2"
+          >
+            BetCard
+          </button>
+          
+          {/* Sign In button */}
           {!session ? (
             <Link 
               to="/signin" 
@@ -121,8 +130,20 @@ export function Navbar() {
                 </Link>
               ))}
               
-              {/* Mobile sign in button */}
+              {/* Mobile menu additional options */}
               <div className="pt-4 mt-3 border-t border-[#1E2330]">
+                {/* BetCard button in mobile menu */}
+                <button
+                  onClick={() => {
+                    openBetCardProfile();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left py-2 text-sm font-medium text-gray-300 hover:text-white"
+                >
+                  BetCard
+                </button>
+                
+                {/* Mobile sign in button */}
                 {!session ? (
                   <>
                     <Link 
