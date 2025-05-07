@@ -462,11 +462,11 @@ function Home() {
           {/* This section formerly contained the Gary50.png background */}
           
           {/* Coin2 image on the left side under navbar */}
-          <div className="absolute top-24 left-6 z-30 hidden md:block">
+          <div className="absolute top-24 left-[-42px] z-30 hidden md:block">
             <img
               src="/coin2.png"
               alt="Gold Coin"
-              className="w-[19.2rem] h-[19.2rem] object-contain"
+              className="w-[18.24rem] h-[18.24rem] object-contain"
               style={{ 
                 animation: "float 6s ease-in-out infinite"
               }}
