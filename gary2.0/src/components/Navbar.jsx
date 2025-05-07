@@ -20,6 +20,7 @@ export function Navbar() {
     { path: '/billfold', label: 'Billfold' },
     { path: '/leaderboard', label: 'Leaderboard' },
     { path: '/pricing', label: 'Pricing' },
+    { path: '/learn-more', label: 'Learn More' },
   ];
   
   const signedInNavItems = [...navItems];

@@ -17,6 +17,7 @@ import { Leaderboard } from "./pages/Leaderboard";
 import { HowItWorks } from "./pages/HowItWorks";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
+import LearnMore from "./pages/LearnMore";
 import { CheckoutSuccess } from "./pages/CheckoutSuccess";
 import { CheckoutCancel } from "./pages/CheckoutCancel";
 
@@ -117,6 +118,7 @@ function AppContent() {
               <Route path="/billfold" element={<Billfold />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/learn-more" element={<LearnMore />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
 
