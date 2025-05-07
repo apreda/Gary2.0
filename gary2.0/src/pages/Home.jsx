@@ -466,7 +466,7 @@ function Home() {
             <img
               src="/coin2.png"
               alt="Gold Coin"
-              className="w-96 h-96 object-contain"
+              className="w-[19.2rem] h-[19.2rem] object-contain"
               style={{ 
                 animation: "float 6s ease-in-out infinite"
               }}
