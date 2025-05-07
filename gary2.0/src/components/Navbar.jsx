@@ -30,13 +30,13 @@ export function Navbar() {
   }, [location.pathname]);
   
   return (
-    <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#E0B016]/20 py-3 rounded-3xl shadow-xl w-11/12 max-w-6xl">
+    <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#B8953F]/20 py-3 rounded-3xl shadow-xl w-11/12 max-w-6xl">
       <div className="w-full px-6 flex items-center justify-between">
         {/* Modern high-tech logo without the G circle */}
         <div className="flex items-center">
           <Link to="/" className="flex items-center group">
             <span className="text-white text-xl font-light tracking-tight" style={{ fontFamily: 'Arial, sans-serif', letterSpacing: '0.05em' }}>Gary</span>
-            <span className="text-[#E0B016] text-xl font-bold" style={{ fontFamily: 'Arial, sans-serif' }}>.AI</span>
+            <span className="text-[#B8953F] text-xl font-bold" style={{ fontFamily: 'Arial, sans-serif' }}>.AI</span>
           </Link>
         </div>
         
@@ -48,7 +48,7 @@ export function Navbar() {
               to={item.path}
               className={`text-sm font-medium transition-colors duration-200 px-1 py-1 ${
                 activeLink === item.path 
-                ? 'text-[#E0B016]' 
+                ? 'text-[#B8953F]' 
                 : 'text-gray-300 hover:text-white'}`}
               onClick={() => setActiveLink(item.path)}
             >
@@ -108,14 +108,14 @@ export function Navbar() {
       
       {/* Mobile Menu Dropdown - Floating style with black and gold */}
       {isMobileMenuOpen && (
-        <div className="bg-black border border-[#E0B016]/20 md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-3xl shadow-xl w-11/12 max-w-6xl">
+        <div className="bg-black border border-[#B8953F]/20 md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-3xl shadow-xl w-11/12 max-w-6xl">
           <div className="py-4 px-6">
             <div className="flex flex-col space-y-3">
               {filteredNavItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`py-2 text-sm font-medium ${activeLink === item.path ? 'text-[#E0B016]' : 'text-gray-300 hover:text-white'}`}
+                  className={`py-2 text-sm font-medium ${activeLink === item.path ? 'text-[#B8953F]' : 'text-gray-300 hover:text-white'}`}
                   onClick={() => {
                     setActiveLink(item.path);
                     setIsMobileMenuOpen(false);
@@ -153,7 +153,7 @@ export function Navbar() {
                     </Link>
                     <Link 
                       to="/pricing" 
-                      className="mt-4 block text-center bg-[#E0B016] hover:bg-[#d4af37] text-black px-4 py-2 rounded-full text-sm font-medium transition-all"
+                      className="mt-4 block text-center bg-[#B8953F] hover:bg-[#d4af37] text-black px-4 py-2 rounded-full text-sm font-medium transition-all"
                       onClick={() => {
                         setActiveLink("/pricing");
                         setIsMobileMenuOpen(false);
@@ -165,7 +165,7 @@ export function Navbar() {
                 ) : (
                   <Link 
                     to="/dashboard" 
-                    className="mt-3 block text-center bg-[#E0B016] hover:bg-[#d4af37] text-black px-4 py-2 rounded-full text-sm font-medium transition-all"
+                    className="mt-3 block text-center bg-[#B8953F] hover:bg-[#d4af37] text-black px-4 py-2 rounded-full text-sm font-medium transition-all"
                     onClick={() => {
                       setActiveLink("/dashboard");
                       setIsMobileMenuOpen(false);
