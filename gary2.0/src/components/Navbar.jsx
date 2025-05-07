@@ -20,7 +20,8 @@ export function Navbar() {
     { path: '/billfold', label: 'Billfold' },
     { path: '/leaderboard', label: 'Leaderboard' },
     { path: '/pricing', label: 'Pricing' },
-    { path: '/learn-more', label: 'Learn More' },
+    // Learn More page hidden from navbar but still accessible via direct URL
+    // { path: '/learn-more', label: 'Learn More' },
   ];
   
   const signedInNavItems = [...navItems];
