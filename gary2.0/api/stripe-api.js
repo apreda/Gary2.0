@@ -1,3 +1,10 @@
+/**
+ * DEPRECATED: This Express API server is no longer used.
+ * Stripe webhook handling and subscription management has been moved to Next.js API routes.
+ * Please use the implementation in /pages/api/ directory instead.
+ * This file is kept for reference and may be removed in the future.
+ */
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
