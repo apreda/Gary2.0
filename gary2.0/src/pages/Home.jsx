@@ -464,7 +464,7 @@ function Home() {
           <div className="relative mx-auto w-full max-w-[1440px]">
             {/* Create a fixed-position container that follows the main content container */}
             {/* Use a combination of responsive classes and custom styles for the logo */}
-            <div className="absolute top-24 z-30 logo-container" style={{ left: 'calc(50% - 600px - 280px)' }}>
+            <div className="absolute top-24 z-30 logo-container" style={{ left: 'calc(50% - 600px - 120px)' }}>
               <img
                 src="/coin2.png"
                 alt="Gold Coin"
