@@ -337,14 +337,44 @@ function Home() {
   useEffect(() => {
     const fetchFeaturedPicks = async () => {
       try {
-        // Get today's date in YYYY-MM-DD format
-        const today = new Date().toISOString().split("T")[0];
+        // Use Eastern Time consistently for all date operations
+        const today = new Date();
+        const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const dateString = easternTime.toISOString().split("T")[0]; // Current date in Eastern Time
+        const easternHour = easternTime.getHours();
         
-        // Query Supabase for today's picks
+        let queryDate = dateString;
+        
+        // Before 10am EST, always use yesterday's picks if available
+        if (easternHour < 10) {
+          console.log("Home: It's before 10am Eastern Time - looking for yesterday's picks");
+          
+          // Calculate yesterday's date
+          const yesterday = new Date(easternTime);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayString = yesterday.toISOString().split("T")[0];
+          
+          // Check if yesterday's picks exist
+          const { data: yesterdayData, error: yesterdayError } = await supabase
+            .from("daily_picks")
+            .select("picks, date")
+            .eq("date", yesterdayString)
+            .maybeSingle();
+            
+          if (!yesterdayError && yesterdayData && yesterdayData.picks) {
+            console.log(`Home: Using picks from previous day (${yesterdayString}) since it's before 10am`);
+            queryDate = yesterdayString;
+          } else {
+            console.log(`Home: No picks found for previous day ${yesterdayString}, will try today's picks`); 
+          }
+        }
+        
+        // Query Supabase for picks using the determined date
+        console.log(`Home: Querying picks for date: ${queryDate}`);
         const { data, error } = await supabase
           .from("daily_picks")
           .select("picks, date")
-          .eq("date", today)
+          .eq("date", queryDate)
           .maybeSingle();
           
         if (error) {
@@ -352,11 +382,11 @@ function Home() {
           return;
         }
         
-        // If we have picks for today, get the top two with highest confidence
+        // If we have picks, get the top one with highest confidence
         if (data && data.picks) {
           const picksArray = typeof data.picks === "string" ? JSON.parse(data.picks) : data.picks;
           
-          // Sort by confidence (high to low) and get top 2
+          // Sort by confidence (high to low) and get top pick
           const sortedPicks = [...picksArray].sort((a, b) => {
             const confA = a.confidence ? parseFloat(a.confidence) : 0;
             const confB = b.confidence ? parseFloat(b.confidence) : 0;
@@ -365,7 +395,7 @@ function Home() {
           
           setFeaturedPicks(sortedPicks);
         } else {
-          // Use default picks if none found for today
+          // Use default picks if none found
           setFeaturedPicks([]);
         }
       } catch (err) {
