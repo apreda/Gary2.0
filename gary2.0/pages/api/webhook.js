@@ -45,13 +45,12 @@ export default async function handler(req, res) {
         if (client_reference_id) {
           // Update the user's status in Supabase
           const { error } = await supabase
-            .from('profiles')
+            .from('users')
             .update({
-              is_subscribed: true,
+              plan: 'pro',
               stripe_customer_id: customer,
               stripe_subscription_id: subscription,
-              subscription_status: 'active',
-              subscription_tier: 'pro'
+              subscription_status: 'active'
             })
             .eq('id', client_reference_id);
             
@@ -68,9 +67,9 @@ export default async function handler(req, res) {
         const status = subscription.status;
         
         const { error } = await supabase
-          .from('profiles')
+          .from('users')
           .update({
-            subscription_status: status,
+            subscription_status: status
           })
           .eq('stripe_customer_id', customerId);
           
@@ -85,11 +84,11 @@ export default async function handler(req, res) {
         
         // Update the user's subscription status in your database
         const { error } = await supabase
-          .from('profiles')
+          .from('users')
           .update({
-            is_subscribed: false,
-            subscription_status: 'canceled',
-            subscription_tier: 'free'
+            plan: 'free',
+            subscription_status: 'inactive',
+            subscription_end: new Date().toISOString()
           })
           .eq('stripe_customer_id', customerId);
           
