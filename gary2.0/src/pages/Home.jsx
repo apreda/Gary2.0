@@ -489,7 +489,7 @@ function Home() {
               </div>
 
               {/* Main headline - Simple and impactful */}
-              <h1 className="mb-10 text-center" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em", maxWidth: "920px" }}>
+              <h1 className="mb-6 text-center" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em", maxWidth: "920px" }}>
                 <div>
                   <span className="text-white font-bold">Make </span>
                   <span className="italic font-normal text-[#B8953F]">Smarter</span>
@@ -499,14 +499,12 @@ function Home() {
                 </div>
               </h1>
               
-              {/* Subheading container - now empty but maintaining spacing */}
-              <div className="text-center mb-4 max-w-2xl">
-              </div>
+              {/* Removed empty spacing div to tighten layout */}
 
               {/* Technology badges - using original tags from GaryHero */}
-              <div className="flex flex-wrap justify-center p-4 mb-8 mx-auto max-w-3xl">
-                <div className="flex gap-4 flex-wrap justify-center">
-                  <div className="relative bg-transparent text-sm font-bold px-5 py-2 rounded-full flex items-center transition-all duration-300" style={{ color: '#b8953f', background: 'linear-gradient(to right, rgba(184, 149, 63, 0.15), rgba(184, 149, 63, 0.05), rgba(184, 149, 63, 0.15))', textShadow: '0 0 2px rgba(255, 215, 0, 0.5)', boxShadow: '0 0 10px rgba(184, 149, 63, 0.3)', border: '1.5px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+              <div className="flex flex-wrap justify-center p-2 mb-8 mx-auto max-w-3xl">
+                <div className="flex gap-3 flex-wrap justify-center">
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
                     const shine = e.currentTarget.querySelector('.shine-effect');
                     shine.style.transform = 'translateX(250%)';
                   }} onMouseLeave={(e) => {
@@ -525,9 +523,9 @@ function Home() {
                       pointerEvents: 'none',
                       zIndex: 2
                     }}></div>
-                    <span style={{ color: '#B8953F', fontWeight: 'bold' }}>Odds API</span>
+                    <span style={{ fontWeight: 'bold' }}>Odds API</span>
                   </div>
-                  <div className="relative bg-transparent text-sm font-bold px-5 py-2 rounded-full flex items-center transition-all duration-300" style={{ color: '#b8953f', background: 'linear-gradient(to right, rgba(184, 149, 63, 0.15), rgba(184, 149, 63, 0.05), rgba(184, 149, 63, 0.15))', textShadow: '0 0 2px rgba(255, 215, 0, 0.5)', boxShadow: '0 0 10px rgba(184, 149, 63, 0.3)', border: '1.5px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
                     const shine = e.currentTarget.querySelector('.shine-effect');
                     shine.style.transform = 'translateX(250%)';
                   }} onMouseLeave={(e) => {
@@ -546,9 +544,9 @@ function Home() {
                       pointerEvents: 'none',
                       zIndex: 2
                     }}></div>
-                    <span style={{ color: '#B8953F', fontWeight: 'bold' }}>SportsDB</span>
+                    <span style={{ fontWeight: 'bold' }}>SportsDB</span>
                   </div>
-                  <div className="relative bg-transparent text-sm font-bold px-5 py-2 rounded-full flex items-center transition-all duration-300" style={{ color: '#b8953f', background: 'linear-gradient(to right, rgba(184, 149, 63, 0.15), rgba(184, 149, 63, 0.05), rgba(184, 149, 63, 0.15))', textShadow: '0 0 2px rgba(255, 215, 0, 0.5)', boxShadow: '0 0 10px rgba(184, 149, 63, 0.3)', border: '1.5px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
                     const shine = e.currentTarget.querySelector('.shine-effect');
                     shine.style.transform = 'translateX(250%)';
                   }} onMouseLeave={(e) => {
@@ -567,9 +565,9 @@ function Home() {
                       pointerEvents: 'none',
                       zIndex: 2
                     }}></div>
-                    <span style={{ color: '#B8953F', fontWeight: 'bold' }}>Turbo 3.5 Mini</span>
+                    <span style={{ fontWeight: 'bold' }}>Turbo 3.5 Mini</span>
                   </div>
-                  <div className="relative bg-transparent text-sm font-bold px-5 py-2 rounded-full flex items-center transition-all duration-300" style={{ color: '#b8953f', background: 'linear-gradient(to right, rgba(184, 149, 63, 0.15), rgba(184, 149, 63, 0.05), rgba(184, 149, 63, 0.15))', textShadow: '0 0 2px rgba(255, 215, 0, 0.5)', boxShadow: '0 0 10px rgba(184, 149, 63, 0.3)', border: '1.5px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
                     const shine = e.currentTarget.querySelector('.shine-effect');
                     shine.style.transform = 'translateX(250%)';
                   }} onMouseLeave={(e) => {
@@ -588,9 +586,9 @@ function Home() {
                       pointerEvents: 'none',
                       zIndex: 2
                     }}></div>
-                    <span style={{ color: '#B8953F', fontWeight: 'bold' }}>Perplexity</span>
+                    <span style={{ fontWeight: 'bold' }}>Perplexity</span>
                   </div>
-                  <div className="relative bg-transparent text-sm font-bold px-5 py-2 rounded-full flex items-center transition-all duration-300" style={{ color: '#b8953f', background: 'linear-gradient(to right, rgba(184, 149, 63, 0.15), rgba(184, 149, 63, 0.05), rgba(184, 149, 63, 0.15))', textShadow: '0 0 2px rgba(255, 215, 0, 0.5)', boxShadow: '0 0 10px rgba(184, 149, 63, 0.3)', border: '1.5px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
                     const shine = e.currentTarget.querySelector('.shine-effect');
                     shine.style.transform = 'translateX(250%)';
                   }} onMouseLeave={(e) => {
@@ -609,7 +607,7 @@ function Home() {
                       pointerEvents: 'none',
                       zIndex: 2
                     }}></div>
-                    <span style={{ color: '#B8953F', fontWeight: 'bold' }}>StatCast API</span>
+                    <span style={{ fontWeight: 'bold' }}>StatCast API</span>
                   </div>
                 </div>
               </div>
