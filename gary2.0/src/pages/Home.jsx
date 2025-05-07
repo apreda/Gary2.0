@@ -459,23 +459,25 @@ function Home() {
             <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
-          {/* This section formerly contained the Gary50.png background */}
-          
-          {/* Coin2 image on the left side under navbar */}
-          <div className="fixed top-24 left-[-18px] z-30 hidden md:block">
-            <img
-              src="/coin2.png"
-              alt="Gold Coin"
-              className="w-[18.24rem] h-[18.24rem] object-contain"
-              style={{ 
-                animation: "float 6s ease-in-out infinite",
-                maxWidth: "18.24rem"
-              }}
-            />
-          </div>
-          
-          <main className="hero-inner max-w-[1440px] mx-auto flex flex-col z-20 relative w-full h-full" style={{ padding: "24px 24px" }}>
-            {/* Centered Hero Content */}
+          {/* Content wrapper that spans the full width to center both the logo and main content */}
+          <div className="relative mx-auto w-full max-w-[1440px]">
+            {/* Create a fixed-position container that follows the main content container */}
+            <div className="fixed top-24 z-30 hidden md:block" style={{ left: 'calc(max(15%, 50% - 600px + 20px))' }}>
+              <img
+                src="/coin2.png"
+                alt="Gold Coin"
+                className="w-[18.24rem] h-[18.24rem] object-contain"
+                style={{ 
+                  animation: "float 6s ease-in-out infinite",
+                  maxWidth: "18.24rem"
+                }}
+              />
+            </div>
+            
+            {/* Main content area - use full width at all times */}
+            <div className="relative z-20 w-full mx-auto">
+              <main className="hero-inner flex flex-col w-full h-full" style={{ padding: "24px 24px" }}>
+                {/* Centered Hero Content */}
             <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
               {/* NEW badge - gold-colored and oval-shaped with border */}
               <div className="mb-8 relative mt-16">  {/* moved down a quarter inch */}
