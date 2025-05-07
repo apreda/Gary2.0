@@ -462,7 +462,7 @@ function Home() {
           {/* Content wrapper that spans the full width to center both the logo and main content */}
           <div className="relative mx-auto w-full max-w-[1440px]">
             {/* Create a fixed-position container that follows the main content container */}
-            <div className="fixed top-24 z-30 hidden md:block" style={{ left: 'calc(max(15%, 50% - 600px - 40px))' }}>
+            <div className="absolute top-24 z-30 hidden md:block" style={{ left: 'calc(max(15%, 50% - 600px - 40px))' }}>
               <img
                 src="/coin2.png"
                 alt="Gold Coin"
