@@ -156,9 +156,19 @@ function AppContent() {
         marginTop: 'auto'
       }}>
         <p>&copy; {new Date().getFullYear()} Gary A.I. LLC. All rights reserved.</p>
-        <div style={{ marginTop: '10px' }}>
+        <div style={{ marginTop: '10px', marginBottom: '20px' }}>
           <Link to="/terms" style={{ color: '#b8953f', marginRight: '20px', textDecoration: 'none' }}>Terms of Service</Link>
           <Link to="/privacy" style={{ color: '#b8953f', textDecoration: 'none' }}>Privacy Policy</Link>
+        </div>
+        
+        <div style={{ fontSize: '0.8rem', maxWidth: '800px', margin: '0 auto', lineHeight: '1.4' }}>
+          <p style={{ marginBottom: '12px' }}><strong>DISCLAIMER:</strong> This site is 100% for entertainment purposes only and does not involve real money betting or prizes. You must be 18+ years old to utilize Gary.ai.</p>
+          
+          <p style={{ marginBottom: '12px' }}>If you or someone you know may have a gambling problem, Gary.ai For crisis counseling and referral services, call 1-800 GAMBLER (1-800-426-2537). For more information and resources, visit our Responsible Gaming page.</p>
+          
+          <p>Gambling problem? Call 1-800-GAMBLER (Available in the US)<br />
+          Call 877-8-HOPENY or text HOPENY (467369) (NY)<br />
+          Call 1-800-327-5050 (MA), 1-800-NEXT-STEP (AZ), 1-800-BETS-OFF (IA), 1-800-981-0023 (PR)</p>
         </div>
       </div>
     </div>
