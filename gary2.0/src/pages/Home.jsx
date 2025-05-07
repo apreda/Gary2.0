@@ -503,19 +503,109 @@ function Home() {
               {/* Technology badges - using original tags from GaryHero */}
               <div className="flex flex-wrap justify-center p-4 mb-8 mx-auto max-w-3xl">
                 <div className="flex gap-4 flex-wrap justify-center">
-                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center shadow-lg hover:shadow-xl transition-all duration-300" style={{ color: '#000000', boxShadow: '0 0 10px rgba(184, 149, 63, 0.6), inset 0 0 6px rgba(255, 255, 255, 0.6)', border: '2px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(250%)';
+                  }} onMouseLeave={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(-100%)';
+                  }}>
+                    <div className="shine-effect" style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '30%',
+                      height: '100%',
+                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
+                      transform: 'translateX(-100%)',
+                      transition: 'transform 0.6s ease-in-out',
+                      pointerEvents: 'none',
+                      zIndex: 2
+                    }}></div>
                     <span style={{ color: '#000000' }}>Odds API</span>
                   </div>
-                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center shadow-lg hover:shadow-xl transition-all duration-300" style={{ color: '#000000', boxShadow: '0 0 10px rgba(184, 149, 63, 0.6), inset 0 0 6px rgba(255, 255, 255, 0.6)', border: '2px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(250%)';
+                  }} onMouseLeave={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(-100%)';
+                  }}>
+                    <div className="shine-effect" style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '30%',
+                      height: '100%',
+                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
+                      transform: 'translateX(-100%)',
+                      transition: 'transform 0.6s ease-in-out',
+                      pointerEvents: 'none',
+                      zIndex: 2
+                    }}></div>
                     <span style={{ color: '#000000' }}>SportsDB</span>
                   </div>
-                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center shadow-lg hover:shadow-xl transition-all duration-300" style={{ color: '#000000', boxShadow: '0 0 10px rgba(184, 149, 63, 0.6), inset 0 0 6px rgba(255, 255, 255, 0.6)', border: '2px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(250%)';
+                  }} onMouseLeave={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(-100%)';
+                  }}>
+                    <div className="shine-effect" style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '30%',
+                      height: '100%',
+                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
+                      transform: 'translateX(-100%)',
+                      transition: 'transform 0.6s ease-in-out',
+                      pointerEvents: 'none',
+                      zIndex: 2
+                    }}></div>
                     <span style={{ color: '#000000' }}>Turbo 3.5 Mini</span>
                   </div>
-                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center shadow-lg hover:shadow-xl transition-all duration-300" style={{ color: '#000000', boxShadow: '0 0 10px rgba(184, 149, 63, 0.6), inset 0 0 6px rgba(255, 255, 255, 0.6)', border: '2px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(250%)';
+                  }} onMouseLeave={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(-100%)';
+                  }}>
+                    <div className="shine-effect" style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '30%',
+                      height: '100%',
+                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
+                      transform: 'translateX(-100%)',
+                      transition: 'transform 0.6s ease-in-out',
+                      pointerEvents: 'none',
+                      zIndex: 2
+                    }}></div>
                     <span style={{ color: '#000000' }}>Perplexity</span>
                   </div>
-                  <div className="bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center border border-[#B8953F]/80" style={{ color: '#000000' }}>
+                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-2 rounded-full flex items-center shadow-lg hover:shadow-xl transition-all duration-300" style={{ color: '#000000', boxShadow: '0 0 10px rgba(184, 149, 63, 0.6), inset 0 0 6px rgba(255, 255, 255, 0.6)', border: '2px solid', borderImage: 'linear-gradient(45deg, #ffd700, #b8953f, #ffd700) 1', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(250%)';
+                  }} onMouseLeave={(e) => {
+                    const shine = e.currentTarget.querySelector('.shine-effect');
+                    shine.style.transform = 'translateX(-100%)';
+                  }}>
+                    <div className="shine-effect" style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '30%',
+                      height: '100%',
+                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
+                      transform: 'translateX(-100%)',
+                      transition: 'transform 0.6s ease-in-out',
+                      pointerEvents: 'none',
+                      zIndex: 2
+                    }}></div>
                     <span style={{ color: '#000000' }}>StatCast API</span>
                   </div>
                 </div>
