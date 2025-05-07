@@ -809,6 +809,8 @@ function Home() {
             </div>
             <div className="mt-2">© {new Date().getFullYear()} GARY.AI. All rights reserved.</div>
           </footer>
+          </div>
+          </div>
         </section>
       </div>
     </div>
