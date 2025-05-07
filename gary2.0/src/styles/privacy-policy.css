@@ -1,0 +1,68 @@
+/* Privacy Policy Page Styles */
+
+.privacy-container {
+  max-width: 1000px;
+  margin: 40px auto;
+  padding: 0 20px 80px 20px;
+  color: #f1f1f1;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+}
+
+.privacy-card {
+  background-color: rgba(20, 20, 20, 0.9);
+  border-radius: 8px;
+  padding: 40px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.privacy-title {
+  color: #b8953f;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.privacy-last-updated {
+  color: #999;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+.privacy-section {
+  margin: 30px 0;
+}
+
+.privacy-heading {
+  color: #b8953f;
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+  font-weight: 500;
+}
+
+.privacy-text {
+  margin-bottom: 15px;
+  line-height: 1.6;
+}
+
+.privacy-footer {
+  border-top: 1px solid #333;
+  margin-top: 50px;
+  padding-top: 20px;
+  text-align: center;
+  color: #999;
+  font-size: 0.9rem;
+}
+
+.privacy-link {
+  color: #b8953f;
+  margin-right: 20px;
+  text-decoration: none;
+}
+
+.privacy-link:last-child {
+  margin-right: 0;
+}
+
+.privacy-links {
+  margin-top: 15px;
+}
