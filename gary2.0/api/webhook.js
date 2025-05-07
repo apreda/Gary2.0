@@ -72,13 +72,16 @@ export default async function handler(req, res) {
           
           // Prepare the update data
           const updateData = {
-            plan: '"pro"::text',
+            plan: 'pro', // Changed from PostgreSQL casting to simple string
             stripe_customer_id: customer,
             stripe_subscription_id: subscription,
             subscription_status: 'active',
             subscription_period_start: new Date(subscriptionDetails.current_period_start * 1000).toISOString(),
             subscription_period_end: new Date(subscriptionDetails.current_period_end * 1000).toISOString()
           };
+          
+          console.log('Supabase URL:', supabaseUrl);
+          console.log('User email being processed:', customerEmail);
           
           console.log('Update data prepared:', updateData);
           
@@ -99,10 +102,38 @@ export default async function handler(req, res) {
           // Otherwise try to find user by email
           else if (customerEmail) {
             console.log('Looking up user by email:', customerEmail);
+            // Log the exact query we're about to run
+            console.log('Running Supabase update with email:', customerEmail);
+            
+            // First check if the user exists
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('id, email')
+              .eq('email', customerEmail)
+              .single();
+              
+            if (userError || !userData) {
+              console.error('Error finding user by email:', userError || 'No user found');
+              console.log('Trying case insensitive search...');
+              
+              // Try a case-insensitive search as fallback
+              const { data: fuzzyUserData } = await supabase
+                .from('users')
+                .select('id, email')
+                .ilike('email', customerEmail);
+                
+              console.log('Fuzzy email search results:', fuzzyUserData);
+            } else {
+              console.log('Found user data:', userData);
+            }
+            
+            // Proceed with the update
             const result = await supabase
               .from('users')
               .update(updateData)
               .eq('email', customerEmail);
+            
+            console.log('Supabase update result:', result);
             
             if (result.error) {
               console.error('Error updating by email:', result.error);
@@ -154,13 +185,18 @@ export default async function handler(req, res) {
       const customerId = subscription.customer;
       
       try {
+        // Log the customer ID we're looking for
+        console.log('Looking for customer with Stripe ID:', customerId);
+        
         const result = await supabase
           .from('users')
           .update({ 
             subscription_status: 'canceled',
-            plan: '"free"::text'
+            plan: 'free' // Changed from PostgreSQL casting to simple string
           })
           .eq('stripe_customer_id', customerId);
+          
+        console.log('Supabase update result:', result);
         
         if (result.error) {
           console.error('Error canceling subscription:', result.error);
