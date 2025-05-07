@@ -456,7 +456,7 @@ function Home() {
         <section className="hero relative flex flex-col overflow-hidden min-h-screen">
           {/* Hero watermark background - Gary Money image with a subtle gradient overlay */}
           <div className="hero__watermark absolute top-1/2 left-1/2 w-[120%] h-[120%] transform -translate-x-1/2 -translate-y-1/2 scale-110 pointer-events-none z-10">
-            <div className="absolute inset-0 bg-[url('/gary99.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
+            <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
           {/* This section formerly contained the Gary50.png background */}
@@ -466,7 +466,7 @@ function Home() {
             <img
               src="/coin2.png"
               alt="Gold Coin"
-              className="w-48 h-48 object-contain"
+              className="w-96 h-96 object-contain"
               style={{ 
                 animation: "float 6s ease-in-out infinite"
               }}
@@ -481,7 +481,7 @@ function Home() {
                 <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center border border-gray-800" 
                      style={{ background: '#b8953f', color: '#1a1a1a' }}>
                   <span className="mr-2 font-bold">NEW</span>
-                  <span>Introducing Gary AI: Intelligent sports betting</span>
+                  <span>Introducing Gary AI: Intelligent Sports Bets</span>
                 </div>
               </div>
 
@@ -524,7 +524,7 @@ function Home() {
               {/* CTA Buttons - Exact Vault style from original GaryHero */}
               <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center">
                 <Link 
-                  to="/picks" 
+                  to="/real-gary-picks" 
                   className="bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] text-white font-medium rounded-md border border-[rgba(255,255,255,0.1)] backdrop-blur-sm transition duration-200 ease-in-out"
                   style={{ padding: "10px 20px" }}
                 >
