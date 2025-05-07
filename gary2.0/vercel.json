@@ -2,5 +2,15 @@
   "rewrites": [
     { "source": "/((?!api/).*)" , "destination": "/index.html" }
   ],
-  "buildCommand": "vite build"
+  "buildCommand": "vite build",
+  "functions": {
+    "api/**/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build" },
+    { "src": "pages/api/**/*.js", "use": "@vercel/node" }
+  ]
 }
