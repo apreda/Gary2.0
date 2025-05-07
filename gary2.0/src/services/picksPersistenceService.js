@@ -124,23 +124,44 @@ export const picksPersistenceService = {
       console.log('Loading picks from persistence service...');
       
       // Use Eastern Time consistently for all date operations
-      const today = new Date();
-      // Convert to Eastern Time
-      const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
-      const dateString = easternTime.toISOString().split('T')[0]; // YYYY-MM-DD in Eastern Time
-      const easternHour = easternTime.getHours();
+      const now = new Date();
       
-      console.log(`Current Eastern Time: ${easternTime.toLocaleString()} (Hour: ${easternHour})`);
+      // Convert to Eastern Time zone properly
+      const easternTimeOptions = { timeZone: "America/New_York" };
+      const easternDateString = now.toLocaleDateString('en-US', easternTimeOptions);
+      const easternTimeString = now.toLocaleTimeString('en-US', easternTimeOptions);
+      
+      // Create a new date object with Eastern Time components
+      const [month, day, year] = easternDateString.split('/');
+      const [time, period] = easternTimeString.match(/([\d:]+)\s(AM|PM)/).slice(1);
+      const [hours, minutes] = time.split(':');
+      
+      // Format the date string properly (YYYY-MM-DD)
+      const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      const easternHour = parseInt(hours) + (period === 'PM' && hours !== '12' ? 12 : 0);
+      
+      // Format full time for logging
+      const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
+      
+      console.log(`Service: Properly formatted Eastern date: ${dateString}, Hour: ${easternHour}`);
+      console.log(`Service: Original time parts: M:${month} D:${day} Y:${year} H:${hours} M:${minutes} ${period}`);
+      console.log(`Service: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour})`);
       
       // Before 10am EST, always use yesterday's picks if available
       if (easternHour < 10) {
         console.log("It's before 10am Eastern Time - looking for yesterday's picks");
         
-        // Calculate yesterday's date
-        const yesterday = new Date(easternTime);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayString = yesterday.toISOString().split('T')[0];
-        console.log(`Looking for picks from previous day: ${yesterdayString}`);
+        // Calculate yesterday's date properly using the date parts we already have
+        const yesterdayDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        
+        // Format yesterday's date as YYYY-MM-DD
+        const yesterdayYear = yesterdayDate.getFullYear();
+        const yesterdayMonth = (yesterdayDate.getMonth() + 1).toString().padStart(2, '0');
+        const yesterdayDay = yesterdayDate.getDate().toString().padStart(2, '0');
+        const yesterdayString = `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
+        
+        console.log(`Service: Looking for picks from previous day: ${yesterdayString}`);
         
         // Try to load yesterday's picks from Supabase
         try {
@@ -207,25 +228,44 @@ export const picksPersistenceService = {
   picksExistForToday: async () => {
     try {
       // Use Eastern Time consistently for all date operations
-      const today = new Date();
-      // Convert to Eastern Time
-      const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
-      const dateString = easternTime.toISOString().split('T')[0];
+      const now = new Date();
       
-      // Log Eastern Time information for debugging
-      const easternHour = easternTime.getHours();
-      console.log(`Current Eastern Time: ${easternTime.toLocaleString()} (Hour: ${easternHour})`);
-      console.log(`Checking for picks with date: ${dateString} (Eastern Time)`);
+      // Convert to Eastern Time zone properly
+      const easternTimeOptions = { timeZone: "America/New_York" };
+      const easternDateString = now.toLocaleDateString('en-US', easternTimeOptions);
+      const easternTimeString = now.toLocaleTimeString('en-US', easternTimeOptions);
+      
+      // Create a new date object with Eastern Time components
+      const [month, day, year] = easternDateString.split('/');
+      const [time, period] = easternTimeString.match(/([\d:]+)\s(AM|PM)/).slice(1);
+      const [hours, minutes] = time.split(':');
+      
+      // Format the date string properly (YYYY-MM-DD)
+      const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      const easternHour = parseInt(hours) + (period === 'PM' && hours !== '12' ? 12 : 0);
+      
+      // Format full time for logging
+      const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
+      
+      console.log(`picksExistForToday: Properly formatted Eastern date: ${dateString}, Hour: ${easternHour}`);
+      console.log(`picksExistForToday: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour})`);
+      console.log(`picksExistForToday: Checking for picks with date: ${dateString}`);
       
       // Always use yesterday's picks before 10am Eastern Time, even if today's picks exist
       if (easternHour < 10) {
         console.log("It's before 10am Eastern Time - always using yesterday's picks if available");
         
-        // If it's before 10am, check for yesterday's picks instead
-        const yesterday = new Date(easternTime);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayString = yesterday.toISOString().split('T')[0];
-        console.log(`Looking for previous day's picks with date: ${yesterdayString}`);
+        // Calculate yesterday's date properly using the date parts we already have
+        const yesterdayDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        
+        // Format yesterday's date as YYYY-MM-DD
+        const yesterdayYear = yesterdayDate.getFullYear();
+        const yesterdayMonth = (yesterdayDate.getMonth() + 1).toString().padStart(2, '0');
+        const yesterdayDay = yesterdayDate.getDate().toString().padStart(2, '0');
+        const yesterdayString = `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
+        
+        console.log(`picksExistForToday: Looking for previous day's picks with date: ${yesterdayString}`);
         
         // Only using Supabase for data consistency across all devices
         const connectionVerified = await ensureAnonymousSession();
