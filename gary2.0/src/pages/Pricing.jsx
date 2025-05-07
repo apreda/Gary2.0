@@ -75,14 +75,6 @@ export function Pricing() {
                   <span className="mr-2" style={{color: 'black'}}>•</span>
                   <span style={{color: 'black'}}>1 DAILY PICK</span>
                 </li>
-                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
-                  <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>MONTHLY BONUS PICK</span>
-                </li>
-                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
-                  <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>RIDE OR FADE STATS</span>
-                </li>
               </ul>
             </div>
             
