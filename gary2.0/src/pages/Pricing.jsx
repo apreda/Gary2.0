@@ -148,15 +148,15 @@ export function Pricing() {
               <ul className="space-y-3 mb-6 text-lg">
                 <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
                   <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>UNLIMITED PICKS</span>
+                  <span style={{color: 'black'}}>DAILY PICKS (3-7 per day)</span>
                 </li>
                 <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
                   <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>VIP MODEL ACCESS</span>
+                  <span style={{color: 'black'}}>GARY'S ANALYSIS</span>
                 </li>
                 <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
                   <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>UNIT SIZING</span>
+                  <span style={{color: 'black'}}>EARLY ACCESS TO ADVANCE MODEL (Coming Soon)</span>
                 </li>
               </ul>
             </div>
