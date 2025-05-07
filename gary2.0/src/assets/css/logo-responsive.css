@@ -1,0 +1,28 @@
+/* Responsive styles for the Gary logo */
+@media (max-width: 1400px) {
+  .logo-image {
+    max-width: 16rem !important;
+    max-height: 16rem !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .logo-image {
+    max-width: 14rem !important;
+    max-height: 14rem !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .logo-image {
+    max-width: 12rem !important;
+    max-height: 12rem !important;
+  }
+}
+
+/* Hide the logo on smaller screens to prevent overlap */
+@media (max-width: 992px) {
+  .logo-container {
+    display: none !important;
+  }
+}

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
+import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";
 // Using the public Gary50.png image from the public folder
 
@@ -462,11 +463,12 @@ function Home() {
           {/* Content wrapper that spans the full width to center both the logo and main content */}
           <div className="relative mx-auto w-full max-w-[1440px]">
             {/* Create a fixed-position container that follows the main content container */}
-            <div className="absolute top-24 z-30 hidden md:block" style={{ left: 'calc(max(2%, 50% - 600px - 280px))' }}>
+            {/* Use a combination of responsive classes and custom styles for the logo */}
+            <div className="absolute top-24 z-30 logo-container" style={{ left: 'calc(50% - 600px - 280px)' }}>
               <img
                 src="/coin2.png"
                 alt="Gold Coin"
-                className="w-[18.24rem] h-[18.24rem] object-contain"
+                className="w-auto h-auto logo-image object-contain transition-all duration-300"
                 style={{ 
                   animation: "float 6s ease-in-out infinite",
                   maxWidth: "18.24rem"
