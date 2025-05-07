@@ -94,7 +94,7 @@ export function Pricing() {
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div className="w-full py-3 px-4 bg-black text-center rounded-md border border-[#b8953f]">
+              <div className="w-full h-[52px] py-3 px-4 bg-black text-center rounded-md border border-[#b8953f]">
                 <div className="text-xl text-[#b8953f] font-sans tracking-wider">
                   CURRENT PLAN
                 </div>
@@ -169,7 +169,7 @@ export function Pricing() {
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div className="w-full py-3 px-4 bg-[#b8953f] text-center rounded-md">
+              <div className="w-full h-[52px] py-3 px-4 bg-[#b8953f] text-center rounded-md">
                 <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="no-underline">
                   <div className="text-xl text-black font-sans tracking-wider">
                     SELECT PLAN
