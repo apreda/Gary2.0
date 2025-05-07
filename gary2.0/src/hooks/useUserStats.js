@@ -227,81 +227,225 @@ export function useUserStats() {
     }
   };
 
-  // This function is now faster because it doesn't need to
-  // manually refresh the stats - the real-time subscription will handle that
-  const updateStats = async (action) => {
+  // Method to record a bet/fade decision
+  const updateStats = async (action, gameId) => {
     try {
       if (!user) {
         console.log('No authenticated user, skipping stats update');
+        return false;
+      }
+      
+      // Only handle ride and fade actions
+      if (action !== 'ride' && action !== 'fade') {
+        console.warn('Invalid action:', action);
+        return false;
+      }
+      
+      // We need a gameId to record the decision
+      if (!gameId) {
+        console.warn('No gameId provided for decision');
+        return false;
+      }
+      
+      // First, record the user decision
+      await recordUserDecision(user.id, gameId, action);
+
+      // Then, check if the game result is already available to update win/loss stats
+      await checkGameResult(user.id, gameId, action);
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating stats:', error);
+      setError(error.message);
+      return false;
+    }
+  };
+  
+  // Record user's decision in user_decisions table
+  const recordUserDecision = async (userId, gameId, decisionType) => {
+    try {
+      // First check if user already made a decision for this game
+      const { data: existing } = await supabase
+        .from('user_decisions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('game_id', gameId)
+        .maybeSingle();
+        
+      // If user already made a decision, update it
+      if (existing) {
+        await supabase
+          .from('user_decisions')
+          .update({ 
+            decision_type: decisionType,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+      } else {
+        // Otherwise create a new decision record
+        await supabase
+          .from('user_decisions')
+          .insert([{ 
+            user_id: userId,
+            game_id: gameId,
+            decision_type: decisionType,
+            created_at: new Date().toISOString()
+          }]);
+      }
+      
+      // Update the appropriate count in user_stats
+      const countField = decisionType === 'ride' ? 'ride_count' : 'fade_count';
+      
+      // Get current stats
+      const { data: currentStats } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (currentStats) {
+        await supabase
+          .from('user_stats')
+          .update({ 
+            [countField]: (currentStats[countField] || 0) + 1,
+            total_picks: (currentStats.total_picks || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+      }
+    } catch (error) {
+      console.error('Error recording user decision:', error);
+      throw error;
+    }
+  };
+  
+  // Check if the game has a result and update user's win/loss record
+  const checkGameResult = async (userId, gameId, decisionType) => {
+    try {
+      // Get game result from game_results table
+      const { data: gameResult } = await supabase
+        .from('game_results')
+        .select('*')
+        .eq('id', gameId)
+        .maybeSingle();
+        
+      // If no result yet, do nothing
+      if (!gameResult || !gameResult.result) {
         return;
       }
       
+      const isGaryWin = gameResult.result.toLowerCase() === 'win';
+      
+      // Determine if user decision was correct
+      // If user rode with Gary and Gary wins → User wins
+      // If user faded Gary and Gary loses → User wins
+      let isUserWin = false;
+      if ((decisionType === 'ride' && isGaryWin) || (decisionType === 'fade' && !isGaryWin)) {
+        isUserWin = true;
+      }
+      
+      // Update user stats with the result
+      await updateUserResultStats(userId, isUserWin);
+      
+      // Mark the user decision as processed with result
+      await supabase
+        .from('user_decisions')
+        .update({ 
+          processed: true, 
+          result: isUserWin ? 'win' : 'loss',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('user_id', userId)
+        .eq('game_id', gameId);
+    } catch (error) {
+      console.error('Error checking game result:', error);
+    }
+  };
+  
+  // Update user's win/loss stats based on the result
+  const updateUserResultStats = async (userId, isWin) => {
+    try {
       // Get current stats
-      const { data: currentStats, error: fetchError } = await supabase
+      const { data: currentStats } = await supabase
         .from('user_stats')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
-
-      if (fetchError) throw fetchError;
-
-      // Simulate win/loss (in production this would be based on actual game results)
-      const result = Math.random() > 0.5 ? 'win' : 'loss';
+        
+      if (!currentStats) return;
       
-      // Calculate new values
-      const updates = { ...currentStats };
+      // Calculate updated stats
+      const updates = {
+        win_count: isWin ? (currentStats.win_count || 0) + 1 : currentStats.win_count,
+        loss_count: !isWin ? (currentStats.loss_count || 0) + 1 : currentStats.loss_count,
+        last_result: isWin ? 'win' : 'loss',
+        updated_at: new Date().toISOString()
+      };
       
-      // Update pick counts
-      if (action === 'ride' || action === 'fade') {
-        const countField = `${action}_count`;
-        updates[countField] = (currentStats[countField] || 0) + 1;
-        updates.total_picks = (currentStats.total_picks || 0) + 1;
-      }
-
-      // Update win/loss and streak
-      if (result === 'win') {
-        updates.win_count = (currentStats.win_count || 0) + 1;
-        // If last result was also a win, increment streak, else start new streak
+      // Update streak
+      if (isWin) {
         if (currentStats.last_result === 'win') {
           updates.current_streak = (currentStats.current_streak || 0) + 1;
         } else {
           updates.current_streak = 1;
         }
-        updates.longest_streak = Math.max(
-          updates.current_streak,
-          currentStats.longest_streak || 0
-        );
+        
+        // Update longest streak if needed
+        if (updates.current_streak > (currentStats.longest_streak || 0)) {
+          updates.longest_streak = updates.current_streak;
+        }
       } else {
-        updates.loss_count = (currentStats.loss_count || 0) + 1;
-        // If last result was also a loss, decrement streak, else start new losing streak
+        // Loss
         if (currentStats.last_result === 'loss') {
           updates.current_streak = (currentStats.current_streak || 0) - 1;
         } else {
           updates.current_streak = -1;
         }
       }
-
-      // Update last result
-      updates.last_result = result;
-
+      
       // Update recent results (keep last 6)
       updates.recent_results = [
-        result.toUpperCase()[0],
-        ...(currentStats.recent_results || [])
-      ].slice(0, 6);
-
-      // Update in Supabase
-      const { error: updateError } = await supabase
+        isWin ? 'W' : 'L',
+        ...(currentStats.recent_results || []).slice(0, 5)
+      ];
+      
+      // Update in database
+      await supabase
         .from('user_stats')
         .update(updates)
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
-
-      // No need to manually refresh - real-time subscription will handle it
+        .eq('id', userId);
     } catch (error) {
-      console.error('Error updating stats:', error);
-      setError(error.message);
+      console.error('Error updating user result stats:', error);
+    }
+  };
+  
+  // Process all pending user decisions that haven't been checked against game results yet
+  const checkAllPendingResults = async () => {
+    try {
+      if (!user) return { processed: 0 };
+      
+      // Get all unprocessed decisions
+      const { data: pendingDecisions } = await supabase
+        .from('user_decisions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('processed', false);
+        
+      if (!pendingDecisions || pendingDecisions.length === 0) {
+        return { processed: 0 };
+      }
+      
+      // Process each pending decision
+      let processingCount = 0;
+      for (const decision of pendingDecisions) {
+        await checkGameResult(user.id, decision.game_id, decision.decision_type);
+        processingCount++;
+      }
+      
+      return { processed: processingCount };
+    } catch (error) {
+      console.error('Error checking pending results:', error);
+      return { processed: 0, error: error.message };
     }
   };
 
@@ -310,6 +454,7 @@ export function useUserStats() {
     loading,
     error,
     updateStats,
+    checkAllPendingResults,
     realtimeStatus,
     // DEV ONLY: Expose function to simulate issues
     simulateConnectionIssue: process.env.NODE_ENV === 'development' ? simulateConnectionIssue : undefined
