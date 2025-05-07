@@ -456,7 +456,7 @@ function Home() {
         <section className="hero relative flex flex-col overflow-hidden min-h-screen">
           {/* Hero watermark background - Gary Money image with a subtle gradient overlay */}
           <div className="hero__watermark absolute top-1/2 left-1/2 w-[120%] h-[120%] transform -translate-x-1/2 -translate-y-1/2 scale-110 pointer-events-none z-10">
-            <div className="absolute inset-0 bg-[url('/garyai-watermark2.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
+            <div className="absolute inset-0 bg-[url('/gary99.png')] bg-center bg-no-repeat bg-contain opacity-[0.035] filter blur-sm"></div>
           </div>
 
           {/* This section formerly contained the Gary50.png background */}
