@@ -29,6 +29,15 @@ function RealGaryPicks() {
   const [reloadKey, setReloadKey] = useState(0);
   const { userPlan } = useUserPlan();
   const navigate = useNavigate();
+  
+  // Debug log for pro/free status
+  useEffect(() => {
+    console.log('RealGaryPicks: userPlan status:', userPlan);
+    console.log('RealGaryPicks: user authenticated:', !!user);
+    if (user) {
+      console.log('RealGaryPicks: user ID:', user.id);
+    }
+  }, [userPlan, user]);
 
   // State for cards loaded from the database
   const [picks, setPicks] = useState([]);

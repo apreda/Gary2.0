@@ -11,16 +11,40 @@ export const UserPlanProvider = ({ children }) => {
   // Load user plan from supabase when authenticated
   useEffect(() => {
     const loadUserPlan = async () => {
+      // Get current auth user
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('UserPlanContext: Current auth user:', user?.id);
+      
       if (user) {
+        // Try first from the users table
         const { data, error } = await supabase
           .from('users')
-          .select('plan')
+          .select('plan, subscription_status, id')
           .eq('id', user.id)
           .single();
-          
+        
+        console.log('UserPlanContext: User data from Supabase:', data);
+        console.log('UserPlanContext: Error fetching user plan:', error);
+        
         if (!error && data) {
-          setUserPlan(data.plan || 'free');
+          // Check if plan is explicitly 'pro' or subscription_status is 'active'
+          if (data.plan === 'pro' || data.subscription_status === 'active') {
+            console.log('UserPlanContext: Setting user plan to pro');
+            setUserPlan('pro');
+          } else {
+            console.log('UserPlanContext: Setting user plan to free');
+            setUserPlan('free');
+          }
+        } else {
+          // As a fallback, check the user metadata
+          const metadata = user.user_metadata || {};
+          if (metadata.plan === 'pro' || metadata.subscription_status === 'active') {
+            console.log('UserPlanContext: Setting user plan to pro based on metadata');
+            setUserPlan('pro');
+          } else {
+            console.log('UserPlanContext: No plan found, setting to free');
+            setUserPlan('free');
+          }
         }
       }
     };
