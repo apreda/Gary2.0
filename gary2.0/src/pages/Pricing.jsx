@@ -33,7 +33,7 @@ export function Pricing() {
         <div className="grid md:grid-cols-2 gap-10 max-w-3xl mx-auto">
           
           {/* Free Tier - Ticket Style */}
-          <div className="flex flex-col h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
+          <div className="flex flex-col h-[500px] max-w-[300px] w-[300px] mx-auto relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
             {/* Ticket notches - simplified */}
             <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
             <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
@@ -75,6 +75,15 @@ export function Pricing() {
                   <span className="mr-2" style={{color: 'black'}}>•</span>
                   <span style={{color: 'black'}}>1 DAILY PICK</span>
                 </li>
+                {/* Invisible placeholders to match the height of the pro card */}
+                <li className="flex items-center font-sans tracking-wider opacity-0" style={{color: 'black'}}>
+                  <span className="mr-2" style={{color: 'black'}}>•</span>
+                  <span style={{color: 'black'}}>PLACEHOLDER</span>
+                </li>
+                <li className="flex items-center font-sans tracking-wider opacity-0" style={{color: 'black'}}>
+                  <span className="mr-2" style={{color: 'black'}}>•</span>
+                  <span style={{color: 'black'}}>PLACEHOLDER</span>
+                </li>
               </ul>
             </div>
             
@@ -85,8 +94,8 @@ export function Pricing() {
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div className="pricing-page-button-container" style={{ width: '100%', padding: '0.75rem 1rem', backgroundColor: 'black', background: 'black', textAlign: 'center', borderRadius: '0.375rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', border: '1px solid #b8953f' }}>
-                <div className="pricing-page-button-text" style={{ fontSize: '1.25rem', color: '#b8953f', fontFamily: 'sans-serif', letterSpacing: '0.05em', fontWeight: 'bold' }}>
+              <div className="w-full py-3 px-4 bg-black text-center rounded-md border border-[#b8953f]">
+                <div className="text-xl text-[#b8953f] font-sans tracking-wider">
                   CURRENT PLAN
                 </div>
               </div>
@@ -100,7 +109,7 @@ export function Pricing() {
           </div>
           
           {/* Pro Tier - Ticket Style */}
-          <div className="flex flex-col h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
+          <div className="flex flex-col h-[500px] max-w-[300px] w-[300px] mx-auto relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
             {/* Ticket notches - simplified */}
             <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
             <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
