@@ -52,7 +52,7 @@ export default async function handler(req, res) {
             const { error } = await supabase
               .from('users')
               .update({
-                plan: 'pro',
+                plan: '"pro"::text',
                 stripe_customer_id: customer,
                 stripe_subscription_id: subscription,
                 subscription_status: 'active',
@@ -118,7 +118,7 @@ export default async function handler(req, res) {
         const { error } = await supabase
           .from('users')
           .update({
-            plan: 'free',
+            plan: '"free"::text',
             subscription_status: 'inactive',
             subscription_end: new Date().toISOString()
           })
