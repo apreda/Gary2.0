@@ -54,25 +54,56 @@ function RealGaryPicks() {
     console.log('[RealGaryPicks] error:', error);
   }, [picks, loading, error]);
 
-  // Load picks from Supabase - specifically for today's date
+  // Load picks from Supabase using appropriate date based on time
   const loadPicks = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      // Get today's date in YYYY-MM-DD format for database query
-      const today = new Date().toISOString().split('T')[0];
-      console.log(`Looking for picks specifically for today (${today})`);
+      // Use Eastern Time consistently for all date operations
+      const now = new Date();
+      const easternTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+      const dateString = easternTime.toISOString().split("T")[0]; // Current date in Eastern Time
+      const easternHour = easternTime.getHours();
       
-      // Query Supabase for picks with today's date only
+      let queryDate = dateString;
+      console.log(`Current Eastern Time: ${easternTime.toLocaleString()} (Hour: ${easternHour})`);
+      
+      // Before 10am EST, always use yesterday's picks if available
+      if (easternHour < 10) {
+        console.log("RealGaryPicks: It's before 10am Eastern Time - looking for yesterday's picks");
+        
+        // Calculate yesterday's date
+        const yesterday = new Date(easternTime);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayString = yesterday.toISOString().split("T")[0];
+        
+        // Check if yesterday's picks exist
+        const { data: yesterdayData, error: yesterdayError } = await supabase
+          .from("daily_picks")
+          .select("picks, date")
+          .eq("date", yesterdayString)
+          .maybeSingle();
+          
+        if (!yesterdayError && yesterdayData && yesterdayData.picks) {
+          console.log(`RealGaryPicks: Using picks from previous day (${yesterdayString}) since it's before 10am`);
+          queryDate = yesterdayString;
+        } else {
+          console.log(`RealGaryPicks: No picks found for previous day ${yesterdayString}, will try today's picks`); 
+        }
+      }
+      
+      console.log(`Looking for picks for date: ${queryDate}`);
+      
+      // Query Supabase for picks with the determined date
       const { data, error: fetchError } = await supabase
         .from('daily_picks')
         .select('picks, date')
-        .eq('date', today)
+        .eq('date', queryDate)
         .maybeSingle(); // Use maybeSingle to avoid 406 errors
       
-      // Log the result for debugging - explicitly show the date we checked
-      console.log(`Supabase fetch result for ${today}:`, { data, fetchError });
+      // Log the result for debugging
+      console.log(`Supabase fetch result for ${queryDate}:`, { data, fetchError });
 
       // Parse picks column if it's a string
       let picksArray = [];
