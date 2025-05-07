@@ -30,10 +30,10 @@ export function Pricing() {
         </div>
         
         {/* Pricing Cards */}
-        <div className="grid md:grid-cols-2 gap-10 max-w-3xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-center items-stretch gap-10 max-w-3xl mx-auto">
           
           {/* Free Tier - Ticket Style */}
-          <div className="flex flex-col h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
+          <div className="flex flex-col pricing-card h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
             {/* Ticket notches - simplified */}
             <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
             <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
@@ -41,7 +41,7 @@ export function Pricing() {
             <div className="absolute -right-1 top-2/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
             
             {/* Ticket header */}
-            <div className="w-full py-2 px-4 rounded-t-xl flex flex-col" style={{backgroundColor: '#000000'}}>
+            <div className="w-full py-2 px-4 rounded-t-xl flex flex-col pricing-card-header" style={{backgroundColor: '#000000'}}>
               <div className="flex flex-col">
                 <div className="flex justify-between items-center">
                   <div className="text-lg font-bold text-[#b8953f] font-sans tracking-wider">GARY A.I.</div>
@@ -62,7 +62,7 @@ export function Pricing() {
             </div>
             
             {/* Ticket body */}
-            <div className="px-6 pt-4 pb-2 flex-1 bg-[#f8f8e0] text-black rounded-b-xl">
+            <div className="px-6 pt-4 pb-2 flex-1 bg-[#f8f8e0] text-black rounded-b-xl pricing-card-body">
               <h2 className="text-5xl font-bold mb-3 font-sans tracking-wider uppercase" style={{color: 'black'}}>FREE</h2>
               
               <div className="mb-4 flex items-baseline border-b border-dotted border-gray-400/30 pb-4">
@@ -93,8 +93,8 @@ export function Pricing() {
                 <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
               </div>
               
-              <div className="pricing-page-button-container" style={{ width: '100%', padding: '0.75rem 1rem', backgroundColor: 'black', background: 'black', textAlign: 'center', borderRadius: '0.375rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', border: '1px solid #b8953f' }}>
-                <div className="pricing-page-button-text" style={{ fontSize: '1.25rem', color: '#b8953f', fontFamily: 'sans-serif', letterSpacing: '0.05em', fontWeight: 'bold' }}>
+              <div className="w-full py-3 px-4 bg-black text-center rounded-md border border-[#b8953f]">
+                <div className="text-xl text-[#b8953f] font-sans tracking-wider font-bold">
                   CURRENT PLAN
                 </div>
               </div>
@@ -108,7 +108,7 @@ export function Pricing() {
           </div>
           
           {/* Pro Tier - Ticket Style */}
-          <div className="flex flex-col h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
+          <div className="flex flex-col pricing-card h-[500px] max-w-[300px] mx-auto w-full relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
             {/* Ticket notches - simplified */}
             <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
             <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
@@ -116,7 +116,7 @@ export function Pricing() {
             <div className="absolute -right-1 top-2/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
             
             {/* Ticket header with branding */}
-            <div className="w-full py-2 px-4 rounded-t-xl flex flex-col" style={{backgroundColor: '#b8953f'}}>
+            <div className="w-full py-2 px-4 rounded-t-xl flex flex-col pricing-card-header" style={{backgroundColor: '#b8953f'}}>
               <div className="flex flex-col">
                 <div className="flex justify-between items-center">
                   <div className="text-lg font-bold text-black font-sans tracking-wider">GARY A.I.</div>
@@ -137,7 +137,7 @@ export function Pricing() {
             </div>
             
             {/* Ticket body */}
-            <div className="px-6 pt-4 pb-2 flex-1 bg-[#f8f8e0] text-black rounded-b-xl">
+            <div className="px-6 pt-4 pb-2 flex-1 bg-[#f8f8e0] text-black rounded-b-xl pricing-card-body">
               <h2 className="text-5xl font-bold mb-3 font-sans tracking-wider uppercase" style={{color: 'black'}}>PRO</h2>
               
               <div className="mb-4 flex items-baseline border-b border-dotted border-gray-400/30 pb-4">
