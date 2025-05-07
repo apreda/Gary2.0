@@ -42,39 +42,71 @@ export default async function handler(req, res) {
         // Extract the customer and subscription IDs
         const { client_reference_id, customer, subscription } = session;
         
-        if (client_reference_id) {
-          // Update the user's status in Supabase
-          const { error } = await supabase
-            .from('users')
-            .update({
-              plan: 'pro',
-              stripe_customer_id: customer,
-              stripe_subscription_id: subscription,
-              subscription_status: 'active'
-            })
-            .eq('id', client_reference_id);
+        if (client_reference_id && subscription) {
+          // Fetch the subscription details to get period start/end dates
+          try {
+            // Get subscription details from Stripe
+            const subscriptionDetails = await stripe.subscriptions.retrieve(subscription);
             
-          if (error) {
-            console.error('Error updating user subscription status:', error);
+            // Update the user's status in Supabase with all required fields
+            const { error } = await supabase
+              .from('users')
+              .update({
+                plan: 'pro',
+                stripe_customer_id: customer,
+                stripe_subscription_id: subscription,
+                subscription_status: 'active',
+                subscription_period_start: new Date(subscriptionDetails.current_period_start * 1000).toISOString(),
+                subscription_period_end: new Date(subscriptionDetails.current_period_end * 1000).toISOString()
+              })
+              .eq('id', client_reference_id);
+              
+            if (error) {
+              console.error('Error updating user subscription status:', error);
+            } else {
+              console.log('Successfully updated subscription for user:', client_reference_id);
+            }
+          } catch (subscriptionError) {
+            console.error('Error fetching subscription details:', subscriptionError);
           }
+        } else {
+          console.error('Missing client_reference_id or subscription in checkout.session.completed event');
         }
         break;
       }
       case 'customer.subscription.updated': {
-        const subscription = event.data.object;
+        const subscriptionObj = event.data.object;
         // Handle subscription updates (e.g., plan changes, payment failures)
-        const customerId = subscription.customer;
-        const status = subscription.status;
+        const customerId = subscriptionObj.customer;
+        const status = subscriptionObj.status;
         
+        // Get subscription period dates
+        const periodStart = subscriptionObj.current_period_start 
+          ? new Date(subscriptionObj.current_period_start * 1000).toISOString() 
+          : null;
+        const periodEnd = subscriptionObj.current_period_end 
+          ? new Date(subscriptionObj.current_period_end * 1000).toISOString() 
+          : null;
+        
+        // Prepare update data
+        const updateData = {
+          subscription_status: status
+        };
+        
+        // Only include period dates if they exist
+        if (periodStart) updateData.subscription_period_start = periodStart;
+        if (periodEnd) updateData.subscription_period_end = periodEnd;
+        
+        // Update the user record
         const { error } = await supabase
           .from('users')
-          .update({
-            subscription_status: status
-          })
+          .update(updateData)
           .eq('stripe_customer_id', customerId);
           
         if (error) {
           console.error('Error updating subscription status:', error);
+        } else {
+          console.log('Successfully updated subscription status for customer:', customerId);
         }
         break;
       }
