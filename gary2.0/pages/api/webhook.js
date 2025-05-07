@@ -41,36 +41,60 @@ export default async function handler(req, res) {
         const session = event.data.object;
         // Extract the customer and subscription IDs
         const { client_reference_id, customer, subscription } = session;
+        const customerEmail = session.customer_details?.email;
         
-        if (client_reference_id && subscription) {
-          // Fetch the subscription details to get period start/end dates
+        // Only proceed if we have a subscription
+        if (subscription) {
           try {
             // Get subscription details from Stripe
             const subscriptionDetails = await stripe.subscriptions.retrieve(subscription);
             
-            // Update the user's status in Supabase with all required fields
-            const { error } = await supabase
-              .from('users')
-              .update({
-                plan: '"pro"::text',
-                stripe_customer_id: customer,
-                stripe_subscription_id: subscription,
-                subscription_status: 'active',
-                subscription_period_start: new Date(subscriptionDetails.current_period_start * 1000).toISOString(),
-                subscription_period_end: new Date(subscriptionDetails.current_period_end * 1000).toISOString()
-              })
-              .eq('id', client_reference_id);
+            // Prepare the update data
+            const updateData = {
+              plan: '"pro"::text',
+              stripe_customer_id: customer,
+              stripe_subscription_id: subscription,
+              subscription_status: 'active',
+              subscription_period_start: new Date(subscriptionDetails.current_period_start * 1000).toISOString(),
+              subscription_period_end: new Date(subscriptionDetails.current_period_end * 1000).toISOString()
+            };
+            
+            let error;
+            
+            // Try to update by client_reference_id if available
+            if (client_reference_id) {
+              console.log('Updating user by client_reference_id:', client_reference_id);
+              const result = await supabase
+                .from('users')
+                .update(updateData)
+                .eq('id', client_reference_id);
               
+              error = result.error;
+            } 
+            // Otherwise try to find user by email
+            else if (customerEmail) {
+              console.log('client_reference_id missing, looking up user by email:', customerEmail);
+              const result = await supabase
+                .from('users')
+                .update(updateData)
+                .eq('email', customerEmail);
+              
+              error = result.error;
+            } else {
+              console.error('Cannot update user: Both client_reference_id and email are missing');
+              break;
+            }
+            
             if (error) {
               console.error('Error updating user subscription status:', error);
             } else {
-              console.log('Successfully updated subscription for user:', client_reference_id);
+              console.log('Successfully updated subscription for user with email:', customerEmail);
             }
           } catch (subscriptionError) {
             console.error('Error fetching subscription details:', subscriptionError);
           }
         } else {
-          console.error('Missing client_reference_id or subscription in checkout.session.completed event');
+          console.error('Missing subscription in checkout.session.completed event');
         }
         break;
       }
