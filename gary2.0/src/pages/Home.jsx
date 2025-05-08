@@ -17,53 +17,7 @@ function Home() {
     height: window.innerHeight,
   });
   
-  // Create Win Rate badge directly in the DOM, completely bypassing React rendering
-  useEffect(() => {
-    // Check if the badge already exists to prevent duplicates
-    const existingBadge = document.getElementById('fixed-win-rate-badge');
-    if (existingBadge) {
-      existingBadge.remove();
-    }
-    
-    // Create the badge element
-    const badge = document.createElement('div');
-    badge.id = 'fixed-win-rate-badge';
-    
-    // Apply styles to make it absolutely fixed
-    Object.assign(badge.style, {
-      position: 'fixed',
-      top: '150px',
-      right: '150px',
-      transform: 'rotate(8deg)',
-      background: '#B8953F',
-      color: '#1a1a1a',
-      padding: '0.75rem 2rem',
-      borderRadius: '999px',
-      boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-      border: '2.5px solid #1a1a1a',
-      fontWeight: 'bold',
-      zIndex: '9999',
-      pointerEvents: 'none',
-      userSelect: 'none',
-      fontSize: '1.5rem',
-      lineHeight: '1.5',
-      fontFamily: 'Inter, system-ui, sans-serif'
-    });
-    
-    // Set the content
-    badge.innerHTML = `<span style="font-weight: bold;">Win Rate: ${winRate}</span>`;
-    
-    // Add to body (outside React's control)
-    document.body.appendChild(badge);
-    
-    // Clean up when component unmounts
-    return () => {
-      const badge = document.getElementById('fixed-win-rate-badge');
-      if (badge) {
-        badge.remove();
-      }
-    };
-  }, [winRate]); // Only recreate when winRate changes
+  // Window resize monitoring is not needed, removed
 
   // Render a pick card - IDENTICAL to RealGaryPicks implementation
   const renderPickCard = (pick) => {
@@ -930,6 +884,25 @@ function Home() {
           </div>
           </div>
         </section>
+      </div>
+      
+      {/* Simple fixed position Win Rate badge that stays in place when scrolling */}
+      <div style={{
+        position: 'fixed',
+        top: '150px',
+        right: '150px',
+        transform: 'rotate(8deg)',
+        background: '#B8953F',
+        color: '#1a1a1a',
+        padding: '0.75rem 2rem',
+        borderRadius: '999px',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+        border: '2.5px solid #1a1a1a',
+        fontWeight: 'bold',
+        fontSize: '1.5rem',
+        zIndex: 9999
+      }}>
+        <span style={{ fontWeight: 'bold' }}>Win Rate: {winRate}</span>
       </div>
     </div>
   );
