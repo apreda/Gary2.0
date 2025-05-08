@@ -649,7 +649,7 @@ function RealGaryPicks() {
                       </div>
                       
                       {/* Card Stack - Wider index card format (20% larger) */}
-                      <div className="relative" style={{ width: '576px', height: '384px' }}>
+                      <div className="relative" style={{ width: '634px', height: '422px' }}>
                         {picks.map((pick, index) => {
                           // Calculate position in stack relative to current index
                           const position = (index - currentIndex + picks.length) % picks.length;
@@ -711,7 +711,7 @@ function RealGaryPicks() {
                                   >
                                     <div className="text-center px-6">
                                       <div className="mb-4">
-                                        <img src="/coin2.png" alt="Gary A.I." className="w-24 h-24 mx-auto" />
+                                        <img src="/coin2.png" alt="Gary A.I." className="w-[106px] h-[106px] mx-auto" />
                                       </div>
                                       <h3 className="text-[#b8953f] text-2xl font-bold mb-3">Unlock Premium Picks</h3>
                                       <p className="text-white mb-6 max-w-sm">Upgrade to Pro to see all of Gary's premium picks with detailed analysis and reasoning.</p>
@@ -982,8 +982,8 @@ function RealGaryPicks() {
                                               src="/coin2.png" 
                                               alt="Coin Image"
                                               style={{
-                                                width: 130, /* 20% bigger than previous 108px */
-                                                height: 130, /* 20% bigger than previous 108px */
+                                                width: 143, /* 10% bigger than previous 130px */
+                                                height: 143, /* 10% bigger than previous 130px */
                                                 objectFit: 'contain',
                                                 opacity: 1,
                                                 background: 'transparent'
