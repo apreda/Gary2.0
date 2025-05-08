@@ -27,17 +27,18 @@ import { supabase, ensureAnonymousSession } from '../supabaseClient';
 function RealGaryPicks() {
   const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
-  const { userPlan, planLoading } = useUserPlan();
+  const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
   
-  // Log user plan status when component mounts
+  // Log user plan and subscription status when component mounts
   useEffect(() => {
     if (user) {
-      console.log('RealGaryPicks: User authenticated, checking plan status');
+      console.log('RealGaryPicks: User authenticated, checking subscription status');
       console.log('RealGaryPicks: Current plan loading state:', planLoading);
       console.log('RealGaryPicks: Current plan status:', userPlan);
+      console.log('RealGaryPicks: Current subscription status:', subscriptionStatus);
     }
-  }, [user, userPlan, planLoading]);
+  }, [user, userPlan, planLoading, subscriptionStatus]);
   
   // Debug log for pro/free status
   useEffect(() => {
@@ -644,10 +645,10 @@ function RealGaryPicks() {
                                 style={{
                                   perspective: '1000px',
                                 }}
-                                onClick={!planLoading && userPlan === 'pro' ? toggleFlip : null}
+                                onClick={!planLoading && subscriptionStatus === 'active' ? toggleFlip : null}
                               >
-                                {/* Blur overlay for FREE users - only show when plan loading is complete */}
-                                {!planLoading && userPlan !== 'pro' && (
+                                {/* Blur overlay for users without active subscription - only show when loading is complete */}
+                                {!planLoading && subscriptionStatus !== 'active' && (
                                   <div 
                                     className="absolute inset-0 z-50 flex flex-col items-center justify-center" 
                                     style={{

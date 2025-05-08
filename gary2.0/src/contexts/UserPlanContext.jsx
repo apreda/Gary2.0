@@ -7,6 +7,7 @@ const UserPlanContext = createContext();
 // Provider component
 export const UserPlanProvider = ({ children }) => {
   const [userPlan, setUserPlan] = useState('free');
+  const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [planLoading, setPlanLoading] = useState(true); // Add loading state
   
@@ -41,32 +42,50 @@ export const UserPlanProvider = ({ children }) => {
         if (!error && data) {
           // Log ALL relevant fields for debugging
           console.log('UserPlanContext: Plan loading complete');
-          console.log('UserPlanContext: Setting plan status to:', userPlan);
           console.log('UserPlanContext: Debug info - refreshTrigger:', refreshTrigger, 'timestamp:', new Date().toISOString());
-          setPlanLoading(false);
           console.log('UserPlanContext: Plan =', data.plan);
           console.log('UserPlanContext: Subscription Status =', data.subscription_status);
           console.log('UserPlanContext: Has stripe customer ID =', !!data.stripe_customer_id);
           
-          // Check if plan is explicitly 'pro' or subscription_status is 'active'
-          if (data.plan === 'pro' || data.subscription_status === 'active') {
-            console.log('UserPlanContext: Setting user plan to pro');
+          // Always set the subscription status directly from the database value
+          const status = data.subscription_status || 'inactive';
+          setSubscriptionStatus(status);
+          console.log('UserPlanContext: Setting subscription status to:', status);
+          
+          // For backward compatibility, still set the plan based on subscription status
+          if (status === 'active') {
+            console.log('UserPlanContext: Setting user plan to pro based on active subscription');
             setUserPlan('pro');
           } else {
-            console.log('UserPlanContext: Setting user plan to free');
+            console.log('UserPlanContext: Setting user plan to free based on inactive subscription');
             setUserPlan('free');
           }
+          
+          // Plan loading is complete
+          setPlanLoading(false);
         } else {
           // As a fallback, check the user metadata
           const metadata = user.user_metadata || {};
-          if (metadata.plan === 'pro' || metadata.subscription_status === 'active') {
+          
+          // Check subscription status from metadata
+          const metaStatus = metadata.subscription_status || 'inactive';
+          setSubscriptionStatus(metaStatus);
+          console.log('UserPlanContext: Setting subscription status from metadata to:', metaStatus);
+          
+          // Set plan based on metadata subscription status
+          if (metaStatus === 'active') {
             console.log('UserPlanContext: Setting user plan to pro based on metadata');
             setUserPlan('pro');
           } else {
-            console.log('UserPlanContext: No plan found, setting to free');
+            console.log('UserPlanContext: No active subscription found in metadata, setting to free');
             setUserPlan('free');
           }
         }
+      } else {
+        // Not logged in, set to free plan and inactive subscription
+        console.log('UserPlanContext: User not logged in, setting to free plan and inactive subscription');
+        setUserPlan('free');
+        setSubscriptionStatus('inactive');
       }
     };
     
@@ -100,7 +119,13 @@ export const UserPlanProvider = ({ children }) => {
   };
   
   return (
-    <UserPlanContext.Provider value={{ userPlan, updateUserPlan, refreshUserPlan, planLoading }}>
+    <UserPlanContext.Provider value={{ 
+      userPlan, 
+      updateUserPlan, 
+      refreshUserPlan, 
+      planLoading, 
+      subscriptionStatus, // Expose subscription status to components
+    }}>
       {children}
     </UserPlanContext.Provider>
   );
