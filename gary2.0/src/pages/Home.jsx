@@ -549,7 +549,7 @@ function Home() {
                 
                 {/* Win Rate Stamp - positioned diagonally to the right */}
                 <div className="absolute lg:block hidden" style={{ 
-                  top: '0', 
+                  top: '-50px', 
                   right: '5%', 
                   transform: 'rotate(15deg)',
                   background: '#B8953F',
@@ -566,7 +566,7 @@ function Home() {
                 
                 {/* Yesterday's Performance Stamp */}
                 <div className="absolute lg:block hidden" style={{ 
-                  top: '80px', 
+                  top: '20px', 
                   right: '10%', 
                   transform: 'rotate(-8deg)',
                   background: '#1a1a1a',

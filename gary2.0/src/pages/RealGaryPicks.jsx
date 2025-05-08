@@ -524,6 +524,34 @@ function RealGaryPicks() {
                       Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
                     </p>
                     
+                    {/* Yesterday's Performance Banner */}
+                    <div className="flex justify-center items-center mb-6">
+                      <div className="inline-block px-4 py-2 rounded-lg" style={{ 
+                        background: '#1a1a1a',
+                        color: '#B8953F',
+                        border: '2px solid #B8953F',
+                        fontWeight: 'bold',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+                      }}>
+                        <span className="text-lg">GARY WENT {yesterdayRecord} YESTERDAY</span>
+                      </div>
+                    </div>
+                    
+                    {/* See Past Picks Button */}
+                    <div className="flex justify-center mb-8">
+                      <Link
+                        to="/billfold"
+                        className="px-6 py-3 rounded-lg text-white font-bold transition-all duration-300"
+                        style={{
+                          background: 'linear-gradient(135deg, #B8953F 0%, #D4AF37 100%)',
+                          boxShadow: '0 4px 15px rgba(184, 149, 63, 0.3)',
+                          border: '2px solid #1a1a1a'
+                        }}
+                      >
+                        See Past Picks
+                      </Link>
+                    </div>
+                    
                     {/* Card Stack Interface */}
                     <div className="flex justify-center items-center relative py-4 pt-2">
                       {/* Left navigation arrow - positioned outside the card, no circle */}
