@@ -11,6 +11,8 @@ function Home() {
   const { user } = useAuth();
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [winRate, setWinRate] = useState('67%');
+  const [yesterdayRecord, setYesterdayRecord] = useState('6-1');
 
   // Render a pick card - IDENTICAL to RealGaryPicks implementation
   const renderPickCard = (pick) => {
@@ -335,6 +337,49 @@ function Home() {
   };
 
   // Load featured picks from the database
+  // Fetch win rate and yesterday's performance
+  useEffect(() => {
+    const fetchWinRateData = async () => {
+      try {
+        // Fetch all picks to calculate win rate
+        const { data: picksData, error: picksError } = await supabase
+          .from("game_results")
+          .select("*")
+          .order('date', { ascending: false });
+          
+        if (picksError) {
+          console.error("Error fetching game results:", picksError);
+          return;
+        }
+        
+        if (picksData && picksData.length > 0) {
+          // Calculate overall win rate
+          const totalGames = picksData.length;
+          const wins = picksData.filter(game => game.result === 'win').length;
+          const calculatedWinRate = Math.round((wins / totalGames) * 100);
+          setWinRate(`${calculatedWinRate}%`);
+          
+          // Get yesterday's record
+          const today = new Date();
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayString = yesterday.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+          
+          const yesterdayGames = picksData.filter(game => game.date?.includes(yesterdayString));
+          if (yesterdayGames.length > 0) {
+            const yesterdayWins = yesterdayGames.filter(game => game.result === 'win').length;
+            const yesterdayLosses = yesterdayGames.length - yesterdayWins;
+            setYesterdayRecord(`${yesterdayWins}-${yesterdayLosses}`);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching win rate data:", err);
+      }
+    };
+    
+    fetchWinRateData();
+  }, []);
+  
   useEffect(() => {
     const fetchFeaturedPicks = async () => {
       try {
@@ -491,15 +536,51 @@ function Home() {
               </div>
 
               {/* Main headline - Simple and impactful */}
-              <h1 className="mb-6 text-center w-full" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em" }}>
-                <div className="max-w-[920px] mx-auto">
-                  <span className="text-white font-bold">Make </span>
-                  <span className="italic font-normal text-[#B8953F]">Smarter</span>
-                  <span className="text-white font-bold"> Sports Bets </span>
-                  <span className="text-white font-bold">with </span>
-                  <span className="italic font-normal"><span className="text-white">GARY</span><span className="text-[#B8953F]">.AI</span></span>
+              <div className="relative mb-6 w-full">
+                <h1 className="text-center w-full" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em" }}>
+                  <div className="max-w-[920px] mx-auto">
+                    <span className="text-white font-bold">Make </span>
+                    <span className="italic font-normal text-[#B8953F]">Smarter</span>
+                    <span className="text-white font-bold"> Sports Bets </span>
+                    <span className="text-white font-bold">with </span>
+                    <span className="italic font-normal"><span className="text-white">GARY</span><span className="text-[#B8953F]">.AI</span></span>
+                  </div>
+                </h1>
+                
+                {/* Win Rate Stamp - positioned diagonally to the right */}
+                <div className="absolute lg:block hidden" style={{ 
+                  top: '0', 
+                  right: '5%', 
+                  transform: 'rotate(15deg)',
+                  background: '#B8953F',
+                  color: '#1a1a1a',
+                  padding: '0.5rem 1.5rem',
+                  borderRadius: '4px',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                  border: '2px solid #1a1a1a',
+                  fontWeight: 'bold',
+                  zIndex: 30
+                }}>
+                  <span className="text-lg">Win Rate: {winRate}</span>
                 </div>
-              </h1>
+                
+                {/* Yesterday's Performance Stamp */}
+                <div className="absolute lg:block hidden" style={{ 
+                  top: '80px', 
+                  right: '10%', 
+                  transform: 'rotate(-8deg)',
+                  background: '#1a1a1a',
+                  color: '#B8953F',
+                  padding: '0.5rem 1.5rem',
+                  borderRadius: '4px',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                  border: '2px solid #B8953F',
+                  fontWeight: 'bold',
+                  zIndex: 30
+                }}>
+                  <span className="text-lg">GARY WENT {yesterdayRecord} YESTERDAY</span>
+                </div>
+              </div>
               
               {/* Removed empty spacing div to tighten layout */}
 
