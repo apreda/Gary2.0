@@ -1133,7 +1133,7 @@ function RealGaryPicks() {
                     <div className="flex justify-center mt-16 mb-12">
                       <Link
                         to="/billfold"
-                        className="px-6 py-3 rounded-lg text-white font-bold transition-all duration-300"
+                        className="px-6 py-3 rounded-lg text-black font-bold transition-all duration-300"
                         style={{
                           background: 'linear-gradient(135deg, #B8953F 0%, #D4AF37 100%)',
                           boxShadow: '0 4px 15px rgba(184, 149, 63, 0.3)',
