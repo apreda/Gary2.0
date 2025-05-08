@@ -546,11 +546,11 @@ function Home() {
                   </div>
                 </h1>
                 
-                {/* Win Rate Stamp - positioned diagonally to the right with rounded corners */}
+                {/* Win Rate Stamp - positioned diagonally to the right of 'Sports' */}
                 <div className="absolute lg:block hidden" style={{ 
-                  top: '45px', 
-                  right: '-15px', 
-                  transform: 'rotate(12deg)',
+                  top: '-20px', 
+                  right: '32%', 
+                  transform: 'rotate(8deg)',
                   background: '#B8953F',
                   color: '#1a1a1a',
                   padding: '0.75rem 2rem',
