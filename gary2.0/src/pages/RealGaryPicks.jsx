@@ -27,16 +27,17 @@ import { supabase, ensureAnonymousSession } from '../supabaseClient';
 function RealGaryPicks() {
   const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
-  const { userPlan, refreshUserPlan } = useUserPlan();
+  const { userPlan, planLoading } = useUserPlan();
   const navigate = useNavigate();
   
-  // Force refresh plan status when component mounts
+  // Log user plan status when component mounts
   useEffect(() => {
     if (user) {
-      console.log('RealGaryPicks: Force refreshing user plan status');
-      refreshUserPlan();
+      console.log('RealGaryPicks: User authenticated, checking plan status');
+      console.log('RealGaryPicks: Current plan loading state:', planLoading);
+      console.log('RealGaryPicks: Current plan status:', userPlan);
     }
-  }, [user, refreshUserPlan]);
+  }, [user, userPlan, planLoading]);
   
   // Debug log for pro/free status
   useEffect(() => {
@@ -643,10 +644,10 @@ function RealGaryPicks() {
                                 style={{
                                   perspective: '1000px',
                                 }}
-                                onClick={userPlan === 'pro' ? toggleFlip : null}
+                                onClick={!planLoading && userPlan === 'pro' ? toggleFlip : null}
                               >
-                                {/* Blur overlay for FREE users */}
-                                {userPlan !== 'pro' && (
+                                {/* Blur overlay for FREE users - only show when plan loading is complete */}
+                                {!planLoading && userPlan !== 'pro' && (
                                   <div 
                                     className="absolute inset-0 z-50 flex flex-col items-center justify-center" 
                                     style={{
