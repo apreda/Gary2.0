@@ -1177,22 +1177,7 @@ function RealGaryPicks() {
             </div>
           )}
           
-          {/* Gambling Disclaimer */}
-          <div className="py-8 text-center text-gray-500 text-sm">
-            <div className="mt-6 max-w-4xl mx-auto px-4 border-t border-gray-700 pt-6 text-xs">
-              <p className="mb-2">
-                DISCLAIMER: This site is 100% for entertainment purposes only and does not involve real money betting or prizes. You must be 18+ years old to utilize Gary.ai.
-              </p>
-              <p className="mb-2">
-                If you or someone you know may have a gambling problem, Gary.ai For crisis counseling and referral services, call 1-800 GAMBLER (1-800-426-2537). For more information and resources, visit our Responsible Gaming page.
-              </p>
-              <p>
-                Gambling problem? Call 1-800-GAMBLER (Available in the US)
-                Call 877-8-HOPENY or text HOPENY (467369) (NY)
-                Call 1-800-327-5050 (MA), 1-800-NEXT-STEP (AZ), 1-800-BETS-OFF (IA), 1-800-981-0023 (PR)
-              </p>
-            </div>
-          </div>
+          {/* Disclaimer removed */}
           </>
         )}
       </div>
