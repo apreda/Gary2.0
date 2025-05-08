@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { useUserPlan } from "../hooks/useUserPlan";
+import { useUserPlan } from "../contexts/UserPlanContext";
 import { useBetCardProfile } from "../contexts/BetCardProfileContext";
 import { useAuth } from '../contexts/AuthContext';
 
