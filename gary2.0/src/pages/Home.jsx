@@ -546,22 +546,7 @@ function Home() {
                   </div>
                 </h1>
                 
-                {/* Win Rate Badge - absolutely fixed position */}
-                <div className="fixed lg:block hidden" style={{ 
-                  top: '150px', 
-                  right: '150px', 
-                  transform: 'rotate(8deg)',
-                  background: '#B8953F',
-                  color: '#1a1a1a',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '999px',
-                  boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-                  border: '2.5px solid #1a1a1a',
-                  fontWeight: 'bold',
-                  zIndex: 100
-                }}>
-                  <span className="text-2xl font-bold">Win Rate: {winRate}</span>
-                </div>
+                {/* Win Rate Badge removed */}
               </div>
               
               {/* Removed empty spacing div to tighten layout */}
