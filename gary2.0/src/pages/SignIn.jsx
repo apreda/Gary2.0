@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
-import garyLogo from '../assets/images/gary3.png';
+// Using coin2.png from public folder directly
 import '../styles/dimensional.css';
 
 export function SignIn() {
@@ -216,7 +216,7 @@ export function SignIn() {
             <div className="flex flex-col items-center mb-8">
               <div className="relative mb-4">
                 <div className="absolute inset-0 rounded-full bg-[#d4af37]/20 blur-lg transform scale-150 animate-pulse-slow" style={{ animationDuration: '4s' }}></div>
-                <img src={garyLogo} alt="Gary The Bear" className="w-48 h-48 mx-auto object-contain relative z-10" />
+                <img src="/coin2.png" alt="Gary Coin" className="w-48 h-48 mx-auto object-contain relative z-10" />
               </div>
               <h1 className="text-3xl font-bold text-white tracking-wide text-center">THE BEAR'S DEN</h1>
             </div>
