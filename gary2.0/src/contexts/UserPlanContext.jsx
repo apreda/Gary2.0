@@ -28,16 +28,9 @@ export const UserPlanProvider = ({ children }) => {
     const loadUserPlan = async () => {
       // Get current auth user
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // If this request is no longer the latest, abort
-      if (!isLatestRequest) {
-        console.log('UserPlanContext: Aborting outdated plan check');
-        return;
-      }
-      
       console.log('UserPlanContext: Current auth user:', user?.id);
       
-      if (user) {
+      if (user && isLatestRequest) {
         try {
           // Query Supabase for the user's subscription status
           const { data, error } = await supabase
@@ -45,12 +38,6 @@ export const UserPlanProvider = ({ children }) => {
             .select('plan, subscription_status, id, stripe_customer_id')
             .eq('id', user.id)
             .single();
-          
-          // If this request is no longer the latest, abort
-          if (!isLatestRequest) {
-            console.log('UserPlanContext: Aborting outdated subscription data handling');
-            return;
-          }
           
           console.log(`UserPlanContext: User data from Supabase (refresh #${refreshTrigger}):`, data);
           
