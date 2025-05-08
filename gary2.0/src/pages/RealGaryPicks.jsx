@@ -546,7 +546,7 @@ function RealGaryPicks() {
         }} />
       </div>
       {/* Main content, zIndex: 2 */}
-      <div className="w-full flex flex-col items-center justify-center pt-12 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
+      <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
         {/* Show loading screen while plan status is being checked */}
         {planLoading ? (
           <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
