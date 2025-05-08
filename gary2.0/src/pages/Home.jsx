@@ -548,8 +548,8 @@ function Home() {
                 
                 {/* Win Rate Stamp - positioned diagonally to the right with rounded corners */}
                 <div className="absolute lg:block hidden" style={{ 
-                  top: '-10px', 
-                  right: '15%', 
+                  top: '-30px', 
+                  right: '8%', 
                   transform: 'rotate(15deg)',
                   background: '#B8953F',
                   color: '#1a1a1a',
