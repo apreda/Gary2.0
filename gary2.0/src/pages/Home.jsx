@@ -525,8 +525,22 @@ function Home() {
               <main className="hero-inner flex flex-col w-full h-full" style={{ padding: "24px 24px" }}>
                 {/* Centered Hero Content */}
              <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
+              {/* Yesterday's Performance Banner - above NEW badge */}
+              <div className="mb-2 relative mt-16 flex justify-center w-full">  
+                <div className="text-sm font-bold px-5 py-1.5 rounded-full flex items-center" 
+                     style={{ 
+                      background: '#1a1a1a', 
+                      color: '#B8953F', 
+                      border: '2px solid #B8953F',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+                    }}>
+                  <span className="font-bold">GARY WENT 6-1 YESTERDAY</span>
+                </div>
+              </div>
+
               {/* NEW badge - gold-colored and oval-shaped with border */}
-              <div className="mb-8 relative mt-16 flex justify-center w-full">  
+              <div className="mb-8 relative flex justify-center w-full">  
                 <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center border border-gray-800" 
                      style={{ background: '#b8953f', color: '#1a1a1a' }}>
                   <span className="mr-2 font-bold">NEW</span>
@@ -569,17 +583,6 @@ function Home() {
               {/* Technology badges - using original tags from GaryHero */}
               <div className="flex flex-wrap justify-center p-2 mb-8 mx-auto max-w-3xl w-full">
                 <div className="flex gap-3 flex-wrap justify-center w-full">
-                  {/* Yesterday's Performance Banner - placed to the left of Odds API */}
-                  <div className="relative bg-[#1a1a1a] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
-                    style={{ 
-                      minWidth: '200px', 
-                      color: '#B8953F', 
-                      border: '2px solid #B8953F',
-                      fontWeight: 'bold',
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
-                    }}>
-                    <span className="text-sm font-bold">GARY WENT 6-1 YESTERDAY</span>
-                  </div>
                   <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
                     const shine = e.currentTarget.querySelector('.shine-effect');
                     shine.style.transform = 'translateX(250%)';
