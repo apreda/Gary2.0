@@ -504,7 +504,7 @@ function RealGaryPicks() {
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
-          opacity: 0.6, /* Reducing opacity by 40% total */
+          opacity: 0.4, /* Reducing opacity by 60% total */
           overflow: 'hidden',
         }}
       >
