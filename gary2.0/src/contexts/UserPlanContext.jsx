@@ -8,6 +8,7 @@ const UserPlanContext = createContext();
 export const UserPlanProvider = ({ children }) => {
   const [userPlan, setUserPlan] = useState('free');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [planLoading, setPlanLoading] = useState(true); // Add loading state
   
   // Function to refresh plan status manually
   const refreshUserPlan = () => {
@@ -39,6 +40,10 @@ export const UserPlanProvider = ({ children }) => {
         
         if (!error && data) {
           // Log ALL relevant fields for debugging
+          console.log('UserPlanContext: Plan loading complete');
+          console.log('UserPlanContext: Setting plan status to:', userPlan);
+          console.log('UserPlanContext: Debug info - refreshTrigger:', refreshTrigger, 'timestamp:', new Date().toISOString());
+          setPlanLoading(false);
           console.log('UserPlanContext: Plan =', data.plan);
           console.log('UserPlanContext: Subscription Status =', data.subscription_status);
           console.log('UserPlanContext: Has stripe customer ID =', !!data.stripe_customer_id);
@@ -95,7 +100,7 @@ export const UserPlanProvider = ({ children }) => {
   };
   
   return (
-    <UserPlanContext.Provider value={{ userPlan, updateUserPlan, refreshUserPlan }}>
+    <UserPlanContext.Provider value={{ userPlan, updateUserPlan, refreshUserPlan, planLoading }}>
       {children}
     </UserPlanContext.Provider>
   );
