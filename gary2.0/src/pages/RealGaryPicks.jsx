@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 // Removed unused import: useUserStats, useLocation
 import { useUserPlan } from "../contexts/UserPlanContext";
+import BG2 from '/BG2.png'; // Import the background image directly
 import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
@@ -501,10 +502,8 @@ function RealGaryPicks() {
           height: '100vh',
           zIndex: 0,
           pointerEvents: 'none',
-          backgroundImage: 'url(/BG2.png)',
+          background: `#121212 url(${BG2}) no-repeat center center`,
           backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
           opacity: 0.15, /* Background at 15% opacity */
           overflow: 'hidden',
         }}
