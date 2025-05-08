@@ -12,6 +12,23 @@ function Home() {
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [winRate, setWinRate] = useState('67%');
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+  
+  // Add event listener for window resize
+  useEffect(() => {
+    function handleResize() {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    }
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Render a pick card - IDENTICAL to RealGaryPicks implementation
   const renderPickCard = (pick) => {
@@ -478,6 +495,24 @@ function Home() {
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-x-hidden">
+      {/* Win Rate Badge - absolutely fixed position as direct child of root */}
+      <div style={{ 
+        position: 'fixed',
+        top: '150px', 
+        right: '150px', 
+        transform: 'rotate(8deg)',
+        background: '#B8953F',
+        color: '#1a1a1a',
+        padding: '0.75rem 2rem',
+        borderRadius: '999px',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+        border: '2.5px solid #1a1a1a',
+        fontWeight: 'bold',
+        zIndex: 9999,
+        display: windowSize.width >= 992 ? 'block' : 'none'
+      }}>
+        <span className="text-2xl font-bold">Win Rate: {winRate}</span>
+      </div>
       {/* Fixed background with all effects - spans the entire viewport */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#18181a] z-0">
         {/* Gold vignette corners - enhanced with white glow */}
@@ -546,7 +581,7 @@ function Home() {
                   </div>
                 </h1>
                 
-                {/* Win Rate Badge removed */}
+
               </div>
               
               {/* Removed empty spacing div to tighten layout */}
