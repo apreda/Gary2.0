@@ -517,9 +517,12 @@ function RealGaryPicks() {
                 <div className="mb-12">
                   {/* NEW LAYOUT: Directly on page in a horizontal row format */}
                   <div className="pt-12 px-4">
-                    <h1 className="text-4xl font-bold text-center mb-4" style={{ color: '#b8953f' }}>
+                    <h1 className="text-4xl font-bold text-center mb-2" style={{ color: '#b8953f' }}>
                       TODAY'S PICKS
                     </h1>
+                    <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto">
+                      Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
+                    </p>
                     
                     {/* Card Stack Interface */}
                     <div className="flex justify-center items-center relative py-4 pt-2">
