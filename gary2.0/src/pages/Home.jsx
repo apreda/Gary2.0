@@ -548,19 +548,19 @@ function Home() {
                 
                 {/* Win Rate Stamp - positioned diagonally to the right with rounded corners */}
                 <div className="absolute lg:block hidden" style={{ 
-                  top: '-50px', 
-                  right: '5%', 
+                  top: '-10px', 
+                  right: '15%', 
                   transform: 'rotate(15deg)',
                   background: '#B8953F',
                   color: '#1a1a1a',
-                  padding: '0.5rem 1.5rem',
+                  padding: '0.75rem 2rem',
                   borderRadius: '999px', /* Rounded like API icons */
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
-                  border: '2px solid #1a1a1a',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+                  border: '2.5px solid #1a1a1a',
                   fontWeight: 'bold',
                   zIndex: 30
                 }}>
-                  <span className="text-lg">Win Rate: {winRate}</span>
+                  <span className="text-2xl font-bold">Win Rate: {winRate}</span>
                 </div>
               </div>
               
