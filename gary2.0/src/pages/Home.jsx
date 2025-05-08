@@ -5,13 +5,59 @@ import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";
-// Using the public Gary50.png image from the public folder
+
+// Add this style tag to ensure the Win Rate badge stays fixed
+// This CSS approach bypasses React's rendering and guarantees fixed positioning
+const fixedBadgeStyle = `
+  #fixed-win-rate-badge {
+    position: fixed !important;
+    top: 150px !important;
+    right: 150px !important;
+    transform: rotate(8deg) !important;
+    background: #B8953F !important;
+    color: #1a1a1a !important;
+    padding: 0.75rem 2rem !important;
+    border-radius: 999px !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
+    border: 2.5px solid #1a1a1a !important;
+    font-weight: bold !important;
+    font-size: 1.5rem !important;
+    z-index: 9999 !important;
+    font-family: Inter, system-ui, sans-serif !important;
+    line-height: 1.5 !important;
+    text-align: center !important;
+    display: block !important;
+  }
+`;
 
 function Home() {
   const { user } = useAuth();
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [winRate, setWinRate] = useState('67%');
+  
+  // Inject the fixed badge into the document body
+  useEffect(() => {
+    // Add the CSS to the document
+    const styleElement = document.createElement('style');
+    styleElement.innerHTML = fixedBadgeStyle;
+    document.head.appendChild(styleElement);
+    
+    // Create the badge
+    const badge = document.createElement('div');
+    badge.id = 'fixed-win-rate-badge';
+    badge.innerHTML = `<span style="font-weight: bold !important;">Win Rate: ${winRate}</span>`;
+    document.body.appendChild(badge);
+    
+    // Clean up when component unmounts
+    return () => {
+      document.head.removeChild(styleElement);
+      const badgeElement = document.getElementById('fixed-win-rate-badge');
+      if (badgeElement) {
+        document.body.removeChild(badgeElement);
+      }
+    };
+  }, [winRate]);
 
   // Render a pick card - IDENTICAL to RealGaryPicks implementation
   const renderPickCard = (pick) => {
@@ -879,24 +925,7 @@ function Home() {
         </section>
       </div>
       
-      {/* Simple fixed position Win Rate badge that stays in place when scrolling */}
-      <div style={{
-        position: 'fixed',
-        top: '150px',
-        right: '150px',
-        transform: 'rotate(8deg)',
-        background: '#B8953F',
-        color: '#1a1a1a',
-        padding: '0.75rem 2rem',
-        borderRadius: '999px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-        border: '2.5px solid #1a1a1a',
-        fontWeight: 'bold',
-        fontSize: '1.5rem',
-        zIndex: 9999
-      }}>
-        <span style={{ fontWeight: 'bold' }}>Win Rate: {winRate}</span>
-      </div>
+      {/* Win Rate badge is created using DOM manipulation in useEffect */}
     </div>
   );
 }
