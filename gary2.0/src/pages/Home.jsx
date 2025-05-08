@@ -546,10 +546,10 @@ function Home() {
                   </div>
                 </h1>
                 
-                {/* Win Rate Badge - positioned diagonally closer to headline */}
-                <div className="absolute lg:block hidden" style={{ 
-                  top: '20px', 
-                  right: '25%', 
+                {/* Win Rate Badge - positioned diagonally in top-right corner */}
+                <div className="fixed lg:block hidden" style={{ 
+                  top: '120px', 
+                  right: '50px', 
                   transform: 'rotate(8deg)',
                   background: '#B8953F',
                   color: '#1a1a1a',
