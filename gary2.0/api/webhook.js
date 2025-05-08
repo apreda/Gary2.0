@@ -4,9 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Initialize Supabase client
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+// Initialize Supabase client - using environment variables without VITE_ prefix for server-side code
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export default async function handler(req, res) {
@@ -102,43 +102,93 @@ export default async function handler(req, res) {
           // Otherwise try to find user by email
           else if (customerEmail) {
             console.log('Looking up user by email:', customerEmail);
-            // Log the exact query we're about to run
-            console.log('Running Supabase update with email:', customerEmail);
             
-            // First check if the user exists
+            // For debugging, check the users table structure
+            const { data: userTableSample, error: tableError } = await supabase
+              .from('users')
+              .select('*')
+              .limit(1);
+            
+            if (tableError) {
+              console.error('Error accessing users table:', tableError);
+            } else if (userTableSample && userTableSample.length > 0) {
+              console.log('Users table columns:', Object.keys(userTableSample[0]));
+            }
+            
+            // First try exact email match
+            console.log('Trying exact email match for:', customerEmail);
             const { data: userData, error: userError } = await supabase
               .from('users')
               .select('id, email')
               .eq('email', customerEmail)
               .single();
-              
+            
             if (userError || !userData) {
-              console.error('Error finding user by email:', userError || 'No user found');
+              console.error('Error finding user by exact email:', userError || 'No user found');
               console.log('Trying case insensitive search...');
               
               // Try a case-insensitive search as fallback
-              const { data: fuzzyUserData } = await supabase
+              const { data: fuzzyUserData, error: fuzzyError } = await supabase
                 .from('users')
                 .select('id, email')
                 .ilike('email', customerEmail);
                 
               console.log('Fuzzy email search results:', fuzzyUserData);
+              
+              // If we found a user with the fuzzy search, update by ID
+              if (fuzzyUserData && fuzzyUserData.length > 0) {
+                const userId = fuzzyUserData[0].id;
+                console.log('Found user via fuzzy search, ID:', userId);
+                
+                // Use the found ID to update instead of email
+                const result = await supabase
+                  .from('users')
+                  .update(updateData)
+                  .eq('id', userId);
+                  
+                console.log('Update result using ID from fuzzy search:', result);
+                
+                if (result.error) {
+                  console.error('Error updating by user ID after fuzzy search:', result.error);
+                } else {
+                  console.log('Successfully updated subscription for user by ID after fuzzy search');
+                  return res.status(200).json({ received: true });
+                }
+              } else {
+                console.error('No user found with email (including fuzzy search):', customerEmail);
+              }
             } else {
-              console.log('Found user data:', userData);
+              console.log('Found user data with exact match:', userData);
+              
+              // Proceed with the update using ID for precision
+              const result = await supabase
+                .from('users')
+                .update(updateData)
+                .eq('id', userData.id);
+              
+              console.log('Supabase update result:', result);
+              
+              if (result.error) {
+                console.error('Error updating by user ID after exact email match:', result.error);
+              } else {
+                console.log('Successfully updated subscription for user by ID');
+                return res.status(200).json({ received: true });
+              }
             }
             
-            // Proceed with the update
+            // Final fallback: try direct email update if ID-based updates failed
+            console.log('Trying direct email update as fallback for:', customerEmail);
             const result = await supabase
               .from('users')
               .update(updateData)
               .eq('email', customerEmail);
             
-            console.log('Supabase update result:', result);
+            console.log('Direct email update result:', result);
             
             if (result.error) {
-              console.error('Error updating by email:', result.error);
+              console.error('Error updating by direct email:', result.error);
             } else {
-              console.log('Successfully updated subscription for user by email');
+              console.log('Successfully updated subscription by direct email');
             }
           } else {
             console.error('Cannot update user: Both client_reference_id and email are missing');
