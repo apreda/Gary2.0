@@ -94,21 +94,18 @@ export default async function handler(req, res) {
           
           // Handle text fields correctly
           updateData.plan = 'pro';
-          if (customer) updateData.stripe_customer = customer; // Note: Using the actual column name seen in screenshot
-          if (subscription) updateData.stripe_subscri = subscription; // Note: Using the actual column name seen in screenshot
-          updateData.subscription_s = 'active'; // Using the subscription_status column name from screenshot
+          if (customer) updateData.stripe_customer_id = customer; // CORRECTED: Using full column name from screenshot
+          if (subscription) updateData.stripe_subscription_id = subscription; // CORRECTED: Using full column name from screenshot
+          updateData.subscription_status = 'active'; // CORRECTED: Using full column name from screenshot
           
           // Handle timestamp fields correctly - use JavaScript Date objects directly, not strings
           // This ensures PostgreSQL receives proper timestamp objects
           if (subscriptionDetails.current_period_start) {
-            updateData.subscription_p = new Date(subscriptionDetails.current_period_start * 1000);
+            updateData.subscription_period_start = new Date(subscriptionDetails.current_period_start * 1000);
           }
           
           if (subscriptionDetails.current_period_end) {
-            const endDate = new Date(subscriptionDetails.current_period_end * 1000);
-            // Get column names for timestamp fields - we'll set both of them correctly
-            const endDateColumnName = 'subscription_p'; // We'll update both timestamp columns
-            updateData[endDateColumnName] = endDate;
+            updateData.subscription_period_end = new Date(subscriptionDetails.current_period_end * 1000);
           }
           
           console.log('Prepared update data with corrected column names and types:', updateData);
@@ -259,21 +256,26 @@ export default async function handler(req, res) {
       const updateData = {};
       
       // Use the actual column names from the database
-      updateData.subscription_s = subscription.status;
+      updateData.subscription_status = subscription.status;
       
       // Handle timestamp fields correctly - use JavaScript Date objects directly
       if (subscription.current_period_start) {
-        updateData.subscription_p = new Date(subscription.current_period_start * 1000);
+        updateData.subscription_period_start = new Date(subscription.current_period_start * 1000);
+      }
+      
+      // Add the subscription end period if available
+      if (subscription.current_period_end) {
+        updateData.subscription_period_end = new Date(subscription.current_period_end * 1000);
       }
       
       console.log('Prepared update data for subscription update:', updateData);
       
       try {
-        // Now look up the user by stripe_customer (actual column name)
+        // Now look up the user by the correct stripe_customer_id column name
         const { data: userData, error: userQueryError } = await supabase
           .from('users')
           .select('id')
-          .eq('stripe_customer', customerId)
+          .eq('stripe_customer_id', customerId)
           .single();
           
         if (userQueryError || !userData) {
@@ -308,15 +310,15 @@ export default async function handler(req, res) {
         // Log the customer ID we're looking for
         console.log('Looking for customer with Stripe ID:', customerId);
         
-        // First find the user by the correct column name 'stripe_customer' (not stripe_customer_id)
+        // Find the user by the correct column name stripe_customer_id
         const { data: userData, error: userQueryError } = await supabase
           .from('users')
           .select('id')
-          .eq('stripe_customer', customerId)
+          .eq('stripe_customer_id', customerId)
           .single();
           
         if (userQueryError || !userData) {
-          console.error('Error finding user by stripe_customer:', userQueryError || 'No user found');
+          console.error('Error finding user by stripe_customer_id:', userQueryError || 'No user found');
           return res.status(404).json({ error: 'User not found' });
         }
         
@@ -326,7 +328,7 @@ export default async function handler(req, res) {
         const result = await supabase
           .from('users')
           .update({ 
-            subscription_s: 'canceled', // Using the actual column name from screenshot
+            subscription_status: 'canceled', // CORRECTED: Using actual column name
             plan: 'free' // Simple string value
           })
           .eq('id', userData.id); // Update by ID for reliability
