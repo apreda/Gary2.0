@@ -546,19 +546,19 @@ function Home() {
                   </div>
                 </h1>
                 
-                {/* Win Rate Stamp - positioned diagonally to the right of 'Sports' */}
-                <div className="absolute lg:block hidden" style={{ 
-                  top: '-20px', 
-                  right: '32%', 
-                  transform: 'rotate(8deg)',
+                {/* Win Rate Badge - positioned as standalone element */}
+                <div className="fixed lg:block hidden" style={{ 
+                  top: '120px', 
+                  right: '50px', 
+                  transform: 'rotate(0deg)',
                   background: '#B8953F',
                   color: '#1a1a1a',
                   padding: '0.75rem 2rem',
-                  borderRadius: '999px', /* Rounded like API icons */
+                  borderRadius: '999px',
                   boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
                   border: '2.5px solid #1a1a1a',
                   fontWeight: 'bold',
-                  zIndex: 30
+                  zIndex: 100
                 }}>
                   <span className="text-2xl font-bold">Win Rate: {winRate}</span>
                 </div>
