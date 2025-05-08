@@ -30,24 +30,18 @@ function RealGaryPicks() {
   const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
   
-  // Log user plan and subscription status when component mounts
+  // Single debug logging effect that executes when subscription status changes
   useEffect(() => {
     if (user) {
-      console.log('RealGaryPicks: User authenticated, checking subscription status');
-      console.log('RealGaryPicks: Current plan loading state:', planLoading);
-      console.log('RealGaryPicks: Current plan status:', userPlan);
-      console.log('RealGaryPicks: Current subscription status:', subscriptionStatus);
+      console.log('RealGaryPicks: User subscription check', {
+        authenticated: true,
+        userId: user.id,
+        planLoading,
+        subscriptionStatus,
+        userPlan
+      });
     }
   }, [user, userPlan, planLoading, subscriptionStatus]);
-  
-  // Debug log for pro/free status
-  useEffect(() => {
-    console.log('RealGaryPicks: userPlan status:', userPlan);
-    console.log('RealGaryPicks: user authenticated:', !!user);
-    if (user) {
-      console.log('RealGaryPicks: user ID:', user.id);
-    }
-  }, [userPlan, user]);
 
   // State for cards loaded from the database
   const [picks, setPicks] = useState([]);
@@ -499,7 +493,19 @@ function RealGaryPicks() {
       </div>
       {/* Main content, zIndex: 2 */}
       <div className="w-full flex flex-col items-center justify-center pt-12 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
-        <>
+        {/* Show loading screen while plan status is being checked */}
+        {planLoading ? (
+          <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
+            <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+              <h3 className="font-bold text-black">CHECKING SUBSCRIPTION...</h3>
+            </div>
+            <p className="text-yellow-500 mb-4">Please wait while we verify your subscription status</p>
+            <div className="flex justify-center">
+              <div className="w-8 h-8 border-t-2 border-b-2 border-[#d4af37] rounded-full animate-spin"></div>
+            </div>
+          </div>
+        ) : (
+          <>
           {loading ? (
             <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
               <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
@@ -1111,7 +1117,8 @@ function RealGaryPicks() {
               </p>
             </div>
           </div>
-        </>
+          </>
+        )}
       </div>
     </div>
   );
