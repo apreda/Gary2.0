@@ -2,7 +2,8 @@ import { supabase } from '../supabaseClient';
 
 // Service for tracking user bet decisions and results
 export const betTrackingService = {
-  // Save a user's bet decision (ride or fade) to localStorage and Supabase if logged in
+  // Save a user's bet decision (ride or fade) to localStorage only
+  // Note: Supabase update is handled by userStatsService.recordDecision called in handleDecisionMade
   saveBetDecision: async (pickId, decision, userId = null) => {
     try {
       // Get existing decisions from localStorage
@@ -22,17 +23,8 @@ export const betTrackingService = {
       // Update BetCard stats
       betTrackingService.updateBetCardStats(decision);
       
-      // If user is logged in, save to Supabase too
-      if (userId) {
-        await supabase
-          .from('user_picks')
-          .upsert({
-            user_id: userId,
-            pick_id: pickId,
-            decision,
-            created_at: new Date().toISOString()
-          });
-      }
+      // Note: We no longer update Supabase here as that's handled by
+      // userStatsService.recordDecision in the RealGaryPicks.handleDecisionMade function
       
       return { success: true };
     } catch (error) {
@@ -66,28 +58,32 @@ export const betTrackingService = {
         };
       }
       
-      // If not found locally and user is logged in, check Supabase
+      // If not found locally and user is logged in, check user_stats in Supabase
       if (userId) {
         const { data } = await supabase
-          .from('user_picks')
-          .select('decision')
-          .eq('user_id', userId)
-          .eq('pick_id', pickId)
+          .from('user_stats')
+          .select('recent_results')
+          .eq('id', userId)
           .maybeSingle();
         
-        if (data) {
-          // Update local storage for next time
-          decisions[pickId] = {
-            decision: data.decision,
-            timestamp: new Date().toISOString(),
-            result: null
-          };
-          localStorage.setItem('userPickDecisions', JSON.stringify(decisions));
+        if (data && data.recent_results) {
+          // Check if this pick is in recent_results
+          const matchingResult = data.recent_results.find(result => result.pick_id === pickId);
           
-          return {
-            hasMade: true,
-            decision: data.decision
-          };
+          if (matchingResult) {
+            // Update local storage for next time
+            decisions[pickId] = {
+              decision: matchingResult.decision,
+              timestamp: matchingResult.timestamp,
+              result: null
+            };
+            localStorage.setItem('userPickDecisions', JSON.stringify(decisions));
+            
+            return {
+              hasMade: true,
+              decision: matchingResult.decision
+            };
+          }
         }
       }
       
@@ -186,16 +182,41 @@ export const betTrackingService = {
         // Update BetCard with result
         betTrackingService.updateBetCardWithResult(userDecision, userResult);
         
-        // If user is logged in, update Supabase too
+        // If user is logged in, update the result in the user's recent_results in user_stats
         if (userId) {
-          await supabase
-            .from('user_picks')
-            .update({ 
-              result: userResult,
-              updated_at: new Date().toISOString()
-            })
-            .eq('user_id', userId)
-            .eq('pick_id', pickId);
+          // First get the current user stats
+          const { data } = await supabase
+            .from('user_stats')
+            .select('recent_results')
+            .eq('id', userId)
+            .maybeSingle();
+          
+          if (data && data.recent_results) {
+            // Find the matching pick in recent_results and update it
+            const updatedRecentResults = data.recent_results.map(result => {
+              if (result.pick_id === pickId) {
+                return {
+                  ...result,
+                  result: userResult,
+                  result_pending: false
+                };
+              }
+              return result;
+            });
+            
+            // Update user_stats with the modified recent_results
+            await supabase
+              .from('user_stats')
+              .update({
+                recent_results: updatedRecentResults,
+                // Also update win_count if it's a win
+                ...(userResult === 'WIN' ? { win_count: supabase.sql`win_count + 1` } : {}),
+                // Update loss_count if it's a loss
+                ...(userResult === 'LOSS' ? { loss_count: supabase.sql`loss_count + 1` } : {}),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', userId);
+          }
         }
       }
       
