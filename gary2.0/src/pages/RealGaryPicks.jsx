@@ -35,6 +35,8 @@ function RealGaryPicks() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userDecisions, setUserDecisions] = useState({});
+  // State to track which picks are being processed to prevent double-clicking
+  const [processingDecisions, setProcessingDecisions] = useState({});
   // State to track which cards are flipped
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -357,6 +359,18 @@ function RealGaryPicks() {
   const handleDecisionMade = async (decision, pick) => {
     console.log('[RealGaryPicks] handleDecisionMade', { decision, pick });
     
+    // Prevent multiple clicks on the same pick
+    if (processingDecisions[pick.id] || userDecisions[pick.id]) {
+      showToast('You already made a decision for this pick', 'warning', 3000, false);
+      return;
+    }
+    
+    // Mark this pick as being processed
+    setProcessingDecisions(prev => ({
+      ...prev,
+      [pick.id]: true
+    }));
+    
     try {
       // Make sure user is logged in
       if (!user) {
@@ -370,6 +384,10 @@ function RealGaryPicks() {
       if (!userId) {
         console.error('User ID not available for tracking bet/fade decision');
         showToast('Sign in to track your picks!', 'error', 3000, false);
+        setProcessingDecisions(prev => ({
+          ...prev,
+          [pick.id]: false
+        }));
         return;
       }
       
@@ -377,6 +395,10 @@ function RealGaryPicks() {
       const { hasMade } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
       if (hasMade) {
         showToast('You already placed a bet on this pick!', 'warning', 3000, false);
+        setProcessingDecisions(prev => ({
+          ...prev,
+          [pick.id]: false
+        }));
         return;
       }
       
@@ -408,10 +430,15 @@ function RealGaryPicks() {
         console.log('[RealGaryPicks] reloadKey incremented', newKey);
         return newKey;
       });
-      
     } catch (error) {
       console.error('Error handling bet/fade decision:', error);
       showToast('Something went wrong. Please try again.', 'error', 3000, false);
+    } finally {
+      // Regardless of outcome, mark this pick as no longer being processed
+      setProcessingDecisions(prev => ({
+        ...prev,
+        [pick.id]: false
+      }));
     }
   };
 
@@ -880,9 +907,10 @@ function RealGaryPicks() {
                                                   transition: 'all 0.2s ease',
                                                   opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'bet' ? 0.5 : 1
                                                 }}
-                                                onClick={(e) => {
+                                                 onClick={(e) => {
                                                   e.stopPropagation(); // Prevent card flip
-                                                  if (!userDecisions[pick.id]) {
+                                                  // Disable the button if either processing or already decided
+                                                  if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
                                                     handleDecisionMade('bet', pick);
                                                   }
                                                 }}
@@ -909,9 +937,10 @@ function RealGaryPicks() {
                                                   transition: 'all 0.2s ease',
                                                   opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'fade' ? 0.5 : 1
                                                 }}
-                                                onClick={(e) => {
+                                                 onClick={(e) => {
                                                   e.stopPropagation(); // Prevent card flip
-                                                  if (!userDecisions[pick.id]) {
+                                                  // Disable the button if either processing or already decided
+                                                  if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
                                                     handleDecisionMade('fade', pick);
                                                   }
                                                 }}
