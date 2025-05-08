@@ -525,22 +525,8 @@ function Home() {
               <main className="hero-inner flex flex-col w-full h-full" style={{ padding: "24px 24px" }}>
                 {/* Centered Hero Content */}
              <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
-              {/* Yesterday's Performance Banner - above NEW badge */}
-              <div className="mb-2 relative mt-16 flex justify-center w-full">  
-                <div className="text-sm font-bold px-5 py-1.5 rounded-full flex items-center" 
-                     style={{ 
-                      background: '#1a1a1a', 
-                      color: '#B8953F', 
-                      border: '2px solid #B8953F',
-                      fontWeight: 'bold',
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
-                    }}>
-                  <span className="font-bold">GARY WENT 6-1 YESTERDAY</span>
-                </div>
-              </div>
-
               {/* NEW badge - gold-colored and oval-shaped with border */}
-              <div className="mb-8 relative flex justify-center w-full">  
+              <div className="mb-8 relative mt-16 flex justify-center w-full">  
                 <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center border border-gray-800" 
                      style={{ background: '#b8953f', color: '#1a1a1a' }}>
                   <span className="mr-2 font-bold">NEW</span>
