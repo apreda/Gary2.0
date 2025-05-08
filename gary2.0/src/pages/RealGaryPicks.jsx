@@ -48,7 +48,6 @@ function RealGaryPicks() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [activeTab, setActiveTab] = useState('today');
-  const [yesterdayRecord, setYesterdayRecord] = useState('0-0');
   
   // State for bet tracking
   const [showBetTracker, setShowBetTracker] = useState(false);
@@ -64,39 +63,7 @@ function RealGaryPicks() {
     console.log('[RealGaryPicks] error:', error);
   }, [picks, loading, error]);
 
-  // Fetch yesterday's performance data
-  useEffect(() => {
-    const fetchYesterdayRecord = async () => {
-      try {
-        // Get yesterday's date
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayString = yesterday.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-        
-        // Fetch all picks from yesterday
-        const { data: picksData, error: picksError } = await supabase
-          .from("game_results")
-          .select("*")
-          .eq('date', yesterdayString);
-          
-        if (picksError) {
-          console.error("Error fetching yesterday's game results:", picksError);
-          return;
-        }
-        
-        if (picksData && picksData.length > 0) {
-          const yesterdayWins = picksData.filter(game => game.result === 'win').length;
-          const yesterdayLosses = picksData.length - yesterdayWins;
-          setYesterdayRecord(`${yesterdayWins}-${yesterdayLosses}`);
-        }
-      } catch (err) {
-        console.error("Error fetching yesterday's record:", err);
-      }
-    };
-    
-    fetchYesterdayRecord();
-  }, []);
+  // Using hardcoded performance values
 
   // Load picks from Supabase using appropriate date based on time
   const loadPicks = async () => {
@@ -568,7 +535,7 @@ function RealGaryPicks() {
                         fontWeight: 'bold',
                         boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
                       }}>
-                        <span className="text-lg">GARY WENT {yesterdayRecord} YESTERDAY</span>
+                        <span className="text-lg">GARY WENT 6-1 YESTERDAY</span>
                       </div>
                     </div>
                     

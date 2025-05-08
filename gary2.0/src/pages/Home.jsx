@@ -12,7 +12,6 @@ function Home() {
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [winRate, setWinRate] = useState('67%');
-  const [yesterdayRecord, setYesterdayRecord] = useState('6-1');
 
   // Render a pick card - IDENTICAL to RealGaryPicks implementation
   const renderPickCard = (pick) => {
@@ -578,7 +577,7 @@ function Home() {
                   fontWeight: 'bold',
                   zIndex: 30
                 }}>
-                  <span className="text-lg">GARY WENT {yesterdayRecord} YESTERDAY</span>
+                  <span className="text-lg">GARY WENT 6-1 YESTERDAY</span>
                 </div>
               </div>
               
