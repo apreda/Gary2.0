@@ -27,8 +27,16 @@ import { supabase, ensureAnonymousSession } from '../supabaseClient';
 function RealGaryPicks() {
   const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
-  const { userPlan } = useUserPlan();
+  const { userPlan, refreshUserPlan } = useUserPlan();
   const navigate = useNavigate();
+  
+  // Force refresh plan status when component mounts
+  useEffect(() => {
+    if (user) {
+      console.log('RealGaryPicks: Force refreshing user plan status');
+      refreshUserPlan();
+    }
+  }, [user, refreshUserPlan]);
   
   // Debug log for pro/free status
   useEffect(() => {
