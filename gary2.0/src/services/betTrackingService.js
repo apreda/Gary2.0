@@ -52,6 +52,52 @@ export const betTrackingService = {
     }
   },
   
+  // Check if user has already made a decision for a specific pick
+  hasUserMadeDecision: async (pickId, userId = null) => {
+    try {
+      // First check local storage
+      const savedDecisions = localStorage.getItem('userPickDecisions') || '{}';
+      const decisions = JSON.parse(savedDecisions);
+      
+      if (decisions[pickId]) {
+        return {
+          hasMade: true,
+          decision: decisions[pickId].decision
+        };
+      }
+      
+      // If not found locally and user is logged in, check Supabase
+      if (userId) {
+        const { data } = await supabase
+          .from('user_picks')
+          .select('decision')
+          .eq('user_id', userId)
+          .eq('pick_id', pickId)
+          .maybeSingle();
+        
+        if (data) {
+          // Update local storage for next time
+          decisions[pickId] = {
+            decision: data.decision,
+            timestamp: new Date().toISOString(),
+            result: null
+          };
+          localStorage.setItem('userPickDecisions', JSON.stringify(decisions));
+          
+          return {
+            hasMade: true,
+            decision: data.decision
+          };
+        }
+      }
+      
+      return { hasMade: false };
+    } catch (error) {
+      console.error('Error checking user decision:', error);
+      return { hasMade: false, error };
+    }
+  },
+  
   // Update the BetCard stats
   updateBetCardStats: (decision) => {
     try {

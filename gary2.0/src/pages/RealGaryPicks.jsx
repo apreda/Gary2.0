@@ -43,10 +43,43 @@ function RealGaryPicks() {
     }
   }, [user, userPlan, planLoading, subscriptionStatus]);
 
+  // Load picks from Supabase
+  useEffect(() => {
+    if (!planLoading && subscriptionStatus === 'active') {
+      loadPicks();
+    }
+  }, [planLoading, subscriptionStatus]);
+  
+  // Check for existing user decisions when picks load
+  useEffect(() => {
+    if (picks.length > 0 && user) {
+      checkUserDecisions();
+    }
+  }, [picks, user]);
+  
+  // Function to check if user has already made decisions on any picks
+  const checkUserDecisions = async () => {
+    if (!user) return;
+    
+    const userId = user.id;
+    const decisionsMap = {};
+    
+    // Check each pick for existing user decisions
+    for (const pick of picks) {
+      const { hasMade, decision } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
+      if (hasMade) {
+        decisionsMap[pick.id] = decision;
+      }
+    }
+    
+    setUserDecisions(decisionsMap);
+  };
+
   // State for cards loaded from the database
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userDecisions, setUserDecisions] = useState({});
   // State to track which cards are flipped
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -340,6 +373,13 @@ function RealGaryPicks() {
         return;
       }
       
+      // Check if user already made a decision on this pick
+      const { hasMade } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
+      if (hasMade) {
+        showToast('You already placed a bet on this pick!', 'warning', 3000, false);
+        return;
+      }
+      
       // Display appropriate Gary toast message based on decision
       const toastMessage = decision === 'bet'
         ? garyPhrases.getRandom('betPhrases')
@@ -352,6 +392,12 @@ function RealGaryPicks() {
       
       // Update user-pick tracking
       await betTrackingService.saveBetDecision(pick.id, decision, userId);
+      
+      // Update local state to reflect the decision
+      setUserDecisions(prev => ({
+        ...prev,
+        [pick.id]: decision
+      }));
       
       // Reload picks if necessary
       loadPicks();
@@ -816,44 +862,58 @@ function RealGaryPicks() {
                                             }}>
                                               <button 
                                                 style={{
-                                                  background: 'rgba(191, 161, 66, 0.15)',
-                                                  color: '#bfa142',
+                                                  background: userDecisions[pick.id] === 'bet' 
+                                                    ? 'rgba(191, 161, 66, 0.5)'
+                                                    : 'rgba(191, 161, 66, 0.15)',
+                                                  color: userDecisions[pick.id] === 'bet' 
+                                                    ? '#ffdf7e'
+                                                    : '#bfa142',
                                                   fontWeight: '600',
                                                   padding: '0.5rem 1rem',
                                                   borderRadius: '8px',
                                                   border: '1px solid rgba(191, 161, 66, 0.3)',
-                                                  cursor: 'pointer',
+                                                  cursor: userDecisions[pick.id] ? 'default' : 'pointer',
                                                   flex: 1,
                                                   fontSize: '0.8rem',
                                                   letterSpacing: '0.05em',
                                                   textTransform: 'uppercase',
-                                                  transition: 'all 0.2s ease'
+                                                  transition: 'all 0.2s ease',
+                                                  opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'bet' ? 0.5 : 1
                                                 }}
                                                 onClick={(e) => {
                                                   e.stopPropagation(); // Prevent card flip
-                                                  handleDecisionMade('bet', pick);
+                                                  if (!userDecisions[pick.id]) {
+                                                    handleDecisionMade('bet', pick);
+                                                  }
                                                 }}
                                               >
                                                 Bet
                                               </button>
                                               <button 
                                                 style={{
-                                                  background: 'rgba(255, 255, 255, 0.05)',
-                                                  color: 'rgba(255, 255, 255, 0.8)',
+                                                  background: userDecisions[pick.id] === 'fade' 
+                                                    ? 'rgba(255, 255, 255, 0.2)'
+                                                    : 'rgba(255, 255, 255, 0.05)',
+                                                  color: userDecisions[pick.id] === 'fade' 
+                                                    ? 'rgba(255, 255, 255, 1)'
+                                                    : 'rgba(255, 255, 255, 0.8)',
                                                   fontWeight: '600',
                                                   padding: '0.5rem 1rem',
                                                   borderRadius: '8px',
                                                   border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                  cursor: 'pointer',
+                                                  cursor: userDecisions[pick.id] ? 'default' : 'pointer',
                                                   flex: 1,
                                                   fontSize: '0.8rem',
                                                   letterSpacing: '0.05em',
                                                   textTransform: 'uppercase',
-                                                  transition: 'all 0.2s ease'
+                                                  transition: 'all 0.2s ease',
+                                                  opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'fade' ? 0.5 : 1
                                                 }}
                                                 onClick={(e) => {
                                                   e.stopPropagation(); // Prevent card flip
-                                                  handleDecisionMade('fade', pick);
+                                                  if (!userDecisions[pick.id]) {
+                                                    handleDecisionMade('fade', pick);
+                                                  }
                                                 }}
                                               >
                                                 Fade
