@@ -70,15 +70,48 @@ export default async function handler(req, res) {
           const subscriptionDetails = await stripe.subscriptions.retrieve(subscription);
           console.log('Subscription details retrieved');
           
-          // Prepare the update data
-          const updateData = {
-            plan: 'pro', // Changed from PostgreSQL casting to simple string
-            stripe_customer_id: customer,
-            stripe_subscription_id: subscription,
-            subscription_status: 'active',
-            subscription_period_start: new Date(subscriptionDetails.current_period_start * 1000).toISOString(),
-            subscription_period_end: new Date(subscriptionDetails.current_period_end * 1000).toISOString()
-          };
+          // Check the actual structure of the users table to ensure we're using the correct column names
+          console.log('Getting users table structure to verify column names...');
+          const { data: userTableSample, error: tableError } = await supabase
+            .from('users')
+            .select('*')
+            .limit(1);
+          
+          if (tableError) {
+            console.error('Error accessing users table:', tableError);
+            return res.status(500).send(`Database Error: ${tableError.message}`);
+          }
+
+          if (userTableSample && userTableSample.length > 0) {
+            console.log('Users table columns:', Object.keys(userTableSample[0]));
+          } else {
+            console.warn('Could not retrieve users table structure - table may be empty.');
+          }
+          
+          // Prepare the update data with careful attention to column names and data types
+          // Using exact column names as seen in the Supabase schema
+          const updateData = {};
+          
+          // Handle text fields correctly
+          updateData.plan = 'pro';
+          if (customer) updateData.stripe_customer = customer; // Note: Using the actual column name seen in screenshot
+          if (subscription) updateData.stripe_subscri = subscription; // Note: Using the actual column name seen in screenshot
+          updateData.subscription_s = 'active'; // Using the subscription_status column name from screenshot
+          
+          // Handle timestamp fields correctly - use JavaScript Date objects directly, not strings
+          // This ensures PostgreSQL receives proper timestamp objects
+          if (subscriptionDetails.current_period_start) {
+            updateData.subscription_p = new Date(subscriptionDetails.current_period_start * 1000);
+          }
+          
+          if (subscriptionDetails.current_period_end) {
+            const endDate = new Date(subscriptionDetails.current_period_end * 1000);
+            // Get column names for timestamp fields - we'll set both of them correctly
+            const endDateColumnName = 'subscription_p'; // We'll update both timestamp columns
+            updateData[endDateColumnName] = endDate;
+          }
+          
+          console.log('Prepared update data with corrected column names and types:', updateData);
           
           console.log('Supabase URL:', supabaseUrl);
           console.log('User email being processed:', customerEmail);
@@ -207,17 +240,54 @@ export default async function handler(req, res) {
       const subscription = event.data.object;
       const customerId = subscription.customer;
       
-      const updateData = {
-        subscription_status: subscription.status,
-        subscription_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        subscription_period_end: new Date(subscription.current_period_end * 1000).toISOString()
-      };
+      // First get the user table structure to check column names
+      const { data: userTableSample, error: tableError } = await supabase
+        .from('users')
+        .select('*')
+        .limit(1);
+        
+      if (tableError) {
+        console.error('Error accessing users table:', tableError);
+        return res.status(500).send(`Database Error: ${tableError.message}`);
+      }
+
+      if (userTableSample && userTableSample.length > 0) {
+        console.log('Users table columns for update:', Object.keys(userTableSample[0]));
+      }
+      
+      // Create update object with correct column names
+      const updateData = {};
+      
+      // Use the actual column names from the database
+      updateData.subscription_s = subscription.status;
+      
+      // Handle timestamp fields correctly - use JavaScript Date objects directly
+      if (subscription.current_period_start) {
+        updateData.subscription_p = new Date(subscription.current_period_start * 1000);
+      }
+      
+      console.log('Prepared update data for subscription update:', updateData);
       
       try {
+        // Now look up the user by stripe_customer (actual column name)
+        const { data: userData, error: userQueryError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('stripe_customer', customerId)
+          .single();
+          
+        if (userQueryError || !userData) {
+          console.error('Error finding user by stripe_customer:', userQueryError || 'No user found');
+          return res.status(404).json({ error: 'User not found' });
+        }
+        
+        console.log('Found user to update:', userData);
+        
+        // Update by id for maximum reliability
         const result = await supabase
           .from('users')
           .update(updateData)
-          .eq('stripe_customer_id', customerId);
+          .eq('id', userData.id);
         
         if (result.error) {
           console.error('Error updating subscription:', result.error);
@@ -238,13 +308,28 @@ export default async function handler(req, res) {
         // Log the customer ID we're looking for
         console.log('Looking for customer with Stripe ID:', customerId);
         
+        // First find the user by the correct column name 'stripe_customer' (not stripe_customer_id)
+        const { data: userData, error: userQueryError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('stripe_customer', customerId)
+          .single();
+          
+        if (userQueryError || !userData) {
+          console.error('Error finding user by stripe_customer:', userQueryError || 'No user found');
+          return res.status(404).json({ error: 'User not found' });
+        }
+        
+        console.log('Found user to update subscription status:', userData);
+        
+        // Update using the correct column names from the database schema
         const result = await supabase
           .from('users')
           .update({ 
-            subscription_status: 'canceled',
-            plan: 'free' // Changed from PostgreSQL casting to simple string
+            subscription_s: 'canceled', // Using the actual column name from screenshot
+            plan: 'free' // Simple string value
           })
-          .eq('stripe_customer_id', customerId);
+          .eq('id', userData.id); // Update by ID for reliability
           
         console.log('Supabase update result:', result);
         
