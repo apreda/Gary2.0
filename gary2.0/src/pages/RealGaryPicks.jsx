@@ -490,7 +490,7 @@ function RealGaryPicks() {
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100vw', overflow: 'hidden' }}>
-      {/* Modern dark UI background */}
+      {/* BG2.png background */}
       <div
         style={{
           position: 'fixed',
@@ -500,7 +500,10 @@ function RealGaryPicks() {
           height: '100vh',
           zIndex: 0,
           pointerEvents: 'none',
-          background: 'linear-gradient(135deg, #121212 0%, #1e1e1e 100%)',
+          backgroundImage: 'url(/BG2.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
           overflow: 'hidden',
         }}
       >
