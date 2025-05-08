@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUserStats } from "../hooks/useUserStats";
-import { useUserPlan } from "../hooks/useUserPlan";
+import { useUserPlan } from "../contexts/UserPlanContext";
 import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
