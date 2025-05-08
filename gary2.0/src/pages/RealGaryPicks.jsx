@@ -30,6 +30,35 @@ function RealGaryPicks() {
   const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
   
+  // State for cards loaded from the database
+  const [picks, setPicks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [userDecisions, setUserDecisions] = useState({});
+  // State to track which cards are flipped
+  const [flippedCards, setFlippedCards] = useState({});
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [animating, setAnimating] = useState(false);
+  const [activeTab, setActiveTab] = useState('today');
+  
+  // Function to check if user has already made decisions on any picks
+  const checkUserDecisions = async () => {
+    if (!user) return;
+    
+    const userId = user.id;
+    const decisionsMap = {};
+    
+    // Check each pick for existing user decisions
+    for (const pick of picks) {
+      const { hasMade, decision } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
+      if (hasMade) {
+        decisionsMap[pick.id] = decision;
+      }
+    }
+    
+    setUserDecisions(decisionsMap);
+  };
+  
   // Single debug logging effect that executes when subscription status changes
   useEffect(() => {
     if (user) {
@@ -56,35 +85,6 @@ function RealGaryPicks() {
       checkUserDecisions();
     }
   }, [picks, user]);
-  
-  // Function to check if user has already made decisions on any picks
-  const checkUserDecisions = async () => {
-    if (!user) return;
-    
-    const userId = user.id;
-    const decisionsMap = {};
-    
-    // Check each pick for existing user decisions
-    for (const pick of picks) {
-      const { hasMade, decision } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
-      if (hasMade) {
-        decisionsMap[pick.id] = decision;
-      }
-    }
-    
-    setUserDecisions(decisionsMap);
-  };
-
-  // State for cards loaded from the database
-  const [picks, setPicks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [userDecisions, setUserDecisions] = useState({});
-  // State to track which cards are flipped
-  const [flippedCards, setFlippedCards] = useState({});
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [animating, setAnimating] = useState(false);
-  const [activeTab, setActiveTab] = useState('today');
   
   // State for bet tracking
   const [showBetTracker, setShowBetTracker] = useState(false);
