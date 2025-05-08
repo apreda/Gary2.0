@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useUserStats } from "../hooks/useUserStats";
+import { Link, useNavigate } from "react-router-dom";
+// Removed unused import: useUserStats, useLocation
 import { useUserPlan } from "../contexts/UserPlanContext";
 import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
@@ -8,15 +8,11 @@ import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/PickCardGlow.css'; // Import the glow effect CSS
 
-// Modern UI no longer uses retro styles
-
 // Only import assets we actually need for the modern dark UI design
 import GaryEmblem from '../assets/images/Garyemblem.png';
-// Using coin image from public directory to avoid build issues
 
 // Import services
 import { picksService } from '../services/picksService';
-// schedulerService removed - no longer needed
 import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
 import { picksPersistenceService } from '../services/picksPersistenceService';
@@ -88,9 +84,7 @@ function RealGaryPicks() {
     }
   }, [picks, user]);
   
-  // State for bet tracking
-  const [showBetTracker, setShowBetTracker] = useState(false);
-  const [activePick, setActivePick] = useState(null);
+  // Removed unused state variables for bet tracking
 
   // Toast notification system
   const showToast = useToast();
@@ -442,24 +436,6 @@ function RealGaryPicks() {
     }
   };
 
-  // Function to handle bet tracking
-  const handleTrackBet = (pickId) => {
-    setUserDecisions(prev => ({
-      ...prev,
-      [pickId]: 'bet'
-    }));
-  };
-
-  // Function to handle skipping a pick
-  const handleSkipPick = (pickId) => {
-    setUserDecisions(prev => ({
-      ...prev,
-      [pickId]: 'skip'
-    }));
-  };
-
-  // This function was removed as it's redundant with nextPick/prevPick
-  
   // Functions to navigate between picks
   const nextPick = () => {
     if (animating || picks.length <= 1) return;
