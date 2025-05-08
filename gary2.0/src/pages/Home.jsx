@@ -37,24 +37,6 @@ function Home() {
       <div style={{ width: 576, height: 384, perspective: '1000px', cursor: 'pointer' }}>
         {/* Card container with 3D effect */}
         <div style={{ position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)' }}>
-          {/* Win Rate Badge moved 5in right, 2in up */}
-          <div style={{
-            position: 'absolute',
-            right: '5in',
-            top: '-2in',
-            zIndex: 50,
-            background: '#B8953F',
-            color: '#222',
-            fontWeight: 700,
-            borderRadius: '999px',
-            padding: '0.5rem 1.5rem',
-            fontSize: '1.15rem',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            border: '2px solid #bfa142',
-            transform: 'rotate(-10deg)'
-          }}>
-            Win Rate: {winRate}
-          </div>
           {/* FRONT OF CARD - Modern Dark UI Design */}
           <div style={{
             position: 'absolute',
