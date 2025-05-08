@@ -7,6 +7,7 @@ import { useToast } from '../components/ui/ToastProvider';
 import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/PickCardGlow.css'; // Import the glow effect CSS
+import '../styles/DisableCardGlow.css'; // Override to disable the glow effect
 
 // Only import assets we actually need for the modern dark UI design
 import GaryEmblem from '../assets/images/Garyemblem.png';
@@ -667,7 +668,7 @@ function RealGaryPicks() {
                                   : 'translateX(30px) scale(0.85) translateY(30px)',
                             opacity: position <= 2 ? 1 - (position * 0.15) : 0,
                             pointerEvents: isCurrentCard ? 'auto' : 'none',
-                            boxShadow: isCurrentCard ? '0 10px 25px rgba(0, 0, 0, 0.4)' : '0 5px 15px rgba(0, 0, 0, 0.3)',
+                            /* Box shadow removed */
                             transition: animating ? 'all 0.5s ease-in-out' : 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out'
                           };
                           

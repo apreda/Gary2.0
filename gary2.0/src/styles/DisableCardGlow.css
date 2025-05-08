@@ -1,0 +1,12 @@
+/* Disable glow effect for pick cards */
+.pick-card-container::before {
+  display: none !important;
+  opacity: 0 !important;
+  box-shadow: none !important;
+}
+
+.pick-card-container:hover::before {
+  display: none !important;
+  opacity: 0 !important;
+  box-shadow: none !important;
+}
