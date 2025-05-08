@@ -548,8 +548,8 @@ function Home() {
                 
                 {/* Win Rate Stamp - positioned diagonally to the right with rounded corners */}
                 <div className="absolute lg:block hidden" style={{ 
-                  top: '-35px', 
-                  right: '20%', 
+                  top: '80px', 
+                  right: '5%', 
                   transform: 'rotate(7deg)',
                   background: '#B8953F',
                   color: '#1a1a1a',
@@ -558,8 +558,7 @@ function Home() {
                   boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
                   border: '2.5px solid #1a1a1a',
                   fontWeight: 'bold',
-                  zIndex: 30,
-                  marginLeft: '2rem' /* Additional spacing from text */
+                  zIndex: 30
                 }}>
                   <span className="text-2xl font-bold">Win Rate: {winRate}</span>
                 </div>
