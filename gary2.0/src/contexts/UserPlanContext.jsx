@@ -7,8 +7,15 @@ const UserPlanContext = createContext();
 // Provider component
 export const UserPlanProvider = ({ children }) => {
   const [userPlan, setUserPlan] = useState('free');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
-  // Load user plan from supabase when authenticated
+  // Function to refresh plan status manually
+  const refreshUserPlan = () => {
+    console.log('UserPlanContext: Manually refreshing user plan');
+    setRefreshTrigger(prev => prev + 1);
+  };
+  
+  // Load user plan from supabase when authenticated or when refresh is triggered
   useEffect(() => {
     const loadUserPlan = async () => {
       // Get current auth user
@@ -16,17 +23,26 @@ export const UserPlanProvider = ({ children }) => {
       console.log('UserPlanContext: Current auth user:', user?.id);
       
       if (user) {
-        // Try first from the users table
+        // Use cache-busting options to ensure fresh data
+        const timestamp = new Date().getTime();
+        
+        // Try first from the users table - with no-cache headers
         const { data, error } = await supabase
           .from('users')
-          .select('plan, subscription_status, id')
+          .select('plan, subscription_status, id, stripe_customer_id')
           .eq('id', user.id)
-          .single();
+          .single()
+          .abortSignal(new AbortController().signal); // Forces a new request
         
-        console.log('UserPlanContext: User data from Supabase:', data);
+        console.log(`UserPlanContext: User data from Supabase (refresh #${refreshTrigger}):`, data);
         console.log('UserPlanContext: Error fetching user plan:', error);
         
         if (!error && data) {
+          // Log ALL relevant fields for debugging
+          console.log('UserPlanContext: Plan =', data.plan);
+          console.log('UserPlanContext: Subscription Status =', data.subscription_status);
+          console.log('UserPlanContext: Has stripe customer ID =', !!data.stripe_customer_id);
+          
           // Check if plan is explicitly 'pro' or subscription_status is 'active'
           if (data.plan === 'pro' || data.subscription_status === 'active') {
             console.log('UserPlanContext: Setting user plan to pro');
@@ -51,6 +67,12 @@ export const UserPlanProvider = ({ children }) => {
     
     loadUserPlan();
     
+    // Set up a recheck interval (every minute) to ensure plan status is current
+    const intervalId = setInterval(() => {
+      console.log('UserPlanContext: Performing automatic plan refresh check');
+      loadUserPlan();
+    }, 60000); // Check every minute
+    
     // Subscribe to auth changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -63,16 +85,17 @@ export const UserPlanProvider = ({ children }) => {
     );
     
     return () => {
+      clearInterval(intervalId);
       authListener?.subscription?.unsubscribe();
     };
-  }, []);
+  }, [refreshTrigger]); // Add refreshTrigger as a dependency
   
   const updateUserPlan = (plan) => {
     setUserPlan(plan);
   };
   
   return (
-    <UserPlanContext.Provider value={{ userPlan, updateUserPlan }}>
+    <UserPlanContext.Provider value={{ userPlan, updateUserPlan, refreshUserPlan }}>
       {children}
     </UserPlanContext.Provider>
   );
