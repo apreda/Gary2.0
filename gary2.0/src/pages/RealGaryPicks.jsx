@@ -171,6 +171,9 @@ function RealGaryPicks() {
       
       // Log the result for debugging
       console.log(`Supabase fetch result for ${queryDate}:`, { data, fetchError });
+      
+      // Store the queryDate for use in generating consistent pick IDs
+      const currentDate = queryDate;
 
       // Parse picks column if it's a string
       let picksArray = [];
@@ -208,7 +211,9 @@ function RealGaryPicks() {
             // Create a pick object with BOTH original OpenAI fields AND mapped fields
             // Parse and extract the necessary fields for our card implementation
             const simplePick = {
-              id: pick.id || `pick-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              // Use a consistent ID based on the pick content and date instead of random numbers
+              // This ensures the same pick gets the same ID across page refreshes
+              id: pick.id || `pick-${currentDate}-${pick.league}-${pick.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
               
               // Include original OpenAI format fields
               pick: pick.pick || '',          // Original OpenAI field for the bet
@@ -274,8 +279,8 @@ function RealGaryPicks() {
               
               // Add a minimal required ID field for React keys
               return {
-                // The only additional field we need to add is the ID
-                id: pick.id,
+                // Generate a consistent ID based on pick content and today's date
+                id: pick.id || `pick-${today}-${rawOutput.league}-${rawOutput.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
                 
                 // Directly use all OpenAI output fields exactly as received
                 pick: rawOutput.pick,
