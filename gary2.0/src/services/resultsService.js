@@ -1,5 +1,7 @@
 import { winnersService } from './winnersService';
 import { oddsService } from './oddsService';
+import { betTrackingService } from './betTrackingService';
+import { supabase } from '../supabaseClient';
 
 /**
  * Service to manage game results and update the status of picks
@@ -98,6 +100,36 @@ export const resultsService = {
           // If it's a winning pick, add it to the winners history
           if (gameResult.outcome === 'WIN') {
             await winnersService.addWinningPick(updatedPick);
+          }
+          
+          // Update bet tracking for all users who bet on this pick
+          const { data: currentAuth } = await supabase.auth.getSession();
+          const currentUser = currentAuth?.session?.user;
+          
+          // Update current user's bet locally if logged in
+          if (currentUser) {
+            await betTrackingService.updateBetResult(pick.id, gameResult.outcome, currentUser.id);
+          }
+          
+          // Update all users' bets in Supabase who bet on this pick
+          try {
+            const { data: userPicks } = await supabase
+              .from('user_picks')
+              .select('user_id, decision')
+              .eq('pick_id', pick.id);
+                
+            if (userPicks && userPicks.length > 0) {
+              console.log(`Updating bet results for ${userPicks.length} users who bet on pick ${pick.id}`);
+              
+              for (const userPick of userPicks) {
+                // Only update if not the current user (already updated above)
+                if (currentUser && userPick.user_id === currentUser.id) continue;
+                
+                await betTrackingService.updateBetResult(pick.id, gameResult.outcome, userPick.user_id);
+              }
+            }
+          } catch (error) {
+            console.error('Error updating user bet results:', error);
           }
           
           return updatedPick;
