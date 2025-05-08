@@ -79,8 +79,8 @@ export default function BetCardProfileOverlay({ isOpen, onClose }) {
         className="relative perspective-card max-w-md w-full cursor-pointer transform transition-all duration-300 hover:scale-105"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Baseball Card */}
-        <div className="relative h-[500px] rounded-xl overflow-hidden shadow-2xl hover:shadow-[0_20px_50px_rgba(212,175,55,0.3)]">
+        {/* Baseball Card - now with scrolling */}
+        <div className="relative h-[500px] rounded-xl overflow-auto shadow-2xl hover:shadow-[0_20px_50px_rgba(212,175,55,0.3)]">
           {/* Card glow effect */}
           <div className="absolute inset-0 z-0">
             <div className="absolute inset-0 bg-gradient-to-br from-[#111] via-[#222] to-[#111] rounded-xl"></div>
@@ -119,9 +119,9 @@ export default function BetCardProfileOverlay({ isOpen, onClose }) {
             <div className="mx-auto mt-4 mb-6">
               <div className="relative w-36 h-36 rounded-full border-4 border-[#d4af37]/50 overflow-hidden">
                 <img 
-                  src={avatarUrl} 
-                  alt={username} 
-                  className="w-full h-full object-cover"
+                  src="/coin2.png" 
+                  alt="Gary Coin" 
+                  className="w-full h-full object-contain bg-[#1a1a1a]"
                 />
               </div>
             </div>
