@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import { supabase } from '../supabaseClient';
 import '../styles/BillfoldEnhanced.css'; // Consolidated high-tech modern styling
+import '../styles/BillfoldScroll.css'; // Custom scrolling for Recent Picks
 
 export const Billfold = () => {
   // State for user performance data
@@ -335,18 +336,19 @@ export const Billfold = () => {
             <div className="gary-card-header">
               <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">RECENT PICKS</h3>
             </div>
-            <table className="gary-table">
-              <thead>
-                <tr>
-                  <th>DATE</th>
-                  <th>SPORT</th>
-                  <th>MATCHUP</th>
-                  <th>PICK</th>
-                  <th style={{ textAlign: 'right' }}>RESULT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bettingLog.slice(0, 5).map((bet, index) => (
+            <div className="recent-picks-scroll">
+              <table className="gary-table">
+                <thead className="recent-picks-header">
+                  <tr>
+                    <th>DATE</th>
+                    <th>SPORT</th>
+                    <th>MATCHUP</th>
+                    <th>PICK</th>
+                    <th style={{ textAlign: 'right' }}>RESULT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bettingLog.map((bet, index) => (
                   <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-800/50 transition-colors">
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.sport}</td>
@@ -366,8 +368,8 @@ export const Billfold = () => {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
-          
 
         </div>
           
