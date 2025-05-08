@@ -1,0 +1,39 @@
+/* Custom scrollbar styling for the Billfold page */
+.recent-picks-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #b8953f #1a1a1a;
+}
+
+/* For Webkit browsers (Chrome, Safari) */
+.recent-picks-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.recent-picks-scroll::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.recent-picks-scroll::-webkit-scrollbar-thumb {
+  background: #b8953f;
+  border-radius: 4px;
+}
+
+.recent-picks-scroll::-webkit-scrollbar-thumb:hover {
+  background: #d4af37;
+}
+
+/* Fixed header styling */
+.recent-picks-header {
+  position: sticky;
+  top: 0;
+  background: #121212;
+  z-index: 10;
+}
+
+/* Gold accent for the table header */
+.recent-picks-header th {
+  border-bottom: 2px solid #b8953f;
+}
