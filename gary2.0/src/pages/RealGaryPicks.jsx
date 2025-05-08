@@ -650,7 +650,7 @@ function RealGaryPicks() {
                       </div>
                       
                       {/* Card Stack - Wider index card format (20% larger) */}
-                      <div className="relative" style={{ width: '634px', height: '422px' }}>
+                      <div className="relative" style={{ width: '634px', height: '422px', marginLeft: '48px' }}>
                         {picks.map((pick, index) => {
                           // Calculate position in stack relative to current index
                           const position = (index - currentIndex + picks.length) % picks.length;
