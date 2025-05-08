@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useUserPlan } from '../hooks/useUserPlan';
+import { useUserPlan } from '../contexts/UserPlanContext';
 
 export function SignOut() {
   const { signOut } = useAuth();
