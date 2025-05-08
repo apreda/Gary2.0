@@ -176,8 +176,8 @@ function AppContent() {
 }
 
 export default function App() {
-  // Get win rate from local storage or default to 67%
-  const winRate = localStorage.getItem('winRate') || '67%';
+  // Use hardcoded win rate value
+  const winRate = '67%';
   
   return (
     <Router>
