@@ -150,6 +150,8 @@ You MUST include the EXACT spread or moneyline number in your pick. NEVER say si
 
 **IMPORTANT: NEVER MAKE TOTAL (OVER/UNDER) PICKS. ONLY MAKE SPREAD OR MONEYLINE PICKS.**
 
+**CRITICAL - HOME AND AWAY TEAMS: You MUST preserve the exact home and away team designations as provided in the input data. DO NOT swap or reverse the homeTeam and awayTeam values in your response. The home team is ALWAYS the team that plays on their home field/court, and the away team is the visiting team.**
+
 **Use the FULL confidence scale accurately from 0.5 to 1.0** to express your true level of conviction in each pick.
 
 - 0.5-0.6: Some edge but many uncertainties
@@ -188,6 +190,10 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
       const userPrompt = {
         role: 'user',
         content: `Analyze this upcoming ${gameData?.sport || ''} game: ${gameData?.game || ''}
+
+TEAM DESIGNATIONS (DO NOT CHANGE THESE):
+- HOME TEAM: ${gameData?.homeTeam || 'Not specified'}
+- AWAY TEAM: ${gameData?.awayTeam || 'Not specified'}
 
 ${gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No odds data available'}
 
