@@ -176,9 +176,6 @@ function AppContent() {
 }
 
 export default function App() {
-  // Use hardcoded win rate value
-  const winRate = '67%';
-  
   return (
     <Router>
       <AuthProvider>
@@ -188,25 +185,6 @@ export default function App() {
               <ToastProvider>
                 <FontLoader />
                 <AppContent />
-                {/* Absolutely fixed Win Rate badge that won't move when scrolling */}
-                <div style={{
-                  position: 'fixed',
-                  top: '150px',
-                  right: '150px',
-                  transform: 'rotate(8deg)',
-                  background: '#B8953F',
-                  color: '#1a1a1a',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '999px',
-                  boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-                  border: '2.5px solid #1a1a1a',
-                  fontWeight: 'bold',
-                  fontSize: '1.5rem',
-                  zIndex: 9999999,
-                  pointerEvents: 'none'
-                }}>
-                  Win Rate: {winRate}
-                </div>
                 {/* Vercel Analytics is automatically injected at runtime */}
               </ToastProvider>
             </BetCardProfileProvider>
