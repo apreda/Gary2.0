@@ -17,18 +17,53 @@ function Home() {
     height: window.innerHeight,
   });
   
-  // Add event listener for window resize
+  // Create Win Rate badge directly in the DOM, completely bypassing React rendering
   useEffect(() => {
-    function handleResize() {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
+    // Check if the badge already exists to prevent duplicates
+    const existingBadge = document.getElementById('fixed-win-rate-badge');
+    if (existingBadge) {
+      existingBadge.remove();
     }
     
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    // Create the badge element
+    const badge = document.createElement('div');
+    badge.id = 'fixed-win-rate-badge';
+    
+    // Apply styles to make it absolutely fixed
+    Object.assign(badge.style, {
+      position: 'fixed',
+      top: '150px',
+      right: '150px',
+      transform: 'rotate(8deg)',
+      background: '#B8953F',
+      color: '#1a1a1a',
+      padding: '0.75rem 2rem',
+      borderRadius: '999px',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+      border: '2.5px solid #1a1a1a',
+      fontWeight: 'bold',
+      zIndex: '9999',
+      pointerEvents: 'none',
+      userSelect: 'none',
+      fontSize: '1.5rem',
+      lineHeight: '1.5',
+      fontFamily: 'Inter, system-ui, sans-serif'
+    });
+    
+    // Set the content
+    badge.innerHTML = `<span style="font-weight: bold;">Win Rate: ${winRate}</span>`;
+    
+    // Add to body (outside React's control)
+    document.body.appendChild(badge);
+    
+    // Clean up when component unmounts
+    return () => {
+      const badge = document.getElementById('fixed-win-rate-badge');
+      if (badge) {
+        badge.remove();
+      }
+    };
+  }, [winRate]); // Only recreate when winRate changes
 
   // Render a pick card - IDENTICAL to RealGaryPicks implementation
   const renderPickCard = (pick) => {
@@ -495,24 +530,7 @@ function Home() {
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-x-hidden">
-      {/* Win Rate Badge - absolutely fixed position as direct child of root */}
-      <div style={{ 
-        position: 'fixed',
-        top: '150px', 
-        right: '150px', 
-        transform: 'rotate(8deg)',
-        background: '#B8953F',
-        color: '#1a1a1a',
-        padding: '0.75rem 2rem',
-        borderRadius: '999px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-        border: '2.5px solid #1a1a1a',
-        fontWeight: 'bold',
-        zIndex: 9999,
-        display: windowSize.width >= 992 ? 'block' : 'none'
-      }}>
-        <span className="text-2xl font-bold">Win Rate: {winRate}</span>
-      </div>
+      {/* Win Rate badge is created via useEffect directly in the body */}
       {/* Fixed background with all effects - spans the entire viewport */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#18181a] z-0">
         {/* Gold vignette corners - enhanced with white glow */}
