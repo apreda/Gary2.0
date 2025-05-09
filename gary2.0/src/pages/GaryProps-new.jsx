@@ -14,9 +14,9 @@ import '../styles/DisableCardGlow.css'; // Override to disable the glow effect
 import GaryEmblem from '../assets/images/Garyemblem.png';
 
 // Import services
-import { propPicksService } from '../services/propPicksService';
 import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
+import { propPicksService } from '../services/propPicksService';
 import { userStatsService } from '../services/userStatsService';
 import { garyPhrases } from '../utils/garyPhrases';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
@@ -99,7 +99,7 @@ function GaryProps() {
 
   // Using hardcoded performance values
 
-  // Load picks from Supabase using appropriate date based on time
+  // Load prop picks from Supabase using appropriate date based on time
   const loadPicks = async () => {
     setLoading(true);
     setError(null);
@@ -109,69 +109,43 @@ function GaryProps() {
       const now = new Date();
       
       // Convert to Eastern Time zone properly
-      const easternTimeOptions = { timeZone: "America/New_York" };
-      const easternDateString = now.toLocaleDateString('en-US', easternTimeOptions);
-      const easternTimeString = now.toLocaleTimeString('en-US', easternTimeOptions);
+      // This creates a date in the Eastern time zone
+      const easternNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
       
-      // Create a new date object with Eastern Time components
-      const [month, day, year] = easternDateString.split('/');
-      const [time, period] = easternTimeString.match(/([\d:]+)\s(AM|PM)/).slice(1);
-      const [hours, minutes] = time.split(':');
+      // Determine if we're loading picks for 'today' or 'yesterday' tab
+      let dateString;
       
-      // Format the date string properly (YYYY-MM-DD)
-      const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      const easternHour = parseInt(hours) + (period === 'PM' && hours !== '12' ? 12 : 0);
-      
-      // Format full time for logging
-      const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
-      
-      console.log(`Properly formatted Eastern date: ${dateString}, Hour: ${easternHour}`);
-      console.log(`Original time parts: M:${month} D:${day} Y:${year} H:${hours} M:${minutes} ${period}`);
-      
-      let queryDate = dateString;
-      console.log(`Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour})`);
-
-      
-      // Before 10am EST, always use yesterday's picks if available
-      if (easternHour < 10) {
-        console.log("RealGaryPicks: It's before 10am Eastern Time - looking for yesterday's picks");
-        
-        // Calculate yesterday's date properly using the date parts we already have
-        const yesterdayDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        
-        // Format yesterday's date as YYYY-MM-DD
-        const yesterdayYear = yesterdayDate.getFullYear();
-        const yesterdayMonth = (yesterdayDate.getMonth() + 1).toString().padStart(2, '0');
-        const yesterdayDay = yesterdayDate.getDate().toString().padStart(2, '0');
-        const yesterdayString = `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
-        
-        // Check if yesterday's picks exist
-        const { data: yesterdayData, error: yesterdayError } = await supabase
-          .from("daily_picks")
-          .select("picks, date")
-          .eq("date", yesterdayString)
-          .maybeSingle();
-          
-        if (!yesterdayError && yesterdayData && yesterdayData.picks) {
-          console.log(`RealGaryPicks: Using picks from previous day (${yesterdayString}) since it's before 10am`);
-          queryDate = yesterdayString;
+      // For 'today' tab, use current date (or day after if after 10pm)
+      if (activeTab === 'today') {
+        // Check if it's after 10 PM Eastern
+        if (easternNow.getHours() >= 22) {
+          // After 10 PM Eastern, show next day's picks
+          const tomorrow = new Date(easternNow);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          dateString = tomorrow.toISOString().split('T')[0]; // e.g. '2023-04-01'
+          console.log('After 10 PM ET, using tomorrow\'s date:', dateString);
         } else {
-          console.log(`RealGaryPicks: No picks found for previous day ${yesterdayString}, will try today's picks`); 
+          // Before 10 PM Eastern, show today's picks
+          dateString = easternNow.toISOString().split('T')[0]; // e.g. '2023-04-01'
+          console.log('Using today\'s date:', dateString);
         }
+      } 
+      // For 'yesterday' tab, always use previous day
+      else if (activeTab === 'yesterday') {
+        const yesterday = new Date(easternNow);
+        yesterday.setDate(yesterday.getDate() - 1);
+        dateString = yesterday.toISOString().split('T')[0]; // e.g. '2023-03-31'
+        console.log('Using yesterday\'s date:', dateString);
       }
       
-      console.log(`Looking for picks for date: ${queryDate}`);
+      console.log(`Loading prop picks for date ${dateString} (${activeTab} tab)`);
       
-      // Query Supabase for prop picks with the determined date
-      const { data, error: fetchError } = await supabase
-        .from('prop_picks')
-        .select('picks, date')
-        .eq('date', queryDate)
-        .maybeSingle(); // Use maybeSingle to avoid 406 errors
+      // Ensure we have a session before we fetch picks since we'll need the ID for user picks
+      if (!user) {
+        await ensureAnonymousSession();
       
       // Log the result for debugging
-      console.log(`Supabase fetch prop picks result for ${queryDate}:`, { data, fetchError });
+      console.log(`Supabase fetch result for ${queryDate}:`, { data, fetchError });
       
       // Store the queryDate for use in generating consistent pick IDs
       const currentDate = queryDate;
@@ -593,7 +567,7 @@ function GaryProps() {
                   {/* NEW LAYOUT: Directly on page in a horizontal row format */}
                   <div className="pt-12 px-4">
                     <h1 className="text-4xl font-bold text-center mb-2" style={{ color: '#b8953f' }}>
-                      TODAY'S PROP PICKS
+                      TODAY'S PICKS
                     </h1>
                     <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto">
                       Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
@@ -817,46 +791,14 @@ function GaryProps() {
                                               Gary's Pick
                                             </div>
                                             <div style={{ 
-                                              fontSize: '1.4rem', 
+                                              fontSize: '2rem', 
                                               fontWeight: 700, 
                                               lineHeight: 1.1,
-                                              color: '#bfa142', /* Keeping gold color for the player name */
-                                              wordBreak: 'break-word',
-                                              marginBottom: '0.25rem'
-                                            }}>
-                                              {pick.player_name || 'Player Name'}
-                                            </div>
-                                            <div style={{ 
-                                              fontSize: '1.2rem', 
-                                              fontWeight: 600, 
-                                              lineHeight: 1.2,
-                                              color: '#bfa142', /* Keeping gold color for the prop details */
+                                              color: '#bfa142', /* Keeping gold color for the actual pick */
                                               wordBreak: 'break-word',
                                               marginBottom: '0.75rem'
                                             }}>
-                                              {pick.prop_type} {pick.pick_direction === 'OVER' ? 'OVER' : 'UNDER'} {pick.line}
-                                            </div>
-                                            <div style={{
-                                              display: 'flex',
-                                              justifyContent: 'space-between',
-                                              fontSize: '0.85rem',
-                                              marginBottom: '0.75rem',
-                                              backgroundColor: 'rgba(30, 30, 35, 0.5)',
-                                              padding: '0.5rem',
-                                              borderRadius: '0.25rem'
-                                            }}>
-                                              <div>
-                                                <span style={{opacity: 0.6}}>Odds:</span> {' '}
-                                                <span style={{fontWeight: 600}}>{pick.odds > 0 ? `+${pick.odds}` : pick.odds}</span>
-                                              </div>
-                                              <div>
-                                                <span style={{opacity: 0.6}}>EV:</span> {' '}
-                                                <span style={{fontWeight: 600}}>{pick.ev ? `${(pick.ev * 100).toFixed(1)}%` : 'N/A'}</span>
-                                              </div>
-                                              <div>
-                                                <span style={{opacity: 0.6}}>Confidence:</span> {' '}
-                                                <span style={{fontWeight: 600}}>{Math.round(pick.confidence * 100)}%</span>
-                                              </div>
+                                              {pick.pick || 'MISSING PICK'}
                                             </div>
                                             
                                             {/* Add a preview of the rationale on front card */}
@@ -1098,7 +1040,7 @@ function GaryProps() {
                                       }}>
                                       {/* Card Header - Pick */}
                                       <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
-                                        {/* Player Prop Banner */}
+                                        {/* Pick Banner */}
                                         <div style={{ 
                                           backgroundColor: 'rgba(191, 161, 66, 0.15)',
                                           color: '#bfa142',
@@ -1109,10 +1051,8 @@ function GaryProps() {
                                           letterSpacing: '0.05rem',
                                           textTransform: 'uppercase',
                                           borderRadius: '8px',
-                                          borderLeft: '4px solid #bfa142',
-                                          marginBottom: '0.75rem'
                                         }}>
-                                          {pick.player_name}: {pick.prop_type} {pick.line}
+                                          {pick.pick || 'GARY\'S PICK'}
                                         </div>
                                       </div>
                                       
@@ -1218,4 +1158,4 @@ function GaryProps() {
   );
 }
 
-export default GaryProps;
+export default RealGaryPicks;
