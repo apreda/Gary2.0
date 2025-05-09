@@ -71,7 +71,7 @@ export default function GaryProps() {
       // Format as YYYY-MM-DD
       const yesterdayFormatted = yesterday.toISOString().split('T')[0];
       
-      console.log(\`Loading yesterday's prop picks for date: \${yesterdayFormatted}\`);
+      console.log(`Loading yesterday's prop picks for date: ${yesterdayFormatted}`);
       
       // Fetch yesterday's prop picks from Supabase
       const { data, error } = await supabase
@@ -85,7 +85,7 @@ export default function GaryProps() {
         return;
       }
       
-      console.log(\`Loaded \${data.length} yesterday's prop picks\`);
+      console.log(`Loaded ${data.length} yesterday's prop picks`);
       setYesterdayPicks(data || []);
     } catch (err) {
       console.error('Error in loadYesterdayPicks:', err);
@@ -142,7 +142,7 @@ export default function GaryProps() {
       }
       
       // Debug log the picks we got
-      console.log(\`Loaded \${data.length} prop picks\`);
+      console.log(`Loaded ${data.length} prop picks`);
       
       setPicks(data || []);
       setLoading(false);
@@ -183,13 +183,13 @@ export default function GaryProps() {
       
       // Step 3: Show a toast notification
       const decisionText = decision === 'bet' ? 'bet' : 'faded';
-      showToast(\`Successfully \${decisionText} \${pick.pick}\`, "success");
+      showToast(`Successfully ${decisionText} ${pick.pick}`, "success");
       
       // Step 4: Update user stats
       await userStatsService.incrementDecisionCount(userId, decision);
       
       // Log the successful decision
-      console.log(\`User \${userId} successfully \${decisionText} pick \${pick.id}\`);
+      console.log(`User ${userId} successfully ${decisionText} pick ${pick.id}`);
       
     } catch (err) {
       console.error('Error in handleDecisionMade:', err);
@@ -217,7 +217,7 @@ export default function GaryProps() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: \`url(\${BG2}) center/cover no-repeat fixed\` }}>
+    <div className="min-h-screen" style={{ background: `url(${BG2}) center/cover no-repeat fixed` }}>
       <div className="mx-auto px-4 py-12 max-w-screen-xl">
         {loading ? (
           <div className="flex justify-center items-center min-h-[50vh]">
@@ -260,13 +260,13 @@ export default function GaryProps() {
                     <div className="flex justify-center mb-8">
                       <div className="bg-gray-800 rounded-lg inline-flex p-1">
                         <button
-                          className={\`py-2 px-6 rounded-md transition-all duration-200 \${activeTab === 'today' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}\`}
+                          className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'today' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
                           onClick={() => setActiveTab('today')}
                         >
                           Today's Picks
                         </button>
                         <button
-                          className={\`py-2 px-6 rounded-md transition-all duration-200 \${activeTab === 'yesterday' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}\`}
+                          className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'yesterday' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
                           onClick={() => setActiveTab('yesterday')}
                         >
                           Yesterday's Picks
@@ -378,11 +378,11 @@ export default function GaryProps() {
                                           </div>
                                           <div className="bg-gray-800 rounded-lg p-3">
                                             <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
-                                            <p className="text-white font-bold">{pick.ev ? \`+\${pick.ev}%\` : 'N/A'}</p>
+                                            <p className="text-white font-bold">{pick.ev ? `+${pick.ev}%` : 'N/A'}</p>
                                           </div>
                                           
                                           <div className="mt-4">
-                                            <div className={\`inline-block px-3 py-1 rounded-full text-sm font-medium \${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}\`}>
+                                            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
                                               {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
                                             </div>
                                           </div>
@@ -409,7 +409,7 @@ export default function GaryProps() {
                                       
                                       <div className="mt-4">
                                         <h3 className="text-[#b8953f] text-lg font-bold mb-2">Outcome</h3>
-                                        <div className={\`inline-block px-3 py-1 rounded-full text-sm font-medium \${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}\`}>
+                                        <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
                                           {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
                                         </div>
                                       </div>
@@ -436,13 +436,13 @@ export default function GaryProps() {
                     <div className="flex justify-center mb-8">
                       <div className="bg-gray-800 rounded-lg inline-flex p-1">
                         <button
-                          className={\`py-2 px-6 rounded-md transition-all duration-200 \${activeTab === 'today' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}\`}
+                          className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'today' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
                           onClick={() => setActiveTab('today')}
                         >
                           Today's Picks
                         </button>
                         <button
-                          className={\`py-2 px-6 rounded-md transition-all duration-200 \${activeTab === 'yesterday' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}\`}
+                          className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'yesterday' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
                           onClick={() => setActiveTab('yesterday')}
                         >
                           Yesterday's Picks
@@ -529,11 +529,11 @@ export default function GaryProps() {
                                           </div>
                                           <div className="bg-gray-800 rounded-lg p-3">
                                             <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
-                                            <p className="text-white font-bold">{pick.ev ? \`+\${pick.ev}%\` : 'N/A'}</p>
+                                            <p className="text-white font-bold">{pick.ev ? `+${pick.ev}%` : 'N/A'}</p>
                                           </div>
                                           
                                           <div className="mt-4">
-                                            <div className={\`inline-block px-3 py-1 rounded-full text-sm font-medium \${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}\`}>
+                                            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
                                               {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
                                             </div>
                                           </div>
@@ -560,7 +560,7 @@ export default function GaryProps() {
                                       
                                       <div className="mt-4">
                                         <h3 className="text-[#b8953f] text-lg font-bold mb-2">Outcome</h3>
-                                        <div className={\`inline-block px-3 py-1 rounded-full text-sm font-medium \${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}\`}>
+                                        <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
                                           {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
                                         </div>
                                       </div>
