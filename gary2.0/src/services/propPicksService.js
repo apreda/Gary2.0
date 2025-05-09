@@ -350,7 +350,17 @@ ${gameData.league === 'NHL' ? `- player_goal_scorer (focus on second-line player
 - player_assists (especially for playmaking forwards and defensemen)
 - player_power_play_points (when available with good odds)` : ''}
 
+EXPECTED VALUE (EV) CALCULATION:
+1. Convert American odds to decimal odds:
+   - For positive odds (+110): Decimal = (American / 100) + 1
+   - For negative odds (-110): Decimal = (100 / |American|) + 1
+2. Calculate implied probability = 1 / decimal odds
+3. Estimate true probability based on your analysis of player stats, matchups, and trends
+4. Calculate EV = (true probability × (decimal odds - 1)) - (1 - true probability)
+5. A positive EV means the bet has value long-term
+
 IMPORTANT NOTES ON PROP PICKS:
+- Calculate and prioritize picks with positive Expected Value (EV)
 - Use the FULL confidence scale from 0.51 to 1.0 based on your statistical analysis
 - 0.51-0.6: Slight edge
 - 0.6-0.7: Moderate edge
@@ -361,6 +371,7 @@ IMPORTANT NOTES ON PROP PICKS:
 - Provide accurate line values based on current player performance
 - Odds should be realistic (typically -120 to +120 for most prop bets)
 - Only include props where you have identified a clear statistical advantage
+- Higher EV values should correlate with higher confidence
 
 Generate player prop picks with detailed statistical rationale for this matchup.
 
@@ -373,13 +384,17 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "line": 25.5,
   "pick": "LeBron James POINTS OVER 25.5 -110", // Format as: "PLAYER_NAME PROP_TYPE PICK BET_TYPE ODDS"
   "odds": -110,
+  "decimal_odds": 1.91,  // Converted from American odds
+  "implied_probability": 0.524,  // 1 / decimal_odds
+  "true_probability": 0.65,  // Your estimated true probability
+  "ev": 0.126,  // Expected Value calculation
   "confidence": 0.75,
   "homeTeam": "Home team name",
   "awayTeam": "Away team name",
   "matchup": "Team vs Team",
   "time": "7:30 PM ET",
   "league": "NBA | MLB | NHL",
-  "rationale": "1-2 sentence statistical breakdown with Gary's swagger. Mention recent performance trends, matchup advantages, and any key insights."  
+  "rationale": "1-2 sentence statistical breakdown with Gary's swagger. Include EV calculation justification, performance trends, and matchup advantages."  
 }
 \`\`\`
 
