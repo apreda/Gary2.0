@@ -347,7 +347,7 @@ IMPORTANT NOTES ON PROP PICKS:
 - Odds should be realistic (typically -120 to +120 for most prop bets)
 - Only include props where you have identified a clear statistical advantage
 
-Provide 2-3 high-quality player prop picks with detailed statistical rationale.
+Generate player prop picks with detailed statistical rationale for this matchup.
 
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 \`\`\`json
@@ -356,7 +356,7 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "team": "Player's team",
   "prop_type": "points | rebounds | assists | threes | pts+reb+ast",
   "line": 25.5,
-  "pick": "over | under",
+  "pick": "LeBron James POINTS OVER 25.5 -110", // Format as: "PLAYER_NAME PROP_TYPE PICK BET_TYPE ODDS"
   "odds": -110,
   "confidence": 0.75,
   "homeTeam": "Home team name",
@@ -368,7 +368,7 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 }
 \`\`\`
 
-Generate your response as a JSON array with 2-3 prop picks, each following the exact format above.`;    
+Generate your response as a JSON array containing all valid prop picks, each following the exact format above. Don't limit the number of picks.`;    
       
       // Use OpenAI to generate player prop picks
       const messages = [
