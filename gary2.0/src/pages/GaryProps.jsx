@@ -351,23 +351,36 @@ export default function GaryProps() {
                                         width: '100%',
                                         height: '100%',
                                         backfaceVisibility: 'hidden',
-                                        background: 'linear-gradient(135deg, rgba(20, 20, 24, 0.95) 0%, rgba(30, 30, 35, 0.93) 100%)',
+                                        background: 'linear-gradient(135deg, rgba(22, 22, 28, 0.97) 0%, rgba(28, 28, 32, 0.95) 100%)',
                                         borderRadius: '16px',
                                         fontFamily: 'Inter, system-ui, sans-serif',
                                         overflow: 'hidden',
-                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(191, 161, 66, 0.1)',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(191, 161, 66, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
                                         color: '#ffffff',
-                                        border: '1px solid rgba(40, 40, 45, 0.8)',
+                                        border: '1px solid rgba(40, 40, 45, 0.85)',
                                         position: 'relative',
                                       }}>
-                                        {/* Gold accent line at top */}
+                                        {/* Premium gold accent at top - mimicking Beta icon style */}
                                         <div style={{
                                           position: 'absolute',
                                           top: 0,
                                           left: 0,
                                           right: 0,
-                                          height: '3px',
-                                          background: 'linear-gradient(90deg, rgba(191, 161, 66, 0.5) 0%, rgba(191, 161, 66, 0.9) 50%, rgba(191, 161, 66, 0.5) 100%)',
+                                          height: '4px',
+                                          background: 'linear-gradient(90deg, rgba(191, 161, 66, 0.5) 0%, rgba(212, 175, 55, 0.95) 50%, rgba(191, 161, 66, 0.5) 100%)',
+                                          boxShadow: 'inset 0 1px 2px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.2)',
+                                        }}></div>
+                                        
+                                        {/* Subtle gold edge glow */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          top: 0,
+                                          left: 0,
+                                          right: 0,
+                                          height: '100%',
+                                          pointerEvents: 'none',
+                                          boxShadow: 'inset 0 0 15px rgba(212, 175, 55, 0.1)',
+                                          borderRadius: '16px',
                                         }}></div>
                                       {/* Card content - expanded to use full width */}
                                       <div style={{
@@ -536,34 +549,34 @@ export default function GaryProps() {
                                              marginTop: '0.3rem'
                                            }}>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.9)',
-                                                border: '1px solid rgba(191, 161, 66, 0.4)',
+                                                background: 'linear-gradient(145deg, rgba(33, 30, 22, 0.95) 0%, rgba(25, 23, 17, 0.9) 100%)',
+                                                border: '1px solid rgba(191, 161, 66, 0.5)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
-                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 0 0 1px rgba(191, 161, 66, 0.15)',
                                               }}>
-                                                <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>True Prob</p>
-                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
+                                                <p style={{ color: 'rgba(212, 175, 55, 0.95)', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600, textShadow: '0 1px 1px rgba(0, 0, 0, 0.5)' }}>True Prob</p>
+                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem', textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}>{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.9)',
-                                                border: '1px solid rgba(191, 161, 66, 0.4)',
+                                                background: 'linear-gradient(145deg, rgba(33, 30, 22, 0.95) 0%, rgba(25, 23, 17, 0.9) 100%)',
+                                                border: '1px solid rgba(191, 161, 66, 0.5)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
-                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 0 0 1px rgba(191, 161, 66, 0.15)',
                                               }}>
-                                                <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Implied Prob</p>
-                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
+                                                <p style={{ color: 'rgba(212, 175, 55, 0.95)', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600, textShadow: '0 1px 1px rgba(0, 0, 0, 0.5)' }}>Implied Prob</p>
+                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem', textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}>{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.9)',
-                                                border: '1px solid rgba(191, 161, 66, 0.4)',
+                                                background: 'linear-gradient(145deg, rgba(33, 30, 22, 0.95) 0%, rgba(25, 23, 17, 0.9) 100%)',
+                                                border: '1px solid rgba(191, 161, 66, 0.5)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
-                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 0 0 1px rgba(191, 161, 66, 0.15)',
                                               }}>
-                                                <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>EV</p>
-                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
+                                                <p style={{ color: 'rgba(212, 175, 55, 0.95)', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600, textShadow: '0 1px 1px rgba(0, 0, 0, 0.5)' }}>EV</p>
+                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem', textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
                                               </div>
                                           </div>
                                         </div>
