@@ -357,57 +357,56 @@ export default function GaryProps() {
                                       boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
                                       color: '#ffffff',
                                     }}>
-                                      {/* Left side content */}
+                                      {/* Card content - expanded to use full width */}
                                       <div style={{
                                         position: 'absolute',
                                         left: 0,
                                         top: 0,
                                         bottom: 0,
-                                        width: '70%',
-                                        padding: '1.5rem',
+                                        width: '100%',
+                                        padding: '1.25rem',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         justifyContent: 'space-between',
                                         overflow: 'hidden',
                                       }}>
-                                        {/* League and Matchup in horizontal layout */}
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                                        {/* Top section with League/Matchup side-by-side */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                                           {/* League */}
-                                          <div>
+                                          <div style={{ width: '30%' }}>
                                             <div style={{ 
-                                              fontSize: '0.75rem', 
+                                              fontSize: '0.7rem', 
                                               opacity: 0.6, 
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.05em', 
-                                              marginBottom: '0.25rem'
+                                              marginBottom: '0.1rem'
                                             }}>
                                               League
                                             </div>
                                             <div style={{ 
-                                              fontSize: '1.25rem', 
-                                              fontWeight: 600, 
-                                              letterSpacing: '0.02em',
-                                              opacity: 0.95
+                                              fontSize: '1rem', 
+                                              fontWeight: 700, 
+                                              letterSpacing: '0.02em'
                                             }}>
                                               {pick.league || 'NBA'}
                                             </div>
                                           </div>
                                           
                                           {/* Matchup */}
-                                          <div style={{ marginLeft: '20px' }}>
+                                          <div style={{ width: '65%' }}>
                                             <div style={{ 
-                                              fontSize: '0.75rem', 
+                                              fontSize: '0.7rem', 
                                               opacity: 0.6, 
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.05em', 
-                                              marginBottom: '0.25rem'
+                                              marginBottom: '0.1rem'
                                             }}>
                                               Matchup
                                             </div>
                                             <div style={{ 
-                                              fontSize: '1.25rem', 
+                                              fontSize: '1rem', 
                                               fontWeight: 600,
-                                              opacity: 0.9
+                                              lineHeight: 1.2
                                             }}>
                                               {pick.matchup || 'TBD'}
                                             </div>
@@ -417,11 +416,11 @@ export default function GaryProps() {
                                         {/* The main pick display */}
                                         <div style={{ marginBottom: '1rem' }}>
                                           <div style={{ 
-                                            fontSize: '0.75rem', 
-                                            opacity: 0.6, 
+                                            fontSize: '0.7rem', 
+                                            opacity: 0.7, 
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em', 
-                                            marginBottom: '0.5rem'
+                                            marginBottom: '0.3rem'
                                           }}>
                                             Gary's Pick
                                           </div>
@@ -431,54 +430,56 @@ export default function GaryProps() {
                                             lineHeight: 1.1,
                                             color: '#bfa142', /* Gold color for the actual pick */
                                             wordBreak: 'break-word',
-                                            marginBottom: '0.75rem'
+                                            marginBottom: '0.5rem'
                                           }}>
                                             {pick.pick}
                                           </div>
                                           
                                           {/* Additional info about the pick */}
                                           <div style={{
-                                            fontSize: '0.85rem',
-                                            opacity: 0.8,
-                                            marginBottom: '0.5rem'
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            fontSize: '0.8rem',
+                                            opacity: 0.9,
+                                            marginBottom: '0.75rem',
+                                            background: 'rgba(0, 0, 0, 0.2)',
+                                            borderRadius: '4px',
+                                            padding: '0.4rem 0.6rem'
                                           }}>
-                                            <div className="flex items-center">
-                                              <span>{pick.team}</span>
-                                              <span className="mx-2 text-gray-600">•</span>
-                                              <span>{pick.time}</span>
-                                            </div>
+                                            <span><strong>{pick.team}</strong></span>
+                                            <span>{pick.time}</span>
                                           </div>
                                         </div>
                                         
                                         {/* Stats for the pick */}
                                         <div>
                                           <div style={{ 
-                                            fontSize: '0.75rem', 
+                                            fontSize: '0.7rem', 
                                             opacity: 0.6, 
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em', 
-                                            marginBottom: '0.5rem'
+                                            marginBottom: '0.3rem'
                                           }}>
                                             Pick Details
                                           </div>
                                           <div style={{
                                             display: 'grid',
-                                            gridTemplateColumns: '1fr 1fr',
-                                            gap: '0.75rem',
+                                            gridTemplateColumns: '1fr 1fr 1fr',
+                                            gap: '0.5rem',
                                             width: '100%',
                                           }}>
-                                             <div className="bg-gray-800 rounded-lg p-3">
-                                               <p className="text-gray-400 text-xs mb-1">True Probability</p>
-                                               <p className="text-white font-bold">{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
+                                             <div className="bg-gray-800 rounded-lg p-2">
+                                               <p className="text-gray-400 text-xs mb-0.5">True Prob</p>
+                                               <p className="text-white font-bold text-sm">{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
                                              </div>
-                                             <div className="bg-gray-800 rounded-lg p-3">
-                                               <p className="text-gray-400 text-xs mb-1">Implied Probability</p>
-                                               <p className="text-white font-bold">{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
+                                             <div className="bg-gray-800 rounded-lg p-2">
+                                               <p className="text-gray-400 text-xs mb-0.5">Implied Prob</p>
+                                               <p className="text-white font-bold text-sm">{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
                                              </div>
-                                          </div>
-                                          <div className="bg-gray-800 rounded-lg p-3 mt-2">
-                                            <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
-                                            <p className="text-white font-bold">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
+                                             <div className="bg-gray-800 rounded-lg p-2">
+                                               <p className="text-gray-400 text-xs mb-0.5">EV</p>
+                                               <p className="text-white font-bold text-sm">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
+                                             </div>
                                           </div>
                                         </div>
                                       </div>
