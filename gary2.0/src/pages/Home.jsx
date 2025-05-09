@@ -539,16 +539,16 @@ function Home() {
                   }}
                 />
                 
-                {/* Shiny banner */}
-                <div className="text-black font-medium px-6 py-2 rounded-full flex items-center"
+                {/* Shiny banner - 15% smaller */}
+                <div className="text-black font-medium px-5 py-1.5 rounded-full flex items-center"
                      style={{
                        background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
                        color: '#111',
                        textShadow: '0 1px 1px rgba(255,255,255,0.3)',
                        boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
                        border: '1px solid rgba(184, 149, 63, 0.5)',
-                       fontSize: '1.08rem',
-                       transform: 'scale(1.2)',
+                       fontSize: '0.93rem', /* Reduced by 15% from 1.08rem */
+                       transform: 'scale(1.02)', /* Reduced by 15% from 1.2 */
                        transformOrigin: 'center',
                      }}>
                   <span className="mr-2 font-bold uppercase">NEW</span>
