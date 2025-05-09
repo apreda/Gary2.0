@@ -528,11 +528,17 @@ function Home() {
               <main className="hero-inner flex flex-col w-full h-full" style={{ padding: "24px 24px" }}>
                 {/* Centered Hero Content */}
              <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
-              {/* NEW badge - gold-colored and oval-shaped with border */}
+              {/* NEW badge - with shiny premium style */}
               <div className="mb-8 relative mt-16 flex justify-center w-full">  
-                <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center border border-gray-800" 
-                     style={{ background: '#b8953f', color: '#1a1a1a' }}>
-                  <span className="mr-2 font-bold">NEW</span>
+                <div className="text-black text-sm font-medium px-5 py-1.5 rounded-full flex items-center"
+                     style={{
+                       background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                       color: '#111',
+                       textShadow: '0 1px 1px rgba(255,255,255,0.3)',
+                       boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
+                       border: '1px solid rgba(184, 149, 63, 0.5)',
+                     }}>
+                  <span className="mr-2 font-bold uppercase">NEW</span>
                   <span>Introducing Gary AI: Intelligent Sports Bets</span>
                 </div>
               </div>
@@ -554,113 +560,72 @@ function Home() {
               
               {/* Removed empty spacing div to tighten layout */}
 
-              {/* Technology badges - using original tags from GaryHero */}
+              {/* Technology badges - styled to match the Beta badge */}
               <div className="flex flex-wrap justify-center p-2 mb-8 mx-auto max-w-3xl w-full">
                 <div className="flex gap-3 flex-wrap justify-center w-full">
-                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(250%)';
-                  }} onMouseLeave={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(-100%)';
-                  }}>
-                    <div className="shine-effect" style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '30%',
-                      height: '100%',
-                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
-                      transform: 'translateX(-100%)',
-                      transition: 'transform 0.6s ease-in-out',
-                      pointerEvents: 'none',
-                      zIndex: 2
-                    }}></div>
-                    <span style={{ fontWeight: 'bold' }}>Odds API</span>
+                  {/* Odds API badge */}
+                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
+                    style={{
+                      background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                      color: '#111',
+                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
+                      border: '1px solid rgba(184, 149, 63, 0.5)',
+                      minWidth: '120px',
+                    }}>
+                    Odds API
                   </div>
-                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(250%)';
-                  }} onMouseLeave={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(-100%)';
-                  }}>
-                    <div className="shine-effect" style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '30%',
-                      height: '100%',
-                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
-                      transform: 'translateX(-100%)',
-                      transition: 'transform 0.6s ease-in-out',
-                      pointerEvents: 'none',
-                      zIndex: 2
-                    }}></div>
-                    <span style={{ fontWeight: 'bold' }}>SportsDB</span>
+                  
+                  {/* SportsDB badge */}
+                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
+                    style={{
+                      background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                      color: '#111',
+                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
+                      border: '1px solid rgba(184, 149, 63, 0.5)',
+                      minWidth: '120px',
+                    }}>
+                    SportsDB
                   </div>
-                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(250%)';
-                  }} onMouseLeave={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(-100%)';
-                  }}>
-                    <div className="shine-effect" style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '30%',
-                      height: '100%',
-                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
-                      transform: 'translateX(-100%)',
-                      transition: 'transform 0.6s ease-in-out',
-                      pointerEvents: 'none',
-                      zIndex: 2
-                    }}></div>
-                    <span style={{ fontWeight: 'bold' }}>Turbo 3.5 Mini</span>
+                  
+                  {/* Turbo 3.5 Mini badge */}
+                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
+                    style={{
+                      background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                      color: '#111',
+                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
+                      border: '1px solid rgba(184, 149, 63, 0.5)',
+                      minWidth: '120px',
+                    }}>
+                    Turbo 3.5 Mini
                   </div>
-                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(250%)';
-                  }} onMouseLeave={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(-100%)';
-                  }}>
-                    <div className="shine-effect" style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '30%',
-                      height: '100%',
-                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
-                      transform: 'translateX(-100%)',
-                      transition: 'transform 0.6s ease-in-out',
-                      pointerEvents: 'none',
-                      zIndex: 2
-                    }}></div>
-                    <span style={{ fontWeight: 'bold' }}>Perplexity</span>
+                  
+                  {/* Perplexity badge */}
+                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
+                    style={{
+                      background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                      color: '#111',
+                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
+                      border: '1px solid rgba(184, 149, 63, 0.5)',
+                      minWidth: '120px',
+                    }}>
+                    Perplexity
                   </div>
-                  <div className="relative bg-[#B8953F] text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center transition-all duration-300" style={{ minWidth: '120px', color: '#1a1a1a', overflow: 'hidden', position: 'relative' }} onMouseEnter={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(250%)';
-                  }} onMouseLeave={(e) => {
-                    const shine = e.currentTarget.querySelector('.shine-effect');
-                    shine.style.transform = 'translateX(-100%)';
-                  }}>
-                    <div className="shine-effect" style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '30%',
-                      height: '100%',
-                      background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
-                      transform: 'translateX(-100%)',
-                      transition: 'transform 0.6s ease-in-out',
-                      pointerEvents: 'none',
-                      zIndex: 2
-                    }}></div>
-                    <span style={{ fontWeight: 'bold' }}>StatCast API</span>
+                  
+                  {/* StatCast API badge */}
+                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
+                    style={{
+                      background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                      color: '#111',
+                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
+                      border: '1px solid rgba(184, 149, 63, 0.5)',
+                      minWidth: '120px',
+                    }}>
+                    StatCast API
                   </div>
                 </div>
               </div>
