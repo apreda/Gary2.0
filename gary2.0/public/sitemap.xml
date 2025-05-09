@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Homepage -->
+  <url>
+    <loc>https://betwithgary.ai/</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <!-- Meet Gary -->
+  <url>
+    <loc>https://betwithgary.ai/meet-gary</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Gary's Picks -->
+  <url>
+    <loc>https://betwithgary.ai/real-gary-picks</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  
+  <!-- Pricing -->
+  <url>
+    <loc>https://betwithgary.ai/pricing</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Billfold -->
+  <url>
+    <loc>https://betwithgary.ai/billfold</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
+  <!-- Leaderboard -->
+  <url>
+    <loc>https://betwithgary.ai/leaderboard</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
+  <!-- How It Works -->
+  <url>
+    <loc>https://betwithgary.ai/how-it-works</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <!-- Learn More -->
+  <url>
+    <loc>https://betwithgary.ai/learn-more</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <!-- Terms of Service -->
+  <url>
+    <loc>https://betwithgary.ai/terms</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  
+  <!-- Privacy Policy -->
+  <url>
+    <loc>https://betwithgary.ai/privacy</loc>
+    <lastmod>2025-05-08</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>
