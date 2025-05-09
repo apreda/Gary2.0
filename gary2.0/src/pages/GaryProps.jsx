@@ -341,22 +341,34 @@ export default function GaryProps() {
                                       height: '100%',
                                       transformStyle: 'preserve-3d',
                                       transition: 'transform 0.6s',
-                                      transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                                      transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0)',
                                     }}
                                   >
-                                    {/* FRONT OF CARD */}
-                                    <div style={{
-                                      position: 'absolute',
-                                      width: '100%',
-                                      height: '100%',
-                                      backfaceVisibility: 'hidden',
-                                      background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                      borderRadius: '16px',
-                                      fontFamily: 'Inter, system-ui, sans-serif',
-                                      overflow: 'hidden',
-                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                      color: '#ffffff',
-                                    }}>
+                                    {/* Front of card */}
+                                    <div 
+                                      style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%',
+                                        backfaceVisibility: 'hidden',
+                                        background: 'linear-gradient(135deg, rgba(20, 20, 24, 0.98) 0%, rgba(30, 30, 35, 0.95) 100%)',
+                                        borderRadius: '16px',
+                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(191, 161, 66, 0.1)',
+                                        color: '#ffffff',
+                                        border: '1px solid rgba(40, 40, 45, 0.8)',
+                                        position: 'relative',
+                                      }}>
+                                        {/* Gold accent line at top */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          top: 0,
+                                          left: 0,
+                                          right: 0,
+                                          height: '3px',
+                                          background: 'linear-gradient(90deg, rgba(191, 161, 66, 0.5) 0%, rgba(191, 161, 66, 0.9) 50%, rgba(191, 161, 66, 0.5) 100%)',
+                                        }}></div>
                                       {/* Card content - expanded to use full width */}
                                       <div style={{
                                         position: 'absolute',
@@ -391,9 +403,8 @@ export default function GaryProps() {
                                               {pick.league || 'NBA'}
                                             </div>
                                           </div>
-                                          
-                                          {/* Matchup */}
-                                          <div style={{ width: '65%' }}>
+                                                                                    {/* Matchup */}
+                                           <div style={{ width: '65%' }}>
                                             <div style={{ 
                                               fontSize: '0.7rem', 
                                               opacity: 0.6, 
@@ -454,29 +465,36 @@ export default function GaryProps() {
                                              gridTemplateColumns: '1fr 1fr 1fr',
                                              gap: '0.5rem',
                                              width: '100%',
+                                             marginTop: '0.3rem'
                                            }}>
                                               <div style={{
-                                                background: 'rgba(20, 20, 25, 0.8)',
-                                                borderRadius: '8px',
-                                                padding: '0.5rem'
+                                                background: 'rgba(25, 23, 17, 0.9)',
+                                                border: '1px solid rgba(191, 161, 66, 0.4)',
+                                                borderRadius: '6px',
+                                                padding: '0.5rem',
+                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
-                                                <p style={{ color: '#999', fontSize: '0.65rem', marginBottom: '0.25rem' }}>True Prob</p>
+                                                <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>True Prob</p>
                                                 <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(20, 20, 25, 0.8)',
-                                                borderRadius: '8px',
-                                                padding: '0.5rem'
+                                                background: 'rgba(25, 23, 17, 0.9)',
+                                                border: '1px solid rgba(191, 161, 66, 0.4)',
+                                                borderRadius: '6px',
+                                                padding: '0.5rem',
+                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
-                                                <p style={{ color: '#999', fontSize: '0.65rem', marginBottom: '0.25rem' }}>Implied Prob</p>
+                                                <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Implied Prob</p>
                                                 <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(20, 20, 25, 0.8)',
-                                                borderRadius: '8px',
-                                                padding: '0.5rem'
+                                                background: 'rgba(25, 23, 17, 0.9)',
+                                                border: '1px solid rgba(191, 161, 66, 0.4)',
+                                                borderRadius: '6px',
+                                                padding: '0.5rem',
+                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
-                                                <p style={{ color: '#999', fontSize: '0.65rem', marginBottom: '0.25rem' }}>EV</p>
+                                                <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>EV</p>
                                                 <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
                                               </div>
                                           </div>
@@ -575,7 +593,25 @@ export default function GaryProps() {
                                             Game Information
                                           </div>
                                           
-                                          <div className="bg-gray-800 rounded-lg p-3 mb-3">
+                                          <div style={{
+                                            background: 'linear-gradient(180deg, rgba(26, 26, 31, 0.98) 0%, rgba(20, 20, 24, 0.98) 100%)',
+                                            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2)',
+                                            border: '1px solid rgba(40, 40, 45, 0.8)',
+                                            borderRadius: '0.5rem',
+                                            padding: '1rem',
+                                            marginBottom: '1rem',
+                                            overflow: 'hidden',
+                                            position: 'relative',
+                                          }} key={pick.id}>
+                                            {/* Gold accent line at top */}
+                                            <div style={{
+                                              position: 'absolute',
+                                              top: 0,
+                                              left: 0,
+                                              right: 0,
+                                              height: '3px',
+                                              background: 'linear-gradient(90deg, rgba(191, 161, 66, 0.5) 0%, rgba(191, 161, 66, 0.9) 50%, rgba(191, 161, 66, 0.5) 100%)',
+                                            }}></div>
                                             <p className="text-gray-400 text-xs mb-1">Matchup</p>
                                             <p className="text-white text-sm font-medium">{pick.matchup}</p>
                                           </div>
