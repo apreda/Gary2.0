@@ -470,14 +470,21 @@ export const oddsService = {
 
       console.log(`🔍 Fetching player prop odds for ${homeTeam} vs ${awayTeam}`);
       
-      // First get the event ID for the game by fetching upcoming games
+      // Format today's date in ISO format
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      
+      console.log(`Fetching prop odds for games on ${formattedDate}`);
+      
+      // First get the event ID for the game by fetching today's games
       const gamesResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
         params: {
           apiKey,
           regions: 'us',
           markets: 'h2h,spreads',
           oddsFormat: 'american',
-          dateFormat: 'iso'
+          dateFormat: 'iso',
+          commenceTimeTo: `${formattedDate}T23:59:59Z` // End of today in UTC
         }
       });
       
