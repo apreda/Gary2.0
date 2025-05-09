@@ -351,7 +351,7 @@ export default function GaryProps() {
                                         width: '100%',
                                         height: '100%',
                                         backfaceVisibility: 'hidden',
-                                        background: 'linear-gradient(135deg, rgba(20, 20, 24, 0.735) 0%, rgba(30, 30, 35, 0.7125) 100%)',
+                                        background: 'linear-gradient(135deg, rgba(20, 20, 24, 0.95) 0%, rgba(30, 30, 35, 0.93) 100%)',
                                         borderRadius: '16px',
                                         fontFamily: 'Inter, system-ui, sans-serif',
                                         overflow: 'hidden',
@@ -510,7 +510,7 @@ export default function GaryProps() {
                                              marginTop: '0.3rem'
                                            }}>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.675)',
+                                                background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
@@ -520,7 +520,7 @@ export default function GaryProps() {
                                                 <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.675)',
+                                                background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
@@ -530,7 +530,7 @@ export default function GaryProps() {
                                                 <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.675)',
+                                                background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
@@ -561,64 +561,102 @@ export default function GaryProps() {
                                       width: '100%',
                                       height: '100%',
                                       backfaceVisibility: 'hidden',
-                                      background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                      background: 'linear-gradient(135deg, rgba(20, 20, 24, 0.95) 0%, rgba(30, 30, 35, 0.93) 100%)',
                                       borderRadius: '16px',
-                                      padding: '24px',
+                                      padding: '1.25rem',
                                       transform: 'rotateY(180deg)',
-                                      overflow: 'auto',
+                                      overflow: 'hidden',
                                       fontFamily: 'Inter, system-ui, sans-serif',
                                       color: '#ffffff',
+                                      border: '1px solid rgba(40, 40, 45, 0.8)',
+                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(191, 161, 66, 0.1)',
                                     }}>
+                                      {/* Gold accent line at top */}
+                                      <div style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        height: '3px',
+                                        background: 'linear-gradient(90deg, rgba(191, 161, 66, 0.5) 0%, rgba(191, 161, 66, 0.9) 50%, rgba(191, 161, 66, 0.5) 100%)',
+                                      }}></div>
+                                      
                                       <div style={{ 
-                                        color: '#fff',
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 0,
+                                        bottom: 0,
                                         width: '100%',
-                                        height: '100%',
-                                        overflowY: 'auto',
+                                        padding: '1.25rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        overflow: 'auto',
                                       }}>
                                         {/* Rationale Heading */}
                                         <div style={{ 
-                                          fontSize: '0.8rem', 
-                                          opacity: 0.6, 
+                                          fontSize: '0.7rem', 
+                                          opacity: 0.7, 
                                           textTransform: 'uppercase',
                                           letterSpacing: '0.05em', 
-                                          marginBottom: '0.75rem'
+                                          marginBottom: '0.5rem',
+                                          color: '#bfa142',
+                                          fontWeight: 500
                                         }}>
-                                          Rationale
+                                          Analysis
                                         </div>
                                         
                                         {/* Display the rationale */}
-                                        <p style={{ margin: 0, fontWeight: 400, opacity: 0.9, marginBottom: '1.5rem' }}>
-                                          {pick.rationale || 'Analysis not available.'}
-                                        </p>
+                                        <div style={{ 
+                                          margin: 0, 
+                                          fontWeight: 400, 
+                                          opacity: 0.9, 
+                                          marginBottom: '1rem',
+                                          fontSize: '0.9rem',
+                                          lineHeight: 1.5
+                                        }}>
+                                          {pick.rationale || 'Analysis not available at this time.'}
+                                        </div>
                                         
                                         {/* Pick Details */}
-                                        <div style={{ marginBottom: '1.5rem' }}>
+                                        <div style={{ marginTop: 'auto' }}>
                                           <div style={{ 
-                                            fontSize: '0.8rem', 
-                                            opacity: 0.6, 
+                                            fontSize: '0.7rem', 
+                                            opacity: 0.7, 
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em', 
-                                            marginBottom: '0.75rem'
+                                            marginBottom: '0.5rem',
+                                            color: '#bfa142',
+                                            fontWeight: 500
                                           }}>
                                             Pick Details
                                           </div>
                                           
-                                          <div className="grid grid-cols-2 gap-3">
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">Line</p>
-                                              <p className="text-white text-sm font-medium">{pick.line}</p>
+                                          <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '1fr 1fr',
+                                            gap: '0.5rem',
+                                            width: '100%',
+                                            marginTop: '0.3rem'
+                                          }}>
+                                            <div style={{
+                                              background: 'rgba(25, 23, 17, 0.9)',
+                                              border: '1px solid rgba(191, 161, 66, 0.4)',
+                                              borderRadius: '6px',
+                                              padding: '0.5rem',
+                                              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                                            }}>
+                                              <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Line</p>
+                                              <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.line || 'N/A'}</p>
                                             </div>
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">Odds</p>
-                                              <p className="text-white text-sm font-medium">{pick.odds}</p>
-                                            </div>
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">EV</p>
-                                              <p className="text-white text-sm font-medium">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
-                                            </div>
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">League</p>
-                                              <p className="text-white text-sm font-medium">{pick.league}</p>
+                                            <div style={{
+                                              background: 'rgba(25, 23, 17, 0.9)',
+                                              border: '1px solid rgba(191, 161, 66, 0.4)',
+                                              borderRadius: '6px',
+                                              padding: '0.5rem',
+                                              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                                            }}>
+                                              <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Odds</p>
+                                              <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.odds || 'N/A'}</p>
                                             </div>
                                           </div>
                                         </div>
