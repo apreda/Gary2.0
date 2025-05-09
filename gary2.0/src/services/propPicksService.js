@@ -218,15 +218,105 @@ const propPicksService = {
     try {
       console.log(`Generating prop bets for ${gameData.league} game: ${gameData.matchup}`);
       
+      // Format player statistics from Ball Don't Lie API in a more token-efficient way
+      let playerStatsText = 'No player statistics available';
+      if (gameData.playerStats) {
+        const homeTeam = gameData.playerStats.homeTeam;
+        const awayTeam = gameData.playerStats.awayTeam;
+        
+        // For NBA: Include points, assists, rebounds, 3-pointers for key players
+        // For MLB: Include batting average, home runs, RBIs, or ERA and strikeouts for pitchers
+        const formatPlayerStats = (player, league) => {
+          if (!player) return '';
+          
+          if (league === 'NBA') {
+            const stats = player.stats || {};
+            return `${player.first_name || ''} ${player.last_name || ''} ` +
+                   `(${stats.pts || '-'} ppg, ${stats.ast || '-'} ast, ` +
+                   `${stats.reb || '-'} reb, ${stats.fg3_pct || '-'} 3PT%)`;
+          } else if (league === 'MLB') {
+            const stats = player.stats || {};
+            const isPitcher = player.position === 'P';
+            if (isPitcher) {
+              return `${player.first_name || ''} ${player.last_name || ''} ` +
+                     `(ERA: ${stats.era || '-'}, SO: ${stats.strikeouts || '-'})`;
+            } else {
+              return `${player.first_name || ''} ${player.last_name || ''} ` +
+                     `(AVG: ${stats.batting_avg || '-'}, HR: ${stats.home_runs || '-'})`;
+            }
+          } else {
+            return `${player.first_name || ''} ${player.last_name || ''}`;
+          }
+        };
+        
+        // Get key players only (starters or important players)
+        const keyHomePlayers = homeTeam.players
+          ?.filter(p => p.starter === true || p.key_player === true)
+          ?.slice(0, 5)
+          ?.map(p => formatPlayerStats(p, gameData.league))
+          ?.join('\n') || 'No key player data';
+          
+        const keyAwayPlayers = awayTeam.players
+          ?.filter(p => p.starter === true || p.key_player === true)
+          ?.slice(0, 5)
+          ?.map(p => formatPlayerStats(p, gameData.league))
+          ?.join('\n') || 'No key player data';
+        
+        playerStatsText = `HOME (${homeTeam.name}):\n${keyHomePlayers}\n\nAWAY (${awayTeam.name}):\n${keyAwayPlayers}`;
+      }
+      
+      // Get odds data from The Odds API for player props if available
+      let oddsText = '';
+      if (gameData.sportKey) {
+        try {
+          // Check if we have odds data for this game's player props
+          const propOdds = await oddsService.getPlayerPropOdds(gameData.sportKey, gameData.homeTeam, gameData.awayTeam);
+          
+          if (propOdds && propOdds.length > 0) {
+            const relevantProps = propOdds.slice(0, 10); // Limit to top 10 props to reduce tokens
+            const formattedOdds = relevantProps.map(prop => 
+              `${prop.player}: ${prop.prop_type} ${prop.line} (${prop.over_odds}/${prop.under_odds})`
+            ).join('\n');
+            
+            oddsText = `AVAILABLE PLAYER PROPS (ODDS API):\n${formattedOdds}`;
+          }
+        } catch (oddsError) {
+          console.error(`Error fetching prop odds: ${oddsError.message}`);
+          oddsText = 'Odds data unavailable';
+        }
+      }
+      
+      // Format Perplexity insights in a more concise way for props specifically
+      let perplexityText = '';
+      if (gameData.perplexityStats) {
+        // Extract only prop-related insights
+        const propInsights = gameData.perplexityStats.prop_insights || 
+                            gameData.perplexityStats.player_insights || 
+                            gameData.perplexityStats.insights || '';
+        
+        // If we have structured data, format it concisely
+        if (typeof propInsights === 'object') {
+          const formattedInsights = Object.entries(propInsights)
+            .slice(0, 5) // Limit to top 5 insights
+            .map(([player, insight]) => `${player}: ${insight}`)
+            .join('\n');
+          
+          perplexityText = `PLAYER INSIGHTS (PERPLEXITY):\n${formattedInsights}`;
+        } else if (typeof propInsights === 'string') {
+          // If it's just a string, use it directly but truncate if needed
+          perplexityText = `PLAYER INSIGHTS (PERPLEXITY):\n${propInsights.substring(0, 500)}...`;
+        }
+      }
+      
       const prompt = `Analyze this upcoming ${gameData.league} game: ${gameData.matchup}
 
 TEAM DESIGNATIONS:
 - HOME TEAM: ${gameData.homeTeam}
 - AWAY TEAM: ${gameData.awayTeam}
 
-${gameData.playerStats ? 'PLAYER STATISTICS:\n' + JSON.stringify(gameData.playerStats, null, 2) : 'No player statistics available'}
+PLAYER STATISTICS:\n${playerStatsText}
 
-${gameData.perplexityStats ? 'RECENT PERFORMANCE (from Perplexity web search):\n' + JSON.stringify(gameData.perplexityStats, null, 2) : ''}
+${oddsText ? oddsText + '\n\n' : ''}${perplexityText}
 
 For ${gameData.league} games, focus on these specific markets:
 ${gameData.league === 'NBA' ? `- player_points (14+ points, 20+ points, etc.)  
@@ -291,7 +381,8 @@ Generate your response as a JSON array with 2-3 prop picks, each following the e
       
       const response = await openaiService.generateResponse(messages, {
         temperature: 0.7,
-        maxTokens: 1500
+        maxTokens: 1000,
+        model: 'gpt-3.5-turbo' // Use a cheaper model that handles this task well
       });
       
       // Extract the JSON response
