@@ -214,8 +214,8 @@ export default function GaryProps() {
 
   // Responsive card dimensions with 60% increase
   const cardStyle = {
-    width: '352px', // 10% wider than previous size
-    height: '336px', // 30% shorter than previous size
+    width: '320px', // 60% larger than the original size
+    height: '480px',
     margin: '0 auto 2rem auto',
     position: 'relative',
   };
@@ -376,7 +376,7 @@ export default function GaryProps() {
                                         top: 0,
                                         bottom: 0,
                                         width: '100%',
-                                        padding: '0.85rem',
+                                        padding: '1.25rem',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         justifyContent: 'space-between',
@@ -384,7 +384,7 @@ export default function GaryProps() {
                                       }}>
                                         <div>
                                           {/* Top section with League/Matchup side-by-side */}
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                                             {/* League */}
                                             <div style={{ width: '30%' }}>
                                               <div style={{ 
@@ -427,11 +427,11 @@ export default function GaryProps() {
                                           
                                           {/* The main pick display - immediately below League/Matchup */}
                                           <div style={{ 
-                                            padding: '0.25rem 0', 
+                                            padding: '0.5rem 0', 
                                             borderTop: '1px solid rgba(255, 255, 255, 0.1)', 
                                             borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                                            marginTop: '0.1rem',
-                                            marginBottom: '0.25rem'
+                                            marginTop: '0.25rem',
+                                            marginBottom: '0.75rem'
                                           }}>
                                             <div style={{ 
                                               fontSize: '0.7rem', 
@@ -489,6 +489,32 @@ export default function GaryProps() {
                                               <img src="/coin2.png" alt="Gary Coin" style={{ width: '28px', height: '28px' }} />
                                             </div>
                                           </div>
+                                          
+                                          {/* Rationale/Analysis section */}
+                                          <div style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
+                                            <div style={{ 
+                                              fontSize: '0.7rem', 
+                                              opacity: 0.7, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.5rem',
+                                              color: '#bfa142',
+                                              fontWeight: 500
+                                            }}>
+                                              Analysis
+                                            </div>
+                                            <div style={{ 
+                                              margin: 0, 
+                                              fontWeight: 400, 
+                                              opacity: 0.9, 
+                                              fontSize: '0.85rem',
+                                              lineHeight: 1.4,
+                                              maxHeight: '100px',
+                                              overflow: 'auto'
+                                            }}>
+                                              {pick.rationale || 'Analysis not available at this time.'}
+                                            </div>
+                                          </div>
                                         </div>
                                         
                                         {/* Stats for the pick */}
@@ -513,7 +539,7 @@ export default function GaryProps() {
                                                 background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
-                                                padding: '0.35rem',
+                                                padding: '0.5rem',
                                                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
                                                 <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>True Prob</p>
@@ -523,7 +549,7 @@ export default function GaryProps() {
                                                 background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
-                                                padding: '0.35rem',
+                                                padding: '0.5rem',
                                                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
                                                 <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Implied Prob</p>
@@ -533,7 +559,7 @@ export default function GaryProps() {
                                                 background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
-                                                padding: '0.35rem',
+                                                padding: '0.5rem',
                                                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
                                                 <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>EV</p>
@@ -587,35 +613,11 @@ export default function GaryProps() {
                                         top: 0,
                                         bottom: 0,
                                         width: '100%',
-                                        padding: '0.85rem',
+                                        padding: '1.25rem',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         overflow: 'auto',
                                       }}>
-                                        {/* Rationale Heading */}
-                                        <div style={{ 
-                                          fontSize: '0.7rem', 
-                                          opacity: 0.7, 
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.05em', 
-                                          marginBottom: '0.5rem',
-                                          color: '#bfa142',
-                                          fontWeight: 500
-                                        }}>
-                                          Analysis
-                                        </div>
-                                        
-                                        {/* Display the rationale */}
-                                        <div style={{ 
-                                          margin: 0, 
-                                          fontWeight: 400, 
-                                          opacity: 0.9, 
-                                          marginBottom: '1rem',
-                                          fontSize: '0.9rem',
-                                          lineHeight: 1.5
-                                        }}>
-                                          {pick.rationale || 'Analysis not available at this time.'}
-                                        </div>
                                         
                                         {/* Pick Details */}
                                         <div style={{ marginTop: 'auto' }}>
@@ -642,7 +644,7 @@ export default function GaryProps() {
                                               background: 'rgba(25, 23, 17, 0.9)',
                                               border: '1px solid rgba(191, 161, 66, 0.4)',
                                               borderRadius: '6px',
-                                              padding: '0.35rem',
+                                              padding: '0.5rem',
                                               boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                             }}>
                                               <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Line</p>
@@ -652,7 +654,7 @@ export default function GaryProps() {
                                               background: 'rgba(25, 23, 17, 0.9)',
                                               border: '1px solid rgba(191, 161, 66, 0.4)',
                                               borderRadius: '6px',
-                                              padding: '0.35rem',
+                                              padding: '0.5rem',
                                               boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                             }}>
                                               <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Odds</p>
