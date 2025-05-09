@@ -509,28 +509,28 @@ function Home() {
 
           {/* Content wrapper that spans the full width to center both the logo and main content */}
           <div className="relative mx-auto w-full max-w-[1440px]">
-            {/* Create a fixed-position container that follows the main content container */}
-            {/* Use a combination of responsive classes and custom styles for the logo */}
-            <div className="absolute top-24 z-30 logo-container" style={{ left: 'calc(50% - 600px - 120px + 5%)' }}>
-              <img
-                src="/coin2.png"
-                alt="Gold Coin"
-                className="w-auto h-auto logo-image object-contain transition-all duration-300"
-                style={{ 
-                  animation: "float 6s ease-in-out infinite",
-                  maxWidth: "12.77rem" /* Reduced by 30% from 18.24rem */
-                }}
-              />
-            </div>
+            {/* Coin image moved to the NEW banner */}
             
             {/* Main content area - use full width at all times */}
             <div className="relative z-20 w-full mx-auto">
               <main className="hero-inner flex flex-col w-full h-full" style={{ padding: "24px 24px" }}>
                 {/* Centered Hero Content */}
              <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
-              {/* NEW badge - 7% bigger than previous size */}
-              <div className="mb-8 relative mt-16 flex justify-center w-full">
-                {/* Shiny banner - made 7% bigger */}
+              {/* NEW badge with coin image */}
+              <div className="mb-8 relative mt-16 flex justify-center items-center w-full">
+                {/* Coin image */}
+                <img
+                  src="/coin2.png"
+                  alt="Gold Coin"
+                  className="mr-4 object-contain"
+                  style={{ 
+                    height: "45px",
+                    animation: "float 6s ease-in-out infinite",
+                    filter: "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5))",
+                  }}
+                />
+                
+                {/* Shiny banner */}
                 <div className="text-black font-medium px-5 py-1.5 rounded-full flex items-center"
                      style={{
                        background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
