@@ -79,16 +79,34 @@ const openaiServiceInstance = {
       // Add comprehensive logging to debug the structure of the OpenAI response
       console.log('\n🔍 OpenAI raw response received. Attempting to parse JSON...');
       try {
+        // Helper function to preprocess JSON string to handle betting odds notation
+        const preprocessJSON = (jsonStr) => {
+          // Replace odds values like "odds": +120 with "odds": 120 (remove the plus sign)
+          // and handle other betting odds formats
+          return jsonStr.replace(/"odds"\s*:\s*\+([0-9]+)/g, '"odds": $1')
+                      .replace(/"odds"\s*:\s*"\+([0-9]+)"/g, '"odds": "$1"')
+                      // Also handle plus signs in picks notation
+                      .replace(/("pick"\s*:\s*"[^"]*)(\+)([0-9]+)([^"]*")/g, '$1plus$3$4');
+        };
+        
         // Attempt to find and parse JSON in the response
-        const jsonMatch = content.match(/\{[\s\S]*\}/); // Match everything between { and }
+        const jsonMatch = content.match(/\{[\s\S]*?\}/); // Match everything between { and } (non-greedy)
         if (jsonMatch) {
           const jsonContent = jsonMatch[0];
-          const parsedJson = JSON.parse(jsonContent);
-          console.log('✅ Successfully parsed JSON from OpenAI response:');
-          console.log('JSON Structure:', Object.keys(parsedJson).join(', '));
-          console.log('Confidence value:', parsedJson.confidence);
-          console.log('Pick:', parsedJson.pick);
-          console.log('Type:', parsedJson.type);
+          // Preprocess the JSON to handle betting odds notation
+          const preprocessed = preprocessJSON(jsonContent);
+          try {
+            const parsedJson = JSON.parse(preprocessed);
+            console.log('✅ Successfully parsed JSON from OpenAI response:');
+            console.log('JSON Structure:', Object.keys(parsedJson).join(', '));
+            console.log('Confidence value:', parsedJson.confidence);
+            console.log('Pick:', parsedJson.pick);
+            console.log('Type:', parsedJson.type);
+          } catch (innerError) {
+            console.warn('⚠️ Preprocessed JSON still failed to parse:', innerError.message);
+            console.log('Preprocessed content:', preprocessed);
+            // Still return original content even if parsing fails
+          }
         } else {
           console.warn('⚠️ No JSON object found in OpenAI response');
           console.log('Raw response preview:', content.substring(0, 200) + '...');
