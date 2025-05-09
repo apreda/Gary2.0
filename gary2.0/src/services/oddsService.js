@@ -449,5 +449,131 @@ export const oddsService = {
       sharpAction: hasSignificantMovement ? 'Significant sharp action detected' : 'No clear sharp action',
       timestamp: new Date().toISOString()
     };
+  },
+
+  /**
+   * Get player prop odds for a specific game
+   * @param {string} sport - Sport key (e.g., 'basketball_nba')
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {Promise<Array>} - Array of player prop odds
+   */
+  getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
+    try {
+      // Get the API key from the config loader
+      const apiKey = await configLoader.getOddsApiKey();
+      
+      if (!apiKey) {
+        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch player prop odds');
+        return [];
+      }
+
+      console.log(`🔍 Fetching player prop odds for ${homeTeam} vs ${awayTeam}`);
+      
+      // First get the event ID for the game by fetching upcoming games
+      const gamesResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
+        params: {
+          apiKey,
+          regions: 'us',
+          markets: 'h2h,spreads',
+          oddsFormat: 'american',
+          dateFormat: 'iso'
+        }
+      });
+      
+      // Find the game that matches our home and away teams
+      const game = gamesResponse.data.find(g => {
+        const gameHomeTeam = g.home_team;
+        const gameAwayTeam = g.away_team;
+        
+        // Try different matching approaches in case of naming differences
+        return (
+          (gameHomeTeam.includes(homeTeam) || homeTeam.includes(gameHomeTeam)) &&
+          (gameAwayTeam.includes(awayTeam) || awayTeam.includes(gameAwayTeam))
+        );
+      });
+      
+      if (!game) {
+        console.warn(`No game found matching ${homeTeam} vs ${awayTeam} for ${sport}`);
+        return [];
+      }
+      
+      console.log(`Found matching game with ID: ${game.id}`);
+      
+      // Now fetch player props for this specific game
+      // NOTE: The Odds API offers player props endpoint only for certain sports and at higher subscription tiers
+      // This implementation assumes access to the necessary tier for prop odds
+      const propResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${game.id}/odds`, {
+        params: {
+          apiKey,
+          regions: 'us',
+          markets: 'player_points,player_rebounds,player_assists,player_threes,player_blocks,player_steals',
+          oddsFormat: 'american',
+          dateFormat: 'iso'
+        }
+      });
+      
+      // If no player props were found, return an empty array - no mock data
+      if (!propResponse.data || !propResponse.data.bookmakers || propResponse.data.bookmakers.length === 0) {
+        console.warn('No player prop data found from The Odds API');
+        return [];
+      }
+      
+      // Process the API response to extract player prop information
+      const playerProps = [];
+      const bookmakers = propResponse.data.bookmakers;
+      
+      // Look for a bookmaker with player props
+      for (const bookmaker of bookmakers) {
+        for (const market of bookmaker.markets) {
+          // Extract the prop type from the market key (e.g., player_points → points)
+          const propType = market.key.replace('player_', '');
+          
+          for (const outcome of market.outcomes) {
+            playerProps.push({
+              player: outcome.description, // Player name
+              team: outcome.team, // Team name if available, or derive from game data
+              prop_type: propType,
+              line: outcome.point,
+              over_odds: outcome.name === 'Over' ? outcome.price : null,
+              under_odds: outcome.name === 'Under' ? outcome.price : null
+            });
+          }
+        }
+      }
+      
+      // Group over/under odds together for the same player and prop type
+      const groupedProps = {};
+      for (const prop of playerProps) {
+        const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+        if (!groupedProps[key]) {
+          groupedProps[key] = {
+            player: prop.player,
+            team: prop.team,
+            prop_type: prop.prop_type,
+            line: prop.line,
+            over_odds: null,
+            under_odds: null
+          };
+        }
+        
+        if (prop.over_odds !== null) {
+          groupedProps[key].over_odds = prop.over_odds;
+        }
+        if (prop.under_odds !== null) {
+          groupedProps[key].under_odds = prop.under_odds;
+        }
+      }
+      
+      // Convert back to array
+      const result = Object.values(groupedProps);
+      console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
+      
+      return result;
+      
+    } catch (error) {
+      console.error('Error fetching player prop odds:', error);
+      return [];
+    }
   }
 };
