@@ -630,9 +630,18 @@ async function generatePlayerPropPicks(gameData) {
  */
 function extractJSONFromResponse(response) {
   try {
-    // First try direct JSON parsing
+    // Helper function to preprocess JSON string to handle betting odds notation
+    const preprocessJSON = (jsonStr) => {
+      // Replace odds values like "odds": +120 with "odds": 120 (remove the plus sign)
+      // and convert odds like "odds": -110 to negative numbers
+      return jsonStr.replace(/"odds"\s*:\s*\+([0-9]+)/g, '"odds": $1')
+                   .replace(/"odds"\s*:\s*"\+([0-9]+)"/g, '"odds": "$1"');
+    };
+    
+    // First try direct JSON parsing with preprocessing
     try {
-      return JSON.parse(response);
+      const preprocessed = preprocessJSON(response);
+      return JSON.parse(preprocessed);
     } catch (directError) {
       console.log('Direct JSON parsing failed, trying to extract JSON from response');
       
@@ -641,7 +650,8 @@ function extractJSONFromResponse(response) {
       if (arrayMatch && arrayMatch[0]) {
         try {
           console.log('Found JSON array pattern, attempting to parse');
-          return JSON.parse(arrayMatch[0]);
+          const preprocessed = preprocessJSON(arrayMatch[0]);
+          return JSON.parse(preprocessed);
         } catch (arrayError) {
           console.error('Error parsing JSON array:', arrayError.message);
         }
@@ -653,7 +663,8 @@ function extractJSONFromResponse(response) {
         // Try each potential JSON object match
         for (const match of objectMatch) {
           try {
-            const parsed = JSON.parse(match);
+            const preprocessed = preprocessJSON(match);
+            const parsed = JSON.parse(preprocessed);
             // Check if it looks like a valid prop pick object
             if (parsed.player_name && parsed.prop_type) {
               console.log('Found valid JSON object with expected prop pick fields');
@@ -669,14 +680,43 @@ function extractJSONFromResponse(response) {
       console.log('Attempting more aggressive JSON extraction...');
       
       // Look for content between code blocks
-      const codeBlockMatch = response.match(/```json\s*([\s\S]*?)```/);
+      const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (codeBlockMatch && codeBlockMatch[1]) {
         try {
           const cleanJson = codeBlockMatch[1].trim();
           console.log('Found JSON in code block, attempting to parse');
-          return JSON.parse(cleanJson);
+          const preprocessed = preprocessJSON(cleanJson);
+          return JSON.parse(preprocessed);
         } catch (blockError) {
           console.error('Error parsing JSON from code block:', blockError.message);
+          
+          // Last resort: try to parse it as individual objects if it's an array
+          try {
+            if (cleanJson.includes('{') && cleanJson.includes('}')) {
+              console.log('Attempting to parse individual objects in the response...');
+              const objectMatches = cleanJson.match(/\{[\s\S]*?\}/g);
+              if (objectMatches && objectMatches.length > 0) {
+                const validObjects = [];
+                for (const objMatch of objectMatches) {
+                  try {
+                    const preprocessed = preprocessJSON(objMatch);
+                    const parsed = JSON.parse(preprocessed);
+                    if (parsed.player_name && parsed.prop_type) {
+                      validObjects.push(parsed);
+                    }
+                  } catch (e) {
+                    // Skip invalid objects
+                  }
+                }
+                if (validObjects.length > 0) {
+                  console.log(`Successfully parsed ${validObjects.length} individual objects`);
+                  return validObjects;
+                }
+              }
+            }
+          } catch (lastResortError) {
+            console.error('Last resort parsing failed:', lastResortError.message);
+          }
         }
       }
     }
