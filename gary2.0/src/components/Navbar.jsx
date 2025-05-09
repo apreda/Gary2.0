@@ -39,6 +39,17 @@ export function Navbar() {
           <Link to="/" className="flex items-center group">
             <span className="text-white text-xl font-light tracking-tight" style={{ fontFamily: 'Arial, sans-serif', letterSpacing: '0.05em' }}>Gary</span>
             <span className="text-[#B8953F] text-xl font-bold" style={{ fontFamily: 'Arial, sans-serif' }}>.AI</span>
+            <div className="ml-2 px-2 py-0.5 rounded-md text-xs uppercase font-bold tracking-wide" 
+              style={{
+                background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                color: '#111',
+                textShadow: '0 1px 1px rgba(255,255,255,0.3)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
+                border: '1px solid rgba(184, 149, 63, 0.5)',
+                transform: 'scale(0.9)'
+              }}>
+              Beta
+            </div>
           </Link>
         </div>
         
