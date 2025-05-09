@@ -609,17 +609,56 @@ function extractJSONFromResponse(response) {
     // First try direct JSON parsing
     try {
       return JSON.parse(response);
-    } catch (error) {
-      // If direct parsing fails, try to find JSON in the response
-      const jsonRegex = /\[[\s\S]*\]|\{[\s\S]*\}/;
-      const match = response.match(jsonRegex);
+    } catch (directError) {
+      console.log('Direct JSON parsing failed, trying to extract JSON from response');
       
-      if (match) {
-        return JSON.parse(match[0]);
+      // Look for array JSON pattern first (we expect an array of prop picks)
+      const arrayMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+      if (arrayMatch && arrayMatch[0]) {
+        try {
+          console.log('Found JSON array pattern, attempting to parse');
+          return JSON.parse(arrayMatch[0]);
+        } catch (arrayError) {
+          console.error('Error parsing JSON array:', arrayError.message);
+        }
+      }
+      
+      // Look for object JSON pattern as fallback
+      const objectMatch = response.match(/\{[\s\S]*?\}/g);
+      if (objectMatch && objectMatch.length > 0) {
+        // Try each potential JSON object match
+        for (const match of objectMatch) {
+          try {
+            const parsed = JSON.parse(match);
+            // Check if it looks like a valid prop pick object
+            if (parsed.player_name && parsed.prop_type) {
+              console.log('Found valid JSON object with expected prop pick fields');
+              return [parsed]; // Return as array for consistency
+            }
+          } catch (objError) {
+            // Continue to next potential match
+          }
+        }
+      }
+      
+      // If we get here, try to clean the response and find JSON blocks
+      console.log('Attempting more aggressive JSON extraction...');
+      
+      // Look for content between code blocks
+      const codeBlockMatch = response.match(/```json\s*([\s\S]*?)```/);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        try {
+          const cleanJson = codeBlockMatch[1].trim();
+          console.log('Found JSON in code block, attempting to parse');
+          return JSON.parse(cleanJson);
+        } catch (blockError) {
+          console.error('Error parsing JSON from code block:', blockError.message);
+        }
       }
     }
     
     console.error('Failed to extract JSON from response');
+    console.log('Response preview:', response.substring(0, 500));
     return null;
   } catch (error) {
     console.error('Error extracting JSON:', error);
