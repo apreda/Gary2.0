@@ -485,8 +485,8 @@ export default function GaryProps() {
                                                 {pick.confidence || 'High'}
                                               </div>
                                             </div>
-                                            <div style={{ width: '20%', textAlign: 'right' }}>
-                                              <img src="/coin2.png" alt="Gary Coin" style={{ width: '28px', height: '28px' }} />
+                                            <div style={{ width: '30%', textAlign: 'right' }}>
+                                              <img src="/coin2.png" alt="Gary Coin" style={{ width: '70px', height: '70px' }} />
                                             </div>
                                           </div>
                                           
