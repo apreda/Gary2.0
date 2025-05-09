@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+// Re-deployed GaryProps with card design that matches RealGaryPicks style
 import { Link, useNavigate } from "react-router-dom";
 // Removed unused import: useUserStats, useLocation
 import { useUserPlan } from "../contexts/UserPlanContext";
