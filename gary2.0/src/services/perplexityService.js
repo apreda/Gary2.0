@@ -64,23 +64,59 @@ export const perplexityService = {
         
         // Use optimized query for faster responses
         console.log(`Original query length: ${query.length} chars | Optimized length: ${optimizedQuery.length} chars`);
-        // Make request with optimized query
-        const response = await axios.post(
-          apiUrl,
-          {
-            model: requestOptions.model || 'sonar-small-online', // Use faster model
-            messages: [{ role: 'user', content: optimizedQuery }],
-            temperature: requestOptions.temperature,
-            max_tokens: requestOptions.maxTokens
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${perplexityService.API_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 50000 // Increased timeout for Perplexity Pro and Vercel Pro
+        // Implement retry logic for resilience
+        const maxRetries = 2;
+        let retryCount = 0;
+        let response;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            // If this is a retry, log it
+            if (retryCount > 0) {
+              console.log(`Retry attempt ${retryCount}/${maxRetries} for Perplexity API call`);
+            }
+            
+            // Make request with optimized query
+            response = await axios.post(
+              apiUrl,
+              {
+                model: requestOptions.model || 'sonar-small-online', // Use faster model
+                messages: [{ role: 'user', content: optimizedQuery }],
+                temperature: requestOptions.temperature,
+                max_tokens: requestOptions.maxTokens
+              },
+              {
+                headers: {
+                  'Authorization': `Bearer ${perplexityService.API_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                timeout: 60000 // Increased timeout to 60 seconds
+              }
+            );
+            
+            // If we get here, the request succeeded, so we can break out of the retry loop
+            break;
+          } catch (retryError) {
+            // If this is our last retry, throw the error
+            if (retryCount === maxRetries) {
+              throw retryError;
+            }
+            
+            // If it's a timeout or 504, wait and retry
+            if (retryError.code === 'ECONNABORTED' || 
+                retryError.message.includes('timeout') || 
+                (retryError.response && retryError.response.status === 504)) {
+              // Exponential backoff (1s, 2s, 4s, etc.)
+              const waitTime = 1000 * Math.pow(2, retryCount);
+              console.log(`Request timed out. Waiting ${waitTime}ms before retry ${retryCount + 1}/${maxRetries}`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              retryCount++;
+            } else {
+              // For non-timeout errors, don't retry
+              throw retryError;
+            }
           }
-        );
+        }
         
         // Log successful response status
         console.log('Successfully retrieved real-time information from Perplexity');
@@ -146,7 +182,8 @@ export const perplexityService = {
       });
     } catch (error) {
       console.error(`Error getting game news for ${homeTeam} vs ${awayTeam}:`, error);
-      return null;
+      // Return a message that indicates the issue rather than null
+      return `Unable to retrieve real-time data for ${homeTeam} vs ${awayTeam} due to API timeout. Analysis will proceed with available data.`;
     }
   },
   
@@ -167,7 +204,8 @@ export const perplexityService = {
       });
     } catch (error) {
       console.error(`Error getting insights for ${teamName}:`, error);
-      return null;
+      // Return a message that indicates the issue rather than null
+      return `Unable to retrieve real-time data for ${teamName} due to API timeout. Analysis will proceed with available data.`;
     }
   }
 };
