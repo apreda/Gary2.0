@@ -552,7 +552,7 @@ function Home() {
               {/* Main headline - Simple and impactful */}
               <div className="relative mb-6 w-full">
                 <h1 className="text-center w-full" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em" }}>
-                  <div className="max-w-[920px] mx-auto" style={{ marginLeft: "30px" }}>
+                  <div className="max-w-[920px] mx-auto">
                     <span className="text-white font-bold">Make </span>
                     <span className="italic font-normal text-[#B8953F]">Smarter</span>
                     <span className="text-white font-bold"> Sports Bets </span>
