@@ -382,70 +382,78 @@ export default function GaryProps() {
                                         justifyContent: 'space-between',
                                         overflow: 'hidden',
                                       }}>
-                                        {/* Top section with League/Matchup side-by-side */}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                                          {/* League */}
-                                          <div style={{ width: '30%' }}>
-                                            <div style={{ 
-                                              fontSize: '0.7rem', 
-                                              opacity: 0.6, 
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em', 
-                                              marginBottom: '0.1rem'
-                                            }}>
-                                              League
+                                        <div>
+                                          {/* Top section with League/Matchup side-by-side */}
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                            {/* League */}
+                                            <div style={{ width: '30%' }}>
+                                              <div style={{ 
+                                                fontSize: '0.7rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.1rem'
+                                              }}>
+                                                League
+                                              </div>
+                                              <div style={{ 
+                                                fontSize: '0.9rem', 
+                                                fontWeight: 700, 
+                                                letterSpacing: '0.02em'
+                                              }}>
+                                                {pick.league || 'NBA'}
+                                              </div>
                                             </div>
-                                            <div style={{ 
-                                              fontSize: '1rem', 
-                                              fontWeight: 700, 
-                                              letterSpacing: '0.02em'
-                                            }}>
-                                              {pick.league || 'NBA'}
+                                                                                      {/* Matchup */}
+                                             <div style={{ width: '65%' }}>
+                                              <div style={{ 
+                                                fontSize: '0.7rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.1rem'
+                                              }}>
+                                                Matchup
+                                              </div>
+                                              <div style={{ 
+                                                fontSize: '0.9rem', 
+                                                fontWeight: 600,
+                                                lineHeight: 1.2
+                                              }}>
+                                                {pick.matchup || 'TBD'}
+                                              </div>
                                             </div>
-                                          </div>
-                                                                                    {/* Matchup */}
-                                           <div style={{ width: '65%' }}>
-                                            <div style={{ 
-                                              fontSize: '0.7rem', 
-                                              opacity: 0.6, 
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em', 
-                                              marginBottom: '0.1rem'
-                                            }}>
-                                              Matchup
-                                            </div>
-                                            <div style={{ 
-                                              fontSize: '1rem', 
-                                              fontWeight: 600,
-                                              lineHeight: 1.2
-                                            }}>
-                                              {pick.matchup || 'TBD'}
-                                            </div>
-                                          </div>
-                                        </div>
-                                        
-                                        {/* The main pick display */}
-                                        <div style={{ marginBottom: '1rem' }}>
-                                          <div style={{ 
-                                            fontSize: '0.7rem', 
-                                            opacity: 0.7, 
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em', 
-                                            marginBottom: '0.3rem'
-                                          }}>
-                                            Gary's Pick
-                                          </div>
-                                          <div style={{ 
-                                            fontSize: '1.2rem', /* Reduced by 40% from 2rem */
-                                            fontWeight: 700, 
-                                            lineHeight: 1.1,
-                                            color: '#bfa142', /* Gold color for the actual pick */
-                                            wordBreak: 'break-word',
-                                            marginBottom: '0.5rem'
-                                          }}>
-                                            {pick.pick}
                                           </div>
                                           
+                                          {/* The main pick display - immediately below League/Matchup */}
+                                          <div style={{ 
+                                            padding: '0.35rem 0', 
+                                            borderTop: '1px solid rgba(255, 255, 255, 0.1)', 
+                                            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                                            marginTop: '0.15rem',
+                                            marginBottom: '0.4rem'
+                                          }}>
+                                            <div style={{ 
+                                              fontSize: '0.7rem', 
+                                              opacity: 0.7, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.2rem'
+                                            }}>
+                                              Gary's Pick
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: '1.2rem', /* Reduced by 40% from 2rem */
+                                              fontWeight: 700, 
+                                              lineHeight: 1.1,
+                                              color: '#bfa142', /* Gold color for the actual pick */
+                                              wordBreak: 'break-word',
+                                              marginBottom: '0.2rem'
+                                            }}>
+                                              {pick.pick}
+                                            </div>
+                                          </div>
+                                            
                                           {/* Confidence level and Gary Coin */}
                                           <div style={{
                                             display: 'flex',
