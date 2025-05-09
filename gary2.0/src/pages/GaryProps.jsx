@@ -435,20 +435,7 @@ export default function GaryProps() {
                                             {pick.pick}
                                           </div>
                                           
-                                          {/* Additional info about the pick */}
-                                          <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            fontSize: '0.8rem',
-                                            opacity: 0.9,
-                                            marginBottom: '0.75rem',
-                                            background: 'rgba(0, 0, 0, 0.2)',
-                                            borderRadius: '4px',
-                                            padding: '0.4rem 0.6rem'
-                                          }}>
-                                            <span><strong>{pick.team}</strong></span>
-                                            <span>{pick.time}</span>
-                                          </div>
+                                          {/* Team/time info section removed to avoid duplication */}
                                         </div>
                                         
                                         {/* Stats for the pick */}
@@ -462,24 +449,36 @@ export default function GaryProps() {
                                           }}>
                                             Pick Details
                                           </div>
-                                          <div style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '1fr 1fr 1fr',
-                                            gap: '0.5rem',
-                                            width: '100%',
-                                          }}>
-                                             <div className="bg-gray-800 rounded-lg p-2">
-                                               <p className="text-gray-400 text-xs mb-0.5">True Prob</p>
-                                               <p className="text-white font-bold text-sm">{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
-                                             </div>
-                                             <div className="bg-gray-800 rounded-lg p-2">
-                                               <p className="text-gray-400 text-xs mb-0.5">Implied Prob</p>
-                                               <p className="text-white font-bold text-sm">{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
-                                             </div>
-                                             <div className="bg-gray-800 rounded-lg p-2">
-                                               <p className="text-gray-400 text-xs mb-0.5">EV</p>
-                                               <p className="text-white font-bold text-sm">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
-                                             </div>
+                                           <div style={{
+                                             display: 'grid',
+                                             gridTemplateColumns: '1fr 1fr 1fr',
+                                             gap: '0.5rem',
+                                             width: '100%',
+                                           }}>
+                                              <div style={{
+                                                background: 'rgba(20, 20, 25, 0.8)',
+                                                borderRadius: '8px',
+                                                padding: '0.5rem'
+                                              }}>
+                                                <p style={{ color: '#999', fontSize: '0.65rem', marginBottom: '0.25rem' }}>True Prob</p>
+                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
+                                              </div>
+                                              <div style={{
+                                                background: 'rgba(20, 20, 25, 0.8)',
+                                                borderRadius: '8px',
+                                                padding: '0.5rem'
+                                              }}>
+                                                <p style={{ color: '#999', fontSize: '0.65rem', marginBottom: '0.25rem' }}>Implied Prob</p>
+                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
+                                              </div>
+                                              <div style={{
+                                                background: 'rgba(20, 20, 25, 0.8)',
+                                                borderRadius: '8px',
+                                                padding: '0.5rem'
+                                              }}>
+                                                <p style={{ color: '#999', fontSize: '0.65rem', marginBottom: '0.25rem' }}>EV</p>
+                                                <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
+                                              </div>
                                           </div>
                                         </div>
                                       </div>
