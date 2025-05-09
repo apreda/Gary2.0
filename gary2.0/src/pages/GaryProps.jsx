@@ -426,7 +426,7 @@ export default function GaryProps() {
                                             Gary's Pick
                                           </div>
                                           <div style={{ 
-                                            fontSize: '2rem', 
+                                            fontSize: '1.2rem', /* Reduced by 40% from 2rem */
                                             fontWeight: 700, 
                                             lineHeight: 1.1,
                                             color: '#bfa142', /* Gold color for the actual pick */
