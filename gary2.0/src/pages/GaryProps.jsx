@@ -133,16 +133,10 @@ export default function GaryProps() {
     
     try {
       // Simply get today's prop picks
-      const { data, error } = await propPicksService.getTodayPropPicks();
-      
-      if (error) {
-        setError("Error loading picks: " + error.message);
-        setLoading(false);
-        return;
-      }
+      const data = await propPicksService.getTodayPropPicks();
       
       // Debug log the picks we got
-      console.log(`Loaded ${data.length} prop picks`);
+      console.log(`Loaded ${data?.length || 0} prop picks`);
       
       setPicks(data || []);
       setLoading(false);
