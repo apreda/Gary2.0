@@ -446,7 +446,41 @@ export default function GaryProps() {
                                             {pick.pick}
                                           </div>
                                           
-                                          {/* Team/time info section removed to avoid duplication */}
+                                          {/* Confidence level and Gary Coin */}
+                                          <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            marginBottom: '0.5rem',
+                                            marginTop: '0.25rem'
+                                          }}>
+                                            <div style={{
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              width: '75%'
+                                            }}>
+                                              <div style={{
+                                                fontSize: '0.65rem',
+                                                color: '#bfa142',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em',
+                                                marginBottom: '0.1rem',
+                                                fontWeight: 500
+                                              }}>
+                                                Confidence
+                                              </div>
+                                              <div style={{
+                                                fontSize: '0.9rem',
+                                                fontWeight: 600,
+                                                color: 'white'
+                                              }}>
+                                                {pick.confidence || 'High'}
+                                              </div>
+                                            </div>
+                                            <div style={{ width: '20%', textAlign: 'right' }}>
+                                              <img src="/coin2.png" alt="Gary Coin" style={{ width: '28px', height: '28px' }} />
+                                            </div>
+                                          </div>
                                         </div>
                                         
                                         {/* Stats for the pick */}
