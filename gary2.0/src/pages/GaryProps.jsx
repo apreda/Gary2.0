@@ -133,7 +133,7 @@ export default function GaryProps() {
     
     try {
       // Simply get today's prop picks
-      const { data, error } = await propPicksService.getTodaysPropPicks();
+      const { data, error } = await propPicksService.getTodayPropPicks();
       
       if (error) {
         setError("Error loading picks: " + error.message);
@@ -256,23 +256,7 @@ export default function GaryProps() {
                 <div className="mb-12">
                   {/* NEW LAYOUT: Directly on page in a horizontal row format */}
                   <div className="pt-12 px-4">
-                    {/* Tab Navigation */}
-                    <div className="flex justify-center mb-8">
-                      <div className="bg-gray-800 rounded-lg inline-flex p-1">
-                        <button
-                          className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'today' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
-                          onClick={() => setActiveTab('today')}
-                        >
-                          Today's Picks
-                        </button>
-                        <button
-                          className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'yesterday' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
-                          onClick={() => setActiveTab('yesterday')}
-                        >
-                          Yesterday's Picks
-                        </button>
-                      </div>
-                    </div>
+                    {/* No tabs needed as we only show today's picks */}
                     
                     <h1 className="text-5xl font-bold text-center mb-3" style={{ color: '#ffffff' }}>
                       Gary's Props
@@ -302,20 +286,7 @@ export default function GaryProps() {
                       </span>
                     </div>
                     
-                    {/* Yesterday's Performance Banner */}
-                    <div className="flex justify-center items-center mb-6">
-                      <div className="inline-block px-4 py-2 rounded-lg" style={{ 
-                        background: 'linear-gradient(135deg, rgba(184,149,63,0.2) 0%, rgba(184,149,63,0.3) 100%)',
-                        border: '1px solid rgba(184,149,63,0.4)',
-                      }}>
-                        <div className="text-[#b8953f] font-medium">Yesterday's Results:</div>
-                        <div className="mt-1 flex space-x-3">
-                          <span className="text-green-400">Wins: {yesterdayPicks.filter(p => p.result === 'win').length}</span>
-                          <span className="text-red-400">Losses: {yesterdayPicks.filter(p => p.result === 'loss').length}</span>
-                          <span className="text-gray-400">Pending: {yesterdayPicks.filter(p => p.result !== 'win' && p.result !== 'loss').length}</span>
-                        </div>
-                      </div>
-                    </div>
+                    {/* No Yesterday's Performance Banner needed */}
                     
                     {/* Cards Container */}
                     <div className="container mx-auto">
@@ -375,8 +346,11 @@ export default function GaryProps() {
                                       <div className="flex-1 flex flex-col">
                                         <div className="mb-4">
                                           <span className="text-[#b8953f] text-sm font-medium">{pick.league}</span>
-                                          <h3 className="text-white text-xl font-bold mt-2">{pick.pick}</h3>
-                                          <p className="text-gray-400 text-sm mt-1">{pick.matchup} • {pick.time}</p>
+                                          <div className="mt-2">
+                                            <p className="text-gray-400 text-xs mb-1">Gary's Pick</p>
+                                            <h3 className="text-white text-xl font-bold">{pick.pick}</h3>
+                                          </div>
+                                          <p className="text-gray-400 text-sm mt-2">{pick.matchup} • {pick.time}</p>
                                         </div>
                                         
                                         <div className="mt-auto">
@@ -440,156 +414,7 @@ export default function GaryProps() {
                 </div>
             )}
               
-            {/* Yesterday's Picks Tab */}
-            {/* Added proper JSX structure with balanced parentheses and loading optimization */}
-            {activeTab === 'yesterday' && (
-              <div className="mb-12">
-                {/* NEW LAYOUT: Directly on page in a horizontal row format */}
-                <div className="pt-12 px-4">
-                  {/* Tab Navigation */}
-                  <div className="flex justify-center mb-8">
-                    <div className="bg-gray-800 rounded-lg inline-flex p-1">
-                      <button
-                        className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'today' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
-                        onClick={() => setActiveTab('today')}
-                      >
-                        Today's Picks
-                      </button>
-                      <button
-                        className={`py-2 px-6 rounded-md transition-all duration-200 ${activeTab === 'yesterday' ? 'bg-[#b8953f] text-black font-bold' : 'text-white hover:bg-gray-700'}`}
-                        onClick={() => setActiveTab('yesterday')}
-                      >
-                        Yesterday's Picks
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <h1 className="text-4xl font-bold text-center mb-2" style={{ color: '#b8953f' }}>
-                    YESTERDAY'S PROP PICKS
-                  </h1>
-                  <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto">
-                    Review yesterday's player prop pick performance and outcomes.
-                  </p>
-                  
-                  {/* Cards Container */}
-                  <div className="container mx-auto">
-                    {/* Loading State */}
-                    {loading ? (
-                      <div className="flex justify-center items-center py-20">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#b8953f]"></div>
-                      </div>
-                    ) : yesterdayPicks.length === 0 ? (
-                      <div className="text-center py-16">
-                        <p className="text-gray-400 text-xl">No prop picks available for yesterday</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {yesterdayPicks.map(pick => {
-                          const isFlipped = flippedCards[pick.id] || false;
-                          
-                          return (
-                            <div 
-                              key={pick.id} 
-                              className="pick-card-container"
-                              style={cardStyle}
-                            >
-                              {/* Card container with flip effect */}
-                              <div 
-                                className="w-full h-full relative cursor-pointer" 
-                                style={{
-                                  perspective: '1000px',
-                                }}
-                                onClick={() => toggleCardFlip(pick.id)}
-                              >
-                                <div 
-                                  style={{
-                                    position: 'relative',
-                                    width: '100%',
-                                    height: '100%',
-                                    transformStyle: 'preserve-3d',
-                                    transition: 'transform 0.6s',
-                                    transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-                                  }}
-                                >
-                                  {/* FRONT OF CARD */}
-                                  <div style={{
-                                    position: 'absolute',
-                                    width: '100%',
-                                    height: '100%',
-                                    backfaceVisibility: 'hidden',
-                                    background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                    borderRadius: '16px',
-                                    padding: '24px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                  }}>
-                                    <div className="flex-1 flex flex-col">
-                                      <div className="mb-4">
-                                        <span className="text-[#b8953f] text-sm font-medium">{pick.league}</span>
-                                        <h3 className="text-white text-xl font-bold mt-2">{pick.pick}</h3>
-                                        <p className="text-gray-400 text-sm mt-1">{pick.matchup} • {pick.time}</p>
-                                      </div>
-                                      
-                                      <div className="mt-auto">
-                                        <div className="grid grid-cols-2 gap-4 mb-3">
-                                          <div className="bg-gray-800 rounded-lg p-3">
-                                            <p className="text-gray-400 text-xs mb-1">Line</p>
-                                            <p className="text-white font-bold">{pick.line}</p>
-                                          </div>
-                                          <div className="bg-gray-800 rounded-lg p-3">
-                                            <p className="text-gray-400 text-xs mb-1">Odds</p>
-                                            <p className="text-white font-bold">{pick.odds}</p>
-                                          </div>
-                                        </div>
-                                        <div className="bg-gray-800 rounded-lg p-3">
-                                          <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
-                                          <p className="text-white font-bold">{pick.ev ? `+${pick.ev}%` : 'N/A'}</p>
-                                        </div>
-                                        
-                                        <div className="mt-4">
-                                          <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
-                                            {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* BACK OF CARD */}
-                                  <div style={{
-                                    position: 'absolute',
-                                    width: '100%',
-                                    height: '100%',
-                                    backfaceVisibility: 'hidden',
-                                    background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                    borderRadius: '16px',
-                                    padding: '24px',
-                                    transform: 'rotateY(180deg)',
-                                    overflow: 'auto',
-                                  }}>
-                                    <div className="mb-4">
-                                      <h3 className="text-[#b8953f] text-lg font-bold mb-3">Analysis</h3>
-                                      <p className="text-white text-sm">{pick.rationale || 'No analysis available'}</p>
-                                    </div>
-                                    
-                                    <div className="mt-4">
-                                      <h3 className="text-[#b8953f] text-lg font-bold mb-2">Outcome</h3>
-                                      <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
-                                        {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Yesterday's picks tab removed as requested */}
           </div>
         )}
       </div>
