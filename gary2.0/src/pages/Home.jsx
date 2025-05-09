@@ -517,9 +517,9 @@ function Home() {
                 {/* Centered Hero Content */}
              <div className="w-full mx-auto flex flex-col items-center mt-14" style={{ paddingLeft: "0", paddingRight: "0" }}>
               {/* NEW badge with coin image - shifted left */}
-              <div className="relative mt-11 flex justify-center items-center w-full" style={{ marginLeft: "-60px", marginBottom: "0.5rem" }}>
+              <div className="relative mt-11 flex justify-center items-center w-full" style={{ marginLeft: "-80px", marginBottom: "0.5rem" }}>
                 {/* Coin image - 20% larger than before and moved even further left */}
-                <div className="mr-14">
+                <div className="mr-10">
                   <img
                     src="/coin2.png"
                     alt="Gold Coin"
