@@ -351,48 +351,228 @@ export default function GaryProps() {
                                       backfaceVisibility: 'hidden',
                                       background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
                                       borderRadius: '16px',
-                                      padding: '24px',
-                                      display: 'flex',
-                                      flexDirection: 'column',
+                                      fontFamily: 'Inter, system-ui, sans-serif',
+                                      overflow: 'hidden',
+                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                      color: '#ffffff',
                                     }}>
-                                      <div className="flex-1 flex flex-col">
-                                         <div className="mb-4">
-                                           <span className="text-[#b8953f] text-sm font-medium">{pick.league}</span>
-                                           <div className="mt-2">
-                                             <p className="text-gray-400 text-xs mb-1">Gary's Pick</p>
-                                             <h3 className="text-white text-lg font-bold">{pick.pick}</h3>
-                                           </div>
-                                           <div className="flex items-center mt-2">
-                                             <span className="text-gray-400 text-sm">{pick.team}</span>
-                                             <span className="mx-2 text-gray-600">•</span>
-                                             <span className="text-gray-400 text-sm">{pick.time}</span>
-                                           </div>
-                                           <p className="text-gray-400 text-sm mt-1">{pick.matchup}</p>
-                                         </div>
-                                         
-                                         <div className="mt-auto">
-                                           <div className="grid grid-cols-2 gap-4 mb-3">
-                                             <div className="bg-gray-800 rounded-lg p-3">
-                                               <p className="text-gray-400 text-xs mb-1">Line</p>
-                                               <p className="text-white font-bold">{pick.line}</p>
-                                             </div>
-                                             <div className="bg-gray-800 rounded-lg p-3">
-                                               <p className="text-gray-400 text-xs mb-1">Odds</p>
-                                               <p className="text-white font-bold">{pick.odds}</p>
-                                             </div>
-                                           </div>
-                                           <div className="bg-gray-800 rounded-lg p-3">
-                                             <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
-                                             <p className="text-white font-bold">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
-                                           </div>
+                                      {/* Left side content */}
+                                      <div style={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: '70%',
+                                        padding: '1.5rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        overflow: 'hidden',
+                                      }}>
+                                        {/* League and Matchup in horizontal layout */}
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                                          {/* League */}
+                                          <div>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.25rem'
+                                            }}>
+                                              League
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: '1.25rem', 
+                                              fontWeight: 600, 
+                                              letterSpacing: '0.02em',
+                                              opacity: 0.95
+                                            }}>
+                                              {pick.league || 'NBA'}
+                                            </div>
+                                          </div>
                                           
-                                          <div className="mt-4">
-                                            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
-                                              {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
+                                          {/* Matchup */}
+                                          <div style={{ marginLeft: '20px' }}>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.25rem'
+                                            }}>
+                                              Matchup
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: '1.25rem', 
+                                              fontWeight: 600,
+                                              opacity: 0.9
+                                            }}>
+                                              {pick.matchup || 'TBD'}
                                             </div>
                                           </div>
                                         </div>
+                                        
+                                        {/* The main pick display */}
+                                        <div style={{ marginBottom: '1rem' }}>
+                                          <div style={{ 
+                                            fontSize: '0.75rem', 
+                                            opacity: 0.6, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.5rem'
+                                          }}>
+                                            Gary's Pick
+                                          </div>
+                                          <div style={{ 
+                                            fontSize: '2rem', 
+                                            fontWeight: 700, 
+                                            lineHeight: 1.1,
+                                            color: '#bfa142', /* Gold color for the actual pick */
+                                            wordBreak: 'break-word',
+                                            marginBottom: '0.75rem'
+                                          }}>
+                                            {pick.pick}
+                                          </div>
+                                          
+                                          {/* Additional info about the pick */}
+                                          <div style={{
+                                            fontSize: '0.85rem',
+                                            opacity: 0.8,
+                                            marginBottom: '0.5rem'
+                                          }}>
+                                            <div className="flex items-center">
+                                              <span>{pick.team}</span>
+                                              <span className="mx-2 text-gray-600">•</span>
+                                              <span>{pick.time}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Stats for the pick */}
+                                        <div>
+                                          <div style={{ 
+                                            fontSize: '0.75rem', 
+                                            opacity: 0.6, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.5rem'
+                                          }}>
+                                            Pick Details
+                                          </div>
+                                          <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '1fr 1fr',
+                                            gap: '0.75rem',
+                                            width: '100%',
+                                          }}>
+                                            <div className="bg-gray-800 rounded-lg p-3">
+                                              <p className="text-gray-400 text-xs mb-1">Line</p>
+                                              <p className="text-white font-bold">{pick.line}</p>
+                                            </div>
+                                            <div className="bg-gray-800 rounded-lg p-3">
+                                              <p className="text-gray-400 text-xs mb-1">Odds</p>
+                                              <p className="text-white font-bold">{pick.odds}</p>
+                                            </div>
+                                          </div>
+                                          <div className="bg-gray-800 rounded-lg p-3 mt-2">
+                                            <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
+                                            <p className="text-white font-bold">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
+                                          </div>
+                                        </div>
                                       </div>
+                                      
+                                      {/* Right side content */}
+                                      <div style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: '30%',
+                                        borderLeft: '2.25px solid #bfa142', /* Gold border */
+                                        padding: '1.5rem 1rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)',
+                                        boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)',
+                                        borderRadius: '0 16px 16px 0',
+                                        clipPath: 'inset(0px 0px 0px -20px)',
+                                        zIndex: 2,
+                                        transform: 'translateZ(10px)',
+                                      }}>
+                                        {/* Game time section */}
+                                        <div style={{ 
+                                          textAlign: 'center',
+                                          marginBottom: '1rem'
+                                        }}>
+                                          <div style={{ 
+                                            fontSize: '0.75rem', 
+                                            opacity: 0.6, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.25rem'
+                                          }}>
+                                            Game Time
+                                          </div>
+                                          <div style={{ 
+                                            fontSize: '1.125rem', 
+                                            fontWeight: 600,
+                                            opacity: 0.9
+                                          }}>
+                                            {pick.time || '7:30 PM ET'}
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Coin Image centered */}
+                                        <div style={{
+                                          display: 'flex',
+                                          justifyContent: 'center',
+                                          marginTop: 'auto',
+                                          marginBottom: 'auto',
+                                          background: 'transparent'
+                                        }}>
+                                          <img 
+                                            src="/coin2.png" 
+                                            alt="Gary A.I."
+                                            style={{
+                                              width: 120,
+                                              height: 120,
+                                              objectFit: 'contain',
+                                              opacity: 1,
+                                              background: 'transparent'
+                                            }}
+                                          />
+                                        </div>
+                                        
+                                        {/* View Analysis button */}
+                                        <button style={{
+                                          marginTop: '1rem',
+                                          fontSize: '0.75rem',
+                                          padding: '0.5rem 1rem',
+                                          background: 'rgba(191, 161, 66, 0.15)',
+                                          color: '#bfa142',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor: 'pointer',
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em',
+                                          fontWeight: 500,
+                                          transition: 'all 0.2s ease'
+                                        }}>
+                                          View Analysis
+                                        </button>
+                                      </div>
+                                      
+                                      {/* Subtle gradient overlay for depth */}
+                                      <div style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
+                                        opacity: 0.5,
+                                        pointerEvents: 'none'
+                                      }}></div>
                                     </div>
                                     
                                     {/* BACK OF CARD */}
@@ -406,34 +586,90 @@ export default function GaryProps() {
                                       padding: '24px',
                                       transform: 'rotateY(180deg)',
                                       overflow: 'auto',
+                                      fontFamily: 'Inter, system-ui, sans-serif',
+                                      color: '#ffffff',
                                     }}>
-                                      <div className="mb-4">
-                                        <h3 className="text-[#b8953f] text-lg font-bold mb-3">Analysis</h3>
-                                        <p className="text-white text-sm">{pick.rationale || 'No analysis available'}</p>
-                                      </div>
-                                      
-                                      <div className="mb-4">
-                                        <h3 className="text-[#b8953f] text-lg font-bold mb-2">Pick Details</h3>
-                                        <div className="bg-gray-800 rounded-lg p-3 mb-2">
-                                          <p className="text-gray-400 text-xs mb-1">Matchup</p>
-                                          <p className="text-white text-sm">{pick.matchup}</p>
+                                      <div style={{ 
+                                        color: '#fff',
+                                        width: '100%',
+                                        height: '100%',
+                                        overflowY: 'auto',
+                                      }}>
+                                        {/* Rationale Heading */}
+                                        <div style={{ 
+                                          fontSize: '0.8rem', 
+                                          opacity: 0.6, 
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em', 
+                                          marginBottom: '0.75rem'
+                                        }}>
+                                          Rationale
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <div className="bg-gray-800 rounded-lg p-2">
-                                            <p className="text-gray-400 text-xs mb-1">Home</p>
-                                            <p className="text-white text-sm">{pick.homeTeam}</p>
+                                        
+                                        {/* Display the rationale */}
+                                        <p style={{ margin: 0, fontWeight: 400, opacity: 0.9, marginBottom: '1.5rem' }}>
+                                          {pick.rationale || 'Analysis not available.'}
+                                        </p>
+                                        
+                                        {/* Pick Details */}
+                                        <div style={{ marginBottom: '1.5rem' }}>
+                                          <div style={{ 
+                                            fontSize: '0.8rem', 
+                                            opacity: 0.6, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.75rem'
+                                          }}>
+                                            Pick Details
                                           </div>
-                                          <div className="bg-gray-800 rounded-lg p-2">
-                                            <p className="text-gray-400 text-xs mb-1">Away</p>
-                                            <p className="text-white text-sm">{pick.awayTeam}</p>
+                                          
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-gray-800 rounded-lg p-3">
+                                              <p className="text-gray-400 text-xs mb-1">Line</p>
+                                              <p className="text-white text-sm font-medium">{pick.line}</p>
+                                            </div>
+                                            <div className="bg-gray-800 rounded-lg p-3">
+                                              <p className="text-gray-400 text-xs mb-1">Odds</p>
+                                              <p className="text-white text-sm font-medium">{pick.odds}</p>
+                                            </div>
+                                            <div className="bg-gray-800 rounded-lg p-3">
+                                              <p className="text-gray-400 text-xs mb-1">EV</p>
+                                              <p className="text-white text-sm font-medium">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
+                                            </div>
+                                            <div className="bg-gray-800 rounded-lg p-3">
+                                              <p className="text-gray-400 text-xs mb-1">League</p>
+                                              <p className="text-white text-sm font-medium">{pick.league}</p>
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
-                                      
-                                      <div className="mt-4">
-                                        <h3 className="text-[#b8953f] text-lg font-bold mb-2">Outcome</h3>
-                                        <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
-                                          {pick.result === 'win' ? 'WIN' : pick.result === 'loss' ? 'LOSS' : 'PENDING'}
+                                        
+                                        {/* Game Information */}
+                                        <div>
+                                          <div style={{ 
+                                            fontSize: '0.8rem', 
+                                            opacity: 0.6, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.75rem'
+                                          }}>
+                                            Game Information
+                                          </div>
+                                          
+                                          <div className="bg-gray-800 rounded-lg p-3 mb-3">
+                                            <p className="text-gray-400 text-xs mb-1">Matchup</p>
+                                            <p className="text-white text-sm font-medium">{pick.matchup}</p>
+                                          </div>
+                                          
+                                          <div className="flex justify-between">
+                                            <div className="bg-gray-800 rounded-lg p-3" style={{ width: '48%' }}>
+                                              <p className="text-gray-400 text-xs mb-1">Time</p>
+                                              <p className="text-white text-sm font-medium">{pick.time}</p>
+                                            </div>
+                                            <div className="bg-gray-800 rounded-lg p-3" style={{ width: '48%' }}>
+                                              <p className="text-gray-400 text-xs mb-1">Team</p>
+                                              <p className="text-white text-sm font-medium">{pick.team}</p>
+                                            </div>
+                                          </div>
                                         </div>
                                       </div>
                                     </div>
