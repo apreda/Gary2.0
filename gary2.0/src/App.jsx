@@ -11,6 +11,7 @@ import { Navbar } from "./components/Navbar";
 import Home from "./pages/Home";
 import { MeetGary } from "./pages/MeetGary";
 import RealGaryPicks from "./pages/RealGaryPicks";
+import GaryProps from "./pages/GaryProps";
 import { Pricing } from "./pages/Pricing";
 import { Billfold } from "./pages/Billfold";
 import { Leaderboard } from "./pages/Leaderboard";
@@ -114,6 +115,7 @@ function AppContent() {
               <Route path="/" element={<Home />} />
               <Route path="/meet-gary" element={<MeetGary />} />
               <Route path="/real-gary-picks" element={<RealGaryPicks />} />
+              <Route path="/gary-props" element={<GaryProps />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/billfold" element={<Billfold />} />
               <Route path="/leaderboard" element={<Leaderboard />} />

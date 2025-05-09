@@ -4,6 +4,7 @@ import { resultsCheckerService } from '../services/resultsCheckerService';
 import { perplexityService } from '../services/perplexityService';
 import { openaiService } from '../services/openaiService';
 import { garyPerformanceService } from '../services/garyPerformanceService';
+import { propResultsService } from '../services/propResultsService';
 
 function ResultsAdmin() {
   const [date, setDate] = useState('');
@@ -11,6 +12,9 @@ function ResultsAdmin() {
   const [loading, setLoading] = useState(false);
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(false);
   const [apiKeyStatus, setApiKeyStatus] = useState('loading');
+  const [activeTab, setActiveTab] = useState('game_results');
+  const [propResults, setPropResults] = useState([]);
+  const [propResultsLoading, setPropResultsLoading] = useState(false);
   
   // Set the default date to a recent past date (known to have results) and check API key status
   useEffect(() => {
@@ -48,7 +52,29 @@ function ResultsAdmin() {
     }
   };
   
-  // Manually check results for a specific date
+  // Manually check prop results for a specific date
+  const checkPropResults = async () => {
+    setPropResultsLoading(true);
+    setStatus('Checking player prop results...');
+    
+    try {
+      const results = await propResultsService.checkPropResults(date);
+      
+      if (results.success) {
+        setStatus(`Success: ${results.message}`);
+        setPropResults(results.results || []);
+      } else {
+        setStatus(`Error: ${results.message || 'Could not check prop results'}`);
+      }
+    } catch (error) {
+      setStatus(`Error checking prop results: ${error.message}`);
+      console.error('Error checking prop results:', error);
+    }
+    
+    setPropResultsLoading(false);
+  };
+  
+  // Manually check game results for a specific date
   const checkResults = async () => {
     setLoading(true);
     setStatus('Checking results...');
@@ -122,8 +148,26 @@ function ResultsAdmin() {
     <div className="pt-24 pb-12 px-8 max-w-4xl mx-auto min-h-screen text-white">
       <h1 className="text-3xl font-bold mb-6">Results Admin</h1>
       
-      <div className="bg-gray-800 p-6 rounded-lg mb-8">
-        <h2 className="text-xl font-semibold mb-4">OpenAI API Configuration</h2>
+      {/* Tab Navigation */}
+      <div className="flex mb-6 border-b border-gray-700">
+        <button
+          className={`px-4 py-2 font-medium ${activeTab === 'game_results' ? 'text-[#B8953F] border-b-2 border-[#B8953F]' : 'text-gray-400'}`}
+          onClick={() => setActiveTab('game_results')}
+        >
+          Game Results
+        </button>
+        <button
+          className={`px-4 py-2 font-medium ${activeTab === 'prop_results' ? 'text-[#B8953F] border-b-2 border-[#B8953F]' : 'text-gray-400'}`}
+          onClick={() => setActiveTab('prop_results')}
+        >
+          Player Prop Results
+        </button>
+      </div>
+      
+      {activeTab === 'game_results' ? (
+        <>
+          <div className="bg-gray-800 p-6 rounded-lg mb-8">
+            <h2 className="text-xl font-semibold mb-4">OpenAI API Configuration</h2>
         <div className="mb-4">
           {apiKeyStatus === 'configured' ? (
             <div className="flex items-center">
@@ -153,7 +197,7 @@ function ResultsAdmin() {
       </div>
       
       <div className="bg-gray-800 p-6 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4">Manual Results Check</h2>
+        <h2 className="text-xl font-semibold mb-4">Manual Game Results Check</h2>
         <div className="mb-4">
           <label className="block mb-2">Date (YYYY-MM-DD)</label>
           <input 
@@ -177,6 +221,76 @@ function ResultsAdmin() {
           </div>
         )}
       </div>
+        </>
+      ) : (
+        <>
+          <div className="bg-gray-800 p-6 rounded-lg mb-8">
+            <h2 className="text-xl font-semibold mb-4">Check Player Prop Results</h2>
+            <div className="mb-4">
+              <label className="block mb-2">Date (YYYY-MM-DD)</label>
+              <input 
+                type="date" 
+                value={date} 
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full p-2 bg-gray-700 rounded"
+              />
+            </div>
+            <button 
+              onClick={checkPropResults}
+              disabled={propResultsLoading}
+              className={`px-4 py-2 ${propResultsLoading ? 'bg-gray-600' : 'bg-green-600'} rounded`}
+            >
+              {propResultsLoading ? 'Checking...' : 'Check Prop Results'}
+            </button>
+            
+            {status && (
+              <div className="mt-4 p-3 bg-gray-700 rounded">
+                {status}
+              </div>
+            )}
+          </div>
+          
+          {/* Display Prop Results */}
+          {propResults && propResults.length > 0 && (
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h2 className="text-xl font-semibold mb-4">Player Prop Results</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-gray-900 rounded-lg">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-2 text-left">Player</th>
+                      <th className="px-4 py-2 text-left">Prop</th>
+                      <th className="px-4 py-2 text-left">Line</th>
+                      <th className="px-4 py-2 text-left">Direction</th>
+                      <th className="px-4 py-2 text-left">Actual</th>
+                      <th className="px-4 py-2 text-left">Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {propResults.map((result, index) => (
+                      <tr key={index} className={index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-900'}>
+                        <td className="px-4 py-2">{result.player_name}</td>
+                        <td className="px-4 py-2">{result.prop_type}</td>
+                        <td className="px-4 py-2">{result.prop_line}</td>
+                        <td className="px-4 py-2">{result.pick_direction}</td>
+                        <td className="px-4 py-2">{result.actual_result || 'N/A'}</td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${result.result_status === 'won' ? 'bg-green-500/20 text-green-400' : 
+                            result.result_status === 'lost' ? 'bg-red-500/20 text-red-400' : 
+                            result.result_status === 'push' ? 'bg-yellow-500/20 text-yellow-400' : 
+                            'bg-gray-500/20 text-gray-400'}`}>
+                            {result.result_status.toUpperCase()}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

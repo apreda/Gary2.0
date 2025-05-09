@@ -17,6 +17,7 @@ export function Navbar() {
   const navItems = [
     { path: '/', label: 'Home' },
     { path: '/real-gary-picks', label: 'Gary\'s Picks' },
+    { path: '/gary-props', label: 'Gary\'s Props' },
     { path: '/billfold', label: 'Billfold' },
     { path: '/leaderboard', label: 'Leaderboard' },
     { path: '/pricing', label: 'Pricing' },
