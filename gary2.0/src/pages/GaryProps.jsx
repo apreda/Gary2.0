@@ -351,7 +351,7 @@ export default function GaryProps() {
                                         width: '100%',
                                         height: '100%',
                                         backfaceVisibility: 'hidden',
-                                        background: 'linear-gradient(135deg, rgba(20, 20, 24, 0.98) 0%, rgba(30, 30, 35, 0.95) 100%)',
+                                        background: 'linear-gradient(135deg, rgba(20, 20, 24, 0.735) 0%, rgba(30, 30, 35, 0.7125) 100%)',
                                         borderRadius: '16px',
                                         fontFamily: 'Inter, system-ui, sans-serif',
                                         overflow: 'hidden',
@@ -468,7 +468,7 @@ export default function GaryProps() {
                                              marginTop: '0.3rem'
                                            }}>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.9)',
+                                                background: 'rgba(25, 23, 17, 0.675)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
@@ -478,7 +478,7 @@ export default function GaryProps() {
                                                 <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.9)',
+                                                background: 'rgba(25, 23, 17, 0.675)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
@@ -488,7 +488,7 @@ export default function GaryProps() {
                                                 <p style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
                                               </div>
                                               <div style={{
-                                                background: 'rgba(25, 23, 17, 0.9)',
+                                                background: 'rgba(25, 23, 17, 0.675)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
                                                 padding: '0.5rem',
