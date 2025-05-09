@@ -533,25 +533,25 @@ function Home() {
                 </div>
                 
                 {/* Shiny banner */}
-                <div className="text-black font-medium px-5 py-1.5 rounded-full flex items-center"
+                <div className="font-medium px-5 py-1.5 rounded-full flex items-center"
                      style={{
-                       background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
+                       background: 'linear-gradient(135deg, #d4af37 0%, #b8953f 50%, #9c7c33 100%)',
                        color: '#111',
-                       textShadow: '0 1px 1px rgba(255,255,255,0.3)',
-                       boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
-                       border: '1px solid rgba(184, 149, 63, 0.5)',
-                       fontSize: '0.995rem', /* Increased by 7% from 0.93rem */
-                       transform: 'scale(1.09)', /* Increased by 7% from 1.02 */
+                       textShadow: '0 1px 1px rgba(0,0,0,0.2)',
+                       boxShadow: '0 2px 4px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.3)',
+                       border: '1px solid #b8953f',
+                       fontSize: '0.995rem',
+                       transform: 'scale(1.09)',
                        transformOrigin: 'center',
                      }}>
-                  <span className="mr-2 font-bold uppercase">NEW</span>
-                  <span>Introducing Gary AI: Intelligent Sports Bets</span>
+                  <span className="mr-2 font-bold uppercase text-black">NEW</span>
+                  <span className="text-black">Introducing Gary AI: Intelligent Sports Bets</span>
                 </div>
               </div>
 
               {/* Main headline - Simple and impactful */}
               <div className="relative mb-6 w-full">
-                <h1 className="text-center w-full" style={{ fontSize: "clamp(4.025rem, 6.9vw, 5.75rem)", lineHeight: "1.1", letterSpacing: "-0.02em" }}>
+                <h1 className="text-center w-full" style={{ fontSize: "clamp(3.62rem, 6.21vw, 5.175rem)", lineHeight: "1.1", letterSpacing: "-0.02em" }}>
                   <div className="max-w-[920px] mx-auto">
                     <span className="text-white font-bold">Make </span>
                     <span className="italic font-normal text-[#B8953F]">Smarter</span>
