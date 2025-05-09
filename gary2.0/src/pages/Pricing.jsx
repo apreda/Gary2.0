@@ -81,6 +81,10 @@ export function Pricing() {
                 </li>
                 <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
                   <span className="mr-2" style={{color: 'black'}}>•</span>
+                  <span style={{color: 'black'}}>ACCESS TO DAILY PLAYER PROP PICKS</span>
+                </li>
+                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
+                  <span className="mr-2" style={{color: 'black'}}>•</span>
                   <span style={{color: 'black'}}>EARLY ACCESS TO ADVANCE MODEL (Coming Soon)</span>
                 </li>
               </ul>
