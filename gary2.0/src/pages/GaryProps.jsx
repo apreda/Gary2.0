@@ -274,17 +274,31 @@ export default function GaryProps() {
                       </div>
                     </div>
                     
-                    <h1 className="text-4xl font-bold text-center mb-2" style={{ color: '#b8953f' }}>
-                      DAILY PLAYER PROP PICKS
+                    <h1 className="text-5xl font-bold text-center mb-3" style={{ color: '#ffffff' }}>
+                      Gary's Props
                     </h1>
-                    <p className="text-center text-gray-400 mb-4 max-w-2xl mx-auto">
-                      Currently available for MLB and NBA games. All picks are analyzed for positive Expected Value (EV) using advanced statistical models and real-time odds data.
+                    <p className="text-center text-gray-400 mb-5 max-w-2xl mx-auto">
+                      High-upside player prop recommendations with +EV odds
                     </p>
                     
                     {/* BETA Banner */}
+                    <div className="text-center mb-6 bg-[#1a1a1a] border border-[#b8953f]/30 rounded-lg p-4 max-w-xl mx-auto">
+                      <div className="flex items-center justify-center gap-3 mb-2">
+                        <span className="inline-block px-2 py-1 bg-[#b8953f] text-black font-bold rounded text-xs">
+                          BETA
+                        </span>
+                        <span className="text-white font-medium text-sm">
+                          This feature is in testing mode.
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        Player props picks are experimental and may not be as accurate as our regular picks.
+                      </p>
+                    </div>
+                    
                     <div className="text-center mb-6">
-                      <span className="inline-block px-3 py-1 bg-yellow-600 text-black font-bold rounded text-sm">
-                        BETA: This feature is in testing mode. Feedback welcome!
+                      <span className="inline-block px-4 py-2 border border-[#b8953f]/50 rounded-full text-[#b8953f] text-sm">
+                        Currently available for NBA & MLB only - NFL coming when season starts
                       </span>
                     </div>
                     
