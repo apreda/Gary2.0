@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { bankrollService } from './bankrollService';
 import { oddsService } from './oddsService';
+import { userPickResultsService } from './userPickResultsService';
 import axios from 'axios';
 
 /**
@@ -220,10 +221,25 @@ const gameResultsService = {
         }
       }
       
+      // Check if there are no updates to process
+      if (updatedWagers.length === 0) {
+        return { success: true, message: 'No updates needed', updates: 0 };
+      }
+
+      // After updating wagers, update user stats for any users who bet on these picks
+      try {
+        console.log('Checking for user pick results to update...');
+        const userResults = await userPickResultsService.checkAndUpdateResults();
+        console.log('User pick results updated:', userResults);
+      } catch (userStatsError) {
+        console.error('Error updating user stats:', userStatsError);
+        // Continue execution even if user stats update fails
+      }
+
       return { 
         success: true, 
-        updated: updatedWagers.length,
-        wagers: updatedWagers
+        message: `Updated ${updatedWagers.length} wagers`, 
+        updates: updatedWagers.length 
       };
     } catch (error) {
       console.error('Unexpected error in updateGameResults:', error);
