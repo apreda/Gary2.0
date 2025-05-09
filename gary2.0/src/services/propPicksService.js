@@ -583,17 +583,41 @@ async function generatePlayerPropPicks(gameData) {
       return [];
     }
     
-    // Filter for high confidence picks only (0.7+)
-    const highConfidencePicks = playerProps.filter(prop => prop.confidence >= 0.7);
+    // Filter for picks with at least 51% confidence (lowered threshold)
+    const highConfidencePicks = playerProps.filter(prop => prop.confidence >= 0.51);
     
-    // Add additional metadata to each pick
-    return highConfidencePicks.map(prop => ({
-      ...prop,
-      league: gameData.league,
-      matchup: gameData.matchup,
-      date: new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString()
-    }));
+    // Add additional metadata to each pick and remove fields not in schema
+    return highConfidencePicks.map(prop => {
+      // Extract only the fields that exist in our database schema
+      const {
+        player_name,
+        team,
+        prop_type,
+        prop_line,
+        pick_direction,
+        odds,
+        confidence,
+        rationale,
+        stats
+      } = prop;
+      
+      // Return only the fields that exist in our database schema
+      return {
+        player_name,
+        team,
+        prop_type,
+        prop_line,
+        pick_direction,
+        odds,
+        confidence,
+        rationale,
+        stats: typeof stats === 'object' ? JSON.stringify(stats) : stats,
+        league: gameData.league,
+        matchup: gameData.matchup,
+        date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString()
+      };
+    });
     
   } catch (error) {
     console.error('Error generating player prop picks:', error);

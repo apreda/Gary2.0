@@ -284,11 +284,20 @@ function GaryProps() {
           </div>
         </div>
         
+        {/* Header Section */}
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold mb-2 text-white">Gary's Props</h1>
+          <p className="text-gray-400 mb-2">High-upside player prop recommendations with +EV odds</p>
+          <div className="inline-block py-1 px-3 rounded-full text-sm font-semibold" style={{ background: 'rgba(184, 149, 63, 0.15)', border: '1px solid #B8953F', color: '#B8953F' }}>
+            Currently available for NBA & MLB only · NFL coming when season starts
+          </div>
+        </div>
+        
         {/* Page Title */}
         <div className="text-center mb-10">
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">Gary's Props</h1>
           <p className="text-lg text-gray-300 max-w-xl mx-auto">
-            AI-powered player prop picks across NBA, MLB, and NHL
+            AI-powered player prop picks across NBA & MLB
           </p>
         </div>
         
