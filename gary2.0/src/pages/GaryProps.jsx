@@ -32,6 +32,7 @@ function GaryProps() {
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [status, setStatus] = useState('');
   const [userDecisions, setUserDecisions] = useState({});
   // State to track which picks are being processed to prevent double-clicking
   const [processingDecisions, setProcessingDecisions] = useState({});
@@ -112,6 +113,28 @@ function GaryProps() {
       if (activeTab === 'today') {
         // Get today's prop picks
         picksData = await propPicksService.getTodayPropPicks();
+        
+        // If no picks found for today, generate them
+        if (!picksData || picksData.length === 0) {
+          console.log('No prop picks found for today, generating new ones...');
+          setStatus('Generating today\'s player prop picks... This may take a minute.');
+          
+          try {
+            // Generate new prop picks
+            const generationResult = await propPicksService.generateDailyPropPicks();
+            
+            if (generationResult.success && generationResult.count > 0) {
+              console.log(`Successfully generated ${generationResult.count} new prop picks`);
+              
+              // Fetch the newly generated picks
+              picksData = await propPicksService.getTodayPropPicks();
+            } else {
+              console.log('No prop picks could be generated at this time');
+            }
+          } catch (genError) {
+            console.error('Error generating prop picks:', genError);
+          }
+        }
       } else {
         // Get yesterday's prop picks
         const yesterday = new Date(now);
@@ -320,7 +343,21 @@ function GaryProps() {
               
               {activeTab === 'today' && (
                 <div>
-                  {picks.length === 0 ? (
+                  {status && (
+                    <div className="text-center py-6 max-w-lg mx-auto">
+                      <div className="animate-pulse">
+                        <img src={gary1} alt="Gary" className="w-20 h-20 mx-auto mb-4 opacity-80" />
+                        <h3 className="text-lg text-[#B8953F] font-semibold mb-2">{status}</h3>
+                        <div className="mt-4 flex justify-center space-x-2">
+                          <div className="w-2 h-2 bg-[#B8953F] rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-[#B8953F] rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                          <div className="w-2 h-2 bg-[#B8953F] rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+              
+              {picks.length === 0 && !status ? (
                     <div className="text-center py-12 max-w-lg mx-auto">
                       <img src={gary1} alt="Gary" className="w-24 h-24 mx-auto mb-6 opacity-70" />
                       <h3 className="text-xl text-white font-semibold mb-2">No Prop Picks Today</h3>
