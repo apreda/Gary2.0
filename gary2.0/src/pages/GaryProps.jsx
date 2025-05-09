@@ -132,13 +132,31 @@ export default function GaryProps() {
     setError(null);
     
     try {
-      // Simply get today's prop picks
+      // Get today's prop picks
       const data = await propPicksService.getTodayPropPicks();
       
-      // Debug log the picks we got
-      console.log(`Loaded ${data?.length || 0} prop picks`);
+      // Process the data - extract picks from the nested structure
+      let processedPicks = [];
       
-      setPicks(data || []);
+      if (data && data.length > 0) {
+        // For each prop_picks record
+        data.forEach(record => {
+          // If the record has a picks array, extract and process each pick
+          if (record.picks && Array.isArray(record.picks)) {
+            // Add id to each pick from the record for React keys
+            const picksWithIds = record.picks.map((pick, index) => ({
+              ...pick,
+              id: `${record.id}-${index}`,
+              date: record.date,
+              created_at: record.created_at
+            }));
+            processedPicks = [...processedPicks, ...picksWithIds];
+          }
+        });
+      }
+      
+      console.log(`Processed ${processedPicks.length} individual prop picks`);
+      setPicks(processedPicks);
       setLoading(false);
     } catch (err) {
       console.error('Error in loadPicks:', err);
@@ -338,30 +356,35 @@ export default function GaryProps() {
                                       flexDirection: 'column',
                                     }}>
                                       <div className="flex-1 flex flex-col">
-                                        <div className="mb-4">
-                                          <span className="text-[#b8953f] text-sm font-medium">{pick.league}</span>
-                                          <div className="mt-2">
-                                            <p className="text-gray-400 text-xs mb-1">Gary's Pick</p>
-                                            <h3 className="text-white text-xl font-bold">{pick.pick}</h3>
-                                          </div>
-                                          <p className="text-gray-400 text-sm mt-2">{pick.matchup} • {pick.time}</p>
-                                        </div>
-                                        
-                                        <div className="mt-auto">
-                                          <div className="grid grid-cols-2 gap-4 mb-3">
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">Line</p>
-                                              <p className="text-white font-bold">{pick.line}</p>
-                                            </div>
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">Odds</p>
-                                              <p className="text-white font-bold">{pick.odds}</p>
-                                            </div>
-                                          </div>
-                                          <div className="bg-gray-800 rounded-lg p-3">
-                                            <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
-                                            <p className="text-white font-bold">{pick.ev ? `+${pick.ev}%` : 'N/A'}</p>
-                                          </div>
+                                         <div className="mb-4">
+                                           <span className="text-[#b8953f] text-sm font-medium">{pick.league}</span>
+                                           <div className="mt-2">
+                                             <p className="text-gray-400 text-xs mb-1">Gary's Pick</p>
+                                             <h3 className="text-white text-lg font-bold">{pick.pick}</h3>
+                                           </div>
+                                           <div className="flex items-center mt-2">
+                                             <span className="text-gray-400 text-sm">{pick.team}</span>
+                                             <span className="mx-2 text-gray-600">•</span>
+                                             <span className="text-gray-400 text-sm">{pick.time}</span>
+                                           </div>
+                                           <p className="text-gray-400 text-sm mt-1">{pick.matchup}</p>
+                                         </div>
+                                         
+                                         <div className="mt-auto">
+                                           <div className="grid grid-cols-2 gap-4 mb-3">
+                                             <div className="bg-gray-800 rounded-lg p-3">
+                                               <p className="text-gray-400 text-xs mb-1">Line</p>
+                                               <p className="text-white font-bold">{pick.line}</p>
+                                             </div>
+                                             <div className="bg-gray-800 rounded-lg p-3">
+                                               <p className="text-gray-400 text-xs mb-1">Odds</p>
+                                               <p className="text-white font-bold">{pick.odds}</p>
+                                             </div>
+                                           </div>
+                                           <div className="bg-gray-800 rounded-lg p-3">
+                                             <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
+                                             <p className="text-white font-bold">{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p>
+                                           </div>
                                           
                                           <div className="mt-4">
                                             <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${pick.result === 'win' ? 'bg-green-900 text-green-300' : pick.result === 'loss' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'}`}>
@@ -387,6 +410,24 @@ export default function GaryProps() {
                                       <div className="mb-4">
                                         <h3 className="text-[#b8953f] text-lg font-bold mb-3">Analysis</h3>
                                         <p className="text-white text-sm">{pick.rationale || 'No analysis available'}</p>
+                                      </div>
+                                      
+                                      <div className="mb-4">
+                                        <h3 className="text-[#b8953f] text-lg font-bold mb-2">Pick Details</h3>
+                                        <div className="bg-gray-800 rounded-lg p-3 mb-2">
+                                          <p className="text-gray-400 text-xs mb-1">Matchup</p>
+                                          <p className="text-white text-sm">{pick.matchup}</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div className="bg-gray-800 rounded-lg p-2">
+                                            <p className="text-gray-400 text-xs mb-1">Home</p>
+                                            <p className="text-white text-sm">{pick.homeTeam}</p>
+                                          </div>
+                                          <div className="bg-gray-800 rounded-lg p-2">
+                                            <p className="text-gray-400 text-xs mb-1">Away</p>
+                                            <p className="text-white text-sm">{pick.awayTeam}</p>
+                                          </div>
+                                        </div>
                                       </div>
                                       
                                       <div className="mt-4">
