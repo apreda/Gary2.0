@@ -6,8 +6,8 @@ import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService';
 import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
-import { sportsDbApiService } from './sportsDbApiService';
 import { perplexityService } from './perplexityService';
+import { ballDontLieService } from './ballDontLieService';
 
 const propPicksService = {
   /**
@@ -17,8 +17,8 @@ const propPicksService = {
     try {
       console.log('Generating daily player prop picks with sequential processing');
       
-      // Get active sports and their games
-      const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl'];
+      // Get active sports and their games (only NBA and MLB supported for player props)
+      const sportsToAnalyze = ['basketball_nba', 'baseball_mlb'];
       const allPropPicks = [];
       
       // Process one sport at a time to avoid overwhelming OpenAI API
@@ -56,49 +56,99 @@ const propPicksService = {
                 requestType: 'player_props' // Signal to OpenAI we want player props
               };
               
-              // Fetch player stats from SportsDB API
-              const leagueIdMap = {
-                'NBA': '4387',
-                'MLB': '4424',
-                'NHL': '4380'
-              };
-              
+              // Fetch player stats from Ball Don't Lie API
               try {
-                // Get teams and players data
-                const leagueId = leagueIdMap[sportName];
-                if (leagueId) {
-                  console.log(`Fetching team and player data for ${sportName}...`);
+                console.log(`Fetching team and player data for ${sportName} using Ball Don't Lie API...`);
+                
+                // Look up teams based on sport
+                let homeTeamData = null;
+                let awayTeamData = null;
+                let homeTeamPlayers = [];
+                let awayTeamPlayers = [];
+                
+                if (sportName === 'NBA') {
+                  // Get NBA team and player data
+                  homeTeamData = await ballDontLieService.lookupNbaTeam(game.home_team);
+                  awayTeamData = await ballDontLieService.lookupNbaTeam(game.away_team);
                   
-                  // First, look up team IDs
-                  const homeTeamData = await sportsDbApiService.lookupTeam(game.home_team, leagueId);
-                  const awayTeamData = await sportsDbApiService.lookupTeam(game.away_team, leagueId);
+                  if (homeTeamData) {
+                    homeTeamPlayers = await ballDontLieService.getNbaTeamPlayers(homeTeamData.id);
+                    console.log(`Found ${homeTeamPlayers.length} NBA players for ${homeTeamData.full_name}`);
+                  }
                   
-                  if (homeTeamData && awayTeamData) {
-                    // Then get player stats for both teams
-                    const homeTeamId = homeTeamData.idTeam;
-                    const awayTeamId = awayTeamData.idTeam;
-                    
-                    const homeTeamPlayers = await sportsDbApiService.getTeamPlayers(homeTeamId);
-                    const awayTeamPlayers = await sportsDbApiService.getTeamPlayers(awayTeamId);
-                    
-                    // Add player stats to game data
-                    gameData.playerStats = {
-                      homeTeam: {
-                        players: homeTeamPlayers || [],
-                        teamId: homeTeamId
-                      },
-                      awayTeam: {
-                        players: awayTeamPlayers || [],
-                        teamId: awayTeamId
-                      }
-                    };
-                    
-                    console.log(`Found ${homeTeamPlayers?.length || 0} home team players and ${awayTeamPlayers?.length || 0} away team players`);
+                  if (awayTeamData) {
+                    awayTeamPlayers = await ballDontLieService.getNbaTeamPlayers(awayTeamData.id);
+                    console.log(`Found ${awayTeamPlayers.length} NBA players for ${awayTeamData.full_name}`);
+                  }
+                  
+                } else if (sportName === 'MLB') {
+                  // Get MLB team and player data
+                  homeTeamData = await ballDontLieService.lookupMlbTeam(game.home_team);
+                  awayTeamData = await ballDontLieService.lookupMlbTeam(game.away_team);
+                  
+                  if (homeTeamData) {
+                    homeTeamPlayers = await ballDontLieService.getMlbTeamPlayers(homeTeamData.id);
+                    console.log(`Found ${homeTeamPlayers.length} MLB players for ${homeTeamData.display_name}`);
+                  }
+                  
+                  if (awayTeamData) {
+                    awayTeamPlayers = await ballDontLieService.getMlbTeamPlayers(awayTeamData.id);
+                    console.log(`Found ${awayTeamPlayers.length} MLB players for ${awayTeamData.display_name}`);
                   }
                 }
+                
+                // Enrich player data with season stats for key players
+                const enrichedHomePlayers = await Promise.all(
+                  homeTeamPlayers.slice(0, 10).map(async (player) => {
+                    try {
+                      let stats = null;
+                      if (sportName === 'NBA') {
+                        stats = await ballDontLieService.getNbaPlayerSeasonStats(player.id);
+                      } else if (sportName === 'MLB') {
+                        stats = await ballDontLieService.getMlbPlayerSeasonStats(player.id);
+                      }
+                      return { ...player, season_stats: stats };
+                    } catch (err) {
+                      console.warn(`Error fetching stats for player ${player.id}:`, err.message);
+                      return player;
+                    }
+                  })
+                );
+                
+                const enrichedAwayPlayers = await Promise.all(
+                  awayTeamPlayers.slice(0, 10).map(async (player) => {
+                    try {
+                      let stats = null;
+                      if (sportName === 'NBA') {
+                        stats = await ballDontLieService.getNbaPlayerSeasonStats(player.id);
+                      } else if (sportName === 'MLB') {
+                        stats = await ballDontLieService.getMlbPlayerSeasonStats(player.id);
+                      }
+                      return { ...player, season_stats: stats };
+                    } catch (err) {
+                      console.warn(`Error fetching stats for player ${player.id}:`, err.message);
+                      return player;
+                    }
+                  })
+                );
+                
+                // Add player stats to game data
+                gameData.playerStats = {
+                  homeTeam: {
+                    players: enrichedHomePlayers || [],
+                    team: homeTeamData
+                  },
+                  awayTeam: {
+                    players: enrichedAwayPlayers || [],
+                    team: awayTeamData
+                  }
+                };
+                
+                console.log(`Loaded ${enrichedHomePlayers.length} home team players and ${enrichedAwayPlayers.length} away team players with stats`);
+                
               } catch (statsError) {
-                console.warn(`Error fetching player stats from SportsDB: ${statsError.message}`);
-                // Continue without SportsDB player stats if there's an error
+                console.warn(`Error fetching player stats from Ball Don't Lie API: ${statsError.message}`);
+                // Continue without Ball Don't Lie stats if there's an error
               }
               
               // LAYER 2: Fetch recent player stats from Perplexity (web search)
@@ -136,16 +186,21 @@ const propPicksService = {
                     // Query based on league and stat type
                     let query = '';
                     if (gameData.league === 'NBA') {
-                      query = `${player} recent stats points rebounds assists last 5 games`;
+                      query = `${player} recent stats points rebounds assists last 5 games NBA`;
                     } else if (gameData.league === 'MLB') {
-                      query = `${player} recent batting stats home runs hits rbi last 5 games`;
-                    } else if (gameData.league === 'NHL') {
-                      query = `${player} recent stats goals assists points shots last 5 games`;
+                      query = `${player} recent batting stats home runs hits rbi last 5 games MLB`;
                     }
                     
-                    const stats = await perplexityService.query(query);
-                    perplexityStats[player] = stats;
-                    console.log(`Got recent stats for ${player} from Perplexity`);
+                    // Use the Perplexity API to get real-time player stats
+                    console.log(`Fetching real-time stats for ${player} via Perplexity...`);
+                    const stats = await perplexityService.fetchRealTimeInfo(query, {
+                      model: 'sonar',
+                      temperature: 0.3,
+                      maxTokens: 400
+                    });
+                    
+                    perplexityStats[player] = stats || `No recent data found for ${player}`;
+                    console.log(`Got stats for ${player} (${stats ? stats.length : 0} chars)`);
                     
                     // Add small delay to avoid rate limiting
                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -259,9 +314,182 @@ async function generatePlayerPropPicks(gameData) {
   try {
     console.log(`Generating player prop picks for ${gameData.matchup}`);
     
-    // Create a prompt that specifically asks for high-odds player props based on statistical analysis
+    // Prepare prompt with game data and player stats
+    let playerStatsSection = '';
+    
+    if (gameData.playerStats) {
+      playerStatsSection = `PLAYER STATISTICS (from Ball Don't Lie API):\n`;
+      
+      // Format home team players with their key stats
+      playerStatsSection += `HOME TEAM (${gameData.homeTeam}):\n`;
+      gameData.playerStats.homeTeam.players.slice(0, 5).forEach(player => {
+        try {
+          // Different formatting for NBA vs MLB
+          if (gameData.league === 'NBA') {
+            const stats = player.season_stats?.stats || {};
+            const injury = player.season_stats?.injury;
+            
+            playerStatsSection += `- ${player.first_name} ${player.last_name} (${player.position || 'N/A'})`;
+            
+            // Add injury information if available
+            if (injury) {
+              playerStatsSection += ` [INJURY: ${injury.status} - ${injury.type || ''} ${injury.detail || ''} ${injury.side || ''}]`;
+            }
+            
+            playerStatsSection += `:\n`;
+            
+            if (Object.keys(stats).length > 0) {
+              // Basic stats
+              playerStatsSection += `  * Basic: ${stats.pts || 'N/A'} PPG, ${stats.reb || 'N/A'} RPG, ${stats.ast || 'N/A'} APG, ${stats.stl || 'N/A'} SPG, ${stats.blk || 'N/A'} BPG\n`;
+              
+              // Shooting stats
+              playerStatsSection += `  * Shooting: ${stats.fg_pct ? (stats.fg_pct * 100).toFixed(1) + '%' : 'N/A'} FG%, `;
+              playerStatsSection += `${stats.fg3_pct ? (stats.fg3_pct * 100).toFixed(1) + '%' : 'N/A'} 3P%, `;
+              playerStatsSection += `${stats.ft_pct ? (stats.ft_pct * 100).toFixed(1) + '%' : 'N/A'} FT%\n`;
+              
+              // Advanced stats if available
+              if (stats.general_advanced) {
+                playerStatsSection += `  * Advanced: ${stats.ts_pct ? (stats.ts_pct * 100).toFixed(1) + '%' : 'N/A'} TS%, `;
+                playerStatsSection += `${stats.usg_pct ? (stats.usg_pct * 100).toFixed(1) + '%' : 'N/A'} USG%, `;
+                playerStatsSection += `${stats.off_rtg || 'N/A'} ORTG, ${stats.def_rtg || 'N/A'} DRTG\n`;
+              }
+              
+              // Recent trends if available
+              if (stats.general_scoring) {
+                playerStatsSection += `  * Scoring: ${stats.general_scoring.pts_per_36 || 'N/A'} PTS/36, ${stats.general_scoring.pts_per_100_poss || 'N/A'} PTS/100 POSS\n`;
+              }
+            } else {
+              playerStatsSection += `  * No detailed season averages available\n`;
+            }
+          } else if (gameData.league === 'MLB') {
+            playerStatsSection += `- ${player.first_name} ${player.last_name} (${player.position || 'N/A'})`;
+            
+            // Add injury information if available
+            const injury = player.season_stats?.injury;
+            if (injury) {
+              playerStatsSection += ` [INJURY: ${injury.status} - ${injury.type || ''} ${injury.detail || ''} ${injury.side || ''}]`;
+            }
+            
+            playerStatsSection += `:\n`;
+            
+            if (player.season_stats && player.season_stats.stats) {
+              const stats = player.season_stats.stats;
+              const isPitcher = stats.player_info?.is_pitcher;
+              
+              if (isPitcher) {
+                // Pitching stats
+                playerStatsSection += `  * Record: ${stats.pitching.wins || '0'}-${stats.pitching.losses || '0'}, ${stats.pitching.era || 'N/A'} ERA\n`;
+                playerStatsSection += `  * Pitching: ${stats.pitching.innings_pitched || 'N/A'} IP, ${stats.pitching.strikeouts || 'N/A'} K, ${stats.pitching.whip || 'N/A'} WHIP\n`;
+                playerStatsSection += `  * K Rate: ${stats.pitching.k_per_9 || 'N/A'} K/9, ${stats.pitching.war || 'N/A'} WAR\n`;
+              } else {
+                // Batting stats
+                playerStatsSection += `  * Batting: ${stats.batting.batting_average || 'N/A'} AVG, ${stats.batting.on_base_percentage || 'N/A'} OBP, ${stats.batting.slugging || 'N/A'} SLG\n`;
+                playerStatsSection += `  * Power: ${stats.batting.home_runs || '0'} HR, ${stats.batting.rbi || '0'} RBI, ${stats.batting.doubles || '0'} 2B, ${stats.batting.triples || '0'} 3B\n`;
+                playerStatsSection += `  * Production: ${stats.batting.ops || 'N/A'} OPS, ${stats.batting.war || 'N/A'} WAR, ${stats.batting.stolen_bases || '0'} SB\n`;
+              }
+            } else {
+              playerStatsSection += `  * No detailed season stats available\n`;
+            }
+          }
+        } catch (error) {
+          console.warn(`Error formatting player stats for ${player.first_name} ${player.last_name}:`, error.message);
+          playerStatsSection += `- ${player.first_name} ${player.last_name}: Stats formatting error\n`;
+        }
+      });
+      
+      // Format away team players with their key stats
+      playerStatsSection += `\nAWAY TEAM (${gameData.awayTeam}):\n`;
+      gameData.playerStats.awayTeam.players.slice(0, 5).forEach(player => {
+        try {
+          // Different formatting for NBA vs MLB
+          if (gameData.league === 'NBA') {
+            const stats = player.season_stats?.stats || {};
+            const injury = player.season_stats?.injury;
+            
+            playerStatsSection += `- ${player.first_name} ${player.last_name} (${player.position || 'N/A'})`;
+            
+            // Add injury information if available
+            if (injury) {
+              playerStatsSection += ` [INJURY: ${injury.status} - ${injury.type || ''} ${injury.detail || ''} ${injury.side || ''}]`;
+            }
+            
+            playerStatsSection += `:\n`;
+            
+            if (Object.keys(stats).length > 0) {
+              // Basic stats
+              playerStatsSection += `  * Basic: ${stats.pts || 'N/A'} PPG, ${stats.reb || 'N/A'} RPG, ${stats.ast || 'N/A'} APG, ${stats.stl || 'N/A'} SPG, ${stats.blk || 'N/A'} BPG\n`;
+              
+              // Shooting stats
+              playerStatsSection += `  * Shooting: ${stats.fg_pct ? (stats.fg_pct * 100).toFixed(1) + '%' : 'N/A'} FG%, `;
+              playerStatsSection += `${stats.fg3_pct ? (stats.fg3_pct * 100).toFixed(1) + '%' : 'N/A'} 3P%, `;
+              playerStatsSection += `${stats.ft_pct ? (stats.ft_pct * 100).toFixed(1) + '%' : 'N/A'} FT%\n`;
+              
+              // Advanced stats if available
+              if (stats.general_advanced) {
+                playerStatsSection += `  * Advanced: ${stats.ts_pct ? (stats.ts_pct * 100).toFixed(1) + '%' : 'N/A'} TS%, `;
+                playerStatsSection += `${stats.usg_pct ? (stats.usg_pct * 100).toFixed(1) + '%' : 'N/A'} USG%, `;
+                playerStatsSection += `${stats.off_rtg || 'N/A'} ORTG, ${stats.def_rtg || 'N/A'} DRTG\n`;
+              }
+              
+              // Recent trends if available
+              if (stats.general_scoring) {
+                playerStatsSection += `  * Scoring: ${stats.general_scoring.pts_per_36 || 'N/A'} PTS/36, ${stats.general_scoring.pts_per_100_poss || 'N/A'} PTS/100 POSS\n`;
+              }
+            } else {
+              playerStatsSection += `  * No detailed season averages available\n`;
+            }
+          } else if (gameData.league === 'MLB') {
+            playerStatsSection += `- ${player.first_name} ${player.last_name} (${player.position || 'N/A'})`;
+            
+            // Add injury information if available
+            const injury = player.season_stats?.injury;
+            if (injury) {
+              playerStatsSection += ` [INJURY: ${injury.status} - ${injury.type || ''} ${injury.detail || ''} ${injury.side || ''}]`;
+            }
+            
+            playerStatsSection += `:\n`;
+            
+            if (player.season_stats && player.season_stats.stats) {
+              const stats = player.season_stats.stats;
+              const isPitcher = stats.player_info?.is_pitcher;
+              
+              if (isPitcher) {
+                // Pitching stats
+                playerStatsSection += `  * Record: ${stats.pitching.wins || '0'}-${stats.pitching.losses || '0'}, ${stats.pitching.era || 'N/A'} ERA\n`;
+                playerStatsSection += `  * Pitching: ${stats.pitching.innings_pitched || 'N/A'} IP, ${stats.pitching.strikeouts || 'N/A'} K, ${stats.pitching.whip || 'N/A'} WHIP\n`;
+                playerStatsSection += `  * K Rate: ${stats.pitching.k_per_9 || 'N/A'} K/9, ${stats.pitching.war || 'N/A'} WAR\n`;
+              } else {
+                // Batting stats
+                playerStatsSection += `  * Batting: ${stats.batting.batting_average || 'N/A'} AVG, ${stats.batting.on_base_percentage || 'N/A'} OBP, ${stats.batting.slugging || 'N/A'} SLG\n`;
+                playerStatsSection += `  * Power: ${stats.batting.home_runs || '0'} HR, ${stats.batting.rbi || '0'} RBI, ${stats.batting.doubles || '0'} 2B, ${stats.batting.triples || '0'} 3B\n`;
+                playerStatsSection += `  * Production: ${stats.batting.ops || 'N/A'} OPS, ${stats.batting.war || 'N/A'} WAR, ${stats.batting.stolen_bases || '0'} SB\n`;
+              }
+            } else {
+              playerStatsSection += `  * No detailed season stats available\n`;
+            }
+          }
+        } catch (error) {
+          console.warn(`Error formatting player stats for ${player.first_name} ${player.last_name}:`, error.message);
+          playerStatsSection += `- ${player.first_name} ${player.last_name}: Stats formatting error\n`;
+        }
+      });
+    }
+    
+    // Add Perplexity data if available
+    let perplexitySection = '';
+    if (gameData.perplexityStats) {
+      perplexitySection = '\nRECENT PERFORMANCE (from Perplexity web search):\n';
+      for (const [player, stats] of Object.entries(gameData.perplexityStats)) {
+        perplexitySection += `${player}: ${stats}\n\n`;
+      }
+    }
+    
     const prompt = `
       Analyze the upcoming ${gameData.league} game: ${gameData.matchup}.
+      
+      ${playerStatsSection}
+      
+      ${perplexitySection}
       
       Generate 2-3 high-upside player prop bets with preferred odds between -120 and +800.
       
@@ -323,7 +551,7 @@ async function generatePlayerPropPicks(gameData) {
         
         "pick_direction": string ("OVER" or "UNDER"),
         
-        "odds": number (MUST be positive, between -120 and +00),
+        "odds": number (between -120 and +800),
         
         "confidence": number (0.6-1.0),
         
@@ -337,9 +565,14 @@ async function generatePlayerPropPicks(gameData) {
     `;
     
     // Use OpenAI to generate player prop picks
-    const response = await openaiService.generateResponse(prompt, {
+    const messages = [
+      { role: 'system', content: 'You are Gary, an expert sports analyst specializing in player prop picks.' },
+      { role: 'user', content: prompt }
+    ];
+    
+    const response = await openaiService.generateResponse(messages, {
       temperature: 0.7,
-      max_tokens: 1500
+      maxTokens: 1500
     });
     
     // Extract the JSON response

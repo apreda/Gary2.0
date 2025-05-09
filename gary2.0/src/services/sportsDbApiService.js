@@ -241,6 +241,105 @@ export const sportsDbApiService = {
       console.error('Error checking TheSportsDB API key:', error);
       return false;
     }
+  },
+  
+  /**
+   * Look up a team by name and league
+   * @param {string} teamName - The name of the team to look up
+   * @param {string} leagueId - The league ID to search in
+   * @returns {Promise<Object>} Team data
+   */
+  lookupTeam: async (teamName, leagueId) => {
+    try {
+      if (!sportsDbApiService.API_KEY) {
+        throw new Error('TheSportsDB API key not configured');
+      }
+      
+      console.log(`Looking up team "${teamName}" in league ${leagueId}`);
+      
+      // First attempt an exact team search
+      const searchUrl = `${sportsDbApiService.BASE_URL}/${sportsDbApiService.API_KEY}/searchteams.php`;
+      const searchResponse = await axios.get(searchUrl, {
+        params: {
+          t: teamName
+        }
+      });
+      
+      let teams = searchResponse.data.teams || [];
+      
+      // Filter by league if we have multiple results
+      if (teams.length > 1 && leagueId) {
+        teams = teams.filter(team => team.idLeague == leagueId);
+      }
+      
+      // If we found a team, return it
+      if (teams.length > 0) {
+        console.log(`Found team: ${teams[0].strTeam}`);
+        return teams[0];
+      }
+      
+      // If not found with exact match, try a partial match
+      console.log(`No exact match found for "${teamName}", trying partial search...`);
+      
+      // Get all teams in the league
+      const leagueUrl = `${sportsDbApiService.BASE_URL}/${sportsDbApiService.API_KEY}/lookup_all_teams.php`;
+      const leagueResponse = await axios.get(leagueUrl, {
+        params: {
+          id: leagueId
+        }
+      });
+      
+      const leagueTeams = leagueResponse.data.teams || [];
+      
+      // Try to find a team with a partial name match
+      const normalizedTeamName = teamName.toLowerCase().replace(/\s+/g, '');
+      const matchedTeam = leagueTeams.find(team => {
+        const normalizedStrTeam = team.strTeam.toLowerCase().replace(/\s+/g, '');
+        return normalizedStrTeam.includes(normalizedTeamName) || 
+              normalizedTeamName.includes(normalizedStrTeam);
+      });
+      
+      if (matchedTeam) {
+        console.log(`Found team with partial match: ${matchedTeam.strTeam}`);
+        return matchedTeam;
+      }
+      
+      console.log(`Could not find team "${teamName}" in league ${leagueId}`);
+      return null;
+    } catch (error) {
+      console.error(`Error looking up team "${teamName}":`, error);
+      return null;
+    }
+  },
+  
+  /**
+   * Get players for a specific team
+   * @param {string} teamId - The ID of the team to get players for
+   * @returns {Promise<Array>} Array of players
+   */
+  getTeamPlayers: async (teamId) => {
+    try {
+      if (!sportsDbApiService.API_KEY || !teamId) {
+        throw new Error('TheSportsDB API key or teamId not configured');
+      }
+      
+      console.log(`Fetching players for team ID ${teamId}`);
+      
+      const url = `${sportsDbApiService.BASE_URL}/${sportsDbApiService.API_KEY}/lookup_all_players.php`;
+      const response = await axios.get(url, {
+        params: {
+          id: teamId
+        }
+      });
+      
+      const players = response.data.player || [];
+      console.log(`Found ${players.length} players for team ID ${teamId}`);
+      
+      return players;
+    } catch (error) {
+      console.error(`Error fetching players for team ID ${teamId}:`, error);
+      return [];
+    }
   }
 };
 
