@@ -259,80 +259,29 @@ const propPicksService = {
    * Get today's player prop picks
    */
   getTodayPropPicks: async () => {
-    try {
-      // Get today's date in correct format
-      const now = new Date();
-      const dateString = now.toISOString().split('T')[0];
-      
-      return propPicksService.getPropPicksByDate(dateString);
-    } catch (error) {
-      console.error('Error fetching today\'s prop picks:', error);
-      throw error;
-    }
-  },
-  
-  /**
-   * Get player prop picks by date
-   */
-  getPropPicksByDate: async (dateString) => {
-    try {
-      console.log(`Fetching prop picks for date: ${dateString}`);
-      
-      // Ensure valid Supabase session
-      await ensureValidSupabaseSession();
-      
-      // Query the prop_picks table
-      const { data, error } = await supabase
-        .from('prop_picks')
-        .select('*')
-        .eq('date', dateString)
-        .order('created_at', { ascending: false });
-        
-      if (error) {
-        console.error('Error querying prop_picks table:', error);
-        throw new Error(`Failed to fetch prop picks: ${error.message}`);
-      }
-      
-      if (!data || data.length === 0) {
-        console.log(`No prop picks found for ${dateString}`);
-        return [];
-      }
-      
-      console.log(`Found ${data.length} prop picks for ${dateString}`);
-      return data;
-    } catch (error) {
-      console.error('Error fetching prop picks by date:', error);
-      throw error;
-    }
   }
-};
+},
 
 /**
- * Generate player prop picks for a specific game
+ * Get player prop picks by date
  */
-async function generatePlayerPropPicks(gameData) {
+getPropPicksByDate: async (dateString) => {
   try {
-    console.log(`Generating player prop picks for ${gameData.matchup}`);
+    console.log(`Fetching prop picks for date: ${dateString}`);
     
-    // Prepare prompt with game data and player stats
-    let playerStatsSection = '';
+    // Ensure valid Supabase session
+    await ensureValidSupabaseSession();
     
-    if (gameData.playerStats) {
-      playerStatsSection = `PLAYER STATISTICS (from Ball Don't Lie API):\n`;
+    // Query the prop_picks table
+    const { data, error } = await supabase
+      .from('prop_picks')
+      .select('*')
+      .eq('date', dateString)
+      .order('created_at', { ascending: false });
       
-      // Format home team players with their key stats
-      playerStatsSection += `HOME TEAM (${gameData.homeTeam}):\n`;
-      gameData.playerStats.homeTeam.players.slice(0, 5).forEach(player => {
-        try {
-          // Different formatting for NBA vs MLB
-          if (gameData.league === 'NBA') {
-            const stats = player.season_stats?.stats || {};
-            const injury = player.season_stats?.injury;
-            
-            playerStatsSection += `- ${player.first_name} ${player.last_name} (${player.position || 'N/A'})`;
-            
-            // Add injury information if available
-            if (injury) {
+    if (error) {
+      console.error('Error querying prop_picks table:', error);
+      throw new Error(`Failed to fetch prop picks: ${error.message}`);
               playerStatsSection += ` [INJURY: ${injury.status} - ${injury.type || ''} ${injury.detail || ''} ${injury.side || ''}]`;
             }
             
@@ -735,15 +684,27 @@ function extractJSONFromResponse(response) {
  */
 async function storePropPicksInDatabase(propPicks) {
   try {
-    console.log(`Storing ${propPicks.length} player prop picks in database`);
+    console.log(`Storing raw player prop picks in database`);
     
     // Ensure valid Supabase session
     await ensureValidSupabaseSession();
     
-    // Batch insert all prop picks
+    // Get today's date
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Format data for Supabase - store the entire array as raw JSON string
+    const pickEntry = {
+      date: today,
+      picks: propPicks, // Store the raw array as is
+      created_at: new Date().toISOString()
+    };
+    
+    console.log('Storing prop picks with date:', today);
+    
+    // Insert as a single entry with the raw JSON
     const { data, error } = await supabase
       .from('prop_picks')
-      .insert(propPicks);
+      .insert(pickEntry);
       
     if (error) {
       console.error('Error storing prop picks:', error);
