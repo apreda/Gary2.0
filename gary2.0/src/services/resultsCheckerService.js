@@ -4,6 +4,7 @@ import { garyPerformanceService } from './garyPerformanceService';
 import { perplexityService } from './perplexityService';
 import { openaiService } from './openaiService';
 import { sportsDbApiService } from './sportsDbApiService';
+import { userPickResultsService } from './userPickResultsService';
 
 // Create a Supabase client with admin privileges that bypasses RLS
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || 'https://wljxcsmijuhnqumstxvr.supabase.co';
@@ -577,6 +578,15 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
           } else {
             console.log('Performance stats update skipped - function not available');
           }
+          
+          // Update user stats based on game results
+          try {
+            console.log('Updating user stats based on new game results...');
+            const userStatsResults = await userPickResultsService.checkAndUpdateResults();
+            console.log('User stats update complete:', userStatsResults);
+          } catch (userStatsError) {
+            console.error('Error updating user stats:', userStatsError);
+          }
         } catch (statsError) {
           console.error('Error updating performance stats:', statsError);
         }
@@ -591,7 +601,7 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
   
   /**
    * Check the status of the API keys
-   * @returns {Promise<Object>} Status of each API key
+   * @returns {Promise} Status of each API key
    */
   checkApiKeyStatus: async () => {
     try {
