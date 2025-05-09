@@ -517,7 +517,7 @@ function Home() {
                 {/* Centered Hero Content */}
              <div className="w-full mx-auto flex flex-col items-center mt-14" style={{ paddingLeft: "0", paddingRight: "0" }}>
               {/* NEW badge with coin image - shifted left */}
-              <div className="relative mt-11 flex justify-center items-center w-full" style={{ marginLeft: "-80px", marginBottom: "0.35rem" }}>
+              <div className="relative mt-11 flex justify-center items-center w-full" style={{ marginLeft: "-80px", marginBottom: "0.28rem" }}>
                 {/* Coin image - 20% larger than before and moved even further left */}
                 <div className="mr-10">
                   <img
@@ -551,7 +551,7 @@ function Home() {
 
               {/* Main headline - Simple and impactful */}
               <div className="relative mb-6 w-full">
-                <h1 className="text-center w-full" style={{ fontSize: "clamp(3.5rem, 6vw, 5rem)", lineHeight: "1.1", letterSpacing: "-0.02em" }}>
+                <h1 className="text-center w-full" style={{ fontSize: "clamp(4.025rem, 6.9vw, 5.75rem)", lineHeight: "1.1", letterSpacing: "-0.02em" }}>
                   <div className="max-w-[920px] mx-auto">
                     <span className="text-white font-bold">Make </span>
                     <span className="italic font-normal text-[#B8953F]">Smarter</span>
