@@ -214,8 +214,8 @@ export default function GaryProps() {
 
   // Responsive card dimensions with 60% increase
   const cardStyle = {
-    width: '320px', // 60% larger than the original size
-    height: '480px',
+    width: '352px', // 10% wider than previous size
+    height: '336px', // 30% shorter than previous size
     margin: '0 auto 2rem auto',
     position: 'relative',
   };
@@ -313,7 +313,7 @@ export default function GaryProps() {
                           <p className="text-gray-400 text-xl">No prop picks available for today</p>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 px-2">
                           {picks.map(pick => {
                             const isFlipped = flippedCards[pick.id] || false;
                             const hasDecided = userDecisions[pick.id] !== undefined;
@@ -376,7 +376,7 @@ export default function GaryProps() {
                                         top: 0,
                                         bottom: 0,
                                         width: '100%',
-                                        padding: '1.25rem',
+                                        padding: '0.85rem',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         justifyContent: 'space-between',
@@ -384,7 +384,7 @@ export default function GaryProps() {
                                       }}>
                                         <div>
                                           {/* Top section with League/Matchup side-by-side */}
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
                                             {/* League */}
                                             <div style={{ width: '30%' }}>
                                               <div style={{ 
@@ -427,11 +427,11 @@ export default function GaryProps() {
                                           
                                           {/* The main pick display - immediately below League/Matchup */}
                                           <div style={{ 
-                                            padding: '0.35rem 0', 
+                                            padding: '0.25rem 0', 
                                             borderTop: '1px solid rgba(255, 255, 255, 0.1)', 
                                             borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                                            marginTop: '0.15rem',
-                                            marginBottom: '0.4rem'
+                                            marginTop: '0.1rem',
+                                            marginBottom: '0.25rem'
                                           }}>
                                             <div style={{ 
                                               fontSize: '0.7rem', 
@@ -513,7 +513,7 @@ export default function GaryProps() {
                                                 background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
-                                                padding: '0.5rem',
+                                                padding: '0.35rem',
                                                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
                                                 <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>True Prob</p>
@@ -523,7 +523,7 @@ export default function GaryProps() {
                                                 background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
-                                                padding: '0.5rem',
+                                                padding: '0.35rem',
                                                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
                                                 <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Implied Prob</p>
@@ -533,7 +533,7 @@ export default function GaryProps() {
                                                 background: 'rgba(25, 23, 17, 0.9)',
                                                 border: '1px solid rgba(191, 161, 66, 0.4)',
                                                 borderRadius: '6px',
-                                                padding: '0.5rem',
+                                                padding: '0.35rem',
                                                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                               }}>
                                                 <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>EV</p>
@@ -587,7 +587,7 @@ export default function GaryProps() {
                                         top: 0,
                                         bottom: 0,
                                         width: '100%',
-                                        padding: '1.25rem',
+                                        padding: '0.85rem',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         overflow: 'auto',
@@ -642,7 +642,7 @@ export default function GaryProps() {
                                               background: 'rgba(25, 23, 17, 0.9)',
                                               border: '1px solid rgba(191, 161, 66, 0.4)',
                                               borderRadius: '6px',
-                                              padding: '0.5rem',
+                                              padding: '0.35rem',
                                               boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                             }}>
                                               <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Line</p>
@@ -652,7 +652,7 @@ export default function GaryProps() {
                                               background: 'rgba(25, 23, 17, 0.9)',
                                               border: '1px solid rgba(191, 161, 66, 0.4)',
                                               borderRadius: '6px',
-                                              padding: '0.5rem',
+                                              padding: '0.35rem',
                                               boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                                             }}>
                                               <p style={{ color: '#bfa142', fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 500 }}>Odds</p>
