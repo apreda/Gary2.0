@@ -518,7 +518,7 @@ function Home() {
                 className="w-auto h-auto logo-image object-contain transition-all duration-300"
                 style={{ 
                   animation: "float 6s ease-in-out infinite",
-                  maxWidth: "18.24rem"
+                  maxWidth: "12.77rem" /* Reduced by 30% from 18.24rem */
                 }}
               />
             </div>
