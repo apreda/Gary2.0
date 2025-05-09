@@ -6,6 +6,8 @@ import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService';
 import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
+import { sportsDbApiService } from './sportsDbApiService';
+import { perplexityService } from './perplexityService';
 
 const propPicksService = {
   /**
@@ -42,9 +44,9 @@ const propPicksService = {
           // For each game, generate player props
           for (const game of games) {
             try {
-              console.log(`\n-- Analyzing players for game: ${game.home_team} vs ${game.away_team} --`);
+              console.log(`\n-- Analyzing game: ${game.home_team} vs ${game.away_team} --`);
               
-              // Format the game data to request player props
+              // Format the game data for Gary's analysis
               const gameData = {
                 homeTeam: game.home_team,
                 awayTeam: game.away_team,
@@ -53,6 +55,112 @@ const propPicksService = {
                 sportKey: sport,
                 requestType: 'player_props' // Signal to OpenAI we want player props
               };
+              
+              // Fetch player stats from SportsDB API
+              const leagueIdMap = {
+                'NBA': '4387',
+                'MLB': '4424',
+                'NHL': '4380'
+              };
+              
+              try {
+                // Get teams and players data
+                const leagueId = leagueIdMap[sportName];
+                if (leagueId) {
+                  console.log(`Fetching team and player data for ${sportName}...`);
+                  
+                  // First, look up team IDs
+                  const homeTeamData = await sportsDbApiService.lookupTeam(game.home_team, leagueId);
+                  const awayTeamData = await sportsDbApiService.lookupTeam(game.away_team, leagueId);
+                  
+                  if (homeTeamData && awayTeamData) {
+                    // Then get player stats for both teams
+                    const homeTeamId = homeTeamData.idTeam;
+                    const awayTeamId = awayTeamData.idTeam;
+                    
+                    const homeTeamPlayers = await sportsDbApiService.getTeamPlayers(homeTeamId);
+                    const awayTeamPlayers = await sportsDbApiService.getTeamPlayers(awayTeamId);
+                    
+                    // Add player stats to game data
+                    gameData.playerStats = {
+                      homeTeam: {
+                        players: homeTeamPlayers || [],
+                        teamId: homeTeamId
+                      },
+                      awayTeam: {
+                        players: awayTeamPlayers || [],
+                        teamId: awayTeamId
+                      }
+                    };
+                    
+                    console.log(`Found ${homeTeamPlayers?.length || 0} home team players and ${awayTeamPlayers?.length || 0} away team players`);
+                  }
+                }
+              } catch (statsError) {
+                console.warn(`Error fetching player stats from SportsDB: ${statsError.message}`);
+                // Continue without SportsDB player stats if there's an error
+              }
+              
+              // LAYER 2: Fetch recent player stats from Perplexity (web search)
+              try {
+                console.log('Fetching recent player stats from Perplexity (layer 2)...');
+                
+                // Identify key players to get stats for
+                let keyPlayers = [];
+                
+                // Use players from SportsDB if available
+                if (gameData.playerStats) {
+                  // Get top 3 players from each team
+                  const homeTeamPlayers = gameData.playerStats.homeTeam.players || [];
+                  const awayTeamPlayers = gameData.playerStats.awayTeam.players || [];
+                  
+                  // Select up to 3 players from each team
+                  const homePlayers = homeTeamPlayers.slice(0, 3).map(p => `${p.strPlayer} ${gameData.homeTeam}`);
+                  const awayPlayers = awayTeamPlayers.slice(0, 3).map(p => `${p.strPlayer} ${gameData.awayTeam}`);
+                  
+                  keyPlayers = [...homePlayers, ...awayPlayers];
+                } 
+                // If no SportsDB data, use team names to get top players
+                else {
+                  keyPlayers = [
+                    `top players ${gameData.homeTeam} ${gameData.league}`,
+                    `top players ${gameData.awayTeam} ${gameData.league}`
+                  ];
+                }
+                
+                // Get recent stats for each player from Perplexity
+                const perplexityStats = {};
+                
+                for (const player of keyPlayers) {
+                  try {
+                    // Query based on league and stat type
+                    let query = '';
+                    if (gameData.league === 'NBA') {
+                      query = `${player} recent stats points rebounds assists last 5 games`;
+                    } else if (gameData.league === 'MLB') {
+                      query = `${player} recent batting stats home runs hits rbi last 5 games`;
+                    } else if (gameData.league === 'NHL') {
+                      query = `${player} recent stats goals assists points shots last 5 games`;
+                    }
+                    
+                    const stats = await perplexityService.query(query);
+                    perplexityStats[player] = stats;
+                    console.log(`Got recent stats for ${player} from Perplexity`);
+                    
+                    // Add small delay to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  } catch (error) {
+                    console.warn(`Error getting Perplexity stats for ${player}: ${error.message}`);
+                  }
+                }
+                
+                // Add to gameData
+                gameData.perplexityStats = perplexityStats;
+                console.log(`Added Perplexity stats for ${Object.keys(perplexityStats).length} players/queries`);
+              } catch (perplexityError) {
+                console.warn(`Error fetching player stats from Perplexity: ${perplexityError.message}`);
+                // Continue without Perplexity stats if there's an error
+              }
               
               // Request player prop suggestions from OpenAI
               const playerProps = await generatePlayerPropPicks(gameData);
@@ -151,13 +259,19 @@ async function generatePlayerPropPicks(gameData) {
   try {
     console.log(`Generating player prop picks for ${gameData.matchup}`);
     
-    // Create a prompt that specifically asks for high-odds player props
+    // Create a prompt that specifically asks for high-odds player props based on statistical analysis
     const prompt = `
       Analyze the upcoming ${gameData.league} game: ${gameData.matchup}.
       
-      Generate 2-3 high-upside player prop bets with positive odds (over/under on points, rebounds, assists, home runs, strikeouts, saves, goals, etc.).
+      Generate 2-3 high-upside player prop bets with preferred odds between -120 and +800.
       
-      IMPORTANT: ONLY select player props with POSITIVE odds (+130, +200, +300, etc.) - do NOT select negative odds props.
+      IMPORTANT: All picks must be based 100% on rigorous statistical analysis, not on gut feelings or narrative-based reasoning.
+      
+      I've provided you with multiple layers of data to analyze:
+      ${gameData.playerStats ? '- Layer 1: SportsDB player statistics from the official database' : ''}
+      ${gameData.perplexityStats ? '- Layer 2: Recent player performance data from web searches via Perplexity' : ''}
+      
+      Use this comprehensive data to identify statistically-backed prop opportunities with clear numerical advantages.
       
       For ${gameData.league} games, focus on these specific markets:
       ${gameData.league === 'NBA' ? `
@@ -181,17 +295,17 @@ async function generatePlayerPropPicks(gameData) {
       
       For each prop:
       
-      1. Identify a specific player who might exceed expectations
+      1. Identify a specific player who has a statistical advantage for this prop
       
-      2. Determine the appropriate prop line value
+      2. Determine the appropriate prop line value based on recent statistical performance
       
-      3. Select OVER or UNDER (preferably OVER for most high-odds props)
+      3. Select OVER or UNDER based purely on statistical analysis
       
-      4. Use odds values between +130 and +400 only
+      4. Use odds values between -120 and +800 only
       
-      5. Provide a detailed rationale explaining why this underdog prop might hit
+      5. Provide a detailed statistical rationale with specific metrics and trends
       
-      6. Only include props with at least 70% confidence despite the higher odds
+      6. Only include props with at least 60% confidence based on statistical modeling
       
       
       
@@ -209,9 +323,9 @@ async function generatePlayerPropPicks(gameData) {
         
         "pick_direction": string ("OVER" or "UNDER"),
         
-        "odds": number (MUST be positive, between +130 and +400),
+        "odds": number (MUST be positive, between -120 and +00),
         
-        "confidence": number (0.7-1.0),
+        "confidence": number (0.6-1.0),
         
         "rationale": string,
         
