@@ -111,11 +111,37 @@ function GaryProps() {
       let picksData;
       
       if (activeTab === 'today') {
-        // Get today's prop picks
-        picksData = await propPicksService.getTodayPropPicks();
+        // Query the prop_picks table
+        let { data: propPicksData, error: propPicksError } = await supabase
+          .from('prop_picks')
+          .select('*')
+          .eq('date', dateString)
+          .order('created_at', { ascending: false });
         
-        // If no picks found for today, generate them
-        if (!picksData || picksData.length === 0) {
+        if (propPicksError) {
+          console.error('Error querying prop_picks table:', propPicksError);
+          setError('Failed to load prop picks');
+          setLoading(false);
+          return;
+        }
+        
+        // If we found picks for today, load and format them
+        if (propPicksData && propPicksData.length > 0) {
+          // Import the formatter dynamically
+          const { formatPropPicksForDisplay } = await import('../utils/propPicksFormatter');
+          
+          try {
+            // Extract raw picks from the database entry
+            const rawPicks = propPicksData[0].picks;
+            // Format the picks for display
+            picksData = formatPropPicksForDisplay(rawPicks);
+            console.log(`Loaded and formatted ${picksData.length} prop picks`);
+          } catch (formatError) {
+            console.error('Error formatting prop picks:', formatError);
+            setError('Error formatting prop picks data');
+          }
+        } else {
+          // If no picks found for today, generate them
           console.log('No prop picks found for today, generating new ones...');
           setStatus('Generating today\'s player prop picks... This may take a minute.');
           
@@ -126,8 +152,23 @@ function GaryProps() {
             if (generationResult.success && generationResult.count > 0) {
               console.log(`Successfully generated ${generationResult.count} new prop picks`);
               
-              // Fetch the newly generated picks
-              picksData = await propPicksService.getTodayPropPicks();
+              // Query again to get the newly generated picks
+              const { data: freshData, error: freshError } = await supabase
+                .from('prop_picks')
+                .select('*')
+                .eq('date', dateString)
+                .order('created_at', { ascending: false });
+              
+              if (!freshError && freshData && freshData.length > 0) {
+                // Import the formatter dynamically
+                const { formatPropPicksForDisplay } = await import('../utils/propPicksFormatter');
+                
+                // Extract raw picks from the database entry
+                const rawPicks = freshData[0].picks;
+                // Format the picks for display
+                picksData = formatPropPicksForDisplay(rawPicks);
+                console.log(`Loaded and formatted ${picksData.length} fresh prop picks`);
+              }
             } else {
               console.log('No prop picks could be generated at this time');
             }
