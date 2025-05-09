@@ -518,17 +518,19 @@ function Home() {
              <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
               {/* NEW badge with coin image */}
               <div className="mb-8 relative mt-16 flex justify-center items-center w-full">
-                {/* Coin image */}
-                <img
-                  src="/coin2.png"
-                  alt="Gold Coin"
-                  className="mr-4 object-contain"
-                  style={{ 
-                    height: "45px",
-                    animation: "float 6s ease-in-out infinite",
-                    filter: "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5))",
-                  }}
-                />
+                {/* Coin image - moved left and 5% smaller */}
+                <div className="mr-5">
+                  <img
+                    src="/coin2.png"
+                    alt="Gold Coin"
+                    className="object-contain"
+                    style={{ 
+                      height: "42.75px", /* 5% smaller than 45px */
+                      animation: "float 6s ease-in-out infinite",
+                      filter: "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5))",
+                    }}
+                  />
+                </div>
                 
                 {/* Shiny banner */}
                 <div className="text-black font-medium px-5 py-1.5 rounded-full flex items-center"
