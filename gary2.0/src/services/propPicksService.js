@@ -118,15 +118,23 @@ const propPicksService = {
               // Get additional insights from Perplexity if available
               try {
                 console.log('Fetching additional insights from Perplexity...');
-                const perplexityData = await perplexityService.getGameInsights(gameData);
-                
-                if (perplexityData) {
-                  console.log('Successfully fetched data from Perplexity');
-                  gameData.perplexityStats = perplexityData;
+                // Check if perplexityService has the method before calling it
+                if (perplexityService && typeof perplexityService.getGameInsights === 'function') {
+                  const perplexityData = await perplexityService.getGameInsights(gameData);
+                  
+                  if (perplexityData) {
+                    console.log('Successfully fetched data from Perplexity');
+                    gameData.perplexityStats = perplexityData;
+                  }
+                } else {
+                  // Fallback if the function doesn't exist
+                  console.log('Perplexity insights not available for prop picks');
+                  gameData.perplexityStats = { insights: 'No Perplexity data available for props' };
                 }
               } catch (perplexityError) {
                 console.error(`Error fetching data from Perplexity: ${perplexityError.message}`);
                 // Proceed without Perplexity data if there's an error
+                gameData.perplexityStats = { insights: 'Error fetching Perplexity data' };
               }
               
               // Generate prop picks for this game
@@ -269,16 +277,23 @@ const propPicksService = {
       let oddsText = '';
       if (gameData.sportKey) {
         try {
-          // Check if we have odds data for this game's player props
-          const propOdds = await oddsService.getPlayerPropOdds(gameData.sportKey, gameData.homeTeam, gameData.awayTeam);
-          
-          if (propOdds && propOdds.length > 0) {
-            const relevantProps = propOdds.slice(0, 10); // Limit to top 10 props to reduce tokens
-            const formattedOdds = relevantProps.map(prop => 
-              `${prop.player}: ${prop.prop_type} ${prop.line} (${prop.over_odds}/${prop.under_odds})`
-            ).join('\n');
+          // Check if oddsService has the method before calling it
+          if (oddsService && typeof oddsService.getPlayerPropOdds === 'function') {
+            // Check if we have odds data for this game's player props
+            const propOdds = await oddsService.getPlayerPropOdds(gameData.sportKey, gameData.homeTeam, gameData.awayTeam);
             
-            oddsText = `AVAILABLE PLAYER PROPS (ODDS API):\n${formattedOdds}`;
+            if (propOdds && propOdds.length > 0) {
+              const relevantProps = propOdds.slice(0, 10); // Limit to top 10 props to reduce tokens
+              const formattedOdds = relevantProps.map(prop => 
+                `${prop.player}: ${prop.prop_type} ${prop.line} (${prop.over_odds}/${prop.under_odds})`
+              ).join('\n');
+              
+              oddsText = `AVAILABLE PLAYER PROPS (ODDS API):\n${formattedOdds}`;
+            }
+          } else {
+            // Fallback if the function doesn't exist
+            console.log('Player prop odds API not available yet');
+            oddsText = 'Player prop odds from The Odds API not yet implemented';
           }
         } catch (oddsError) {
           console.error(`Error fetching prop odds: ${oddsError.message}`);
@@ -386,7 +401,61 @@ Generate your response as a JSON array containing all valid prop picks, each fol
       });
       
       // Extract the JSON response
-      const playerProps = openaiService.extractJSONFromResponse(response);
+      let playerProps;
+      
+      // Add our own JSON extraction implementation since it's missing
+      try {
+        console.log('Attempting to extract JSON from OpenAI response');
+        
+        // First try to find array pattern
+        const arrayMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+        if (arrayMatch && arrayMatch[0]) {
+          console.log('Found JSON array in response');
+          playerProps = JSON.parse(arrayMatch[0]);
+        } else {
+          // Try to find individual JSON objects
+          const objMatch = response.match(/\{[\s\S]*?\}/g);
+          if (objMatch && objMatch.length > 0) {
+            console.log('Found individual JSON objects in response');
+            playerProps = objMatch.map(obj => {
+              try {
+                return JSON.parse(obj);
+              } catch (e) {
+                return null;
+              }
+            }).filter(Boolean);
+          } else {
+            // Try to find content inside code blocks
+            const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (codeBlockMatch && codeBlockMatch[1]) {
+              const content = codeBlockMatch[1].trim();
+              console.log('Found JSON in code block');
+              try {
+                playerProps = JSON.parse(content);
+                if (!Array.isArray(playerProps)) {
+                  playerProps = [playerProps];
+                }
+              } catch (e) {
+                console.error('Error parsing JSON from code block:', e);
+                playerProps = [];
+              }
+            } else {
+              console.log('No JSON found in response');
+              playerProps = [];
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error extracting JSON from response:', error);
+        playerProps = [];
+      }
+      
+      // Log the results for debugging
+      if (playerProps && playerProps.length > 0) {
+        console.log(`Successfully extracted ${playerProps.length} prop picks from response`);
+      } else {
+        console.log('No valid prop picks found in response');
+      }
       
       if (!playerProps || playerProps.length === 0) {
         console.log('No valid player prop picks generated from OpenAI response');
