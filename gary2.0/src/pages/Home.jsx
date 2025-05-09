@@ -528,8 +528,18 @@ function Home() {
               <main className="hero-inner flex flex-col w-full h-full" style={{ padding: "24px 24px" }}>
                 {/* Centered Hero Content */}
              <div className="w-full mx-auto flex flex-col items-center mt-20 md:mt-24" style={{ paddingLeft: "0", paddingRight: "0" }}>
-              {/* NEW badge - with shiny premium style - 20% larger */}
-              <div className="mb-8 relative mt-16 flex justify-center w-full">  
+              {/* NEW badge with Gary mascot to the left */}
+              <div className="mb-8 relative mt-16 flex justify-center items-center w-full">
+                {/* Gary mascot image */}
+                <img src="/Gary50.png" alt="Gary Mascot" 
+                  className="mr-4" 
+                  style={{
+                    height: "54px",  /* 10% smaller than typical size */
+                    filter: "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5))",
+                  }}
+                />
+                
+                {/* Shiny banner */}
                 <div className="text-black font-medium px-6 py-2 rounded-full flex items-center"
                      style={{
                        background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
@@ -537,8 +547,8 @@ function Home() {
                        textShadow: '0 1px 1px rgba(255,255,255,0.3)',
                        boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
                        border: '1px solid rgba(184, 149, 63, 0.5)',
-                       fontSize: '1.08rem', /* Increased from the default text-sm (0.875rem) by 20% */
-                       transform: 'scale(1.2)', /* Scale up by 20% */
+                       fontSize: '1.08rem',
+                       transform: 'scale(1.2)',
                        transformOrigin: 'center',
                      }}>
                   <span className="mr-2 font-bold uppercase">NEW</span>
