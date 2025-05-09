@@ -467,14 +467,14 @@ export default function GaryProps() {
                                             gap: '0.75rem',
                                             width: '100%',
                                           }}>
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">Line</p>
-                                              <p className="text-white font-bold">{pick.line}</p>
-                                            </div>
-                                            <div className="bg-gray-800 rounded-lg p-3">
-                                              <p className="text-gray-400 text-xs mb-1">Odds</p>
-                                              <p className="text-white font-bold">{pick.odds}</p>
-                                            </div>
+                                             <div className="bg-gray-800 rounded-lg p-3">
+                                               <p className="text-gray-400 text-xs mb-1">True Probability</p>
+                                               <p className="text-white font-bold">{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p>
+                                             </div>
+                                             <div className="bg-gray-800 rounded-lg p-3">
+                                               <p className="text-gray-400 text-xs mb-1">Implied Probability</p>
+                                               <p className="text-white font-bold">{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p>
+                                             </div>
                                           </div>
                                           <div className="bg-gray-800 rounded-lg p-3 mt-2">
                                             <p className="text-gray-400 text-xs mb-1">Expected Value (EV)</p>
