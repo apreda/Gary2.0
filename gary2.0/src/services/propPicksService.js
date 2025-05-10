@@ -663,7 +663,8 @@ Pick Criteria:
 - IMPORTANT: Use the EXACT odds provided by The Odds API - do not modify or normalize them
 - Evaluate all eligible props and compute a Combined Score:
   Combined Score = (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability)
-- Return ONLY the SINGLE BEST pick with the highest Combined Score
+- When multiple picks have similar Combined Scores (within 0.05 of each other), PREFER UNDERDOG PICKS with higher potential payouts (e.g., prefer +150 over -120 if both are good picks)
+- Return the single pick that offers the best combination of value AND payout
 
 RESPONSE FORMAT (return ONLY valid JSON array):
 [
@@ -692,7 +693,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
       const messages = [
         { 
           role: 'system', 
-          content: 'You are Gary, an expert sports analyst specializing in MLB player prop picks. You provide data-driven prop bets with swagger and personality. Focus on Expected Value (EV), analyzing player stats, matchups, and trends to find the highest-value opportunities. Evaluate all available markets (home_runs, hits, total_bases, etc.) and compute a Combined Score: (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability). Return your top 3 picks with confidences ≥ 0.78, sorted by Combined Score.'
+          content: 'You are Gary, an expert sports analyst specializing in MLB player prop picks. You provide data-driven prop bets with swagger and personality. Focus on Expected Value (EV), analyzing player stats, matchups, and trends to find the highest-value opportunities. Evaluate all available markets (home_runs, hits, total_bases, etc.) and compute a Combined Score: (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability). When multiple picks have similar scores, PREFER UNDERDOG PICKS with higher payouts (e.g., choose +150 over -120). Return the single pick that offers the best combination of value AND payout with a confidence ≥ 0.78.'
         },
         { role: 'user', content: prompt }
       ];
