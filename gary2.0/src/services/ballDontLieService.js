@@ -530,19 +530,33 @@ export const ballDontLieService = {
     try {
       const { season, player_ids } = options;
       
-      if (!season || !player_ids || !Array.isArray(player_ids) || player_ids.length === 0) {
+      if (!player_ids || !Array.isArray(player_ids) || player_ids.length === 0) {
         console.error('Invalid parameters for getSeasonAverages');
         return { data: [] };
       }
       
-      console.log(`Fetching season averages for player ID ${player_ids[0]} in season ${season}`);
+      // Ball Don't Lie treats season=2024 as 2023-24 regular season
+      // For 2024-25 regular season, we need to use season=2025
+      // Adjust the season parameter accordingly
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1; // 0-based, so +1
+      
+      // If it's after April of the current year, we're likely in the next season
+      // NBA regular season typically ends in April
+      let adjustedSeason = season;
+      if (!season) {
+        // If no season provided, use the current season
+        adjustedSeason = currentMonth >= 10 ? currentYear + 1 : currentYear;
+      }
+      
+      console.log(`Fetching season averages for player ID ${player_ids[0]} in season ${adjustedSeason}`);
       
       const response = await axios.get(`${this.NBA_BASE_URL}/season_averages`, {
         headers: {
           'Authorization': this.API_KEY
         },
         params: {
-          season,
+          season: adjustedSeason,
           player_ids: player_ids
         }
       });
@@ -702,6 +716,234 @@ export const ballDontLieService = {
     } catch (error) {
       console.error(`Error getting MLB player recent stats for player ${playerId}:`, error);
       return [];
+    }
+  },
+  
+  /**
+   * Get NBA player's playoff stats and calculate averages
+   * @param {number} playerId - The player ID to get stats for
+   * @param {number} season - The season year (e.g., 2025 for 2024-25 season)
+   * @param {number} limit - Maximum number of games to include
+   * @returns {Promise<Object>} Playoff stats with calculated averages
+   */
+  getNbaPlayerPlayoffStats: async function(playerId, season, limit = 20) {
+    try {
+      // If no season specified, determine the current season
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1; // 0-based, so +1
+      const adjustedSeason = season || (currentMonth >= 10 ? currentYear + 1 : currentYear);
+      
+      console.log(`Fetching playoff stats for player ID ${playerId} in season ${adjustedSeason}`);
+      
+      const response = await axios.get(`${this.NBA_BASE_URL}/stats`, {
+        headers: {
+          'Authorization': this.API_KEY
+        },
+        params: {
+          player_ids: [playerId],
+          seasons: [adjustedSeason],
+          postseason: true,
+          per_page: limit
+        }
+      });
+      
+      // If no playoff data, return empty object
+      if (!response.data.data || response.data.data.length === 0) {
+        console.log(`No playoff stats found for player ID ${playerId} in season ${adjustedSeason}`);
+        return { data: [] };
+      }
+      
+      // Calculate averages from the playoff games
+      const playoffGames = response.data.data;
+      const statTotals = {};
+      const numGames = playoffGames.length;
+      
+      // First, gather all stat totals
+      playoffGames.forEach(game => {
+        Object.keys(game).forEach(key => {
+          // Skip non-numeric and non-statistical fields
+          if (
+            typeof game[key] === 'number' &&
+            key !== 'id' &&
+            key !== 'player_id' &&
+            key !== 'team_id' &&
+            key !== 'game_id' &&
+            key !== 'season'
+          ) {
+            statTotals[key] = (statTotals[key] || 0) + game[key];
+          }
+        });
+      });
+      
+      // Then calculate averages
+      const averages = {};
+      Object.keys(statTotals).forEach(key => {
+        averages[key] = numGames > 0 ? statTotals[key] / numGames : 0;
+      });
+      
+      // Format the response similar to season_averages endpoint
+      return {
+        data: [
+          {
+            ...averages,
+            player_id: playerId,
+            games_played: numGames,
+            season: adjustedSeason,
+            is_playoff_data: true
+          }
+        ]
+      };
+    } catch (error) {
+      console.error(`Error getting NBA player playoff stats for player ${playerId}:`, error);
+      return { data: [] };
+    }
+  },
+  
+  /**
+   * Get NBA player's season stats
+   * @param {number} playerId - The player ID to get stats for
+   * @returns {Promise<Object>} Season stats
+   */
+  getNbaPlayerSeasonStats: async function(playerId) {
+    try {
+      // Define the current season (year when season ends)
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth() + 1; // JS months are 0-based
+      
+      // If we're after September, we're in the next season (2024-25 would be 2025)
+      // NBA season typically starts in October 
+      const currentSeason = currentMonth >= 10 ? currentYear + 1 : currentYear;
+      
+      console.log(`Getting season stats for NBA player ID ${playerId} for season ${currentSeason}`);
+      
+      // First check if we're in playoff mode (April-June)
+      const isPlayoffPeriod = currentMonth >= 4 && currentMonth <= 6;
+      
+      let seasonStats = null;
+      let statsSource = 'regular_season';
+      let playerInfo = null;
+      
+      // Try the regular season stats first
+      const seasonAveragesResponse = await this.getSeasonAverages({
+        season: currentSeason,
+        player_ids: [playerId]
+      });
+      
+      // If we have regular season data, use it
+      if (seasonAveragesResponse.data && seasonAveragesResponse.data.length > 0) {
+        seasonStats = seasonAveragesResponse.data[0];
+        console.log(`Found regular season averages for player ${playerId} with ${seasonStats.games_played} games played`);
+      }
+      // If we don't have regular season data and it might be playoff time, try playoff stats
+      else if (isPlayoffPeriod) {
+        console.log(`No regular season data found. It might be playoff time. Checking playoff stats...`);
+        const playoffStatsResponse = await this.getNbaPlayerPlayoffStats(playerId, currentSeason);
+        
+        if (playoffStatsResponse.data && playoffStatsResponse.data.length > 0) {
+          seasonStats = playoffStatsResponse.data[0];
+          statsSource = 'playoff';
+          console.log(`Found playoff stats for player ${playerId} with ${seasonStats.games_played} games played`);
+        }
+      }
+      
+      // If we don't have season or playoff data, try getting recent games stats
+      if (!seasonStats) {
+        console.warn(`No season or playoff averages found for player ${playerId} for season ${currentSeason}`);
+        
+        // Try getting recent game stats as fallback
+        const recentGames = await this.getNbaPlayerRecentStats(playerId, 10);
+        
+        if (recentGames.length === 0) {
+          console.warn(`No recent game data found for player ${playerId}`);
+          return null;
+        }
+        
+        // Get player info from recent games
+        playerInfo = {
+          id: playerId,
+          first_name: recentGames[0].player.first_name,
+          last_name: recentGames[0].player.last_name,
+          full_name: `${recentGames[0].player.first_name} ${recentGames[0].player.last_name}`,
+          position: recentGames[0].player.position || 'N/A',
+          team: {
+            id: recentGames[0].team.id,
+            name: recentGames[0].team.full_name
+          }
+        };
+        
+        console.log(`Using recent ${recentGames.length} games to calculate averages for ${playerInfo.full_name}`);
+        
+        // Simple average calculation
+        seasonStats = {
+          games_played: recentGames.length,
+          player_id: playerId,
+          season: currentSeason,
+          min: recentGames.reduce((acc, game) => acc + parseFloat(game.min || '0'), 0) / recentGames.length,
+          fgm: recentGames.reduce((acc, game) => acc + (game.fgm || 0), 0) / recentGames.length,
+          fga: recentGames.reduce((acc, game) => acc + (game.fga || 0), 0) / recentGames.length,
+          fg3m: recentGames.reduce((acc, game) => acc + (game.fg3m || 0), 0) / recentGames.length,
+          fg3a: recentGames.reduce((acc, game) => acc + (game.fg3a || 0), 0) / recentGames.length,
+          ftm: recentGames.reduce((acc, game) => acc + (game.ftm || 0), 0) / recentGames.length,
+          fta: recentGames.reduce((acc, game) => acc + (game.fta || 0), 0) / recentGames.length,
+          oreb: recentGames.reduce((acc, game) => acc + (game.oreb || 0), 0) / recentGames.length,
+          dreb: recentGames.reduce((acc, game) => acc + (game.dreb || 0), 0) / recentGames.length,
+          reb: recentGames.reduce((acc, game) => acc + (game.reb || 0), 0) / recentGames.length,
+          ast: recentGames.reduce((acc, game) => acc + (game.ast || 0), 0) / recentGames.length,
+          stl: recentGames.reduce((acc, game) => acc + (game.stl || 0), 0) / recentGames.length,
+          blk: recentGames.reduce((acc, game) => acc + (game.blk || 0), 0) / recentGames.length,
+          turnover: recentGames.reduce((acc, game) => acc + (game.turnover || 0), 0) / recentGames.length,
+          pf: recentGames.reduce((acc, game) => acc + (game.pf || 0), 0) / recentGames.length,
+          pts: recentGames.reduce((acc, game) => acc + (game.pts || 0), 0) / recentGames.length,
+          fg_pct: recentGames.reduce((acc, game) => acc + (game.fg_pct || 0), 0) / recentGames.length,
+          fg3_pct: recentGames.reduce((acc, game) => acc + (game.fg3_pct || 0), 0) / recentGames.length,
+          ft_pct: recentGames.reduce((acc, game) => acc + (game.ft_pct || 0), 0) / recentGames.length
+        };
+        
+        statsSource = 'recent_games';
+      } 
+      // If we have season/playoff stats but no player info yet, get it
+      else if (!playerInfo) {
+        // Try to get basic player info to structure the response
+        const playerSearchResult = await this.searchNbaPlayer(`${playerId}`);
+        if (playerSearchResult && playerSearchResult.length > 0) {
+          const player = playerSearchResult[0];
+          playerInfo = {
+            id: playerId,
+            first_name: player.first_name,
+            last_name: player.last_name,
+            full_name: `${player.first_name} ${player.last_name}`,
+            position: player.position || 'N/A',
+            team: {
+              id: player.team?.id || 0,
+              name: player.team?.full_name || 'Unknown Team'
+            }
+          };
+        } else {
+          // If we can't get player info, create minimal info
+          playerInfo = {
+            id: playerId,
+            first_name: 'Unknown',
+            last_name: 'Player',
+            full_name: 'Unknown Player',
+            position: 'N/A',
+            team: {
+              id: 0,
+              name: 'Unknown Team'
+            }
+          };
+        }
+      }
+      
+      // Return the final structured response
+      return {
+        player: playerInfo,
+        stats: seasonStats,
+        source: statsSource
+      };
+    } catch (error) {
+      console.error(`Error getting NBA player season stats for player ${playerId}:`, error);
+      return null;
     }
   },
   
