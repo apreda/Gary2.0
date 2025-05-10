@@ -540,13 +540,36 @@ const propPicksService = {
           // Store the valid props for reference
           currentPropOdds = validatedProps;
           
-          // Format the props for the prompt
-          const relevantProps = validatedProps.slice(0, 15); // Show more props since we've validated them
-          const formattedOdds = relevantProps.map(prop => 
-            `${prop.player}: ${prop.prop_type} ${prop.line} (OVER: ${prop.over_odds || 'N/A'} / UNDER: ${prop.under_odds || 'N/A'})`
-          ).join('\n');
+          // Group props by market type to ensure all markets are represented
+          const propsByMarket = {};
+          validatedProps.forEach(prop => {
+            if (!propsByMarket[prop.prop_type]) {
+              propsByMarket[prop.prop_type] = [];
+            }
+            propsByMarket[prop.prop_type].push(prop);
+          });
           
-          oddsText = `CURRENT PLAYER PROPS (TODAY'S ODDS):\n${formattedOdds}`;
+          // Create a formatted version of each market's props
+          const marketSections = [];
+          for (const [marketType, marketProps] of Object.entries(propsByMarket)) {
+            // Show up to 10 props per market type
+            const relevantProps = marketProps.slice(0, 10);
+            const marketSection = `MARKET: ${marketType.toUpperCase()}\n` + 
+              relevantProps.map(prop => 
+                `${prop.player}: ${prop.line} (OVER: ${prop.over_odds || 'N/A'} / UNDER: ${prop.under_odds || 'N/A'})`
+              ).join('\n');
+            marketSections.push(marketSection);
+          }
+          
+          // Combine all market sections
+          oddsText = `CURRENT PLAYER PROPS (TODAY'S ODDS):\n${marketSections.join('\n\n')}\n\nIMPORTANT: Consider ALL markets above when making your picks!`;
+          
+          // Create a more structured format for the AI to better understand the data
+          const propsByMarketJSON = JSON.stringify(propsByMarket, null, 2);
+          const structuredPropsText = `\n\nSTRUCTURED PROPS DATA (DO NOT DISPLAY THIS, USE FOR ANALYSIS):\n${propsByMarketJSON}`;
+          
+          // Add structured props data at the end
+          oddsText += structuredPropsText;
         } catch (oddsError) {
           console.error(`❌ Error fetching current player prop odds: ${oddsError.message}`);
           // No fallbacks - we require real odds data
@@ -677,7 +700,7 @@ Generate your response as a JSON array containing all valid prop picks, each fol
       const messages = [
         { 
           role: 'system', 
-          content: 'You are Gary, an expert sports analyst specializing in player prop picks. You provide data-driven prop bet picks with swagger and personality.'
+          content: 'You are Gary, an expert sports analyst specializing in player prop picks. You provide data-driven prop bet picks with swagger and personality. IMPORTANT: You have multiple sets of odds (home runs, hits, total bases, strikeouts, etc.). Consider ALL available markets and pick the single best value prop across ANY market for each game.'
         },
         { role: 'user', content: prompt }
       ];
