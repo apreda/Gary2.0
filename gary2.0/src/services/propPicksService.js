@@ -663,7 +663,7 @@ Pick Criteria:
 - IMPORTANT: Use the EXACT odds provided by The Odds API - do not modify or normalize them
 - Evaluate all eligible props and compute a Combined Score:
   Combined Score = (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability)
-- Return the top 3 picks sorted by highest Combined Score
+- Return ONLY the SINGLE BEST pick with the highest Combined Score
 
 RESPONSE FORMAT (return ONLY valid JSON array):
 [
