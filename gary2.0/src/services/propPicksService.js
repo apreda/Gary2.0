@@ -469,9 +469,11 @@ EXPECTED VALUE (EV) CALCULATION:
    - For positive odds (+110): Decimal = (American / 100) + 1
    - For negative odds (-110): Decimal = (100 / |American|) + 1
 2. Calculate implied probability = 1 / decimal odds
+   - For American odds -110: implied probability ≈ 0.524
 3. Estimate true probability based on your analysis of player stats, matchups, and trends
-4. Calculate EV = (true probability × (decimal odds - 1)) - (1 - true probability)
-5. A positive EV means the bet has value long-term
+4. Calculate EV = (true_probability - implied_probability) × 100%
+   - Example: If true probability is 0.58 and implied probability is 0.524, EV = (0.58 - 0.524) × 100% = +5.6%
+5. A positive EV (e.g., +5.6%) means your model thinks there's a 5.6 percentage points edge over the market
 
 IMPORTANT NOTES ON PROP PICKS:
 - Calculate and prioritize picks with positive Expected Value (EV)
@@ -501,7 +503,7 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "decimal_odds": 1.91,  // Converted from American odds
   "implied_probability": 0.524,  // 1 / decimal_odds
   "true_probability": 0.65,  // Your estimated true probability
-  "ev": 0.126,  // Expected Value calculation
+  "ev": 0.126,  // EV = (true_probability - implied_probability) = (0.65 - 0.524) × 100% = +12.6%
   "confidence": 0.75,
   "homeTeam": "Home team name",
   "awayTeam": "Away team name",
