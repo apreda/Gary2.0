@@ -79,59 +79,61 @@ export function Pricing() {
                   <div className="font-mono text-xs opacity-90 text-black">
                     <div>SECTION: VIP BOX</div>
                     <div>ROW: P</div>
-                    <div>SEAT: 29</div>
+                    <div>SEAT: RO</div>
                   </div>
-                  <div className="font-mono text-xs opacity-90 text-black text-right">
-                    SERIAL: GA-2025-V29
+                  <div className="text-xs text-black font-medium">
+                    <div className="mb-1">VALID THRU: 30 DAYS</div>
+                    <div className="text-right font-black text-xl">
+                      <span className="font-medium text-xs">$</span>29
+                      <span className="text-xs font-normal">/mo</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
             
-            {/* Ticket body with black background */}
-            <div className="px-6 pt-6 pb-3 flex-1 rounded-b-xl relative z-20" 
-                 style={{
-                   background: "linear-gradient(180deg, #0e0e0e 0%, #000000 100%)",
-                   boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3)"
-                 }}>
-              <div className="flex justify-between items-center mb-3">
-                <h2 className="text-5xl font-bold font-sans tracking-wider uppercase text-black">PRO</h2>
-                <div className="bg-[#b8953f] text-black px-3 py-1 rounded-full text-sm font-bold transform rotate-3">
-                  BEST VALUE
-                </div>
+            {/* Ticket body - with a dark contrast */}
+            <div className="flex-grow bg-black text-white p-6 flex flex-col justify-between"> 
+              <div>
+                <h3 className="text-lg font-bold mb-4 text-[#b8953f]">Pro Membership</h3>
+                <ul className="space-y-3 text-gray-300">
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-[#b8953f] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>3-7 daily A.I. picks across all leagues</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-[#b8953f] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Complete access to player prop picks</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-[#b8953f] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Full betting history & performance tracking</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-[#b8953f] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Private Discord community access</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-[#b8953f] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Early access to new features & markets</span>
+                  </li>
+                </ul>
               </div>
-              
-              <div className="mb-6 flex items-baseline border-b border-dashed border-gray-400/40 pb-4">
-                <span className="text-5xl font-bold font-sans tracking-wider text-[#d4af37]">$29</span>
-                <span className="text-lg ml-1 font-sans tracking-wider uppercase text-[#b8953f]">/MONTH</span>
-              </div>
-              
-              <ul className="space-y-4 mb-6 text-lg">
-                <li className="flex items-start font-sans text-[#b8953f]">
-                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
-                  <span className="font-medium leading-tight">DAILY PICKS <span className="text-sm font-normal opacity-75">(3-7 per day)</span></span>
-                </li>
-                <li className="flex items-start font-sans text-[#b8953f]">
-                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
-                  <span className="font-medium leading-tight">PLAYER PROPS <span className="text-sm font-normal opacity-75">(MLB/NFL/NBA/NHL)</span></span>
-                </li>
-                <li className="flex items-start font-sans text-[#b8953f]">
-                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
-                  <span className="font-medium leading-tight">ALL PRO LEAGUES <span className="text-sm font-normal opacity-75">(MLB/NFL/NBA/NHL)</span></span>
-                </li>
-                <li className="flex items-start font-sans text-[#b8953f]">
-                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
-                  <span className="font-medium leading-tight">FULL BET HISTORY <span className="text-sm font-normal opacity-75">(Complete record)</span></span>
-                </li>
-                <li className="flex items-start font-sans text-[#b8953f]">
-                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
-                  <span className="font-medium leading-tight">DISCORD ACCESS <span className="text-sm font-normal opacity-75">(Private channel)</span></span>
-                </li>
-              </ul>
             </div>
             
-            {/* Button area with modern barcode */}
-            <div className="px-6 pb-6 pt-3 border-t border-dashed border-gray-400/40 rounded-b-xl relative z-20" 
+            {/* Ticket footer with action button */}
+            <div className="bg-black relative p-4 rounded-b-xl group-hover:shadow-md transition duration-300 overflow-hidden">
+              <div className="relative z-20 rounded-lg overflow-hidden"
                  style={{
                    background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)"
                  }}>
@@ -145,7 +147,7 @@ export function Pricing() {
                                 transform hover:-translate-y-1">
                     <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
                                    -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                    <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
+                    <div className="text-xl text-[#d4af37] font-sans tracking-wider font-bold relative z-10">
                       SELECT PLAN
                     </div>
                   </div>
@@ -157,7 +159,7 @@ export function Pricing() {
                                 transform hover:-translate-y-1">
                     <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
                                    -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                    <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
+                    <div className="text-xl text-[#d4af37] font-sans tracking-wider font-bold relative z-10">
                       SELECT PLAN
                     </div>
                   </div>
