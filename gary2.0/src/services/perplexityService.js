@@ -207,6 +207,101 @@ export const perplexityService = {
       // Return a message that indicates the issue rather than null
       return `Unable to retrieve real-time data for ${teamName} due to API timeout. Analysis will proceed with available data.`;
     }
+  },
+  
+  /**
+   * Gets player-specific insights for prop betting
+   * @param {object} gameData - Game data containing teams, league, and player info
+   * @returns {Promise<object>} - Structured player insights for prop betting
+   */
+  getPlayerPropInsights: async (gameData) => {
+    try {
+      console.log(`Fetching player prop insights for ${gameData.matchup}`);
+      
+      // Extract home and away team names
+      const homeTeam = gameData.homeTeam || '';
+      const awayTeam = gameData.awayTeam || '';
+      const league = gameData.league || '';
+      
+      // Get list of key players (if available)
+      let keyPlayers = [];
+      
+      // Extract players from playerStats if available
+      if (gameData.playerStats) {
+        // Add home team players
+        if (gameData.playerStats.homeTeam && gameData.playerStats.homeTeam.players) {
+          keyPlayers = [...keyPlayers, ...gameData.playerStats.homeTeam.players.slice(0, 5)
+            .map(p => p.name || p.player_name)]
+        }
+        // Add away team players
+        if (gameData.playerStats.awayTeam && gameData.playerStats.awayTeam.players) {
+          keyPlayers = [...keyPlayers, ...gameData.playerStats.awayTeam.players.slice(0, 5)
+            .map(p => p.name || p.player_name)]
+        }
+      }
+      
+      // Construct league-specific query for player props
+      let propQuery = '';
+      
+      if (league === 'NBA') {
+        propQuery = `${league} player props insights for ${homeTeam} vs ${awayTeam} game TODAY: 
+          1. Which players are on hot/cold scoring streaks? 
+          2. Any players with recent shooting percentage changes? 
+          3. Any players with minutes restrictions or expanded roles? 
+          4. Recent assist or rebound trend changes? 
+          5. Any players with matchup advantages for tonight's game?`;
+      } else if (league === 'MLB') {
+        propQuery = `${league} player props insights for ${homeTeam} vs ${awayTeam} game TODAY: 
+          1. Which batters are on hitting streaks or slumps? 
+          2. Any pitchers with improving/declining strikeout rates recently? 
+          3. Any batters showing power surge or decline in recent games? 
+          4. Any baserunners with increasing/decreasing stolen base attempts? 
+          5. Any starting pitchers with recent pitch count or innings changes?`;
+      } else if (league === 'NHL') {
+        propQuery = `${league} player props insights for ${homeTeam} vs ${awayTeam} game TODAY: 
+          1. Which players are on scoring streaks or slumps? 
+          2. Any players with shooting percentage changes recently? 
+          3. Any players with power play or penalty kill time changes? 
+          4. Any players with increased shot volume in recent games? 
+          5. Any defense pairs with favorable matchups tonight?`;
+      }
+      
+      // If we have key players, add them to the query
+      if (keyPlayers.length > 0) {
+        propQuery += `\nFocus specifically on these players: ${keyPlayers.join(', ')}`;
+      }
+      
+      propQuery += `\nProvide ONLY factual, recent information (last 10 games) relevant for prop betting. Format as bullet points for each player.`;
+      
+      // Call Perplexity with our specialized query
+      const insights = await perplexityService.fetchRealTimeInfo(propQuery, {
+        model: 'sonar',
+        temperature: 0.2, // Lower temperature for factual data
+        maxTokens: 650    // Need more tokens for detailed player insights
+      });
+      
+      // Process the insights to create a structured result
+      return {
+        player_insights: insights,
+        meta: {
+          query_time: new Date().toISOString(),
+          game: gameData.matchup,
+          league: gameData.league,
+          insight_weight: '20%' // Indicate this should be 20% of decision weight
+        }
+      };
+    } catch (error) {
+      console.error(`Error getting player prop insights: ${error.message}`);
+      return {
+        player_insights: `Unable to retrieve player trend data. Analysis will proceed with available statistical data only.`,
+        meta: {
+          error: error.message,
+          game: gameData.matchup,
+          league: gameData.league || 'unknown',
+          query_time: new Date().toISOString()
+        }
+      };
+    }
   }
 };
 
