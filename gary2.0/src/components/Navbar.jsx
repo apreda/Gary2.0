@@ -19,7 +19,8 @@ export function Navbar() {
     { path: '/real-gary-picks', label: 'Gary\'s Picks' },
     { path: '/gary-props', label: 'Gary\'s Props' },
     { path: '/billfold', label: 'Billfold' },
-    { path: '/leaderboard', label: 'Leaderboard' },
+    // Leaderboard page hidden from navbar but still accessible via direct URL
+    // { path: '/leaderboard', label: 'Leaderboard' },
     { path: '/pricing', label: 'Pricing' },
     // Learn More page hidden from navbar but still accessible via direct URL
     // { path: '/learn-more', label: 'Learn More' },
