@@ -9,6 +9,30 @@ import { oddsService } from './oddsService';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
+// Define player prop markets by sport
+const PROP_MARKETS = {
+  basketball_nba: [
+    'player_points',
+    'player_rebounds',
+    'player_assists',
+    'player_threes',
+    'player_blocks',
+    'player_steals'
+  ],
+  baseball_mlb: [
+    'batter_home_runs',
+    'batter_hits',
+    'batter_total_bases',
+    'pitcher_strikeouts'
+  ],
+  icehockey_nhl: [
+    'player_points',
+    'player_goals',
+    'player_assists',
+    'player_shots_on_goal'
+  ]
+};
+
 export const propOddsService = {
   /**
    * Get player prop odds for a specific game
@@ -46,86 +70,84 @@ export const propOddsService = {
       
       console.log(`✅ Found matching game with ID: ${game.id}, scheduled for ${new Date(game.commence_time).toLocaleString()}`);
       
-      // Now fetch player props for this specific game using the two-step process required by The Odds API
-      console.log(`🔍 Fetching player props from The Odds API for game ID: ${game.id}`);
+      // Get the appropriate prop markets for this sport
+      const marketsList = PROP_MARKETS[sport] || ['player_points'];
+      console.log(`Will fetch ${marketsList.length} markets individually for ${sport}`);
       
-      // Choose the appropriate markets based on the sport
-      const propMarkets = sport === 'basketball_nba' ? 'player_points,player_rebounds,player_assists,player_threes,player_blocks,player_steals' :
-                          sport === 'baseball_mlb' ? 'batter_home_runs,batter_total_bases,pitcher_strikeouts,batter_hits' :
-                          'player_points,player_rebounds,player_assists'; // default
+      // Fetch each market type individually to avoid 404 errors
+      const allPlayerProps = [];
       
-      // IMPORTANT: Use the event-specific endpoint for player props
-      const propResponse = await axios.get(`${ODDS_API_BASE_URL}/events/${game.id}/odds`, {
-        params: {
-          apiKey,
-          regions: 'us',
-          markets: propMarkets,
-          oddsFormat: 'american',
-          dateFormat: 'iso'
-        }
-      });
-      
-      // Validate we have player prop data
-      if (!propResponse.data || !propResponse.data.bookmakers || propResponse.data.bookmakers.length === 0) {
-        console.error('❌ No player prop data returned from The Odds API');
-        throw new Error('No player prop data available for this game. This may be due to API tier limitations or the market not being available yet.');
-      }
-      
-      // Process the API response to extract player prop information
-      const playerProps = [];
-      const bookmakers = propResponse.data.bookmakers;
-      
-      // Look for a bookmaker with player props
-      let propMarketsFound = 0;
-      const propsByBookmaker = {};
-      
-      for (const bookmaker of bookmakers) {
-        if (!propsByBookmaker[bookmaker.key]) {
-          propsByBookmaker[bookmaker.key] = 0;
-        }
+      for (const market of marketsList) {
+        console.log(`Fetching ${sport} player props for market: ${market}`);
         
-        for (const market of bookmaker.markets) {
-          // Only process player prop markets
-          if (!market.key.startsWith('player_') && 
-              !market.key.startsWith('batter_') && 
-              !market.key.startsWith('pitcher_')) {
-            continue;
+        try {
+          const propResponse = await axios.get(`${ODDS_API_BASE_URL}/events/${game.id}/odds`, {
+            params: {
+              apiKey,
+              regions: 'us',
+              markets: market, // Just one market at a time
+              oddsFormat: 'american',
+              dateFormat: 'iso'
+            }
+          });
+          
+          // If we got valid data, process it
+          if (propResponse.data && 
+              propResponse.data.bookmakers && 
+              propResponse.data.bookmakers.length > 0) {
+                
+            // Process each bookmaker's data for this market
+            const bookmakers = propResponse.data.bookmakers;
+            
+            // Look for bookmakers with this market
+            for (const bookmaker of bookmakers) {
+              for (const bkMarket of bookmaker.markets) {
+                // Skip if this isn't the market we're processing
+                if (bkMarket.key !== market) continue;
+                
+                // Clean up the market key for display (remove player_, batter_, pitcher_ prefixes)
+                const propType = bkMarket.key
+                  .replace('player_', '')
+                  .replace('batter_', '')
+                  .replace('pitcher_', '');
+                
+                // Process each outcome for this market
+                for (const outcome of bkMarket.outcomes) {
+                  allPlayerProps.push({
+                    player: outcome.description, // Player name
+                    team: outcome.team || (outcome.name?.includes(game.home_team) ? game.home_team : game.away_team),
+                    prop_type: propType,
+                    line: outcome.point,
+                    over_odds: outcome.name === 'Over' ? outcome.price : null,
+                    under_odds: outcome.name === 'Under' ? outcome.price : null
+                  });
+                }
+              }
+            }
           }
-          
-          propMarketsFound++;
-          propsByBookmaker[bookmaker.key]++;
-          
-          // Extract the prop type from the market key (e.g., player_points → points)
-          const propType = market.key.replace(/^(player_|batter_|pitcher_)/, '');
-          
-          for (const outcome of market.outcomes) {
-            playerProps.push({
-              player: outcome.description, // Player name
-              team: outcome.team, // Team name if available, or derive from game data
-              prop_type: propType,
-              line: outcome.point,
-              over_odds: outcome.name === 'Over' ? outcome.price : null,
-              under_odds: outcome.name === 'Under' ? outcome.price : null,
-              bookmaker: bookmaker.key
-            });
+        } catch (err) {
+          // Handle 404 error for this specific market (just continue to next market)
+          if (err.response && err.response.status === 404) {
+            console.warn(`No data available for ${market} in game ${game.id}, continuing to next market`);
+            continue;
+          } else if (err.response && err.response.status === 422) {
+            console.warn(`API cannot process ${market} market request (422 error), continuing to next market`);
+            continue;
+          } else {
+            console.error(`Error fetching ${market} data:`, err);
           }
         }
       }
       
-      if (propMarketsFound === 0) {
-        console.error(`❌ No player prop markets found for ${homeTeam} vs ${awayTeam}.`);
-        console.error('Available bookmakers:', Object.keys(propsByBookmaker).join(', '));
-        throw new Error(`No player prop markets available for ${homeTeam} vs ${awayTeam}. The API may not have prop data for this game yet.`);
+      // If we didn't find any props after trying all markets
+      if (allPlayerProps.length === 0) {
+        console.error('❌ No player prop data found from The Odds API after trying all markets');
+        throw new Error('No player prop data available for this game after trying all markets.');
       }
-      
-      console.log(`Found ${propMarketsFound} player prop markets across ${Object.keys(propsByBookmaker).length} bookmakers.`);
-      Object.entries(propsByBookmaker).forEach(([bookmaker, count]) => {
-        console.log(`  - ${bookmaker}: ${count} player prop markets`);
-      });
       
       // Group over/under odds together for the same player and prop type
       const groupedProps = {};
-      for (const prop of playerProps) {
+      for (const prop of allPlayerProps) {
         const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
         if (!groupedProps[key]) {
           groupedProps[key] = {
@@ -134,8 +156,7 @@ export const propOddsService = {
             prop_type: prop.prop_type,
             line: prop.line,
             over_odds: null,
-            under_odds: null,
-            bookmakers: []
+            under_odds: null
           };
         }
         
@@ -145,39 +166,16 @@ export const propOddsService = {
         if (prop.under_odds !== null) {
           groupedProps[key].under_odds = prop.under_odds;
         }
-        if (!groupedProps[key].bookmakers.includes(prop.bookmaker)) {
-          groupedProps[key].bookmakers.push(prop.bookmaker);
-        }
       }
       
-      // Convert back to array and validate
+      // Convert back to array
       const result = Object.values(groupedProps);
+      console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
       
-      if (result.length === 0) {
-        console.error(`❌ No valid player props found after processing data for ${homeTeam} vs ${awayTeam}.`);
-        throw new Error(`No valid player props available for ${homeTeam} vs ${awayTeam}.`);
-      }
-      
-      console.log(`✅ Successfully found ${result.length} player props for ${homeTeam} vs ${awayTeam}.`);
-      
-      // Validate we have a mix of teams (not all props for same team)
-      const teamCounts = {};
-      result.forEach(prop => {
-        if (prop.team) {
-          teamCounts[prop.team] = (teamCounts[prop.team] || 0) + 1;
-        }
-      });
-      
-      console.log('Player props by team:', Object.entries(teamCounts)
-        .map(([team, count]) => `${team}: ${count} props`)
-        .join(', '));
-        
       return result;
-      
     } catch (error) {
-      console.error(`❌ Error fetching player prop odds for ${homeTeam} vs ${awayTeam}:`, error.message);
-      // Re-throw the error to ensure caller knows this failed
-      throw new Error(`Failed to get current player prop data: ${error.message}`);
+      console.error(`❌ Error fetching player prop odds for ${homeTeam} vs ${awayTeam}: ${error.message}`);
+      throw error;
     }
   },
 
