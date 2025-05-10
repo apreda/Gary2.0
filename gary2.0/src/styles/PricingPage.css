@@ -45,7 +45,7 @@ html {
 }
 
 .pricing-page-button-container {
-  background-color: #b8953f !important;
+  background: linear-gradient(135deg, #b8953f 0%, #d4af37 75%) !important;
   border: none !important;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
   transition: all 0.3s ease-out !important;
