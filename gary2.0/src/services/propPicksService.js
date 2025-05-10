@@ -81,10 +81,11 @@ const propPicksService = {
    */
   generateDailyPropPicks: async () => {
     try {
-      console.log('Generating daily player prop picks with sequential processing');
+      console.log('Generating daily MLB player prop picks');
+      const date = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
       
-      // Get active sports and their games (only NBA and MLB supported for player props)
-      const sportsToAnalyze = ['basketball_nba', 'baseball_mlb'];
+      // Focus exclusively on MLB props as requested
+      const sportsToAnalyze = ['baseball_mlb']; // MLB only, skip NBA and NHL
       const allPropPicks = [];
       
       // Process one sport at a time to avoid overwhelming OpenAI API
