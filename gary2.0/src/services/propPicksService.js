@@ -595,8 +595,15 @@ Generate your response as a JSON array containing all valid prop picks, each fol
       
       console.log(`Generated ${playerProps.length} prop picks`);
       
-      // Filter for picks with at least 51% confidence (lowered threshold)
-      const highConfidencePicks = playerProps.filter(prop => prop.confidence >= 0.51);
+      // First get all prop picks that have at least 51% confidence
+      const validPicks = playerProps.filter(prop => prop.confidence >= 0.51);
+      
+      // Then filter for high confidence picks only (0.78+) - keeping prompt unaware of this threshold
+      const highConfidencePicks = validPicks.filter(prop => prop.confidence >= 0.78);
+      
+      // Log how many picks were filtered out due to confidence threshold
+      console.log(`Original picks: ${playerProps.length}, Valid picks (>0.51): ${validPicks.length}, High confidence picks (>0.78): ${highConfidencePicks.length}`);
+      console.log(`Filtered out ${validPicks.length - highConfidencePicks.length} picks below 0.78 confidence threshold`);
       
       return highConfidencePicks;
     } catch (error) {
