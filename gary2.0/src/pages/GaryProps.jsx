@@ -93,12 +93,12 @@ export default function GaryProps() {
   };
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative pt-20"> {/* Added pt-20 for top padding to account for navbar */}
       {/* Background */}
       <div className="fixed inset-0 z-0" style={{ backgroundImage: `url(${BG2})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3, filter: 'blur(1px)' }} />
 
       {/* PAGE HEADER with BETA Banner - always shown regardless of user status or loading state */}
-      <div className="mx-auto px-4 pt-8 pb-4 max-w-screen-xl relative z-20">
+      <div className="mx-auto px-4 pt-10 pb-4 max-w-screen-xl relative z-20">
         <div className="text-center mb-6 bg-[#1a1a1a] border border-[#b8953f]/30 rounded-lg p-4 max-w-xl mx-auto">
           <div className="flex items-center justify-center gap-3 mb-2">
             <span className="inline-block px-2 py-1 bg-[#b8953f] text-black font-bold rounded text-xs">
