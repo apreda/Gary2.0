@@ -169,9 +169,9 @@ export default function GaryProps() {
                               <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
                               <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>{pick.pick}</div>
                             </div>
-                            <div style={{ marginTop: '0.5rem', marginBottom: '1.25rem' }}>
-                              <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
-                              <div style={{ fontSize: '0.85rem', lineHeight: 1.4, maxHeight: '180px', overflow: 'auto', opacity: 0.9 }}>{pick.rationale || 'Analysis not available at this time.'}</div>
+                            <div style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+                              <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
+                              <div style={{ fontSize: '0.85rem', lineHeight: 1.4, maxHeight: '110px', overflow: 'auto', opacity: 0.9, padding: '0.25rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>{pick.rationale || 'Analysis not available at this time.'}</div>
                             </div>
                             <div style={{ marginTop: 'auto' }}>
                               <div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Pick Details</div>
