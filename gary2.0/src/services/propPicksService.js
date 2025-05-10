@@ -9,6 +9,71 @@ import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
 import { ballDontLieService } from './ballDontLieService';
 import { sportsDbApiService } from './sportsDbApiService';
+import { nbaSeason, formatSeason } from '../utils/dateUtils';
+
+/**
+ * Fetch active players for an NBA team with their current season stats
+ * Uses TheSportsDB for current roster and Ball Don't Lie for season stats
+ * 
+ * @param {string} teamName - The name of the NBA team
+ * @returns {Promise<Array>} Array of active players with their season stats
+ */
+async function fetchActivePlayers(teamName) {
+  try {
+    console.log(`Fetching active players for ${teamName}`);
+    
+    // 1. Get current roster from TheSportsDB (only active players)
+    const roster = await sportsDbApiService.getNbaTeamRoster(teamName);
+    console.log(`Found ${roster.length} active players on the ${teamName} roster from TheSportsDB`);
+    
+    // Get the current NBA season
+    const season = nbaSeason();
+    console.log(`Using NBA season: ${season} (${formatSeason(season)})`);
+    
+    // 2. Enrich players with season stats from Ball Don't Lie
+    const playersWithStats = await Promise.all(
+      roster.map(async (player) => {
+        try {
+          // Convert TheSportsDB player ID to Ball Don't Lie player ID
+          // This requires searching for the player by name in Ball Don't Lie
+          const bdlPlayers = await ballDontLieService.searchNbaPlayer(player.strPlayer);
+          
+          if (bdlPlayers && bdlPlayers.length > 0) {
+            const bdlPlayer = bdlPlayers[0]; // Use the first match
+            
+            // Get season stats for this player
+            const seasonStats = await ballDontLieService.getSeasonAverages({
+              season: season,
+              player_ids: [bdlPlayer.id]
+            });
+            
+            if (seasonStats && seasonStats.data && seasonStats.data.length > 0) {
+              // Combine player info with stats
+              return {
+                ...bdlPlayer,
+                sportsDbData: player,
+                seasonStats: seasonStats.data[0]
+              };
+            }
+          }
+          return null; // No stats found, will be filtered out
+        } catch (error) {
+          console.error(`Error getting stats for player ${player.strPlayer}:`, error);
+          return null;
+        }
+      })
+    );
+    
+    // 3. Filter out null values (players with no stats)
+    const activePlayers = playersWithStats.filter(player => player !== null);
+    console.log(`Found ${activePlayers.length} active players with current season stats for ${teamName}`);
+    
+    return activePlayers;
+  } catch (error) {
+    console.error(`Error fetching active players for ${teamName}:`, error);
+    return [];
+  }
+}
 
 const propPicksService = {
   /**
@@ -68,68 +133,23 @@ const propPicksService = {
                 let awayTeamPlayers = [];
                 
                 if (sportName === 'NBA') {
-                  // Get NBA team and player data
+                  console.log(`Using TheSportsDB to fetch current NBA rosters...`);
+                  
+                  // Get team information for reference
                   homeTeamData = await ballDontLieService.lookupNbaTeam(game.home_team);
                   awayTeamData = await ballDontLieService.lookupNbaTeam(game.away_team);
                   
-                  if (homeTeamData) {
-                    // Get all players first
-                    const allHomePlayers = await ballDontLieService.getNbaTeamPlayers(homeTeamData.id);
-                    console.log(`Found ${allHomePlayers.length} total NBA players for ${homeTeamData.full_name}`);
-                    
-                    // Filter by season averages to get only active players
-                    console.log(`Filtering for active players with 2023-2024 season stats...`);
-                    const activeHomePlayers = [];
-                    
-                    for (const player of allHomePlayers) {
-                      try {
-                        // Check if player has season stats for current season
-                        const seasonStats = await ballDontLieService.getSeasonAverages({ 
-                          season: 2023, 
-                          player_ids: [player.id]
-                        });
-                        
-                        if (seasonStats && seasonStats.data && seasonStats.data.length > 0) {
-                          activeHomePlayers.push(player);
-                        }
-                      } catch (error) {
-                        console.error(`Error checking season stats for ${player.first_name} ${player.last_name}:`, error);
-                      }
-                    }
-                    
-                    homeTeamPlayers = activeHomePlayers;
-                    console.log(`Filtered to ${homeTeamPlayers.length} ACTIVE NBA players for ${homeTeamData.full_name}`);
-                  }
+                  // Get active players with current season stats using TheSportsDB and Ball Don't Lie
+                  console.log(`Fetching active players for ${game.home_team}...`);
+                  homeTeamPlayers = await fetchActivePlayers(game.home_team);
+                  console.log(`Found ${homeTeamPlayers.length} active players with current season stats for ${game.home_team}`);
                   
-                  if (awayTeamData) {
-                    // Get all players first
-                    const allAwayPlayers = await ballDontLieService.getNbaTeamPlayers(awayTeamData.id);
-                    console.log(`Found ${allAwayPlayers.length} total NBA players for ${awayTeamData.full_name}`);
-                    
-                    // Filter by season averages to get only active players
-                    console.log(`Filtering for active players with 2023-2024 season stats...`);
-                    const activeAwayPlayers = [];
-                    
-                    for (const player of allAwayPlayers) {
-                      try {
-                        // Check if player has season stats for current season
-                        const seasonStats = await ballDontLieService.getSeasonAverages({ 
-                          season: 2023, 
-                          player_ids: [player.id]
-                        });
-                        
-                        if (seasonStats && seasonStats.data && seasonStats.data.length > 0) {
-                          activeAwayPlayers.push(player);
-                        }
-                      } catch (error) {
-                        console.error(`Error checking season stats for ${player.first_name} ${player.last_name}:`, error);
-                      }
-                    }
-                    
-                    awayTeamPlayers = activeAwayPlayers;
-                    console.log(`Filtered to ${awayTeamPlayers.length} ACTIVE NBA players for ${awayTeamData.full_name}`);
-                  }
+                  console.log(`Fetching active players for ${game.away_team}...`);
+                  awayTeamPlayers = await fetchActivePlayers(game.away_team);
+                  console.log(`Found ${awayTeamPlayers.length} active players with current season stats for ${game.away_team}`);
                   
+                  const season = nbaSeason();
+                  console.log(`Using ${formatSeason(season)} NBA season data`);
                 } else if (sportName === 'MLB') {
                   // Don't use Ball Don't Lie for MLB - it doesn't have baseball coverage
                   // Instead use TheSportsDB API which has current MLB rosters
