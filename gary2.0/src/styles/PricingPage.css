@@ -45,7 +45,7 @@ html {
 }
 
 .pricing-page-button-container {
-  background: #FFFFFF !important;
+  background: #000000 !important;
   border: none !important;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
   transition: all 0.3s ease-out !important;
@@ -59,7 +59,7 @@ html {
 }
 
 .pricing-page-button-text {
-  color: black !important;
+  color: #d4af37 !important;
   font-weight: bold !important;
   font-size: 1.1rem !important;
   letter-spacing: 1px !important;
