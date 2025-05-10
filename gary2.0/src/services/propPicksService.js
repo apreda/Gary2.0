@@ -8,6 +8,7 @@ import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
 import { ballDontLieService } from './ballDontLieService';
+import { sportsDbApiService } from './sportsDbApiService';
 
 const propPicksService = {
   /**
@@ -72,28 +73,152 @@ const propPicksService = {
                   awayTeamData = await ballDontLieService.lookupNbaTeam(game.away_team);
                   
                   if (homeTeamData) {
-                    homeTeamPlayers = await ballDontLieService.getNbaTeamPlayers(homeTeamData.id);
-                    console.log(`Found ${homeTeamPlayers.length} NBA players for ${homeTeamData.full_name}`);
+                    // Get all players first
+                    const allHomePlayers = await ballDontLieService.getNbaTeamPlayers(homeTeamData.id);
+                    console.log(`Found ${allHomePlayers.length} total NBA players for ${homeTeamData.full_name}`);
+                    
+                    // Filter by season averages to get only active players
+                    console.log(`Filtering for active players with 2025 season stats...`);
+                    const activeHomePlayers = [];
+                    
+                    for (const player of allHomePlayers) {
+                      try {
+                        // Check if player has season stats for current season
+                        const seasonStats = await ballDontLieService.getSeasonAverages({ 
+                          season: 2025, 
+                          player_ids: [player.id]
+                        });
+                        
+                        if (seasonStats && seasonStats.data && seasonStats.data.length > 0) {
+                          activeHomePlayers.push(player);
+                        }
+                      } catch (error) {
+                        console.error(`Error checking season stats for ${player.first_name} ${player.last_name}:`, error);
+                      }
+                    }
+                    
+                    homeTeamPlayers = activeHomePlayers;
+                    console.log(`Filtered to ${homeTeamPlayers.length} ACTIVE NBA players for ${homeTeamData.full_name}`);
                   }
                   
                   if (awayTeamData) {
-                    awayTeamPlayers = await ballDontLieService.getNbaTeamPlayers(awayTeamData.id);
-                    console.log(`Found ${awayTeamPlayers.length} NBA players for ${awayTeamData.full_name}`);
+                    // Get all players first
+                    const allAwayPlayers = await ballDontLieService.getNbaTeamPlayers(awayTeamData.id);
+                    console.log(`Found ${allAwayPlayers.length} total NBA players for ${awayTeamData.full_name}`);
+                    
+                    // Filter by season averages to get only active players
+                    console.log(`Filtering for active players with 2025 season stats...`);
+                    const activeAwayPlayers = [];
+                    
+                    for (const player of allAwayPlayers) {
+                      try {
+                        // Check if player has season stats for current season
+                        const seasonStats = await ballDontLieService.getSeasonAverages({ 
+                          season: 2025, 
+                          player_ids: [player.id]
+                        });
+                        
+                        if (seasonStats && seasonStats.data && seasonStats.data.length > 0) {
+                          activeAwayPlayers.push(player);
+                        }
+                      } catch (error) {
+                        console.error(`Error checking season stats for ${player.first_name} ${player.last_name}:`, error);
+                      }
+                    }
+                    
+                    awayTeamPlayers = activeAwayPlayers;
+                    console.log(`Filtered to ${awayTeamPlayers.length} ACTIVE NBA players for ${awayTeamData.full_name}`);
                   }
                   
                 } else if (sportName === 'MLB') {
-                  // Get MLB team and player data
-                  homeTeamData = await ballDontLieService.lookupMlbTeam(game.home_team);
-                  awayTeamData = await ballDontLieService.lookupMlbTeam(game.away_team);
+                  // Don't use Ball Don't Lie for MLB - it doesn't have baseball coverage
+                  // Instead use TheSportsDB API which has current MLB rosters
+                  console.log(`Using TheSportsDB API for MLB teams and players (Ball Don't Lie doesn't cover MLB)`);
                   
-                  if (homeTeamData) {
-                    homeTeamPlayers = await ballDontLieService.getMlbTeamPlayers(homeTeamData.id);
-                    console.log(`Found ${homeTeamPlayers.length} MLB players for ${homeTeamData.full_name}`);
+                  // Look up MLB teams using TheSportsDB
+                  const homeTeamSportsDb = await sportsDbApiService.lookupTeam(
+                    game.home_team, 
+                    sportsDbApiService.leagueIds.MLB
+                  );
+                  
+                  const awayTeamSportsDb = await sportsDbApiService.lookupTeam(
+                    game.away_team, 
+                    sportsDbApiService.leagueIds.MLB
+                  );
+                  
+                  // Set team data from SportsDB results
+                  if (homeTeamSportsDb) {
+                    homeTeamData = {
+                      id: homeTeamSportsDb.idTeam,
+                      name: homeTeamSportsDb.strTeam,
+                      full_name: homeTeamSportsDb.strTeam,
+                      city: homeTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || homeTeamSportsDb.strTeam
+                    };
+                    
+                    // Get current MLB players for this team
+                    const sportsDbHomePlayers = await sportsDbApiService.getTeamPlayers(homeTeamData.id);
+                    
+                    // Convert SportsDB player format to match our expected format
+                    homeTeamPlayers = sportsDbHomePlayers.map(player => ({
+                      id: player.idPlayer,
+                      first_name: player.strPlayer.split(' ')[0],
+                      last_name: player.strPlayer.split(' ').slice(1).join(' '),
+                      position: player.strPosition,
+                      height_feet: null,
+                      height_inches: null,
+                      weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
+                      team: {
+                        id: homeTeamData.id,
+                        name: homeTeamData.name,
+                        full_name: homeTeamData.full_name,
+                        city: homeTeamData.city
+                      },
+                      // Add MLB-specific fields
+                      is_pitcher: player.strPosition === 'Pitcher' || 
+                                player.strPosition === 'Starting Pitcher' || 
+                                player.strPosition === 'Relief Pitcher'
+                    }));
+                    
+                    console.log(`Found ${homeTeamPlayers.length} current MLB players for ${homeTeamData.full_name}`);
+                  } else {
+                    console.warn(`Could not find MLB team data for ${game.home_team}`);
                   }
                   
-                  if (awayTeamData) {
-                    awayTeamPlayers = await ballDontLieService.getMlbTeamPlayers(awayTeamData.id);
-                    console.log(`Found ${awayTeamPlayers.length} MLB players for ${awayTeamData.full_name}`);
+                  if (awayTeamSportsDb) {
+                    awayTeamData = {
+                      id: awayTeamSportsDb.idTeam,
+                      name: awayTeamSportsDb.strTeam,
+                      full_name: awayTeamSportsDb.strTeam,
+                      city: awayTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || awayTeamSportsDb.strTeam
+                    };
+                    
+                    // Get current MLB players for this team
+                    const sportsDbAwayPlayers = await sportsDbApiService.getTeamPlayers(awayTeamData.id);
+                    
+                    // Convert SportsDB player format to match our expected format
+                    awayTeamPlayers = sportsDbAwayPlayers.map(player => ({
+                      id: player.idPlayer,
+                      first_name: player.strPlayer.split(' ')[0],
+                      last_name: player.strPlayer.split(' ').slice(1).join(' '),
+                      position: player.strPosition,
+                      height_feet: null,
+                      height_inches: null,
+                      weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
+                      team: {
+                        id: awayTeamData.id,
+                        name: awayTeamData.name,
+                        full_name: awayTeamData.full_name,
+                        city: awayTeamData.city
+                      },
+                      // Add MLB-specific fields
+                      is_pitcher: player.strPosition === 'Pitcher' || 
+                                player.strPosition === 'Starting Pitcher' || 
+                                player.strPosition === 'Relief Pitcher'
+                    }));
+                    
+                    console.log(`Found ${awayTeamPlayers.length} current MLB players for ${awayTeamData.full_name}`);
+                  } else {
+                    console.warn(`Could not find MLB team data for ${game.away_team}`);
                   }
                 }
                 
@@ -518,19 +643,40 @@ Generate your response as a JSON array containing all valid prop picks, each fol
         const arrayMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
         if (arrayMatch && arrayMatch[0]) {
           console.log('Found JSON array in response');
-          playerProps = JSON.parse(arrayMatch[0]);
+          const rawProps = JSON.parse(arrayMatch[0]);
+          
+          // Ensure prop_type is properly mapped to type field (if needed)
+          playerProps = rawProps.map(prop => {
+            // If the API returns prop_type but code expects type
+            if (prop.prop_type && prop.type === undefined) {
+              return {
+                ...prop,
+                type: prop.prop_type // Map prop_type to type for compatibility
+              };
+            }
+            return prop;
+          });
+          
         } else {
           // Try to find individual JSON objects
           const objMatch = response.match(/\{[\s\S]*?\}/g);
           if (objMatch && objMatch.length > 0) {
             console.log('Found individual JSON objects in response');
-            playerProps = objMatch.map(obj => {
+            const parsedObjects = objMatch.map(obj => {
               try {
                 return JSON.parse(obj);
               } catch (e) {
                 return null;
               }
             }).filter(Boolean);
+            
+            // Map prop_type to type if needed
+            playerProps = parsedObjects.map(prop => {
+              if (prop.prop_type && prop.type === undefined) {
+                return { ...prop, type: prop.prop_type };
+              }
+              return prop;
+            });
           } else {
             // Try to find content inside code blocks
             const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -538,9 +684,26 @@ Generate your response as a JSON array containing all valid prop picks, each fol
               const content = codeBlockMatch[1].trim();
               console.log('Found JSON in code block');
               try {
-                playerProps = JSON.parse(content);
-                if (!Array.isArray(playerProps)) {
-                  playerProps = [playerProps];
+                const parsedContent = JSON.parse(content);
+                if (!Array.isArray(parsedContent)) {
+                  // Make sure it's an array
+                  const propArray = [parsedContent];
+                  
+                  // Map prop_type to type if needed
+                  playerProps = propArray.map(prop => {
+                    if (prop.prop_type && prop.type === undefined) {
+                      return { ...prop, type: prop.prop_type };
+                    }
+                    return prop;
+                  });
+                } else {
+                  // Already an array, just map the fields
+                  playerProps = parsedContent.map(prop => {
+                    if (prop.prop_type && prop.type === undefined) {
+                      return { ...prop, type: prop.prop_type };
+                    }
+                    return prop;
+                  });
                 }
               } catch (e) {
                 console.error('Error parsing JSON from code block:', e);
