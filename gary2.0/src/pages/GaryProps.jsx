@@ -177,7 +177,7 @@ export default function GaryProps() {
                             <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', margin: '0.25rem 0 0.75rem' }}>
                               <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
                               <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
-                                {pick.pick ? pick.pick.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '(No pick available)'}
+                                {pick.pick ? pick.pick.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(/\s[-+]\d+$/, '') : '(No pick available)'}
                               </div>
                             </div>
                             <div style={{ marginTop: '0.5rem', marginBottom: '0.25rem' }}>
