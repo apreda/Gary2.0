@@ -78,14 +78,14 @@ const propPicksService = {
                     console.log(`Found ${allHomePlayers.length} total NBA players for ${homeTeamData.full_name}`);
                     
                     // Filter by season averages to get only active players
-                    console.log(`Filtering for active players with 2025 season stats...`);
+                    console.log(`Filtering for active players with 2023-2024 season stats...`);
                     const activeHomePlayers = [];
                     
                     for (const player of allHomePlayers) {
                       try {
                         // Check if player has season stats for current season
                         const seasonStats = await ballDontLieService.getSeasonAverages({ 
-                          season: 2025, 
+                          season: 2023, 
                           player_ids: [player.id]
                         });
                         
@@ -107,14 +107,14 @@ const propPicksService = {
                     console.log(`Found ${allAwayPlayers.length} total NBA players for ${awayTeamData.full_name}`);
                     
                     // Filter by season averages to get only active players
-                    console.log(`Filtering for active players with 2025 season stats...`);
+                    console.log(`Filtering for active players with 2023-2024 season stats...`);
                     const activeAwayPlayers = [];
                     
                     for (const player of allAwayPlayers) {
                       try {
                         // Check if player has season stats for current season
                         const seasonStats = await ballDontLieService.getSeasonAverages({ 
-                          season: 2025, 
+                          season: 2023, 
                           player_ids: [player.id]
                         });
                         
