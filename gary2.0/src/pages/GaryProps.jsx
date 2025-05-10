@@ -108,10 +108,12 @@ export default function GaryProps() {
 
   // Load picks from Supabase
   useEffect(() => {
+    console.log('GaryProps: Subscription check - planLoading:', planLoading, 'subscriptionStatus:', subscriptionStatus);
     if (!planLoading && subscriptionStatus === 'active') {
+      console.log('GaryProps: User has active subscription, loading prop picks...');
       loadPicks();
     }
-  }, [planLoading, subscriptionStatus]);
+  }, [planLoading, subscriptionStatus, reloadKey])
   
   // Load yesterday's picks when tab changes
   useEffect(() => {
@@ -129,21 +131,33 @@ export default function GaryProps() {
 
   // Load picks from Supabase using appropriate date based on time
   const loadPicks = async () => {
+    console.log('GaryProps: loadPicks function called');
     setLoading(true);
     setError(null);
     
     try {
+      // Get today's date for logging
+      const today = new Date().toISOString().split('T')[0];
+      console.log(`GaryProps: Looking for prop picks for date ${today}`);
+      
       // Get today's prop picks
       const data = await propPicksService.getTodayPropPicks();
+      console.log('GaryProps: Initial prop picks data:', data);
       
       // Process the data - extract picks from the nested structure
       let processedPicks = [];
       
       if (data && data.length > 0) {
+        console.log(`GaryProps: Found ${data.length} prop pick records for today`);
+        
         // For each prop_picks record
         data.forEach(record => {
+          console.log('GaryProps: Processing record:', record);
+          
           // If the record has a picks array, extract and process each pick
           if (record.picks && Array.isArray(record.picks)) {
+            console.log(`GaryProps: Record has ${record.picks.length} prop picks`);
+            
             // Add id to each pick from the record for React keys
             const picksWithIds = record.picks.map((pick, index) => ({
               ...pick,
@@ -152,22 +166,31 @@ export default function GaryProps() {
               created_at: record.created_at
             }));
             processedPicks = [...processedPicks, ...picksWithIds];
+          } else {
+            console.log('GaryProps: Record has no valid picks array:', record.picks);
           }
         });
       } else {
         // No picks found for today, generate new ones
-        console.log('No prop picks found for today. Generating new prop picks...');
+        console.log('GaryProps: No prop picks found for today. Generating new prop picks...');
         try {
           showToast('Generating new prop picks... This may take a moment.', 'info');
+          
+          // Generate new prop picks
+          console.log('GaryProps: Calling propPicksService.generateDailyPropPicks()...');
           const newPicks = await propPicksService.generateDailyPropPicks();
+          console.log('GaryProps: Generated picks result:', newPicks);
           
           if (newPicks && newPicks.length > 0) {
             // Store the generated picks in Supabase
+            console.log(`GaryProps: Storing ${newPicks.length} new prop picks`);
             await propPicksService.storePropPicksInDatabase(newPicks);
-            console.log(`Generated and stored ${newPicks.length} new prop picks`);
+            console.log(`GaryProps: Successfully stored ${newPicks.length} new prop picks`);
             
             // Reload picks to display the newly generated ones
+            console.log('GaryProps: Reloading fresh prop picks data...');
             const freshData = await propPicksService.getTodayPropPicks();
+            console.log('GaryProps: Fresh prop picks data:', freshData);
             
             if (freshData && freshData.length > 0) {
               freshData.forEach(record => {
@@ -185,20 +208,20 @@ export default function GaryProps() {
             
             showToast(`Generated ${processedPicks.length} new prop picks!`, 'success');
           } else {
-            console.log('No prop picks could be generated');
+            console.log('GaryProps: No prop picks could be generated');
             showToast('No prop picks available for today', 'warning');
           }
         } catch (genError) {
-          console.error('Error generating prop picks:', genError);
+          console.error('GaryProps: Error generating prop picks:', genError);
           showToast('Failed to generate prop picks', 'error');
         }
       }
       
-      console.log(`Processed ${processedPicks.length} individual prop picks`);
+      console.log(`GaryProps: Processed ${processedPicks.length} individual prop picks`);
       setPicks(processedPicks);
       setLoading(false);
     } catch (err) {
-      console.error('Error in loadPicks:', err);
+      console.error('GaryProps: Error in loadPicks:', err);
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);
     }
