@@ -184,7 +184,7 @@ export default function GaryProps() {
                               <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
                               <div style={{ fontSize: '0.85rem', lineHeight: 1.4, maxHeight: '132px', overflow: 'auto', opacity: 0.9, padding: '0.25rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>{pick.rationale || 'Analysis not available at this time.'}</div>
                             </div>
-                            <div style={{ marginTop: '0.25rem' }}>
+                            <div style={{ marginTop: '0.75rem' }}>
                               <div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Pick Details</div>
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                                 <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>EV</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p></div>
