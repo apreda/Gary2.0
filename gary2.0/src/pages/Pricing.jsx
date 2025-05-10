@@ -133,7 +133,7 @@ export function Pricing() {
             {/* Button area with modern barcode */}
             <div className="px-6 pb-6 pt-3 border-t border-dashed border-gray-400/40 rounded-b-xl relative z-20" 
                  style={{
-                   background: "linear-gradient(180deg, #f8f5e1 0%, #f3f0d8 100%)"
+                   background: "linear-gradient(180deg, #0e0e0e 0%, #000000 100%)"
                  }}>
               {/* Modern barcode */}
               <div className="mb-4 flex justify-center">
@@ -145,7 +145,7 @@ export function Pricing() {
                       y="0" 
                       width={Math.random() * 2 + 0.5} 
                       height="20" 
-                      fill="#000" 
+                      fill="#FFF" 
                       opacity={Math.random() * 0.5 + 0.5} 
                     />
                   ))}
