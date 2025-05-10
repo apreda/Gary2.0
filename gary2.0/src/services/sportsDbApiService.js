@@ -340,6 +340,35 @@ export const sportsDbApiService = {
       console.error(`Error fetching players for team ID ${teamId}:`, error);
       return [];
     }
+  },
+  
+  /**
+   * Get NBA team roster (current active players only)
+   * @param {string} teamName - The name of the NBA team
+   * @returns {Promise<Array>} Array of current active players
+   */
+  getNbaTeamRoster: async (teamName) => {
+    try {
+      if (!sportsDbApiService.API_KEY) {
+        throw new Error('TheSportsDB API key not configured');
+      }
+      
+      console.log(`Fetching current roster for NBA team "${teamName}"`);
+      
+      // First look up the team ID by name
+      const team = await sportsDbApiService.lookupTeam(teamName, sportsDbApiService.leagueIds.NBA);
+      
+      if (!team || !team.idTeam) {
+        console.error(`Could not find NBA team "${teamName}"`);
+        return [];
+      }
+      
+      // Get all players for this team (only active roster is returned)
+      return await sportsDbApiService.getTeamPlayers(team.idTeam);
+    } catch (error) {
+      console.error(`Error fetching NBA roster for team "${teamName}":`, error);
+      return [];
+    }
   }
 };
 
