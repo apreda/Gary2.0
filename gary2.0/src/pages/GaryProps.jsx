@@ -93,6 +93,15 @@ export default function GaryProps() {
     // Flipping disabled for prop cards
     return;
   };
+  
+  // Format prop_type from snake_case to Title Case with spaces
+  const formatPropType = (propType) => {
+    if (!propType) return '';
+    return propType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   return (
     <div className="min-h-screen relative pt-20"> {/* Added pt-20 for top padding to account for navbar */}
@@ -167,7 +176,9 @@ export default function GaryProps() {
                             </div>
                             <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', margin: '0.25rem 0 0.75rem' }}>
                               <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>{pick.pick}</div>
+                              <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
+                                {pick.pick ? pick.pick.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '(No pick available)'}
+                              </div>
                             </div>
                             <div style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>
                               <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>

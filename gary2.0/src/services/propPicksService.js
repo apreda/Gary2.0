@@ -674,7 +674,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
     "team": "${gameData.homeTeam} | ${gameData.awayTeam}",
     "prop_type": "batter_home_runs | batter_hits | batter_total_bases | batter_stolen_bases | batter_runs_scored | batter_rbi | pitcher_strikeouts | pitcher_outs",
     "line": 0.5,
-    "pick": "PLAYER_NAME PROP_TYPE OVER|UNDER LINE AMERICAN_ODDS",
+    "pick": "PLAYER_NAME Prop Type (use proper capitalized words with spaces, not snake_case) OVER|UNDER LINE",
     "odds": -110,
     "decimal_odds": 1.909,
     "implied_probability": 0.524,
