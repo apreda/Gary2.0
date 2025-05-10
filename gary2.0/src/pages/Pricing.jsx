@@ -6,109 +6,157 @@ import '../styles/PricingPage.css'; // Import the Pricing page specific styles
 export function Pricing() {
   return (
     <div className="min-h-screen w-full py-12 relative">
-      {/* Stadium background image */}
+      {/* Stadium background image with parallax effect */}
       <div className="absolute inset-0 bg-cover bg-center z-0" style={{
         backgroundImage: `url(${colorBackground})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
-        filter: "brightness(0.5) blur(1px)",
-        opacity: 0.95
+        filter: "brightness(0.4) blur(1px)",
+        opacity: 0.95,
+        transform: "translateZ(0)",
       }}></div>
       
-      {/* Dark overlay to enhance card readability */}
-      <div className="absolute inset-0 bg-black opacity-30 z-0"></div>
+      {/* Subtle gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-black/20 z-1"></div>
       
       {/* Content container with overlay */}
       <div className="relative z-10">
       <div className="max-w-5xl mx-auto px-4">
         {/* Header Section */}
-        <div className="text-center mb-16 pt-16">  {/* Added pt-16 for extra top padding */}
-          <h1 className="text-5xl font-bold text-[#b8953f] mb-4">Pricing</h1>
-          <p className="text-xl text-gray-400 max-w-xl mx-auto">
+        <div className="text-center mb-24 pt-16">  {/* Increased margin bottom */}
+          <h1 className="text-6xl font-bold text-[#b8953f] mb-4 drop-shadow-lg">Pricing</h1>
+          <p className="text-xl text-gray-300 max-w-xl mx-auto font-light">
             Simple, transparent pricing to upgrade your betting game
           </p>
         </div>
         
-        {/* Pricing Cards */}
+        {/* Pricing Card - Centered */}
         <div className="flex justify-center mx-auto">
           
-          {/* Pro Tier - Ticket Style */}
-          <div className="flex flex-col h-[500px] max-w-[300px] w-[300px] mx-auto relative hover:-translate-y-2 hover:shadow-xl hover:scale-105 transition-all duration-300">
-            {/* Ticket notches - simplified */}
-            <div className="absolute -left-1 top-1/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
-            <div className="absolute -left-1 top-2/3 w-2 h-4 bg-[#333] rounded-r-full"></div>
-            <div className="absolute -right-1 top-1/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
-            <div className="absolute -right-1 top-2/3 w-2 h-4 bg-[#333] rounded-l-full"></div>
+          {/* Pro Tier - Modern Ticket Style */}
+          <div className="flex flex-col h-[550px] max-w-[320px] w-[320px] mx-auto relative group
+                         transition-all duration-500 ease-out
+                         hover:-translate-y-2 hover:shadow-2xl hover:scale-105 hover:rotate-1
+                         shadow-[0_22px_70px_4px_rgba(0,0,0,0.56)]">
+            {/* Glowing border effect on hover */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#b8953f] to-[#d4af37] opacity-0 
+                           group-hover:opacity-60 rounded-xl blur-md transition duration-500"></div>
             
-            {/* Ticket header with branding */}
-            <div className="w-full py-2 px-4 rounded-t-xl flex flex-col" style={{backgroundColor: '#b8953f'}}>
+            {/* Ticket notches - more modern */}
+            <div className="absolute -left-1.5 top-1/3 w-3 h-6 bg-black rounded-r-full z-10"></div>
+            <div className="absolute -left-1.5 top-2/3 w-3 h-6 bg-black rounded-r-full z-10"></div>
+            <div className="absolute -right-1.5 top-1/3 w-3 h-6 bg-black rounded-l-full z-10"></div>
+            <div className="absolute -right-1.5 top-2/3 w-3 h-6 bg-black rounded-l-full z-10"></div>
+            
+            {/* Ticket header with premium branding */}
+            <div className="w-full py-4 px-6 rounded-t-xl relative z-20" 
+                 style={{
+                   background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)",
+                   boxShadow: "0px 4px 15px rgba(0,0,0,0.2)"
+                 }}>
               <div className="flex flex-col">
                 <div className="flex justify-between items-center">
-                  <div className="text-lg font-bold text-black font-sans tracking-wider">GARY A.I.</div>
-                  <div className="text-sm text-black font-sans tracking-wider">BOX SEAT ACCESS</div>
+                  <div className="text-xl font-bold text-black font-sans tracking-wider">GARY A.I.</div>
+                  <div className="text-sm text-black font-sans tracking-wider font-medium">BOX SEAT ACCESS</div>
                 </div>
-                <div className="flex justify-between mt-1">
-                  {/* Ticket seat information */}
-                  <div className="font-mono text-xs opacity-80 text-black">
+                <div className="flex justify-between mt-2">
+                  {/* Ticket seat information with modern font */}
+                  <div className="font-mono text-xs opacity-90 text-black">
                     <div>SECTION: VIP BOX</div>
                     <div>ROW: P</div>
                     <div>SEAT: 29</div>
                   </div>
-                  <div className="font-mono text-xs opacity-80 text-black text-right">
+                  <div className="font-mono text-xs opacity-90 text-black text-right">
                     SERIAL: GA-2025-V29
                   </div>
                 </div>
               </div>
             </div>
             
-            {/* Ticket body */}
-            <div className="px-6 pt-4 pb-2 flex-1 bg-[#f8f8e0] text-black rounded-b-xl">
-              <h2 className="text-5xl font-bold mb-3 font-sans tracking-wider uppercase" style={{color: 'black'}}>PRO</h2>
-              
-              <div className="mb-4 flex items-baseline border-b border-dotted border-gray-400/30 pb-4">
-                <span className="text-5xl font-bold font-sans tracking-wider" style={{color: 'black'}}>$29</span>
-                <span className="text-lg ml-1 font-sans tracking-wider uppercase" style={{color: 'black'}}>/MONTH</span>
+            {/* Ticket body with soft paper texture */}
+            <div className="px-6 pt-6 pb-3 flex-1 rounded-b-xl relative z-20" 
+                 style={{
+                   background: "linear-gradient(180deg, #f8f8e8 0%, #f8f5e1 100%)",
+                   boxShadow: "inset 0 1px 3px rgba(0,0,0,0.1)"
+                 }}>
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-5xl font-bold font-sans tracking-wider uppercase text-black">PRO</h2>
+                <div className="bg-[#b8953f] text-black px-3 py-1 rounded-full text-sm font-bold transform rotate-3">
+                  BEST VALUE
+                </div>
               </div>
               
-              <ul className="space-y-3 mb-6 text-lg">
-                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
-                  <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>DAILY PICKS (3-7 per day)</span>
+              <div className="mb-6 flex items-baseline border-b border-dashed border-gray-400/40 pb-4">
+                <span className="text-5xl font-bold font-sans tracking-wider text-black">$29</span>
+                <span className="text-lg ml-1 font-sans tracking-wider uppercase text-black/80">/MONTH</span>
+              </div>
+              
+              <ul className="space-y-4 mb-6 text-lg">
+                <li className="flex items-start font-sans text-black">
+                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
+                  <span className="font-medium leading-tight">DAILY PICKS <span className="text-sm font-normal opacity-75">(3-7 per day)</span></span>
                 </li>
-                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
-                  <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>GARY'S ANALYSIS</span>
+                <li className="flex items-start font-sans text-black">
+                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
+                  <span className="font-medium">GARY'S ANALYSIS</span>
                 </li>
-                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
-                  <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>ACCESS TO DAILY PLAYER PROP PICKS</span>
+                <li className="flex items-start font-sans text-black">
+                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
+                  <span className="font-medium leading-tight">ACCESS TO DAILY PLAYER PROP PICKS</span>
                 </li>
-                <li className="flex items-center font-sans tracking-wider" style={{color: 'black'}}>
-                  <span className="mr-2" style={{color: 'black'}}>•</span>
-                  <span style={{color: 'black'}}>EARLY ACCESS TO ADVANCE MODEL (Coming Soon)</span>
+                <li className="flex items-start font-sans text-black">
+                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
+                  <span className="font-medium leading-tight">EARLY ACCESS TO ADVANCE MODEL <span className="text-sm font-normal opacity-75 italic">(Coming Soon)</span></span>
                 </li>
               </ul>
             </div>
             
-            {/* Button area */}
-            <div className="px-6 pb-6 pt-2 bg-[#f8f8e0] border-t border-dotted border-gray-400/30">
-              {/* Barcode */}
+            {/* Button area with modern barcode */}
+            <div className="px-6 pb-6 pt-3 border-t border-dashed border-gray-400/40 rounded-b-xl relative z-20" 
+                 style={{
+                   background: "linear-gradient(180deg, #f8f5e1 0%, #f3f0d8 100%)"
+                 }}>
+              {/* Modern barcode */}
               <div className="mb-4 flex justify-center">
-                <img src="/img/fake-barcode.svg" alt="barcode" className="h-10 opacity-70" />
+                <svg className="h-8 w-48 opacity-80" viewBox="0 0 100 20">
+                  {Array.from({length: 30}).map((_, i) => (
+                    <rect 
+                      key={i} 
+                      x={i * 3} 
+                      y="0" 
+                      width={Math.random() * 2 + 0.5} 
+                      height="20" 
+                      fill="#000" 
+                      opacity={Math.random() * 0.5 + 0.5} 
+                    />
+                  ))}
+                </svg>
               </div>
               
-              <div className="w-full h-[52px] py-3 px-4 bg-[#b8953f] text-center rounded-md">
-                <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="no-underline">
-                  <div className="text-xl text-black font-sans tracking-wider">
+              {/* Action button with hover effects */}
+              <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="no-underline block w-full">
+                <div className="w-full h-[56px] py-3 px-4 text-center rounded-lg 
+                              relative overflow-hidden group/btn
+                              flex items-center justify-center
+                              transition-all duration-300 ease-out
+                              bg-gradient-to-r from-[#b8953f] to-[#d4af37]
+                              hover:from-[#d4af37] hover:to-[#b8953f]
+                              shadow-md hover:shadow-lg
+                              transform hover:-translate-y-1">
+                  <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent 
+                                 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
+                  <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
                     SELECT PLAN
                   </div>
-                </a>
-              </div>
+                </div>
+              </a>
               
-              {/* VIP punch hole */}
-              <div className="absolute bottom-3 -right-[15px] w-[30px] h-[30px] rounded-full bg-black flex items-center justify-center overflow-hidden">
-                <div className="absolute inset-1 rounded-full bg-[#fffbe6]"></div>
-                <div className="text-[7px] font-bold relative z-10 text-black rotate-90">VIP</div>
+              {/* VIP hologram effect */}
+              <div className="absolute bottom-4 -right-[18px] w-[36px] h-[36px] rounded-full bg-black 
+                             flex items-center justify-center overflow-hidden shadow-lg
+                             group-hover:rotate-[360deg] transition-transform duration-1000 ease-out">
+                <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#f8f8e0] to-[#d4af37] opacity-90"></div>
+                <div className="text-[10px] font-bold relative z-10 text-black">VIP</div>
               </div>
             </div>
           </div>
