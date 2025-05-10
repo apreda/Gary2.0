@@ -1,9 +1,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useUserPlan } from '../contexts/UserPlanContext';
 import colorBackground from '../assets/images/colorbackground.png';
 import '../styles/PricingPage.css'; // Import the Pricing page specific styles
 
 export function Pricing() {
+  const { user } = useAuth();
+  const { subscriptionStatus } = useUserPlan();
+
+  // Function to determine button destination based on user status
+  const getButtonDestination = () => {
+    // If user is logged in and has active subscription, direct to checkout
+    if (user && subscriptionStatus === 'active') {
+      return "https://buy.stripe.com/dR603v2UndMebrq144";
+    }
+    // Otherwise direct to login
+    return "/login";
+  };
+
   return (
     <div className="min-h-screen w-full py-12 relative">
       {/* Stadium background image with parallax effect */}
@@ -73,11 +88,11 @@ export function Pricing() {
               </div>
             </div>
             
-            {/* Ticket body with black background instead of cream */}
+            {/* Ticket body with black background */}
             <div className="px-6 pt-6 pb-3 flex-1 rounded-b-xl relative z-20" 
                  style={{
-                   background: "linear-gradient(180deg, #0e0e0e 0%, #1a1a1a 100%)",
-                   boxShadow: "inset 0 1px 3px rgba(0,0,0,0.1)"
+                   background: "linear-gradient(180deg, #0e0e0e 0%, #000000 100%)",
+                   boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3)"
                  }}>
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-5xl font-bold font-sans tracking-wider uppercase text-black">PRO</h2>
@@ -137,18 +152,32 @@ export function Pricing() {
                 </svg>
               </div>
               
-              {/* Action button with hover effects */}
-              <a href="https://buy.stripe.com/test_dR628zfn7gTX5Ne28a" className="group/btn block w-full">
-                <div className="pricing-page-button-container flex items-center justify-center bg-[#b8953f] rounded-lg py-3 px-6 
-                              shadow-md hover:shadow-lg
-                              transform hover:-translate-y-1">
-                  <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
-                                 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                  <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
-                    SELECT PLAN
+              {/* Action button with conditional destination based on user status */}
+              {user && subscriptionStatus === 'active' ? (
+                <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group/btn block w-full">
+                  <div className="pricing-page-button-container flex items-center justify-center bg-[#b8953f] rounded-lg py-3 px-6 
+                                shadow-md hover:shadow-lg
+                                transform hover:-translate-y-1">
+                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
+                                   -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
+                    <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
+                      SELECT PLAN
+                    </div>
                   </div>
-                </div>
-              </a>
+                </a>
+              ) : (
+                <Link to="/login" className="group/btn block w-full">
+                  <div className="pricing-page-button-container flex items-center justify-center bg-[#b8953f] rounded-lg py-3 px-6 
+                                shadow-md hover:shadow-lg
+                                transform hover:-translate-y-1">
+                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
+                                   -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
+                    <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
+                      SELECT PLAN
+                    </div>
+                  </div>
+                </Link>
+              )}
               
               {/* VIP hologram effect */}
               <div className="absolute bottom-4 -right-[18px] w-[36px] h-[36px] rounded-full bg-black 
