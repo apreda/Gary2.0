@@ -98,7 +98,7 @@ export default function GaryProps() {
       <div className="fixed inset-0 z-0" style={{ backgroundImage: `url(${BG2})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3, filter: 'blur(1px)' }} />
 
       <div className="mx-auto px-4 py-12 max-w-screen-xl relative z-10">
-        {/* BETA Banner - always shown to all users */}
+        {/* BETA Banner - always shown to all users regardless of status */}
         <div className="text-center mb-6 bg-[#1a1a1a] border border-[#b8953f]/30 rounded-lg p-4 max-w-xl mx-auto">
           <div className="flex items-center justify-center gap-3 mb-2">
             <span className="inline-block px-2 py-1 bg-[#b8953f] text-black font-bold rounded text-xs">
@@ -113,6 +113,7 @@ export default function GaryProps() {
           </p>
         </div>
         
+        {/* Sport limitations notice - always shown */}
         <div className="text-center mb-6">
           <span className="inline-block px-4 py-2 border border-[#b8953f]/50 rounded-full text-[#b8953f] text-sm">
             Currently available for NBA & MLB only - NFL coming when season starts
@@ -139,7 +140,11 @@ export default function GaryProps() {
                   <Link to="/pricing" className="inline-block py-3 px-8 rounded-md text-white font-medium" style={{ background: 'linear-gradient(90deg, #b8953f 0%, #d4af37 100%)', boxShadow: '0 4px 12px rgba(184,149,63,0.5)' }}>Upgrade to Pro</Link>
                 </div>
               </div>
-            ) : picks.length === 0 ? null : (
+            ) : picks.length === 0 ? (
+              <div className="flex justify-center items-center min-h-[30vh]">
+                <div className="text-gray-300 text-xl">No prop picks available for today.</div>
+              </div>
+            ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 px-2">
                 {picks.map(pick => {
