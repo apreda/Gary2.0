@@ -135,22 +135,7 @@ export function Pricing() {
                  style={{
                    background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)"
                  }}>
-              {/* Modern barcode */}
-              <div className="mb-4 flex justify-center">
-                <svg className="h-8 w-48 opacity-80" viewBox="0 0 100 20">
-                  {Array.from({length: 30}).map((_, i) => (
-                    <rect 
-                      key={i} 
-                      x={i * 3} 
-                      y="0" 
-                      width={Math.random() * 2 + 0.5} 
-                      height="20" 
-                      fill="#000" 
-                      opacity={Math.random() * 0.5 + 0.5} 
-                    />
-                  ))}
-                </svg>
-              </div>
+              {/* Barcode removed */}
               
               {/* Action button with conditional destination based on user status */}
               {user && subscriptionStatus === 'active' ? (
