@@ -520,6 +520,41 @@ export const ballDontLieService = {
   },
   
   /**
+   * Get NBA player's season averages
+   * @param {Object} options - Options for fetching season averages
+   * @param {number} options.season - The NBA season (year) to get averages for
+   * @param {Array<number>} options.player_ids - Array of player IDs to get stats for
+   * @returns {Promise<Object>} Season average stats for the requested players
+   */
+  getSeasonAverages: async function(options) {
+    try {
+      const { season, player_ids } = options;
+      
+      if (!season || !player_ids || !Array.isArray(player_ids) || player_ids.length === 0) {
+        console.error('Invalid parameters for getSeasonAverages');
+        return { data: [] };
+      }
+      
+      console.log(`Fetching season averages for player ID ${player_ids[0]} in season ${season}`);
+      
+      const response = await axios.get(`${this.NBA_BASE_URL}/season_averages`, {
+        headers: {
+          'Authorization': this.API_KEY
+        },
+        params: {
+          season,
+          player_ids: player_ids
+        }
+      });
+      
+      return response.data || { data: [] };
+    } catch (error) {
+      console.error(`Error getting season averages:`, error);
+      return { data: [] };
+    }
+  },
+  
+  /**
    * Get MLB player's comprehensive season stats including batting, pitching, and fielding data
    */
   getMlbPlayerSeasonStats: async function(playerId) {
