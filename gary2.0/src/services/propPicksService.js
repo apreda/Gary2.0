@@ -660,7 +660,7 @@ EV Calculation:
 
 Pick Criteria:
 - Only include picks with confidence ≥ 0.78 (strong picks)
-- Odds should reflect real lines (–120 to +120)
+- IMPORTANT: Use the EXACT odds provided by The Odds API - do not modify or normalize them
 - Evaluate all eligible props and compute a Combined Score:
   Combined Score = (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability)
 - Return the top 3 picks sorted by highest Combined Score
@@ -843,33 +843,32 @@ RESPONSE FORMAT (return ONLY valid JSON array):
       }
       
       function validateAndFormatOdds(odds) {
-        // If odds is a string with a plus/minus sign but no space
+        // If odds is a string with a text format instead of numeric
         if (typeof odds === 'string') {
           // Fix formatting like "plus140" to "+140"
           if (odds.startsWith('plus')) return `+${odds.substring(4)}`;
           if (odds.startsWith('minus')) return `-${odds.substring(5)}`;
           
-          // Already formatted correctly
+          // Already formatted correctly with +/- prefix
           if (odds.startsWith('+') || odds.startsWith('-')) {
-            // Parse to number to validate the range
-            const numOdds = parseInt(odds);
-            if (numOdds > 300) return '+300';
-            if (numOdds < -200) return '-200';
-            return odds; 
+            return odds;
+          }
+          
+          // Try to parse as a number
+          const numOdds = parseInt(odds);
+          if (!isNaN(numOdds)) {
+            // Format with proper +/- prefix
+            return numOdds > 0 ? `+${numOdds}` : `${numOdds}`;
           }
         }
         
-        // If odds is a number
+        // If odds is a number, preserve the value but format correctly
         if (typeof odds === 'number') {
-          // Cap extreme values
-          if (odds > 300) return '+300';
-          if (odds < -200) return '-200';
-          
-          // Format with prefix
+          // Format with proper +/- prefix
           return odds > 0 ? `+${odds}` : `${odds}`;
         }
         
-        // Default to standard odds
+        // Default to standard odds only if nothing else works
         return '-110';
       }
       
