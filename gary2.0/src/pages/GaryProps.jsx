@@ -119,7 +119,29 @@ export default function GaryProps() {
                 </div>
               </div>
             ) : picks.length === 0 ? null : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 px-2">
+              <>
+                {/* BETA Banner */}
+                <div className="text-center mb-6 bg-[#1a1a1a] border border-[#b8953f]/30 rounded-lg p-4 max-w-xl mx-auto">
+                  <div className="flex items-center justify-center gap-3 mb-2">
+                    <span className="inline-block px-2 py-1 bg-[#b8953f] text-black font-bold rounded text-xs">
+                      BETA
+                    </span>
+                    <span className="text-white font-medium text-sm">
+                      This feature is in testing mode.
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    Player props picks are experimental and may not be as accurate as our regular picks.
+                  </p>
+                </div>
+                
+                <div className="text-center mb-6">
+                  <span className="inline-block px-4 py-2 border border-[#b8953f]/50 rounded-full text-[#b8953f] text-sm">
+                    Currently available for NBA & MLB only - NFL coming when season starts
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 px-2">
                 {picks.map(pick => {
                   const flipped = !!flippedCards[pick.id];
                   return (
@@ -151,6 +173,7 @@ export default function GaryProps() {
                   );
                 })}
               </div>
+              </>
             )}
           </>
         )}
