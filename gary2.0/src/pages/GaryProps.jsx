@@ -86,7 +86,7 @@ export default function GaryProps() {
     }
   };
 
-  const cardStyle = { width: '320px', height: '480px', margin: '0 auto 2rem', position: 'relative' };
+  const cardStyle = { width: '320px', height: '500px', margin: '0 auto 2rem', position: 'relative' };
   // Prop card flipping disabled as requested
   const toggleCardFlip = (id, e) => {
     e?.stopPropagation();
@@ -168,27 +168,36 @@ export default function GaryProps() {
                       <div onClick={e => toggleCardFlip(pick.id, e)} style={{ perspective: '1000px', width: '100%', height: '100%' }}>
                         <div style={{ position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d', transition: 'transform 0.6s', transform: flipped ? 'rotateY(180deg)' : 'rotateY(0)' }}>
                           {/* Front */}
-                          <div style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', background: 'linear-gradient(135deg, rgba(22,22,28,0.97) 0%, rgba(28,28,32,0.95) 100%)', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(191,161,66,0.25)', color: '#fff', padding: '1.25rem', overflow: 'hidden', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+                          <div style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', background: 'linear-gradient(135deg, rgba(22,22,28,0.97) 0%, rgba(28,28,32,0.95) 100%)', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(191,161,66,0.25)', color: '#fff', overflow: 'hidden', fontFamily: 'Inter, sans-serif' }}>
                             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, rgba(191,161,66,0.5) 0%, rgba(212,175,55,0.95) 50%, rgba(191,161,66,0.5) 100%)' }} />
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                              <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>League</div><div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.league || 'NBA'}</div></div>
-                              <div style={{ width: '65%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Matchup</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.matchup || 'TBD'}</div></div>
-                            </div>
-                            <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', margin: '0.25rem 0 0.75rem' }}>
-                              <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
-                                {pick.pick ? pick.pick.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(/\s[-+]\d+$/, '') : '(No pick available)'}
+                            <div style={{ height: '100%', padding: '1.25rem 1.25rem', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                              {/* Top Section - Header Info */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                                <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>League</div><div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.league || 'MLB'}</div></div>
+                                <div style={{ width: '65%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Matchup</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.matchup || 'TBD'}</div></div>
                               </div>
-                            </div>
-                            <div style={{ marginTop: '0.5rem', marginBottom: '0.25rem' }}>
-                              <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
-                              <div style={{ fontSize: '0.85rem', lineHeight: 1.4, maxHeight: '132px', overflow: 'auto', opacity: 0.9, padding: '0.25rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>{pick.rationale || 'Analysis not available at this time.'}</div>
-                            </div>
-                            <div style={{ marginTop: '0.75rem' }}>
-                              <div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Pick Details</div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                                <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>EV</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p></div>
-                                <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Confidence</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.confidence ? (typeof pick.confidence === 'number' ? pick.confidence.toFixed(2) : pick.confidence) : 'Medium'}</p></div>
+                              
+                              {/* Gary's Pick Section */}
+                              <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', margin: '0.25rem 0 0.75rem' }}>
+                                <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
+                                  {pick.pick ? pick.pick.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(/\s[-+]\d+$/, '') : '(No pick available)'}
+                                </div>
+                              </div>
+                              
+                              {/* Middle Content - Analysis */}
+                              <div style={{ flex: '1 1 auto', marginBottom: '0.5rem' }}>
+                                <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
+                                <div style={{ fontSize: '0.85rem', lineHeight: 1.4, height: '150px', overflow: 'auto', opacity: 0.9, padding: '0.25rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>{pick.rationale || 'Analysis not available at this time.'}</div>
+                              </div>
+                              
+                              {/* Bottom Section - Pick Details (fixed at bottom) */}
+                              <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
+                                <div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Pick Details</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                  <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>EV</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p></div>
+                                  <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Confidence</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.confidence ? (typeof pick.confidence === 'number' ? pick.confidence.toFixed(2) : pick.confidence) : 'Medium'}</p></div>
+                                </div>
                               </div>
                             </div>
                           </div>
