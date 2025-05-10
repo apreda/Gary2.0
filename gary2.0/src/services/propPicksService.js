@@ -3,6 +3,7 @@
  * Handles generating and retrieving player prop picks
  */
 import { oddsService } from './oddsService';
+import { propOddsService } from './propOddsService';
 import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
@@ -137,14 +138,22 @@ const propPicksService = {
                 gameData.perplexityStats = { insights: 'Error fetching Perplexity data' };
               }
               
-              // Generate prop picks for this game
-              const gamePropPicks = await propPicksService.generatePropBets(gameData);
-              
-              if (gamePropPicks.length > 0) {
-                console.log(`Generated ${gamePropPicks.length} prop picks for ${gameData.matchup}`);
-                allPropPicks.push(...gamePropPicks);
-              } else {
-                console.log(`No prop picks generated for ${gameData.matchup}`);
+              try {
+                // Generate prop picks for this game
+                // This will throw an error if we can't get current player prop data
+                const gamePropPicks = await propPicksService.generatePropBets(gameData);
+                
+                if (gamePropPicks.length > 0) {
+                  console.log(`Generated ${gamePropPicks.length} prop picks for ${gameData.matchup}`);
+                  allPropPicks.push(...gamePropPicks);
+                } else {
+                  console.log(`No prop picks generated for ${gameData.matchup}`);
+                }
+              } catch (propError) {
+                console.error(`❌ Failed to generate prop picks for ${gameData.matchup}: ${propError.message}`);
+                // We continue to the next game in case other games can still get prop picks
+                // But we properly log the error so we know exactly what went wrong
+                throw new Error(`Could not generate prop picks for ${gameData.matchup} because current player prop data is unavailable: ${propError.message}`);
               }
               
             } catch (gameError) {
@@ -315,30 +324,87 @@ const propPicksService = {
       
       // Get odds data from The Odds API for player props if available
       let oddsText = '';
+      let currentPropOdds = [];
+      
       if (gameData.sportKey) {
         try {
-          // Check if oddsService has the method before calling it
-          if (oddsService && typeof oddsService.getPlayerPropOdds === 'function') {
-            // Check if we have odds data for this game's player props
-            const propOdds = await oddsService.getPlayerPropOdds(gameData.sportKey, gameData.homeTeam, gameData.awayTeam);
-            
-            if (propOdds && propOdds.length > 0) {
-              const relevantProps = propOdds.slice(0, 10); // Limit to top 10 props to reduce tokens
-              const formattedOdds = relevantProps.map(prop => 
-                `${prop.player}: ${prop.prop_type} ${prop.line} (${prop.over_odds}/${prop.under_odds})`
-              ).join('\n');
-              
-              oddsText = `AVAILABLE PLAYER PROPS (ODDS API):\n${formattedOdds}`;
-            }
-          } else {
-            // Fallback if the function doesn't exist
-            console.log('Player prop odds API not available yet');
-            oddsText = 'Player prop odds from The Odds API not yet implemented';
+          console.log(`📊 Fetching current player prop odds for ${gameData.matchup}...`);
+          
+          // Use our dedicated propOddsService to fetch current player prop data
+          // This will throw an error if no valid current prop data is available
+          const propOdds = await propOddsService.getPlayerPropOdds(
+            gameData.sportKey, 
+            gameData.homeTeam, 
+            gameData.awayTeam
+          );
+          
+          if (!propOdds || propOdds.length === 0) {
+            throw new Error(`No player prop odds available for ${gameData.matchup}`);
           }
+          
+          console.log(`✅ Successfully fetched ${propOdds.length} player prop odds`);
+          
+          // Validate the players against known team rosters from Ball Don't Lie API
+          let validatedProps = propOdds;
+          
+          // If we have player data from Ball Don't Lie, validate the prop players
+          if (gameData.playerStats && gameData.playerStats.homeTeam && gameData.playerStats.awayTeam) {
+            validatedProps = propOddsService.validatePlayerProps(
+              propOdds,
+              gameData.playerStats.homeTeam.players,
+              gameData.playerStats.awayTeam.players
+            );
+            
+            if (validatedProps.length === 0) {
+              console.error(`❌ No valid player props found after roster validation for ${gameData.matchup}`);
+              throw new Error(`Could not validate any player props against current team rosters`);
+            }
+            
+            console.log(`✓ Validated ${validatedProps.length} out of ${propOdds.length} player props against team rosters`);
+          }
+          
+          // Store the valid props for reference
+          currentPropOdds = validatedProps;
+          
+          // Format the props for the prompt
+          const relevantProps = validatedProps.slice(0, 15); // Show more props since we've validated them
+          const formattedOdds = relevantProps.map(prop => 
+            `${prop.player}: ${prop.prop_type} ${prop.line} (OVER: ${prop.over_odds || 'N/A'} / UNDER: ${prop.under_odds || 'N/A'})`
+          ).join('\n');
+          
+          oddsText = `CURRENT PLAYER PROPS (TODAY'S ODDS):\n${formattedOdds}`;
         } catch (oddsError) {
-          console.error(`Error fetching prop odds: ${oddsError.message}`);
-          oddsText = 'Odds data unavailable';
+          console.error(`❌ Error fetching current player prop odds: ${oddsError.message}`);
+          
+          // Try to get props from sportsbooks via Perplexity as fallback
+          try {
+            console.log(`🔍 Attempting to fetch player props from sportsbooks via Perplexity...`);
+            const sportCode = gameData.sportKey.includes('basketball') ? 'nba' : 
+                            gameData.sportKey.includes('baseball') ? 'mlb' : 'sports';
+                            
+            const sbProps = await propOddsService.getPlayerPropsFromSportsbooks(
+              sportCode,
+              gameData.matchup
+            );
+            
+            if (sbProps && sbProps.length > 0) {
+              oddsText = `CURRENT PLAYER PROPS (FROM SPORTSBOOKS):\n${sbProps.join('\n')}`;
+              console.log(`✅ Successfully fetched player props from sportsbooks`);
+            } else {
+              throw new Error(`No player props available from sportsbooks either`);
+            }
+          } catch (sbError) {
+            console.error(`❌ Error fetching player props from sportsbooks: ${sbError.message}`);
+            // We need current props data, so we must fail if we can't get any
+            throw new Error(
+              `Cannot generate prop picks without current player prop data. ` +
+              `The Odds API error: ${oddsError.message}. ` +
+              `Sportsbooks fallback error: ${sbError.message}`
+            );
+          }
         }
+      } else {
+        throw new Error(`Sport key is required to fetch player prop odds`);
       }
       
       // Format Perplexity insights in a more concise way for props specifically
@@ -363,6 +429,14 @@ const propPicksService = {
         }
       }
       
+      // Specifically tell the model which players to generate picks for
+      let validatedPlayersText = '';
+      if (currentPropOdds && currentPropOdds.length > 0) {
+        // Get unique players
+        const uniquePlayers = [...new Set(currentPropOdds.map(prop => prop.player))];
+        validatedPlayersText = `CONFIRMED CURRENT PLAYERS:\n${uniquePlayers.join('\n')}\n\nGENERATE PICKS ONLY FOR THESE PLAYERS. Do not generate picks for any players not in this list.\n`;
+      }
+      
       const prompt = `Analyze this upcoming ${gameData.league} game: ${gameData.matchup}
 
 TEAM DESIGNATIONS:
@@ -371,7 +445,7 @@ TEAM DESIGNATIONS:
 
 PLAYER STATISTICS:\n${playerStatsText}
 
-${oddsText ? oddsText + '\n\n' : ''}${perplexityText}
+${oddsText ? oddsText + '\n\n' : ''}${validatedPlayersText}${perplexityText}
 
 For ${gameData.league} games, focus on these specific markets:
 ${gameData.league === 'NBA' ? `- player_points (14+ points, 20+ points, etc.)  
