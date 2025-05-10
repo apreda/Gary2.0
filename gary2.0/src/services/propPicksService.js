@@ -404,7 +404,43 @@ const propPicksService = {
     }
   },
 
-  // storePropPicksInDatabase method has been removed and its functionality inlined in generateDailyPropPicks
+  /**
+   * Store player prop picks in the database
+   * @param {Array} propPicks - Array of player prop picks
+   * @returns {Promise<Object>} Supabase response
+   */
+  storePropPicksInDatabase: async (propPicks) => {
+    try {
+      console.log(`Storing ${propPicks.length} prop picks in the database`);
+      
+      // Ensure we have a valid session
+      await ensureValidSupabaseSession();
+      
+      // Format the data for Supabase
+      const date = new Date().toISOString().split('T')[0];
+      const formattedData = {
+        date,
+        picks: propPicks,
+        created_at: new Date().toISOString()
+      };
+      
+      // Insert into the database
+      const { data, error } = await supabase
+        .from('prop_picks')
+        .insert([formattedData]);
+      
+      if (error) {
+        console.error('Error storing prop picks in database:', error);
+        throw error;
+      }
+      
+      console.log('Successfully stored prop picks in database:', data);
+      return data;
+    } catch (error) {
+      console.error('Error storing prop picks in database:', error);
+      throw error;
+    }
+  },
 
   /**
    * Generate prop bet recommendations
