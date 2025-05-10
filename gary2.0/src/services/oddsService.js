@@ -510,11 +510,25 @@ export const oddsService = {
       // Now fetch player props for this specific game
       // NOTE: The Odds API offers player props endpoint only for certain sports and at higher subscription tiers
       // This implementation assumes access to the necessary tier for prop odds
+      
+      // Determine the appropriate markets based on sport
+      let propMarkets = 'player_points';
+      
+      if (sport === 'basketball_nba') {
+        propMarkets = 'player_points,player_rebounds,player_assists,player_threes,player_blocks,player_steals,player_double_double,player_first_basket,player_points_rebounds_assists';
+      } else if (sport === 'baseball_mlb') {
+        propMarkets = 'batter_home_runs,batter_hits,batter_runs_scored,batter_rbis,batter_stolen_bases,batter_total_bases,pitcher_strikeouts,pitcher_outs,pitcher_earned_runs';
+      } else if (sport === 'icehockey_nhl') {
+        propMarkets = 'player_points,player_goals,player_assists,player_shots_on_goal,player_power_play_points';
+      }
+      
+      console.log(`Fetching ${sport} player props with markets: ${propMarkets}`);
+      
       const propResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${game.id}/odds`, {
         params: {
           apiKey,
           regions: 'us',
-          markets: 'player_points,player_rebounds,player_assists,player_threes,player_blocks,player_steals',
+          markets: propMarkets,
           oddsFormat: 'american',
           dateFormat: 'iso'
         }
