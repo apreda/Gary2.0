@@ -194,19 +194,47 @@ export const propOddsService = {
       
       // If we have perplexityService, we can use it to search for current prop data
       if (typeof perplexityService !== 'undefined' && perplexityService.search) {
-        // Construct search queries for major sportsbooks
-        const queries = [
-          `site:fanduel.com/sportsbook/${sport} "${game}" "player props"`,
+        // Define site-specific search patterns as provided
+        const sportsbooks = [
+          // Main sportsbooks
+          `site:fanduel.com/sportsbook/${sport} "player props" "${game}"`, 
           `site:sportsbook.draftkings.com "${sport} player props" "${game}"`,
           `site:betmgm.com "${sport} player props" "${game}"`,
-          `site:caesars.com "${sport} player props" "${game}"`
+          `site:caesars.com "${sport} player props" "${game}"`,
+          
+          // Aggregators
+          `site:oddsshark.com "${sport} player props today" "${game}"`, 
+          `site:covers.com "${sport} player props" "${game}"`,
+          `site:actionnetwork.com "${sport} player props" "${game}"`,
+          
+          // General searches with dates to ensure freshness
+          `${sport} player props "${game}" today`, 
+          `${game} betting lines player props "over under" today`
         ];
         
-        // Try each query until we get results
-        for (const query of queries) {
-          const results = await perplexityService.search(query);
+        console.log(`Trying ${sportsbooks.length} different sportsbook search patterns...`);
+        
+        // Try each sportsbook until we get results
+        for (const searchPattern of sportsbooks) {
+          console.log(`Searching with pattern: ${searchPattern}`);
+          const results = await perplexityService.search(searchPattern);
+          
           if (results && results.length > 0) {
-            console.log(`✅ Found player props data from sportsbooks for ${game}`);
+            console.log(`✅ Found player props data from search pattern: ${searchPattern}`);
+            return results;
+          }
+        }
+        
+        // If no specific searches worked, try a more direct approach
+        const directQueries = [
+          `What are the current player props for ${game} in ${sport} today?`,
+          `List all available player props for ${game} in ${sport} with current odds.`
+        ];
+        
+        for (const query of directQueries) {
+          const results = await perplexityService.search(query, true); // force direct question
+          if (results && results.length > 0) {
+            console.log(`✅ Found player props data using direct query: ${query}`);
             return results;
           }
         }
