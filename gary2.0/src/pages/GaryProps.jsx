@@ -97,8 +97,8 @@ export default function GaryProps() {
       {/* Background */}
       <div className="fixed inset-0 z-0" style={{ backgroundImage: `url(${BG2})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3, filter: 'blur(1px)' }} />
 
-      <div className="mx-auto px-4 py-12 max-w-screen-xl relative z-10">
-        {/* BETA Banner - always shown to all users regardless of status */}
+      {/* PAGE HEADER with BETA Banner - always shown regardless of user status or loading state */}
+      <div className="mx-auto px-4 pt-8 pb-4 max-w-screen-xl relative z-20">
         <div className="text-center mb-6 bg-[#1a1a1a] border border-[#b8953f]/30 rounded-lg p-4 max-w-xl mx-auto">
           <div className="flex items-center justify-center gap-3 mb-2">
             <span className="inline-block px-2 py-1 bg-[#b8953f] text-black font-bold rounded text-xs">
@@ -119,7 +119,10 @@ export default function GaryProps() {
             Currently available for NBA & MLB only - NFL coming when season starts
           </span>
         </div>
-        
+      </div>
+
+      {/* MAIN CONTENT AREA - Contains loading states and picks */}
+      <div className="mx-auto px-4 pb-12 max-w-screen-xl relative z-10">
         {loading ? (
           <div className="flex justify-center items-center min-h-[50vh]"><div className="animate-pulse text-gray-200 text-xl">Loading prop picks...</div></div>
         ) : error ? (
