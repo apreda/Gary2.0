@@ -98,30 +98,26 @@ export default function GaryProps() {
       <div className="fixed inset-0 z-0" style={{ backgroundImage: `url(${BG2})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3, filter: 'blur(1px)' }} />
 
       <div className="mx-auto px-4 py-12 max-w-screen-xl relative z-10">
-        {/* BETA Banner - shown to all users */}
-        {!loading && !error && (
-          <>
-            <div className="text-center mb-6 bg-[#1a1a1a] border border-[#b8953f]/30 rounded-lg p-4 max-w-xl mx-auto">
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <span className="inline-block px-2 py-1 bg-[#b8953f] text-black font-bold rounded text-xs">
-                  BETA
-                </span>
-                <span className="text-white font-medium text-sm">
-                  This feature is in testing mode.
-                </span>
-              </div>
-              <p className="text-sm text-gray-400">
-                Player props picks are experimental and may not be as accurate as our regular picks.
-              </p>
-            </div>
-            
-            <div className="text-center mb-6">
-              <span className="inline-block px-4 py-2 border border-[#b8953f]/50 rounded-full text-[#b8953f] text-sm">
-                Currently available for NBA & MLB only - NFL coming when season starts
-              </span>
-            </div>
-          </>
-        )}
+        {/* BETA Banner - always shown to all users */}
+        <div className="text-center mb-6 bg-[#1a1a1a] border border-[#b8953f]/30 rounded-lg p-4 max-w-xl mx-auto">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <span className="inline-block px-2 py-1 bg-[#b8953f] text-black font-bold rounded text-xs">
+              BETA
+            </span>
+            <span className="text-white font-medium text-sm">
+              This feature is in testing mode.
+            </span>
+          </div>
+          <p className="text-sm text-gray-400">
+            Player props picks are experimental and may not be as accurate as our regular picks.
+          </p>
+        </div>
+        
+        <div className="text-center mb-6">
+          <span className="inline-block px-4 py-2 border border-[#b8953f]/50 rounded-full text-[#b8953f] text-sm">
+            Currently available for NBA & MLB only - NFL coming when season starts
+          </span>
+        </div>
         
         {loading ? (
           <div className="flex justify-center items-center min-h-[50vh]"><div className="animate-pulse text-gray-200 text-xl">Loading prop picks...</div></div>
@@ -173,7 +169,7 @@ export default function GaryProps() {
                                 <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>True Prob</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.true_probability ? `${Math.round(pick.true_probability * 100)}%` : 'N/A'}</p></div>
                                 <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Implied Prob</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.implied_probability ? `${Math.round(pick.implied_probability * 100)}%` : 'N/A'}</p></div>
                                 <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>EV</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.ev ? `+${Math.round(pick.ev * 100)}%` : 'N/A'}</p></div>
-                                <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Confidence</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.confidence || 'Medium'}</p></div>
+                                <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Confidence</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.confidence ? (typeof pick.confidence === 'number' ? pick.confidence.toFixed(2) : pick.confidence) : 'Medium'}</p></div>
                               </div>
                             </div>
                           </div>
