@@ -291,24 +291,76 @@ export default function GaryProps() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: `url(${BG2}) center/cover no-repeat fixed` }}>
-      <div className="mx-auto px-4 py-12 max-w-screen-xl">
+    <div className="min-h-screen relative">
+      {/* Background image with reduced opacity */}
+      <div
+        className="fixed inset-0 z-0"
+        style={{
+          backgroundImage: `url(${BG2})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: 0.3, // Reduced opacity
+          filter: 'blur(1px)' // Subtle blur
+        }}
+      ></div>
+      
+      <div className="mx-auto px-4 py-12 max-w-screen-xl relative z-10">
         {loading ? (
           <div className="flex justify-center items-center min-h-[50vh]">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-gold"></div>
+            <div className="animate-pulse text-gray-200 text-xl">Loading prop picks...</div>
           </div>
         ) : error ? (
-          <div className="text-center py-10">
-            <h2 className="text-2xl text-red-500 mb-4">Error</h2>
-            <p className="text-white">{error}</p>
-            <button
-              onClick={() => loadPicks()}
-              className="mt-4 px-4 py-2 bg-gold text-black font-bold rounded"
-            >
-              Try Again
-            </button>
+          <div className="flex justify-center items-center min-h-[50vh]">
+            <div className="text-red-500 text-xl">{error}</div>
           </div>
-        ) : planLoading ? (
+        ) : (
+        <div>
+          {/* Today's picks tab content */}
+          {activeTab === 'today' && (
+            <div className="space-y-8">
+              {!planLoading && subscriptionStatus !== 'active' ? (
+                <div className="flex justify-center items-center min-h-[50vh]">
+                  <div className="bg-gray-900 border border-gray-800 rounded-lg p-8 max-w-2xl w-full mx-auto text-center" 
+                       style={{
+                         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.8)',
+                         background: 'linear-gradient(145deg, rgba(30, 30, 35, 0.9) 0%, rgba(18, 18, 22, 0.95) 100%)',
+                         borderTop: '3px solid #b8953f',
+                       }}>
+                    <img 
+                      src={GaryEmblem} 
+                      alt="Gary AI Logo" 
+                      className="mx-auto mb-6" 
+                      style={{ height: '80px', opacity: 0.9 }}
+                    />
+                    <h2 className="text-2xl font-bold mb-2" style={{ color: '#b8953f' }}>Unlock Player Props Access</h2>
+                    <p className="text-gray-300 mb-6 text-lg">Upgrade to Pro for exclusive player prop picks with higher odds and bigger potential payouts.</p>
+                    <ul className="mb-8 text-left mx-auto inline-block">
+                      <li className="flex items-center mb-3">
+                        <span className="text-b8953f mr-2">✓</span>
+                        <span className="text-gray-200">High-value player props (+130 to +400 odds)</span>
+                      </li>
+                      <li className="flex items-center mb-3">
+                        <span className="text-b8953f mr-2">✓</span>
+                        <span className="text-gray-200">Detailed player analysis and research</span>
+                      </li>
+                      <li className="flex items-center mb-3">
+                        <span className="text-b8953f mr-2">✓</span>
+                        <span className="text-gray-200">Updated daily with fresh opportunities</span>
+                      </li>
+                    </ul>
+                    <Link 
+                      to="/pricing" 
+                      className="inline-block py-3 px-8 rounded-md text-white font-medium"
+                      style={{
+                        background: 'linear-gradient(90deg, #b8953f 0%, #d4af37 100%)',
+                        boxShadow: '0 4px 12px rgba(184, 149, 63, 0.5)'  
+                      }}
+                    >
+                      Upgrade to Pro
+                    </Link>
+                  </div>
+                </div>
+              ) : picks.length > 0 ? (
           <div className="flex justify-center items-center min-h-[50vh]">
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-gold"></div>
           </div>
