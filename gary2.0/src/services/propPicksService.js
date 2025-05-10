@@ -619,42 +619,72 @@ const propPicksService = {
         validatedPlayersText = `CONFIRMED CURRENT PLAYERS:\n${uniquePlayers.join('\n')}\n\nGENERATE PICKS ONLY FOR THESE PLAYERS. Do not generate picks for any players not in this list.\n`;
       }
       
-      // Create a more concise prompt to reduce token count
-      const prompt = `${gameData.league} Game: ${gameData.matchup}
-Home: ${gameData.homeTeam}, Away: ${gameData.awayTeam}
+      // MLB-specific structured prompt for prop picks
+      const prompt = `Analyze the upcoming MLB game: ${gameData.matchup}
 
+Teams:
+HOME_TEAM: ${gameData.homeTeam}
+AWAY_TEAM: ${gameData.awayTeam}
+
+Eligible Players:
+${validatedPlayersText ? validatedPlayersText.replace('CONFIRMED CURRENT PLAYERS:', '').replace('GENERATE PICKS ONLY FOR THESE PLAYERS. Do not generate picks for any players not in this list.', '') : 'Use players from the prop odds below'}
+
+Today's Lines:
 ${oddsText}
 
-${validatedPlayersText ? validatedPlayersText : ''}
+Recent Trends (last 10 games):
+${perplexityText ? perplexityText.substring(0, 800) + '...' : 'Use statistical analysis for decision-making'}
+Use these insights for 20% of your decision-making, and statistical analysis (80%) for the remainder.
 
-${perplexityText ? perplexityText.substring(0, 1000) + '...' : ''}
+Key Markets (focus):
+- batter_home_runs
+- batter_hits
+- batter_total_bases
+- batter_stolen_bases
+- batter_runs_scored
+- batter_rbi
+- pitcher_strikeouts
+- pitcher_outs
 
-INSTRUCTIONS:
-1. Examine ALL available markets (home_runs, hits, strikeouts, etc.)
-2. Select the SINGLE BEST prop bet with highest +EV across ANY market
-3. Only generate picks with 0.78+ confidence
-4. Return JSON with accurate prop_type field matching the market type
+Combined Decision Framework:
+Base each pick on a holistic evaluation that blends:
+- Expected Value (EV): 60% weight
+- Confidence Score: 20% weight
+- Predictive Judgment: 20% weight, reflecting your forecast of true outcome chances
+
+EV Calculation:
+- Convert American odds to decimal odds
+- implied_probability = 1 / decimal_odds
+- true_probability = your estimated likelihood based on analysis
+- EV = true_probability – implied_probability
+
+Pick Criteria:
+- Only include picks with confidence ≥ 0.78 (strong picks)
+- Odds should reflect real lines (–120 to +120)
+- Evaluate all eligible props and compute a Combined Score:
+  Combined Score = (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability)
+- Return the top 3 picks sorted by highest Combined Score
 
 RESPONSE FORMAT (return ONLY valid JSON array):
 [
   {
-    "player_name": "Player Name",
-    "team": "Team",
-    "prop_type": "batter_home_runs | batter_hits | pitcher_strikeouts", // MUST be exact market key
-    "line": 0.5, // ONLY use realistic lines: 0.5, 1.5, 2.5, etc. based on market norms
-    "pick": "Player PROP_TYPE OVER/UNDER 0.5 -110",
-    "odds": -110, // American odds format (-110, +120, etc.)
-    "decimal_odds": 1.91, // Convert from American odds
-    "implied_probability": 0.524, // 1 / decimal_odds
-    "true_probability": 0.65, // Your estimated probability
-    "ev": 0.06, // (true_probability - implied_probability) - be realistic
-    "confidence": 0.8, // Must be 0.78 or higher
+    "player_name": "Full name",
+    "team": "${gameData.homeTeam} | ${gameData.awayTeam}",
+    "prop_type": "batter_home_runs | batter_hits | batter_total_bases | batter_stolen_bases | batter_runs_scored | batter_rbi | pitcher_strikeouts | pitcher_outs",
+    "line": 0.5,
+    "pick": "PLAYER_NAME PROP_TYPE OVER|UNDER LINE AMERICAN_ODDS",
+    "odds": -110,
+    "decimal_odds": 1.909,
+    "implied_probability": 0.524,
+    "true_probability": 0.65,
+    "ev": 0.126,
+    "confidence": 0.8,
     "homeTeam": "${gameData.homeTeam}",
     "awayTeam": "${gameData.awayTeam}",
     "matchup": "${gameData.matchup}",
-    "time": "${gameData.time || '7:00 PM ET'}", // Include actual game time
-    "league": "${gameData.league}",
-    "rationale": "Statistical analysis with evidence for why this bet has positive EV"
+    "time": "${gameData.time || '7:10 PM ET'}",
+    "league": "MLB",
+    "rationale": "3-4 sentence statistical breakdown with swagger, including EV calculation and matchup advantages."
   }
 ]`;    
       
@@ -662,7 +692,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
       const messages = [
         { 
           role: 'system', 
-          content: 'You are Gary, an expert sports analyst specializing in player prop picks. You provide data-driven prop bet picks with swagger and personality. IMPORTANT: You have multiple sets of odds (home runs, hits, total bases, strikeouts, etc.). Consider ALL available markets and pick the single best value prop across ANY market for each game.'
+          content: 'You are Gary, an expert sports analyst specializing in MLB player prop picks. You provide data-driven prop bets with swagger and personality. Focus on Expected Value (EV), analyzing player stats, matchups, and trends to find the highest-value opportunities. Evaluate all available markets (home_runs, hits, total_bases, etc.) and compute a Combined Score: (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability). Return your top 3 picks with confidences ≥ 0.78, sorted by Combined Score.'
         },
         { role: 'user', content: prompt }
       ];
