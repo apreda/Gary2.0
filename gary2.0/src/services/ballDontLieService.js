@@ -16,6 +16,43 @@ export const ballDontLieService = {
   NBA_BASE_URL: 'https://api.balldontlie.io/v1',
   MLB_BASE_URL: 'https://api.balldontlie.io/mlb/v1',
   
+  // MLB Stats API base URL for current rosters
+  MLB_STATS_API: 'https://statsapi.mlb.com/api/v1',
+  
+  // MLB team ID mapping (statsapi.mlb.com team IDs)
+  MLB_TEAM_MAPPING: {
+    'Arizona Diamondbacks': 109,
+    'Atlanta Braves': 144,
+    'Baltimore Orioles': 110,
+    'Boston Red Sox': 111,
+    'Chicago Cubs': 112,
+    'Chicago White Sox': 145,
+    'Cincinnati Reds': 113,
+    'Cleveland Guardians': 114,
+    'Colorado Rockies': 115,
+    'Detroit Tigers': 116,
+    'Houston Astros': 117,
+    'Kansas City Royals': 118,
+    'Los Angeles Angels': 108,
+    'Los Angeles Dodgers': 119,
+    'Miami Marlins': 146,
+    'Milwaukee Brewers': 158,
+    'Minnesota Twins': 142,
+    'New York Mets': 121,
+    'New York Yankees': 147,
+    'Oakland Athletics': 133,
+    'Philadelphia Phillies': 143,
+    'Pittsburgh Pirates': 134,
+    'San Diego Padres': 135,
+    'San Francisco Giants': 137,
+    'Seattle Mariners': 136,
+    'St. Louis Cardinals': 138,
+    'Tampa Bay Rays': 139,
+    'Texas Rangers': 140,
+    'Toronto Blue Jays': 141,
+    'Washington Nationals': 120
+  },
+  
   /**
    * Initialize the service and verify API key
    */
@@ -133,30 +170,74 @@ export const ballDontLieService = {
   },
   
   /**
-   * Look up an MLB team by name
+   * Look up MLB team by name
    */
   lookupMlbTeam: async function(teamName) {
     try {
-      const teams = await this.getMlbTeams();
+      teamName = teamName.trim();
       
-      // Try to find an exact match first
-      let team = teams.find(t => 
-        t.display_name.toLowerCase() === teamName.toLowerCase() ||
-        t.name.toLowerCase() === teamName.toLowerCase() || 
-        t.location.toLowerCase() === teamName.toLowerCase()
-      );
+      // First try to get a direct match from our MLB_TEAM_MAPPING
+      const statsApiTeamId = this.lookupMlbTeamFromStatsApi(teamName);
       
-      // If no exact match, try a partial match
-      if (!team) {
-        team = teams.find(t => 
-          t.display_name.toLowerCase().includes(teamName.toLowerCase()) ||
-          teamName.toLowerCase().includes(t.name.toLowerCase()) ||
-          t.location.toLowerCase().includes(teamName.toLowerCase()) ||
-          teamName.toLowerCase().includes(t.location.toLowerCase())
-        );
+      if (statsApiTeamId) {
+        // We found a valid MLB Stats API team ID, create a stub team object
+        const matchedTeamName = Object.keys(this.MLB_TEAM_MAPPING).find(name => 
+          this.MLB_TEAM_MAPPING[name] === statsApiTeamId
+        ) || teamName;
+        
+        console.log(`✅ Found MLB team match: ${matchedTeamName} (ID: ${statsApiTeamId})`);
+        
+        return {
+          id: statsApiTeamId,  // Use the MLB Stats API team ID
+          name: matchedTeamName,
+          full_name: matchedTeamName,
+          display_name: matchedTeamName,
+          location: matchedTeamName.split(' ')[0],
+          stats_api_id: statsApiTeamId // Include the MLB Stats API ID for reference
+        };
       }
       
-      return team || null;
+      // If we couldn't find a match with Stats API mapping, fall back to BDL API
+      try {
+        const response = await axios.get(`${this.MLB_BASE_URL}/teams`, {
+          headers: {
+            'Authorization': this.API_KEY
+          }
+        });
+        
+        const teams = response.data.data || [];
+        
+        // First try exact match
+        let team = teams.find(t => 
+          t.name.toLowerCase() === teamName.toLowerCase() || 
+          t.full_name.toLowerCase() === teamName.toLowerCase() ||
+          t.display_name.toLowerCase() === teamName.toLowerCase()
+        );
+        
+        // If no exact match, try partial match
+        if (!team) {
+          team = teams.find(t => 
+            t.display_name.toLowerCase().includes(teamName.toLowerCase()) ||
+            teamName.toLowerCase().includes(t.name.toLowerCase()) ||
+            t.location.toLowerCase().includes(teamName.toLowerCase()) ||
+            teamName.toLowerCase().includes(t.location.toLowerCase())
+          );
+        }
+        
+        // If we found a BDL team, try to augment it with Stats API ID
+        if (team) {
+          // Look up the Stats API ID using the team name
+          const foundStatsApiId = this.lookupMlbTeamFromStatsApi(team.full_name || team.name);
+          if (foundStatsApiId) {
+            team.stats_api_id = foundStatsApiId;
+          }
+        }
+        
+        return team || null;
+      } catch (bdlError) {
+        console.warn(`Ball Don't Lie MLB team lookup failed: ${bdlError.message}`);
+        return null;
+      }
     } catch (error) {
       console.error(`Error looking up MLB team "${teamName}":`, error);
       return null;
@@ -186,21 +267,137 @@ export const ballDontLieService = {
   },
   
   /**
-   * Get MLB players for a team
+   * Look up MLB team from the MLB Stats API by team name
+   */
+  lookupMlbTeamFromStatsApi: function(teamName) {
+    // Clean up team name for matching
+    const cleanName = teamName.replace(/^\s+|\s+$/g, '');
+    
+    // Try direct match first
+    if (this.MLB_TEAM_MAPPING[cleanName]) {
+      return this.MLB_TEAM_MAPPING[cleanName];
+    }
+    
+    // Try partial matches
+    for (const [key, value] of Object.entries(this.MLB_TEAM_MAPPING)) {
+      // Match team name parts (e.g., 'Yankees' will match 'New York Yankees')
+      if (key.toLowerCase().includes(cleanName.toLowerCase()) || 
+          cleanName.toLowerCase().includes(key.toLowerCase().split(' ').pop())) {
+        return value;
+      }
+    }
+    
+    console.warn(`Could not find MLB team ID for: ${teamName}`);
+    return null;
+  },
+  
+  /**
+   * Get MLB players for a team using the MLB Stats API to ensure current roster data
    */
   getMlbTeamPlayers: async function(teamId) {
     try {
-      const response = await axios.get(`${this.MLB_BASE_URL}/players`, {
-        headers: {
-          'Authorization': this.API_KEY
-        },
-        params: {
-          team_ids: [teamId],
-          per_page: 100
-        }
-      });
+      // First, try to get players from the Ball Don't Lie API
+      let players = [];
+      try {
+        const bdlResponse = await axios.get(`${this.MLB_BASE_URL}/players`, {
+          headers: {
+            'Authorization': this.API_KEY
+          },
+          params: {
+            team_ids: [teamId],
+            per_page: 100
+          }
+        });
+        players = bdlResponse.data.data || [];
+      } catch (bdlError) {
+        console.warn(`Ball Don't Lie MLB player data unavailable: ${bdlError.message}`);
+      }
       
-      return response.data.data || [];
+      // Then augment with current MLB Stats API data for accuracy
+      // First get the MLB Stats API team ID
+      let statsApiTeamId = null;
+      
+      // If we have Ball Don't Lie data, try to use the team name to look up MLB Stats team ID
+      if (players.length > 0 && players[0].team) {
+        statsApiTeamId = this.lookupMlbTeamFromStatsApi(players[0].team.name);
+      }
+      
+      // If we couldn't get it from BDL data, try direct lookup
+      if (!statsApiTeamId) {
+        // Look for team in our mappings
+        for (const [teamName, id] of Object.entries(this.MLB_TEAM_MAPPING)) {
+          if (teamName.toLowerCase().includes(String(teamId).toLowerCase())) {
+            statsApiTeamId = id;
+            break;
+          }
+        }
+      }
+      
+      // If we found a valid Stats API team ID, get the current roster
+      if (statsApiTeamId) {
+        try {
+          console.log(`Fetching current roster for MLB team ID ${statsApiTeamId} from MLB Stats API...`);
+          const rosterResponse = await axios.get(`${this.MLB_STATS_API}/teams/${statsApiTeamId}/roster`, {
+            params: {
+              rosterType: 'active',  // Only get active players
+              date: new Date().toISOString().split('T')[0]  // Today's date in YYYY-MM-DD format
+            }
+          });
+          
+          const activeRoster = rosterResponse.data.roster || [];
+          console.log(`Found ${activeRoster.length} active MLB players on current roster`);
+          
+          // If we got valid roster data, use it to filter or augment our player list
+          if (activeRoster.length > 0) {
+            // Get detailed info for each roster player
+            const rosterPlayerIds = activeRoster.map(player => player.person.id);
+            
+            // Batch fetching of player details (up to 25 per request per API limits)
+            const detailedPlayers = [];
+            for (let i = 0; i < rosterPlayerIds.length; i += 25) {
+              const batch = rosterPlayerIds.slice(i, i + 25);
+              try {
+                const playerResponse = await axios.get(`${this.MLB_STATS_API}/people`, {
+                  params: {
+                    personIds: batch.join(','),
+                    fields: 'people,id,fullName,primaryNumber,primaryPosition,batSide,pitchHand,active,currentTeam'
+                  }
+                });
+                
+                if (playerResponse.data.people) {
+                  detailedPlayers.push(...playerResponse.data.people);
+                }
+              } catch (batchError) {
+                console.warn(`Error fetching batch of player details: ${batchError.message}`);
+              }
+            }
+            
+            // Replace our player list with the active roster data
+            if (detailedPlayers.length > 0) {
+              // Format MLB Stats API data into the same format as Ball Don't Lie API
+              players = detailedPlayers.map(player => ({
+                id: player.id,
+                first_name: player.fullName.split(' ')[0],
+                last_name: player.fullName.split(' ').slice(1).join(' '),
+                full_name: player.fullName,
+                position: player.primaryPosition ? player.primaryPosition.abbreviation : '',
+                number: player.primaryNumber,
+                active: true,  // These are all active roster players
+                team: { id: statsApiTeamId, name: teamName },
+                mlbStatsData: player  // Keep original data for reference
+              }));
+              
+              console.log(`Validated ${players.length} current active MLB players`);
+              return players;
+            }
+          }
+        } catch (statsApiError) {
+          console.error(`Error fetching MLB roster from Stats API: ${statsApiError.message}`);
+        }
+      }
+      
+      // Return the original player list if we couldn't enhance it
+      return players;
     } catch (error) {
       console.error(`Error getting MLB players for team ${teamId}:`, error);
       return [];
