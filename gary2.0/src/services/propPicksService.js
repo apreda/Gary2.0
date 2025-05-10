@@ -549,27 +549,43 @@ const propPicksService = {
             propsByMarket[prop.prop_type].push(prop);
           });
           
-          // Create a formatted version of each market's props
+          // Create a more token-efficient representation of the props
           const marketSections = [];
+          let marketCount = 0;
+          
+          // Only include markets that have props (max 5 markets to keep token count reasonable)
           for (const [marketType, marketProps] of Object.entries(propsByMarket)) {
-            // Show up to 10 props per market type
-            const relevantProps = marketProps.slice(0, 10);
+            if (marketProps.length === 0 || marketCount >= 5) continue;
+            marketCount++;
+            
+            // Select 3-5 best props per market (with good odds)
+            const bestProps = marketProps
+              .sort((a, b) => {
+                // Sort by most favorable odds (higher absolute value is better)
+                const aOdds = Math.max(a.over_odds || -9999, a.under_odds || -9999);
+                const bOdds = Math.max(b.over_odds || -9999, b.under_odds || -9999);
+                return bOdds - aOdds;
+              })
+              .slice(0, 5);
+              
+            // Format each prop concisely
             const marketSection = `MARKET: ${marketType.toUpperCase()}\n` + 
-              relevantProps.map(prop => 
-                `${prop.player}: ${prop.line} (OVER: ${prop.over_odds || 'N/A'} / UNDER: ${prop.under_odds || 'N/A'})`
+              bestProps.map(prop => 
+                `${prop.player.split(' ').slice(-1)[0]}: ${prop.line} (O:${prop.over_odds || 'N/A'}/U:${prop.under_odds || 'N/A'})`
               ).join('\n');
+              
             marketSections.push(marketSection);
           }
           
           // Combine all market sections
           oddsText = `CURRENT PLAYER PROPS (TODAY'S ODDS):\n${marketSections.join('\n\n')}\n\nIMPORTANT: Consider ALL markets above when making your picks!`;
           
-          // Create a more structured format for the AI to better understand the data
-          const propsByMarketJSON = JSON.stringify(propsByMarket, null, 2);
-          const structuredPropsText = `\n\nSTRUCTURED PROPS DATA (DO NOT DISPLAY THIS, USE FOR ANALYSIS):\n${propsByMarketJSON}`;
+          // Add a simple market summary instead of full JSON
+          const marketSummary = Object.entries(propsByMarket)
+            .map(([market, props]) => `${market}: ${props.length} props`)
+            .join(', ');
           
-          // Add structured props data at the end
-          oddsText += structuredPropsText;
+          oddsText += `\n\nAVAILABLE MARKETS: ${marketSummary}`;
         } catch (oddsError) {
           console.error(`❌ Error fetching current player prop odds: ${oddsError.message}`);
           // No fallbacks - we require real odds data
@@ -603,98 +619,40 @@ const propPicksService = {
         validatedPlayersText = `CONFIRMED CURRENT PLAYERS:\n${uniquePlayers.join('\n')}\n\nGENERATE PICKS ONLY FOR THESE PLAYERS. Do not generate picks for any players not in this list.\n`;
       }
       
-      const prompt = `Analyze this upcoming ${gameData.league} game: ${gameData.matchup}
+      // Create a more concise prompt to reduce token count
+      const prompt = `${gameData.league} Game: ${gameData.matchup}
+Home: ${gameData.homeTeam}, Away: ${gameData.awayTeam}
 
-TEAM DESIGNATIONS:
-- HOME TEAM: ${gameData.homeTeam}
-- AWAY TEAM: ${gameData.awayTeam}
+${oddsText}
 
-PLAYER STATISTICS:\n${playerStatsText}
+${validatedPlayersText ? validatedPlayersText : ''}
 
-${oddsText ? oddsText + '\n\n' : ''}${validatedPlayersText}${perplexityText}
+${perplexityText ? perplexityText.substring(0, 1000) + '...' : ''}
 
-For ${gameData.league} games, focus on these specific markets:
-${gameData.league === 'NBA' ? `- player_points (14+ points, 20+ points, etc.)  
-- player_threes (especially 3+ or 4+ three-pointers made)
-- player_assists (especially 7+ or 8+ assists)
-- player_rebounds (especially 8+ or 10+ rebounds)
-- player_pra (points+rebounds+assists)
-- player_blocks (especially 2+ blocks for rim protectors)
-- player_steals (especially 2+ steals for defensive specialists)
-- player_double_double (points + rebounds most common)
-- player_first_basket (especially for centers and high-usage scorers)
-- player_points_rebounds (combined totals for frontcourt players)` : ''}
-${gameData.league === 'MLB' ? `- batter_home_runs (especially for power hitters)
-- batter_total_bases (especially 3+ or 4+ total bases)
-- pitcher_strikeouts (especially high strikeout totals)
-- batter_hits (especially for consistent contact hitters)
-- pitcher_outs (innings pitched)
-- batter_stolen_bases (especially for speedsters with favorable matchups)
-- batter_runs_scored (especially leadoff and top of order hitters)
-- batter_rbi (especially for middle-order power hitters)
-- batter_extra_base_hits (doubles, triples, homers combined)
-- batter_to_record_a_hit (yes/no markets)
-- pitcher_earned_runs (under markets for quality starters)` : ''}
-${gameData.league === 'NHL' ? `- player_goal_scorer (focus on second-line players with good odds)
-- player_points (especially 2+ or 3+ points)
-- player_shots_on_goal (especially high shot totals)
-- player_assists (especially for playmaking forwards and defensemen)
-- player_power_play_points (when available with good odds)` : ''}
+INSTRUCTIONS:
+1. Examine ALL available markets (home_runs, hits, strikeouts, etc.)
+2. Select the SINGLE BEST prop bet with highest +EV across ANY market
+3. Only generate picks with 0.78+ confidence
+4. Return JSON with accurate prop_type field matching the market type
 
-EXPECTED VALUE (EV) CALCULATION:
-1. Convert American odds to decimal odds:
-   - For positive odds (+110): Decimal = (American / 100) + 1
-   - For negative odds (-110): Decimal = (100 / |American|) + 1
-2. Calculate implied probability = 1 / decimal odds
-   - For American odds -110: implied probability ≈ 0.524
-3. Estimate true probability based on your analysis of player stats, matchups, and trends
-4. Calculate EV = (true_probability - implied_probability) × 100%
-   - Example: If true probability is 0.58 and implied probability is 0.524, EV = (0.58 - 0.524) × 100% = +5.6%
-5. A positive EV (e.g., +5.6%) means your model thinks there's a 5.6 percentage points edge over the market
-
-IMPORTANT NOTES ON PROP PICKS:
-- Calculate and prioritize picks with positive Expected Value (EV)
-- Use the FULL confidence scale from 0.1 to 1.0 based on your statistical analysis
-- 0.1-0.3: Weak edge, speculative play
-- 0.3-0.5: Slight edge, low conviction
-- 0.5-0.65: Moderate edge
-- 0.65-0.78: Good statistical edge
-- 0.78-0.9: Strong pick with excellent matchup advantages (our preferred range)
-- 0.9-1.0: Extremely high conviction pick
-
-NOTE: We're focusing ONLY on high-quality picks with 0.78+ confidence ratings
-
-- Provide accurate line values based on current player performance
-- Odds should be realistic (typically -120 to +120 for most prop bets)
-- Only include props where you have identified a clear statistical advantage
-- Higher EV values should correlate with higher confidence
-
-Generate player prop picks with detailed statistical rationale for this matchup.
-
-RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
-\`\`\`json
-{
-  "player_name": "Player's full name",
-  "team": "Player's team",
-  "prop_type": "points | rebounds | assists | threes | pts+reb+ast",
-  "line": 25.5,
-  "pick": "LeBron James POINTS OVER 25.5 -110", // Format as: "PLAYER_NAME PROP_TYPE PICK BET_TYPE ODDS"
-  "odds": -110,
-  "decimal_odds": 1.91,  // Converted from American odds
-  "implied_probability": 0.524,  // 1 / decimal_odds
-  "true_probability": 0.65,  // Your estimated true probability
-  "ev": 0.126,  // EV = (true_probability - implied_probability) = (0.65 - 0.524) × 100% = +12.6%
-  "confidence": 0.75,
-  "homeTeam": "Home team name",
-  "awayTeam": "Away team name",
-  "matchup": "Team vs Team",
-  "time": "7:30 PM ET",
-  "league": "NBA | MLB | NHL",
-  "rationale": "3-4 sentence statistical breakdown with Gary's swagger. Include EV calculation justification, performance trends, matchup advantages, and recent player performance context. Be more thorough and detailed in your analysis."  
-}
-\`\`\`
-
-Generate your response as a JSON array containing all valid prop picks, each following the exact format above. Don't limit the number of picks.`;    
+RESPONSE FORMAT (return ONLY valid JSON array):
+[
+  {
+    "player_name": "Player Name",
+    "team": "Team",
+    "prop_type": "home_runs | hits | strikeouts", 
+    "line": 0.5,
+    "pick": "Player PROP_TYPE OVER/UNDER 0.5 -110",
+    "odds": -110,
+    "confidence": 0.8,
+    "ev": 0.06,
+    "homeTeam": "${gameData.homeTeam}",
+    "awayTeam": "${gameData.awayTeam}",
+    "matchup": "${gameData.matchup}",
+    "league": "${gameData.league}",
+    "rationale": "Brief statistical analysis with evidence"
+  }
+]`;    
       
       // Use OpenAI to generate player prop picks
       const messages = [
