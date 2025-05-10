@@ -81,7 +81,7 @@ export const propOddsService = {
         console.log(`Fetching ${sport} player props for market: ${market}`);
         
         try {
-          const propResponse = await axios.get(`${ODDS_API_BASE_URL}/events/${game.id}/odds`, {
+          const propResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${game.id}/odds`, {
             params: {
               apiKey,
               regions: 'us',

@@ -389,10 +389,11 @@ export const oddsService = {
   
   /**
    * Get line movement data for a specific event using only current odds data
+   * @param {string} sport - Sport key (e.g., 'basketball_nba')
    * @param {string} eventId - Event ID
    * @returns {Promise<Object>} Line movement analysis
    */
-  getLineMovement: async (eventId) => {
+  getLineMovement: async (sport, eventId) => {
     try {
       const apiKey = await configLoader.getOddsApiKey();
       if (!apiKey) {
@@ -403,7 +404,7 @@ export const oddsService = {
       console.log(`Analyzing line movement for event ${eventId}`);
       
       // Get current odds for this event
-      const response = await axios.get(`${ODDS_API_BASE_URL}/events/${eventId}/odds`, {
+      const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${eventId}/odds`, {
         params: {
           apiKey,
           regions: 'us',
