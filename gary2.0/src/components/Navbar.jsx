@@ -26,6 +26,7 @@ export function Navbar() {
     // { path: '/learn-more', label: 'Learn More' },
   ];
   
+  // We don't need to modify signedInNavItems differently, just use the navItems defined above
   const signedInNavItems = [...navItems];
   const filteredNavItems = session ? signedInNavItems : navItems;
   
