@@ -3,6 +3,36 @@ import { configLoader } from './configLoader';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
+// Player prop markets by sport
+const PROP_MARKETS = {
+  basketball_nba: [
+    'player_points',
+    'player_rebounds',
+    'player_assists',
+    'player_threes',
+    'player_blocks',
+    'player_steals'
+  ],
+  baseball_mlb: [
+    'batter_home_runs',
+    'batter_hits',
+    'batter_runs_scored',
+    'batter_rbis',
+    'batter_stolen_bases',
+    'batter_total_bases',
+    'pitcher_strikeouts',
+    'pitcher_outs',
+    'pitcher_earned_runs'
+  ],
+  icehockey_nhl: [
+    'player_points',
+    'player_goals',
+    'player_assists',
+    'player_shots_on_goal',
+    'player_power_play_points'
+  ]
+};
+
 /**
  * Service for fetching data from The Odds API
  */
@@ -145,18 +175,17 @@ export const oddsService = {
       
       const response = await axios.get(`${ODDS_API_BASE_URL}/sports`, {
         params: {
-          apiKey: apiKey
+          apiKey
         }
       });
       
-      console.log(`✅ Successfully retrieved ${response.data.length} sports`);
       return response.data;
     } catch (error) {
-      console.error('❌ Error fetching sports:', error.response?.data || error.message);
-      throw new Error('Failed to get sports list. Check API key and network connection.');
+      console.error('❌ Error fetching sports:', error);
+      throw error;
     }
   },
-
+  
   /**
    * Get odds for a specific sport
    * @param {string} sport - Sport key
@@ -166,25 +195,27 @@ export const oddsService = {
     try {
       const apiKey = await configLoader.getOddsApiKey();
       if (!apiKey) {
-        console.error('⚠️ ODDS API KEY IS MISSING - This will cause picks generation to fail');
+        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch odds');
         throw new Error('API key is required for The Odds API');
       }
+      
+      console.log(`Fetching odds for ${sport}`);
+      
       const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
         params: {
           apiKey,
           regions: 'us',
-          markets: 'h2h,spreads,totals',
-          oddsFormat: 'american',
-          bookmakers: 'fanduel,draftkings,betmgm,caesars'
+          markets: 'h2h,spreads,totals'
         }
       });
+      
       return response.data;
     } catch (error) {
-      console.error(`❌ Error fetching odds for ${sport}:`, error.response?.data || error.message);
+      console.error(`❌ Error fetching odds for ${sport}:`, error);
       throw error;
     }
   },
-
+  
   /**
    * Get odds for multiple sports
    * @param {Array<string>} sports - Array of sport keys
@@ -192,10 +223,15 @@ export const oddsService = {
    */
   getBatchOdds: async (sports) => {
     try {
-      // Handle case where no sports are passed
-      if (!sports || sports.length === 0) {
-        console.error('No sports provided to getBatchOdds - API returned no active sports');
-        throw new Error('No active sports found to get odds for. The API may be experiencing issues.');
+      const apiKey = await configLoader.getOddsApiKey();
+      if (!apiKey) {
+        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch batch odds');
+        throw new Error('API key is required for The Odds API');
+      }
+      
+      if (!sports || !Array.isArray(sports) || sports.length === 0) {
+        console.error('Invalid sports parameter for getBatchOdds');
+        return {};
       }
       
       console.log(`Fetching batch odds for sports: ${sports.join(', ')}`);
@@ -256,11 +292,21 @@ export const oddsService = {
       
       console.log(`Fetching games between ${twelvePmEST.toISOString()} and ${cutoffTime.toISOString()} EST`);
       
+      // Include prop markets when fetching games to ensure we can later get prop odds
+      let marketParams = options.markets || 'h2h,spreads,totals';
+      
+      // Add prop markets based on sport to ensure the event IDs we get support prop markets
+      if (sport in PROP_MARKETS && !options.markets) {
+        const propMarketsString = PROP_MARKETS[sport].join(',');
+        marketParams = `${marketParams},${propMarketsString}`;
+        console.log(`Added prop markets for ${sport}: ${propMarketsString}`);
+      }
+      
       const response = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
         params: {
           apiKey,
           regions: options.regions || 'us',
-          markets: options.markets || 'h2h,spreads,totals',
+          markets: marketParams,
           oddsFormat: options.oddsFormat || 'american',
           bookmakers: options.bookmakers || 'fanduel,draftkings,betmgm,caesars'
         }
@@ -279,33 +325,34 @@ export const oddsService = {
       if (error.response && error.response.status === 401) {
         console.error('⚠️ API KEY ERROR: The Odds API returned 401 Unauthorized. Your API key has expired or reached its limit. Please update your VITE_ODDS_API_KEY environment variable in Vercel.');
       }
-      console.error('Error fetching upcoming games:', error);
-      throw error;
+      console.error('❌ Error fetching upcoming games:', error);
+      return [];
     }
   },
-
-
+  
+  
   /**
    * Get all available sports
    * @returns {Promise<Array>} List of available sports
    */
   getAllSports: async () => {
     try {
-      const apiKey = await configLoader.getOddsApiKey();
-      if (!apiKey) {
-        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch all sports');
-        throw new Error('API key is required for The Odds API');
+      console.log('Fetching all available sports...');
+      
+      const sports = await oddsService.getSports();
+      
+      if (!sports || !Array.isArray(sports)) {
+        console.error('Invalid response from The Odds API when fetching sports');
+        return [];
       }
-      const response = await axios.get(`${ODDS_API_BASE_URL}/sports`, {
-        params: { apiKey }
-      });
-      return response.data;
+      
+      return sports;
     } catch (error) {
-      console.error('Error fetching all sports:', error.response?.data || error.message);
-      throw error;
+      console.error('Error fetching all sports:', error);
+      return [];
     }
   },
-
+  
   /**
    * Get line movement data for a specific event using only current odds data
    * @param {string} eventId - Event ID
@@ -313,100 +360,135 @@ export const oddsService = {
    */
   getLineMovement: async (eventId) => {
     try {
-      // Fetch current odds for the event
-      // We'll try to infer line movement by comparing available bookmaker lines
       const apiKey = await configLoader.getOddsApiKey();
       if (!apiKey) {
         console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch line movement');
-        return {
-          hasSignificantMovement: false,
-          movement: 0,
-          sharpAction: 'No clear sharp action detected',
-          publicPercentages: { home: 50, away: 50 }
-        };
+        throw new Error('API key is required for The Odds API');
       }
-      // Fetch odds for the event (try all sports, filter for eventId)
-      // For efficiency, fetch odds for all prioritized sports and find the event
-      // This assumes eventId is unique across prioritized sports (NBA, MLB, NHL)
-      const prioritizedSports = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl'];
-      let foundGame = null;
-      for (const sport of prioritizedSports) {
-        try {
-          const games = await oddsService.getUpcomingGames(sport);
-          foundGame = Array.isArray(games)
-            ? games.find(g => g.id === eventId)
-            : null;
-          if (foundGame) break;
-        } catch (sportErr) {
-          // Log and continue
-          console.error(`Error fetching games for ${sport}:`, sportErr);
-        }
-      }
-      if (!foundGame) {
-        console.warn(`No current odds found for eventId: ${eventId}`);
-        return {
-          hasSignificantMovement: false,
-          movement: 0,
-          sharpAction: 'No clear sharp action detected',
-          publicPercentages: { home: 50, away: 50 }
-        };
-      }
-      // Analyze bookmaker lines for spread and moneyline variance
-      const bookmakers = foundGame.bookmakers || [];
-      let spreadPoints = [];
-      let moneylinesHome = [];
-      let moneylinesAway = [];
-      bookmakers.forEach(bm => {
-        const spreadMarket = bm.markets.find(m => m.key === 'spreads');
-        if (spreadMarket && Array.isArray(spreadMarket.outcomes)) {
-          spreadMarket.outcomes.forEach(outcome => {
-            if (typeof outcome.point === 'number') {
-              spreadPoints.push(outcome.point);
-            }
-          });
-        }
-        const h2hMarket = bm.markets.find(m => m.key === 'h2h');
-        if (h2hMarket && Array.isArray(h2hMarket.outcomes)) {
-          if (h2hMarket.outcomes[0] && typeof h2hMarket.outcomes[0].price === 'number') {
-            moneylinesHome.push(h2hMarket.outcomes[0].price);
-          }
-          if (h2hMarket.outcomes[1] && typeof h2hMarket.outcomes[1].price === 'number') {
-            moneylinesAway.push(h2hMarket.outcomes[1].price);
-          }
+      
+      console.log(`Analyzing line movement for event ${eventId}`);
+      
+      // Get current odds for this event
+      const response = await axios.get(`${ODDS_API_BASE_URL}/events/${eventId}/odds`, {
+        params: {
+          apiKey,
+          regions: 'us',
+          markets: 'h2h,spreads,totals',
+          oddsFormat: 'american',
+          dateFormat: 'iso'
         }
       });
-      // Calculate movement as the difference between max and min lines
-      const spreadMovement =
-        spreadPoints.length > 1 ? Math.max(...spreadPoints) - Math.min(...spreadPoints) : 0;
-      const moneylineMovementHome =
-        moneylinesHome.length > 1 ? Math.max(...moneylinesHome) - Math.min(...moneylinesHome) : 0;
-      const moneylineMovementAway =
-        moneylinesAway.length > 1 ? Math.max(...moneylinesAway) - Math.min(...moneylinesAway) : 0;
-      const hasSignificantMovement =
-        Math.abs(spreadMovement) >= 2 ||
-        Math.abs(moneylineMovementHome) >= 20 ||
-        Math.abs(moneylineMovementAway) >= 20;
-      return {
-        hasSignificantMovement,
-        movement: {
-          spread: spreadMovement,
-          moneyline: {
-            home: moneylineMovementHome,
-            away: moneylineMovementAway
+      
+      // Check if we have valid data
+      if (!response.data || !response.data.bookmakers || response.data.bookmakers.length === 0) {
+        console.warn('No valid odds data found to analyze line movement');
+        return {
+          hasSignificantMovement: false,
+          sharpAction: 'No data available for line movement analysis',
+          timestamp: new Date().toISOString()
+        };
+      }
+      
+      // Use data from the top two or three bookmakers since we don't have historical data
+      // This is a simplified approach - real line movement analysis requires historical odds data
+      const majors = ['draftkings', 'fanduel', 'caesars', 'betmgm'];
+      const bookmakers = response.data.bookmakers.filter(b => majors.includes(b.key));
+      
+      if (bookmakers.length < 2) {
+        console.warn('Not enough major bookmakers to analyze line movement properly');
+        return {
+          hasSignificantMovement: false,
+          sharpAction: 'Insufficient bookmaker data for line movement analysis',
+          timestamp: new Date().toISOString()
+        };
+      }
+      
+      // Analyze spread market differences
+      let spreadVariance = 0;
+      try {
+        const spreadMarkets = bookmakers
+          .map(b => b.markets.find(m => m.key === 'spreads'))
+          .filter(Boolean)
+          .map(m => m.outcomes[0].point);
+        
+        // Calculate variance in the spread
+        if (spreadMarkets.length >= 2) {
+          const min = Math.min(...spreadMarkets);
+          const max = Math.max(...spreadMarkets);
+          spreadVariance = max - min;
+        }
+      } catch (e) {
+        console.error('Error analyzing spread variance:', e);
+      }
+      
+      // Analyze moneyline market differences
+      let moneylineVariance = {
+        home: 0,
+        away: 0
+      };
+      
+      try {
+        const h2hMarkets = bookmakers
+          .map(b => b.markets.find(m => m.key === 'h2h'))
+          .filter(Boolean);
+        
+        if (h2hMarkets.length >= 2) {
+          // Get home team odds
+          const homeOdds = h2hMarkets.map(m => {
+            const homeOutcome = m.outcomes.find(o => o.name === response.data.home_team);
+            return homeOutcome ? homeOutcome.price : null;
+          }).filter(Boolean);
+          
+          // Get away team odds
+          const awayOdds = h2hMarkets.map(m => {
+            const awayOutcome = m.outcomes.find(o => o.name === response.data.away_team);
+            return awayOutcome ? awayOutcome.price : null;
+          }).filter(Boolean);
+          
+          if (homeOdds.length >= 2) {
+            const minHomeOdds = Math.min(...homeOdds);
+            const maxHomeOdds = Math.max(...homeOdds);
+            moneylineVariance.home = maxHomeOdds - minHomeOdds;
           }
+          
+          if (awayOdds.length >= 2) {
+            const minAwayOdds = Math.min(...awayOdds);
+            const maxAwayOdds = Math.max(...awayOdds);
+            moneylineVariance.away = maxAwayOdds - minAwayOdds;
+          }
+        }
+      } catch (e) {
+        console.error('Error analyzing moneyline variance:', e);
+      }
+      
+      // Determine if there's significant movement based on variance
+      // These thresholds are somewhat arbitrary and could be tuned
+      const hasSignificantMovement = spreadVariance >= 1 ||
+        Math.abs(moneylineVariance.home) >= 15 ||
+        Math.abs(moneylineVariance.away) >= 15;
+      
+      const lineMovementAnalysis = {
+        hasSignificantMovement,
+        variance: {
+          spread: spreadVariance,
+          moneyline: moneylineVariance
         },
-        sharpAction: hasSignificantMovement ? 'Significant sharp action detected' : 'No clear sharp action detected',
-        publicPercentages: { home: 50, away: 50 }, // Not available from current odds
+        sharpAction: hasSignificantMovement ? 
+          'Significant line discrepancies detected across major bookmakers' : 
+          'No significant line discrepancies',
         timestamp: new Date().toISOString()
       };
+      
+      console.log('Line movement analysis:', lineMovementAnalysis);
+      
+      return lineMovementAnalysis;
     } catch (error) {
-      console.error('Error analyzing line movement from current odds:', error);
-      // Always return a safe default
+      console.error('Error analyzing line movement:', error);
       return {
         hasSignificantMovement: false,
-        movement: 0,
-        sharpAction: 'No clear sharp action detected',
-        publicPercentages: { home: 50, away: 50 }
+        error: error.message,
+        sharpAction: 'Error occurred during line movement analysis',
+        timestamp: new Date().toISOString()
       };
     }
   },
@@ -450,7 +532,7 @@ export const oddsService = {
       timestamp: new Date().toISOString()
     };
   },
-
+  
   /**
    * Get player prop odds for a specific game
    * @param {string} sport - Sport key (e.g., 'basketball_nba')
@@ -460,43 +542,38 @@ export const oddsService = {
    */
   getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
     try {
-      // Get the API key from the config loader
       const apiKey = await configLoader.getOddsApiKey();
-      
       if (!apiKey) {
-        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch player prop odds');
+        console.error('⚠️ API key is missing - Cannot fetch player prop odds');
         return [];
       }
-
-      console.log(`🔍 Fetching player prop odds for ${homeTeam} vs ${awayTeam}`);
       
-      // Format today's date in ISO format
-      const today = new Date();
-      const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      // First, find the game ID by looking for a game with matching team names
+      console.log(`Looking for game: ${homeTeam} vs ${awayTeam} in ${sport}`);
       
-      console.log(`Fetching prop odds for games on ${formattedDate}`);
+      // When fetching games, the markets parameter will already include prop markets
+      // due to our update in getUpcomingGames
+      const allGames = await oddsService.getUpcomingGames(sport);
       
-      // First get the event ID for the game by fetching today's games
-      const gamesResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
-        params: {
-          apiKey,
-          regions: 'us',
-          markets: 'h2h,spreads',
-          oddsFormat: 'american',
-          dateFormat: 'iso',
-          commenceTimeTo: `${formattedDate}T23:59:59Z` // End of today in UTC
-        }
-      });
+      if (!allGames || allGames.length === 0) {
+        console.warn(`No games found for ${sport}`);
+        return [];
+      }
       
-      // Find the game that matches our home and away teams
-      const game = gamesResponse.data.find(g => {
-        const gameHomeTeam = g.home_team;
-        const gameAwayTeam = g.away_team;
+      console.log(`Found ${allGames.length} games for ${sport}, looking for ${homeTeam} vs ${awayTeam}`);
+      
+      // Find the specific game with matching team names
+      // Use inclusion check to handle slight name variations
+      const game = allGames.find(g => {
+        const gameHomeTeam = g.home_team.toLowerCase();
+        const gameAwayTeam = g.away_team.toLowerCase();
+        const searchHomeTeam = homeTeam.toLowerCase();
+        const searchAwayTeam = awayTeam.toLowerCase();
         
-        // Try different matching approaches in case of naming differences
+        // Check if the team names contain each other (bidirectional inclusion)
         return (
-          (gameHomeTeam.includes(homeTeam) || homeTeam.includes(gameHomeTeam)) &&
-          (gameAwayTeam.includes(awayTeam) || awayTeam.includes(gameAwayTeam))
+          (gameHomeTeam.includes(searchHomeTeam) || searchHomeTeam.includes(gameHomeTeam)) &&
+          (gameAwayTeam.includes(searchAwayTeam) || searchAwayTeam.includes(gameAwayTeam))
         );
       });
       
@@ -507,91 +584,95 @@ export const oddsService = {
       
       console.log(`Found matching game with ID: ${game.id}`);
       
-      // Now fetch player props for this specific game
-      // NOTE: The Odds API offers player props endpoint only for certain sports and at higher subscription tiers
-      // This implementation assumes access to the necessary tier for prop odds
-      
-      // Determine the appropriate markets based on sport
-      let propMarkets = 'player_points';
-      
-      if (sport === 'basketball_nba') {
-        propMarkets = 'player_points,player_rebounds,player_assists,player_threes,player_blocks,player_steals,player_double_double,player_first_basket,player_points_rebounds_assists';
-      } else if (sport === 'baseball_mlb') {
-        propMarkets = 'batter_home_runs,batter_hits,batter_runs_scored,batter_rbis,batter_stolen_bases,batter_total_bases,pitcher_strikeouts,pitcher_outs,pitcher_earned_runs';
-      } else if (sport === 'icehockey_nhl') {
-        propMarkets = 'player_points,player_goals,player_assists,player_shots_on_goal,player_power_play_points';
+      // Get the appropriate prop markets for this sport from our constants
+      let propMarkets;
+      if (sport in PROP_MARKETS) {
+        propMarkets = PROP_MARKETS[sport].join(',');
+      } else {
+        // Default to a basic prop if the sport is not in our predefined markets
+        propMarkets = 'player_points';
       }
       
       console.log(`Fetching ${sport} player props with markets: ${propMarkets}`);
       
-      const propResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${game.id}/odds`, {
-        params: {
-          apiKey,
-          regions: 'us',
-          markets: propMarkets,
-          oddsFormat: 'american',
-          dateFormat: 'iso'
-        }
-      });
-      
-      // If no player props were found, return an empty array - no mock data
-      if (!propResponse.data || !propResponse.data.bookmakers || propResponse.data.bookmakers.length === 0) {
-        console.warn('No player prop data found from The Odds API');
-        return [];
-      }
-      
-      // Process the API response to extract player prop information
-      const playerProps = [];
-      const bookmakers = propResponse.data.bookmakers;
-      
-      // Look for a bookmaker with player props
-      for (const bookmaker of bookmakers) {
-        for (const market of bookmaker.markets) {
-          // Extract the prop type from the market key (e.g., player_points → points)
-          const propType = market.key.replace('player_', '');
-          
-          for (const outcome of market.outcomes) {
-            playerProps.push({
-              player: outcome.description, // Player name
-              team: outcome.team, // Team name if available, or derive from game data
-              prop_type: propType,
-              line: outcome.point,
-              over_odds: outcome.name === 'Over' ? outcome.price : null,
-              under_odds: outcome.name === 'Under' ? outcome.price : null
-            });
+      try {
+        const propResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${game.id}/odds`, {
+          params: {
+            apiKey,
+            regions: 'us',
+            markets: propMarkets,
+            oddsFormat: 'american',
+            dateFormat: 'iso'
           }
-        }
-      }
-      
-      // Group over/under odds together for the same player and prop type
-      const groupedProps = {};
-      for (const prop of playerProps) {
-        const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
-        if (!groupedProps[key]) {
-          groupedProps[key] = {
-            player: prop.player,
-            team: prop.team,
-            prop_type: prop.prop_type,
-            line: prop.line,
-            over_odds: null,
-            under_odds: null
-          };
+        });
+        
+        // If no player props were found, return an empty array - no mock data
+        if (!propResponse.data || !propResponse.data.bookmakers || propResponse.data.bookmakers.length === 0) {
+          console.warn('No player prop data found from The Odds API');
+          return [];
         }
         
-        if (prop.over_odds !== null) {
-          groupedProps[key].over_odds = prop.over_odds;
+        // Process the API response to extract player prop information
+        const playerProps = [];
+        const bookmakers = propResponse.data.bookmakers;
+        
+        // Look for a bookmaker with player props
+        for (const bookmaker of bookmakers) {
+          for (const market of bookmaker.markets) {
+            // Extract the prop type from the market key (e.g., player_points → points)
+            const propType = market.key.replace('player_', '').replace('batter_', '').replace('pitcher_', '');
+            
+            for (const outcome of market.outcomes) {
+              playerProps.push({
+                player: outcome.description, // Player name
+                team: outcome.team, // Team name if available, or derive from game data
+                prop_type: propType,
+                line: outcome.point,
+                over_odds: outcome.name === 'Over' ? outcome.price : null,
+                under_odds: outcome.name === 'Under' ? outcome.price : null
+              });
+            }
+          }
         }
-        if (prop.under_odds !== null) {
-          groupedProps[key].under_odds = prop.under_odds;
+        
+        // Group over/under odds together for the same player and prop type
+        const groupedProps = {};
+        for (const prop of playerProps) {
+          const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+          if (!groupedProps[key]) {
+            groupedProps[key] = {
+              player: prop.player,
+              team: prop.team,
+              prop_type: prop.prop_type,
+              line: prop.line,
+              over_odds: null,
+              under_odds: null
+            };
+          }
+          
+          if (prop.over_odds !== null) {
+            groupedProps[key].over_odds = prop.over_odds;
+          }
+          if (prop.under_odds !== null) {
+            groupedProps[key].under_odds = prop.under_odds;
+          }
         }
+        
+        // Convert back to array
+        const result = Object.values(groupedProps);
+        console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
+        
+        return result;
+      } catch (err) {
+        // Handle 404 error gracefully - this means the event doesn't have the requested markets
+        if (err.response && err.response.status === 404) {
+          console.warn(`No prop data for event ${game.id} (${homeTeam} vs ${awayTeam}), skipping.`);
+          return [];
+        }
+        // For other errors, log and rethrow
+        console.error(`Error fetching player prop odds: ${err.message}`);
+        throw err;
       }
-      
-      // Convert back to array
-      const result = Object.values(groupedProps);
-      console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
-      
-      return result;
-      
     } catch (error) {
       console.error('Error fetching player prop odds:', error);
       return [];
