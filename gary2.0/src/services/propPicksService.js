@@ -434,7 +434,7 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "matchup": "Team vs Team",
   "time": "7:30 PM ET",
   "league": "NBA | MLB | NHL",
-  "rationale": "1-2 sentence statistical breakdown with Gary's swagger. Include EV calculation justification, performance trends, and matchup advantages."  
+  "rationale": "3-4 sentence statistical breakdown with Gary's swagger. Include EV calculation justification, performance trends, matchup advantages, and recent player performance context. Be more thorough and detailed in your analysis."  
 }
 \`\`\`
 
