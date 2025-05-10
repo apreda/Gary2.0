@@ -116,26 +116,24 @@ const propPicksService = {
                 // Proceed without player stats if there's an error
               }
               
-              // Get additional insights from Perplexity if available
+              // Get player-specific prop insights from Perplexity (hot streaks, recent trends, etc.)
               try {
-                console.log('Fetching additional insights from Perplexity...');
-                // Check if perplexityService has the method before calling it
-                if (perplexityService && typeof perplexityService.getGameInsights === 'function') {
-                  const perplexityData = await perplexityService.getGameInsights(gameData);
-                  
-                  if (perplexityData) {
-                    console.log('Successfully fetched data from Perplexity');
-                    gameData.perplexityStats = perplexityData;
-                  }
-                } else {
-                  // Fallback if the function doesn't exist
-                  console.log('Perplexity insights not available for prop picks');
-                  gameData.perplexityStats = { insights: 'No Perplexity data available for props' };
+                console.log('🔍 Fetching player prop trends from Perplexity...');
+                // Directly call the new player prop insights method
+                const perplexityData = await perplexityService.getPlayerPropInsights(gameData);
+                
+                if (perplexityData && perplexityData.player_insights) {
+                  console.log('✅ Successfully fetched player trend data from Perplexity');
+                  console.log(`📊 Trend data length: ${perplexityData.player_insights.length} characters`);
+                  gameData.perplexityStats = perplexityData;
                 }
               } catch (perplexityError) {
-                console.error(`Error fetching data from Perplexity: ${perplexityError.message}`);
-                // Proceed without Perplexity data if there's an error
-                gameData.perplexityStats = { insights: 'Error fetching Perplexity data' };
+                // If there's an error or the method doesn't exist
+                console.error(`❌ Error fetching player trend data from Perplexity: ${perplexityError.message}`);
+                gameData.perplexityStats = { 
+                  player_insights: 'No player trend data available from Perplexity',
+                  meta: { error: perplexityError.message, insight_weight: '20%' }
+                };
               }
               
               try {
@@ -405,22 +403,13 @@ const propPicksService = {
       // Format Perplexity insights in a more concise way for props specifically
       let perplexityText = '';
       if (gameData.perplexityStats) {
-        // Extract only prop-related insights
-        const propInsights = gameData.perplexityStats.prop_insights || 
-                            gameData.perplexityStats.player_insights || 
-                            gameData.perplexityStats.insights || '';
+        // Extract player insights
+        const propInsights = gameData.perplexityStats.player_insights || '';
+        const insightWeight = gameData.perplexityStats.meta?.insight_weight || '20%';
         
-        // If we have structured data, format it concisely
-        if (typeof propInsights === 'object') {
-          const formattedInsights = Object.entries(propInsights)
-            .slice(0, 5) // Limit to top 5 insights
-            .map(([player, insight]) => `${player}: ${insight}`)
-            .join('\n');
-          
-          perplexityText = `PLAYER INSIGHTS (PERPLEXITY):\n${formattedInsights}`;
-        } else if (typeof propInsights === 'string') {
-          // If it's just a string, use it directly but truncate if needed
-          perplexityText = `PLAYER INSIGHTS (PERPLEXITY):\n${propInsights.substring(0, 500)}...`;
+        // Format the insights for the prompt
+        if (propInsights && typeof propInsights === 'string') {
+          perplexityText = `RECENT PLAYER TRENDS AND HEADLINES (LAST 10 GAMES):\n${propInsights}\n\nNOTE: These recent player trends should account for ${insightWeight} of your decision making, with statistical analysis accounting for 80%.`;
         }
       }
       
@@ -447,12 +436,23 @@ ${gameData.league === 'NBA' ? `- player_points (14+ points, 20+ points, etc.)
 - player_threes (especially 3+ or 4+ three-pointers made)
 - player_assists (especially 7+ or 8+ assists)
 - player_rebounds (especially 8+ or 10+ rebounds)
-- player_pra (points+rebounds+assists)` : ''}
+- player_pra (points+rebounds+assists)
+- player_blocks (especially 2+ blocks for rim protectors)
+- player_steals (especially 2+ steals for defensive specialists)
+- player_double_double (points + rebounds most common)
+- player_first_basket (especially for centers and high-usage scorers)
+- player_points_rebounds (combined totals for frontcourt players)` : ''}
 ${gameData.league === 'MLB' ? `- batter_home_runs (especially for power hitters)
 - batter_total_bases (especially 3+ or 4+ total bases)
 - pitcher_strikeouts (especially high strikeout totals)
 - batter_hits (especially for consistent contact hitters)
-- pitcher_outs (innings pitched)` : ''}
+- pitcher_outs (innings pitched)
+- batter_stolen_bases (especially for speedsters with favorable matchups)
+- batter_runs_scored (especially leadoff and top of order hitters)
+- batter_rbi (especially for middle-order power hitters)
+- batter_extra_base_hits (doubles, triples, homers combined)
+- batter_to_record_a_hit (yes/no markets)
+- pitcher_earned_runs (under markets for quality starters)` : ''}
 ${gameData.league === 'NHL' ? `- player_goal_scorer (focus on second-line players with good odds)
 - player_points (especially 2+ or 3+ points)
 - player_shots_on_goal (especially high shot totals)
@@ -472,12 +472,15 @@ EXPECTED VALUE (EV) CALCULATION:
 
 IMPORTANT NOTES ON PROP PICKS:
 - Calculate and prioritize picks with positive Expected Value (EV)
-- Use the FULL confidence scale from 0.51 to 1.0 based on your statistical analysis
-- 0.51-0.6: Slight edge
-- 0.6-0.7: Moderate edge
-- 0.7-0.8: Good statistical edge
-- 0.8-0.9: Strong pick with excellent matchup advantages
+- Use the FULL confidence scale from 0.1 to 1.0 based on your statistical analysis
+- 0.1-0.3: Weak edge, speculative play
+- 0.3-0.5: Slight edge, low conviction
+- 0.5-0.65: Moderate edge
+- 0.65-0.78: Good statistical edge
+- 0.78-0.9: Strong pick with excellent matchup advantages (our preferred range)
 - 0.9-1.0: Extremely high conviction pick
+
+NOTE: We're focusing ONLY on high-quality picks with 0.78+ confidence ratings
 
 - Provide accurate line values based on current player performance
 - Odds should be realistic (typically -120 to +120 for most prop bets)
