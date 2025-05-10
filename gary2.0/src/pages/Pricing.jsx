@@ -147,7 +147,7 @@ export function Pricing() {
                                 transform hover:-translate-y-1">
                     <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
                                    -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                    <div className="text-xl text-[#d4af37] font-sans tracking-wider font-bold relative z-10">
+                    <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
                       SELECT PLAN
                     </div>
                   </div>
@@ -159,7 +159,7 @@ export function Pricing() {
                                 transform hover:-translate-y-1">
                     <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
                                    -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                    <div className="text-xl text-[#d4af37] font-sans tracking-wider font-bold relative z-10">
+                    <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
                       SELECT PLAN
                     </div>
                   </div>
