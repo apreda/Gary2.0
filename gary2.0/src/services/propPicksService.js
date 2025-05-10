@@ -368,33 +368,11 @@ const propPicksService = {
           oddsText = `CURRENT PLAYER PROPS (TODAY'S ODDS):\n${formattedOdds}`;
         } catch (oddsError) {
           console.error(`❌ Error fetching current player prop odds: ${oddsError.message}`);
-          
-          // Try to get props from sportsbooks via Perplexity as fallback
-          try {
-            console.log(`🔍 Attempting to fetch player props from sportsbooks via Perplexity...`);
-            const sportCode = gameData.sportKey.includes('basketball') ? 'nba' : 
-                            gameData.sportKey.includes('baseball') ? 'mlb' : 'sports';
-                            
-            const sbProps = await propOddsService.getPlayerPropsFromSportsbooks(
-              sportCode,
-              gameData.matchup
-            );
-            
-            if (sbProps && sbProps.length > 0) {
-              oddsText = `CURRENT PLAYER PROPS (FROM SPORTSBOOKS):\n${sbProps.join('\n')}`;
-              console.log(`✅ Successfully fetched player props from sportsbooks`);
-            } else {
-              throw new Error(`No player props available from sportsbooks either`);
-            }
-          } catch (sbError) {
-            console.error(`❌ Error fetching player props from sportsbooks: ${sbError.message}`);
-            // We need current props data, so we must fail if we can't get any
-            throw new Error(
-              `Cannot generate prop picks without current player prop data. ` +
-              `The Odds API error: ${oddsError.message}. ` +
-              `Sportsbooks fallback error: ${sbError.message}`
-            );
-          }
+          // No fallbacks - we require real odds data
+          throw new Error(
+            `Cannot generate prop picks without real player prop data from The Odds API. ` +
+            `Error: ${oddsError.message}`
+          );
         }
       } else {
         throw new Error(`Sport key is required to fetch player prop odds`);
