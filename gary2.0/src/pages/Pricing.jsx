@@ -73,10 +73,10 @@ export function Pricing() {
               </div>
             </div>
             
-            {/* Ticket body with soft paper texture */}
+            {/* Ticket body with black background instead of cream */}
             <div className="px-6 pt-6 pb-3 flex-1 rounded-b-xl relative z-20" 
                  style={{
-                   background: "linear-gradient(180deg, #f8f8e8 0%, #f8f5e1 100%)",
+                   background: "linear-gradient(180deg, #0e0e0e 0%, #1a1a1a 100%)",
                    boxShadow: "inset 0 1px 3px rgba(0,0,0,0.1)"
                  }}>
               <div className="flex justify-between items-center mb-3">
@@ -87,26 +87,30 @@ export function Pricing() {
               </div>
               
               <div className="mb-6 flex items-baseline border-b border-dashed border-gray-400/40 pb-4">
-                <span className="text-5xl font-bold font-sans tracking-wider text-black">$29</span>
-                <span className="text-lg ml-1 font-sans tracking-wider uppercase text-black/80">/MONTH</span>
+                <span className="text-5xl font-bold font-sans tracking-wider text-[#d4af37]">$29</span>
+                <span className="text-lg ml-1 font-sans tracking-wider uppercase text-[#b8953f]">/MONTH</span>
               </div>
               
               <ul className="space-y-4 mb-6 text-lg">
-                <li className="flex items-start font-sans text-black">
-                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
+                <li className="flex items-start font-sans text-[#b8953f]">
+                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
                   <span className="font-medium leading-tight">DAILY PICKS <span className="text-sm font-normal opacity-75">(3-7 per day)</span></span>
                 </li>
-                <li className="flex items-start font-sans text-black">
-                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
-                  <span className="font-medium">GARY'S ANALYSIS</span>
+                <li className="flex items-start font-sans text-[#b8953f]">
+                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
+                  <span className="font-medium leading-tight">PLAYER PROPS <span className="text-sm font-normal opacity-75">(MLB/NFL/NBA/NHL)</span></span>
                 </li>
-                <li className="flex items-start font-sans text-black">
-                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
-                  <span className="font-medium leading-tight">ACCESS TO DAILY PLAYER PROP PICKS</span>
+                <li className="flex items-start font-sans text-[#b8953f]">
+                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
+                  <span className="font-medium leading-tight">ALL PRO LEAGUES <span className="text-sm font-normal opacity-75">(MLB/NFL/NBA/NHL)</span></span>
                 </li>
-                <li className="flex items-start font-sans text-black">
-                  <span className="mr-3 text-[#b8953f] text-xl">✓</span>
-                  <span className="font-medium leading-tight">EARLY ACCESS TO ADVANCE MODEL <span className="text-sm font-normal opacity-75 italic">(Coming Soon)</span></span>
+                <li className="flex items-start font-sans text-[#b8953f]">
+                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
+                  <span className="font-medium leading-tight">FULL BET HISTORY <span className="text-sm font-normal opacity-75">(Complete record)</span></span>
+                </li>
+                <li className="flex items-start font-sans text-[#b8953f]">
+                  <span className="mr-3 text-[#d4af37] text-xl">✓</span>
+                  <span className="font-medium leading-tight">DISCORD ACCESS <span className="text-sm font-normal opacity-75">(Private channel)</span></span>
                 </li>
               </ul>
             </div>
@@ -134,16 +138,11 @@ export function Pricing() {
               </div>
               
               {/* Action button with hover effects */}
-              <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="no-underline block w-full">
-                <div className="w-full h-[56px] py-3 px-4 text-center rounded-lg 
-                              relative overflow-hidden group/btn
-                              flex items-center justify-center
-                              transition-all duration-300 ease-out
-                              bg-gradient-to-r from-[#b8953f] to-[#d4af37]
-                              hover:from-[#d4af37] hover:to-[#b8953f]
+              <a href="https://buy.stripe.com/test_dR628zfn7gTX5Ne28a" className="group/btn block w-full">
+                <div className="pricing-page-button-container flex items-center justify-center bg-[#b8953f] rounded-lg py-3 px-6 
                               shadow-md hover:shadow-lg
                               transform hover:-translate-y-1">
-                  <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent 
+                  <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
                                  -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
                   <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
                     SELECT PLAN
@@ -155,7 +154,7 @@ export function Pricing() {
               <div className="absolute bottom-4 -right-[18px] w-[36px] h-[36px] rounded-full bg-black 
                              flex items-center justify-center overflow-hidden shadow-lg
                              group-hover:rotate-[360deg] transition-transform duration-1000 ease-out">
-                <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#f8f8e0] to-[#d4af37] opacity-90"></div>
+                <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#b8953f] to-[#d4af37] opacity-90"></div>
                 <div className="text-[10px] font-bold relative z-10 text-black">VIP</div>
               </div>
             </div>
