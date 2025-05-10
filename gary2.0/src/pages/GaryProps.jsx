@@ -154,6 +154,44 @@ export default function GaryProps() {
             processedPicks = [...processedPicks, ...picksWithIds];
           }
         });
+      } else {
+        // No picks found for today, generate new ones
+        console.log('No prop picks found for today. Generating new prop picks...');
+        try {
+          showToast('Generating new prop picks... This may take a moment.', 'info');
+          const newPicks = await propPicksService.generateDailyPropPicks();
+          
+          if (newPicks && newPicks.length > 0) {
+            // Store the generated picks in Supabase
+            await propPicksService.storePropPicksInDatabase(newPicks);
+            console.log(`Generated and stored ${newPicks.length} new prop picks`);
+            
+            // Reload picks to display the newly generated ones
+            const freshData = await propPicksService.getTodayPropPicks();
+            
+            if (freshData && freshData.length > 0) {
+              freshData.forEach(record => {
+                if (record.picks && Array.isArray(record.picks)) {
+                  const picksWithIds = record.picks.map((pick, index) => ({
+                    ...pick,
+                    id: `${record.id}-${index}`,
+                    date: record.date,
+                    created_at: record.created_at
+                  }));
+                  processedPicks = [...processedPicks, ...picksWithIds];
+                }
+              });
+            }
+            
+            showToast(`Generated ${processedPicks.length} new prop picks!`, 'success');
+          } else {
+            console.log('No prop picks could be generated');
+            showToast('No prop picks available for today', 'warning');
+          }
+        } catch (genError) {
+          console.error('Error generating prop picks:', genError);
+          showToast('Failed to generate prop picks', 'error');
+        }
       }
       
       console.log(`Processed ${processedPicks.length} individual prop picks`);

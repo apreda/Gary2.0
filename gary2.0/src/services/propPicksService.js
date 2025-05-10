@@ -220,6 +220,46 @@ const propPicksService = {
   },
 
   /**
+   * Store player prop picks in the database
+   */
+  storePropPicksInDatabase: async (propPicks) => {
+    try {
+      console.log(`Storing raw player prop picks in database`);
+      
+      // Ensure valid Supabase session
+      await ensureValidSupabaseSession();
+      
+      // Get today's date
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Format data for Supabase - store the entire array as raw JSON
+      const pickEntry = {
+        date: today,
+        picks: propPicks, // Store the raw array as is
+        created_at: new Date().toISOString()
+      };
+      
+      console.log('Storing prop picks with date:', today);
+      
+      // Insert as a single entry with the raw JSON
+      const { data, error } = await supabase
+        .from('prop_picks')
+        .insert(pickEntry);
+        
+      if (error) {
+        console.error('Error storing prop picks:', error);
+        throw new Error(`Failed to store prop picks: ${error.message}`);
+      }
+      
+      console.log('Player prop picks stored successfully');
+      return { success: true, count: propPicks.length };
+    } catch (error) {
+      console.error('Error storing prop picks:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Generate prop bet recommendations
    */
   generatePropBets: async (gameData) => {
