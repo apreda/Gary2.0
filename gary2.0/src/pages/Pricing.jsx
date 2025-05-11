@@ -165,7 +165,7 @@ export function Pricing() {
                   
                   {/* VIP hologram effect */}
                   <div className="absolute bottom-4 -right-[18px] w-[36px] h-[36px] rounded-full bg-black 
-                                flex items-center justify-center overflow-hidden shadow-lg
+                                flex items-center justify-center overflow-hidden shadow-lg z-20
                                 group-hover:rotate-[360deg] transition-transform duration-1000 ease-out">
                     <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#b8953f] to-[#d4af37] opacity-90"></div>
                     <div className="text-[10px] font-bold relative z-10 text-black">VIP</div>
