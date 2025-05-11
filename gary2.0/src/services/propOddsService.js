@@ -144,13 +144,32 @@ export const propOddsService = {
                 
                 // Process each outcome for this market
                 for (const outcome of bkMarket.outcomes) {
+                  // Normalize extreme odds values (sometimes The Odds API returns unusual values)
+                  let overOdds = outcome.name === 'Over' ? outcome.price : null;
+                  let underOdds = outcome.name === 'Under' ? outcome.price : null;
+                  
+                  // Clean up extreme odds values that are likely errors
+                  if (overOdds !== null) {
+                    // For positive odds, cap at +300
+                    if (overOdds > 300) overOdds = 300;
+                    // For negative odds, cap at -200
+                    if (overOdds < -200) overOdds = -200;
+                  }
+                  
+                  if (underOdds !== null) {
+                    // For positive odds, cap at +300
+                    if (underOdds > 300) underOdds = 300;
+                    // For negative odds, cap at -200
+                    if (underOdds < -200) underOdds = -200;
+                  }
+                  
                   allPlayerProps.push({
                     player: outcome.description, // Player name
                     team: outcome.team || (outcome.name?.includes(game.home_team) ? game.home_team : game.away_team),
                     prop_type: propType,
                     line: outcome.point,
-                    over_odds: outcome.name === 'Over' ? outcome.price : null,
-                    under_odds: outcome.name === 'Under' ? outcome.price : null
+                    over_odds: overOdds,
+                    under_odds: underOdds
                   });
                 }
               }

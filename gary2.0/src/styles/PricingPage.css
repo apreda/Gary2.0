@@ -47,10 +47,13 @@ html {
 .pricing-page-button-container {
   background: #000000 !important;
   border: none !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
   transition: all 0.3s ease-out !important;
   transform: translateZ(0);
   overflow: hidden;
+  width: 80% !important;
+  margin: 0 auto !important;
+  border-radius: 8px !important;
 }
 
 .pricing-page-button-container:hover {
