@@ -133,36 +133,28 @@ export function Pricing() {
               
               {/* Ticket footer with action button */}
               <div className="bg-black relative p-4 rounded-b-xl group-hover:shadow-md transition duration-300 overflow-hidden">
-                <div className="relative z-20 rounded-b-xl overflow-hidden"
+                <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
                   style={{
                     background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)",
                     boxShadow: "0px -4px 15px rgba(0,0,0,0.2)"
                   }}>
-                  {/* Centered action button with proper spacing */}
+                  {/* Text directly on gold background */}
                   <div className="py-4 px-6 flex justify-center">
                     {user && subscriptionStatus === 'active' ? (
-                      <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group/btn block">
-                        <div className="pricing-page-button-container flex items-center justify-center py-2 px-4
-                                      shadow-md hover:shadow-lg
-                                      transform hover:-translate-y-1">
-                          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
-                                        -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                          <div className="text-base text-white font-sans tracking-wider font-bold relative z-10">
-                            SELECT PLAN
-                          </div>
+                      <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group relative w-full text-center">
+                        <div className="text-xl font-bold text-black font-sans tracking-wider py-2 hover:opacity-80 transition-opacity">
+                          SELECT PLAN
                         </div>
+                        <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
+                                      -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out"></div>
                       </a>
                     ) : (
-                      <Link to="/login" className="group/btn block">
-                        <div className="pricing-page-button-container flex items-center justify-center py-2 px-4
-                                      shadow-md hover:shadow-lg
-                                      transform hover:-translate-y-1">
-                          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
-                                        -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                          <div className="text-base text-white font-sans tracking-wider font-bold relative z-10">
-                            SELECT PLAN
-                          </div>
+                      <Link to="/login" className="group relative w-full text-center">
+                        <div className="text-xl font-bold text-black font-sans tracking-wider py-2 hover:opacity-80 transition-opacity">
+                          SELECT PLAN
                         </div>
+                        <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
+                                      -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out"></div>
                       </Link>
                     )}
                   </div>
