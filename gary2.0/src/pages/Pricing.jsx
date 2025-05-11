@@ -133,12 +133,13 @@ export function Pricing() {
               
               {/* Ticket footer with action button */}
               <div className="bg-black relative p-4 rounded-b-xl group-hover:shadow-md transition duration-300 overflow-hidden">
-                <div className="relative z-20 rounded-lg overflow-hidden"
+                <div className="relative z-20 rounded-b-xl overflow-hidden"
                   style={{
-                    background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)"
+                    background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)",
+                    boxShadow: "0px -4px 15px rgba(0,0,0,0.2)"
                   }}>
                   {/* Centered action button with proper spacing */}
-                  <div className="py-4 px-4 flex justify-center">
+                  <div className="py-4 px-6 flex justify-center">
                     {user && subscriptionStatus === 'active' ? (
                       <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group/btn block">
                         <div className="pricing-page-button-container flex items-center justify-center py-2 px-4
