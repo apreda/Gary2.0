@@ -56,9 +56,10 @@ export default function GaryProps() {
         });
       } else {
         showToast('Generating new prop picks... This may take a moment.', 'info');
+        // Generate and store prop picks in one operation to avoid duplicates
         const newPicks = await propPicksService.generateDailyPropPicks();
         if (Array.isArray(newPicks) && newPicks.length > 0) {
-          await propPicksService.storePropPicksInDatabase(newPicks);
+          // Fetch the freshly stored picks - generateDailyPropPicks already handles storage
           const freshData = await propPicksService.getTodayPropPicks();
           freshData.forEach(record => {
             if (Array.isArray(record.picks)) {
