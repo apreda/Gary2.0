@@ -8,6 +8,7 @@ import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
 import { sportsDbApiService } from './sportsDbApiService';
+import { ballDontLieService } from './ballDontLieService';
 import { nbaSeason, formatSeason } from '../utils/dateUtils';
 
 // Note: We use TheSportsDB API for reliable player data across all sports (MLB, NBA, NHL)
@@ -222,49 +223,134 @@ const propPicksService = {
                 // Proceed without player stats if there's an error
               }
               
-              // Get player-specific stats from SportsDB API (more reliable than Perplexity)
+              // Get player-specific data based on the league - using Ball Don't Lie for MLB
               try {
-                console.log('🔍 Fetching verified player stats from SportsDB API...');
-                // Use the new SportsDB function to get accurate player statistics
-                const playerStatsData = await sportsDbApiService.getPlayerStatsForProps(
+                // Get team rosters first from SportsDB (only for player identification)
+                console.log('🔍 Fetching team rosters from SportsDB API...');
+                const teamRostersData = await sportsDbApiService.getPlayerStatsForProps(
                   gameData.homeTeam,
                   gameData.awayTeam,
                   gameData.league
                 );
                 
-                if (playerStatsData && !playerStatsData.error) {
-                  console.log('✅ Successfully fetched verified player data from SportsDB API');
-                  console.log(`📊 Found ${playerStatsData.homeTeam.players.length + playerStatsData.awayTeam.players.length} total players`);
+                if (teamRostersData && !teamRostersData.error) {
+                  console.log('✅ Successfully fetched team rosters from SportsDB API');
+                  console.log(`📊 Found ${teamRostersData.homeTeam.players.length + teamRostersData.awayTeam.players.length} total players`);
                   
-                  // Store the stats in a consistent format
-                  gameData.verifiedPlayerStats = playerStatsData;
+                  // Store basic roster data (we'll enrich it with stats)
+                  gameData.teamRosters = teamRostersData;
                   
-                  // Format the stats as text for the prompt (replacing perplexityStats)
-                  const formatPlayerStats = (players) => {
-                    return players.map(player => {
-                      return `- ${player.name} (${player.position}): Team: ${player.team}, Height: ${player.height}, Weight: ${player.weight}`;
-                    }).join('\n');
-                  };
+                  // If this is MLB, fetch detailed stats from Ball Don't Lie API
+                  if (gameData.league === 'MLB') {
+                    console.log('🏆 Using Ball Don\'t Lie API for detailed MLB player statistics (GOAT plan)...');
+                    
+                    // Step 1: Get full list of players for both teams
+                    const allPlayerNames = [];
+                    
+                    // Collect home team players
+                    teamRostersData.homeTeam.players.forEach(player => {
+                      allPlayerNames.push(player.name);
+                    });
+                    
+                    // Collect away team players
+                    teamRostersData.awayTeam.players.forEach(player => {
+                      allPlayerNames.push(player.name);
+                    });
+                    
+                    // Step 2: Find these players in the Ball Don't Lie API
+                    const playerSearchPromises = allPlayerNames.map(playerName => 
+                      ballDontLieService.findPlayersByName(playerName)
+                        .catch(error => {
+                          console.warn(`Could not find player ${playerName} in Ball Don't Lie: ${error.message}`);
+                          return []; // Return empty array on error
+                        })
+                    );
+                    
+                    // Wait for all player searches to complete
+                    const playerSearchResults = await Promise.all(playerSearchPromises);
+                    
+                    // Collect all player IDs found in the Ball Don't Lie API
+                    const foundPlayerIds = [];
+                    const playerNameToId = {};
+                    
+                    playerSearchResults.forEach((players, index) => {
+                      if (players && players.length > 0) {
+                        // Use the first match (most relevant)
+                        foundPlayerIds.push(players[0].id);
+                        playerNameToId[allPlayerNames[index]] = players[0].id;
+                      }
+                    });
+                    
+                    console.log(`Found ${foundPlayerIds.length} players in Ball Don't Lie API`);
+                    
+                    // Step 3: Get detailed stats for all found players
+                    if (foundPlayerIds.length > 0) {
+                      const playerStatsReport = await ballDontLieService.generatePlayerStatsReport(foundPlayerIds);
+                      
+                      // Store the accurate stats in gameData
+                      gameData.ballDontLieStats = playerStatsReport;
+                      
+                      // Create player insights from verified Ball Don't Lie data
+                      gameData.perplexityStats = {
+                        player_insights: playerStatsReport,
+                        meta: { 
+                          source: 'Ball Don\'t Lie API (GOAT Plan)', 
+                          insight_weight: '40%',  // Higher weight for verified stats
+                          verified: true
+                        }
+                      };
+                      
+                      console.log('✅ Successfully fetched detailed MLB player statistics from Ball Don\'t Lie API');
+                    } else {
+                      throw new Error('No players found in Ball Don\'t Lie API');
+                    }
+                  } else {
+                    // For non-MLB leagues, use the roster data directly
+                    // Format the player data as text for the prompt
+                    const formatPlayerStats = (players) => {
+                      return players.map(player => {
+                        return `- ${player.name} (${player.position}): Team: ${player.team}, Height: ${player.height}, Weight: ${player.weight}`;
+                      }).join('\n');
+                    };
+                    
+                    const homePlayersText = formatPlayerStats(teamRostersData.homeTeam.players);
+                    const awayPlayersText = formatPlayerStats(teamRostersData.awayTeam.players);
+                    
+                    // Create structured insights from roster data
+                    gameData.perplexityStats = {
+                      player_insights: `VERIFIED PLAYER DATA:\n\n${gameData.homeTeam} PLAYERS:\n${homePlayersText}\n\n${gameData.awayTeam} PLAYERS:\n${awayPlayersText}`,
+                      meta: { 
+                        source: 'SportsDB API', 
+                        insight_weight: '20%',
+                        verified: true
+                      }
+                    };
+                  }
+                } else {
+                  throw new Error('Could not fetch team rosters from SportsDB API');
+                }
+              } catch (error) {
+                console.error(`❌ Error fetching verified player data: ${error.message}`);
+                // Fall back to Perplexity for data if we can't get verified stats
+                try {
+                  console.log('Falling back to Perplexity for contextual data...');
+                  const perplexityData = await perplexityService.getPlayerPropInsights(gameData);
                   
-                  const homePlayersText = formatPlayerStats(playerStatsData.homeTeam.players);
-                  const awayPlayersText = formatPlayerStats(playerStatsData.awayTeam.players);
-                  
-                  // Create structured insights from verified data only
-                  gameData.perplexityStats = {
-                    player_insights: `VERIFIED PLAYER DATA:\n\n${gameData.homeTeam} PLAYERS:\n${homePlayersText}\n\n${gameData.awayTeam} PLAYERS:\n${awayPlayersText}`,
+                  gameData.perplexityStats = { 
+                    player_insights: perplexityData.player_insights || 'No verified player data available',
                     meta: { 
-                      source: 'SportsDB API', 
-                      insight_weight: '20%',
-                      verified: true
+                      source: 'Perplexity (fallback)', 
+                      insight_weight: '10%',  // Lower weight for unverified data
+                      verified: false 
                     }
                   };
+                } catch (perplexityError) {
+                  console.error(`❌ Perplexity fallback also failed: ${perplexityError.message}`);
+                  gameData.perplexityStats = { 
+                    player_insights: 'No player data available from any source',
+                    meta: { error: error.message, insight_weight: '0%', verified: false }
+                  };
                 }
-              } catch (sportsDbError) {
-                console.error(`❌ Error fetching verified player data from SportsDB API: ${sportsDbError.message}`);
-                gameData.perplexityStats = { 
-                  player_insights: 'No verified player data available from SportsDB API',
-                  meta: { error: sportsDbError.message, insight_weight: '20%', verified: false }
-                };
               }
               
               try {
@@ -627,8 +713,10 @@ const propPicksService = {
       Today's Lines:
       ${oddsText}
       
-      VERIFIED Player Data (SportsDB API):
+      ${gameData.league === 'MLB' ? 'VERIFIED MLB PLAYER STATISTICS (Ball Don\'t Lie API - GOAT Plan):' : 'VERIFIED PLAYER DATA:'}
       ${perplexityText ? perplexityText : 'No verified player data available - use only odds data for analysis'}
+      
+      NOTE: For MLB, the statistics above come from Ball Don't Lie API and are verified, accurate stats that should be trusted for analysis. Use these statistics when evaluating player prop bets.
       
       Key Markets (focus on these by sport):
       ${gameData.league === 'MLB' ? 
