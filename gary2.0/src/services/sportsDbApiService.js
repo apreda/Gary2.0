@@ -369,6 +369,106 @@ export const sportsDbApiService = {
       console.error(`Error fetching NBA roster for team "${teamName}":`, error);
       return [];
     }
+  },
+  
+  /**
+   * Get player statistics for prop betting
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} league - League code (NBA, MLB, NHL)
+   * @returns {Promise<Object>} Player statistics object
+   */
+  getPlayerStatsForProps: async (homeTeam, awayTeam, league) => {
+    try {
+      console.log(`Fetching player statistics for ${homeTeam} vs ${awayTeam} (${league})`);
+      
+      if (!sportsDbApiService.API_KEY) {
+        throw new Error('TheSportsDB API key not configured');
+      }
+      
+      let leagueId;
+      switch(league) {
+        case 'NBA':
+          leagueId = sportsDbApiService.leagueIds.NBA;
+          break;
+        case 'MLB':
+          leagueId = sportsDbApiService.leagueIds.MLB;
+          break;
+        case 'NHL':
+          leagueId = sportsDbApiService.leagueIds.NHL;
+          break;
+        default:
+          throw new Error(`Unsupported league: ${league}`);
+      }
+      
+      // Get team IDs
+      const homeTeamData = await sportsDbApiService.lookupTeam(homeTeam, leagueId);
+      const awayTeamData = await sportsDbApiService.lookupTeam(awayTeam, leagueId);
+      
+      if (!homeTeamData || !awayTeamData) {
+        throw new Error(`Could not find team data for ${homeTeam} or ${awayTeam}`);
+      }
+      
+      // Get players for both teams
+      const [homePlayers, awayPlayers] = await Promise.all([
+        sportsDbApiService.getTeamPlayers(homeTeamData.idTeam),
+        sportsDbApiService.getTeamPlayers(awayTeamData.idTeam)
+      ]);
+      
+      // Process player data to include only relevant stats
+      const processPlayers = (players, isHomeTeam) => {
+        return players.map(player => {
+          // Extract relevant stats based on league
+          let playerStats = {};
+          
+          // Common fields
+          playerStats = {
+            player_id: player.idPlayer,
+            name: player.strPlayer,
+            position: player.strPosition,
+            team: isHomeTeam ? homeTeam : awayTeam,
+            height: player.strHeight || 'N/A',
+            weight: player.strWeight || 'N/A',
+            birth_date: player.dateBorn || 'N/A',
+            nationality: player.strNationality || 'N/A'
+          };
+          
+          // Add league-specific stats if available
+          return playerStats;
+        });
+      };
+      
+      const homeTeamPlayers = processPlayers(homePlayers, true);
+      const awayTeamPlayers = processPlayers(awayPlayers, false);
+      
+      console.log(`Found ${homeTeamPlayers.length} players for ${homeTeam} and ${awayTeamPlayers.length} players for ${awayTeam}`);
+      
+      return {
+        homeTeam: {
+          team_id: homeTeamData.idTeam,
+          name: homeTeam,
+          players: homeTeamPlayers
+        },
+        awayTeam: {
+          team_id: awayTeamData.idTeam,
+          name: awayTeam,
+          players: awayTeamPlayers
+        },
+        meta: {
+          league: league,
+          timestamp: new Date().toISOString(),
+          source: 'TheSportsDB API'
+        }
+      };
+    } catch (error) {
+      console.error(`Error fetching player statistics: ${error.message}`);
+      return {
+        error: error.message,
+        meta: {
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
   }
 };
 
