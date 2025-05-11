@@ -647,6 +647,23 @@ Key Markets (focus):
 - pitcher_strikeouts
 - pitcher_outs
 
+REALITY CHECK GUIDELINES - EXTREMELY IMPORTANT:
+- For home runs (batter_home_runs):
+  * Lines over 0.5 are rare and should be approached with extreme caution
+  * NEVER predict OVER 0.5 home runs with confidence > 0.65
+  * NEVER predict OVER 1.5 home runs with confidence > 0.55
+  * NEVER predict OVER 2.5 home runs (this is extremely unlikely for any player)
+  * Even the best power hitters rarely exceed 1 HR per game
+
+- For hits (batter_hits):
+  * Typical lines are 0.5, 1.5, or occasionally 2.5 for elite hitters
+  * Maximum confidence for OVER 1.5 hits should not exceed 0.75
+  * Maximum confidence for OVER 2.5 hits should not exceed 0.60
+
+- For pitcher strikeouts:
+  * Be realistic based on pitcher's K/9 rate and opposition's strikeout tendencies
+  * High K totals (9+) should rarely have confidence > 0.70
+
 Combined Decision Framework:
 Base each pick on a holistic evaluation that blends:
 - Expected Value (EV): 60% weight
@@ -656,11 +673,11 @@ Base each pick on a holistic evaluation that blends:
 EV Calculation:
 - Convert American odds to decimal odds
 - implied_probability = 1 / decimal_odds
-- true_probability = your estimated likelihood based on analysis
+- true_probability = your estimated likelihood based on analysis (MUST BE REALISTIC)
 - EV = true_probability – implied_probability
 
 Pick Criteria:
-- Only include picks with confidence ≥ 0.78 (strong picks)
+- Only include picks with confidence between 0.60 and 0.80 (more realistic range)
 - IMPORTANT: Use the EXACT odds provided by The Odds API - do not modify or normalize them
 - Evaluate all eligible props and compute a Combined Score:
   Combined Score = (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability)
@@ -678,15 +695,15 @@ RESPONSE FORMAT (return ONLY valid JSON array):
     "odds": -110,
     "decimal_odds": 1.909,
     "implied_probability": 0.524,
-    "true_probability": 0.65,
+    "true_probability": 0.65, // MUST BE REALISTIC - FOLLOW REALITY CHECK GUIDELINES
     "ev": 0.126,
-    "confidence": 0.8,
+    "confidence": 0.7, // MUST BE BETWEEN 0.60-0.80 AND FOLLOW REALITY CHECK GUIDELINES
     "homeTeam": "${gameData.homeTeam}",
     "awayTeam": "${gameData.awayTeam}",
     "matchup": "${gameData.matchup}",
     "time": "${gameData.time || '7:10 PM ET'}",
     "league": "MLB",
-    "rationale": "3-4 sentence statistical breakdown with swagger, including EV calculation and matchup advantages."
+    "rationale": "3-4 sentence statistical breakdown with swagger, including EV calculation and matchup advantages. For rare events like HRs, be clear about realistic probabilities."
   }
 ]`;    
       
