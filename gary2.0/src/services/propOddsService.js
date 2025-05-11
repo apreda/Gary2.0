@@ -20,7 +20,7 @@ const PROP_MARKETS = {
     'player_steals'
   ],
   baseball_mlb: [
-    // Standard MLB player props
+    // Standard MLB player props - using only non-alternate lines
     'batter_home_runs',
     'batter_hits',
     'batter_total_bases',
@@ -39,16 +39,7 @@ const PROP_MARKETS = {
     'pitcher_earned_runs',
     'pitcher_outs',
     'batter_first_home_run',
-    'pitcher_record_a_win',
-    
-    // Alternate props (if primary props fail)
-    'batter_total_bases_alternate',
-    'batter_home_runs_alternate',
-    'batter_hits_alternate',
-    'batter_rbis_alternate',
-    'pitcher_hits_allowed_alternate',
-    'pitcher_walks_alternate',
-    'pitcher_strikeouts_alternate'
+    'pitcher_record_a_win'
   ],
   icehockey_nhl: [
     'player_points',
@@ -250,9 +241,19 @@ export const propOddsService = {
         throw new Error('No player prop data available for this game after trying all sources.');
       }
       
+      // Filter out any alternate props that might have been returned by the API
+      const filteredProps = allPlayerProps.filter(prop => {
+        // Check if this is an MLB alternate prop type
+        if (sport === 'baseball_mlb' && prop.prop_type.includes('alternate')) {
+          console.log(`🔍 Filtering out alternate MLB prop: ${prop.player} - ${prop.prop_type}`);
+          return false;
+        }
+        return true;
+      });
+      
       // Group over/under odds together for the same player and prop type
       const groupedProps = {};
-      for (const prop of allPlayerProps) {
+      for (const prop of filteredProps) {
         const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
         if (!groupedProps[key]) {
           groupedProps[key] = {
