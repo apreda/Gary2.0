@@ -1234,4 +1234,8 @@ function levenshteinDistance(a, b) {
   return matrix[b.length][a.length];
 }
 
-export default propPicksService;
+
+} // Auto-added closing brace
+} // Auto-added closing brace
+
+export { propPicksService };
