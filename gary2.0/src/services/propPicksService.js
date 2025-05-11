@@ -66,6 +66,88 @@ function levenshteinDistance(a, b) {
 }
 
 /**
+ * Function to find best match for a player name in a team roster
+ */
+function findBestMatch(playerName, teamPlayers) {
+  if (!teamPlayers || teamPlayers.length === 0) return null;
+  
+  // Get normalized player name using the Ball Don't Lie service
+  let normalizedSearch = '';
+  try {
+    normalizedSearch = ballDontLieService.normalizePlayerName(playerName);
+  } catch (e) {
+    // If the normalize function isn't available, do simple normalization
+    normalizedSearch = playerName.toLowerCase().replace(/\./g, '').trim();
+  }
+  
+  // Calculate similarity score for each player
+  let bestMatch = null;
+  let bestScore = 100; // Lower is better
+  
+  for (const player of teamPlayers) {
+    const fullName = `${player.first_name} ${player.last_name}`;
+    
+    // Normalize player name from roster
+    let normalizedName = '';
+    try {
+      normalizedName = ballDontLieService.normalizePlayerName(fullName);
+    } catch (e) {
+      normalizedName = fullName.toLowerCase().replace(/\./g, '').trim();
+    }
+    
+    // Use levenshteinDistance for name similarity
+    const score = levenshteinDistance(normalizedName, normalizedSearch);
+    
+    if (score < bestScore) {
+      bestScore = score;
+      bestMatch = player;
+    }
+  }
+  
+  // Return the best match if score is good enough (lower is better)
+  if (bestMatch && bestScore < 4) {
+    return bestMatch;
+  }
+  
+  return null;
+}
+
+/**
+ * Creates a prompt for generating prop picks
+ */
+function createPropPicksPrompt(gameData, playerStatsText, propOddsData) {
+  // Format the odds data
+  const oddsText = propOddsData.map(prop => 
+    `${prop.player}: ${prop.prop_type} ${prop.line} (O:${prop.over_odds}/U:${prop.under_odds})`
+  ).join('\n');
+  
+  return `Analyze the upcoming ${gameData.league} game: ${gameData.matchup}\n\n` +
+         `TEAMS:\n${gameData.homeTeam} vs ${gameData.awayTeam}\n\n` +
+         `PLAYER STATISTICS:\n${playerStatsText}\n\n` +
+         `AVAILABLE PROPS:\n${oddsText}\n\n` +
+         `Generate high-confidence prop picks based on the stats and trends.`;
+}
+
+/**
+ * Parses OpenAI response into structured prop picks
+ */
+function parseOpenAIResponse(response) {
+  try {
+    // Try to extract JSON from the response
+    const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+    if (jsonMatch && jsonMatch[0]) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    
+    // If no valid JSON found, return empty array
+    return [];
+  } catch (error) {
+    console.error('Error parsing OpenAI response:', error);
+    return [];
+  }
+}
+
+/**
  * Ensure we have a valid Supabase session
  */
 async function ensureValidSupabaseSession() {
@@ -325,51 +407,6 @@ const propPicksService = {
                       // Map of player names to Ball Don't Lie player IDs
                       const playerNameToId = {};
                       const playerIdToDetails = {};
-                      
-                      // Function to find best match for a player name in a team roster
-                      const findBestMatch = (playerName, teamPlayers) => {
-                        if (!teamPlayers || teamPlayers.length === 0) return null;
-                        
-                        // Get normalized player name using the Ball Don't Lie service
-                        let normalizedSearch = '';
-                        try {
-                          normalizedSearch = ballDontLieService.normalizePlayerName(playerName);
-                        } catch (e) {
-                          // If the normalize function isn't available, do simple normalization
-                          normalizedSearch = playerName.toLowerCase().replace(/\./g, '').trim();
-                        }
-                        
-                        // Calculate similarity score for each player
-                        let bestMatch = null;
-                        let bestScore = 100; // Lower is better
-                        
-                        for (const player of teamPlayers) {
-                          const fullName = `${player.first_name} ${player.last_name}`;
-                          
-                          // Normalize player name from roster
-                          let normalizedName = '';
-                          try {
-                            normalizedName = ballDontLieService.normalizePlayerName(fullName);
-                          } catch (e) {
-                            normalizedName = fullName.toLowerCase().replace(/\./g, '').trim();
-                          }
-                          
-                          // Use levenshteinDistance instead of custom similarity logic
-                          const score = levenshteinDistance(normalizedName, normalizedSearch);
-                          
-                          if (score < bestScore) {
-                            bestScore = score;
-                            bestMatch = player;
-                          }
-                        }
-                        
-                        // Return the best match if score is good enough (lower is better)
-                        if (bestMatch && bestScore < 4) {
-                          return bestMatch;
-                        }
-                        
-                        return null;
-                      };
                       
                       // Try to match each player from the roster using the team players
                       for (const playerName of allPlayerNames) {
