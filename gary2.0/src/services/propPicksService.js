@@ -74,21 +74,63 @@ const propPicksService = {
       // Process one sport at a time to avoid overwhelming OpenAI API
       for (const sport of sportsToAnalyze) {
         console.log(`\n==== Processing ${sport} player props ====`);
+        const today = date; // Use the date variable defined above
         
         try {
-          // Get games for this sport
-          const games = await oddsService.getUpcomingGames(sport);
-          console.log(`Got ${games.length} games for ${sport}`);
+          console.log(`Getting prop picks for ${sport} on ${today}`);
           
-          if (games.length === 0) {
-            console.log(`No games found for ${sport}, skipping...`);
-            continue;
+          // Get games for this sport
+          let gameOdds = await propOddsService.getGamesForDay(sport, today, false);
+          
+          if (!gameOdds || gameOdds.length === 0) {
+            console.log(`No games found for ${sport} on ${today}`);
+            continue; // Skip to next sport rather than returning
           }
+          
+          // Filter out games that have already started
+          const currentTime = new Date();
+          gameOdds = gameOdds.filter(game => {
+            if (!game.commence_time) return true; // Keep games with no start time
+            
+            const gameStartTime = new Date(game.commence_time);
+            const notStarted = gameStartTime > currentTime;
+            
+            if (!notStarted) {
+              console.log(`Skipping game ${game.home_team} vs ${game.away_team} - already started at ${gameStartTime.toLocaleTimeString()}`);
+            }
+            
+            return notStarted;
+          });
+          
+          if (gameOdds.length === 0) {
+            console.log(`All games for ${sport} on ${today} have already started`);
+            continue; // Skip to next sport rather than returning
+          }
+          
+          console.log(`Found ${gameOdds.length} upcoming games for ${sport}`);
           
           // Map sport key to readable name
           const sportName = sport.includes('basketball') ? 'NBA' :
                            sport.includes('baseball') ? 'MLB' :
                            sport.includes('hockey') ? 'NHL' :
+                           sport.includes('football') ? 'NFL' : 'Unknown';
+          
+          // For each game, generate player props
+          for (const game of gameOdds) {
+          try {
+            console.log(`\n-- Analyzing game: ${game.home_team} vs ${game.away_team} --`);
+            
+            // Format the game data for prop picks analysis
+            const gameData = {
+              homeTeam: game.home_team,
+              awayTeam: game.away_team,
+              matchup: `${game.home_team} vs ${game.away_team}`,
+              league: sportName,
+              sportKey: sport,
+              time: game.commence_time ? new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'TBD'
+            };
+            
+            // Fetch player data for MLB teams from TheSportsDB
                            sport.includes('football') ? 'NFL' : 'Unknown';
           
           // For each game, generate player props
@@ -257,29 +299,146 @@ const propPicksService = {
                       allPlayerNames.push(player.name);
                     });
                     
-                    // Step 2: Find these players in the Ball Don't Lie API
-                    const playerSearchPromises = allPlayerNames.map(playerName => 
-                      ballDontLieService.findPlayersByName(playerName)
-                        .catch(error => {
-                          console.warn(`Could not find player ${playerName} in Ball Don't Lie: ${error.message}`);
-                          return []; // Return empty array on error
-                        })
-                    );
+                    // Step 2: Try multiple approaches to find players in Ball Don't Lie API
+                    console.log('Approach 1: Searching for players by team first...');
                     
-                    // Wait for all player searches to complete
-                    const playerSearchResults = await Promise.all(playerSearchPromises);
+                    // First, try to get players by team name (often more reliable)
+                    const homeTeamPlayers = await ballDontLieService.getPlayersByTeam(gameData.homeTeam)
+                      .catch(error => {
+                        console.warn(`Could not find players for team ${gameData.homeTeam}: ${error.message}`);
+                        return []; // Return empty array on error
+                      });
+                    
+                    const awayTeamPlayers = await ballDontLieService.getPlayersByTeam(gameData.awayTeam)
+                      .catch(error => {
+                        console.warn(`Could not find players for team ${gameData.awayTeam}: ${error.message}`);
+                        return []; // Return empty array on error
+                      });
+                    
+                    console.log(`Found ${homeTeamPlayers.length} players for ${gameData.homeTeam} and ${awayTeamPlayers.length} players for ${gameData.awayTeam}`);
+                    
+                    // Map of player names to Ball Don't Lie player IDs
+                    const playerNameToId = {};
+                    const playerIdToDetails = {};
+                    
+                    // Function to find best match for a player name in a team roster
+                    const findBestMatch = (playerName, teamPlayers) => {
+                      if (!teamPlayers || teamPlayers.length === 0) return null;
+                      
+                      // Get normalized player name using the Ball Don't Lie service
+                      let normalizedSearch = '';
+                      try {
+                        normalizedSearch = ballDontLieService.normalizePlayerName(playerName);
+                      } catch (e) {
+                        // If the normalize function isn't available, do simple normalization
+                        normalizedSearch = playerName.toLowerCase().replace(/\./g, '').trim();
+                      }
+                      
+                      // Calculate similarity score for each player
+                      let bestMatch = null;
+                      let bestScore = 100; // Lower is better
+                      
+                      for (const player of teamPlayers) {
+                        const fullName = `${player.first_name} ${player.last_name}`;
+                        
+                        // Normalize player name from roster
+                        let normalizedName = '';
+                        try {
+                          normalizedName = ballDontLieService.normalizePlayerName(fullName);
+                        } catch (e) {
+                          normalizedName = fullName.toLowerCase().replace(/\./g, '').trim();
+                        }
+                        
+                        // Simple similarity check (could be enhanced)
+                        let score = 100;
+                        
+                        // Exact match
+                        if (normalizedName === normalizedSearch) {
+                          score = 0;
+                        }
+                        // Contains full name
+                        else if (normalizedName.includes(normalizedSearch) || normalizedSearch.includes(normalizedName)) {
+                          score = 1;
+                        }
+                        // Contains parts
+                        else {
+                          const searchParts = normalizedSearch.split(' ');
+                          const nameParts = normalizedName.split(' ');
+                          
+                          // Check for matching last name
+                          if (searchParts.length > 0 && nameParts.length > 0 && 
+                              nameParts[nameParts.length - 1] === searchParts[searchParts.length - 1]) {
+                            score = 2;
+                          }
+                          // Check for matching first name
+                          else if (searchParts.length > 0 && nameParts.length > 0 && 
+                                   nameParts[0] === searchParts[0]) {
+                            score = 3;
+                          }
+                        }
+                        
+                        if (score < bestScore) {
+                          bestScore = score;
+                          bestMatch = player;
+                        }
+                      }
+                      
+                      // Return the best match if score is good enough (lower is better)
+                      if (bestMatch && bestScore < 4) {
+                        return bestMatch;
+                      }
+                      
+                      return null;
+                    };
+                    
+                    // Try to match each player from the roster using the team players
+                    for (const playerName of allPlayerNames) {
+                      // Skip if we've already matched this player
+                      if (playerNameToId[playerName]) continue;
+                      
+                      // Determine which team this player belongs to
+                      const isHomeTeam = teamRostersData.homeTeam.players.some(p => p.name === playerName);
+                      const teamPlayers = isHomeTeam ? homeTeamPlayers : awayTeamPlayers;
+                      
+                      // Try to find the best match
+                      const matchedPlayer = findBestMatch(playerName, teamPlayers);
+                      
+                      if (matchedPlayer) {
+                        playerNameToId[playerName] = matchedPlayer.id;
+                        playerIdToDetails[matchedPlayer.id] = matchedPlayer;
+                        console.log(`✅ Matched "${playerName}" to ${matchedPlayer.first_name} ${matchedPlayer.last_name} (ID: ${matchedPlayer.id})`);
+                      }
+                    }
+                    
+                    // Approach 2: For players not matched by team, try direct name search
+                    const unmatchedPlayers = allPlayerNames.filter(name => !playerNameToId[name]);
+                    
+                    if (unmatchedPlayers.length > 0) {
+                      console.log(`Approach 2: Searching for ${unmatchedPlayers.length} remaining players by name...`);
+                      
+                      // Search for each unmatched player using enhanced name search
+                      for (const playerName of unmatchedPlayers) {
+                        try {
+                          // Use the improved findPlayersByName with name variants
+                          const players = await ballDontLieService.findPlayersByName(playerName);
+                          
+                          if (players && players.length > 0) {
+                            // Use the first match (most relevant after sorting)
+                            playerNameToId[playerName] = players[0].id;
+                            playerIdToDetails[players[0].id] = players[0];
+                            console.log(`✅ Found "${playerName}" via direct name search: ${players[0].first_name} ${players[0].last_name} (ID: ${players[0].id})`);
+                          } else {
+                            console.warn(`❌ No matches found for "${playerName}" after trying name variants`);
+                          }
+                        } catch (error) {
+                          console.warn(`Could not find player ${playerName} in Ball Don't Lie: ${error.message}`);
+                        }
+                      }
+                    }
                     
                     // Collect all player IDs found in the Ball Don't Lie API
-                    const foundPlayerIds = [];
-                    const playerNameToId = {};
-                    
-                    playerSearchResults.forEach((players, index) => {
-                      if (players && players.length > 0) {
-                        // Use the first match (most relevant)
-                        foundPlayerIds.push(players[0].id);
-                        playerNameToId[allPlayerNames[index]] = players[0].id;
-                      }
-                    });
+                    const foundPlayerIds = Object.values(playerNameToId);
+                    console.log(`Successfully identified ${foundPlayerIds.length} of ${allPlayerNames.length} players in Ball Don't Lie API`);
                     
                     console.log(`Found ${foundPlayerIds.length} players in Ball Don't Lie API`);
                     
@@ -1046,4 +1205,33 @@ async function ensureValidSupabaseSession() {
   }
 }
 
-export { propPicksService };
+// Levenshtein distance function for name similarity (used in player matching)
+function levenshteinDistance(a, b) {
+  if (!a || !b) return 100; // Return high distance for empty strings
+  
+  const matrix = [];
+
+  // Initialize matrix
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Fill matrix
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // deletion
+        matrix[i][j - 1] + 1,      // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+export default propPicksService;

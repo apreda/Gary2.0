@@ -8,6 +8,33 @@ import axios from 'axios';
 const API_BASE_URL = 'https://api.balldontlie.io/mlb/v1';
 const API_KEY = '3363660a-a082-43b7-a130-6249ff68e5ab'; // GOAT plan
 
+// Levenshtein distance for name similarity
+function levenshteinDistance(a, b) {
+  const matrix = [];
+
+  // Initialize matrix
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Fill matrix
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // deletion
+        matrix[i][j - 1] + 1,      // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
 export const ballDontLieService = {
   /**
    * Initialize the service
@@ -283,28 +310,154 @@ export const ballDontLieService = {
       
       console.log(`Searching for MLB player: "${playerName}"`);
       
-      // Build URL and params
-      const url = `${API_BASE_URL}/players/active`;
-      const params = {
-        search: playerName,
-        per_page: 10 // Limit to top matches
-      };
+      // Generate name variants to try
+      const normalizedOriginal = ballDontLieService.normalizePlayerName(playerName);
+      const nameVariants = ballDontLieService.generateNameVariants(playerName);
       
-      const response = await axios.get(url, {
-        params,
-        headers: {
-          'Authorization': API_KEY
+      console.log(`Trying ${nameVariants.length} name variants for "${playerName}"`); 
+      
+      // Try each name variant
+      for (const variant of nameVariants) {
+        try {
+          // Build URL and params
+          const url = `${API_BASE_URL}/players/active`;
+          const params = {
+            search: variant,
+            per_page: 10 // Limit to top matches
+          };
+          
+          const response = await axios.get(url, {
+            params,
+            headers: {
+              'Authorization': API_KEY
+            }
+          });
+          
+          if (response.data && response.data.data && response.data.data.length > 0) {
+            console.log(`Found ${response.data.data.length} players matching variant "${variant}"`);
+            
+            // Sort results by name similarity
+            const sortedResults = response.data.data.sort((a, b) => {
+              const aFullName = `${a.first_name} ${a.last_name}`;
+              const bFullName = `${b.first_name} ${b.last_name}`;
+              
+              const aNormalized = ballDontLieService.normalizePlayerName(aFullName);
+              const bNormalized = ballDontLieService.normalizePlayerName(bFullName);
+              
+              // Calculate similarity - lower is better
+              const aSimilarity = levenshteinDistance(normalizedOriginal, aNormalized);
+              const bSimilarity = levenshteinDistance(normalizedOriginal, bNormalized);
+              
+              return aSimilarity - bSimilarity;
+            });
+            
+            return sortedResults;
+          }
+        } catch (error) {
+          console.warn(`Error with variant "${variant}": ${error.message}`);
+          // Continue to next variant
         }
-      });
-      
-      if (response.data && response.data.data) {
-        console.log(`Found ${response.data.data.length} players matching "${playerName}"`);
-        return response.data.data;
       }
       
+      console.warn(`No players found for "${playerName}" after trying ${nameVariants.length} variants`);
       return [];
     } catch (error) {
       console.error(`Error searching for player "${playerName}": ${error.message}`);
+      throw error;
+    }
+  },
+  
+  /**
+   * Normalize player name for better matching
+   * @param {string} name - Player name to normalize
+   * @returns {string} - Normalized name
+   */
+  normalizePlayerName: (name) => {
+    if (!name) return '';
+    
+    // Convert to lowercase
+    let normalized = name.toLowerCase();
+    
+    // Remove periods (e.g., "J.T. Realmuto" -> "jt realmuto")
+    normalized = normalized.replace(/\./g, '');
+    
+    // Remove common suffixes
+    normalized = normalized.replace(/ jr\.?$| sr\.?$| iii$| ii$| iv$/, '');
+    
+    // Remove apostrophes and hyphens (e.g., "D'Angelo" -> "dangelo", "Smith-Jones" -> "smith jones")
+    normalized = normalized.replace(/['-]/g, '');
+    
+    // Remove extra spaces
+    normalized = normalized.replace(/\s+/g, ' ').trim();
+    
+    return normalized;
+  },
+  
+  /**
+   * Generate alternative name formats for searching
+   * @param {string} playerName - Original player name
+   * @returns {Array<string>} - List of name formats to try
+   */
+  generateNameVariants: (playerName) => {
+    if (!playerName) return [];
+    
+    const variants = [playerName]; // Original name
+    const parts = playerName.split(' ');
+    
+    if (parts.length >= 2) {
+      // Last name only
+      variants.push(parts[parts.length - 1]);
+      
+      // First name + last name (skip middle names)
+      if (parts.length > 2) {
+        variants.push(`${parts[0]} ${parts[parts.length - 1]}`);
+      }
+      
+      // Last name, first name
+      if (parts.length >= 2) {
+        variants.push(`${parts[parts.length - 1]}, ${parts[0]}`);
+      }
+    }
+    
+    return variants;
+  },
+  
+  /**
+   * Get players by team name or abbreviation
+   * @param {string} teamIdentifier - Team name or abbreviation
+   * @returns {Promise<Array>} - Array of players on the team
+   */
+  getPlayersByTeam: async (teamIdentifier) => {
+    try {
+      if (!teamIdentifier) {
+        throw new Error('Team identifier is required');
+      }
+      
+      console.log(`Fetching players for team: "${teamIdentifier}"`);
+      
+      // First, get all active players
+      const allPlayers = await ballDontLieService.getActivePlayers({ per_page: 100 });
+      
+      // Normalize team identifier for matching
+      const normalizedTeamId = teamIdentifier.toLowerCase().trim();
+      
+      // Filter players by team
+      const teamPlayers = allPlayers.filter(player => {
+        if (!player.team) return false;
+        
+        // Try to match by team name, abbreviation or city
+        return (
+          player.team.name?.toLowerCase().includes(normalizedTeamId) ||
+          player.team.abbreviation?.toLowerCase() === normalizedTeamId ||
+          player.team.city?.toLowerCase().includes(normalizedTeamId) ||
+          player.team.full_name?.toLowerCase().includes(normalizedTeamId)
+        );
+      });
+      
+      console.log(`Found ${teamPlayers.length} players on team "${teamIdentifier}"`);
+      return teamPlayers;
+    } catch (error) {
+      console.error(`Error fetching players for team "${teamIdentifier}": ${error.message}`);
       throw error;
     }
   },
