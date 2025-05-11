@@ -139,7 +139,11 @@ export function Pricing() {
                     boxShadow: "0px -4px 15px rgba(0,0,0,0.2)"
                   }}>
                   {/* Text directly on gold background */}
-                  <div className="py-4 px-6 flex justify-center">
+                  <div className="py-4 px-6 flex justify-center flex-col">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-mono text-xs opacity-90 text-black font-medium">VIP ACCESS</div>
+                      <div></div>
+                    </div>
                     {user && subscriptionStatus === 'active' ? (
                       <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group relative w-full text-center">
                         <div className="text-xl font-bold text-black font-sans tracking-wider py-2 hover:opacity-80 transition-opacity">
