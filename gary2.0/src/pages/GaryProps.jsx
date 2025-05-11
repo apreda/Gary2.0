@@ -189,7 +189,20 @@ export default function GaryProps() {
                               {/* Middle Content - Analysis */}
                               <div style={{ flex: '1 1 auto', marginBottom: '0.5rem' }}>
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
-                                <div style={{ fontSize: '0.85rem', lineHeight: 1.4, height: '150px', overflow: 'auto', opacity: 0.9, padding: '0.25rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>{pick.rationale || 'Analysis not available at this time.'}</div>
+                                <div style={{ fontSize: '0.85rem', lineHeight: 1.4, height: '150px', overflow: 'auto', opacity: 0.9, padding: '0.25rem 0.5rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>
+                                  {pick.rationale ? (
+                                    <ul style={{ listStyleType: 'none', margin: 0, padding: 0 }}>
+                                      {pick.rationale.split('. ')
+                                        .filter(point => point.trim().length > 0)
+                                        .map((point, idx) => (
+                                          <li key={idx} style={{ display: 'flex', marginBottom: '8px', alignItems: 'flex-start' }}>
+                                            <span style={{ color: '#bfa142', marginRight: '6px', fontWeight: 'bold', fontSize: '0.9rem' }}>•</span>
+                                            <span>{point.endsWith('.') ? point : `${point}.`}</span>
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  ) : 'Analysis not available at this time.'}
+                                </div>
                               </div>
                               
                               {/* Bottom Section - Pick Details (fixed at bottom) */}
