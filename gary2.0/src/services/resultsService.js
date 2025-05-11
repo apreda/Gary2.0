@@ -166,7 +166,7 @@ export const resultsService = {
       }
       
       // Try to get the game from the Odds API
-      const events = await oddsService.getEvents(sport);
+      const events = await oddsService.getUpcomingGames(sport);
       const game = events.find(event => event.id === gameId);
       
       // If the game is not found, it might have concluded
