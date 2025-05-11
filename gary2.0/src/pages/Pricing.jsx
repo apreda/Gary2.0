@@ -134,44 +134,45 @@ export function Pricing() {
               {/* Ticket footer with action button */}
               <div className="bg-black relative p-4 rounded-b-xl group-hover:shadow-md transition duration-300 overflow-hidden">
                 <div className="relative z-20 rounded-lg overflow-hidden"
-                   style={{
-                     background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)"
-                   }}>
-                {/* Barcode removed */}
-                
-                {/* Action button with conditional destination based on user status */}
-                {user && subscriptionStatus === 'active' ? (
-                  <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group/btn block w-full">
-                    <div className="pricing-page-button-container flex items-center justify-center bg-[#b8953f] rounded-lg py-3 px-6 
-                                  shadow-md hover:shadow-lg
-                                  transform hover:-translate-y-1">
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
-                                     -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                      <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
-                        SELECT PLAN
+                  style={{
+                    background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)"
+                  }}>
+                  {/* Barcode removed */}
+                  
+                  {/* Action button with conditional destination based on user status */}
+                  {user && subscriptionStatus === 'active' ? (
+                    <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group/btn block w-full">
+                      <div className="pricing-page-button-container flex items-center justify-center rounded-lg py-3 px-6 
+                                    shadow-md hover:shadow-lg
+                                    transform hover:-translate-y-1">
+                        <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
+                                      -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
+                        <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
+                          SELECT PLAN
+                        </div>
                       </div>
-                    </div>
-                  </a>
-                ) : (
-                  <Link to="/login" className="group/btn block w-full">
-                    <div className="pricing-page-button-container flex items-center justify-center bg-[#b8953f] rounded-lg py-3 px-6 
-                                  shadow-md hover:shadow-lg
-                                  transform hover:-translate-y-1">
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
-                                     -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
-                      <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
-                        SELECT PLAN
+                    </a>
+                  ) : (
+                    <Link to="/login" className="group/btn block w-full">
+                      <div className="pricing-page-button-container flex items-center justify-center rounded-lg py-3 px-6 
+                                    shadow-md hover:shadow-lg
+                                    transform hover:-translate-y-1">
+                        <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
+                                      -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out"></div>
+                        <div className="text-xl text-black font-sans tracking-wider font-bold relative z-10">
+                          SELECT PLAN
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                )}
-                
-                {/* VIP hologram effect */}
-                <div className="absolute bottom-4 -right-[18px] w-[36px] h-[36px] rounded-full bg-black 
-                               flex items-center justify-center overflow-hidden shadow-lg
-                               group-hover:rotate-[360deg] transition-transform duration-1000 ease-out">
-                  <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#b8953f] to-[#d4af37] opacity-90"></div>
-                  <div className="text-[10px] font-bold relative z-10 text-black">VIP</div>
+                    </Link>
+                  )}
+                  
+                  {/* VIP hologram effect */}
+                  <div className="absolute bottom-4 -right-[18px] w-[36px] h-[36px] rounded-full bg-black 
+                                flex items-center justify-center overflow-hidden shadow-lg
+                                group-hover:rotate-[360deg] transition-transform duration-1000 ease-out">
+                    <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#b8953f] to-[#d4af37] opacity-90"></div>
+                    <div className="text-[10px] font-bold relative z-10 text-black">VIP</div>
+                  </div>
                 </div>
               </div>
             </div>
