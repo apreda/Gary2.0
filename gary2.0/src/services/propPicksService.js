@@ -7,68 +7,27 @@ import { propOddsService } from './propOddsService';
 import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
-import { ballDontLieService } from './ballDontLieService';
+// Ball Don't Lie service removed (not needed for MLB props)
 import { sportsDbApiService } from './sportsDbApiService';
 import { nbaSeason, formatSeason } from '../utils/dateUtils';
 
 /**
- * Fetch active players for an NBA team with their current season stats
- * Uses TheSportsDB for current roster and Ball Don't Lie for season stats
- * 
- * @param {string} teamName - The name of the NBA team
- * @returns {Promise<Array>} Array of active players with their season stats
+ * Fetch active players for a team with their current season stats
+ * Uses TheSportsDB for current MLB rosters
+ * @param {string} teamName - The team name as it appears in the Odds API
+ * @returns {Array} - Active players for the team
  */
 async function fetchActivePlayers(teamName) {
   try {
-    console.log(`Fetching active players for ${teamName}`);
+    console.log(`Fetching active MLB players for ${teamName}...`);
     
-    // 1. Get current roster from TheSportsDB (only active players)
-    const roster = await sportsDbApiService.getNbaTeamRoster(teamName);
-    console.log(`Found ${roster.length} active players on the ${teamName} roster from TheSportsDB`);
+    // Fetch current roster from TheSportsDB for MLB teams
+    const roster = await sportsDbApiService.getTeamPlayers(teamName, 'MLB');
+    console.log(`Got ${roster.length} players on ${teamName} roster from TheSportsDB`);
     
-    // Get the current NBA season
-    const season = nbaSeason();
-    console.log(`Using NBA season: ${season} (${formatSeason(season)})`);
-    
-    // 2. Enrich players with season stats from Ball Don't Lie
-    const playersWithStats = await Promise.all(
-      roster.map(async (player) => {
-        try {
-          // Convert TheSportsDB player ID to Ball Don't Lie player ID
-          // This requires searching for the player by name in Ball Don't Lie
-          const bdlPlayers = await ballDontLieService.searchNbaPlayer(player.strPlayer);
-          
-          if (bdlPlayers && bdlPlayers.length > 0) {
-            const bdlPlayer = bdlPlayers[0]; // Use the first match
-            
-            // Get season stats for this player
-            const seasonStats = await ballDontLieService.getSeasonAverages({
-              season: season,
-              player_ids: [bdlPlayer.id]
-            });
-            
-            if (seasonStats && seasonStats.data && seasonStats.data.length > 0) {
-              // Combine player info with stats
-              return {
-                ...bdlPlayer,
-                sportsDbData: player,
-                seasonStats: seasonStats.data[0]
-              };
-            }
-          }
-          return null; // No stats found, will be filtered out
-        } catch (error) {
-          console.error(`Error getting stats for player ${player.strPlayer}:`, error);
-          return null;
-        }
-      })
-    );
-    
-    // 3. Filter out null values (players with no stats)
-    const activePlayers = playersWithStats.filter(player => player !== null);
-    console.log(`Found ${activePlayers.length} active players with current season stats for ${teamName}`);
-    
-    return activePlayers;
+    // For MLB, we only need the roster information from TheSportsDB
+    // We don't need to enrich with Ball Don't Lie as it only covered NBA
+    return roster;
   } catch (error) {
     console.error(`Error fetching active players for ${teamName}:`, error);
     return [];
@@ -123,9 +82,9 @@ const propPicksService = {
                 time: game.commence_time ? new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'TBD'
               };
               
-              // Fetch player stats from Ball Don't Lie API
+              // Fetch player data for MLB teams from TheSportsDB
               try {
-                console.log(`Fetching team and player data for ${sportName} using Ball Don't Lie API...`);
+                console.log(`Fetching team and player data for ${sportName} using TheSportsDB API...`);
                 
                 // Look up teams based on sport
                 let homeTeamData = null;
@@ -133,80 +92,91 @@ const propPicksService = {
                 let homeTeamPlayers = [];
                 let awayTeamPlayers = [];
                 
-                if (sportName === 'NBA') {
-                  console.log(`Using TheSportsDB to fetch current NBA rosters...`);
+                // Only handling MLB for props as configured
+                console.log(`Using TheSportsDB API for MLB teams and players`);
+                
+                // Look up MLB teams using TheSportsDB
+                const homeTeamSportsDb = await sportsDbApiService.lookupTeam(
+                  game.home_team, 
+                  sportsDbApiService.leagueIds.MLB
+                );
+                
+                const awayTeamSportsDb = await sportsDbApiService.lookupTeam(
+                  game.away_team, 
+                  sportsDbApiService.leagueIds.MLB
+                );
+                
+                // Set team data from SportsDB results
+                if (homeTeamSportsDb) {
+                  homeTeamData = {
+                    id: homeTeamSportsDb.idTeam,
+                    name: homeTeamSportsDb.strTeam,
+                    full_name: homeTeamSportsDb.strTeam,
+                    city: homeTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || homeTeamSportsDb.strTeam
+                  };
                   
-                  // Get team information for reference
-                  homeTeamData = await ballDontLieService.lookupNbaTeam(game.home_team);
-                  awayTeamData = await ballDontLieService.lookupNbaTeam(game.away_team);
+                  // Get current MLB players for this team
+                  const sportsDbHomePlayers = await sportsDbApiService.getTeamPlayers(homeTeamData.id);
                   
-                  // Get active players with current season stats using TheSportsDB and Ball Don't Lie
-                  console.log(`Fetching active players for ${game.home_team}...`);
-                  homeTeamPlayers = await fetchActivePlayers(game.home_team);
-                  console.log(`Found ${homeTeamPlayers.length} active players with current season stats for ${game.home_team}`);
+                  // Convert SportsDB player format to match our expected format
+                  homeTeamPlayers = sportsDbHomePlayers.map(player => ({
+                    id: player.idPlayer,
+                    first_name: player.strPlayer.split(' ')[0],
+                    last_name: player.strPlayer.split(' ').slice(1).join(' '),
+                    position: player.strPosition,
+                    height_feet: null,
+                    height_inches: null,
+                    weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
+                    team: {
+                      id: homeTeamData.id,
+                      name: homeTeamData.name,
+                      full_name: homeTeamData.full_name,
+                      city: homeTeamData.city
+                    },
+                    seasons: [],
+                    is_pitcher: player.strPosition === 'Pitcher' || 
+                              player.strPosition === 'Starting Pitcher' || 
+                              player.strPosition === 'Relief Pitcher'
+                  }));
+                  console.log(`Found ${homeTeamPlayers.length} current MLB players for ${homeTeamData.full_name}`);
+                } else {
+                  console.warn(`Could not find MLB team data for ${game.home_team}`);
+                }
+                
+                if (awayTeamSportsDb) {
+                  awayTeamData = {
+                    id: awayTeamSportsDb.idTeam,
+                    name: awayTeamSportsDb.strTeam,
+                    full_name: awayTeamSportsDb.strTeam,
+                    city: awayTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || awayTeamSportsDb.strTeam
+                  };
                   
-                  console.log(`Fetching active players for ${game.away_team}...`);
-                  awayTeamPlayers = await fetchActivePlayers(game.away_team);
-                  console.log(`Found ${awayTeamPlayers.length} active players with current season stats for ${game.away_team}`);
+                  // Get current MLB players for this team
+                  const sportsDbAwayPlayers = await sportsDbApiService.getTeamPlayers(awayTeamData.id);
                   
-                  const season = nbaSeason();
-                  console.log(`Using ${formatSeason(season)} NBA season data`);
-                } else if (sportName === 'MLB') {
-                  // Don't use Ball Don't Lie for MLB - it doesn't have baseball coverage
-                  // Instead use TheSportsDB API which has current MLB rosters
-                  console.log(`Using TheSportsDB API for MLB teams and players (Ball Don't Lie doesn't cover MLB)`);
-                  
-                  // Look up MLB teams using TheSportsDB
-                  const homeTeamSportsDb = await sportsDbApiService.lookupTeam(
-                    game.home_team, 
-                    sportsDbApiService.leagueIds.MLB
-                  );
-                  
-                  const awayTeamSportsDb = await sportsDbApiService.lookupTeam(
-                    game.away_team, 
-                    sportsDbApiService.leagueIds.MLB
-                  );
-                  
-                  // Set team data from SportsDB results
-                  if (homeTeamSportsDb) {
-                    homeTeamData = {
-                      id: homeTeamSportsDb.idTeam,
-                      name: homeTeamSportsDb.strTeam,
-                      full_name: homeTeamSportsDb.strTeam,
-                      city: homeTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || homeTeamSportsDb.strTeam
-                    };
-                    
-                    // Get current MLB players for this team
-                    const sportsDbHomePlayers = await sportsDbApiService.getTeamPlayers(homeTeamData.id);
-                    
-                    // Convert SportsDB player format to match our expected format
-                    homeTeamPlayers = sportsDbHomePlayers.map(player => ({
-                      id: player.idPlayer,
-                      first_name: player.strPlayer.split(' ')[0],
-                      last_name: player.strPlayer.split(' ').slice(1).join(' '),
-                      position: player.strPosition,
-                      height_feet: null,
-                      height_inches: null,
-                      weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
-                      team: {
-                        id: homeTeamData.id,
-                        name: homeTeamData.name,
-                        full_name: homeTeamData.full_name,
-                        city: homeTeamData.city
-                      },
-                      // Add MLB-specific fields
-                      is_pitcher: player.strPosition === 'Pitcher' || 
-                                player.strPosition === 'Starting Pitcher' || 
-                                player.strPosition === 'Relief Pitcher'
-                    }));
-                    
-                    console.log(`Found ${homeTeamPlayers.length} current MLB players for ${homeTeamData.full_name}`);
-                  } else {
-                    console.warn(`Could not find MLB team data for ${game.home_team}`);
-                  }
-                  
-                  if (awayTeamSportsDb) {
-                    awayTeamData = {
+                  // Convert SportsDB player format to match our expected format
+                  awayTeamPlayers = sportsDbAwayPlayers.map(player => ({
+                    id: player.idPlayer,
+                    first_name: player.strPlayer.split(' ')[0],
+                    last_name: player.strPlayer.split(' ').slice(1).join(' '),
+                    position: player.strPosition,
+                    height_feet: null,
+                    height_inches: null,
+                    weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
+                    team: {
+                      id: awayTeamData.id,
+                      name: awayTeamData.name,
+                      full_name: awayTeamData.full_name,
+                      city: awayTeamData.city
+                    },
+                    // Add MLB-specific fields
+                    is_pitcher: player.strPosition === 'Pitcher' || 
+                              player.strPosition === 'Starting Pitcher' || 
+                              player.strPosition === 'Relief Pitcher'
+                  }));
+                  console.log(`Found ${awayTeamPlayers.length} current MLB players for ${awayTeamData.full_name}`);
+                } else {
+                  console.warn(`Could not find MLB team data for ${game.away_team}`);
                       id: awayTeamSportsDb.idTeam,
                       name: awayTeamSportsDb.strTeam,
                       full_name: awayTeamSportsDb.strTeam,
