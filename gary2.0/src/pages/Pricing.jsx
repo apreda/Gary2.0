@@ -49,7 +49,7 @@ export function Pricing() {
           <div className="flex justify-center mx-auto">
             
             {/* Pro Tier - Modern Ticket Style */}
-            <div className="flex flex-col h-[550px] max-w-[320px] w-[320px] mx-auto relative group
+            <div className="flex flex-col h-[600px] max-w-[320px] w-[320px] mx-auto relative group
                            transition-all duration-500 ease-out
                            hover:-translate-y-2 hover:shadow-2xl hover:scale-105 hover:rotate-1
                            shadow-[0_22px_70px_4px_rgba(0,0,0,0.56)]">
