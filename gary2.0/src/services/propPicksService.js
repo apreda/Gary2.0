@@ -180,37 +180,6 @@ const propPicksService = {
                   console.warn(`Could not find MLB team data for ${game.away_team}`);
                 }
                 
-                // Process away team players if team data exists
-                if (awayTeamData) {
-                  // Get current MLB players for this team
-                  const sportsDbAwayPlayers = await sportsDbApiService.getTeamPlayers(awayTeamData.id);
-                  
-                  // Convert SportsDB player format to match our expected format
-                  awayTeamPlayers = sportsDbAwayPlayers.map(player => ({
-                      id: player.idPlayer,
-                      first_name: player.strPlayer.split(' ')[0],
-                      last_name: player.strPlayer.split(' ').slice(1).join(' '),
-                      position: player.strPosition,
-                      height_feet: null,
-                      height_inches: null,
-                      weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
-                      team: {
-                        id: awayTeamData.id,
-                        name: awayTeamData.name,
-                        full_name: awayTeamData.full_name,
-                        city: awayTeamData.city
-                      },
-                      // Add MLB-specific fields
-                      is_pitcher: player.strPosition === 'Pitcher' || 
-                                player.strPosition === 'Starting Pitcher' || 
-                                player.strPosition === 'Relief Pitcher'
-                    }));
-                    
-                    console.log(`Found ${awayTeamPlayers.length} current MLB players for ${awayTeamData.full_name}`);
-                  } else {
-                    console.warn(`Could not find MLB team data for ${game.away_team}`);
-                  }
-                }
                 
                 // Add player stats to the game data
                 gameData.playerStats = {
@@ -354,7 +323,7 @@ const propPicksService = {
         .select('*')
         .eq('date', dateString)
         .order('created_at', { ascending: false });
-        
+      
       if (error) {
         console.error('Error querying prop_picks table:', error);
         throw new Error(`Failed to fetch prop picks: ${error.message}`);
@@ -617,41 +586,44 @@ Key Markets (focus):
 - pitcher_outs
 
 REALITY CHECK GUIDELINES - EXTREMELY IMPORTANT:
-- For home runs (batter_home_runs):
-  * Lines over 0.5 are rare and should be approached with extreme caution
-  * NEVER predict OVER 0.5 home runs with confidence > 0.65
-  * NEVER predict OVER 1.5 home runs with confidence > 0.55
-  * NEVER predict OVER 2.5 home runs (this is extremely unlikely for any player)
-  * Even the best power hitters rarely exceed 1 HR per game
+- REALITY CHECK GUIDELINE:
+  * Base your true probability assessments ENTIRELY on statistical analysis
+  * Your confidence should reflect the ACTUAL likelihood of the outcome occurring
+  * Don't artificially cap confidence - if the data strongly supports a bet, reflect that
+  * For rare events (like home runs), be accurate about their true mathematical probability
+  * Calculate true probabilities using historical player performance, matchups, ballpark factors, and recent trends
 
-- For hits (batter_hits):
-  * Typical lines are 0.5, 1.5, or occasionally 2.5 for elite hitters
-  * Maximum confidence for OVER 1.5 hits should not exceed 0.75
-  * Maximum confidence for OVER 2.5 hits should not exceed 0.60
+Combined Decision Framework (PROPS ONLY):
+Utilize your knowledge of standard prop betting best practices to select high-value props. For each potential pick, calculate:
 
-- For pitcher strikeouts:
-  * Be realistic based on pitcher's K/9 rate and opposition's strikeout tendencies
-  * High K totals (9+) should rarely have confidence > 0.70
+1. Potential ROI: Calculate the return on a hypothetical $100 bet
+   * For +400 odds, a winning $100 bet returns $400 profit
+   * For -150 odds, a winning $100 bet returns $66.67 profit
 
-Combined Decision Framework:
-Base each pick on a holistic evaluation that blends:
-- Expected Value (EV): 60% weight
-- Confidence Score: 20% weight
-- Predictive Judgment: 20% weight, reflecting your forecast of true outcome chances
+2. Expected Value (EV):
+   * Convert American odds to decimal odds
+   * implied_probability = 1 / decimal_odds
+   * true_probability = your realistic assessment based on player stats, matchups, and trends
+   * EV = (true_probability × potential profit) - ((1 - true_probability) × stake)
 
-EV Calculation:
-- Convert American odds to decimal odds
-- implied_probability = 1 / decimal_odds
-- true_probability = your estimated likelihood based on analysis (MUST BE REALISTIC)
-- EV = true_probability – implied_probability
+3. Kelly Criterion sizing (for reference only):
+   * edge = true_probability - implied_probability
+   * kelly_percentage = edge / (odds - 1)
 
-Pick Criteria:
-- Only include picks with confidence between 0.60 and 0.80 (more realistic range)
+Final weighting:
+- Winning probability: 50% weight (being right matters most)
+- Potential ROI: 30% weight (higher returns for correct picks are valuable)
+- Edge size: 20% weight (how much true_probability exceeds implied_probability)
+
+Pick Criteria (PROPS ONLY):
+- Only include props with winning probability (true_probability) between 0.55 and 0.80
 - IMPORTANT: Use the EXACT odds provided by The Odds API - do not modify or normalize them
-- Evaluate all eligible props and compute a Combined Score:
-  Combined Score = (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability)
-- When multiple picks have similar Combined Scores (within 0.05 of each other), PREFER UNDERDOG PICKS with higher potential payouts (e.g., prefer +150 over -120 if both are good picks)
-- Return the single pick that offers the best combination of value AND payout
+- Calculate a Value Score for each potential prop bet:
+  Value Score = (0.5 × true_probability) + (0.3 × potential_ROI_percentage/100) + (0.2 × edge)
+- MAXIMIZE USER RETURNS: When multiple picks have similar Value Scores (within 0.05 of each other), always prioritize higher-paying odds
+  * Example: A +350 prop with 0.60 probability is better than a -150 prop with 0.65 probability
+  * Specifically target undervalued props with positive odds (+120, +180, etc.) whenever they show value
+- Return the single pick with the BEST COMBINATION of winning probability AND potential return
 
 RESPONSE FORMAT (return ONLY valid JSON array):
 [
@@ -672,7 +644,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
     "matchup": "${gameData.matchup}",
     "time": "${gameData.time || '7:10 PM ET'}",
     "league": "MLB",
-    "rationale": "3-4 sentence statistical breakdown with swagger, including EV calculation and matchup advantages. For rare events like HRs, be clear about realistic probabilities."
+    "rationale": "3-4 sentence statistical breakdown with swagger, including EV calculation and matchup advantages. CRITICAL: Your rationale MUST use the EXACT SAME line value that appears in the 'line' field and 'pick' field - do not mention different values."
   }
 ]`;    
       
