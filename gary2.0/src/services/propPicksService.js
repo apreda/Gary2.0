@@ -7,9 +7,10 @@ import { propOddsService } from './propOddsService';
 import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
-// Ball Don't Lie service removed (not needed for MLB props)
 import { sportsDbApiService } from './sportsDbApiService';
 import { nbaSeason, formatSeason } from '../utils/dateUtils';
+
+// Note: We only use TheSportsDB API for MLB data since we're focused exclusively on MLB props
 
 /**
  * Fetch active players for a team with their current season stats
@@ -177,17 +178,15 @@ const propPicksService = {
                   console.log(`Found ${awayTeamPlayers.length} current MLB players for ${awayTeamData.full_name}`);
                 } else {
                   console.warn(`Could not find MLB team data for ${game.away_team}`);
-                      id: awayTeamSportsDb.idTeam,
-                      name: awayTeamSportsDb.strTeam,
-                      full_name: awayTeamSportsDb.strTeam,
-                      city: awayTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || awayTeamSportsDb.strTeam
-                    };
-                    
-                    // Get current MLB players for this team
-                    const sportsDbAwayPlayers = await sportsDbApiService.getTeamPlayers(awayTeamData.id);
-                    
-                    // Convert SportsDB player format to match our expected format
-                    awayTeamPlayers = sportsDbAwayPlayers.map(player => ({
+                }
+                
+                // Process away team players if team data exists
+                if (awayTeamData) {
+                  // Get current MLB players for this team
+                  const sportsDbAwayPlayers = await sportsDbApiService.getTeamPlayers(awayTeamData.id);
+                  
+                  // Convert SportsDB player format to match our expected format
+                  awayTeamPlayers = sportsDbAwayPlayers.map(player => ({
                       id: player.idPlayer,
                       first_name: player.strPlayer.split(' ')[0],
                       last_name: player.strPlayer.split(' ').slice(1).join(' '),
