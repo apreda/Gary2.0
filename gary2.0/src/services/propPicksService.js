@@ -672,4 +672,4 @@ const propPicksService = {
   }
 };
 
-export default propPicksService;
+export { propPicksService };
