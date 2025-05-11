@@ -10,27 +10,49 @@ import { perplexityService } from './perplexityService';
 import { sportsDbApiService } from './sportsDbApiService';
 import { nbaSeason, formatSeason } from '../utils/dateUtils';
 
-// Note: We only use TheSportsDB API for MLB data since we're focused exclusively on MLB props
+// Note: We use TheSportsDB API for reliable player data across all sports (MLB, NBA, NHL)
 
 /**
  * Fetch active players for a team with their current season stats
- * Uses TheSportsDB for current MLB rosters
+ * Uses TheSportsDB for current rosters across all sports
  * @param {string} teamName - The team name as it appears in the Odds API
+ * @param {string} league - The league code (NBA, MLB, NHL)
  * @returns {Array} - Active players for the team
  */
-async function fetchActivePlayers(teamName) {
+async function fetchActivePlayers(teamName, league) {
   try {
-    console.log(`Fetching active MLB players for ${teamName}...`);
+    console.log(`Fetching active ${league} players for ${teamName}...`);
     
-    // Fetch current roster from TheSportsDB for MLB teams
-    const roster = await sportsDbApiService.getTeamPlayers(teamName, 'MLB');
+    // Convert league name to TheSportsDB league ID
+    let leagueId;
+    switch(league) {
+      case 'NBA':
+        leagueId = sportsDbApiService.leagueIds.NBA;
+        break;
+      case 'MLB':
+        leagueId = sportsDbApiService.leagueIds.MLB;
+        break;
+      case 'NHL':
+        leagueId = sportsDbApiService.leagueIds.NHL;
+        break;
+      default:
+        throw new Error(`Unsupported league: ${league}`);
+    }
+    
+    // Step 1: Find the team in TheSportsDB
+    const team = await sportsDbApiService.lookupTeam(teamName, leagueId);
+    if (!team || !team.idTeam) {
+      console.error(`Could not find ${league} team "${teamName}" in TheSportsDB`);
+      return [];
+    }
+    
+    // Step 2: Get players for the team
+    const roster = await sportsDbApiService.getTeamPlayers(team.idTeam);
     console.log(`Got ${roster.length} players on ${teamName} roster from TheSportsDB`);
     
-    // For MLB, we only need the roster information from TheSportsDB
-    // We don't need to enrich with Ball Don't Lie as it only covered NBA
     return roster;
   } catch (error) {
-    console.error(`Error fetching active players for ${teamName}:`, error);
+    console.error(`Error fetching active players for ${teamName} (${league}):`, error);
     return [];
   }
 }
@@ -200,23 +222,48 @@ const propPicksService = {
                 // Proceed without player stats if there's an error
               }
               
-              // Get player-specific prop insights from Perplexity (hot streaks, recent trends, etc.)
+              // Get player-specific stats from SportsDB API (more reliable than Perplexity)
               try {
-                console.log('🔍 Fetching player prop trends from Perplexity...');
-                // Directly call the new player prop insights method
-                const perplexityData = await perplexityService.getPlayerPropInsights(gameData);
+                console.log('🔍 Fetching verified player stats from SportsDB API...');
+                // Use the new SportsDB function to get accurate player statistics
+                const playerStatsData = await sportsDbApiService.getPlayerStatsForProps(
+                  gameData.homeTeam,
+                  gameData.awayTeam,
+                  gameData.league
+                );
                 
-                if (perplexityData && perplexityData.player_insights) {
-                  console.log('✅ Successfully fetched player trend data from Perplexity');
-                  console.log(`📊 Trend data length: ${perplexityData.player_insights.length} characters`);
-                  gameData.perplexityStats = perplexityData;
+                if (playerStatsData && !playerStatsData.error) {
+                  console.log('✅ Successfully fetched verified player data from SportsDB API');
+                  console.log(`📊 Found ${playerStatsData.homeTeam.players.length + playerStatsData.awayTeam.players.length} total players`);
+                  
+                  // Store the stats in a consistent format
+                  gameData.verifiedPlayerStats = playerStatsData;
+                  
+                  // Format the stats as text for the prompt (replacing perplexityStats)
+                  const formatPlayerStats = (players) => {
+                    return players.map(player => {
+                      return `- ${player.name} (${player.position}): Team: ${player.team}, Height: ${player.height}, Weight: ${player.weight}`;
+                    }).join('\n');
+                  };
+                  
+                  const homePlayersText = formatPlayerStats(playerStatsData.homeTeam.players);
+                  const awayPlayersText = formatPlayerStats(playerStatsData.awayTeam.players);
+                  
+                  // Create structured insights from verified data only
+                  gameData.perplexityStats = {
+                    player_insights: `VERIFIED PLAYER DATA:\n\n${gameData.homeTeam} PLAYERS:\n${homePlayersText}\n\n${gameData.awayTeam} PLAYERS:\n${awayPlayersText}`,
+                    meta: { 
+                      source: 'SportsDB API', 
+                      insight_weight: '20%',
+                      verified: true
+                    }
+                  };
                 }
-              } catch (perplexityError) {
-                // If there's an error or the method doesn't exist
-                console.error(`❌ Error fetching player trend data from Perplexity: ${perplexityError.message}`);
+              } catch (sportsDbError) {
+                console.error(`❌ Error fetching verified player data from SportsDB API: ${sportsDbError.message}`);
                 gameData.perplexityStats = { 
-                  player_insights: 'No player trend data available from Perplexity',
-                  meta: { error: perplexityError.message, insight_weight: '20%' }
+                  player_insights: 'No verified player data available from SportsDB API',
+                  meta: { error: sportsDbError.message, insight_weight: '20%', verified: false }
                 };
               }
               
@@ -538,16 +585,25 @@ const propPicksService = {
       }
       
       // Format Perplexity insights in a more concise way for props specifically
+      // ENSURE we have awaited for Perplexity data before proceeding
       let perplexityText = '';
       if (gameData.perplexityStats) {
+        console.log('✓ Successfully received Perplexity player insights data');
         // Extract player insights
         const propInsights = gameData.perplexityStats.player_insights || '';
         const insightWeight = gameData.perplexityStats.meta?.insight_weight || '20%';
         
+        // Validate data quality - log warning for potentially fabricated data
+        if (propInsights.includes('unable to retrieve') || propInsights.includes('No verified data')) {
+          console.warn('⚠️ Perplexity returned incomplete or unverified player data');
+        }
+        
         // Format the insights for the prompt
         if (propInsights && typeof propInsights === 'string') {
-          perplexityText = `RECENT PLAYER TRENDS AND HEADLINES (LAST 10 GAMES):\n${propInsights}\n\nNOTE: These recent player trends should account for ${insightWeight} of your decision making, with statistical analysis accounting for 80%.`;
+          perplexityText = `VERIFIED PLAYER STATISTICS (LAST 10 GAMES):\n${propInsights}\n\nIMPORTANT: Only rely on the above VERIFIED statistics for your analysis. If a specific stat is not explicitly listed above, do NOT reference it or invent it in your rationale. These verified player stats should account for ${insightWeight} of your decision making.`;
         }
+      } else {
+        console.warn('⚠️ No Perplexity player data available - analysis will proceed without player-specific stats');
       }
       
       // Specifically tell the model which players to generate picks for
@@ -558,70 +614,69 @@ const propPicksService = {
         validatedPlayersText = `CONFIRMED CURRENT PLAYERS:\n${uniquePlayers.join('\n')}\n\nGENERATE PICKS ONLY FOR THESE PLAYERS. Do not generate picks for any players not in this list.\n`;
       }
       
-      // MLB-specific structured prompt for prop picks
-      const prompt = `Analyze the upcoming MLB game: ${gameData.matchup}
-
-Teams:
-HOME_TEAM: ${gameData.homeTeam}
-AWAY_TEAM: ${gameData.awayTeam}
-
-Eligible Players:
-${validatedPlayersText ? validatedPlayersText.replace('CONFIRMED CURRENT PLAYERS:', '').replace('GENERATE PICKS ONLY FOR THESE PLAYERS. Do not generate picks for any players not in this list.', '') : 'Use players from the prop odds below'}
-
-Today's Lines:
-${oddsText}
-
-Recent Trends (last 10 games):
-${perplexityText ? perplexityText.substring(0, 800) + '...' : 'Use statistical analysis for decision-making'}
-Use these insights for 20% of your decision-making, and statistical analysis (80%) for the remainder.
-
-Key Markets (focus):
-- batter_home_runs
-- batter_hits
-- batter_total_bases
-- batter_stolen_bases
-- batter_runs_scored
-- batter_rbi
-- pitcher_strikeouts
-- pitcher_outs
-
-REALITY CHECK GUIDELINES - EXTREMELY IMPORTANT:
-- REALITY CHECK GUIDELINE:
-  * Base your true probability assessments ENTIRELY on statistical analysis
-  * Your confidence should reflect the ACTUAL likelihood of the outcome occurring
-  * Don't artificially cap confidence - if the data strongly supports a bet, reflect that
-  * For rare events (like home runs), be accurate about their true mathematical probability
-  * Calculate true probabilities using historical player performance, matchups, ballpark factors, and recent trends
-
-Combined Decision Framework (PROPS ONLY):
-Utilize your knowledge of standard prop betting best practices to select high-value props. For each potential pick, calculate:
-
-1. Potential ROI: Calculate the return on a hypothetical $100 bet
-   * For +400 odds, a winning $100 bet returns $400 profit
-   * For -150 odds, a winning $100 bet returns $66.67 profit
-
-2. Expected Value (EV):
-   * Convert American odds to decimal odds
-   * implied_probability = 1 / decimal_odds
-   * true_probability = your realistic assessment based on player stats, matchups, and trends
-   * EV = (true_probability × potential profit) - ((1 - true_probability) × stake)
-
-3. Kelly Criterion sizing (for reference only):
-   * edge = true_probability - implied_probability
-   * kelly_percentage = edge / (odds - 1)
-
-Final weighting:
-- Winning probability: 50% weight (being right matters most)
-- Potential ROI: 30% weight (higher returns for correct picks are valuable)
-- Edge size: 20% weight (how much true_probability exceeds implied_probability)
-
-Pick Criteria (PROPS ONLY):
-- Only include props with winning probability (true_probability) between 0.55 and 0.80
-- IMPORTANT: Use the EXACT odds provided by The Odds API - do not modify or normalize them
-- Calculate a Value Score for each potential prop bet:
-  Value Score = (0.5 × true_probability) + (0.3 × potential_ROI_percentage/100) + (0.2 × edge)
-- MAXIMIZE USER RETURNS: When multiple picks have similar Value Scores (within 0.05 of each other), always prioritize higher-paying odds
-  * Example: A +350 prop with 0.60 probability is better than a -150 prop with 0.65 probability
+      // Sport-specific structured prompt for prop picks
+      const prompt = `Analyze the upcoming ${gameData.league} game: ${gameData.matchup}
+      
+      Teams:
+      HOME_TEAM: ${gameData.homeTeam}
+      AWAY_TEAM: ${gameData.awayTeam}
+      
+      Eligible Players:
+      ${validatedPlayersText ? validatedPlayersText.replace('CONFIRMED CURRENT PLAYERS:', '').replace('GENERATE PICKS ONLY FOR THESE PLAYERS. Do not generate picks for any players not in this list.', '') : 'Use players from the prop odds below'}
+      
+      Today's Lines:
+      ${oddsText}
+      
+      VERIFIED Player Data (SportsDB API):
+      ${perplexityText ? perplexityText : 'No verified player data available - use only odds data for analysis'}
+      
+      Key Markets (focus on these by sport):
+      ${gameData.league === 'MLB' ? 
+        '- batter_home_runs\n- batter_hits\n- batter_total_bases\n- batter_stolen_bases\n- batter_runs_scored\n- batter_rbi\n- pitcher_strikeouts\n- pitcher_outs' : 
+        gameData.league === 'NBA' ? 
+        '- player_points\n- player_rebounds\n- player_assists\n- player_threes\n- player_blocks\n- player_steals\n- player_turnovers\n- player_points_rebounds_assists' : 
+        gameData.league === 'NHL' ? 
+        '- player_points\n- player_goals\n- player_assists\n- player_shots_on_goal\n- player_power_play_points\n- player_blocked_shots\n- goalie_saves\n- player_points' : 
+        '- Focus on all available markets'}
+      
+      REALITY CHECK GUIDELINES - EXTREMELY IMPORTANT:
+      * Base your true probability assessments ENTIRELY on verified statistical analysis
+      * Your confidence should reflect the ACTUAL likelihood of the outcome occurring
+      * Don't artificially cap confidence - if the data strongly supports a bet, reflect that
+      * For rare events (like home runs), be accurate about their true mathematical probability
+      * Calculate true probabilities using ONLY VERIFIED stats from the SportsDB API, matchups, venue factors, and trends
+      * NEVER invent or estimate statistics. If a specific stat is not provided, don't reference it
+      
+      Combined Decision Framework (PROPS ONLY):
+      Utilize your knowledge of standard prop betting best practices to select high-value props. For each potential pick, calculate:
+      
+      1. Potential ROI: Calculate the return on a hypothetical $100 bet
+         * For +400 odds, a winning $100 bet returns $400 profit
+         * For -150 odds, a winning $100 bet returns $66.67 profit
+      
+      2. Expected Value (EV):
+         * Convert American odds to decimal odds
+         * implied_probability = 1 / decimal_odds
+         * true_probability = your realistic assessment based on VERIFIED player stats, matchups, and trends
+         * EV = (true_probability × potential profit) - ((1 - true_probability) × stake)
+      
+      3. Kelly Criterion sizing (for reference only):
+         * edge = true_probability - implied_probability
+         * kelly_percentage = edge / (odds - 1)
+      
+      Final weighting:
+      - Winning probability: 50% weight (being right matters most)
+      - Potential ROI: 30% weight (higher returns for correct picks are valuable)
+      - Edge size: 20% weight (how much true_probability exceeds implied_probability)
+      
+      Pick Criteria (PROPS ONLY):
+      - Only include props with winning probability (true_probability) between 0.55 and 0.80
+      - IMPORTANT: Use the EXACT odds provided by The Odds API - do not modify or normalize them
+      - Calculate a Value Score for each potential prop bet:
+        Value Score = (0.5 × true_probability) + (0.3 × potential_ROI_percentage/100) + (0.2 × edge)
+      - MAXIMIZE USER RETURNS: When multiple picks have similar Value Scores (within 0.05 of each other), always prioritize higher-paying odds
+        * Example: A +350 prop with 0.60 probability is better than a -150 prop with 0.65 probability
+      - CONFIDENCE MUST BE ORGANIC: DO NOT artificially cap confidence scores. If math indicates a confidence of 0.85, use that exact value
   * Specifically target undervalued props with positive odds (+120, +180, etc.) whenever they show value
 - Return the single pick with the BEST COMBINATION of winning probability AND potential return
 
@@ -644,7 +699,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
     "matchup": "${gameData.matchup}",
     "time": "${gameData.time || '7:10 PM ET'}",
     "league": "MLB",
-    "rationale": "3-4 sentence statistical breakdown with swagger, including EV calculation and matchup advantages. CRITICAL: Your rationale MUST use the EXACT SAME line value that appears in the 'line' field and 'pick' field - do not mention different values."
+    "rationale": "3-4 sentence statistical breakdown with swagger, including EV calculation and matchup advantages. CRITICAL: (1) Your rationale MUST use the EXACT SAME line value that appears in the 'line' field; (2) ONLY use FACTUAL statistics that are provided in the input data - do NOT invent or estimate stats; (3) Do not claim a player has done something (e.g., '4 home runs in last 10 games') unless this exact stat is in the provided data."
   }
 ]`;    
       
@@ -652,7 +707,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
       const messages = [
         { 
           role: 'system', 
-          content: 'You are Gary, an expert sports analyst specializing in MLB player prop picks. You provide data-driven prop bets with swagger and personality. Focus on Expected Value (EV), analyzing player stats, matchups, and trends to find the highest-value opportunities. Evaluate all available markets (home_runs, hits, total_bases, etc.) and compute a Value Score using the formula provided in the user prompt. When multiple picks have similar scores, PREFER UNDERDOG PICKS with higher payouts (e.g., choose +150 over -120). IMPORTANT: Provide OBJECTIVE confidence scores from 0.1-1.0 based SOLELY on your statistical analysis - do not artificially cap or inflate confidence scores. Return the single pick that offers the best combination of winning probability AND potential return.'
+          content: 'You are Gary, an expert sports analyst specializing in MLB player prop picks. You provide data-driven prop bets with swagger and personality. CRITICAL DATA ACCURACY REQUIREMENTS:\n\n1. Only use FACTUAL statistics explicitly provided in the input data\n2. Do NOT invent or estimate player stats that are not provided\n3. NEVER make claims like "player X hit Y home runs in the last Z games" unless this exact stat is provided\n4. If unsure about a specific stat, use general analysis of the odds and matchup instead\n\nFocus on Expected Value (EV), analyzing the provided player stats, matchups, and trends to find the highest-value opportunities. ONLY reference stats that appear in the prompt. Evaluate all available markets (home_runs, hits, total_bases, etc.) and compute a Value Score using the formula provided. When multiple picks have similar scores, PREFER UNDERDOG PICKS with higher payouts. Provide OBJECTIVE confidence scores from 0.1-1.0 based SOLELY on your statistical analysis - do not artificially cap or inflate confidence scores. Return the single pick that offers the best combination of winning probability AND potential return.'
         },
         { role: 'user', content: prompt }
       ];
