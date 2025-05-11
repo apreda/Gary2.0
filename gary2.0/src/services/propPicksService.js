@@ -638,7 +638,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
     "implied_probability": 0.524,
     "true_probability": 0.65, // MUST BE REALISTIC - FOLLOW REALITY CHECK GUIDELINES
     "ev": 0.126,
-    "confidence": 0.7, // MUST BE BETWEEN 0.60-0.80 AND FOLLOW REALITY CHECK GUIDELINES
+    "confidence": 0.7, // Your OBJECTIVE confidence from 0.1-1.0 based SOLELY on your statistical analysis
     "homeTeam": "${gameData.homeTeam}",
     "awayTeam": "${gameData.awayTeam}",
     "matchup": "${gameData.matchup}",
@@ -652,7 +652,7 @@ RESPONSE FORMAT (return ONLY valid JSON array):
       const messages = [
         { 
           role: 'system', 
-          content: 'You are Gary, an expert sports analyst specializing in MLB player prop picks. You provide data-driven prop bets with swagger and personality. Focus on Expected Value (EV), analyzing player stats, matchups, and trends to find the highest-value opportunities. Evaluate all available markets (home_runs, hits, total_bases, etc.) and compute a Combined Score: (0.6 × EV) + (0.2 × confidence) + (0.2 × true_probability). When multiple picks have similar scores, PREFER UNDERDOG PICKS with higher payouts (e.g., choose +150 over -120). Return the single pick that offers the best combination of value AND payout with a confidence ≥ 0.78.'
+          content: 'You are Gary, an expert sports analyst specializing in MLB player prop picks. You provide data-driven prop bets with swagger and personality. Focus on Expected Value (EV), analyzing player stats, matchups, and trends to find the highest-value opportunities. Evaluate all available markets (home_runs, hits, total_bases, etc.) and compute a Value Score using the formula provided in the user prompt. When multiple picks have similar scores, PREFER UNDERDOG PICKS with higher payouts (e.g., choose +150 over -120). IMPORTANT: Provide OBJECTIVE confidence scores from 0.1-1.0 based SOLELY on your statistical analysis - do not artificially cap or inflate confidence scores. Return the single pick that offers the best combination of winning probability AND potential return.'
         },
         { role: 'user', content: prompt }
       ];
@@ -868,12 +868,12 @@ RESPONSE FORMAT (return ONLY valid JSON array):
       // First get all prop picks that have at least 51% confidence
       const validPicks = playerProps.filter(prop => prop.confidence >= 0.51);
       
-      // Then filter for high confidence picks only (0.78+) - keeping prompt unaware of this threshold
-      const highConfidencePicks = validPicks.filter(prop => prop.confidence >= 0.78);
+      // Then filter for high confidence picks only (0.75+) - we only show users high-confidence picks
+      const highConfidencePicks = validPicks.filter(prop => prop.confidence >= 0.75);
       
       // Log how many picks were filtered out due to confidence threshold
-      console.log(`Original picks: ${playerProps.length}, Valid picks (>0.51): ${validPicks.length}, High confidence picks (>0.78): ${highConfidencePicks.length}`);
-      console.log(`Filtered out ${validPicks.length - highConfidencePicks.length} picks below 0.78 confidence threshold`);
+      console.log(`Original picks: ${playerProps.length}, Valid picks (>0.51): ${validPicks.length}, High confidence picks (>0.75): ${highConfidencePicks.length}`);
+      console.log(`Filtered out ${validPicks.length - highConfidencePicks.length} picks below 0.75 confidence threshold`);
       
       return highConfidencePicks;
     } catch (error) {
