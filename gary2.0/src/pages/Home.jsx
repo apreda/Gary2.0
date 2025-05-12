@@ -480,7 +480,7 @@ function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen relative flex flex-col overflow-x-hidden">
+    <div className="min-h-screen relative flex flex-col">
       {/* Fixed background with all effects - spans the entire viewport */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#18181a] z-0">
         {/* Gold vignette corners - enhanced with white glow */}
