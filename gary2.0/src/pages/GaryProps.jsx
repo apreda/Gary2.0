@@ -182,7 +182,25 @@ export default function GaryProps() {
                               <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', margin: '0.25rem 0 0.75rem' }}>
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
-                                  {pick.pick ? pick.pick.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(/\s[-+]\d+$/, '') : '(No pick available)'}
+                                  {pick.player && pick.bet ? 
+                                    `${pick.player} ${pick.bet.toUpperCase()} ${pick.line} ${pick.odds}` : 
+                                    '(No pick available)'}
+                                </div>
+                              </div>
+
+                              {/* Pick Details */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                <div style={{ width: '48%' }}>
+                                  <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confidence</div>
+                                  <div style={{ fontSize: '1rem', fontWeight: 600 }}>
+                                    {pick.confidence ? (pick.confidence * 100).toFixed(0) : 'N/A'}
+                                  </div>
+                                </div>
+                                <div style={{ width: '48%' }}>
+                                  <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>EV</div>
+                                  <div style={{ fontSize: '1rem', fontWeight: 600, color: pick.ev > 0 ? '#4caf50' : '#ff5722' }}>
+                                    {pick.ev ? (pick.ev > 0 ? '+' : '') + pick.ev.toFixed(1) : 'N/A'}
+                                  </div>
                                 </div>
                               </div>
                               
