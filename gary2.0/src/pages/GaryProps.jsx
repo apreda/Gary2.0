@@ -6,7 +6,8 @@ import { useUserPlan } from '../contexts/UserPlanContext';
 import BG2 from '/BG2.png'; // Background image for page
 import { useToast } from '../components/ui/ToastProvider';
 import { useAuth } from '../contexts/AuthContext';
-import GaryEmblem from '../assets/images/Garyemblem.png';
+// Use coin2.png from public folder
+import coinImage from '/coin2.png';
 import { propPicksService } from '../services/propPicksService';
 // Supabase imported for future use
 /* eslint-disable-next-line no-unused-vars */
@@ -144,7 +145,7 @@ export default function GaryProps() {
             {!planLoading && subscriptionStatus !== 'active' ? (
               <div className="flex justify-center items-center min-h-[50vh]">
                 <div className="bg-gray-900 border border-gray-800 rounded-lg p-8 max-w-2xl w-full mx-auto text-center" style={{ boxShadow: '0 10px 25px -5px rgba(0,0,0,0.8)', background: 'linear-gradient(145deg, rgba(30,30,35,0.9) 0%, rgba(18,18,22,0.95) 100%)', borderTop: '3px solid #b8953f' }}>
-                  <img src={GaryEmblem} alt="Gary AI Logo" className="mx-auto mb-6" style={{ height: '80px', opacity: 0.9 }} />
+                  <img src={coinImage} alt="Gary Coin" className="mx-auto mb-6" style={{ height: '80px', opacity: 0.9 }} />
                   <h2 className="text-2xl font-bold mb-2" style={{ color: '#b8953f' }}>Unlock Player Props Access</h2>
                   <p className="text-gray-300 mb-6 text-lg">Upgrade to Pro for exclusive player prop picks with higher odds and bigger potential payouts.</p>
                   <ul className="mb-8 text-left mx-auto inline-block">
