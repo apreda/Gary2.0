@@ -816,6 +816,18 @@ function Home() {
                       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-[#2a2a2a] rounded-full px-3 py-1 border border-[#B8953F]/30">
                         <span className="text-[#B8953F] text-xs">Venue Data</span>
                       </div>
+                      
+                      <div className="absolute top-0 right-1/4 transform translate-x-1/2 bg-[#2a2a2a] rounded-full px-3 py-1 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-xs">Bullpen Usage & Fatigue</span>
+                      </div>
+                      
+                      <div className="absolute bottom-0 left-1/4 transform -translate-x-1/2 bg-[#2a2a2a] rounded-full px-3 py-1 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-xs">Weather & Playing Conditions</span>
+                      </div>
+                      
+                      <div className="absolute bottom-0 right-1/4 transform translate-x-1/2 bg-[#2a2a2a] rounded-full px-3 py-1 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-xs">Travel & Rest Factors</span>
+                      </div>
                     </div>
                   </div>
                 </div>
