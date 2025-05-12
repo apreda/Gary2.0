@@ -15,8 +15,8 @@ export function Pricing() {
     if (user && subscriptionStatus === 'active') {
       return "https://buy.stripe.com/dR603v2UndMebrq144";
     }
-    // Otherwise direct to login
-    return "/login";
+    // Otherwise direct to signin
+    return "https://www.betwithgary.ai/signin";
   };
 
   return (

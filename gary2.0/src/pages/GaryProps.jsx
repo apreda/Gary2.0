@@ -152,7 +152,13 @@ export default function GaryProps() {
                     <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Detailed player season and recent Stat analysis and research</span></li>
                     <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Updated daily 10-20 Daily Player Props</span></li>
                   </ul>
-                  <Link to="/pricing" className="inline-block py-3 px-8 rounded-md text-white font-medium" style={{ background: 'linear-gradient(90deg, #b8953f 0%, #d4af37 100%)', boxShadow: '0 4px 12px rgba(184,149,63,0.5)' }}>Upgrade to Pro</Link>
+                  <Link 
+                    to={user ? "/pricing" : "https://www.betwithgary.ai/signin"} 
+                    className="inline-block py-3 px-8 rounded-md text-white font-medium" 
+                    style={{ background: 'linear-gradient(90deg, #b8953f 0%, #d4af37 100%)', boxShadow: '0 4px 12px rgba(184,149,63,0.5)' }}
+                  >
+                    Upgrade to Pro
+                  </Link>
                 </div>
               </div>
             ) : picks.length === 0 ? (
