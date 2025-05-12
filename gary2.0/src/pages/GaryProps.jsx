@@ -148,9 +148,9 @@ export default function GaryProps() {
                   <h2 className="text-2xl font-bold mb-2" style={{ color: '#b8953f' }}>Unlock Player Props Access</h2>
                   <p className="text-gray-300 mb-6 text-lg">Upgrade to Pro for exclusive player prop picks with higher odds and bigger potential payouts.</p>
                   <ul className="mb-8 text-left mx-auto inline-block">
-                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">High-value player props (+130 to +400 odds)</span></li>
-                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Detailed player analysis and research</span></li>
-                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Updated daily with fresh opportunities</span></li>
+                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">High-value player props</span></li>
+                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Detailed player season and recent Stat analysis and research</span></li>
+                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Updated daily 10-20 Daily Player Props</span></li>
                   </ul>
                   <Link to="/pricing" className="inline-block py-3 px-8 rounded-md text-white font-medium" style={{ background: 'linear-gradient(90deg, #b8953f 0%, #d4af37 100%)', boxShadow: '0 4px 12px rgba(184,149,63,0.5)' }}>Upgrade to Pro</Link>
                 </div>
