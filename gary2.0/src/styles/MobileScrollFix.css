@@ -38,9 +38,4 @@
     max-width: none !important;
     width: auto !important;
   }
-  
-  /* Apply container adjustments to compensate for scale transform */
-  .container, main, section, #root > div {
-    width: 117.65% !important; /* 100/0.85 to compensate for the scale */
-  }
 }
