@@ -175,7 +175,7 @@ export default function GaryProps() {
                               {/* Top Section - Header Info */}
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                                 <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>League</div><div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.league || 'MLB'}</div></div>
-                                <div style={{ width: '65%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Matchup</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.matchup || 'TBD'}</div></div>
+                                <div style={{ width: '65%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Player Prop</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.player ? `${pick.player}${pick.team ? ` (${pick.team})` : ''}` : 'TBD'}</div></div>
                               </div>
                               
                               {/* Gary's Pick Section */}
@@ -185,22 +185,6 @@ export default function GaryProps() {
                                   {pick.player && pick.bet ? 
                                     `${pick.player} ${pick.bet.toUpperCase()} ${pick.line} ${pick.odds}` : 
                                     '(No pick available)'}
-                                </div>
-                              </div>
-
-                              {/* Pick Details */}
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                                <div style={{ width: '48%' }}>
-                                  <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confidence</div>
-                                  <div style={{ fontSize: '1rem', fontWeight: 600 }}>
-                                    {pick.confidence ? (pick.confidence * 100).toFixed(0) : 'N/A'}
-                                  </div>
-                                </div>
-                                <div style={{ width: '48%' }}>
-                                  <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>EV</div>
-                                  <div style={{ fontSize: '1rem', fontWeight: 600, color: pick.ev > 0 ? '#4caf50' : '#ff5722' }}>
-                                    {pick.ev ? (pick.ev > 0 ? '+' : '') + pick.ev.toFixed(1) : 'N/A'}
-                                  </div>
                                 </div>
                               </div>
                               
