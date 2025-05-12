@@ -1,0 +1,29 @@
+/* 
+ * Mobile Horizontal Scroll Fix
+ * Only applies to mobile devices - no impact on desktop
+ */
+
+@media only screen and (max-width: 768px) {
+  html, body {
+    overflow-x: auto !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+  
+  /* Reset any container constraints that might be limiting horizontal scroll */
+  #root, 
+  .container,
+  .container-fluid,
+  [class^="container-"],
+  main,
+  section,
+  .row,
+  .col,
+  [class^="col-"],
+  div[style*="overflow-x: hidden"],
+  div[style*="overflow: hidden"] {
+    overflow-x: visible !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+}

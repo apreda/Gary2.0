@@ -9,6 +9,7 @@ import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/PickCardGlow.css'; // Import the glow effect CSS
 import '../styles/DisableCardGlow.css'; // Override to disable the glow effect
+import '../styles/MobileScrollFix.css'; // Fix for mobile horizontal scrolling
 
 // Only import assets we actually need for the modern dark UI design
 import GaryEmblem from '../assets/images/Garyemblem.png';
