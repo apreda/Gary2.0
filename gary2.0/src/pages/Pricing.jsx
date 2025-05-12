@@ -11,11 +11,11 @@ export function Pricing() {
 
   // Function to determine button destination based on user status
   const getButtonDestination = () => {
-    // If user is logged in and has active subscription, direct to checkout
-    if (user && subscriptionStatus === 'active') {
+    // If user is logged in (regardless of subscription status), direct to checkout
+    if (user) {
       return "https://buy.stripe.com/dR603v2UndMebrq144";
     }
-    // Otherwise direct to signin
+    // Only direct to signin if user is not logged in
     return "https://www.betwithgary.ai/signin";
   };
 
@@ -144,7 +144,7 @@ export function Pricing() {
                       <div className="font-mono text-xs opacity-90 text-black font-medium">VIP ACCESS</div>
                       <div></div>
                     </div>
-                    {user && subscriptionStatus === 'active' ? (
+                    {user ? (
                       <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group relative w-full text-center">
                         <div className="text-xl font-bold text-black font-sans tracking-wider py-2 hover:opacity-80 transition-opacity">
                           SELECT PLAN
