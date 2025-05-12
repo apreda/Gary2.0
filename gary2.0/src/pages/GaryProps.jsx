@@ -175,7 +175,7 @@ export default function GaryProps() {
                               {/* Top Section - Header Info */}
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                                 <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>League</div><div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.league || 'MLB'}</div></div>
-                                <div style={{ width: '65%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Player Prop</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.player ? `${pick.player}${pick.team ? ` (${pick.team})` : ''}` : 'TBD'}</div></div>
+                                <div style={{ width: '65%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.team || 'TBD'}</div></div>
                               </div>
                               
                               {/* Gary's Pick Section */}
