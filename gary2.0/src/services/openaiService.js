@@ -247,6 +247,44 @@ Provide your betting analysis in the exact JSON format specified. Remember to ON
       
       throw error; // Rethrow so caller can handle it
     }
+  },
+  /**
+   * Generate prop picks recommendations from OpenAI
+   * @param {string} prompt - The detailed prompt with game data and available props
+   * @param {Object} options - Additional options for the generation
+   * @returns {Promise<string>} - The generated prop picks response
+   */
+  generatePropPicks: async function(prompt, options = {}) {
+    try {
+      console.log('Generating prop picks from OpenAI...');
+      
+      const systemMessage = {
+        role: 'system',
+        content: "You are Gary, a professional sports bettor and statistical analyst specializing in player prop bets. \n\nYour task is to analyze player statistics and betting lines to identify the most profitable player prop bets.\n\nYour analysis should be data-driven, focusing on:\n1. Player recent form and consistency\n2. Matchup advantages and disadvantages\n3. Historical performance in similar situations\n4. Value in the current betting line\n5. Trends and patterns in prop performance\n\nFor each recommended prop bet, you must provide:\n- Player name and team\n- Prop type (points, rebounds, assists, etc.)\n- Recommendation (over or under)\n- Confidence level (0.5-1.0 scale)\n- Brief rationale with key statistics\n\nResponse format (valid JSON):\n```json\n[\n  {\n    \"player\": \"Player Name\",\n    \"team\": \"Team Name\",\n    \"prop\": \"Points | Rebounds | Assists | etc.\",\n    \"line\": 22.5,\n    \"bet\": \"over | under\",\n    \"odds\": -110,\n    \"confidence\": 0.85,\n    \"rationale\": \"Brief explanation with key stats supporting this pick\"\n  },\n  {...}\n]\n```\n\nYou may provide up to 5 high-confidence picks. Only include picks with a confidence level of 0.7 or higher."
+      };
+      
+      const userMessage = {
+        role: 'user',
+        content: prompt
+      };
+      
+      // Use our standard generateResponse method to make the API call
+      return await this.generateResponse([systemMessage, userMessage], {
+        temperature: options.temperature || 0.7,
+        maxTokens: options.maxTokens || 1500,
+        model: options.model || this.DEFAULT_MODEL
+      });
+    } catch (error) {
+      console.error('Error generating prop picks:', error);
+      
+      // Provide more detailed error information for debugging
+      if (error.response) {
+        console.error('API Error Response:', error.response.data);
+        console.error('Status:', error.response.status);
+      }
+      
+      throw error; // Rethrow so caller can handle it
+    }
   }
 };
 

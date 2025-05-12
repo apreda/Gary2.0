@@ -142,7 +142,7 @@ export const ballDontLieService = {
    * @param {number} gamesLimit - Number of recent games to analyze
    * @returns {Promise<Object>} - Mapped player stats by player ID
    */
-  getPlayerRecentGameStats: async (playerIds = [], season = null, gamesLimit = 10) => {
+  getPlayerRecentGameStats: async (playerIds = [], season = 2024, gamesLimit = 10) => {
     try {
       if (!playerIds || playerIds.length === 0) {
         throw new Error('Player IDs are required for getPlayerRecentGameStats');
@@ -468,7 +468,7 @@ export const ballDontLieService = {
    * @param {number} season - Season year
    * @returns {Promise<Object>} - Player season averages by ID
    */
-  getPlayerAverages: async (playerIds, season = new Date().getFullYear()) => {
+  getPlayerAverages: async (playerIds, season = 2024) => {
     try {
       // Get the season stats for all these players
       const seasonStats = await ballDontLieService.getPlayerSeasonStats(season, playerIds);
@@ -530,7 +530,7 @@ export const ballDontLieService = {
    * @param {number} season - Season year
    * @returns {Promise<string>} - Formatted statistics text for GPT prompt
    */
-  generatePlayerStatsReport: async (playerIds, season = new Date().getFullYear()) => {
+  generatePlayerStatsReport: async (playerIds, season = 2024) => {
     try {
       // Get both season averages and recent game stats
       const [seasonAverages, recentGameStats] = await Promise.all([
