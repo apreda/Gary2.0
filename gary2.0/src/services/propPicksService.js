@@ -184,11 +184,25 @@ const propPicksService = {
           try {
             console.log(`Getting prop picks for ${sport} on ${today}`);
             
-            // Get games for this sport
-            let gameOdds = await oddsService.getGamesForDay(sport, today, false);
+            // Get games for this sport using getUpcomingGames instead of getGamesForDay
+            console.log(`Using getUpcomingGames for ${sport} games...`);
+            let games = await oddsService.getUpcomingGames(sport, { date: today });
             
-            if (!gameOdds || gameOdds.length === 0) {
+            if (!games || games.length === 0) {
               console.log(`No games found for ${sport} on ${today}`);
+              continue; // Skip to next sport rather than returning
+            }
+            
+            // Filter games by date if needed
+            let gameOdds = games.filter(game => {
+              const gameDate = new Date(game.commence_time).toISOString().split('T')[0];
+              return gameDate === today;
+            });
+            
+            console.log(`Found ${games.length} total games, ${gameOdds.length} scheduled for ${today}`);
+            
+            if (gameOdds.length === 0) {
+              console.log(`No games found for ${sport} on ${today} after date filtering`);
               continue; // Skip to next sport rather than returning
             }
             
