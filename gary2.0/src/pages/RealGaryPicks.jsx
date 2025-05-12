@@ -491,7 +491,7 @@ function RealGaryPicks() {
   };
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh', width: '100vw', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
       {/* BG2.png background with 15% opacity */}
       <div
         style={{

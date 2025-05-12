@@ -106,7 +106,7 @@ export default function GaryProps() {
   };
 
   return (
-    <div className="min-h-screen relative pt-20"> {/* Added pt-20 for top padding to account for navbar */}
+    <div className="min-h-screen relative pt-20" style={{ overflowX: 'auto' }}> {/* Added pt-20 for top padding + overflow-x auto for mobile scrolling */}
       {/* Background */}
       <div className="fixed inset-0 z-0" style={{ backgroundImage: `url(${BG2})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3, filter: 'blur(1px)' }} />
 
@@ -154,7 +154,7 @@ export default function GaryProps() {
                     <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Updated daily 10-20 Daily Player Props</span></li>
                   </ul>
                   <Link 
-                    to={user ? "/pricing" : "https://www.betwithgary.ai/signin"} 
+                    to={user ? "https://buy.stripe.com/dR603v2UndMebrq144" : "https://www.betwithgary.ai/signin"} 
                     className="inline-block py-3 px-8 rounded-md text-white font-medium" 
                     style={{ background: 'linear-gradient(90deg, #b8953f 0%, #d4af37 100%)', boxShadow: '0 4px 12px rgba(184,149,63,0.5)' }}
                   >

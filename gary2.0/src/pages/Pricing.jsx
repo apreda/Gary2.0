@@ -20,7 +20,7 @@ export function Pricing() {
   };
 
   return (
-    <div className="min-h-screen w-full py-12 relative">
+    <div className="min-h-screen w-full py-12 relative" style={{ overflowX: 'auto' }}>
       {/* Stadium background image with parallax effect */}
       <div className="absolute inset-0 bg-cover bg-center z-0" style={{
         backgroundImage: `url(${colorBackground})`,

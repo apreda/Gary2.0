@@ -19,7 +19,8 @@
     margin: 0;
     padding: 0;
     min-height: 100vh;
-    overflow-x: hidden;
+    /* Allow scrolling in all directions, especially important for mobile */
+    overflow: auto;
   }
   
   /* We're using targeted approaches for text colors instead of global overrides */
