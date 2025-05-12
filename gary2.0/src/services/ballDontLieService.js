@@ -100,35 +100,76 @@ export const ballDontLieService = {
       
       console.log(`Fetching ${postseason ? 'postseason' : 'regular season'} stats for ${playerIds.length} players in ${season} season`);
       
-      // Build URL and params
-      const url = `${API_BASE_URL}/season_stats`;
-      let params = {
-        season,
-        postseason,
-        per_page: 100 // Get more per page
-      };
+      // Split player IDs into smaller batches of 10 to avoid API limits
+      const BATCH_SIZE = 10;
+      const allResults = [];
       
-      // Add player IDs if specified
-      if (playerIds && playerIds.length > 0) {
-        // Format player_ids[] param for each ID
-        playerIds.forEach((id, index) => {
+      // If no player IDs provided, make a single request without player_ids parameters
+      if (!playerIds || playerIds.length === 0) {
+        const url = `${API_BASE_URL}/season_stats`;
+        const params = {
+          season,
+          postseason,
+          per_page: 100
+        };
+        
+        const response = await axios.get(url, {
+          params,
+          headers: {
+            'Authorization': API_KEY
+          }
+        });
+        
+        if (response.data && response.data.data) {
+          return response.data.data;
+        }
+        
+        return [];
+      }
+      
+      // Process player IDs in batches
+      for (let i = 0; i < playerIds.length; i += BATCH_SIZE) {
+        const batchIds = playerIds.slice(i, i + BATCH_SIZE);
+        console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1} of ${Math.ceil(playerIds.length/BATCH_SIZE)} (${batchIds.length} players)`);
+        
+        // Build URL and params
+        const url = `${API_BASE_URL}/season_stats`;
+        let params = {
+          season,
+          postseason,
+          per_page: 100
+        };
+        
+        // Format player_ids[] param for each ID in this batch
+        batchIds.forEach((id, index) => {
           params[`player_ids[${index}]`] = id;
         });
-      }
-      
-      const response = await axios.get(url, {
-        params,
-        headers: {
-          'Authorization': API_KEY
+        
+        try {
+          const response = await axios.get(url, {
+            params,
+            headers: {
+              'Authorization': API_KEY
+            }
+          });
+          
+          if (response.data && response.data.data) {
+            console.log(`Found season stats for ${response.data.data.length} players in this batch`);
+            allResults.push(...response.data.data);
+          }
+          
+          // Add a small delay between requests to avoid rate limiting
+          if (i + BATCH_SIZE < playerIds.length) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        } catch (error) {
+          console.error(`Error fetching batch ${Math.floor(i/BATCH_SIZE) + 1}: ${error.message}`);
+          // Continue with next batch instead of failing completely
         }
-      });
-      
-      if (response.data && response.data.data) {
-        console.log(`Found season stats for ${response.data.data.length} players`);
-        return response.data.data;
       }
       
-      return [];
+      console.log(`Found season stats for a total of ${allResults.length} players`);
+      return allResults;
     } catch (error) {
       console.error(`Error fetching player season stats: ${error.message}`);
       throw error;
@@ -142,7 +183,7 @@ export const ballDontLieService = {
    * @param {number} gamesLimit - Number of recent games to analyze
    * @returns {Promise<Object>} - Mapped player stats by player ID
    */
-  getPlayerRecentGameStats: async (playerIds = [], season = 2024, gamesLimit = 10) => {
+  getPlayerRecentGameStats: async (playerIds = [], season = null, gamesLimit = 10) => {
     try {
       if (!playerIds || playerIds.length === 0) {
         throw new Error('Player IDs are required for getPlayerRecentGameStats');
@@ -150,147 +191,173 @@ export const ballDontLieService = {
       
       console.log(`Fetching recent game stats for ${playerIds.length} players (last ${gamesLimit} games)`);
       
-      // Build URL and params
-      const url = `${API_BASE_URL}/stats`;
-      const params = {
-        per_page: gamesLimit // Limit to recent games
-      };
+      // Split player IDs into smaller batches to avoid API limits
+      const BATCH_SIZE = 10;
+      let allGameData = [];
       
-      // Add player IDs
-      playerIds.forEach((id, index) => {
-        params[`player_ids[${index}]`] = id;
-      });
-      
-      // Add season if specified
-      if (season) {
-        params['seasons[0]'] = season;
-      }
-      
-      const response = await axios.get(url, {
-        params,
-        headers: {
-          'Authorization': API_KEY
+      // Process player IDs in batches
+      for (let i = 0; i < playerIds.length; i += BATCH_SIZE) {
+        const batchIds = playerIds.slice(i, i + BATCH_SIZE);
+        console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1} of ${Math.ceil(playerIds.length/BATCH_SIZE)} (${batchIds.length} players)`);
+        
+        // Build URL and params for this batch
+        const url = `${API_BASE_URL}/stats`;
+        const params = {
+          per_page: gamesLimit // Limit to recent games
+        };
+        
+        // Add player IDs for this batch
+        batchIds.forEach((id, index) => {
+          params[`player_ids[${index}]`] = id;
+        });
+        
+        // Add season if specified
+        if (season) {
+          params['seasons[0]'] = season;
         }
-      });
-      
-      if (response.data && response.data.data) {
-        console.log(`Found ${response.data.data.length} recent game stats`);
         
-        // Process stats to get averages by player
-        const playerStats = {};
-        
-        // Group stats by player
-        response.data.data.forEach(stat => {
-          const playerId = stat.player.id;
+        try {
+          const response = await axios.get(url, {
+            params,
+            headers: {
+              'Authorization': API_KEY
+            }
+          });
           
-          if (!playerStats[playerId]) {
-            playerStats[playerId] = {
-              player: stat.player,
-              games: [],
-              averages: {}
-            };
+          if (response.data && response.data.data) {
+            console.log(`Found ${response.data.data.length} recent game stats in this batch`);
+            allGameData = [...allGameData, ...response.data.data];
           }
           
-          // Add this game to the player's games
-          playerStats[playerId].games.push({
-            game_id: stat.game.id,
-            date: stat.game.date,
-            at_bats: stat.at_bats,
-            runs: stat.runs,
-            hits: stat.hits,
-            rbi: stat.rbi,
-            hr: stat.hr,
-            avg: stat.avg,
-            obp: stat.obp,
-            slg: stat.slg,
-            ip: stat.ip,
-            p_hits: stat.p_hits,
-            p_runs: stat.p_runs,
-            er: stat.er,
-            p_bb: stat.p_bb,
-            p_k: stat.p_k,
-            p_hr: stat.p_hr,
-            era: stat.era
-          });
-        });
-        
-        // Calculate averages for each player's last 10 games
-        Object.keys(playerStats).forEach(playerId => {
-          const player = playerStats[playerId];
-          const games = player.games;
-          
-          // Initialize batting averages
-          let totalAtBats = 0;
-          let totalRuns = 0;
-          let totalHits = 0;
-          let totalRbi = 0;
-          let totalHr = 0;
-          
-          // Initialize pitching averages
-          let totalIp = 0;
-          let totalPHits = 0;
-          let totalPRuns = 0;
-          let totalEr = 0;
-          let totalPBb = 0;
-          let totalPK = 0;
-          let totalPHr = 0;
-          
-          // Calculate sums for each stat
-          games.forEach(game => {
-            // Batting stats
-            totalAtBats += game.at_bats || 0;
-            totalRuns += game.runs || 0;
-            totalHits += game.hits || 0;
-            totalRbi += game.rbi || 0;
-            totalHr += game.hr || 0;
-            
-            // Pitching stats
-            totalIp += game.ip || 0;
-            totalPHits += game.p_hits || 0;
-            totalPRuns += game.p_runs || 0;
-            totalEr += game.er || 0;
-            totalPBb += game.p_bb || 0;
-            totalPK += game.p_k || 0;
-            totalPHr += game.p_hr || 0;
-          });
-          
-          const gameCount = games.length;
-          
-          // Calculate and store averages
-          player.averages = {
-            games_played: gameCount,
-            batting: {
-              at_bats_per_game: totalAtBats / gameCount,
-              runs_per_game: totalRuns / gameCount,
-              hits_per_game: totalHits / gameCount,
-              rbi_per_game: totalRbi / gameCount,
-              hr_per_game: totalHr / gameCount,
-              batting_avg: totalAtBats > 0 ? totalHits / totalAtBats : 0,
-              total_at_bats: totalAtBats,
-              total_hits: totalHits,
-              total_runs: totalRuns,
-              total_rbi: totalRbi,
-              total_hr: totalHr
-            },
-            pitching: {
-              ip_per_game: totalIp / gameCount,
-              hits_per_game: totalPHits / gameCount,
-              runs_per_game: totalPRuns / gameCount,
-              er_per_game: totalEr / gameCount,
-              bb_per_game: totalPBb / gameCount,
-              k_per_game: totalPK / gameCount,
-              hr_per_game: totalPHr / gameCount,
-              era: totalIp > 0 ? (totalEr * 9) / totalIp : 0,
-              total_ip: totalIp,
-              total_k: totalPK
-            }
-          };
-        });
-        
-        return playerStats;
+          // Add a small delay between requests to avoid rate limiting
+          if (i + BATCH_SIZE < playerIds.length) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        } catch (error) {
+          console.error(`Error fetching batch ${Math.floor(i/BATCH_SIZE) + 1}: ${error.message}`);
+          // Continue with next batch instead of failing completely
+        }
       }
       
-      return {};
+      console.log(`Total recent game stats found: ${allGameData.length}`);
+      
+      // If no data was found across all batches, return empty object
+      if (allGameData.length === 0) {
+        return {};
+      }
+      
+      // Process stats to get averages by player
+      const playerStats = {};
+      
+      // Group stats by player
+      allGameData.forEach(stat => {
+        const playerId = stat.player.id;
+        
+        if (!playerStats[playerId]) {
+          playerStats[playerId] = {
+            player: stat.player,
+            games: [],
+            averages: {}
+          };
+        }
+        
+        // Add this game to the player's games
+        playerStats[playerId].games.push({
+          game_id: stat.game.id,
+          date: stat.game.date,
+          at_bats: stat.at_bats,
+          runs: stat.runs,
+          hits: stat.hits,
+          rbi: stat.rbi,
+          hr: stat.hr,
+          avg: stat.avg,
+          obp: stat.obp,
+          slg: stat.slg,
+          ip: stat.ip,
+          p_hits: stat.p_hits,
+          p_runs: stat.p_runs,
+          er: stat.er,
+          p_bb: stat.p_bb,
+          p_k: stat.p_k,
+          p_hr: stat.p_hr,
+          era: stat.era
+        });
+      });
+      
+      // Calculate averages for each player's last 10 games
+      Object.keys(playerStats).forEach(playerId => {
+        const player = playerStats[playerId];
+        const games = player.games;
+        
+        // Initialize batting averages
+        let totalAtBats = 0;
+        let totalRuns = 0;
+        let totalHits = 0;
+        let totalRbi = 0;
+        let totalHr = 0;
+        
+        // Initialize pitching averages
+        let totalIp = 0;
+        let totalPHits = 0;
+        let totalPRuns = 0;
+        let totalEr = 0;
+        let totalPBb = 0;
+        let totalPK = 0;
+        let totalPHr = 0;
+        
+        // Calculate sums for each stat
+        games.forEach(game => {
+          // Batting stats
+          totalAtBats += game.at_bats || 0;
+          totalRuns += game.runs || 0;
+          totalHits += game.hits || 0;
+          totalRbi += game.rbi || 0;
+          totalHr += game.hr || 0;
+          
+          // Pitching stats
+          totalIp += game.ip || 0;
+          totalPHits += game.p_hits || 0;
+          totalPRuns += game.p_runs || 0;
+          totalEr += game.er || 0;
+          totalPBb += game.p_bb || 0;
+          totalPK += game.p_k || 0;
+          totalPHr += game.p_hr || 0;
+        });
+        
+        const gameCount = games.length;
+        
+        // Calculate and store averages
+        player.averages = {
+          games_played: gameCount,
+          batting: {
+            at_bats_per_game: totalAtBats / gameCount,
+            runs_per_game: totalRuns / gameCount,
+            hits_per_game: totalHits / gameCount,
+            rbi_per_game: totalRbi / gameCount,
+            hr_per_game: totalHr / gameCount,
+            batting_avg: totalAtBats > 0 ? totalHits / totalAtBats : 0,
+            total_at_bats: totalAtBats,
+            total_hits: totalHits,
+            total_runs: totalRuns,
+            total_rbi: totalRbi,
+            total_hr: totalHr
+          },
+          pitching: {
+            ip_per_game: totalIp / gameCount,
+            hits_per_game: totalPHits / gameCount,
+            runs_per_game: totalPRuns / gameCount,
+            er_per_game: totalEr / gameCount,
+            bb_per_game: totalPBb / gameCount,
+            k_per_game: totalPK / gameCount,
+            hr_per_game: totalPHr / gameCount,
+            era: totalIp > 0 ? (totalEr * 9) / totalIp : 0,
+            total_ip: totalIp,
+            total_k: totalPK
+          }
+        };
+      });
+      
+      return playerStats;
     } catch (error) {
       console.error(`Error fetching player recent game stats: ${error.message}`);
       throw error;
@@ -468,7 +535,7 @@ export const ballDontLieService = {
    * @param {number} season - Season year
    * @returns {Promise<Object>} - Player season averages by ID
    */
-  getPlayerAverages: async (playerIds, season = 2024) => {
+  getPlayerAverages: async (playerIds, season = new Date().getFullYear()) => {
     try {
       // Get the season stats for all these players
       const seasonStats = await ballDontLieService.getPlayerSeasonStats(season, playerIds);
@@ -530,7 +597,7 @@ export const ballDontLieService = {
    * @param {number} season - Season year
    * @returns {Promise<string>} - Formatted statistics text for GPT prompt
    */
-  generatePlayerStatsReport: async (playerIds, season = 2024) => {
+  generatePlayerStatsReport: async (playerIds, season = new Date().getFullYear()) => {
     try {
       // Get both season averages and recent game stats
       const [seasonAverages, recentGameStats] = await Promise.all([
