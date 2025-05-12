@@ -787,7 +787,15 @@ function Home() {
                       </div>
                       
                       <div className="absolute bottom-1/4 left-1/4 bg-[#2a2a2a] rounded-full py-1 px-3 border border-[#B8953F]/30">
-                        <span className="text-xs text-white">Twitter</span>
+                        <span className="text-xs text-white">X</span>
+                      </div>
+                      
+                      <div className="absolute top-1/4 left-1/4 bg-[#2a2a2a] rounded-full py-1 px-3 border border-[#B8953F]/30">
+                        <span className="text-xs text-white">Barstool</span>
+                      </div>
+                      
+                      <div className="absolute bottom-1/4 right-1/4 bg-[#2a2a2a] rounded-full py-1 px-3 border border-[#B8953F]/30">
+                        <span className="text-xs text-white">Reddit</span>
                       </div>
                     </div>
                   </div>
