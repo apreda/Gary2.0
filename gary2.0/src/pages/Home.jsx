@@ -727,27 +727,23 @@ function Home() {
                     </div>
                   </div>
                   
-                  {/* Card 2: Fan Brain */}
+                  {/* Card 2: Three-Layered Core */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Fan Brain
+                      Three-Layered Core
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Reads social sentiment, ticket-split data and "sharp money" flows to separate the crowd's hype from true betting value.
+                      Gary's secret sauce: three distinct processing layers—Sports Odds & Stats, Real-Time Storylines, and a Deep Reasoning Engine—that together crank your prediction accuracy through the roof.
                     </p>
-                    <div className="space-y-3 mt-6">
-                      <div className="flex justify-end">
-                        <div className="bg-[#2a2a2a] rounded-2xl px-4 py-2 max-w-xs">
-                          <p className="text-white text-sm">What's the sentiment for Chiefs vs Broncos?</p>
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-[#B8953F] ml-2 flex items-center justify-center text-xs font-bold text-black">GB</div>
+                    <div className="mt-4 flex flex-wrap justify-center gap-3 py-2">
+                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-sm">Sports Odds & Stats</span>
                       </div>
-                      
-                      <div className="flex">
-                        <div className="w-8 h-8 rounded-full bg-[#B8953F] mr-2 flex items-center justify-center text-xs font-bold text-black">AI</div>
-                        <div className="bg-[#B8953F]/20 rounded-2xl px-4 py-2 max-w-xs border border-[#B8953F]/30">
-                          <p className="text-white text-sm">Sharp money coming in on Broncos +7</p>
-                        </div>
+                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-sm">Real-Time Storylines</span>
+                      </div>
+                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
+                        <span className="text-[#B8953F] text-sm">Deep Reasoning Engine</span>
                       </div>
                     </div>
                   </div>
@@ -825,20 +821,24 @@ function Home() {
                 <div className="px-6 mt-8 relative z-20">
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Three-Layered Core
+                      Fan Brain
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Gary's secret sauce: three distinct processing layers—Sports Odds & Stats, Real-Time Storylines, and a Deep Reasoning Engine—that together crank your prediction accuracy through the roof.
+                      Reads social sentiment, ticket-split data and "sharp money" flows to separate the crowd's hype from true betting value.
                     </p>
-                    <div className="mt-4 flex justify-center space-x-12 py-4">
-                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-sm">Sports Odds & Stats</span>
+                    <div className="space-y-3 mt-6">
+                      <div className="flex justify-end">
+                        <div className="bg-[#2a2a2a] rounded-2xl px-4 py-2 max-w-xs">
+                          <p className="text-white text-sm">What's the sentiment for Chiefs vs Broncos?</p>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-[#B8953F] ml-2 flex items-center justify-center text-xs font-bold text-black">GB</div>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-sm">Real-Time Storylines</span>
-                      </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-sm">Deep Reasoning Engine</span>
+                      
+                      <div className="flex">
+                        <div className="w-8 h-8 rounded-full bg-[#B8953F] mr-2 flex items-center justify-center text-xs font-bold text-black">AI</div>
+                        <div className="bg-[#B8953F]/20 rounded-2xl px-4 py-2 max-w-xs border border-[#B8953F]/30">
+                          <p className="text-white text-sm">Sharp money coming in on Broncos +7</p>
+                        </div>
                       </div>
                     </div>
                   </div>
