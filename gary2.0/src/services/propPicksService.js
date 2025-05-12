@@ -185,7 +185,7 @@ const propPicksService = {
             console.log(`Getting prop picks for ${sport} on ${today}`);
             
             // Get games for this sport
-            let gameOdds = await propOddsService.getGamesForDay(sport, today, false);
+            let gameOdds = await oddsService.getGamesForDay(sport, today, false);
             
             if (!gameOdds || gameOdds.length === 0) {
               console.log(`No games found for ${sport} on ${today}`);
