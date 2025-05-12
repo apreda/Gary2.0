@@ -182,8 +182,8 @@ export default function GaryProps() {
                               <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', margin: '0.25rem 0 0.75rem' }}>
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
-                                  {pick.player && pick.bet && pick.prop ? 
-                                    `${pick.player} ${pick.bet.toUpperCase()} ${pick.prop} ${pick.odds}` : 
+                                  {pick.player && pick.prop ? 
+                                    `${pick.player} ${pick.prop} ${pick.odds}` : 
                                     '(No pick available)'}
                                 </div>
                               </div>
