@@ -153,13 +153,13 @@ export function Pricing() {
                                       -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out"></div>
                       </a>
                     ) : (
-                      <Link to="/login" className="group relative w-full text-center">
+                      <a href="https://www.betwithgary.ai/signin" className="group relative w-full text-center">
                         <div className="text-xl font-bold text-black font-sans tracking-wider py-2 hover:opacity-80 transition-opacity">
                           SELECT PLAN
                         </div>
                         <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-[#d4af37]/20 to-transparent 
                                       -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out"></div>
-                      </Link>
+                      </a>
                     )}
                   </div>
                   

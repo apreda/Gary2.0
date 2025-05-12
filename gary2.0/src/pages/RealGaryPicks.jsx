@@ -705,7 +705,7 @@ function RealGaryPicks() {
                                       <h3 className="text-[#b8953f] text-2xl font-bold mb-3">Unlock Premium Picks</h3>
                                       <p className="text-white mb-6 max-w-sm">Upgrade to Pro to see all of Gary's premium picks with detailed analysis and reasoning.</p>
                                       <a 
-                                        href="https://buy.stripe.com/dR603v2UndMebrq144"
+                                        href={user ? "https://buy.stripe.com/dR603v2UndMebrq144" : "https://www.betwithgary.ai/signin"}
                                         className="block py-4 px-8 bg-[#b8953f] hover:bg-[#c5a030] text-black font-medium rounded-lg transition-colors focus:ring-2 focus:ring-[#b8953f]/50 focus:outline-none w-64 mx-auto text-center"
                                       >
                                         Upgrade to Pro — $29/month
