@@ -1,13 +1,25 @@
 /* 
- * Mobile Horizontal Scroll Fix
+ * Mobile View Enhancements
  * Only applies to mobile devices - no impact on desktop
  */
 
+/* Add viewport meta tag dynamically for mobile devices */
 @media only screen and (max-width: 768px) {
+  /* Enable horizontal scrolling when needed */
   html, body {
     overflow-x: auto !important;
     max-width: none !important;
     width: auto !important;
+    /* Apply a slight zoom out effect to fit more content */
+    zoom: 0.85 !important;
+    -moz-transform: scale(0.85) !important;
+    -moz-transform-origin: 0 0 !important;
+    -o-transform: scale(0.85) !important;
+    -o-transform-origin: 0 0 !important;
+    -webkit-transform: scale(0.85) !important;
+    -webkit-transform-origin: 0 0 !important;
+    transform: scale(0.85) !important;
+    transform-origin: 0 0 !important;
   }
   
   /* Reset any container constraints that might be limiting horizontal scroll */
@@ -25,5 +37,10 @@
     overflow-x: visible !important;
     max-width: none !important;
     width: auto !important;
+  }
+  
+  /* Apply container adjustments to compensate for scale transform */
+  .container, main, section, #root > div {
+    width: 117.65% !important; /* 100/0.85 to compensate for the scale */
   }
 }
