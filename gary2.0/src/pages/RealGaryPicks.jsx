@@ -16,12 +16,12 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
 
 // Import services
 import { picksService } from '../services/picksService';
-import { resultsService } from '../services/resultsService';
 import { betTrackingService } from '../services/betTrackingService';
 import { picksPersistenceService } from '../services/picksPersistenceService';
 import { userStatsService } from '../services/userStatsService';
 import { garyPhrases } from '../utils/garyPhrases';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
+import { resultsCheckerService } from '../services/resultsCheckerService';
 
 function RealGaryPicks() {
   const { user } = useAuth();
