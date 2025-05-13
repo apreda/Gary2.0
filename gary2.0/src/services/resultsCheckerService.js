@@ -446,6 +446,8 @@ Include ONLY the picks from this batch. Provide detailed final scores to show ho
   recordResults: async (pickId, results, date) => {
     try {
       console.log(`Recording ${results.length} results for pick ID ${pickId}`);
+      // Log the full incoming results data for debugging
+      console.log('Raw results to insert:', JSON.stringify(results, null, 2));
       
       // Format results for insert
       let recordsToInsert = results.map(result => ({
@@ -460,20 +462,31 @@ Include ONLY the picks from this batch. Provide detailed final scores to show ho
                                                        result.final_score.split(' - ')[1].split(' ').slice(0, -1).join(' ') : '')
       }));
       
-      // Insert records into game_results table with RLS bypass using the service role key
+      // Print exact format of records we're inserting for debugging
+      console.log('Formatted records for Supabase:', JSON.stringify(recordsToInsert, null, 2));
+        
       try {
-        // First check if any of these picks already have results to avoid duplicates
-        const { data: existingData } = await adminSupabase
+        // Check for existing results using pick_id AND matchup as compound key to avoid duplicates
+        const { data: existingData, error: queryError } = await supabase
           .from('game_results')
-          .select('pick_id')
+          .select('id, pick_id, matchup')
           .eq('game_date', date)
-          .in('pick_id', recordsToInsert.map(r => r.pick_id));
+          .eq('pick_id', pickId)
+          .in('matchup', recordsToInsert.map(r => r.matchup));
+          
+        if (queryError) {
+          console.error('Error checking existing results:', queryError);
+          throw new Error(`Database query error: ${queryError.message}`);
+        }
           
         if (existingData && existingData.length > 0) {
           console.log(`Found ${existingData.length} existing results for these picks, skipping those`);
           // Filter out picks that already have results
           const existingPickIds = existingData.map(d => d.pick_id);
-          const filteredRecordsToInsert = recordsToInsert.filter(r => !existingPickIds.includes(r.pick_id));
+          const existingMatchups = existingData.map(d => d.matchup);
+          const filteredRecordsToInsert = recordsToInsert.filter(r => 
+            !(existingPickIds.includes(r.pick_id) && existingMatchups.includes(r.matchup))
+          );
           // Insert new results with explicit created_at and updated_at timestamps
           const timestamp = new Date().toISOString();
           const recordsWithTimestamps = filteredRecordsToInsert.map(record => ({
