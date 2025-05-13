@@ -244,12 +244,23 @@ export const resultsCheckerService = {
       
       for (const league of leagues) {
         try {
-          const events = await sportsDbApiService.getEventsByDate(league.id, date);
+          const response = await sportsDbApiService.getEventsByDate(league.id, date);
+          
+          // Handle both 'events' and 'livescore' formats from TheSportsDB API
+          let events = [];
+          if (response.events && Array.isArray(response.events)) {
+            events = response.events;
+          } else if (response.livescore && Array.isArray(response.livescore)) {
+            events = response.livescore;
+          } else if (Array.isArray(response)) {
+            events = response;
+          }
+          
           console.log(`Found ${events.length} games for ${league.name}`);
           
           // Process each event to get the scores
           events.forEach(event => {
-            if (event.strStatus === 'FT' && event.intHomeScore && event.intAwayScore) {
+            if ((event.strStatus === 'FT' || event.strStatus === 'Match Finished') && event.intHomeScore && event.intAwayScore) {
               // Create a unique key for this matchup
               const matchup = `${event.strAwayTeam} @ ${event.strHomeTeam}`;
               
