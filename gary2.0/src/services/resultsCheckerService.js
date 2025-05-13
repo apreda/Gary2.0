@@ -332,16 +332,30 @@ export const resultsCheckerService = {
     try {
       console.log(`Evaluating ${picks.length} picks against ${Object.keys(scores).length} games`);
       
-      // Format game scores for the prompt (used in all batches)
-      // Include detailed score information for OpenAI to accurately determine winners
+      // Verify we have valid scores before proceeding
+      if (Object.keys(scores).length === 0) {
+        console.error('No valid scores found for this date - evaluation will fail');
+        throw new Error('No game scores available for this date');
+      }
+      
+      // Format game scores for the prompt - ensure we give OpenAI the exact scores from the official API
+      // This data must be accurate for proper evaluation
       const scoresText = Object.values(scores)
-        .map(game => `${game.league}: ${game.awayTeam} ${game.awayScore} - ${game.homeTeam} ${game.homeScore}`)
+        .map(game => {
+          // Log each game score for verification
+          console.log(`Score for ${game.league}: ${game.awayTeam} ${game.awayScore} - ${game.homeTeam} ${game.homeScore}`);
+          return `${game.league}: ${game.awayTeam} ${game.awayScore} - ${game.homeTeam} ${game.homeScore}`;
+        })
         .join('\n');
-        
-      // If no scores found, make it explicit in the prompt
-      const finalScoresText = scoresText.length > 0 
-        ? scoresText 
-        : 'No completed game scores available for this date. Treat all picks as "push" with "No score provided" as the final score.';
+      
+      // Verify we have actual scores text to provide to OpenAI
+      if (!scoresText || scoresText.trim().length === 0) {
+        console.error('Empty scores text generated - evaluation will fail');
+        throw new Error('Failed to format game scores for evaluation');
+      }
+      
+      // Use the actual scores - no fallbacks or mock data
+      const finalScoresText = scoresText;
       
       // Process picks in smaller batches to ensure all picks get evaluated
       const BATCH_SIZE = 2; // Process just 2 picks at a time to ensure completeness
@@ -567,57 +581,53 @@ recordResults: async (pickId, results, date, scores) => {
       }
         
       if (existingData && existingData.length > 0) {
-        console.log(`Found ${existingData.length} existing results for these picks, skipping those`);
+        console.log(`Found ${existingData.length} existing results for these picks, skipping insertion`);
+        
+        // If ALL records already exist, just return the existing data
+        if (existingData.length >= recordsToInsert.length) {
+          console.log('All records already exist in database, nothing to insert');
+          return existingData;
+        }
+        
         // Filter out picks that already have results
         const existingMatchups = existingData.map(d => d.matchup);
-        const filteredRecordsToInsert = recordsToInsert.filter(r => 
+        recordsToInsert = recordsToInsert.filter(r => 
           !(r.matchup && existingMatchups.includes(r.matchup))
         );
         
-        // Insert new results with explicit created_at and updated_at timestamps
-        const timestamp = new Date().toISOString();
-        const recordsWithTimestamps = filteredRecordsToInsert.map(record => ({
-          ...record,
-          created_at: timestamp,
-          updated_at: timestamp
-        }));
-        
-        const { data, error } = await supabase
-          .from('game_results')
-          .insert(recordsWithTimestamps)
-          .select();
-        
-        if (error) {
-          console.error('Database error inserting results:', error);
-          throw new Error(`Error inserting results: ${error.message}`);
+        if (recordsToInsert.length === 0) {
+          console.log('After filtering, no new records to insert');
+          return existingData;
         }
-        
-        console.log(`Successfully recorded ${data.length} results`);
-        console.log('Supabase response:', JSON.stringify(data, null, 2));
-        return data;
-      } else {
-        // Insert new results with explicit created_at and updated_at timestamps
-        const timestamp = new Date().toISOString();
-        const recordsWithTimestamps = recordsToInsert.map(record => ({
-          ...record,
-          created_at: timestamp,
-          updated_at: timestamp
-        }));
-        
-        const { data, error } = await supabase
-          .from('game_results')
-          .insert(recordsWithTimestamps)
-          .select();
-        
-        if (error) {
-          console.error('Database error inserting results:', error);
-          throw new Error(`Error inserting results: ${error.message}`);
-        }
-        
-        console.log(`Successfully recorded ${data.length} results`);
-        console.log('Supabase response:', JSON.stringify(data, null, 2));
-        return data;
       }
+      
+      // If we get here, we need to insert records
+      const timestamp = new Date().toISOString();
+      const recordsWithTimestamps = recordsToInsert.map(record => ({
+        ...record,
+        created_at: timestamp,
+        updated_at: timestamp
+      }));
+      
+      // Verify we have valid data before inserting
+      if (recordsWithTimestamps.length === 0) {
+        console.log('No valid records to insert after processing');
+        return [];
+      }
+      
+      const { data, error } = await supabase
+        .from('game_results')
+        .insert(recordsWithTimestamps)
+        .select();
+      
+      if (error) {
+        console.error('Database error inserting results:', error);
+        throw new Error(`Error inserting results: ${error.message}`);
+      }
+      
+      console.log(`Successfully recorded ${data.length} results`);
+      console.log('Supabase response:', JSON.stringify(data, null, 2));
+      return data;
     } catch (err) {
       console.error('Database error:', err);
       throw err;
