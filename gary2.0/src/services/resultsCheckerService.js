@@ -470,9 +470,11 @@ Include ONLY the picks from this batch. Provide detailed final scores to show ho
  * Record results in the game_results table
  * @param {string} pickId - ID of the daily_picks record
  * @param {Array} results - Array of evaluated pick results
+ * @param {string} date - Date of the picks in YYYY-MM-DD format
+ * @param {Object} scores - Game scores from getGameScores
  * @returns {Promise<Array>} Inserted records
  */
-recordResults: async (pickId, results, date) => {
+recordResults: async (pickId, results, date, scores) => {
   try {
     console.log(`Recording ${results.length} results for pick ID ${pickId}`);
     // Log the full incoming results data for debugging
@@ -486,12 +488,55 @@ recordResults: async (pickId, results, date) => {
         resultValue = null;
       }
       
-      // Check if the final score is actually missing data
+      // Handle final score with proper fallbacks and empty value checks
       let finalScore = result.final_score || result.score || null;
-      if (finalScore && (finalScore.includes('No score provided') || 
-                         finalScore.includes('No game played') || 
-                         finalScore === 'EMPTY')) {
+      
+      // Check for various empty/missing value indicators
+      if (!finalScore || 
+          finalScore === 'N/A' ||
+          finalScore === 'EMPTY' ||
+          finalScore.includes('No game') ||
+          finalScore.includes('No score') ||
+          finalScore.includes('not available')) {
+        
+        // Try to get the actual score from our scores object
+        if (result.matchup && scores && Object.keys(scores).length > 0) {
+          // Normalize matchup formats for comparison (handle both @ and vs formats)
+          const normalizedMatchup1 = result.matchup.toLowerCase();
+          const normalizedMatchup2 = result.matchup.replace(' @ ', ' vs ').toLowerCase();
+          const reversedMatchup = result.matchup.split(' @ ').reverse().join(' @ ').toLowerCase();
+          
+          // Search for the matchup in our scores object
+          for (const key in scores) {
+            const normalizedKey = key.toLowerCase();
+            if (normalizedKey.includes(normalizedMatchup1) || 
+                normalizedKey.includes(normalizedMatchup2) || 
+                normalizedKey.includes(reversedMatchup)) {
+              finalScore = scores[key].score;
+              console.log(`Found score from TheSportsDB for ${result.matchup}: ${finalScore}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Ensure we never store 'EMPTY' or similar placeholders
+      if (!finalScore || 
+          finalScore === 'N/A' ||
+          finalScore === 'EMPTY' ||
+          finalScore.includes('No game') ||
+          finalScore.includes('No score')) {
         finalScore = null;
+      }
+      
+      // Fix incorrect 'push' results when we have actual scores
+      if (resultValue === 'push' && finalScore && 
+          !finalScore.includes('N/A') && 
+          !finalScore.includes('EMPTY') &&
+          !finalScore.includes('No game')) {
+        
+        // Log for debugging
+        console.log(`Validating 'push' result with score: ${finalScore}`);
       }
       
       return {
@@ -621,8 +666,8 @@ recordResults: async (pickId, results, date) => {
         return { success: false, message: 'No results could be evaluated' };
       }
       
-      // Step 4: Record the results
-      await resultsCheckerService.recordResults(data.id, results, date);
+      // Step 4: Record the results - pass scores object to help with missing data
+      await resultsCheckerService.recordResults(data.id, results, date, scores);
       
       return { 
         success: true, 
