@@ -572,8 +572,8 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
         try {
           // Check if the function exists before calling it
           if (typeof garyPerformanceService.recordPickResults === 'function') {
-            // Pass the actual results array to the recordPickResults function
-            await garyPerformanceService.recordPickResults(resultsResponse.results);
+            // Pass both the date and results array to the recordPickResults function
+            await garyPerformanceService.recordPickResults(picksResponse.date, resultsResponse.results);
             console.log('Successfully updated performance stats');
           } else {
             console.log('Performance stats update skipped - function not available');
