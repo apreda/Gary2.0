@@ -46,6 +46,7 @@ export const sportsDbApiService = {
       // Format date for API (YYYY-MM-DD)
       const formattedDate = new Date(date).toISOString().split('T')[0];
       
+      // First try the regular eventsday endpoint
       const url = `${sportsDbApiService.BASE_URL}/${sportsDbApiService.API_KEY}/eventsday.php`;
       const response = await axios.get(url, {
         params: {
@@ -59,7 +60,43 @@ export const sportsDbApiService = {
       }
       
       // The API returns { events: [...] } or null if no events
-      const events = response.data.events || [];
+      let events = response.data.events || [];
+      
+      // If we don't have enough events, try the livescore endpoint as backup
+      if (events.length < 2) {
+        try {
+          // Determine the sport type based on the league ID
+          let sportType = 'soccer'; // default
+          if (leagueId === sportsDbApiService.leagueIds.NBA) sportType = 'basketball';
+          if (leagueId === sportsDbApiService.leagueIds.NHL) sportType = 'icehockey';
+          if (leagueId === sportsDbApiService.leagueIds.MLB) sportType = 'baseball';
+          
+          console.log(`Trying livescore API for ${sportType} games on ${date}`);
+          const livescoreUrl = `https://www.thesportsdb.com/api/v2/json/${sportsDbApiService.API_KEY}/livescore/${sportType}`;
+          
+          const livescoreResponse = await axios.get(livescoreUrl);
+          if (livescoreResponse.status === 200 && livescoreResponse.data) {
+            // Filter results for the requested date
+            const livescoreEvents = livescoreResponse.data.livescore || [];
+            const dateEvents = livescoreEvents.filter(event => event.dateEvent === formattedDate);
+            
+            console.log(`Found ${dateEvents.length} livescore events for ${sportType} on ${date}`);
+            
+            // Combine with regular events
+            if (dateEvents.length > 0) {
+              events = [...events, ...dateEvents];
+              // Deduplicate by event ID
+              const uniqueEvents = events.filter((event, index, self) => 
+                index === self.findIndex(e => e.idEvent === event.idEvent)
+              );
+              events = uniqueEvents;
+            }
+          }
+        } catch (livescoreError) {
+          console.warn(`Livescore API fallback failed: ${livescoreError.message}`);
+        }
+      }
+      
       console.log(`Found ${events.length} games for league ID ${leagueId} on ${date}`);
       
       // If we have events, log the first one to see structure
