@@ -125,7 +125,21 @@ function createPropPicksPrompt(gameData, playerStatsText, propOddsData) {
          `TEAMS:\n${gameData.homeTeam} vs ${gameData.awayTeam}\n\n` +
          `PLAYER STATISTICS:\n${playerStatsText}\n\n` +
          `AVAILABLE PROPS:\n${oddsText}\n\n` +
-         `Generate high-confidence prop picks based on the stats and trends.`;
+         `Generate high-confidence prop picks based on the stats and trends. For each pick, include:\n` +
+         `1. Player name and team\n` +
+         `2. Prop type and line\n` +
+         `3. Your pick (over or under)\n` +
+         `4. Confidence level (0.7-1.0 scale)\n` +
+         `5. American odds value\n` +
+         `6. EV (Expected Value) as a percentage return on $100 bet\n` +
+         `7. Detailed rationale supporting the pick\n\n` +
+         `IMPORTANT: Calculate EV (Expected Value) for each pick using this formula:\n` +
+         `1. Convert American odds to decimal odds (d)\n` +
+         `   - For positive odds: d = (odds/100) + 1\n` +
+         `   - For negative odds: d = (100/abs(odds)) + 1\n` +
+         `2. Estimate the true probability (p) of the pick winning based on your analysis\n` +
+         `3. Calculate EV: p*(d-1)*100 - (1-p)*100\n` +
+         `4. Express EV as a whole number (e.g., 22 for 22% return on $100)`;
 }
 
 /**

@@ -244,7 +244,7 @@ export const resultsCheckerService = {
       
       for (const league of leagues) {
         try {
-          const events = await sportsDbApiService.getGamesByDate(date, league.id);
+          const events = await sportsDbApiService.getEventsByDate(league.id, date);
           console.log(`Found ${events.length} games for ${league.name}`);
           
           // Process each event to get the scores
@@ -355,14 +355,20 @@ Include ONLY the picks from this batch. Provide detailed final scores to show ho
         
         // Use OpenAI to evaluate picks
         console.log(`Sending batch ${batchNumber} (${batchPicks.length} picks) to OpenAI for evaluation`);
-        const response = await openaiService.generateResponse(prompt, {
+        const messages = [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ];
+        
+        const results = await openaiService.generateResponse(messages, {
           temperature: 0.1,
-          max_tokens: 1000,
-          model: 'gpt-4'
+          maxTokens: 800
         });
         
         // Extract JSON from OpenAI response
-        const batchResults = extractJsonFromText(response);
+        const batchResults = extractJsonFromText(results);
         
         if (!batchResults || !Array.isArray(batchResults) || batchResults.length === 0) {
           console.error(`Batch ${batchNumber} produced no valid results`);
