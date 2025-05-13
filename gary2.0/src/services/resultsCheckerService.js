@@ -244,22 +244,26 @@ export const resultsCheckerService = {
       
       for (const league of leagues) {
         try {
-          const events = await sportsDbApiService.getEventsByDate(league.id, date);
+          const events = await sportsDbApiService.getGamesByDate(date, league.id);
           console.log(`Found ${events.length} games for ${league.name}`);
           
-          // Add each event to the scores object
+          // Process each event to get the scores
           events.forEach(event => {
-            if (event.intHomeScore && event.intAwayScore) {
-              // Create matchup key for identifying games
+            if (event.strStatus === 'FT' && event.intHomeScore && event.intAwayScore) {
+              // Create a unique key for this matchup
               const matchup = `${event.strAwayTeam} @ ${event.strHomeTeam}`;
               
+              // Add to the scores object with detailed score information
               scores[matchup] = {
+                matchup,
                 league: league.name,
                 homeTeam: event.strHomeTeam,
                 awayTeam: event.strAwayTeam,
                 homeScore: parseInt(event.intHomeScore, 10),
                 awayScore: parseInt(event.intAwayScore, 10),
-                scoreText: `${event.strAwayTeam} ${event.intAwayScore} - ${event.strHomeTeam} ${event.intHomeScore}`
+                scoreText: `${event.strAwayTeam} ${event.intAwayScore} - ${event.strHomeTeam} ${event.intHomeScore}`,
+                winner: parseInt(event.intHomeScore, 10) > parseInt(event.intAwayScore, 10) ? 'home' : 'away',
+                totalScore: parseInt(event.intHomeScore, 10) + parseInt(event.intAwayScore, 10)
               };
             }
           });
@@ -270,6 +274,10 @@ export const resultsCheckerService = {
       
       const gameCount = Object.keys(scores).length;
       console.log(`Found a total of ${gameCount} games with scores`);
+      
+      if (gameCount === 0) {
+        console.warn('No games with scores found - results checking may fail');
+      }
       
       return scores;
     } catch (error) {
@@ -290,119 +298,121 @@ export const resultsCheckerService = {
       console.log(`Evaluating ${picks.length} picks against ${Object.keys(scores).length} games`);
       
       // Format game scores for the prompt (used in all batches)
+      // Include detailed score information for OpenAI to accurately determine winners
       const scoresText = Object.values(scores)
-        .map(game => `${game.league}: ${game.scoreText}`)
+        .map(game => `${game.league}: ${game.scoreText} (${game.awayTeam} ${game.awayScore} - ${game.homeTeam} ${game.homeScore})`)
         .join('\n');
       
-      // Process picks in smaller batches to avoid token limits
-      const BATCH_SIZE = 5;
+      // Process picks in smaller batches to ensure all picks get evaluated
+      const BATCH_SIZE = 2; // Process just 2 picks at a time to ensure completeness
       const allResults = [];
+      const batchCount = Math.ceil(picks.length / BATCH_SIZE);
+      
+      console.log(`Processing ${picks.length} picks in ${batchCount} batches of max ${BATCH_SIZE} picks each`);
       
       for (let i = 0; i < picks.length; i += BATCH_SIZE) {
         const batchPicks = picks.slice(i, i + BATCH_SIZE);
-        console.log(`Processing batch ${i/BATCH_SIZE + 1} with ${batchPicks.length} picks (${i+1}-${Math.min(i+BATCH_SIZE, picks.length)})`);
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
         
-        // Format just this batch of picks for the prompt
-        // Keep the original pick number for reference
-        const batchPicksText = batchPicks.map((pick, j) =>
-          `${i+j+1}. ${pick.league} | Pick: "${pick.pick}" | Game: ${pick.awayTeam} @ ${pick.homeTeam}`
-        ).join('\n');
+        console.log(`Processing batch ${batchNumber} with ${batchPicks.length} picks (${i+1}-${Math.min(i+BATCH_SIZE, picks.length)})`);
         
-        // Create the Perplexity prompt for this batch - add a cache busting random number
-        // This is critical to prevent Perplexity from returning cached responses
-        const cacheKey = Math.random().toString().substring(2, 8);
+        // Format picks for prompt with more details
+        const picksText = batchPicks.map((pick, index) => {
+          const teamInfo = pick.homeTeam && pick.awayTeam ? `${pick.awayTeam} @ ${pick.homeTeam}` : '';
+          const betValue = pick.bet || pick.pick;
+          return `${i+index+1}. ${betValue} (${teamInfo}) - League: ${pick.league || 'Unknown'}`;
+        }).join('\n');
         
-        const prompt = `I have the following sports results from ${date} and need to evaluate if specific betting picks won or lost. Request ID: ${cacheKey}
+        // Create the prompt for evaluation with improved betting rules explanation
+        const prompt = `You are a sports betting analyst evaluating results of picks. Request ID: ${Math.random().toString().substring(2, 8)}
 
-📊 ACTUAL GAME RESULTS:
+📊 ACTUAL GAME RESULTS for ${date}:
 ${scoresText}
 
-🎲 BETTING PICKS TO EVALUATE (BATCH ${i/BATCH_SIZE + 1} ONLY):
-${batchPicksText}
+🎲 BETTING PICKS TO EVALUATE:
+${picksText}
 
-For each numbered pick IN THIS BATCH ONLY:
-1. Find the corresponding game in the results
-2. Determine if the pick "won", "lost", or was a "push" according to sports betting rules
+For each numbered pick, determine if it won, lost, or pushed based on these betting rules:
 
 Betting Rules:
-- Spread bets (e.g. "Team +3.5"): Add the spread to the team's score. If that total exceeds the opponent's score, the bet wins.
-- Moneyline bets (e.g. "Team ML"): Simply pick the winner of the game.
+- Spread bets with positive spread (e.g. "Team +3.5"): ADD the spread to the team's final score. If that total exceeds the opponent's score, the bet wins.
+- Spread bets with negative spread (e.g. "Team -3.5"): SUBTRACT the spread from the team's final score. If that total still exceeds the opponent's score, the bet wins.
+- Moneyline bets (e.g. "Team ML" or just "Team"): The bet wins if the team wins the game outright.
 - Over/Under bets (e.g. "OVER 220.5"): If the total combined score is over the number, an OVER bet wins. If under, an UNDER bet wins.
 
-Response format must be ONLY a JSON array of objects with ABSOLUTELY NO ADDITIONAL TEXT before or after the array. Each object must have these exact fields:
-- 'pick': The original pick text as provided 
-- 'league': The league (NBA, NHL, MLB) exactly as provided in the pick
-- 'result': Whether the pick 'won', 'lost', 'push'
-- 'final_score': The final score
-- 'matchup': Team A vs Team B from the game scores
+Format your response ONLY as a JSON array with these properties for each pick:
+[
+  {
+    "pick": "exact original pick text",
+    "league": "league (NBA, MLB, NHL)",
+    "result": "won/lost/push",
+    "final_score": "AwayTeam Score - HomeTeam Score",
+    "matchup": "AwayTeam @ HomeTeam"
+  }
+]
 
-IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not previous batches. Response ID: ${cacheKey}`;
+Include ONLY the picks from this batch. Provide detailed final scores to show how you determined the result.`;
         
-        console.log(`Sending batch ${i/BATCH_SIZE + 1} (${batchPicks.length} picks) to OpenAI for evaluation`);
+        // Use OpenAI to evaluate picks
+        console.log(`Sending batch ${batchNumber} (${batchPicks.length} picks) to OpenAI for evaluation`);
+        const response = await openaiService.generateResponse(prompt, {
+          temperature: 0.1,
+          max_tokens: 1000,
+          model: 'gpt-4'
+        });
         
-        try {
-          // Use OpenAI instead of Perplexity for better JSON handling and reliability
-          const responseText = await openaiService.generateResponse([{
-            role: 'user',
-            content: prompt
-          }], {
-            model: 'gpt-3.5-turbo-1106', // Use a model with JSON mode capability
-            temperature: 0.1, // Low temperature for more deterministic responses
-            maxTokens: 1000 // Note the camelCase format to match the API
+        // Extract JSON from OpenAI response
+        const batchResults = extractJsonFromText(response);
+        
+        if (!batchResults || !Array.isArray(batchResults) || batchResults.length === 0) {
+          console.error(`Batch ${batchNumber} produced no valid results`);
+          continue;
+        }
+        
+        // Extract the core text from a pick for comparison
+        function extractPickText(pickString) {
+          if (!pickString) return '';
+          // Extract the team name or OVER/UNDER part
+          const pattern = /(OVER|UNDER|\w+\s+\w+)(\s+[+-]?\d+(\.\d+)?)?/i;
+          const match = pickString.match(pattern);
+          return match ? match[0] : pickString;
+        }
+
+        // Verify batch results match our original picks
+        // This ensures we haven't received results for the wrong batch
+        const batchResultsValid = batchResults.every(result => {
+          if (!result.pick) return false;
+          
+          const pickText = extractPickText(result.pick);
+          if (!pickText) return false;
+          
+          // Check if this pick text exists in any of the original picks for this batch
+          return batchPicks.some(originalPick => {
+            const originalPickText = originalPick.pick || originalPick.bet;
+            return originalPickText && originalPickText.includes(pickText);
           });
-          if (!responseText) {
-            console.error(`No response from OpenAI for batch ${i/BATCH_SIZE + 1}`);
-            continue; // Skip to the next batch if there's no response
-          }
-          
-          // Parse the results from the response
-          const batchResults = extractJsonFromText(responseText);
-          
-          if (!batchResults || batchResults.length === 0) {
-            console.log(`No valid results parsed from OpenAI response for batch ${i/BATCH_SIZE + 1}`);
-          } else {
-            // Verify these results are for the current batch by checking pick content
-            // Helper function to extract the core text from a pick
-            function extractPickText(pickString) {
-              if (!pickString) return '';
-              // Extract the team name or OVER/UNDER part
-              const pattern = /(OVER|UNDER|\w+\s+\w+)(\s+[+-]?\d+(\.\d+)?)?/i;
-              const match = pickString.match(pattern);
-              return match ? match[0] : pickString;
-            }
-
-            // Checking that the pick content is a subString of the original pick to ensure this is the right batch
-            const batchResultsValid = batchResults.every(result => {
-              // Find the corresponding pick 
-              // If there's no pick property, consider it invalid
-              if (!result.pick) return false;
-
-              const pickText = extractPickText(result.pick);
-              if (!pickText) return false;
-              // Check if this pick text exists in any of the original picks for this batch
-              return batchPicks.some(pick => pick.pick && pick.pick.includes(pickText));
-            });
-            
-            if (batchResultsValid) {
-              console.log(`Successfully validated ${batchResults.length} results from batch ${i/BATCH_SIZE + 1}`);
-              allResults.push(...batchResults);
-            } else {
-              console.log(`Skipping invalid results for batch ${i/BATCH_SIZE + 1}`);
-            }
-            
-            // Add a short delay between batches to avoid rate limiting
-            if (i + BATCH_SIZE < picks.length) {
-              console.log('Waiting 2 seconds before processing next batch...');
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-          }
-        } catch (batchError) {
-          console.error(`Error evaluating batch ${i/BATCH_SIZE + 1}:`, batchError);
-          // Continue with the next batch even if this one failed
+        });
+        
+        if (!batchResultsValid) {
+          console.error(`Batch ${batchNumber} results don't match the sent picks`);
+          continue;
+        }
+        
+        console.log(`Successfully validated ${batchResults.length} results from batch ${batchNumber}`);
+        
+        // Store the valid results
+        allResults.push(...batchResults);
+        
+        // Add a short delay between batches to avoid rate limiting
+        if (i + BATCH_SIZE < picks.length) {
+          console.log('Waiting 2 seconds before processing next batch...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
       console.log(`Total results across all batches: ${allResults.length}`);
+      
+      // Return all collected results
       return allResults;
     } catch (error) {
       console.error('Error evaluating picks:', error);
@@ -567,10 +577,16 @@ IMPORTANT: ONLY include picks from THIS BATCH (batch ${i/BATCH_SIZE + 1}) not pr
       // Step 2: Check results for those picks
       const resultsResponse = await resultsCheckerService.checkResults(picksResponse.date);
       
+      // Validate results to ensure all picks were processed
+      if (resultsResponse.success && resultsResponse.results) {
+        if (resultsResponse.results.length < picksResponse.data.length) {
+          console.warn(`WARNING: Only processed ${resultsResponse.results.length} results out of ${picksResponse.data.length} picks`);
+        }
+      }
+      
       // Optionally record performance stats
       if (resultsResponse.success && resultsResponse.results && resultsResponse.results.length > 0) {
         try {
-          // Check if the function exists before calling it
           if (typeof garyPerformanceService.recordPickResults === 'function') {
             // Pass both the date and results array to the recordPickResults function
             await garyPerformanceService.recordPickResults(picksResponse.date, resultsResponse.results);
