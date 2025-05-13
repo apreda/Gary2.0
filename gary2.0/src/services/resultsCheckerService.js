@@ -373,20 +373,24 @@ export const resultsCheckerService = {
         // Format picks for prompt with more details
         const picksText = batchPicks.map((pick, index) => {
           const teamInfo = pick.homeTeam && pick.awayTeam ? `${pick.awayTeam} @ ${pick.homeTeam}` : '';
-          const betValue = pick.bet || pick.pick;
-          return `${i+index+1}. ${betValue} (${teamInfo}) - League: ${pick.league || 'Unknown'}`;
+          return `${index + 1}. ${pick.pick || pick} ${teamInfo ? `(${teamInfo})` : ''}`;
         }).join('\n');
         
         // Create the prompt for evaluation with improved betting rules explanation
-        const prompt = `You are a sports betting analyst evaluating results of picks. Request ID: ${Math.random().toString().substring(2, 8)}
+        const prompt = `Based ONLY on the following game scores from ${date}, evaluate these betting picks and determine if they won or lost:
 
-📊 ACTUAL GAME RESULTS for ${date}:
+GAME SCORES:
 ${finalScoresText}
 
-🎲 BETTING PICKS TO EVALUATE:
+PICKS TO EVALUATE:
 ${picksText}
 
-For each numbered pick, determine if it won, lost, or pushed based on these betting rules:
+IMPORTANT INSTRUCTIONS:
+1. ONLY use the exact scores listed above to evaluate picks
+2. ONLY return scores that match what we provided
+3. If a game is not listed in the scores, return result="no_game" and final_score="Game not found"
+
+Evaluate each pick based on these rules:
 
 Betting Rules:
 - Spread bets with positive spread (e.g. "Team +3.5"): ADD the spread to the team's final score. If that total exceeds the opponent's score, the bet wins.
@@ -539,8 +543,15 @@ recordResults: async (pickId, results, date, scores) => {
           finalScore === 'N/A' ||
           finalScore === 'EMPTY' ||
           finalScore.includes('No game') ||
-          finalScore.includes('No score')) {
+          finalScore.includes('Game not found') ||
+          finalScore.includes('No score') ||
+          resultValue === 'no_game') {
         finalScore = null;
+      }
+      
+      // Make sure we store a proper result value even if OpenAI can't find the game
+      if (resultValue === 'no_game') {
+        resultValue = 'push';
       }
       
       // Fix incorrect 'push' results when we have actual scores
