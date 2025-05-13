@@ -581,7 +581,7 @@ recordResults: async (pickId, results, date) => {
     console.error('Error recording results:', err);
     throw err;
   }
-}
+},
   /**
    * Check results for picks from a specific date
    * @param {string} date - Date in YYYY-MM-DD format
