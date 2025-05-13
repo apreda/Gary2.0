@@ -258,11 +258,31 @@ export const resultsCheckerService = {
           
           console.log(`Found ${events.length} games for ${league.name}`);
           
+          // Log a sample event for debugging
+          if (events.length > 0) {
+            console.log(`Sample event data for ${league.name}:`, JSON.stringify(events[0], null, 2));
+          }
+
           // Process each event to get the scores
           events.forEach(event => {
-            if ((event.strStatus === 'FT' || event.strStatus === 'Match Finished') && event.intHomeScore && event.intAwayScore) {
+            // Check if the game is finished and has scores (allow 0 scores)
+            const isFinished = event.strStatus === 'FT' || 
+                               event.strStatus === 'Match Finished' || 
+                               event.strStatus === 'Final' || 
+                               event.strStatus?.includes('finish');
+
+            const hasScores = event.intHomeScore !== undefined && 
+                              event.intHomeScore !== null && 
+                              event.intAwayScore !== undefined && 
+                              event.intAwayScore !== null;
+
+            if (isFinished && hasScores) {
               // Create a unique key for this matchup
               const matchup = `${event.strAwayTeam} @ ${event.strHomeTeam}`;
+              
+              // Parse scores safely handling zero scores
+              const homeScore = parseInt(event.intHomeScore, 10);
+              const awayScore = parseInt(event.intAwayScore, 10);
               
               // Add to the scores object with detailed score information
               scores[matchup] = {
@@ -270,12 +290,16 @@ export const resultsCheckerService = {
                 league: league.name,
                 homeTeam: event.strHomeTeam,
                 awayTeam: event.strAwayTeam,
-                homeScore: parseInt(event.intHomeScore, 10),
-                awayScore: parseInt(event.intAwayScore, 10),
+                homeScore: homeScore,
+                awayScore: awayScore,
                 scoreText: `${event.strAwayTeam} ${event.intAwayScore} - ${event.strHomeTeam} ${event.intHomeScore}`,
-                winner: parseInt(event.intHomeScore, 10) > parseInt(event.intAwayScore, 10) ? 'home' : 'away',
-                totalScore: parseInt(event.intHomeScore, 10) + parseInt(event.intAwayScore, 10)
+                winner: homeScore > awayScore ? 'home' : (awayScore > homeScore ? 'away' : 'tie'),
+                totalScore: homeScore + awayScore,
+                status: event.strStatus
               };
+            } else if (isFinished) {
+              console.warn(`Game ${event.strAwayTeam} @ ${event.strHomeTeam} is finished but missing scores:`, 
+                          event.intHomeScore, event.intAwayScore);
             }
           });
         } catch (leagueError) {
@@ -311,8 +335,13 @@ export const resultsCheckerService = {
       // Format game scores for the prompt (used in all batches)
       // Include detailed score information for OpenAI to accurately determine winners
       const scoresText = Object.values(scores)
-        .map(game => `${game.league}: ${game.scoreText} (${game.awayTeam} ${game.awayScore} - ${game.homeTeam} ${game.homeScore})`)
+        .map(game => `${game.league}: ${game.awayTeam} ${game.awayScore} - ${game.homeTeam} ${game.homeScore}`)
         .join('\n');
+        
+      // If no scores found, make it explicit in the prompt
+      const finalScoresText = scoresText.length > 0 
+        ? scoresText 
+        : 'No completed game scores available for this date. Treat all picks as "push" with "No score provided" as the final score.';
       
       // Process picks in smaller batches to ensure all picks get evaluated
       const BATCH_SIZE = 2; // Process just 2 picks at a time to ensure completeness
@@ -338,7 +367,7 @@ export const resultsCheckerService = {
         const prompt = `You are a sports betting analyst evaluating results of picks. Request ID: ${Math.random().toString().substring(2, 8)}
 
 📊 ACTUAL GAME RESULTS for ${date}:
-${scoresText}
+${finalScoresText}
 
 🎲 BETTING PICKS TO EVALUATE:
 ${picksText}
@@ -438,107 +467,121 @@ Include ONLY the picks from this batch. Provide detailed final scores to show ho
   },
   
   /**
-   * Record results in the game_results table
-   * @param {string} pickId - ID of the daily_picks record
-   * @param {Array} results - Array of evaluated pick results
-   * @returns {Promise<Array>} Inserted records
-   */
-  recordResults: async (pickId, results, date) => {
-    try {
-      console.log(`Recording ${results.length} results for pick ID ${pickId}`);
-      // Log the full incoming results data for debugging
-      console.log('Raw results to insert:', JSON.stringify(results, null, 2));
+ * Record results in the game_results table
+ * @param {string} pickId - ID of the daily_picks record
+ * @param {Array} results - Array of evaluated pick results
+ * @returns {Promise<Array>} Inserted records
+ */
+recordResults: async (pickId, results, date) => {
+  try {
+    console.log(`Recording ${results.length} results for pick ID ${pickId}`);
+    // Log the full incoming results data for debugging
+    console.log('Raw results to insert:', JSON.stringify(results, null, 2));
+    
+    // Format results for insert with null values for missing data instead of empty strings
+    let recordsToInsert = results.map(result => {
+      // Fix result values - only accept known values
+      let resultValue = result.result || null;
+      if (resultValue && !['won', 'lost', 'push'].includes(resultValue.toLowerCase())) {
+        resultValue = null;
+      }
       
-      // Format results for insert
-      let recordsToInsert = results.map(result => ({
+      // Check if the final score is actually missing data
+      let finalScore = result.final_score || result.score || null;
+      if (finalScore && (finalScore.includes('No score provided') || 
+                         finalScore.includes('No game played') || 
+                         finalScore === 'EMPTY')) {
+        finalScore = null;
+      }
+      
+      return {
         pick_id: pickId,
         game_date: date,
-        league: result.league || '',
-        result: result.result || 'unknown',
-        final_score: result.final_score || result.score || '', // Support both new and old field names
-        pick_text: result.pick || '',
-        // Use provided matchup or extract from score
-        matchup: result.matchup || (result.final_score ? result.final_score.split(' - ')[0].split(' ').slice(0, -1).join(' ') + ' @ ' + 
-                                                       result.final_score.split(' - ')[1].split(' ').slice(0, -1).join(' ') : '')
-      }));
+        league: result.league || null,
+        result: resultValue,
+        final_score: finalScore,
+        pick_text: result.pick || null,
+        matchup: result.matchup || null
+      };
+    });
+    
+    // Print exact format of records we're inserting for debugging
+    console.log('Formatted records for Supabase:', JSON.stringify(recordsToInsert, null, 2));
       
-      // Print exact format of records we're inserting for debugging
-      console.log('Formatted records for Supabase:', JSON.stringify(recordsToInsert, null, 2));
+    try {
+      // Check for existing results to avoid duplicates
+      const { data: existingData, error: queryError } = await supabase
+        .from('game_results')
+        .select('id, pick_id, matchup')
+        .eq('game_date', date)
+        .eq('pick_id', pickId);
         
-      try {
-        // Check for existing results using pick_id AND matchup as compound key to avoid duplicates
-        const { data: existingData, error: queryError } = await supabase
-          .from('game_results')
-          .select('id, pick_id, matchup')
-          .eq('game_date', date)
-          .eq('pick_id', pickId)
-          .in('matchup', recordsToInsert.map(r => r.matchup));
-          
-        if (queryError) {
-          console.error('Error checking existing results:', queryError);
-          throw new Error(`Database query error: ${queryError.message}`);
-        }
-          
-        if (existingData && existingData.length > 0) {
-          console.log(`Found ${existingData.length} existing results for these picks, skipping those`);
-          // Filter out picks that already have results
-          const existingPickIds = existingData.map(d => d.pick_id);
-          const existingMatchups = existingData.map(d => d.matchup);
-          const filteredRecordsToInsert = recordsToInsert.filter(r => 
-            !(existingPickIds.includes(r.pick_id) && existingMatchups.includes(r.matchup))
-          );
-          // Insert new results with explicit created_at and updated_at timestamps
-          const timestamp = new Date().toISOString();
-          const recordsWithTimestamps = filteredRecordsToInsert.map(record => ({
-            ...record,
-            created_at: timestamp,
-            updated_at: timestamp
-          }));
-          
-          const { data, error } = await adminSupabase
-            .from('game_results')
-            .insert(recordsWithTimestamps)
-            .select();
-          
-          if (error) {
-            console.error('Database error inserting results:', error);
-            throw new Error(`Error inserting results: ${error.message}`);
-          }
-          
-          console.log(`Successfully recorded ${data.length} results`);
-          return data;
-        } else {
-          // Insert new results with explicit created_at and updated_at timestamps
-          const timestamp = new Date().toISOString();
-          const recordsWithTimestamps = recordsToInsert.map(record => ({
-            ...record,
-            created_at: timestamp,
-            updated_at: timestamp
-          }));
-          
-          const { data, error } = await adminSupabase
-            .from('game_results')
-            .insert(recordsWithTimestamps)
-            .select();
-          
-          if (error) {
-            console.error('Database error inserting results:', error);
-            throw new Error(`Error inserting results: ${error.message}`);
-          }
-          
-          console.log(`Successfully recorded ${data.length} results`);
-          return data;
-        }
-      } catch (dbError) {
-        console.error('Error in database operation:', dbError);
-        throw dbError;
+      if (queryError) {
+        console.error('Error checking existing results:', queryError);
+        throw new Error(`Database query error: ${queryError.message}`);
       }
-    } catch (error) {
-      console.error('Error recording results:', error);
-      return [];
+        
+      if (existingData && existingData.length > 0) {
+        console.log(`Found ${existingData.length} existing results for these picks, skipping those`);
+        // Filter out picks that already have results
+        const existingMatchups = existingData.map(d => d.matchup);
+        const filteredRecordsToInsert = recordsToInsert.filter(r => 
+          !(r.matchup && existingMatchups.includes(r.matchup))
+        );
+        
+        // Insert new results with explicit created_at and updated_at timestamps
+        const timestamp = new Date().toISOString();
+        const recordsWithTimestamps = filteredRecordsToInsert.map(record => ({
+          ...record,
+          created_at: timestamp,
+          updated_at: timestamp
+        }));
+        
+        const { data, error } = await supabase
+          .from('game_results')
+          .insert(recordsWithTimestamps)
+          .select();
+        
+        if (error) {
+          console.error('Database error inserting results:', error);
+          throw new Error(`Error inserting results: ${error.message}`);
+        }
+        
+        console.log(`Successfully recorded ${data.length} results`);
+        console.log('Supabase response:', JSON.stringify(data, null, 2));
+        return data;
+      } else {
+        // Insert new results with explicit created_at and updated_at timestamps
+        const timestamp = new Date().toISOString();
+        const recordsWithTimestamps = recordsToInsert.map(record => ({
+          ...record,
+          created_at: timestamp,
+          updated_at: timestamp
+        }));
+        
+        const { data, error } = await supabase
+          .from('game_results')
+          .insert(recordsWithTimestamps)
+          .select();
+        
+        if (error) {
+          console.error('Database error inserting results:', error);
+          throw new Error(`Error inserting results: ${error.message}`);
+        }
+        
+        console.log(`Successfully recorded ${data.length} results`);
+        console.log('Supabase response:', JSON.stringify(data, null, 2));
+        return data;
+      }
+    } catch (err) {
+      console.error('Database error:', err);
+      throw err;
     }
-  },
-  
+  } catch (err) {
+    console.error('Error recording results:', err);
+    throw err;
+  }
+}
   /**
    * Check results for picks from a specific date
    * @param {string} date - Date in YYYY-MM-DD format
