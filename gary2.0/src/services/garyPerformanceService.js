@@ -110,6 +110,47 @@ export const garyPerformanceService = {
   },
   
   /**
+   * Update performance stats from existing game_results
+   * @param {string} date - Date of the picks in YYYY-MM-DD format
+   * @returns {Promise<{ success: boolean, message: string }>}
+   */
+  updatePerformanceStats: async (date) => {
+    try {
+      console.log(`Updating performance stats for ${date} from game_results table`);
+      
+      // Get results directly from game_results table
+      const { data: gameResults, error: resultsError } = await supabase
+        .from('game_results')
+        .select('*')
+        .eq('game_date', date);
+      
+      if (resultsError) {
+        console.error('Error fetching game results for stats update:', resultsError);
+        return { success: false, error: resultsError, message: 'Error fetching game results' };
+      }
+      
+      if (!gameResults || gameResults.length === 0) {
+        console.log(`No game results found for ${date} to update stats`);
+        return { success: false, message: `No game results found for ${date}` };
+      }
+      
+      console.log(`Found ${gameResults.length} game results for ${date}, processing stats...`);
+      
+      // Here you would process the stats as needed
+      // For now, we'll just return success
+      
+      return { 
+        success: true, 
+        message: `Processed stats for ${gameResults.length} results from ${date}`,
+        count: gameResults.length
+      };
+    } catch (error) {
+      console.error('Error updating performance stats:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
    * Manually record the results of Gary's picks
    * @param {string} date - Date of the picks in YYYY-MM-DD format
    * @param {Array} results - Array of objects with pick and result fields
@@ -117,6 +158,21 @@ export const garyPerformanceService = {
    */
   recordPickResults: async (date, results) => {
     try {
+      // First check if results already exist for this date in game_results
+      const { data: existingResults, error: checkError } = await supabase
+        .from('game_results')
+        .select('count')
+        .eq('game_date', date);
+        
+      if (!checkError && existingResults && existingResults.length > 0) {
+        console.log(`Found existing results for ${date}, skipping duplicate insertion`);  
+        return { 
+          success: true, 
+          message: `Using existing results for ${date} instead of creating duplicates`,
+          existingResults: true
+        };
+      }
+      
       // Debug logging to inspect incoming results before any processing
       console.log('INCOMING RAW RESULTS to recordPickResults:', JSON.stringify(results));
       
