@@ -226,6 +226,98 @@ export const resultsCheckerService = {
   },
   
   /**
+   * Get scores for games from Perplexity API by searching league websites
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Object>} Game scores mapped by matchup
+   */
+  getScoresFromPerplexity: async (date) => {
+    try {
+      // Format date in a reader-friendly way for the query
+      const dateObj = new Date(date);
+      const formattedDate = dateObj.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      console.log(`Getting scores from Perplexity for ${formattedDate}`);
+      
+      // League-specific URLs for scores
+      const urls = [
+        'https://www.mlb.com/scores',           // MLB scores
+        'https://www.nba.com/scores',           // NBA scores
+        'https://www.nhl.com/scores',           // NHL scores
+        'https://www.espn.com/mlb/scoreboard',  // ESPN MLB scores
+        'https://www.espn.com/nba/scoreboard',  // ESPN NBA scores
+        'https://www.espn.com/nhl/scoreboard'   // ESPN NHL scores
+      ];
+      
+      const query = `Please list every NBA, MLB, and NHL game played on ${formattedDate} and its final score. For each game, specify: 1) The league (NBA, MLB, or NHL), 2) The exact teams that played using their full team names, 3) The final score. Format your answer as a list with one game per line. Each line should follow this format exactly: "[LEAGUE] [AWAY TEAM] @ [HOME TEAM]: [AWAY SCORE]-[HOME SCORE]". Only include games that have completed with final scores.`;
+      
+      // Call Perplexity API
+      const response = await perplexityService.fetchRealTimeInfo(query, {
+        model: 'sonar-small-online',
+        maxTokens: 500,
+        sources: urls
+      });
+      
+      console.log('Raw Perplexity response:', response);
+      
+      // Parse the response to extract scores
+      const scores = {};
+      
+      // Split response into lines and process each line
+      const lines = response.split('\n').filter(line => line.trim() !== '');
+      
+      console.log(`Found ${lines.length} potential games in Perplexity response`);
+      
+      for (const line of lines) {
+        // Parse lines in format "[LEAGUE] [AWAY TEAM] @ [HOME TEAM]: [AWAY SCORE]-[HOME SCORE]"
+        const match = line.match(/([A-Z]+)\s+(.+?)\s+@\s+(.+?):\s*(\d+)-(\d+)/i);
+        
+        if (match) {
+          const [_, league, awayTeam, homeTeam, awayScore, homeScore] = match;
+          
+          // Normalize team names by trimming whitespace
+          const normalizedAwayTeam = awayTeam.trim();
+          const normalizedHomeTeam = homeTeam.trim();
+          
+          // Create matchup key
+          const matchup = `${normalizedAwayTeam} @ ${normalizedHomeTeam}`;
+          
+          // Convert scores to integers
+          const awayScoreNum = parseInt(awayScore, 10);
+          const homeScoreNum = parseInt(homeScore, 10);
+          
+          // Add to scores object
+          scores[matchup] = {
+            matchup,
+            league: league.trim().toUpperCase(),
+            homeTeam: normalizedHomeTeam,
+            awayTeam: normalizedAwayTeam,
+            homeScore: homeScoreNum,
+            awayScore: awayScoreNum,
+            score: `${normalizedAwayTeam} ${awayScoreNum} - ${normalizedHomeTeam} ${homeScoreNum}`,
+            scoreText: `${normalizedAwayTeam} ${awayScoreNum} - ${normalizedHomeTeam} ${homeScoreNum}`,
+            winner: homeScoreNum > awayScoreNum ? 'home' : (awayScoreNum > homeScoreNum ? 'away' : 'tie'),
+            totalScore: homeScoreNum + awayScoreNum,
+            status: 'Final',
+            source: 'Perplexity'
+          };
+          
+          console.log(`Parsed score from Perplexity: ${matchup} = ${awayScoreNum}-${homeScoreNum}`);
+        }
+      }
+      
+      return scores;
+    } catch (error) {
+      console.error('Error getting scores from Perplexity:', error);
+      return {};
+    }
+  },
+  
+  /**
    * Get sports events and scores for a specific date
    * @param {string} date - Date in YYYY-MM-DD format
    * @returns {Promise<Object>} Game scores mapped by matchup
@@ -292,10 +384,12 @@ export const resultsCheckerService = {
                 awayTeam: event.strAwayTeam,
                 homeScore: homeScore,
                 awayScore: awayScore,
+                score: `${event.strAwayTeam} ${event.intAwayScore} - ${event.strHomeTeam} ${event.intHomeScore}`,
                 scoreText: `${event.strAwayTeam} ${event.intAwayScore} - ${event.strHomeTeam} ${event.intHomeScore}`,
                 winner: homeScore > awayScore ? 'home' : (awayScore > homeScore ? 'away' : 'tie'),
                 totalScore: homeScore + awayScore,
-                status: event.strStatus
+                status: event.strStatus,
+                source: 'TheSportsDB'
               };
             } else if (isFinished) {
               console.warn(`Game ${event.strAwayTeam} @ ${event.strHomeTeam} is finished but missing scores:`, 
@@ -308,9 +402,30 @@ export const resultsCheckerService = {
       }
       
       const gameCount = Object.keys(scores).length;
-      console.log(`Found a total of ${gameCount} games with scores`);
+      console.log(`Found a total of ${gameCount} games with scores from TheSportsDB`);
       
-      if (gameCount === 0) {
+      // If we didn't get enough scores, use Perplexity API as a fallback
+      if (gameCount < 3) {
+        console.log('Using Perplexity as fallback to get game scores...');
+        try {
+          const perplexityScores = await resultsCheckerService.getScoresFromPerplexity(date);
+          console.log(`Got ${Object.keys(perplexityScores).length} scores from Perplexity`);
+          
+          // Merge the scores from Perplexity with any existing scores
+          Object.keys(perplexityScores).forEach(matchup => {
+            if (!scores[matchup]) {
+              scores[matchup] = perplexityScores[matchup];
+            }
+          });
+        } catch (perplexityError) {
+          console.error('Error getting scores from Perplexity:', perplexityError);
+        }
+      }
+      
+      const finalGameCount = Object.keys(scores).length;
+      console.log(`Final total: ${finalGameCount} games with scores`);
+      
+      if (finalGameCount === 0) {
         console.warn('No games with scores found - results checking may fail');
       }
       
@@ -713,7 +828,7 @@ recordResults: async (pickId, results, date, scores) => {
         return picksResponse; // Return the error message
       }
       
-      // Step 2: Check results for those picks
+      // Step 2: Check results for those picks and record them in game_results table
       const resultsResponse = await resultsCheckerService.checkResults(picksResponse.date);
       
       // Validate results to ensure all picks were processed
@@ -723,12 +838,12 @@ recordResults: async (pickId, results, date, scores) => {
         }
       }
       
-      // Optionally record performance stats
+      // Update performance stats using the results that were already recorded
       if (resultsResponse.success && resultsResponse.results && resultsResponse.results.length > 0) {
         try {
-          if (typeof garyPerformanceService.recordPickResults === 'function') {
-            // Pass both the date and results array to the recordPickResults function
-            await garyPerformanceService.recordPickResults(picksResponse.date, resultsResponse.results);
+          if (typeof garyPerformanceService.updatePerformanceStats === 'function') {
+            // Only pass the date - the function will query game_results directly
+            await garyPerformanceService.updatePerformanceStats(picksResponse.date);
             console.log('Successfully updated performance stats');
           } else {
             console.log('Performance stats update skipped - function not available');
