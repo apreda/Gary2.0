@@ -106,7 +106,7 @@ const picksService = {
                 const confidence = pick.rawAnalysis.rawOpenAIOutput.confidence || 0;
                 console.log('Pick generated with confidence:', confidence);
                 
-                if (confidence >= 0.75) {
+                if (confidence >= 0.6) {
                   allPicks.push(pick);
                   console.log('Success! Pick added:', pick.rawAnalysis.rawOpenAIOutput.pick || 'No pick text');
                 } else {
