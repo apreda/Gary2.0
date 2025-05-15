@@ -1,27 +1,52 @@
 /**
  * Ball Don't Lie API Service
  * Provides access to detailed MLB and NBA statistics for betting analysis
- * MLB API: https://www.balldontlie.io/docs/mlb/
- * NBA API: https://www.balldontlie.io/docs/
+ * Using official @balldontlie/sdk
  */
-import axios from 'axios';
+import { BalldontlieAPI } from '@balldontlie/sdk';
 
-// API configuration
-const MLB_API_BASE_URL = 'https://api.balldontlie.io/mlb/v1';
-const NBA_API_BASE_URL = 'https://api.balldontlie.io/v1';
+// Initialize the API client with our API key
 const API_KEY = '3363660a-a082-43b7-a130-6249ff68e5ab'; // GOAT plan
+const api = new BalldontlieAPI({ apiKey: API_KEY });
 
-// Levenshtein distance for name similarity
+// Cache for API responses
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
+// Helper function to get data from cache or fetch it
+async function getCachedOrFetch(cacheKey, fetchFn) {
+  const now = Date.now();
+  const cached = cache.get(cacheKey);
+  
+  if (cached && (now - cached.timestamp < CACHE_TTL)) {
+    console.log(`[CACHE HIT] ${cacheKey}`);
+    return cached.data;
+  }
+  
+  console.log(`[CACHE MISS] ${cacheKey}`);
+  try {
+    const data = await fetchFn();
+    cache.set(cacheKey, { data, timestamp: now });
+    return data;
+  } catch (error) {
+    console.error(`Error in getCachedOrFetch for ${cacheKey}:`, error.message);
+    // Return cached data even if it's stale if there's an error
+    if (cached) {
+      console.log(`Returning stale cache data for ${cacheKey}`);
+      return cached.data;
+    }
+    throw error;
+  }
+}
+
+// Levenshtein distance for name similarity (kept for backward compatibility)
 function levenshteinDistance(a, b) {
   const matrix = [];
-
+  if (!a || !b) return Math.max(a?.length || 0, b?.length || 0);
+  
   // Initialize matrix
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
 
   // Fill matrix
   for (let i = 1; i <= b.length; i++) {
@@ -44,6 +69,12 @@ export const ballDontLieService = {
    * @returns {string} - The API key
    */
   getApiKey: () => API_KEY,
+  
+  /**
+   * Get the API client instance
+   * @returns {BalldontlieAPI} - The API client instance
+   */
+  getClient: () => api,
   /**
    * Initialize the service
    */
@@ -64,33 +95,37 @@ export const ballDontLieService = {
    * @returns {Promise<Array>} - Array of active players
    */
   getActiveMLBPlayers: async (options = {}) => {
-    try {
-      console.log('Fetching active MLB players from Ball Don\'t Lie API');
-      
-      // Build URL and params
-      const url = `${MLB_API_BASE_URL}/players/active`;
-      const params = {
-        ...options,
-        per_page: options.per_page || 100 // Get more per page
-      };
-      
-      const response = await axios.get(url, {
-        params,
-        headers: {
-          'Authorization': API_KEY
+    const cacheKey = `mlb_players_${JSON.stringify(options)}`;
+    
+    const fetchFn = async () => {
+      try {
+        console.log('Fetching active MLB players from Ball Don\'t Lie API');
+        
+        const response = await fetch(
+          `${MLB_API_BASE_URL}/players/active?per_page=${options.per_page || DEFAULT_PER_PAGE}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${API_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      });
-      
-      if (response.data && response.data.data) {
-        console.log(`Found ${response.data.data.length} active MLB players`);
-        return response.data.data;
+        
+        const data = await response.json();
+        console.log(`Found ${data.data?.length || 0} active MLB players`);
+        return data.data || [];
+        
+      } catch (error) {
+        console.error('Error fetching active MLB players:', error);
+        throw error;
       }
-      
-      return [];
-    } catch (error) {
-      console.error('Error fetching active MLB players:', error.message);
-      return [];
-    }
+    };
+    
+    return getCachedOrFetch(cacheKey, fetchFn);
   },
   
   /**
@@ -99,33 +134,37 @@ export const ballDontLieService = {
    * @returns {Promise<Array>} - Array of active NBA players
    */
   getActiveNBAPlayers: async (options = {}) => {
-    try {
-      console.log('Fetching active NBA players from Ball Don\'t Lie API');
-      
-      // Build URL and params
-      const url = `${NBA_API_BASE_URL}/players/active`;
-      const params = {
-        ...options,
-        per_page: options.per_page || 100 // Get more per page
-      };
-      
-      const response = await axios.get(url, {
-        params,
-        headers: {
-          'Authorization': API_KEY
+    const cacheKey = `nba_players_${JSON.stringify(options)}`;
+    
+    const fetchFn = async () => {
+      try {
+        console.log('Fetching active NBA players from Ball Don\'t Lie API');
+        
+        const response = await fetch(
+          `${NBA_API_BASE_URL}/players/active?per_page=${options.per_page || DEFAULT_PER_PAGE}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${API_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      });
-      
-      if (response.data && response.data.data) {
-        console.log(`Found ${response.data.data.length} active NBA players`);
-        return response.data.data;
+        
+        const data = await response.json();
+        console.log(`Found ${data.data?.length || 0} active NBA players`);
+        return data.data || [];
+        
+      } catch (error) {
+        console.error('Error fetching active NBA players:', error);
+        throw error;
       }
-      
-      return [];
-    } catch (error) {
-      console.error('Error fetching active NBA players:', error.message);
-      return [];
-    }
+    };
+    
+    return getCachedOrFetch(cacheKey, fetchFn);
   },
   
   /**
@@ -149,7 +188,7 @@ export const ballDontLieService = {
    * @param {boolean} postseason - Whether to get postseason stats
    * @returns {Promise<Array>} - Array of player season stats
    */
-  getPlayerSeasonStats: async (season, playerIds = [], postseason = false) => {
+  getPlayerSeasonStats: async (season, playerIds = [], postseason = false, maxRetries = 1) => {
     try {
       if (!season) {
         throw new Error('Season is required for getPlayerSeasonStats');
@@ -170,18 +209,33 @@ export const ballDontLieService = {
           per_page: 100
         };
         
-        const response = await axios.get(url, {
-          params,
-          headers: {
-            'Authorization': API_KEY
+        try {
+          const response = await axios.get(url, {
+            params,
+            headers: {
+              'Authorization': API_KEY
+            }
+          });
+          
+          if (response.data && response.data.data && response.data.data.length > 0) {
+            return response.data.data;
           }
-        });
-        
-        if (response.data && response.data.data) {
-          return response.data.data;
+          
+          // If no data for current season and we haven't tried previous season yet
+          if (maxRetries > 0 && season > 2020) { // Ensure we don't go too far back
+            console.log(`No data found for ${season}, trying previous season...`);
+            return ballDontLieService.getPlayerSeasonStats(season - 1, playerIds, postseason, maxRetries - 1);
+          }
+          
+          return [];
+        } catch (error) {
+          // If 400 error and we haven't tried previous season yet
+          if (error.response?.status === 400 && maxRetries > 0 && season > 2020) {
+            console.log(`Error fetching stats for ${season}, trying previous season...`);
+            return ballDontLieService.getPlayerSeasonStats(season - 1, playerIds, postseason, maxRetries - 1);
+          }
+          throw error; // Re-throw if not a 400 or no retries left
         }
-        
-        return [];
       }
       
       // Process player IDs in batches
@@ -582,16 +636,6 @@ export const ballDontLieService = {
       return teamPlayers;
     } catch (error) {
       console.error(`Error fetching players for team "${teamIdentifier}": ${error.message}`);
-      throw error;
-    }
-  },
-  
-  /**
-   * Get season averages for multiple players
-   * @param {Array<number>} playerIds - Array of player IDs
-   * @param {number} season - Season year
-   * @returns {Promise<Object>} - Player season averages by ID
-   */
   getPlayerAverages: async (playerIds, season = new Date().getFullYear()) => {
     try {
       // Get the season stats for all these players
@@ -666,16 +710,16 @@ export const ballDontLieService = {
       let statsReport = 'VERIFIED PLAYER STATISTICS (FACTUAL DATA):\n\n';
       
       // For each player, generate a detailed stats section
-      playerIds.forEach(playerId => {
+      for (const playerId of playerIds) {
         const seasonData = seasonAverages[playerId];
         const recentData = recentGameStats[playerId];
         
         if (!seasonData && !recentData) {
-          return; // Skip players with no data
+          continue; // Skip players with no data
         }
         
         const player = (seasonData?.player || recentData?.player);
-        if (!player) return;
+        if (!player) continue;
         
         statsReport += `${player.name} (${player.position}, ${player.team}):\n`;
         
@@ -683,64 +727,164 @@ export const ballDontLieService = {
         if (seasonData) {
           statsReport += '  2024 Season Averages (VERIFIED):\n';
           
-          const battingStats = seasonData.batting;
-          const pitchingStats = seasonData.pitching;
+          const battingStats = seasonData.batting || {};
+          const pitchingStats = seasonData.pitching || {};
           
-          // Add batting stats
+          // Add batting stats if available
           if (battingStats.games_played > 0) {
-            statsReport += `  • Games Played: ${battingStats.games_played}\n`;
-            statsReport += `  • Batting Average: ${battingStats.avg.toFixed(3)}\n`;
-            statsReport += `  • OBP/SLG/OPS: ${battingStats.obp.toFixed(3)}/${battingStats.slg.toFixed(3)}/${battingStats.ops.toFixed(3)}\n`;
-            statsReport += `  • Home Runs: ${battingStats.hr}\n`;
-            statsReport += `  • RBI: ${battingStats.rbi}\n`;
-            statsReport += `  • Runs: ${battingStats.runs}\n`;
-            statsReport += `  • Hits: ${battingStats.hits}\n`;
-            statsReport += `  • Doubles/Triples: ${battingStats.doubles}/${battingStats.triples}\n`;
-            statsReport += `  • Stolen Bases: ${battingStats.sb}\n`;
+            statsReport += `  • Games Played: ${battingStats.games_played || 0}\n`;
+            if (battingStats.avg) statsReport += `  • Batting Average: ${battingStats.avg.toFixed(3)}\n`;
+            if (battingStats.obp || battingStats.slg || battingStats.ops) {
+              statsReport += `  • OBP/SLG/OPS: ${(battingStats.obp || 0).toFixed(3)}/${(battingStats.slg || 0).toFixed(3)}/${(battingStats.ops || 0).toFixed(3)}\n`;
+            }
+            if (battingStats.hr) statsReport += `  • Home Runs: ${battingStats.hr}\n`;
+            if (battingStats.rbi) statsReport += `  • RBI: ${battingStats.rbi}\n`;
+            if (battingStats.runs) statsReport += `  • Runs: ${battingStats.runs}\n`;
+            if (battingStats.hits) statsReport += `  • Hits: ${battingStats.hits}\n`;
+            if (battingStats.doubles || battingStats.triples) {
+              statsReport += `  • Doubles/Triples: ${battingStats.doubles || 0}/${battingStats.triples || 0}\n`;
+            }
+            if (battingStats.sb) statsReport += `  • Stolen Bases: ${battingStats.sb}\n`;
           }
           
-          // Add pitching stats
+          // Add pitching stats if available
           if (pitchingStats.games_played > 0) {
-            statsReport += `  • Pitching Record: ${pitchingStats.wins}-${pitchingStats.losses}\n`;
-            statsReport += `  • ERA: ${pitchingStats.era.toFixed(2)}\n`;
-            statsReport += `  • WHIP: ${pitchingStats.whip.toFixed(2)}\n`;
-            statsReport += `  • Innings Pitched: ${pitchingStats.innings}\n`;
-            statsReport += `  • Strikeouts: ${pitchingStats.strikeouts}\n`;
-            statsReport += `  • K/9: ${pitchingStats.k_per_9.toFixed(1)}\n`;
+            statsReport += `  • Pitching Record: ${pitchingStats.wins || 0}-${pitchingStats.losses || 0}\n`;
+            if (pitchingStats.era) statsReport += `  • ERA: ${pitchingStats.era.toFixed(2)}\n`;
+            if (pitchingStats.whip) statsReport += `  • WHIP: ${pitchingStats.whip.toFixed(2)}\n`;
+            if (pitchingStats.innings) statsReport += `  • Innings Pitched: ${pitchingStats.innings}\n`;
+            if (pitchingStats.strikeouts) statsReport += `  • Strikeouts: ${pitchingStats.strikeouts}\n`;
+            if (pitchingStats.k_per_9) statsReport += `  • K/9: ${pitchingStats.k_per_9.toFixed(1)}\n`;
           }
         }
         
         // Add recent game stats if available
-        if (recentData && recentData.games.length > 0) {
+        if (recentData?.games?.length > 0) {
           statsReport += '  Last 10 Games (VERIFIED):\n';
           
-          const recentStats = recentData.averages;
+          const recentStats = recentData.averages || {};
+          const recentBatting = recentStats.batting || {};
           
           // Batting stats for last 10 games
-          if (recentStats.batting.total_at_bats > 0) {
-            statsReport += `  • Recent At-Bats: ${recentStats.batting.total_at_bats}\n`;
-            statsReport += `  • Recent Hits: ${recentStats.batting.total_hits}\n`;
-            statsReport += `  • Recent Average: ${recentStats.batting.batting_avg.toFixed(3)}\n`;
-            statsReport += `  • Recent HR: ${recentStats.batting.total_hr}\n`;
-            statsReport += `  • Recent RBI: ${recentStats.batting.total_rbi}\n`;
-          }
-          
-          // Pitching stats for last 10 games
-          if (recentStats.pitching.total_ip > 0) {
-            statsReport += `  • Recent IP: ${recentStats.pitching.total_ip.toFixed(1)}\n`;
-            statsReport += `  • Recent K: ${recentStats.pitching.total_k}\n`;
-            statsReport += `  • Recent ERA: ${recentStats.pitching.era.toFixed(2)}\n`;
+          if (recentBatting.total_at_bats > 0) {
+            statsReport += `  • Recent At-Bats: ${recentBatting.total_at_bats || 0}\n`;
+            statsReport += `  • Recent Hits: ${recentBatting.total_hits || 0}\n`;
+            statsReport += `  • Recent Average: ${(recentBatting.batting_avg || 0).toFixed(3)}\n`;
+            statsReport += `  • Recent HR: ${recentBatting.total_hr || 0}\n`;
+            statsReport += `  • Recent RBI: ${recentBatting.total_rbi || 0}\n`;
           }
         }
-        
         statsReport += '\n';
-      });
+      }
       
       return statsReport;
     } catch (error) {
       console.error(`Error generating player stats report: ${error.message}`);
       return 'Error: Unable to retrieve verified player statistics.';
     }
+  },
+  
+  /**
+   * Get players for a specific team
+   * @param {string} teamIdentifier - Team name, abbreviation, or city
+   * @returns {Promise<Array>} - Array of player objects
+   */
+  getTeamPlayers: async (teamIdentifier) => {
+    try {
+      console.log(`Fetching players for team: "${teamIdentifier}"`);
+      
+      // First, get all active players
+      const allPlayers = await ballDontLieService.getActivePlayers({ per_page: 100 });
+      
+      // Normalize team identifier for matching
+      const normalizedTeamId = teamIdentifier.toLowerCase().trim();
+      
+      // Filter players by team
+      const teamPlayers = allPlayers.filter(player => {
+        if (!player.team) return false;
+        
+        // Try to match by team name, abbreviation or city
+        return (
+          player.team.name?.toLowerCase().includes(normalizedTeamId) ||
+          player.team.abbreviation?.toLowerCase() === normalizedTeamId ||
+          player.team.city?.toLowerCase().includes(normalizedTeamId) ||
+          player.team.full_name?.toLowerCase().includes(normalizedTeamId)
+        );
+      });
+      
+      console.log(`Found ${teamPlayers.length} players on team "${teamIdentifier}"`);
+      return teamPlayers;
+    } catch (error) {
+      console.error(`Error fetching players for team "${teamIdentifier}": ${error.message}`);
+      throw error;
+    }
+  },
+  
+  /**
+   * Get season averages for multiple players
+   * @param {Array<number>} playerIds - Array of player IDs
+   * @param {number} season - Season year
+   * @returns {Promise<Object>} - Player season averages by ID
+   */
+  getPlayerAverages: async (playerIds, season = new Date().getFullYear()) => {
+    try {
+      // Get the season stats for all these players
+      const seasonStats = await ballDontLieService.getPlayerSeasonStats(season, playerIds);
+      
+      // Create a mapped object of player stats by player ID
+      const playerAverages = {};
+      
+      seasonStats.forEach(stat => {
+        if (!stat?.player?.id) return;
+        
+        const playerId = stat.player.id;
+        playerAverages[playerId] = {
+          player: {
+            id: stat.player.id,
+            name: stat.player.full_name,
+            position: stat.player.position,
+            team: stat.player.team?.display_name || stat.team_name
+          },
+          batting: {
+            games_played: stat.batting_gp || 0,
+            avg: stat.batting_avg || 0,
+            obp: stat.batting_obp || 0,
+            slg: stat.batting_slg || 0,
+            ops: stat.batting_ops || 0,
+            hr: stat.batting_hr || 0,
+            rbi: stat.batting_rbi || 0,
+            runs: stat.batting_r || 0,
+            sb: stat.batting_sb || 0,
+            hits: stat.batting_h || 0,
+            doubles: stat.batting_2b || 0,
+            triples: stat.batting_3b || 0,
+            bb: stat.batting_bb || 0,
+            so: stat.batting_so || 0
+          },
+          pitching: {
+            // Add any pitching stats if available
+          }
+        };
+      });
+      
+      return playerAverages;
+    } catch (error) {
+      console.error(`Error getting player averages: ${error.message}`);
+      return {};
+    }
+  },
+  
+  // Initialize on import
+  initialize: () => {
+    console.log('Initializing Ball Don\'t Lie API Service');
+    console.log(`Using @balldontlie/sdk v${require('@balldontlie/sdk/package.json').version}`);
+    console.log(`API key ${API_KEY ? 'is set' : 'is NOT set'}`);
+    if (API_KEY) {
+      console.log(`🔑 Ball Don't Lie API Key (masked): ${API_KEY.substring(0, 3)}...`);
+    } else {
+      console.error('❌ Ball Don\'t Lie API key is not set!');
+    }
+    return API_KEY !== '';
   }
 };
 
