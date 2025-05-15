@@ -359,7 +359,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
       try {
         // Get team season stats for current season
         const response = await axios.get(`https://api.balldontlie.io/mlb/v1/teams`, {
-          headers: { 'Authorization': ballDontLieService.API_KEY },
+          headers: { 'Authorization': ballDontLieService.getApiKey() },
           params: { per_page: 100 }
         });
         
@@ -380,7 +380,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
           if (homeTeamData) {
             // Get team season stats
             const homeTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
-              headers: { 'Authorization': ballDontLieService.API_KEY },
+              headers: { 'Authorization': ballDontLieService.getApiKey() },
               params: { 
                 season: new Date().getFullYear(),
                 team_id: homeTeamData.id,
@@ -398,7 +398,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
           if (awayTeamData) {
             // Get team season stats
             const awayTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
-              headers: { 'Authorization': ballDontLieService.API_KEY },
+              headers: { 'Authorization': ballDontLieService.getApiKey() },
               params: { 
                 season: new Date().getFullYear(),
                 team_id: awayTeamData.id,
@@ -418,7 +418,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             try {
               // Get team players
               const homePitchersResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/players`, {
-                headers: { 'Authorization': ballDontLieService.API_KEY },
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
                   team_ids: [enhancedStats.home.teamId],
                   per_page: 100
@@ -440,7 +440,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   // Try to get pitcher stats
                   try {
                     const pitcherStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/season_stats`, {
-                      headers: { 'Authorization': ballDontLieService.API_KEY },
+                      headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
                         season: new Date().getFullYear(),
                         player_ids: [topPitcher.id]
@@ -465,7 +465,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             try {
               // Get team players
               const awayPitchersResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/players`, {
-                headers: { 'Authorization': ballDontLieService.API_KEY },
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
                   team_ids: [enhancedStats.away.teamId],
                   per_page: 100
@@ -487,7 +487,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   // Try to get pitcher stats
                   try {
                     const pitcherStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/season_stats`, {
-                      headers: { 'Authorization': ballDontLieService.API_KEY },
+                      headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
                         season: new Date().getFullYear(),
                         player_ids: [topPitcher.id]
@@ -538,7 +538,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
       try {
         // Get all NBA teams
         const response = await axios.get(`https://api.balldontlie.io/v1/teams`, {
-          headers: { 'Authorization': ballDontLieService.API_KEY }
+          headers: { 'Authorization': ballDontLieService.getApiKey() }
         });
         
         if (response.data && response.data.data) {
@@ -564,7 +564,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             // Try to get team standings
             try {
               const standingsResponse = await axios.get(`https://api.balldontlie.io/v1/standings`, {
-                headers: { 'Authorization': ballDontLieService.API_KEY },
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { season: new Date().getFullYear() }
               });
               
@@ -592,7 +592,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             // Get key players for home team
             try {
               const playersResponse = await axios.get(`https://api.balldontlie.io/v1/players`, {
-                headers: { 'Authorization': ballDontLieService.API_KEY },
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
                   team_ids: [homeTeamData.id],
                   per_page: 25 // Get top players
@@ -614,7 +614,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   
                   try {
                     const statsResponse = await axios.get(`https://api.balldontlie.io/v1/season_averages/general`, {
-                      headers: { 'Authorization': ballDontLieService.API_KEY },
+                      headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
                         season: new Date().getFullYear(),
                         season_type: 'regular',
@@ -650,7 +650,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             // Try to get team standings
             try {
               const standingsResponse = await axios.get(`https://api.balldontlie.io/v1/standings`, {
-                headers: { 'Authorization': ballDontLieService.API_KEY },
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { season: new Date().getFullYear() }
               });
               
@@ -678,7 +678,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             // Get key players for away team
             try {
               const playersResponse = await axios.get(`https://api.balldontlie.io/v1/players`, {
-                headers: { 'Authorization': ballDontLieService.API_KEY },
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
                   team_ids: [awayTeamData.id],
                   per_page: 25 // Get top players
@@ -700,7 +700,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   
                   try {
                     const statsResponse = await axios.get(`https://api.balldontlie.io/v1/season_averages/general`, {
-                      headers: { 'Authorization': ballDontLieService.API_KEY },
+                      headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
                         season: new Date().getFullYear(),
                         season_type: 'regular',

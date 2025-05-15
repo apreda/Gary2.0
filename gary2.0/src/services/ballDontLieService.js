@@ -40,6 +40,11 @@ function levenshteinDistance(a, b) {
 
 export const ballDontLieService = {
   /**
+   * Get API key for external services
+   * @returns {string} - The API key
+   */
+  getApiKey: () => API_KEY,
+  /**
    * Initialize the service
    */
   initialize: () => {
