@@ -196,9 +196,9 @@ export default function GaryProps() {
                               </div>
                               
                               {/* Middle Content - Analysis */}
-                              <div style={{ flex: '1 1 auto', marginBottom: '0.5rem' }}>
+                              <div style={{ flex: '1 1 auto', marginBottom: '0' }}>
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
-                                <div style={{ fontSize: '0.85rem', lineHeight: 1.4, minHeight: '120px', maxHeight: '180px', overflow: 'auto', opacity: 0.9, padding: '0.25rem 0.5rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px', marginBottom: '0.25rem' }}>
+                                <div style={{ fontSize: '0.85rem', lineHeight: 1.4, minHeight: '120px', maxHeight: '200px', overflow: 'auto', opacity: 0.9, padding: '0.25rem 0.5rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px', marginBottom: '0' }}>
                                   {pick.rationale ? (
                                     <ul style={{ listStyleType: 'none', margin: 0, padding: 0 }}>
                                       {pick.rationale.split('. ')
