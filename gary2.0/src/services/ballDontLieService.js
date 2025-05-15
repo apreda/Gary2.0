@@ -184,4 +184,4 @@ const ballDontLieService = {
 // Initialize on import
 ballDontLieService.initialize();
 
-export default ballDontLieService;
+export { ballDontLieService };
