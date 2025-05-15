@@ -355,6 +355,11 @@ ${awayTeamStats.description?.substring(0, 100)}...
         startingPitchers: {}
       };
       
+      // Get current season and previous season for fallback
+      const currentYear = new Date().getFullYear();
+      const previousYear = currentYear - 1;
+      const season = currentYear; // Default to current season
+      
       // Attempt to get team stats
       try {
         // Get team season stats for current season
@@ -379,37 +384,49 @@ ${awayTeamStats.description?.substring(0, 100)}...
           
           if (homeTeamData) {
             // Get team season stats
-            const homeTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
-              headers: { 'Authorization': ballDontLieService.getApiKey() },
-              params: { 
-                season: new Date().getFullYear(),
-                team_id: homeTeamData.id,
-                postseason: false
+            try {
+              const homeTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
+                params: { 
+                  season: season, // Use determined season
+                  team_id: homeTeamData.id,
+                  postseason: false
+                }
+              });
+              
+              if (homeTeamStatsResponse.data && homeTeamStatsResponse.data.data && homeTeamStatsResponse.data.data[0]) {
+                enhancedStats.home.detailedStats = homeTeamStatsResponse.data.data[0];
+                enhancedStats.home.teamId = homeTeamData.id;
+                enhancedStats.home.league = `${homeTeamData.league} League ${homeTeamData.division} Division`;
               }
-            });
-            
-            if (homeTeamStatsResponse.data && homeTeamStatsResponse.data.data && homeTeamStatsResponse.data.data[0]) {
-              enhancedStats.home.detailedStats = homeTeamStatsResponse.data.data[0];
-              enhancedStats.home.teamId = homeTeamData.id;
-              enhancedStats.home.league = `${homeTeamData.league} League ${homeTeamData.division} Division`;
+            } catch (error) {
+              console.error(`Error getting home team stats: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
           }
           
           if (awayTeamData) {
             // Get team season stats
-            const awayTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
-              headers: { 'Authorization': ballDontLieService.getApiKey() },
-              params: { 
-                season: new Date().getFullYear(),
-                team_id: awayTeamData.id,
-                postseason: false
+            try {
+              const awayTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
+                headers: { 'Authorization': ballDontLieService.getApiKey() },
+                params: { 
+                  season: season, // Use determined season
+                  team_id: awayTeamData.id,
+                  postseason: false
+                }
+              });
+              
+              if (awayTeamStatsResponse.data && awayTeamStatsResponse.data.data && awayTeamStatsResponse.data.data[0]) {
+                enhancedStats.away.detailedStats = awayTeamStatsResponse.data.data[0];
+                enhancedStats.away.teamId = awayTeamData.id;
+                enhancedStats.away.league = `${awayTeamData.league} League ${awayTeamData.division} Division`;
               }
-            });
-            
-            if (awayTeamStatsResponse.data && awayTeamStatsResponse.data.data && awayTeamStatsResponse.data.data[0]) {
-              enhancedStats.away.detailedStats = awayTeamStatsResponse.data.data[0];
-              enhancedStats.away.teamId = awayTeamData.id;
-              enhancedStats.away.league = `${awayTeamData.league} League ${awayTeamData.division} Division`;
+            } catch (error) {
+              console.error(`Error getting away team stats: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
           }
           
@@ -420,7 +437,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
               const homePitchersResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/players`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  team_ids: [enhancedStats.home.teamId],
+                  'team_ids[]': enhancedStats.home.teamId, // Correct format for array parameters
                   per_page: 100
                 }
               });
@@ -442,8 +459,9 @@ ${awayTeamStats.description?.substring(0, 100)}...
                     const pitcherStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/season_stats`, {
                       headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
-                        season: new Date().getFullYear(),
-                        player_ids: [topPitcher.id]
+                        season: season, // Use determined season
+                        'player_ids[]': topPitcher.id, // Correct format for array parameters
+                        postseason: false
                       }
                     });
                     
@@ -451,12 +469,16 @@ ${awayTeamStats.description?.substring(0, 100)}...
                       enhancedStats.startingPitchers.home.stats = pitcherStatsResponse.data.data[0];
                     }
                   } catch (error) {
-                    console.log(`Error getting pitcher stats: ${error.message}`);
+                    console.error(`Error getting home pitcher stats: ${error.message}`);
+                    console.error(`Response data:`, error.response?.data);
+                    console.error(`Status code:`, error.response?.status);
                   }
                 }
               }
             } catch (error) {
-              console.log(`Error getting home team pitchers: ${error.message}`);
+              console.error(`Error getting home team pitchers: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
           }
           
@@ -467,7 +489,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
               const awayPitchersResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/players`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  team_ids: [enhancedStats.away.teamId],
+                  'team_ids[]': enhancedStats.away.teamId, // Correct format for array parameters
                   per_page: 100
                 }
               });
@@ -489,8 +511,9 @@ ${awayTeamStats.description?.substring(0, 100)}...
                     const pitcherStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/season_stats`, {
                       headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
-                        season: new Date().getFullYear(),
-                        player_ids: [topPitcher.id]
+                        season: season, // Use determined season
+                        'player_ids[]': topPitcher.id, // Correct format for array parameters
+                        postseason: false
                       }
                     });
                     
@@ -498,17 +521,23 @@ ${awayTeamStats.description?.substring(0, 100)}...
                       enhancedStats.startingPitchers.away.stats = pitcherStatsResponse.data.data[0];
                     }
                   } catch (error) {
-                    console.log(`Error getting pitcher stats: ${error.message}`);
+                    console.error(`Error getting away pitcher stats: ${error.message}`);
+                    console.error(`Response data:`, error.response?.data);
+                    console.error(`Status code:`, error.response?.status);
                   }
                 }
               }
             } catch (error) {
-              console.log(`Error getting away team pitchers: ${error.message}`);
+              console.error(`Error getting away team pitchers: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
           }
         }
       } catch (error) {
         console.error(`Error fetching MLB team data: ${error.message}`);
+        console.error(`Response data:`, error.response?.data);
+        console.error(`Status code:`, error.response?.status);
       }
       
       return enhancedStats;
@@ -533,6 +562,11 @@ ${awayTeamStats.description?.substring(0, 100)}...
         home: { team: homeTeam, detailedStats: {}, keyPlayers: [] },
         away: { team: awayTeam, detailedStats: {}, keyPlayers: [] }
       };
+      
+      // Get current season and previous season for fallback
+      const currentYear = new Date().getFullYear();
+      const previousYear = currentYear - 1;
+      const season = currentYear; // Default to current season
       
       // Attempt to get team stats
       try {
@@ -565,7 +599,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             try {
               const standingsResponse = await axios.get(`https://api.balldontlie.io/v1/standings`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
-                params: { season: new Date().getFullYear() }
+                params: { season: season } // Use consistent season variable
               });
               
               if (standingsResponse.data && standingsResponse.data.data) {
@@ -586,7 +620,9 @@ ${awayTeamStats.description?.substring(0, 100)}...
                 }
               }
             } catch (error) {
-              console.log(`Error getting NBA standings: ${error.message}`);
+              console.error(`Error getting NBA standings: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
             
             // Get key players for home team
@@ -594,7 +630,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
               const playersResponse = await axios.get(`https://api.balldontlie.io/v1/players`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  team_ids: [homeTeamData.id],
+                  'team_ids[]': homeTeamData.id, // Correct format for array parameters
                   per_page: 25 // Get top players
                 }
               });
@@ -613,13 +649,19 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   const playerIds = enhancedStats.home.keyPlayers.map(p => p.id);
                   
                   try {
+                    // For multiple player IDs, we need to format each one properly
+                    const playerIdParams = {};
+                    playerIds.forEach((id, index) => {
+                      playerIdParams[`player_ids[]`] = id;
+                    });
+                    
                     const statsResponse = await axios.get(`https://api.balldontlie.io/v1/season_averages/general`, {
                       headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
-                        season: new Date().getFullYear(),
+                        season: season, // Use consistent season variable
                         season_type: 'regular',
                         type: 'base',
-                        player_ids: playerIds
+                        ...playerIdParams // Spread the playerIdParams
                       }
                     });
                     
@@ -632,12 +674,16 @@ ${awayTeamStats.description?.substring(0, 100)}...
                       });
                     }
                   } catch (error) {
-                    console.log(`Error getting player stats: ${error.message}`);
+                    console.error(`Error getting player stats: ${error.message}`);
+                    console.error(`Response data:`, error.response?.data);
+                    console.error(`Status code:`, error.response?.status);
                   }
                 }
               }
             } catch (error) {
-              console.log(`Error getting home team players: ${error.message}`);
+              console.error(`Error getting home team players: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
           }
           
@@ -651,7 +697,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
             try {
               const standingsResponse = await axios.get(`https://api.balldontlie.io/v1/standings`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
-                params: { season: new Date().getFullYear() }
+                params: { season: season } // Use consistent season variable
               });
               
               if (standingsResponse.data && standingsResponse.data.data) {
@@ -672,7 +718,9 @@ ${awayTeamStats.description?.substring(0, 100)}...
                 }
               }
             } catch (error) {
-              console.log(`Error getting NBA standings: ${error.message}`);
+              console.error(`Error getting NBA standings: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
             
             // Get key players for away team
@@ -680,7 +728,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
               const playersResponse = await axios.get(`https://api.balldontlie.io/v1/players`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  team_ids: [awayTeamData.id],
+                  'team_ids[]': awayTeamData.id, // Correct format for array parameters
                   per_page: 25 // Get top players
                 }
               });
@@ -699,13 +747,19 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   const playerIds = enhancedStats.away.keyPlayers.map(p => p.id);
                   
                   try {
+                    // For multiple player IDs, we need to format each one properly
+                    const playerIdParams = {};
+                    playerIds.forEach((id, index) => {
+                      playerIdParams[`player_ids[]`] = id;
+                    });
+                    
                     const statsResponse = await axios.get(`https://api.balldontlie.io/v1/season_averages/general`, {
                       headers: { 'Authorization': ballDontLieService.getApiKey() },
                       params: { 
-                        season: new Date().getFullYear(),
+                        season: season, // Use consistent season variable
                         season_type: 'regular',
                         type: 'base',
-                        player_ids: playerIds
+                        ...playerIdParams // Spread the playerIdParams
                       }
                     });
                     
@@ -718,17 +772,23 @@ ${awayTeamStats.description?.substring(0, 100)}...
                       });
                     }
                   } catch (error) {
-                    console.log(`Error getting player stats: ${error.message}`);
+                    console.error(`Error getting player stats: ${error.message}`);
+                    console.error(`Response data:`, error.response?.data);
+                    console.error(`Status code:`, error.response?.status);
                   }
                 }
               }
             } catch (error) {
-              console.log(`Error getting away team players: ${error.message}`);
+              console.error(`Error getting away team players: ${error.message}`);
+              console.error(`Response data:`, error.response?.data);
+              console.error(`Status code:`, error.response?.status);
             }
           }
         }
       } catch (error) {
         console.error(`Error fetching NBA team data: ${error.message}`);
+        console.error(`Response data:`, error.response?.data);
+        console.error(`Status code:`, error.response?.status);
       }
       
       return enhancedStats;
