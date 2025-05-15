@@ -176,15 +176,27 @@ export const sportsDataService = {
       // Get team data with fallback to previous season if current season fails
       let homeTeamData, awayTeamData;
       let currentSeason = new Date().getFullYear();
+      const maxRetries = 3; // Maximum number of seasons to go back
+      let retryCount = 0;
       
-      try {
-        homeTeamData = await sportsDataService.getTeamData(homeTeam);
-        awayTeamData = await sportsDataService.getTeamData(awayTeam);
-      } catch (error) {
-        console.error(`Failed to get current season data, trying previous season...`);
-        currentSeason--;
-        homeTeamData = await sportsDataService.getTeamData(homeTeam);
-        awayTeamData = await sportsDataService.getTeamData(awayTeam);
+      while (retryCount < maxRetries) {
+        try {
+          homeTeamData = await sportsDataService.getTeamData(homeTeam);
+          awayTeamData = await sportsDataService.getTeamData(awayTeam);
+          
+          // If we got here, the API call was successful
+          break;
+        } catch (error) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            console.error(`Failed to get team data after ${maxRetries} attempts.`);
+            throw error;
+          }
+          
+          // Try previous season
+          currentSeason--;
+          console.log(`Retry ${retryCount}/${maxRetries}: Trying ${currentSeason} season data...`);
+        }
       }
       
       if (!homeTeamData || !awayTeamData) {

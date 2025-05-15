@@ -12,6 +12,7 @@
     "api:prod": "NODE_ENV=production node api/stripe-api.js"
   },
   "dependencies": {
+    "@balldontlie/sdk": "^1.2.2",
     "@react-spring/three": "^9.7.5",
     "@react-three/drei": "^9.88.7",
     "@react-three/fiber": "^9.1.2",
