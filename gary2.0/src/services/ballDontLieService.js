@@ -72,7 +72,7 @@ export const ballDontLieService = {
       const response = await axios.get(url, {
         params,
         headers: {
-          'X-RapidAPI-Key': API_KEY
+          'Authorization': API_KEY
         }
       });
       
@@ -107,7 +107,7 @@ export const ballDontLieService = {
       const response = await axios.get(url, {
         params,
         headers: {
-          'X-RapidAPI-Key': API_KEY
+          'Authorization': API_KEY
         }
       });
       
@@ -168,7 +168,7 @@ export const ballDontLieService = {
         const response = await axios.get(url, {
           params,
           headers: {
-            'X-RapidAPI-Key': API_KEY
+            'Authorization': API_KEY
           }
         });
         
@@ -201,7 +201,7 @@ export const ballDontLieService = {
           const response = await axios.get(url, {
             params,
             headers: {
-              'X-RapidAPI-Key': API_KEY
+              'Authorization': API_KEY
             }
           });
           
@@ -272,7 +272,7 @@ export const ballDontLieService = {
           const response = await axios.get(url, {
             params,
             headers: {
-              'X-RapidAPI-Key': API_KEY
+              'Authorization': API_KEY
             }
           });
           
@@ -448,7 +448,7 @@ export const ballDontLieService = {
           const response = await axios.get(url, {
             params,
             headers: {
-              'X-RapidAPI-Key': API_KEY
+              'Authorization': API_KEY
             }
           });
           
