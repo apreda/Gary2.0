@@ -1,11 +1,14 @@
 /**
  * Ball Don't Lie API Service
- * Provides access to detailed MLB statistics for prop betting
- * https://www.balldontlie.io/docs/mlb/
+ * Provides access to detailed MLB and NBA statistics for betting analysis
+ * MLB API: https://www.balldontlie.io/docs/mlb/
+ * NBA API: https://www.balldontlie.io/docs/
  */
 import axios from 'axios';
 
-const API_BASE_URL = 'https://api.balldontlie.io/mlb/v1';
+// API configuration
+const MLB_API_BASE_URL = 'https://api.balldontlie.io/mlb/v1';
+const NBA_API_BASE_URL = 'https://api.balldontlie.io/v1';
 const API_KEY = '3363660a-a082-43b7-a130-6249ff68e5ab'; // GOAT plan
 
 // Levenshtein distance for name similarity
@@ -55,12 +58,12 @@ export const ballDontLieService = {
    * @param {object} options - Optional search parameters
    * @returns {Promise<Array>} - Array of active players
    */
-  getActivePlayers: async (options = {}) => {
+  getActiveMLBPlayers: async (options = {}) => {
     try {
       console.log('Fetching active MLB players from Ball Don\'t Lie API');
       
       // Build URL and params
-      const url = `${API_BASE_URL}/players/active`;
+      const url = `${MLB_API_BASE_URL}/players/active`;
       const params = {
         ...options,
         per_page: options.per_page || 100 // Get more per page
@@ -69,7 +72,7 @@ export const ballDontLieService = {
       const response = await axios.get(url, {
         params,
         headers: {
-          'Authorization': API_KEY
+          'X-RapidAPI-Key': API_KEY
         }
       });
       
@@ -81,7 +84,56 @@ export const ballDontLieService = {
       return [];
     } catch (error) {
       console.error('Error fetching active MLB players:', error.message);
-      throw error;
+      return [];
+    }
+  },
+  
+  /**
+   * Get active NBA players
+   * @param {object} options - Optional search parameters
+   * @returns {Promise<Array>} - Array of active NBA players
+   */
+  getActiveNBAPlayers: async (options = {}) => {
+    try {
+      console.log('Fetching active NBA players from Ball Don\'t Lie API');
+      
+      // Build URL and params
+      const url = `${NBA_API_BASE_URL}/players/active`;
+      const params = {
+        ...options,
+        per_page: options.per_page || 100 // Get more per page
+      };
+      
+      const response = await axios.get(url, {
+        params,
+        headers: {
+          'X-RapidAPI-Key': API_KEY
+        }
+      });
+      
+      if (response.data && response.data.data) {
+        console.log(`Found ${response.data.data.length} active NBA players`);
+        return response.data.data;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error fetching active NBA players:', error.message);
+      return [];
+    }
+  },
+  
+  /**
+   * Wrapper to get active players by sport
+   * @param {string} sport - 'MLB' or 'NBA'
+   * @param {object} options - Optional search parameters
+   * @returns {Promise<Array>} - Array of active players
+   */
+  getActivePlayers: async (sport = 'MLB', options = {}) => {
+    if (sport.toUpperCase() === 'NBA') {
+      return ballDontLieService.getActiveNBAPlayers(options);
+    } else {
+      return ballDontLieService.getActiveMLBPlayers(options);
     }
   },
   
@@ -116,7 +168,7 @@ export const ballDontLieService = {
         const response = await axios.get(url, {
           params,
           headers: {
-            'Authorization': API_KEY
+            'X-RapidAPI-Key': API_KEY
           }
         });
         
@@ -149,7 +201,7 @@ export const ballDontLieService = {
           const response = await axios.get(url, {
             params,
             headers: {
-              'Authorization': API_KEY
+              'X-RapidAPI-Key': API_KEY
             }
           });
           
@@ -220,7 +272,7 @@ export const ballDontLieService = {
           const response = await axios.get(url, {
             params,
             headers: {
-              'Authorization': API_KEY
+              'X-RapidAPI-Key': API_KEY
             }
           });
           
@@ -396,7 +448,7 @@ export const ballDontLieService = {
           const response = await axios.get(url, {
             params,
             headers: {
-              'Authorization': API_KEY
+              'X-RapidAPI-Key': API_KEY
             }
           });
           
