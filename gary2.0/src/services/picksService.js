@@ -1,10 +1,12 @@
 /**
- * Simplified Picks Service
- * Generates picks sequentially by sport and stores raw OpenAI responses in Supabase.
+ * Enhanced Picks Service
+ * Generates picks sequentially by sport using sports statistics from TheSportsDB
+ * and stores raw OpenAI responses in Supabase.
  */
 import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService';
 import { supabase } from '../supabaseClient.js';
+import { sportsDataService } from './sportsDataService.js';
 
 const picksService = {
   /**
@@ -45,7 +47,36 @@ const picksService = {
             try {
               console.log(`\n-- Analyzing game: ${game.home_team} vs ${game.away_team} --`);
               
-              // Format the game data for Gary's analysis
+              // Get comprehensive team statistics from TheSportsDB
+              console.log(`Gathering detailed team statistics for ${game.home_team} vs ${game.away_team}...`);
+              const statsContext = await sportsDataService.buildComprehensiveStatsContext(
+                game.home_team,
+                game.away_team,
+                sportName,
+                { // Basic odds data structure
+                  homeOdds: game.bookmakers?.[0]?.markets?.[0]?.outcomes?.[0]?.price,
+                  awayOdds: game.bookmakers?.[0]?.markets?.[0]?.outcomes?.[1]?.price,
+                  pointSpread: game.bookmakers?.[0]?.markets?.[1]?.outcomes?.[0]?.point,
+                }
+              );
+              
+              // For MLB games, get additional pitcher data if available
+              let pitcherData = '';
+              if (sportName === 'MLB') {
+                try {
+                  console.log('Fetching additional MLB pitcher data...');
+                  const homeTeamData = await sportsDataService.getTeamData(game.home_team);
+                  const awayTeamData = await sportsDataService.getTeamData(game.away_team);
+                  
+                  // Ideally we would fetch specific pitcher data here
+                  // This is a placeholder for future implementation
+                  pitcherData = `PITCHING MATCHUP: Check starting pitchers' stats including ERA, WHIP, K/9, and recent performances.`;
+                } catch (error) {
+                  console.error('Error fetching MLB pitcher data:', error.message);
+                }
+              }
+              
+              // Format the game data for Gary's analysis with enhanced statistics
               const formattedGameData = {
                 homeTeam: game.home_team,
                 awayTeam: game.away_team,
@@ -58,11 +89,14 @@ const picksService = {
                   trend: 'stable'
                 },
                 sport: sportName,
-                sportKey: sport
+                sportKey: sport,
+                teamStats: statsContext,
+                pitcherData: pitcherData
               };
               
               // Make the pick using Gary Engine
-              console.log(`Getting pick from Gary for ${formattedGameData.matchup}...`);
+              console.log(`Getting stats-driven pick from Gary for ${formattedGameData.matchup}...`);
+              console.log('Team statistics available:', !!formattedGameData.teamStats);
               const pick = await makeGaryPick(formattedGameData, {
                 temperature: 0.7
               });
