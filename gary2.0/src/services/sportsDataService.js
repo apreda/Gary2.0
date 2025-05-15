@@ -41,6 +41,13 @@ export const sportsDataService = {
         params: { 
           t: teamName 
         }
+      }).catch(error => {
+        console.error(`TheSportsDB API: Error fetching team data for ${teamName}:`, {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        return { data: { teams: [] } }; // Return empty result for error case
       });
       
       if (response.data && response.data.teams && response.data.teams.length > 0) {
@@ -67,6 +74,13 @@ export const sportsDataService = {
         params: { 
           id: teamId 
         }
+      }).catch(error => {
+        console.error(`TheSportsDB API: Error fetching recent events for team ID ${teamId}:`, {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        return { data: { results: [] } }; // Return empty result for error case
       });
       
       if (response.data && response.data.results) {
@@ -89,8 +103,20 @@ export const sportsDataService = {
   getTeamNextEvents: async (teamId) => {
     try {
       const response = await axios.get(
-        `${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/eventsnext.php?id=${teamId}`
-      );
+        `${sportsDataService.API_BASE_URL}/${sportsDataService.API_KEY}/eventsnext.php`,
+        {
+          params: {
+            id: teamId
+          }
+        }
+      ).catch(error => {
+        console.error(`TheSportsDB API: Error fetching next events for team ${teamId}:`, {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        return { data: { events: [] } }; // Return empty result for error case
+      });
       
       if (response.data && response.data.events) {
         return response.data.events;
@@ -116,6 +142,13 @@ export const sportsDataService = {
         params: { 
           l: mappedLeague 
         }
+      }).catch(error => {
+        console.error(`TheSportsDB API: Error fetching standings for ${leagueName}:`, {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        return { data: { table: [] } }; // Return empty result for error case
       });
       
       if (response.data && response.data.table) {
@@ -140,9 +173,19 @@ export const sportsDataService = {
     try {
       console.log(`TheSportsDB API: Generating team stats for ${homeTeam} vs ${awayTeam} (${league})`);
       
-      // Get team data
-      const homeTeamData = await sportsDataService.getTeamData(homeTeam);
-      const awayTeamData = await sportsDataService.getTeamData(awayTeam);
+      // Get team data with fallback to previous season if current season fails
+      let homeTeamData, awayTeamData;
+      let currentSeason = new Date().getFullYear();
+      
+      try {
+        homeTeamData = await sportsDataService.getTeamData(homeTeam);
+        awayTeamData = await sportsDataService.getTeamData(awayTeam);
+      } catch (error) {
+        console.error(`Failed to get current season data, trying previous season...`);
+        currentSeason--;
+        homeTeamData = await sportsDataService.getTeamData(homeTeam);
+        awayTeamData = await sportsDataService.getTeamData(awayTeam);
+      }
       
       if (!homeTeamData || !awayTeamData) {
         console.error(`TheSportsDB API: Could not find team data for ${homeTeam} and/or ${awayTeam}. This will affect pick quality.`);
@@ -153,9 +196,22 @@ export const sportsDataService = {
         };
       }
       
-      // Get recent results for both teams
+      // Get recent results for both teams with season context
       const homeTeamEvents = await sportsDataService.getTeamLastEvents(homeTeamData.idTeam);
       const awayTeamEvents = await sportsDataService.getTeamLastEvents(awayTeamData.idTeam);
+      
+      // If no recent events found, try previous season's data
+      if (!homeTeamEvents.length || !awayTeamEvents.length) {
+        console.log('No recent events found, trying previous season data...');
+        currentSeason--;
+        const prevHomeTeamData = await sportsDataService.getTeamData(homeTeam);
+        const prevAwayTeamData = await sportsDataService.getTeamData(awayTeam);
+        
+        if (prevHomeTeamData && prevAwayTeamData) {
+          homeTeamEvents.push(...await sportsDataService.getTeamLastEvents(prevHomeTeamData.idTeam));
+          awayTeamEvents.push(...await sportsDataService.getTeamLastEvents(prevAwayTeamData.idTeam));
+        }
+      }
       
       // Calculate win-loss record from recent games
       const calculateRecentRecord = (events) => {
@@ -313,83 +369,63 @@ export const sportsDataService = {
     }
     
     const { homeTeamStats, awayTeamStats } = gameStats;
-    console.log(`TheSportsDB API: Formatting stats for ${homeTeamStats.name} vs ${awayTeamStats.name}`);
     
-    return `
-📊 TEAM PERFORMANCE (LAST 5 GAMES)
-- ${homeTeamStats.name}: ${homeTeamStats.recentForm.form}
-- ${awayTeamStats.name}: ${awayTeamStats.recentForm.form}
-
-🏟️ VENUE
-${homeTeamStats.name} plays at ${homeTeamStats.stadium}.
-${awayTeamStats.name} will be the visiting team.
-
-🔍 TEAM INSIGHTS
-${homeTeamStats.description?.substring(0, 100)}...
-${awayTeamStats.description?.substring(0, 100)}...
-`;
-  },
-
-  /**
-   * Build comprehensive stats context for OpenAI prompt
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @param {string} league - League name
-   * @param {Object} oddsData - Current odds and line data
-   * @returns {Promise<string>} - Formatted comprehensive stats context
-   */
-  /**
-   * Get enhanced MLB statistics from Ball Don't Lie API
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @returns {Promise<Object>} - Detailed MLB statistics
-   */
-  getEnhancedMLBStats: async (homeTeam, awayTeam) => {
+    // Get current season and previous season for fallback
+    const currentYear = new Date().getFullYear();
+    const previousYear = currentYear - 1;
+    const season = currentYear; // Default to current season
+    
+    // Attempt to get team stats
     try {
-      console.log(`Getting enhanced MLB stats for ${homeTeam} vs ${awayTeam} from Ball Don't Lie API...`);
+      // Get team season stats for current season
+      const response = await axios.get(`https://api.balldontlie.io/mlb/v1/teams`, {
+        headers: { 'Authorization': ballDontLieService.getApiKey() },
+        params: { per_page: 100 }
+      });
       
-      // Create a basic stats object
-      const enhancedStats = {
-        home: { team: homeTeam, detailedStats: {} },
-        away: { team: awayTeam, detailedStats: {} },
-        startingPitchers: {}
-      };
-      
-      // Get current season and previous season for fallback
-      const currentYear = new Date().getFullYear();
-      const previousYear = currentYear - 1;
-      const season = currentYear; // Default to current season
-      
-      // Attempt to get team stats
-      try {
-        // Get team season stats for current season
-        const response = await axios.get(`https://api.balldontlie.io/mlb/v1/teams`, {
-          headers: { 'Authorization': ballDontLieService.getApiKey() },
-          params: { per_page: 100 }
-        });
+      if (response.data && response.data.data) {
+        const teams = response.data.data;
         
-        if (response.data && response.data.data) {
-          const teams = response.data.data;
-          
-          // Find home and away teams by name (with fuzzy matching)
-          const homeTeamData = teams.find(team => 
-            team.display_name.includes(homeTeam) || 
-            homeTeam.includes(team.name) ||
-            homeTeam.includes(team.location));
-          
-          const awayTeamData = teams.find(team => 
-            team.display_name.includes(awayTeam) || 
-            awayTeam.includes(team.name) ||
-            awayTeam.includes(team.location));
-          
-          if (homeTeamData) {
-            // Get team season stats
+        // Find home and away teams by name (with fuzzy matching)
+        const homeTeamData = teams.find(team => 
+          team.display_name.includes(homeTeam) || 
+          homeTeam.includes(team.name) ||
+          homeTeam.includes(team.location));
+        
+        const awayTeamData = teams.find(team => 
+          team.display_name.includes(awayTeam) || 
+          awayTeam.includes(team.name) ||
+          awayTeam.includes(team.location));
+        
+        if (homeTeamData) {
+          // Get team season stats
+          try {
+            const homeTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
+              headers: { 'Authorization': ballDontLieService.getApiKey() },
+              params: { 
+                season: season, // Use determined season
+                'team_id[]': [homeTeamData.id], // Correct array parameter format
+                postseason: false
+              }
+            });
+            
+            if (homeTeamStatsResponse.data && homeTeamStatsResponse.data.data && homeTeamStatsResponse.data.data[0]) {
+              enhancedStats.home.detailedStats = homeTeamStatsResponse.data.data[0];
+              enhancedStats.home.teamId = homeTeamData.id;
+              enhancedStats.home.league = `${homeTeamData.league} League ${homeTeamData.division} Division`;
+            }
+          } catch (error) {
+            console.error(`Error getting home team stats: ${error.message}`);
+            console.error(`Response data:`, error.response?.data);
+            console.error(`Status code:`, error.response?.status);
+            // Try with previous season as fallback
             try {
+              console.log(`Attempting fallback to previous season ${previousYear} for home team...`);
               const homeTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  season: season, // Use determined season
-                  team_id: homeTeamData.id,
+                  season: previousYear,
+                  'team_id[]': homeTeamData.id, // Correct array parameter format
                   postseason: false
                 }
               });
@@ -399,21 +435,41 @@ ${awayTeamStats.description?.substring(0, 100)}...
                 enhancedStats.home.teamId = homeTeamData.id;
                 enhancedStats.home.league = `${homeTeamData.league} League ${homeTeamData.division} Division`;
               }
-            } catch (error) {
-              console.error(`Error getting home team stats: ${error.message}`);
-              console.error(`Response data:`, error.response?.data);
-              console.error(`Status code:`, error.response?.status);
+            } catch (fallbackError) {
+              console.error(`Fallback attempt for home team also failed: ${fallbackError.message}`);
             }
           }
-          
-          if (awayTeamData) {
-            // Get team season stats
+        }
+        
+        if (awayTeamData) {
+          // Get team season stats
+          try {
+            const awayTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
+              headers: { 'Authorization': ballDontLieService.getApiKey() },
+              params: { 
+                season: season, // Use determined season
+                'team_id[]': awayTeamData.id, // Correct array parameter format
+                postseason: false
+              }
+            });
+            
+            if (awayTeamStatsResponse.data && awayTeamStatsResponse.data.data && awayTeamStatsResponse.data.data[0]) {
+              enhancedStats.away.detailedStats = awayTeamStatsResponse.data.data[0];
+              enhancedStats.away.teamId = awayTeamData.id;
+              enhancedStats.away.league = `${awayTeamData.league} League ${awayTeamData.division} Division`;
+            }
+          } catch (error) {
+            console.error(`Error getting away team stats: ${error.message}`);
+            console.error(`Response data:`, error.response?.data);
+            console.error(`Status code:`, error.response?.status);
+            // Try with previous season as fallback
             try {
+              console.log(`Attempting fallback to previous season ${previousYear} for away team...`);
               const awayTeamStatsResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/teams/season_stats`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  season: season, // Use determined season
-                  team_id: awayTeamData.id,
+                  season: previousYear,
+                  'team_id[]': awayTeamData.id, // Correct array parameter format
                   postseason: false
                 }
               });
@@ -423,29 +479,10 @@ ${awayTeamStats.description?.substring(0, 100)}...
                 enhancedStats.away.teamId = awayTeamData.id;
                 enhancedStats.away.league = `${awayTeamData.league} League ${awayTeamData.division} Division`;
               }
-            } catch (error) {
-              console.error(`Error getting away team stats: ${error.message}`);
-              console.error(`Response data:`, error.response?.data);
-              console.error(`Status code:`, error.response?.status);
+            } catch (fallbackError) {
+              console.error(`Fallback attempt for away team also failed: ${fallbackError.message}`);
             }
           }
-          
-          // Try to get starting pitcher information if team IDs were found
-          if (enhancedStats.home.teamId) {
-            try {
-              // Get team players
-              const homePitchersResponse = await axios.get(`https://api.balldontlie.io/mlb/v1/players`, {
-                headers: { 'Authorization': ballDontLieService.getApiKey() },
-                params: { 
-                  'team_ids[]': enhancedStats.home.teamId, // Correct format for array parameters
-                  per_page: 100
-                }
-              });
-              
-              if (homePitchersResponse.data && homePitchersResponse.data.data) {
-                const pitchers = homePitchersResponse.data.data.filter(player => 
-                  player.position && player.position.includes('Pitcher'));
-                
                 if (pitchers.length > 0) {
                   // Get most recent pitcher stats
                   const topPitcher = pitchers[0]; // Ideally we'd identify the actual starting pitcher
@@ -630,7 +667,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
               const playersResponse = await axios.get(`https://api.balldontlie.io/v1/players`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  'team_ids[]': homeTeamData.id, // Correct format for array parameters
+                  'team_ids[]': [homeTeamData.id], // Correct format for array parameters
                   per_page: 25 // Get top players
                 }
               });
@@ -651,9 +688,8 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   try {
                     // For multiple player IDs, we need to format each one properly
                     const playerIdParams = {};
-                    playerIds.forEach((id, index) => {
-                      playerIdParams[`player_ids[]`] = id;
-                    });
+                    // Pass player IDs directly as an array
+playerIdParams['player_ids[]'] = playerIds;
                     
                     const statsResponse = await axios.get(`https://api.balldontlie.io/v1/season_averages/general`, {
                       headers: { 'Authorization': ballDontLieService.getApiKey() },
@@ -661,7 +697,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
                         season: season, // Use consistent season variable
                         season_type: 'regular',
                         type: 'base',
-                        ...playerIdParams // Spread the playerIdParams
+                        'player_ids[]': playerIds // Pass array directly
                       }
                     });
                     
@@ -728,7 +764,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
               const playersResponse = await axios.get(`https://api.balldontlie.io/v1/players`, {
                 headers: { 'Authorization': ballDontLieService.getApiKey() },
                 params: { 
-                  'team_ids[]': awayTeamData.id, // Correct format for array parameters
+                  'team_ids[]': [awayTeamData.id], // Correct format for array parameters
                   per_page: 25 // Get top players
                 }
               });
@@ -749,9 +785,8 @@ ${awayTeamStats.description?.substring(0, 100)}...
                   try {
                     // For multiple player IDs, we need to format each one properly
                     const playerIdParams = {};
-                    playerIds.forEach((id, index) => {
-                      playerIdParams[`player_ids[]`] = id;
-                    });
+                    // Pass player IDs directly as an array
+playerIdParams['player_ids[]'] = playerIds;
                     
                     const statsResponse = await axios.get(`https://api.balldontlie.io/v1/season_averages/general`, {
                       headers: { 'Authorization': ballDontLieService.getApiKey() },
@@ -759,7 +794,7 @@ ${awayTeamStats.description?.substring(0, 100)}...
                         season: season, // Use consistent season variable
                         season_type: 'regular',
                         type: 'base',
-                        ...playerIdParams // Spread the playerIdParams
+                        'player_ids[]': playerIds // Pass array directly
                       }
                     });
                     
