@@ -238,8 +238,8 @@ const picksService = {
         return { success: true, count: 0, message: 'Picks already exist for today' };
       }
       
-      // Filter to only the successful picks with raw OpenAI output
-      const rawJsonOutputs = picks
+      // First pass: Extract all JSON data from all picks
+      const allParsedOutputs = picks
         .filter(pick => {
           // Must have success flag and raw analysis with OpenAI output
           const isValid = pick.success && pick.rawAnalysis && pick.rawAnalysis.rawOpenAIOutput;
@@ -309,27 +309,46 @@ const picksService = {
           console.log(`Successfully extracted JSON for: ${pick.game}, confidence: ${jsonData.confidence || 'unknown'}`);
           return jsonData;
         })
-        // Filter out null values and picks with confidence below threshold
-        .filter(jsonData => {
-          // Skip null values
-          if (jsonData === null) return false;
-          
-          // Strictly enforce 0.75 threshold
+        // Filter out null values
+        .filter(jsonData => jsonData !== null);
+        
+      console.log(`Successfully extracted ${allParsedOutputs.length} valid JSON outputs from picks`);
+      
+      // First try to find picks with confidence >= 0.75 (primary threshold)
+      let rawJsonOutputs = allParsedOutputs.filter(jsonData => {
+        const confidence = jsonData.confidence || 0;
+        const isAbovePrimaryThreshold = confidence >= 0.75;
+        
+        if (isAbovePrimaryThreshold) {
+          console.log(`Pick for ${jsonData.homeTeam} vs ${jsonData.awayTeam} meets primary confidence threshold: ${confidence}`);
+        }
+        
+        return isAbovePrimaryThreshold;
+      });
+      
+      // If no picks meet the primary threshold, fall back to picks with confidence >= 0.6
+      if (rawJsonOutputs.length === 0) {
+        console.warn('No picks meet the 0.75 confidence threshold, falling back to 0.6+ confidence picks');
+        
+        rawJsonOutputs = allParsedOutputs.filter(jsonData => {
           const confidence = jsonData.confidence || 0;
-          const isAboveThreshold = confidence >= 0.75;
+          const isAboveFallbackThreshold = confidence >= 0.6;
           
-          if (!isAboveThreshold) {
-            console.warn(`Filtering out pick (${jsonData.homeTeam} vs ${jsonData.awayTeam}) at database storage - confidence ${confidence} below threshold of 0.75`);
+          if (isAboveFallbackThreshold) {
+            console.log(`Using fallback pick for ${jsonData.homeTeam} vs ${jsonData.awayTeam} with confidence: ${confidence}`);
+          } else {
+            console.warn(`Filtering out pick for ${jsonData.homeTeam} vs ${jsonData.awayTeam} - confidence ${confidence} below fallback threshold of 0.6`);
           }
           
-          return isAboveThreshold;
+          return isAboveFallbackThreshold;
         });
+      }
       
-      console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output above 0.75 confidence threshold`);
+      console.log(`After confidence filtering, storing ${rawJsonOutputs.length} valid picks`);
       
       // Skip if there are no valid picks
       if (rawJsonOutputs.length === 0) {
-        console.warn('No valid picks with OpenAI output to store');
+        console.warn('No valid picks with OpenAI output to store, even after fallback');
         return { success: false, message: 'No valid picks to store' };
       }
       
