@@ -374,7 +374,12 @@ export const sportsDataService = {
    * @param {Object} gameStats - Team stats object from generateTeamStatsForGame
    * @returns {string} - Formatted stats string for OpenAI prompt
    */
-  formatStatsForPrompt: (gameStats) => {
+  /**
+   * Format team stats for OpenAI prompt
+   * @param {Object} gameStats - Team stats object from generateTeamStatsForGame
+   * @returns {string} - Formatted stats string for OpenAI prompt
+   */
+  async formatStatsForPrompt(gameStats) {
     if (!gameStats || !gameStats.statsAvailable) {
       console.warn('TheSportsDB API: No stats available for OpenAI prompt.');
       return 'NOTE: Current team statistics unavailable - using historical data only.';
