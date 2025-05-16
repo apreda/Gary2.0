@@ -423,6 +423,7 @@ export const resultsCheckerService = {
 
   checkResults: async (date) => {
     try {
+      console.log(`Checking results for date: ${date}`);
       const { data: dailyPicks, error: picksError } = await supabase
         .from('daily_picks')
         .select('*')
@@ -430,68 +431,119 @@ export const resultsCheckerService = {
         .single();
       if (picksError) throw new Error(`Error fetching picks: ${picksError.message}`);
       if (!dailyPicks || !dailyPicks.picks || dailyPicks.picks.length === 0) {
+        console.log(`No picks found for date: ${date}`);
         return { success: true, message: 'No picks found for this date', scores: {} };
       }
+      
+      console.log(`Found ${dailyPicks.picks.length} picks for ${date}`);
       const { success, scores, message } = await resultsCheckerService.getGameScores(date, dailyPicks.picks);
       if (!success) throw new Error(`Failed to get scores: ${message}`);
       
-      // Process scores into the format expected by garyPerformanceService
-      const processedResults = Object.entries(scores).map(([matchup, scoreData]) => {
-        const homeScore = scoreData.home_score;
-        const awayScore = scoreData.away_score;
-        const homeTeam = scoreData.home_team;
-        const awayTeam = scoreData.away_team;
+      console.log(`Retrieved scores for ${Object.keys(scores).length} games`);
+      
+      // Process each pick to determine win/loss/push based on scores and bet type
+      const processedResults = [];
+      
+      for (const pick of dailyPicks.picks) {
+        const pickTeams = pick.pick?.split(' @ ') || [];
+        if (pickTeams.length !== 2) {
+          console.warn(`Invalid pick format: ${pick.pick}`);
+          continue;
+        }
         
-        // Find the original pick to determine if it was won or lost
-        const originalPick = dailyPicks.picks.find(p => 
-          p.pick === matchup || 
-          (p.home_team === homeTeam && p.away_team === awayTeam)
-        );
+        // Try to find the corresponding game score
+        let scoreData = null;
         
-        // Determine win/loss based on the bet type and scores
-        let result = 'unknown';
-        if (originalPick) {
-          // For moneyline bets
-          if (originalPick.type === 'moneyline') {
-            // If the pick was for the home team
-            if (originalPick.pick.includes(homeTeam)) {
-              result = homeScore > awayScore ? 'won' : 'lost';
-            } 
-            // If the pick was for the away team
-            else if (originalPick.pick.includes(awayTeam)) {
-              result = awayScore > homeScore ? 'won' : 'lost';
-            }
-          }
-          // For spread bets
-          else if (originalPick.type === 'spread' && originalPick.spread) {
-            const spread = parseFloat(originalPick.spread);
-            if (originalPick.pick.includes(homeTeam)) {
-              const adjScore = homeScore + spread;
-              result = adjScore > awayScore ? 'won' : (adjScore === awayScore ? 'push' : 'lost');
-            }
-            else if (originalPick.pick.includes(awayTeam)) {
-              const adjScore = awayScore + spread;
-              result = adjScore > homeScore ? 'won' : (adjScore === homeScore ? 'push' : 'lost');
+        // First try direct match by pick
+        if (scores[pick.pick]) {
+          scoreData = scores[pick.pick];
+        } else {
+          // Try to find by team names in any order
+          for (const [matchup, data] of Object.entries(scores)) {
+            const homeTeam = data.home_team;
+            const awayTeam = data.away_team;
+            
+            if ((pick.home_team === homeTeam && pick.away_team === awayTeam) ||
+                (pickTeams[0] === awayTeam && pickTeams[1] === homeTeam) ||
+                (matchup.includes(pick.home_team) && matchup.includes(pick.away_team))) {
+              scoreData = data;
+              break;
             }
           }
         }
         
-        return {
+        if (!scoreData) {
+          console.warn(`Could not find score data for pick: ${pick.pick}`);
+          continue;
+        }
+        
+        const homeScore = parseInt(scoreData.home_score);
+        const awayScore = parseInt(scoreData.away_score);
+        const homeTeam = scoreData.home_team;
+        const awayTeam = scoreData.away_team;
+        
+        // Determine which team was picked
+        const pickedTeam = pick.pick.includes(homeTeam) ? homeTeam : awayTeam;
+        const isHomeTeamPicked = pickedTeam === homeTeam;
+        
+        // Determine win/loss based on the bet type and scores
+        let result = 'unknown';
+        
+        // For moneyline bets (straight up win/loss)
+        if (pick.type === 'moneyline' || !pick.type) {
+          if (isHomeTeamPicked) {
+            result = homeScore > awayScore ? 'won' : (homeScore === awayScore ? 'push' : 'lost');
+          } else {
+            result = awayScore > homeScore ? 'won' : (awayScore === homeScore ? 'push' : 'lost');
+          }
+          console.log(`Moneyline pick ${pick.pick}: ${result} (${awayScore}-${homeScore})`);
+        }
+        // For spread bets
+        else if (pick.type === 'spread' && pick.spread) {
+          const spread = parseFloat(pick.spread);
+          
+          if (isHomeTeamPicked) {
+            // Home team with spread
+            const adjScore = homeScore + spread;
+            result = adjScore > awayScore ? 'won' : (adjScore === awayScore ? 'push' : 'lost');
+          } else {
+            // Away team with spread
+            const adjScore = awayScore + spread;
+            result = adjScore > homeScore ? 'won' : (adjScore === homeScore ? 'push' : 'lost');
+          }
+          console.log(`Spread pick ${pick.pick} (${spread}): ${result} (${awayScore}-${homeScore})`);
+        }
+        // For over/under (total) bets
+        else if (pick.type === 'total' && pick.total) {
+          const total = parseFloat(pick.total);
+          const actualTotal = homeScore + awayScore;
+          
+          if (pick.pick.toLowerCase().includes('over')) {
+            result = actualTotal > total ? 'won' : (actualTotal === total ? 'push' : 'lost');
+          } else if (pick.pick.toLowerCase().includes('under')) {
+            result = actualTotal < total ? 'won' : (actualTotal === total ? 'push' : 'lost');
+          }
+          console.log(`Total pick ${pick.pick} (${total}): ${result} (${actualTotal})`);
+        }
+        
+        processedResults.push({
           pick: `${awayTeam} @ ${homeTeam}`,
+          original_pick: pick.pick,
           result: result,
           score: `${awayScore}-${homeScore}`,
-          league: scoreData.league || originalPick?.league || 'NBA'
-        };
-      });
+          league: scoreData.league || pick.league || 'NBA',
+          type: pick.type || 'moneyline',
+          spread: pick.spread || null,
+          total: pick.total || null
+        });
+      }
       
+      console.log(`Processed ${processedResults.length} results`);
+      
+      // Record the results in the performance service
       const { success: recordSuccess, message: recordMessage } = await garyPerformanceService.recordPickResults(
         date,
-        Object.entries(scores).map(([matchup, score]) => ({
-          pick: `${score.away_team} @ ${score.home_team}`,
-          result: score.result || 'unknown',
-          score: `${score.away_score}-${score.home_score}`,
-          league: score.league || 'NBA'
-        }))
+        processedResults
       );
       if (!recordSuccess) throw new Error(`Failed to record results: ${recordMessage}`);
       await garyPerformanceService.updatePerformanceStats(date);
