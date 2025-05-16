@@ -288,55 +288,152 @@ Format your response as a JSON object with these keys: {
         maxTokens: 800   // Need enough tokens for structured response
       });
       
-      // Try to parse the response as JSON using multiple approaches
+      // Skip JSON parsing entirely and go straight to regex extraction, which is more reliable
       try {
-        // First try to find valid JSON using a more robust approach
-        // Look for JSON block that's likely properly formatted
-        const jsonPattern = /\{[\s\S]*?"gameTime"[\s\S]*?"headlines"[\s\S]*?"keyInjuries"[\s\S]*?\}/;
-        const jsonMatch = response.match(jsonPattern);
+        console.log('Using direct regex extraction for game time and headlines');
         
-        if (jsonMatch) {
-          try {
-            // Try to parse the extracted JSON
-            const parsed = JSON.parse(jsonMatch[0]);
-            console.log('Successfully parsed game time and headlines:', parsed);
-            return {
-              success: true,
-              gameTime: parsed.gameTime || 'TBD',
-              headlines: parsed.headlines || [],
-              keyInjuries: parsed.keyInjuries || { homeTeam: [], awayTeam: [] },
-              rawResponse: response
-            };
-          } catch (innerError) {
-            console.warn('Found JSON-like structure but failed to parse:', innerError);
+        // Extract game time using regex - look for time patterns
+        let gameTime = 'TBD';
+        
+        // Try multiple regex patterns to find a game time
+        const timePatterns = [
+          // Match "gameTime": "7:30 PM ET"
+          /"gameTime"\s*:\s*"([^"]*)"/, 
+          
+          // Match time in format like "7:30 PM ET" or "7:30 PM Eastern"
+          /(\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:ET|Eastern))/, 
+          
+          // Match time in format like "7:30 PM"
+          /(\d{1,2}:\d{2}\s*(?:AM|PM))/, 
+          
+          // Match just time like XX:XX anywhere in text
+          /(\d{1,2}:\d{2})/ 
+        ];
+        
+        // Try each pattern until we find a match
+        for (const pattern of timePatterns) {
+          const match = response.match(pattern);
+          if (match && match[1]) {
+            gameTime = match[1];
+            console.log(`Found game time: ${gameTime} using pattern: ${pattern}`);
+            break;
           }
         }
         
-        // Second approach: Try to extract the data directly using separate regex patterns
-        console.log('Trying alternative extraction approach...');
+        // If still no game time, look for "TBD" or "Not scheduled" or similar phrases
+        if (gameTime === 'TBD') {
+          const tbdMatch = response.match(/(TBD|Not scheduled|No game|postponed|canceled)/i);
+          if (tbdMatch) {
+            gameTime = 'TBD'; // Keep as TBD
+            console.log('Game appears to be unscheduled or TBD');
+          }
+        }
         
-        // Extract game time using regex
-        const timeMatch = response.match(/"gameTime"\s*:\s*"([^"]*)"/);
-        const gameTime = timeMatch ? timeMatch[1] : 'TBD';
-        
-        // Extract headlines - look for array structure
-        const headlinesMatch = response.match(/"headlines"\s*:\s*\[(.*?)\]/s);
+        // Extract headlines using various patterns
         let headlines = [];
+        
+        // Try multiple patterns to extract headlines
+        const headlinePatterns = [
+          // Try to match headlines array in JSON first
+          /"headlines"\s*:\s*\[([^\]]*)\]/s,
+          
+          // Match numbered lists
+          /\d+\.\s*([^\n\d\.]+)/g,
+          
+          // Match bullet points
+          /•\s*([^\n•]+)/g,
+          
+          // Match anything that looks like a headline (sentence ending with period)
+          /([A-Z][^\n\.]+\.[^\n]+)/g
+        ];
+        
+        // First try the JSON pattern
+        const headlinesMatch = response.match(headlinePatterns[0]);
         if (headlinesMatch && headlinesMatch[1]) {
           // Extract quoted strings from array
           const headlineStrings = headlinesMatch[1].match(/"([^"]*)"(?:,|$)/g);
           if (headlineStrings) {
-            headlines = headlineStrings.map(h => h.replace(/[",\s]/g, '').trim()).filter(Boolean);
+            headlines = headlineStrings.map(h => h.replace(/[",\s]/g, '').trim())
+              .filter(h => h.length > 10); // Ensure headlines are substantial
+            console.log(`Found ${headlines.length} headlines in JSON structure`);
           }
         }
         
+        // If no headlines from JSON, try the other patterns
+        if (headlines.length === 0) {
+          console.log('Trying alternative headline extraction patterns');
+          
+          // Look for numbered lists (1. Headline text)
+          const numberedMatches = [...response.matchAll(/\d+\.\s*([^\n\d\.]{15,})/g)];
+          if (numberedMatches.length > 0) {
+            headlines = numberedMatches.map(m => m[1].trim())
+              .filter(h => h.length > 10);
+            console.log(`Found ${headlines.length} headlines in numbered list`);
+          }
+          
+          // If still no headlines, look for bullet points
+          if (headlines.length === 0) {
+            const bulletMatches = [...response.matchAll(/[•\-]\s*([^\n•\-]{15,})/g)];
+            if (bulletMatches.length > 0) {
+              headlines = bulletMatches.map(m => m[1].trim())
+                .filter(h => h.length > 10);
+              console.log(`Found ${headlines.length} headlines in bullet points`);
+            }
+          }
+        }
+        
+        // Extract injuries if possible
+        let keyInjuries = { homeTeam: [], awayTeam: [] };
+        
+        // Try to find injury information for both teams
+        try {
+          // Try to match injuries section first
+          const injuriesSection = response.match(/(?:key injuries|injury report|players out|injured players)[:\s\n]+(.*?)(?:\n\n|$)/is);
+          
+          if (injuriesSection) {
+            const injuryText = injuriesSection[1];
+            console.log('Found injury section:', injuryText);
+            
+            // Try to identify home team injuries
+            const homeTeamPattern = new RegExp(`${homeTeam}[:\s]+(.*?)(?:${awayTeam}|$)`, 'is');
+            const homeTeamMatch = injuryText.match(homeTeamPattern);
+            
+            if (homeTeamMatch && homeTeamMatch[1]) {
+              // Extract individual injuries
+              const injuries = homeTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
+              keyInjuries.homeTeam = injuries;
+              console.log(`Found ${injuries.length} injuries for home team`);
+            }
+            
+            // Try to identify away team injuries
+            const awayTeamPattern = new RegExp(`${awayTeam}[:\s]+(.*?)(?:${homeTeam}|$)`, 'is');
+            const awayTeamMatch = injuryText.match(awayTeamPattern);
+            
+            if (awayTeamMatch && awayTeamMatch[1]) {
+              // Extract individual injuries
+              const injuries = awayTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
+              keyInjuries.awayTeam = injuries;
+              console.log(`Found ${injuries.length} injuries for away team`);
+            }
+          }
+        } catch (injuryError) {
+          console.warn('Error extracting injuries:', injuryError);
+          // Keep default empty arrays
+        }
+        
         // Basic extraction successful
-        console.log('Extracted data using regex:', { gameTime, headlines: headlines.length });
+        console.log('Extracted data using regex approach:', {
+          gameTime, 
+          headlines: headlines.length,
+          homeTeamInjuries: keyInjuries.homeTeam.length,
+          awayTeamInjuries: keyInjuries.awayTeam.length
+        });
+        
         return {
           success: true,
           gameTime: gameTime,
           headlines: headlines,
-          keyInjuries: { homeTeam: [], awayTeam: [] }, // Default empty for now
+          keyInjuries: keyInjuries,
           extractionMethod: 'regex',
           rawResponse: response
         };
