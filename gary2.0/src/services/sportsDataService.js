@@ -324,6 +324,113 @@ const sportsDataService = {
       winStreak: this._calculateWinStreak(events)
     };
   },
+  
+  /**
+   * Get MLB starting pitcher statistics for a team
+   * @param {string} teamName - The team name to get pitcher data for
+   * @returns {Promise<Object>} - Pitcher statistics
+   */
+  async getMlbPitcherStats(teamName) {
+    try {
+      console.log(`Getting starting pitcher data for ${teamName}...`);
+      
+      // Get team data from TheSportsDB API
+      const teamData = await this.getTeamData(teamName);
+      if (!teamData) {
+        console.error(`Could not find team data for ${teamName}`);
+        return null;
+      }
+      
+      // Get team players
+      const players = await this.getTeamPlayers(teamData.idTeam);
+      if (!players || !players.length) {
+        console.error(`No players found for team ${teamName}`);
+        return null;
+      }
+      
+      // Find pitchers (typically position contains 'pitcher')
+      const pitchers = players.filter(p => 
+        p.strPosition?.toLowerCase().includes('pitcher')
+      );
+      
+      if (!pitchers.length) {
+        console.error(`No pitchers found for team ${teamName}`);
+        return null;
+      }
+      
+      // Get detailed stats for top pitchers (likely to be starters)
+      const pitcherDetails = [];
+      
+      // Limit to top starting pitchers to avoid excessive API calls
+      for (const pitcher of pitchers.slice(0, 3)) {
+        try {
+          // Get player details from TheSportsDB API
+          const response = await this.apiGet(`lookupplayer.php?id=${pitcher.idPlayer}`);
+          if (response?.players?.length) {
+            const details = response.players[0];
+            
+            // Extract stats from description if available
+            const era = this._extractStatFromText(details.strDescriptionEN, /ERA of ([0-9.]+)/i) || 
+                       this._extractStatFromText(details.strDescriptionEN, /([0-9.]+)\s*ERA/i);
+                       
+            const wins = this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*wins/i) || 
+                       this._extractStatFromText(details.strDescriptionEN, /record of ([0-9]+)-/i);
+                       
+            const losses = this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*losses/i) || 
+                         this._extractStatFromText(details.strDescriptionEN, /record of [0-9]+-([0-9]+)/i);
+                         
+            const strikeouts = this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*strikeouts/i) || 
+                            this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*K/i);
+            
+            pitcherDetails.push({
+              name: details.strPlayer,
+              position: details.strPosition,
+              thumb: details.strThumb || details.strCutout,
+              stats: {
+                ERA: era || 'N/A',
+                record: (wins && losses) ? `${wins}-${losses}` : 'N/A',
+                strikeouts: strikeouts || 'N/A',
+                description: this._getShortDescription(details.strDescriptionEN)
+              }
+            });
+          }
+        } catch (error) {
+          console.error(`Error getting details for pitcher ${pitcher.strPlayer}:`, error);
+        }
+      }
+      
+      return pitcherDetails.length ? pitcherDetails : null;
+    } catch (error) {
+      console.error(`Error getting pitcher stats for ${teamName}:`, error);
+      return null;
+    }
+  },
+  
+  /**
+   * Helper to extract statistics from text
+   * @param {string} text - Text to parse
+   * @param {RegExp} regex - Regular expression with capture group
+   * @returns {string|null} - Extracted statistic or null
+   * @private
+   */
+  _extractStatFromText(text, regex) {
+    if (!text) return null;
+    const match = text.match(regex);
+    return match && match[1] ? match[1] : null;
+  },
+  
+  /**
+   * Helper to get a short description from long text
+   * @param {string} text - Long description text
+   * @returns {string} - Short description (first 1-2 sentences)
+   * @private
+   */
+  _getShortDescription(text) {
+    if (!text) return 'No description available';
+    // Get first 1-2 sentences or first 100 chars
+    const sentences = text.split('.');
+    return sentences.slice(0, 2).join('.') + '.';
+  },
 
   /**
    * Extract NBA-specific statistics

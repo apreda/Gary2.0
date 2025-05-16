@@ -66,17 +66,48 @@ const picksService = {
               
               // For MLB games, get additional pitcher data if available
               let pitcherData = '';
+              let homePitchers = null;
+              let awayPitchers = null;
               if (sportName === 'MLB') {
                 try {
-                  console.log('Fetching additional MLB pitcher data...');
-                  const homeTeamData = await sportsDataService.getTeamData(game.home_team);
-                  const awayTeamData = await sportsDataService.getTeamData(game.away_team);
+                  console.log('Fetching additional MLB pitcher data from TheSportsDB...');
                   
-                  // Ideally we would fetch specific pitcher data here
-                  // This is a placeholder for future implementation
-                  pitcherData = `PITCHING MATCHUP: Check starting pitchers' stats including ERA, WHIP, K/9, and recent performances.`;
+                  // Get starting pitcher data for both teams using SportsDB
+                  [homePitchers, awayPitchers] = await Promise.all([
+                    sportsDataService.getMlbPitcherStats(game.home_team),
+                    sportsDataService.getMlbPitcherStats(game.away_team)
+                  ]);
+                  
+                  // Format the pitcher data for the prompt
+                  if (homePitchers || awayPitchers) {
+                    pitcherData = 'STARTING PITCHERS:\n';
+                    
+                    if (homePitchers && homePitchers.length > 0) {
+                      const homePitcher = homePitchers[0]; // Use the first pitcher as the likely starter
+                      pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
+                      pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
+                      pitcherData += `- Record: ${homePitcher.stats.record}\n`;
+                      pitcherData += `- K's: ${homePitcher.stats.strikeouts}\n`;
+                      pitcherData += `- ${homePitcher.stats.description}\n`;
+                    }
+                    
+                    if (awayPitchers && awayPitchers.length > 0) {
+                      const awayPitcher = awayPitchers[0]; // Use the first pitcher as the likely starter
+                      pitcherData += `${game.away_team} Starting Pitcher: ${awayPitcher.name}\n`;
+                      pitcherData += `- ERA: ${awayPitcher.stats.ERA}\n`;
+                      pitcherData += `- Record: ${awayPitcher.stats.record}\n`;
+                      pitcherData += `- K's: ${awayPitcher.stats.strikeouts}\n`;
+                      pitcherData += `- ${awayPitcher.stats.description}\n`;
+                    }
+                    
+                    pitcherData += '\nNOTE: For MLB games, starting pitcher stats are more important than team ERA.';
+                  } else {
+                    // Fallback message if no pitcher data found
+                    pitcherData = `PITCHING MATCHUP: No specific starting pitcher data available. Focus on analyzing the pitching matchup using recent performance metrics.`;
+                  }
                 } catch (error) {
                   console.error('Error fetching MLB pitcher data:', error.message);
+                  pitcherData = `PITCHING MATCHUP: Check starting pitchers' stats including ERA, WHIP, K/9, and recent performances.`;
                 }
               }
               
@@ -136,16 +167,23 @@ const picksService = {
                 realTimeNews: gameNews || ''
               };
               
-              // Get enhanced stats for specific sports
+              // Get enhanced stats for specific sports, prioritizing TheSportsDB first
               let enhancedStats = '';
               try {
-                if (sportName === 'MLB') {
-                  enhancedStats = await sportsDataService.getEnhancedMLBStats(game.home_team, game.away_team);
-                  formattedGameData.enhancedStats = enhancedStats;
-                }
-                
-                // Add the comprehensive stats context
+                // First, ensure we have the comprehensive stats context from TheSportsDB
                 formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
+                
+                // Only as a backup, try Ball Don't Lie for additional stats if TheSportsDB data seems incomplete
+                if (formattedGameData.statsContext.includes('unavailable') || formattedGameData.statsContext.includes('Error')) {
+                  console.log('TheSportsDB data incomplete, trying Ball Don\'t Lie API for backup...');
+                  
+                  if (sportName === 'MLB') {
+                    enhancedStats = await sportsDataService.getEnhancedMLBStats(game.home_team, game.away_team);
+                    formattedGameData.enhancedStats = enhancedStats;
+                  }
+                } else {
+                  console.log('Using primary TheSportsDB data for analysis');
+                }
               } catch (statsError) {
                 console.warn('Error getting enhanced stats:', statsError);
                 // Continue with basic stats if enhanced stats fail
