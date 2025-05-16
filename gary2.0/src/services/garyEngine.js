@@ -91,7 +91,10 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       sport: gameData?.league || gameData?.sport || '',
       odds: gameData?.odds || null,
       teamStats: gameData?.teamStats || null,
-      lineMovement: gameData?.lineMovement || null
+      lineMovement: gameData?.lineMovement || null,
+      // Add game time data - important for OpenAI to include in response
+      gameTime: gameData?.gameTime || gameData?.time || 'TBD',
+      time: gameData?.gameTime || gameData?.time || 'TBD'
     };
     
     console.log('Formatted game data:', JSON.stringify(formattedData, null, 2));
