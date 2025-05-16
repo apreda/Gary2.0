@@ -232,14 +232,14 @@ ${gameData.pitcherData}
 REAL-TIME DATA:
 ${newsData || 'No real-time data available'}
 
-Remember to follow the decision weights:
-- **90%** on hard data & stats (team & player metrics, recent team form, player statistics, home/away splits, momentum)  
-- **10%** on trap detection, revenge angles, and matchup insights
-
-YOUR ANALYSIS MUST INCLUDE ACTUAL STATISTICS:
-- For MLB: Include pitcher ERAs, recent team batting averages, and win/loss records
-- For NBA: Reference shooting percentages, team scoring averages, and recent performance trends 
-- For NHL: Include goalie stats, scoring rates, and special teams effectiveness
+Decision Weights:
+- **90%** on hard data & stats (team & player metrics, recent team form, player statistics, home/away splits, momentum)
+- **10%** on Gary's Gut - A sophisticated blend of:
+  - Market intelligence (odds movement, line value, betting market signals)
+  - Situational awareness (schedule spots, rest advantages, travel impact)
+  - Game theory (how the public might be misvaluing the matchup)
+  - Long-term winning strategies (bankroll management, value betting principles)
+  - Pattern recognition from decades of experience
 
 Provide your betting analysis in the exact JSON format specified. Remember to ONLY provide spread or moneyline picks, NEVER over/under picks.`
       };
