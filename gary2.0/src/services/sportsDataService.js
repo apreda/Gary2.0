@@ -404,9 +404,61 @@ const sportsDataService = {
     }
   },
 
-  // Enhanced stats methods will be added here
+  /**
+   * Build comprehensive stats context for OpenAI analysis
+   * This function exists to integrate with the picksService workflow
+   * @param {Object} statsData - Team stats data
+   * @returns {string} - Formatted stats for OpenAI prompt
+   */
+  buildComprehensiveStatsContext(statsData) {
+    return this.formatStatsForPrompt(statsData);
+  },
+
+  /**
+   * Get enhanced MLB statistics from Ball Don't Lie API
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name 
+   * @returns {Promise<Object>} - Enhanced MLB statistics
+   */
   getEnhancedMLBStats: async function(homeTeam, awayTeam) {
-    // Implementation will be added
+    try {
+      console.log(`Fetching enhanced MLB stats for ${homeTeam} vs ${awayTeam}...`);
+      
+      // Find upcoming game for these teams
+      const games = await ballDontLieService.getAllGamesByDate(new Date());
+      let gameId = null;
+      
+      // Find the game ID for these two teams
+      if (games && games.MLB) {
+        const matchedGame = games.MLB.find(game => 
+          (game.home_team.display_name.includes(homeTeam) || homeTeam.includes(game.home_team.display_name)) && 
+          (game.away_team.display_name.includes(awayTeam) || awayTeam.includes(game.away_team.display_name))
+        );
+        
+        if (matchedGame) {
+          gameId = matchedGame.id;
+        }
+      }
+      
+      // Generate game preview if we found the game
+      let gamePreview = '';
+      if (gameId) {
+        gamePreview = await ballDontLieService.generateMlbGamePreview(gameId);
+      } else {
+        // If we can't find the exact game, still try to get team info
+        console.log('Game not found in Ball Don\'t Lie API, using team names only');
+        const homeTeamData = await this.getTeamData(homeTeam);
+        const awayTeamData = await this.getTeamData(awayTeam);
+        
+        gamePreview = `## MLB Game Preview: ${awayTeam} @ ${homeTeam} ##\n\n`;
+        gamePreview += 'Note: Limited statistics available from Ball Don\'t Lie API.\n';
+      }
+      
+      return gamePreview;
+    } catch (error) {
+      console.error('Error fetching enhanced MLB stats:', error);
+      return 'Error fetching enhanced MLB statistics. Using basic information only.';
+    }
   },
   
   getEnhancedNBAStats(homeTeam, awayTeam) {
