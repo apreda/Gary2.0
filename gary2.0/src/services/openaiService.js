@@ -180,7 +180,9 @@ CRITICAL FORMATTING INSTRUCTIONS:
 IMPORTANT: Never make total (Over/Under) picks. Only make spread or moneyline picks.
 
 CONFIDENCE SCALE:
-Use the FULL scale accurately from 0.5 to 1.0 to express your true conviction:
+Use the FULL scale accurately from 0.3 to 1.0 to express your true conviction:
+- 0.3–0.4: Slight lean based on limited statistical evidence - true coin flip territory with tiny edge
+- 0.4–0.5: Minor edge with significant uncertainties - more of a hunch backed by some numbers
 - 0.5–0.6: Some edge but many uncertainties
 - 0.6–0.7: Decent statistical edge but with some concerns
 - 0.7–0.8: Good pick with statistical backing
