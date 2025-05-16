@@ -9,6 +9,27 @@ const sportsDataService = {
   // API configuration
   API_BASE_URL: 'https://www.thesportsdb.com/api/v1/json',
   API_KEY: import.meta.env?.VITE_THESPORTSDB_API_KEY || '3',
+  
+  /**
+   * Helper to make API calls to TheSportsDB
+   * @param {string} endpoint - API endpoint
+   * @param {Object} params - Query parameters
+   * @returns {Promise<Object>} - API response
+   */
+  async apiGet(endpoint, params = {}) {
+    try {
+      // Check if endpoint already has full URL structure
+      const url = endpoint.startsWith('http') 
+        ? endpoint 
+        : `${this.API_BASE_URL}/${this.API_KEY}/${endpoint}`;
+      
+      const response = await axios.get(url, { params });
+      return response.data;
+    } catch (error) {
+      console.error(`API Error [${endpoint}]:`, error.message);
+      return null;
+    }
+  },
 
   /**
    * Convert league names to TheSportsDB format
@@ -33,17 +54,78 @@ const sportsDataService = {
    */
   async getTeamData(teamName) {
     try {
-      const response = await axios.get(
-        `${this.API_BASE_URL}/${this.API_KEY}/searchteams.php`,
-        { params: { t: teamName } }
-      );
+      const data = await this.apiGet('searchteams.php', { t: teamName });
       
-      if (response.data?.teams?.length > 0) {
-        return response.data.teams[0];
+      if (data?.teams?.length > 0) {
+        return data.teams[0];
       }
       return null;
     } catch (error) {
       console.error(`Error fetching team data for ${teamName}:`, error);
+      return null;
+    }
+  },
+  
+  /**
+   * Get all players for a team
+   * @param {string} teamId - Team ID from TheSportsDB
+   * @returns {Promise<Array|null>} - Array of players or null if not found
+   */
+  async getTeamPlayers(teamId) {
+    try {
+      console.log(`Fetching players for team ID ${teamId}...`);
+      const data = await this.apiGet('lookup_all_players.php', { id: teamId });
+      
+      if (data?.player?.length > 0) {
+        return data.player;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error fetching players for team ${teamId}:`, error);
+      return null;
+    }
+  },
+  
+  /**
+   * Get today's games for a specific league
+   * @param {string} league - League code (MLB, NBA, etc.)
+   * @returns {Promise<Array>} - Array of today's games
+   */
+  async getTodaysGames(league) {
+    try {
+      // Format date as YYYY-MM-DD for TheSportsDB API
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0];
+      
+      console.log(`Fetching ${league} games for ${formattedDate}...`);
+      const data = await this.apiGet('eventsday.php', { d: formattedDate, l: league });
+      
+      if (data?.events?.length > 0) {
+        return data.events;
+      }
+      return [];
+    } catch (error) {
+      console.error(`Error fetching today's ${league} games:`, error);
+      return [];
+    }
+  },
+  
+  /**
+   * Get lineup for a specific game
+   * @param {string} eventId - Event ID from TheSportsDB
+   * @returns {Promise<Object|null>} - Lineup data or null if not found
+   */
+  async getGameLineup(eventId) {
+    try {
+      console.log(`Fetching lineup for game ID ${eventId}...`);
+      const data = await this.apiGet('lookuplineup.php', { id: eventId });
+      
+      if (data?.lineup) {
+        return data.lineup;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error fetching lineup for game ${eventId}:`, error);
       return null;
     }
   },
@@ -326,15 +408,212 @@ const sportsDataService = {
   },
   
   /**
-   * Get MLB starting pitcher statistics for a team
+   * Get today's MLB starting pitcher data for a team by checking game lineups
    * @param {string} teamName - The team name to get pitcher data for
-   * @returns {Promise<Object>} - Pitcher statistics
+   * @param {string} opponentName - Optional opponent team name to help find the right game
+   * @returns {Promise<Object>} - Pitcher statistics with game context
    */
-  async getMlbPitcherStats(teamName) {
+  async getMlbStartingPitchers(teamName, opponentName = null) {
     try {
-      console.log(`Getting starting pitcher data for ${teamName}...`);
+      console.log(`Getting starting pitchers for ${teamName} vs ${opponentName || 'any opponent'}...`);
       
-      // Get team data from TheSportsDB API
+      // Step 1: Find today's MLB games
+      const todaysGames = await this.getTodaysGames('MLB');
+      if (!todaysGames.length) {
+        console.log('No MLB games found for today');
+        return await this.getFallbackPitcherData(teamName); // Fall back to generic pitcher data
+      }
+      
+      // Step 2: Find the specific game for this team
+      let targetGame = null;
+      if (opponentName) {
+        // If we know both teams, find their matchup
+        targetGame = todaysGames.find(game =>
+          (this._teamNameMatch(game.strHomeTeam, teamName) && this._teamNameMatch(game.strAwayTeam, opponentName)) ||
+          (this._teamNameMatch(game.strHomeTeam, opponentName) && this._teamNameMatch(game.strAwayTeam, teamName))
+        );
+      } else {
+        // Otherwise just find any game with this team
+        targetGame = todaysGames.find(game =>
+          this._teamNameMatch(game.strHomeTeam, teamName) || this._teamNameMatch(game.strAwayTeam, teamName)
+        );
+      }
+      
+      if (!targetGame) {
+        console.log(`No game found for ${teamName} today, using fallback data`);
+        return await this.getFallbackPitcherData(teamName); // Fall back to generic pitcher data
+      }
+      
+      console.log(`Found game: ${targetGame.strHomeTeam} vs ${targetGame.strAwayTeam} (ID: ${targetGame.idEvent})`);
+      
+      // Step 3: Get the game lineup to find starting pitchers
+      const lineup = await this.getGameLineup(targetGame.idEvent);
+      if (!lineup || (!lineup.home && !lineup.away)) {
+        console.log('No lineup data available, using fallback pitcher data');
+        return await this.getFallbackPitcherData(teamName);
+      }
+      
+      // Step 4: Find the team's starting pitcher from the lineup
+      const isHomeTeam = this._teamNameMatch(targetGame.strHomeTeam, teamName);
+      const teamLineup = isHomeTeam ? lineup.home : lineup.away;
+      const opponentLineup = isHomeTeam ? lineup.away : lineup.home;
+      
+      // Find pitchers (marked with position 'P' in lineup)
+      let startingPitcher = null;
+      let opponentPitcher = null;
+      
+      if (teamLineup?.lineup) {
+        startingPitcher = teamLineup.lineup.find(player => player.strPosition === 'P');
+      }
+      
+      if (opponentLineup?.lineup) {
+        opponentPitcher = opponentLineup.lineup.find(player => player.strPosition === 'P');
+      }
+      
+      // Step 5: Get detailed stats for both pitchers
+      const result = {
+        game: {
+          homeTeam: targetGame.strHomeTeam,
+          awayTeam: targetGame.strAwayTeam,
+          date: targetGame.dateEvent,
+          time: targetGame.strTime,
+          venue: targetGame.strVenue
+        },
+        team: teamName,
+        teamPitcher: startingPitcher ? await this.getDetailedPitcherStats(startingPitcher) : null,
+        opponentPitcher: opponentPitcher ? await this.getDetailedPitcherStats(opponentPitcher) : null
+      };
+      
+      // If we still don't have pitcher data, fall back to the generic method
+      if (!result.teamPitcher && !result.opponentPitcher) {
+        console.log('No pitcher data found in lineup, using fallback method');
+        return await this.getFallbackPitcherData(teamName);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error(`Error getting starting pitcher data for ${teamName}:`, error);
+      return await this.getFallbackPitcherData(teamName);
+    }
+  },
+  
+  /**
+   * Helper to check if team names match (handles variations in team names)
+   * @private
+   */
+  _teamNameMatch(team1, team2) {
+    if (!team1 || !team2) return false;
+    
+    // Clean and lowercase both names
+    const clean1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const clean2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Check for exact match or substring match
+    return clean1 === clean2 || 
+           clean1.includes(clean2) || 
+           clean2.includes(clean1);
+  },
+  
+  /**
+   * Get detailed stats for a pitcher from the lineup
+   * @param {Object} pitcherLineupData - Pitcher data from the lineup
+   * @returns {Promise<Object>} - Detailed pitcher stats
+   */
+  async getDetailedPitcherStats(pitcherLineupData) {
+    try {
+      if (!pitcherLineupData) return null;
+      
+      // If we have the player ID directly
+      const playerId = pitcherLineupData.idPlayer;
+      if (!playerId) {
+        // Search for the player by name if we don't have the ID
+        const searchResult = await this.apiGet('searchplayers.php', { 
+          p: pitcherLineupData.strPlayer
+        });
+        
+        if (searchResult?.player?.length > 0) {
+          const playerMatch = searchResult.player.find(p => 
+            p.strPlayer === pitcherLineupData.strPlayer || 
+            p.strTeam === pitcherLineupData.strTeam
+          ) || searchResult.player[0];
+          
+          const playerDetails = await this.apiGet('lookupplayer.php', { id: playerMatch.idPlayer });
+          if (playerDetails?.players?.length > 0) {
+            return this._formatPitcherStats(playerDetails.players[0]);
+          }
+        }
+        return null;
+      }
+      
+      // Get detailed player stats
+      const playerDetails = await this.apiGet('lookupplayer.php', { id: playerId });
+      if (playerDetails?.players?.length > 0) {
+        return this._formatPitcherStats(playerDetails.players[0]);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting detailed pitcher stats:', error);
+      return null;
+    }
+  },
+  
+  /**
+   * Format pitcher stats from player details
+   * @private
+   */
+  _formatPitcherStats(playerDetails) {
+    if (!playerDetails) return null;
+    
+    // Extract stats from player description and structured data
+    const era = this._extractStatFromText(playerDetails.strDescriptionEN, /ERA of ([0-9.]+)/i) || 
+               this._extractStatFromText(playerDetails.strDescriptionEN, /([0-9.]+)\s*ERA/i) || 
+               playerDetails.strERA || 'N/A';
+               
+    const wins = this._extractStatFromText(playerDetails.strDescriptionEN, /([0-9]+)\s*wins/i) || 
+               this._extractStatFromText(playerDetails.strDescriptionEN, /record of ([0-9]+)-/i) || 
+               playerDetails.strWin || 'N/A';
+               
+    const losses = this._extractStatFromText(playerDetails.strDescriptionEN, /([0-9]+)\s*losses/i) || 
+                 this._extractStatFromText(playerDetails.strDescriptionEN, /record of [0-9]+-([0-9]+)/i) || 
+                 playerDetails.strLoss || 'N/A';
+                 
+    const strikeouts = this._extractStatFromText(playerDetails.strDescriptionEN, /([0-9]+)\s*strikeouts/i) || 
+                    this._extractStatFromText(playerDetails.strDescriptionEN, /([0-9]+)\s*K/i) || 
+                    playerDetails.strStrikeouts || 'N/A';
+                    
+    const whip = this._extractStatFromText(playerDetails.strDescriptionEN, /WHIP of ([0-9.]+)/i) || 
+               this._extractStatFromText(playerDetails.strDescriptionEN, /([0-9.]+)\s*WHIP/i) || 
+               playerDetails.strWHIP || 'N/A';
+    
+    return {
+      name: playerDetails.strPlayer,
+      position: playerDetails.strPosition,
+      team: playerDetails.strTeam,
+      born: playerDetails.dateBorn,
+      height: playerDetails.strHeight,
+      weight: playerDetails.strWeight,
+      thumb: playerDetails.strThumb || playerDetails.strCutout || playerDetails.strRender,
+      stats: {
+        ERA: era,
+        record: (wins && losses && wins !== 'N/A' && losses !== 'N/A') ? `${wins}-${losses}` : 'N/A',
+        strikeouts: strikeouts,
+        WHIP: whip,
+        description: this._getShortDescription(playerDetails.strDescriptionEN)
+      }
+    };
+  },
+  
+  /**
+   * Fallback method to get generic pitcher data when lineups aren't available
+   * @param {string} teamName - Team name
+   * @returns {Promise<Object>} - Fallback pitcher data
+   */
+  async getFallbackPitcherData(teamName) {
+    try {
+      console.log(`Using fallback method to get pitcher data for ${teamName}...`);
+      
+      // Get team data
       const teamData = await this.getTeamData(teamName);
       if (!teamData) {
         console.error(`Could not find team data for ${teamName}`);
@@ -362,46 +641,45 @@ const sportsDataService = {
       const pitcherDetails = [];
       
       // Limit to top starting pitchers to avoid excessive API calls
-      for (const pitcher of pitchers.slice(0, 3)) {
+      for (const pitcher of pitchers.slice(0, 2)) {
         try {
-          // Get player details from TheSportsDB API
-          const response = await this.apiGet(`lookupplayer.php?id=${pitcher.idPlayer}`);
-          if (response?.players?.length) {
-            const details = response.players[0];
-            
-            // Extract stats from description if available
-            const era = this._extractStatFromText(details.strDescriptionEN, /ERA of ([0-9.]+)/i) || 
-                       this._extractStatFromText(details.strDescriptionEN, /([0-9.]+)\s*ERA/i);
-                       
-            const wins = this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*wins/i) || 
-                       this._extractStatFromText(details.strDescriptionEN, /record of ([0-9]+)-/i);
-                       
-            const losses = this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*losses/i) || 
-                         this._extractStatFromText(details.strDescriptionEN, /record of [0-9]+-([0-9]+)/i);
-                         
-            const strikeouts = this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*strikeouts/i) || 
-                            this._extractStatFromText(details.strDescriptionEN, /([0-9]+)\s*K/i);
-            
-            pitcherDetails.push({
-              name: details.strPlayer,
-              position: details.strPosition,
-              thumb: details.strThumb || details.strCutout,
-              stats: {
-                ERA: era || 'N/A',
-                record: (wins && losses) ? `${wins}-${losses}` : 'N/A',
-                strikeouts: strikeouts || 'N/A',
-                description: this._getShortDescription(details.strDescriptionEN)
-              }
-            });
+          const playerDetails = await this.apiGet('lookupplayer.php', { id: pitcher.idPlayer });
+          if (playerDetails?.players?.length > 0) {
+            pitcherDetails.push(this._formatPitcherStats(playerDetails.players[0]));
           }
         } catch (error) {
           console.error(`Error getting details for pitcher ${pitcher.strPlayer}:`, error);
         }
       }
       
-      return pitcherDetails.length ? pitcherDetails : null;
+      return {
+        team: teamName,
+        teamPitcher: pitcherDetails.length > 0 ? pitcherDetails[0] : null,
+        opponentPitcher: null,
+        game: null,
+        note: "Fallback pitcher data - not based on today's lineup"
+      };
     } catch (error) {
-      console.error(`Error getting pitcher stats for ${teamName}:`, error);
+      console.error(`Error getting fallback pitcher data for ${teamName}:`, error);
+      return null;
+    }
+  },
+  
+  /**
+   * Legacy method for backward compatibility
+   * @param {string} teamName - Team name
+   * @returns {Promise<Array>} - Array of pitcher details
+   */
+  async getMlbPitcherStats(teamName) {
+    try {
+      const pitcherData = await this.getMlbStartingPitchers(teamName);
+      if (!pitcherData) return null;
+      
+      const result = [];
+      if (pitcherData.teamPitcher) result.push(pitcherData.teamPitcher);
+      return result.length > 0 ? result : null;
+    } catch (error) {
+      console.error(`Error in legacy pitcher stats method for ${teamName}:`, error);
       return null;
     }
   },
