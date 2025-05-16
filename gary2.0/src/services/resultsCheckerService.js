@@ -126,7 +126,7 @@ export const resultsCheckerService = {
    * @param {Array} picks - Array of Gary's picks from the database
    * @returns {Promise<Object>} Game scores mapped by matchup
    */
-  getGameScores: async (date, picks) => {
+  getGameScores: async function(date, picks) {
     try {
       if (!picks || picks.length === 0) {
         console.log('No picks provided to check scores for');
@@ -394,7 +394,7 @@ export const resultsCheckerService = {
       'https://www.espn.com/nhl/scoreboard'
     ]
   }),
-  checkResults: async (date) => {
+  checkResults: async function(date) {
     try {
       console.log(`Checking results for date: ${date}`);
       
@@ -416,7 +416,7 @@ export const resultsCheckerService = {
       console.log(`Found ${dailyPicks.picks.length} picks to check`);
       
       // 2. Get scores using fallback strategy
-      const { success, scores, message } = await resultsCheckerService.getGameScores(
+      const { success, scores, message } = await this.getGameScores(
         date,
         dailyPicks.picks
       );
