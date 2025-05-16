@@ -245,8 +245,17 @@ const ballDontLieService = {
           return [];
         }
         
+        // Format date as YYYY-MM-DD for API
+        const formattedDate = typeof date === 'string' && date.includes('-') 
+          ? date 
+          : (date instanceof Date 
+              ? date.toISOString().split('T')[0] 
+              : new Date(date).toISOString().split('T')[0]);
+        
+        console.log(`Using formatted date for NBA API: ${formattedDate}`);
+        
         const response = await api.nba.getGames({ 
-          dates: [date],
+          dates: [formattedDate],
           per_page: 100 // Max allowed
         });
         return response.data || [];
@@ -262,8 +271,17 @@ const ballDontLieService = {
       const cacheKey = `mlb_games_${date}`;
       return getCachedOrFetch(cacheKey, async () => {
         console.log(`Fetching MLB games for ${date} from BallDontLie`);
+        // Format date as YYYY-MM-DD for API
+        const formattedDate = typeof date === 'string' && date.includes('-') 
+          ? date 
+          : (date instanceof Date 
+              ? date.toISOString().split('T')[0] 
+              : new Date(date).toISOString().split('T')[0]);
+        
+        console.log(`Using formatted date for MLB API: ${formattedDate}`);
+        
         const response = await api.mlb.getGames({ 
-          dates: [date],
+          dates: [formattedDate],
           per_page: 100 // Max allowed
         });
         return response.data || [];
