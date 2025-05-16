@@ -6,38 +6,35 @@
 import { BalldontlieAPI } from '@balldontlie/sdk';
 
 // Initialize the API client with our API key
-const API_KEY = '3363660a-a082-43b7-a130-6249ff68e5ab'; // GOAT plan
-const api = new BalldontlieAPI({ apiKey: API_KEY });
+let API_KEY = import.meta.env?.VITE_BALLDONTLIE_API_KEY || '3363660a-a082-43b7-a130-6249ff68e5ab'; // Default to GOAT plan key if not in env
+let api;
 
 // Cache for API responses
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 
 // Helper function to get data from cache or fetch it
-async function getCachedOrFetch(cacheKey, fetchFn) {
+const getCachedOrFetch = async (cacheKey, fetchFn) => {
   const now = Date.now();
   const cached = cache.get(cacheKey);
   
   if (cached && (now - cached.timestamp < CACHE_TTL)) {
-    console.log(`[CACHE HIT] ${cacheKey}`);
+    console.log(`Using cached data for ${cacheKey}`);
     return cached.data;
   }
   
-  console.log(`[CACHE MISS] ${cacheKey}`);
-  try {
-    const data = await fetchFn();
-    cache.set(cacheKey, { data, timestamp: now });
-    return data;
-  } catch (error) {
-    console.error(`Error in getCachedOrFetch for ${cacheKey}:`, error.message);
-    // Return cached data even if it's stale if there's an error
-    if (cached) {
-      console.log(`Returning stale cache data for ${cacheKey}`);
-      return cached.data;
-    }
-    throw error;
-  }
+  const data = await fetchFn();
+  cache.set(cacheKey, { data, timestamp: now });
+  return data;
 }
+
+// Initialize api
+const initApi = () => {
+  if (!api) {
+    api = new BalldontlieAPI({ apiKey: API_KEY });
+  }
+  return api;
+};
 
 /**
  * Get NBA games for a specific date
@@ -49,7 +46,8 @@ const getNbaGamesByDate = async (date) => {
     const cacheKey = `nba_games_${date}`;
     return getCachedOrFetch(cacheKey, async () => {
       console.log(`Fetching NBA games for ${date} from BallDontLie`);
-      const response = await api.nba.getGames({ 
+      const client = initApi();
+      const response = await client.nba.getGames({ 
         dates: [date],
         per_page: 100 // Max allowed
       });
@@ -71,7 +69,8 @@ const getMlbGamesByDate = async (date) => {
     const cacheKey = `mlb_games_${date}`;
     return getCachedOrFetch(cacheKey, async () => {
       console.log(`Fetching MLB games for ${date} from BallDontLie`);
-      const response = await api.mlb.getGames({ 
+      const client = initApi();
+      const response = await client.mlb.getGames({ 
         dates: [date],
         per_page: 100 // Max allowed
       });
@@ -261,7 +260,8 @@ const ballDontLieService = {
       const cacheKey = `mlb-player-season-${playerId}-${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
         console.log(`Fetching MLB season stats for player ${playerId} in ${season}`);
-        const response = await api.mlb.getSeasonStats({
+        const client = initApi();
+        const response = await client.mlb.getSeasonStats({
           season,
           player_ids: [playerId]
         });
@@ -284,7 +284,8 @@ const ballDontLieService = {
       const cacheKey = `mlb-player-games-${playerId}-${limit}`;
       return await getCachedOrFetch(cacheKey, async () => {
         console.log(`Fetching MLB game stats for player ${playerId}`);
-        const response = await api.mlb.getStats({
+        const client = initApi();
+        const response = await client.mlb.getStats({
           player_ids: [playerId],
           per_page: limit
         });
@@ -307,7 +308,8 @@ const ballDontLieService = {
       const cacheKey = `mlb-team-season-${teamId}-${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
         console.log(`Fetching MLB season stats for team ${teamId} in ${season}`);
-        const response = await api.mlb.getTeamSeasonStats({
+        const client = initApi();
+        const response = await client.mlb.getTeamSeasonStats({
           season,
           team_id: teamId
         });
@@ -330,7 +332,8 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const params = teamId ? { team_ids: [teamId] } : {};
         console.log(`Fetching MLB injuries ${teamId ? 'for team ' + teamId : 'for all teams'}`);
-        const response = await api.mlb.getPlayerInjuries(params);
+        const client = initApi();
+        const response = await client.mlb.getPlayerInjuries(params);
         return response.data || [];
       });
     } catch (error) {
@@ -354,7 +357,15 @@ const ballDontLieService = {
       for (const playerId of playerIds) {
         // Get player details, season stats, and recent games
         const [playerDetails, seasonStats, recentGames, injuries] = await Promise.all([
-          this.getClient().mlb.getPlayer(playerId),
+          (async () => {
+            try {
+              const client = initApi();
+              return await client.mlb.getPlayer(playerId);
+            } catch (error) {
+              console.error(`Error fetching player details for ${playerId}:`, error);
+              return { data: null };
+            }
+          })(),
           this.getMlbPlayerSeasonStats(playerId, season),
           this.getMlbPlayerGameStats(playerId, 7),
           this.getMlbPlayerInjuries(null) // Get all injuries and filter below
