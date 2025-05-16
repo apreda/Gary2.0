@@ -5,6 +5,7 @@ import { sportsDbApiService } from './sportsDbApiService';
 import { ballDontLieService } from './ballDontLieService';
 import { perplexityService } from './perplexityService';
 import { userPickResultsService } from './userPickResultsService';
+import { oddsApiService } from './oddsApiService';
 
 // Constants for validation and configuration
 const VALID_RESULTS = new Set(['won', 'lost', 'push']);
@@ -67,11 +68,17 @@ const withRetry = async (fn, retries = MAX_RETRIES, delay = RETRY_DELAY_MS) => {
 };
 
 // Create a Supabase client with admin privileges that bypasses RLS
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || 'https://wljxcsmijuhnqumstxvr.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.REACT_APP_SUPABASE_SERVICE_ROLE_KEY;
-const adminSupabase = SUPABASE_SERVICE_KEY ? 
-  createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : 
-  supabase; // Fallback to regular client if no service key
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://xuttubsfgdcjfgmskcol.supabase.co';
+const SUPABASE_SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+const adminSupabase = SUPABASE_SERVICE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  : supabase; // Fallback to regular client if no service key
 
 // Initialize services
 sportsDbApiService.initialize();
@@ -135,30 +142,60 @@ export const resultsCheckerService = {
       
       console.log(`Fetching scores for ${picks.length} picks from ${date}`);
       const scores = {};
-      const missingGames = [];
+      let missingGames = [];
       
-      // 1. Try primary sources first (Ball Don't Lie for NBA, SportsDB for others)
-      for (const pick of picks) {
-        // Extract team names from the pick string
-        const pickStr = pick.pick || pick.originalPick || '';
-        const teamMatch = pickStr.match(/^([A-Za-z. ]+?)(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?$/);
+      // 1. First try to get all scores from Perplexity (preferred method)
+      console.log('Using Perplexity as primary score source...');
+      try {
+        const perplexityScores = await this.getScoresFromPerplexity(date, picks);
         
-        if (!teamMatch || !teamMatch[1]) {
-          console.warn(`Could not extract team name from pick: ${pickStr}`);
-          missingGames.push(pick);
-          continue;
+        if (perplexityScores?.success && Object.keys(perplexityScores.scores || {}).length > 0) {
+          // If we got scores from Perplexity, use them
+          Object.assign(scores, perplexityScores.scores);
+          
+          // Check which picks are still missing scores
+          const foundPicks = new Set(Object.keys(scores));
+          missingGames = picks.filter((pick) => !foundPicks.has(pick.pick || pick.originalPick));
+          
+          if (missingGames.length === 0) {
+            console.log('Successfully found all scores from Perplexity');
+            return { success: true, scores, missingGames: [] };
+          }
+          
+          console.log(`Found ${Object.keys(scores).length} scores from Perplexity, missing ${missingGames.length} games`);
+        } else {
+          console.log('Could not get scores from Perplexity, trying other sources...');
+          missingGames = [...picks]; // Start with all picks as missing
         }
-        
-        const teamName = teamMatch[1].trim();
-        const league = (pick.league || 'NBA').toUpperCase();
+      } catch (perplexityError) {
+        console.error('Error getting scores from Perplexity:', perplexityError);
+        missingGames = [...picks]; // If Perplexity fails, try other sources
+      }
+      
+      // 2. Try Ball Don't Lie for NBA games if we're still missing scores
+      if (missingGames.length > 0) {
+        console.log(`Trying Ball Don't Lie for ${missingGames.length} missing NBA games...`);
         
         try {
-          // First try Ball Don't Lie for NBA games
-          if (league === 'NBA') {
+          const bdlScores = await ballDontLieService.getGamesByDate(date);
+          const remainingGames = [];
+          
+          for (const pick of missingGames) {
             try {
-              const bdlScores = await ballDontLieService.getGamesByDate(date);
-              if (bdlScores) {
-                // Find the game that includes the team name
+              const pickStr = pick.pick || pick.originalPick || '';
+              const teamMatch = pickStr.match(/^([A-Za-z. ]+?)(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?$/);
+              
+              if (!teamMatch || !teamMatch[1]) {
+                console.warn(`Could not extract team name from pick: ${pickStr}`);
+                remainingGames.push(pick);
+                continue;
+              }
+              
+              const teamName = teamMatch[1].trim();
+              const league = (pick.league || 'NBA').toUpperCase();
+              
+              // Only try Ball Don't Lie for NBA games
+              if (league === 'NBA' && bdlScores) {
                 const gameKey = Object.keys(bdlScores).find(key => 
                   key.toLowerCase().includes(teamName.toLowerCase())
                 );
@@ -170,62 +207,137 @@ export const resultsCheckerService = {
                     final: true
                   };
                   console.log(`Found NBA score from Ball Don't Lie: ${teamName}`);
-                  continue;
+                  continue; // Skip adding to remaining games
                 }
               }
-            } catch (bdlError) {
-              console.warn(`Error fetching from Ball Don't Lie:`, bdlError);
-              // Continue to next source on error
+              
+              // If we get here, we couldn't find the score for this pick
+              remainingGames.push(pick);
+              
+            } catch (pickError) {
+              console.error(`Error processing pick ${pick.pick}:`, pickError);
+              remainingGames.push(pick);
             }
           }
           
-          // Try SportsDB for all sports
-          try {
-            const sportsDbScores = await sportsDataService.getScores(date, league);
-            if (sportsDbScores) {
-              // Find the game that includes the team name
-              const gameKey = Object.keys(sportsDbScores).find(key => 
-                key.toLowerCase().includes(teamName.toLowerCase())
-              );
+          missingGames = remainingGames;
+          
+        } catch (bdlError) {
+        }
+      }
+      
+      // 3. Try SportsDB for other sports if we're still missing scores
+      if (missingGames.length > 0) {
+        console.log(`Trying SportsDB for ${missingGames.length} remaining games...`);
+        
+        const remainingGames = [];
+        
+        try {
+          for (const pick of missingGames) {
+            try {
+              const pickStr = pick.pick || pick.originalPick || '';
+              const teamMatch = pickStr.match(/^([A-Za-z. ]+?)(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?$/);
               
-              if (gameKey) {
-                scores[pick.pick || pick.originalPick] = {
-                  home_team: gameKey.split(' @ ')[1] || 'Unknown',
-                  away_team: gameKey.split(' @ ')[0] || 'Unknown',
-                  home_score: sportsDbScores[gameKey].split('-')[1],
-                  away_score: sportsDbScores[gameKey].split('-')[0],
-                  league: league,
-                  final: true
-                };
-                console.log(`Found score from SportsDB: ${teamName}`);
+              if (!teamMatch?.[1]) {
+                console.warn(`Could not extract team name from pick: ${pickStr}`);
+                remainingGames.push(pick);
                 continue;
               }
+              
+              const teamName = teamMatch[1].trim();
+              const league = (pick.league || 'NBA').toUpperCase();
+              
+              try {
+                const sportsDbScores = await sportsDbApiService.getScores(date, league);
+                if (sportsDbScores) {
+                  const gameKey = Object.keys(sportsDbScores).find((key) => 
+                    key.toLowerCase().includes(teamName.toLowerCase())
+                  );
+                  
+                  if (gameKey) {
+                    try {
+                      scores[pick.pick || pick.originalPick] = {
+                        home_team: gameKey.split(' @ ')[1] || 'Unknown',
+                        away_team: gameKey.split(' @ ')[0] || 'Unknown',
+                        home_score: sportsDbScores[gameKey].split('-')[1],
+                        away_score: sportsDbScores[gameKey].split('-')[0],
+                        league: league,
+                        final: true
+                      };
+                      console.log(`Found score from SportsDB: ${teamName}`);
+                      
+                      // Remove from missing games if it was added
+                      const index = missingGames.findIndex((p) => 
+                        (p.pick || p.originalPick) === (pick.pick || pick.originalPick)
+                      );
+                      if (index !== -1) {
+                        missingGames.splice(index, 1);
+                      }
+                      continue; // Skip adding to remainingGames
+                    } catch (scoreError) {
+                      console.warn(`Error processing score for ${pick.pick}:`, scoreError);
+                    }
+                  }
+                }
+              } catch (sportsDbError) {
+                console.warn(`Error processing ${pick.pick} with SportsDB:`, sportsDbError);
+              }
+              
+              // If we got here, we couldn't process this pick
+              remainingGames.push(pick);
+              
+            } catch (pickError) {
+              console.error(`Unexpected error processing pick ${pick.pick || 'unknown'}:`, pickError);
+              remainingGames.push(pick);
             }
-          } catch (sportsDbError) {
-            console.warn(`Error fetching from SportsDB:`, sportsDbError);
-            // Continue to next source on error
           }
-          
-          // If we get here, we couldn't find the score from primary sources
-          missingGames.push(pick);
-          
         } catch (error) {
-          console.warn(`Error processing score for ${teamName}:`, error);
-          missingGames.push(pick);
+          console.error('Error in SportsDB processing:', error);
+          // On error, keep all remaining games as missing
+          remainingGames.push(...missingGames);
         }
-      }
-      
-      // 2. If we have missing games, try Perplexity as a fallback
-      if (missingGames.length > 0) {
-        console.log(`Couldn't find scores for ${missingGames.length} games, trying Perplexity...`);
-        const perplexityScores = await resultsCheckerService.getScoresFromPerplexity(date, missingGames);
         
-        if (perplexityScores && perplexityScores.success) {
-          Object.assign(scores, perplexityScores.scores || {});
+        missingGames = remainingGames;
+      }
+      }
+      
+      // 2. If we still have missing games after trying all sources, log them
+      if (missingGames.length > 0) {
+        console.warn(`Could not find scores for ${missingGames.length} games after trying all sources`);
+        
+        // Try one final attempt with Perplexity for any remaining missing games
+        try {
+          console.log('Making final attempt with Perplexity for remaining games...');
+          const finalPerplexityScores = await this.getScoresFromPerplexity(date, missingGames);
+          
+          if (finalPerplexityScores && finalPerplexityScores.success) {
+            Object.assign(scores, finalPerplexityScores.scores || {});
+            
+            // Remove found games from missingGames
+            Object.keys(finalPerplexityScores.scores || {}).forEach(foundPick => {
+              const index = missingGames.findIndex(p => 
+                (p.pick || p.originalPick) === foundPick
+              );
+              if (index !== -1) {
+                missingGames.splice(index, 1);
+              }
+            });
+          }
+        } catch (finalError) {
+          console.error('Final Perplexity attempt failed:', finalError);
         }
       }
       
-      return { success: true, scores };
+      // Log final status
+      const foundCount = Object.keys(scores).length;
+      const missingCount = missingGames.length;
+      console.log(`Score lookup complete. Found: ${foundCount}, Missing: ${missingCount}`);
+      
+      return { 
+        success: foundCount > 0 || missingCount === 0, 
+        scores,
+        missingGames
+      };
       
     } catch (error) {
       console.error('Error in getGameScores:', error);
@@ -233,13 +345,6 @@ export const resultsCheckerService = {
     }
   },
   
-  /**
-   * Get scores for Gary's picks from Perplexity API by searching league websites
-   * Used as a fallback when primary sources fail
-   * @param {string} date - Date in YYYY-MM-DD format
-   * @param {Array} picks - Array of Gary's picks from the database
-   * @returns {Promise<Object>} Game scores mapped by matchup
-   */
   /**
    * Get scores for Gary's picks from Perplexity API by searching league websites
    * Used as a fallback when primary sources fail
@@ -311,8 +416,9 @@ export const resultsCheckerService = {
             if (scoreMatch) {
               const [_, awayScore, homeScore] = scoreMatch;
               // Determine if the score is in the correct order (away-home)
-              const score = parseInt(awayScore) > parseInt(homeScore) ? 
-                `${awayScore}-${homeScore}` : `${homeScore}-${awayScore}`;
+              const score = parseInt(awayScore) > parseInt(homeScore) 
+                ? `${awayScore}-${homeScore}` 
+                : `${homeScore}-${awayScore}`;
                 
               scores[pick.pick] = score;
               console.log(`Found score for ${pick.pick}: ${score}`);
@@ -326,7 +432,7 @@ export const resultsCheckerService = {
           }
           
           // Add a small delay between requests to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          await new Promise((resolve) => setTimeout(resolve, 1500));
           
         } catch (error) {
           console.error(`Error processing pick ${pick.pick || 'unknown'}:`, error);
