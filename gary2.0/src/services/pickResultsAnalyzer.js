@@ -41,31 +41,82 @@ export const pickResultsAnalyzer = {
   },
   
   /**
+   * Extract team name from a formatted pick string
+   * @param {string} pickString - The formatted pick string (e.g., "Washington Capitals +1.5 -185")
+   * @returns {string} The extracted team name
+   */
+  extractTeamName: (pickString) => {
+    if (!pickString) return '';
+    
+    // Extract team name by removing betting elements
+    let teamName = pickString;
+    
+    // Remove spread and odds: "Team +1.5 -110" -> "Team"
+    teamName = teamName.replace(/\s+[+-]?\d+(\.\d+)?\s+[+-]\d+$/, '');
+    
+    // Remove ML and odds: "Team ML +110" -> "Team"
+    teamName = teamName.replace(/\s+ML\s+[+-]\d+$/, '');
+    
+    // Remove just odds: "Team -110" -> "Team"
+    teamName = teamName.replace(/\s+[+-]\d+$/, '');
+    
+    // Remove Over/Under terms
+    teamName = teamName.replace(/\s+OVER\s+.*$/i, '');
+    teamName = teamName.replace(/\s+UNDER\s+.*$/i, '');
+    
+    // Return the cleaned team name
+    return teamName.trim();
+  },
+  
+  /**
    * Determine the result of a pick based on the final score and pick details
    * @param {Object} pick - The pick object from daily_picks
    * @param {Object} gameScore - The final game score data
    * @returns {Object} The analyzed result with win/loss/push determination
    */
   determineResult: (pick, gameScore) => {
+    if (!gameScore || !gameScore.home_score || !gameScore.away_score) {
+      console.warn('Invalid game score data');
+      return { result: 'unknown' };
+    }
+    
     const homeScore = parseInt(gameScore.home_score);
     const awayScore = parseInt(gameScore.away_score);
     const homeTeam = gameScore.home_team;
     const awayTeam = gameScore.away_team;
     
+    // Extract clean team name from the pick
+    const extractedTeamName = pickResultsAnalyzer.extractTeamName(pick.pick);
+    
     // Find which team was picked
     let pickedTeam = '';
     let isHomeTeamPicked = false;
     
-    // Check if the pick contains either team name
-    if (pick.pick.includes(homeTeam)) {
-      pickedTeam = homeTeam;
-      isHomeTeamPicked = true;
-    } else if (pick.pick.includes(awayTeam)) {
-      pickedTeam = awayTeam;
-      isHomeTeamPicked = false;
-    } else {
-      console.warn(`Could not determine picked team for ${pick.pick}`);
-      return { result: 'unknown' };
+    // First try to use the extracted team name
+    if (extractedTeamName) {
+      if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+        pickedTeam = homeTeam;
+        isHomeTeamPicked = true;
+        console.log(`Matched extracted team name "${extractedTeamName}" to home team "${homeTeam}"`);
+      } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+        pickedTeam = awayTeam;
+        isHomeTeamPicked = false;
+        console.log(`Matched extracted team name "${extractedTeamName}" to away team "${awayTeam}"`);
+      }
+    }
+    
+    // If no match with extracted name, try original pick string
+    if (!pickedTeam) {
+      if (pick.pick.includes(homeTeam)) {
+        pickedTeam = homeTeam;
+        isHomeTeamPicked = true;
+      } else if (pick.pick.includes(awayTeam)) {
+        pickedTeam = awayTeam;
+        isHomeTeamPicked = false;
+      } else {
+        console.warn(`Could not determine picked team for ${pick.pick}`);
+        return { result: 'unknown' };
+      }
     }
     
     let result = 'unknown';
@@ -125,18 +176,46 @@ export const pickResultsAnalyzer = {
    * @returns {Object} The analyzed result with win/loss/push determination from OpenAI
    */
   analyzeWithOpenAI: async (pick, gameScore) => {
+    // Extract team name from the formatted pick
+    const extractedTeam = pickResultsAnalyzer.extractTeamName(pick.pick);
+    
+    // Parse the line (spread/total) and odds from the pick
+    let line = '';
+    let odds = '';
+    let betType = pick.type || 'moneyline';
+    
+    // Try to extract line and odds from the pick format
+    const spreadMatch = pick.pick.match(/([+-]\d+(\.\d+)?)\s+([+-]\d+)$/);
+    const mlMatch = pick.pick.match(/ML\s+([+-]\d+)$/);
+    
+    if (spreadMatch) {
+      line = spreadMatch[1]; // The spread value 
+      odds = spreadMatch[3]; // The odds value
+      betType = 'spread';
+    } else if (mlMatch) {
+      odds = mlMatch[1]; // The odds value
+      betType = 'moneyline';
+    }
+    
     const prompt = `Analyze this sports betting pick and determine if it WON, LOST, or was a PUSH:
 
 PICK: ${pick.pick}
-PICK TYPE: ${pick.type || 'moneyline'}
-${pick.spread ? `SPREAD: ${pick.spread}` : ''}
+EXTRACTED TEAM: ${extractedTeam}
+PICK TYPE: ${betType}
+${pick.spread || line ? `SPREAD: ${pick.spread || line}` : ''}
 ${pick.total ? `TOTAL: ${pick.total}` : ''}
+${odds ? `ODDS: ${odds}` : ''}
 GAME: ${gameScore.away_team} @ ${gameScore.home_team}
 FINAL SCORE: ${gameScore.away_team} ${gameScore.away_score}, ${gameScore.home_team} ${gameScore.home_score}
 DATE: ${pick.date}
 LEAGUE: ${pick.league || gameScore.league || 'Unknown'}
 
-Analyze if this pick won, lost or pushed. Respond with VALID JSON ONLY in this exact format:
+Analyze if this pick won, lost or pushed based on the following rules:
+1. For MONEYLINE bets: The bettor wins if their chosen team wins the game outright
+2. For SPREAD bets: Apply the spread value to the chosen team's score to determine the result
+3. For TOTAL bets: Compare the combined score to the over/under line
+
+Respond with VALID JSON ONLY in this exact format:
 {
   "result": "won|lost|push",
   "explanation": "Brief explanation of why this is a win/loss/push"
