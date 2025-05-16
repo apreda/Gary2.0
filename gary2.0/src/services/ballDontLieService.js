@@ -69,8 +69,21 @@ const getMlbGamesByDate = async (date) => {
     const cacheKey = `mlb_games_${date}`;
     return getCachedOrFetch(cacheKey, async () => {
       console.log(`Fetching MLB games for ${date} from BallDontLie`);
-      const client = initApi();
-      const response = await client.mlb.getGames({ 
+      
+      // Make sure API is initialized
+      if (!api) {
+        console.log('API client not initialized, initializing now...');
+        api = new BalldontlieAPI({ apiKey: API_KEY });
+      }
+      
+      // Check if MLB endpoint is available
+      if (!api.mlb) {
+        console.error('ERROR: api.mlb endpoint is not available in the Ball Don\'t Lie SDK');
+        console.log('Available endpoints:', Object.keys(api).join(', '));
+        return [];
+      }
+      
+      const response = await api.mlb.getGames({ 
         dates: [date],
         per_page: 100 // Max allowed
       });
@@ -153,6 +166,21 @@ const ballDontLieService = {
     console.log(`API key ${API_KEY ? 'is set' : 'is NOT set'}`);
     if (API_KEY) {
       console.log(`🔑 Ball Don't Lie API Key (masked): ${API_KEY.substring(0, 3)}...`);
+      
+      // Actually initialize the API client here
+      try {
+        api = new BalldontlieAPI({ apiKey: API_KEY });
+        console.log('✅ Ball Don\'t Lie API client initialized successfully');
+        
+        // Test if the client has the NBA property
+        if (!api.nba) {
+          console.error('❌ API client initialized but missing .nba property - check SDK version');
+        } else {
+          console.log('✅ API client NBA endpoint verified');
+        }
+      } catch (error) {
+        console.error('❌ Error initializing Ball Don\'t Lie API client:', error);
+      }
     } else {
       console.error('❌ Ball Don\'t Lie API key is not set!');
     }
@@ -203,6 +231,20 @@ const ballDontLieService = {
       const cacheKey = `nba_games_${date}`;
       return getCachedOrFetch(cacheKey, async () => {
         console.log(`Fetching NBA games for ${date} from BallDontLie`);
+        
+        // Make sure API is initialized
+        if (!api) {
+          console.log('API client not initialized, initializing now...');
+          api = new BalldontlieAPI({ apiKey: API_KEY });
+        }
+        
+        // Check if NBA endpoint is available
+        if (!api.nba) {
+          console.error('ERROR: api.nba endpoint is not available in the Ball Don\'t Lie SDK');
+          console.log('Available endpoints:', Object.keys(api).join(', '));
+          return [];
+        }
+        
         const response = await api.nba.getGames({ 
           dates: [date],
           per_page: 100 // Max allowed
