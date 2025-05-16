@@ -271,10 +271,19 @@ const picksService = {
                   
                   // PRIORITY 1: Try API-Sports first
                   console.log('Attempting to get MLB stats from API-Sports...');
-                  // Import API-Sports service
-                  const apiSportsModule = await import('./apiSportsService');
+                  // Import API-Sports service and MLB player stats service
+                  const [apiSportsModule, mlbPlayerStatsModule] = await Promise.all([
+                    import('./apiSportsService'),
+                    import('./mlbPlayerStatsService')
+                  ]);
                   const apiSportsService = apiSportsModule.apiSportsService;
-                  let apiSportsStats = await apiSportsService.getMlbTeamStats(game.home_team, game.away_team);
+                  const mlbPlayerStatsService = mlbPlayerStatsModule.default || mlbPlayerStatsModule.mlbPlayerStatsService;
+                  
+                  // Get team stats and player stats in parallel
+                  const [apiSportsStats, playerStatsReport] = await Promise.all([
+                    apiSportsService.getMlbTeamStats(game.home_team, game.away_team),
+                    mlbPlayerStatsService.generateMlbPlayerStatsReport(game.home_team, game.away_team, date)
+                  ]);
                   
                   if (apiSportsStats) {
                     console.log('Using API-Sports data for MLB analysis');
@@ -283,7 +292,19 @@ const picksService = {
                     const homeTeam = apiSportsStats.homeTeam;
                     const awayTeam = apiSportsStats.awayTeam;
                     
-                    let formattedStatsContext = `MLB Team Statistics:\n\n`;
+                    let formattedStatsContext = ``;
+                    
+                    // First add player-level statistics if available
+                    if (playerStatsReport && !playerStatsReport.includes('Error')) {
+                      console.log('Including detailed MLB player stats in analysis');
+                      formattedStatsContext += playerStatsReport;
+                      formattedStatsContext += '\n\n';
+                    } else {
+                      console.log('No detailed player stats available, using team stats only');
+                    }
+                    
+                    // Then add team-level statistics
+                    formattedStatsContext += `MLB TEAM STATISTICS:\n\n`;
                     
                     // Home team stats
                     formattedStatsContext += `${homeTeam?.teamName || game.home_team} (Home):\n`;
@@ -297,8 +318,8 @@ const picksService = {
                     formattedStatsContext += `Team Batting: AVG: ${awayTeam?.batting?.average || 'N/A'}, Runs: ${awayTeam?.batting?.runs || 0}, HR: ${awayTeam?.batting?.homeRuns || 0}\n`;
                     formattedStatsContext += `Team Pitching: ERA: ${awayTeam?.pitching?.era || 'N/A'}, Strikeouts: ${awayTeam?.pitching?.strikeouts || 0}\n\n`;
                     
-                    // Add pitcher data if available
-                    if (formattedGameData.pitcherData) {
+                    // Add pitcher data if available and wasn't already included in player stats report
+                    if (formattedGameData.pitcherData && !playerStatsReport) {
                       formattedStatsContext += `Starting Pitchers:\n`;
                       
                       const homePitcher = formattedGameData.pitcherData?.homePitcher;
@@ -314,8 +335,9 @@ const picksService = {
                     
                     // Store both raw and formatted stats
                     formattedGameData.rawStatsData = apiSportsStats;
+                    formattedGameData.playerStats = playerStatsReport;
                     formattedGameData.statsContext = formattedStatsContext;
-                    formattedGameData.statsSource = 'API-Sports';
+                    formattedGameData.statsSource = 'API-Sports with Player Stats';
                   } else {
                     // PRIORITY 2: If API-Sports fails, try TheSportsDB
                     console.log('API-Sports data unavailable, trying TheSportsDB for MLB...');
