@@ -592,6 +592,80 @@ Format your response as a JSON object with these keys: {
       };
     }
   }
+  },
+  
+  /**
+   * Get scores for completed games to verify results
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} league - League name (NBA, MLB, NHL)
+   * @param {string} date - Date in YYYY-MM-DD format
+   */
+  getScoresFromPerplexity: async function(homeTeam, awayTeam, league, date) {
+    try {
+      // Create a focused query to get the final score of a specific game
+      const formattedDate = date ? new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'yesterday';
+      const query = `ONLY FACTUAL INFO: What was the EXACT final score of the ${league} game between ${homeTeam} and ${awayTeam} on ${formattedDate}? Respond in this JSON format only: {"home_score": X, "away_score": Y, "home_team": "${homeTeam}", "away_team": "${awayTeam}"}`;
+      
+      console.log(`Getting game scores from Perplexity for ${homeTeam} vs ${awayTeam} on ${formattedDate}`);
+      
+      const result = await this.fetchRealTimeInfo(query, {
+        model: 'sonar',
+        temperature: 0.1, // Very low temperature for factual responses
+        maxTokens: 200
+      });
+      
+      if (!result || typeof result !== 'string') {
+        throw new Error('Invalid response from Perplexity');
+      }
+      
+      // Try to extract JSON from the response
+      const jsonMatch = result.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        try {
+          const scoreData = JSON.parse(jsonMatch[0]);
+          return {
+            success: true,
+            scores: {
+              home_score: parseInt(scoreData.home_score),
+              away_score: parseInt(scoreData.away_score),
+              home_team: scoreData.home_team,
+              away_team: scoreData.away_team
+            }
+          };
+        } catch (e) {
+          console.error('Error parsing JSON from Perplexity response:', e);
+          throw e;
+        }
+      }
+      
+      // If we can't parse JSON, try to extract scores using regex
+      const scoreRegex = /([0-9]+)[\s-]*([0-9]+)/;
+      const scoreMatch = result.match(scoreRegex);
+      
+      if (scoreMatch && scoreMatch.length >= 3) {
+        // We're making an assumption here about the order
+        // A more robust implementation would need to determine which score belongs to which team
+        return {
+          success: true,
+          scores: {
+            home_score: parseInt(scoreMatch[1]),
+            away_score: parseInt(scoreMatch[2]),
+            home_team: homeTeam,
+            away_team: awayTeam
+          }
+        };
+      }
+      
+      throw new Error('Could not extract score from Perplexity response');
+    } catch (error) {
+      console.error(`Error getting scores from Perplexity: ${error.message}`);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 };
 
 export default perplexityService;
