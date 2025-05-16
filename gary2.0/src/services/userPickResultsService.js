@@ -2,6 +2,8 @@ import { supabase } from '../supabaseClient';
 import { userStatsService } from './userStatsService';
 
 export const userPickResultsService = {
+  // Initialize the updateInterval property to null
+  updateInterval: null,
   /**
    * Check and update user pick results
    * This should be run periodically to update user stats when pick results come in
@@ -259,34 +261,19 @@ export const userPickResultsService = {
   },
   
   /**
-   * Schedule regular updates of user pick results
+   * Schedule regular updates of user pick results - DISABLED
    * @param {number} intervalMinutes - How often to check for updates (in minutes)
    */
   scheduleResultsUpdates(intervalMinutes = 30) {
-    // Clear any existing interval
+    // Function disabled as requested by user
+    // Results are manually processed via the admin interface
+    
+    console.log('Automatic results checking is disabled - use admin interface instead');
+    
+    // Clear any existing interval (just in case)
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
+      this.updateInterval = null;
     }
-    
-    // Convert minutes to milliseconds
-    const intervalMs = intervalMinutes * 60 * 1000;
-    
-    // Set up the interval
-    this.updateInterval = setInterval(async () => {
-      console.log('Running scheduled check for pick results...');
-      try {
-        const results = await this.checkAndUpdateResults();
-        console.log('Results update complete:', results);
-      } catch (error) {
-        console.error('Error in scheduled results update:', error);
-      }
-    }, intervalMs);
-    
-    console.log(`Scheduled pick results updates every ${intervalMinutes} minutes`);
-    
-    // Run an initial check
-    this.checkAndUpdateResults()
-      .then(results => console.log('Initial results check complete:', results))
-      .catch(error => console.error('Error in initial results check:', error));
   }
 };
