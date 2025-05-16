@@ -45,12 +45,14 @@ function AppContent() {
   const location = useLocation();
   const { session, user } = useAuth();
   
-  // Initialize user pick results service to check for results every 30 minutes
+  // Automatic results checking has been disabled as requested
+  // Results are now manually processed via the admin interface
   useEffect(() => {
-    userPickResultsService.scheduleResultsUpdates(30);
+    // No automatic scheduling of results updates
+    console.log('Automatic results checking is disabled');
     
     return () => {
-      // Clear interval when component unmounts
+      // Clean up function maintained for possible future use
       if (userPickResultsService.updateInterval) {
         clearInterval(userPickResultsService.updateInterval);
       }
