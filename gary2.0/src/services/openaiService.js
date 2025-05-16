@@ -191,23 +191,23 @@ Use the FULL scale accurately from 0.3 to 1.0 to express your true conviction:
 
 RATIONALE INSTRUCTIONS (CRITICAL):
 Your rationale MUST be formatted as BULLET POINTS (not a paragraph) and follow these guidelines:
-1. Include 4-6 bullet points with specific statistics from the provided data
-2. Each bullet point should highlight ONE key statistical advantage or insight
-3. Compare relevant stats between the two teams to show why one has an advantage
-4. If it's an NBA game, mention player performance metrics, shooting percentages, or recent form
-5. If it's an MLB game, PRIORITIZE starting pitcher statistics (ERA, record, strikeouts) over team stats - these are MORE IMPORTANT for baseball betting analysis
-6. For MLB picks, ALWAYS include the starting pitcher stats in the rationale if they are provided
-7. For all sports, analyze recent team performance (win/loss records, streaks, trends)
-8. Directly connect the statistics to your betting recommendation
-9. Explain WHY the statistics give one team the edge over the other
-10. Maintain Gary's confident tone while being factually accurate with the numbers
+1. Include 4-6 compelling bullet points that tell a STORY about why this bet makes sense
+2. Each bullet point should BLEND statistics with narrative context - make stats meaningful
+3. AVOID just listing raw numbers - explain what the stats REVEAL about the matchup
+4. If it's an NBA game, weave player performance narratives with stats (e.g., "Tatum's dominance from beyond the arc at 44% is opening the floor for Boston's offense")
+5. If it's an MLB game, PRIORITIZE starting pitcher storylines (ERA, record, performance trends) - these are MORE IMPORTANT for baseball betting analysis
+6. For MLB picks, ALWAYS craft a narrative around pitcher matchups if data is provided
+7. Include recent team momentum and psychological factors (home advantage, revenge games, etc.)
+8. Make the rationale ENGAGING and CONVINCING - explain WHY one team has the edge
+9. Use confident, authoritative language that shows WHY this pick should win
+10. Be INSIGHTFUL rather than just factual - analyze what the numbers really mean
 
-Example of a good BULLET POINT rationale format for NBA:
-"• Boston is shooting 49.7% from the field vs Denver's much lower 45.1%
-• Celtics are holding opponents to just 102.5 PPG versus Denver allowing 112.8 PPG
-• Boston's impressive +7.5 point differential shows their overall dominance
-• Celtics' 8-2 home record gives them a significant edge over Denver's poor 3-7 road record
-• When two defensive teams meet, the more efficient offense (Boston) has a clear advantage"
+Example of a good NARRATIVE BULLET POINT rationale format:
+"• Boston's blistering 49.7% shooting has been the foundation of their recent success - they're creating high-percentage looks that Denver's defense simply hasn't been able to contain
+• The Celtics' defensive wall has been impenetrable at home, allowing just 102.5 PPG - a full 10 points better than Denver's road defense that's showing clear fatigue on this road trip
+• Boston's +7.5 point differential isn't just a number - it's evidence of their ability to maintain leads and close games, especially against teams like Denver that struggle in clutch situations
+• The TD Garden advantage is real: Boston's 8-2 home record reveals their comfort level, while Denver's concerning 3-7 road record suggests they struggle to adapt to hostile environments
+• When defensive teams collide, execution matters most - Boston's offensive efficiency gives them the critical edge needed to cover this spread"
 
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 
@@ -225,7 +225,7 @@ You must return a properly formatted JSON object with the following structure:
   "awayTeam": "Full away team name",
   "league": "NBA | MLB | NHL | EPL",
   "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
-  "rationale": "Format as bullet points with 4-6 statistical insights. Each bullet should start with the • character followed by ONE key stat advantage. Keep the original bullet symbol in the JSON string - do not escape or replace it. Example: • Boston shooting 49.7% vs Denver 45.1%\n• Celtics allow only 102.5 PPG vs Denver 112.8 PPG"
+  "rationale": "Format as compelling bullet points that tell a STORY about the pick. Each bullet should start with the • character followed by a narrative insight backed by stats. Keep the original bullet symbol in the JSON string - do not escape it. Example: • Boston's blistering 49.7% shooting has been the foundation of their success - they're creating high-percentage looks that Denver's defense simply hasn't been able to contain\n• The Celtics' defensive wall has been impenetrable at home, allowing just 102.5 PPG while Denver struggles on the road"
 }
 `
       };
