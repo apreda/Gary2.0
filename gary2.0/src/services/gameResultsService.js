@@ -242,40 +242,86 @@ const gameResultsService = {
    */
   getGameResultFromOddsAPI: async (pick) => {
     try {
-      // Get odds data for this game
-      const { data: oddsData, error: oddsError } = await oddsService.getUpcomingGames(pick.sport);
-      
-      if (oddsError) throw oddsError;
+      // Try to get game result from Odds API first
+      try {
+        // Get odds data for this game
+        const { data: oddsData, error: oddsError } = await oddsService.getUpcomingGames(pick.sport);
+        
+        if (!oddsError) {
+          // Find the game in the odds data
+          const game = oddsData.find(game => 
+            game.home_team === pick.home_team && 
+            game.away_team === pick.away_team
+          );
 
-      // Find the game in the odds data
-      const game = oddsData.find(game => 
-        game.home_team === pick.home_team && 
-        game.away_team === pick.away_team
-      );
+          if (game && game.scores) {
+            // Get the final score from the odds data
+            const finalScore = `${game.scores.home}-${game.scores.away}`;
 
-      if (!game) {
-        return { success: false, error: 'Game not found in odds data' };
-      }
+            // Evaluate the pick against the final score
+            const evaluation = await userDecisionsService.evaluatePickAgainstResult(
+              pick, 
+              { home_score: game.scores.home, away_score: game.scores.away }
+            );
 
-      // Get the final score from the odds data
-      const finalScore = `${game.scores.home}-${game.scores.away}`;
-
-      // Evaluate the pick against the final score
-      const evaluation = await userDecisionsService.evaluatePickAgainstResult(
-        pick, 
-        { home_score: game.scores.home, away_score: game.scores.away }
-      );
-
-      return {
-        success: true,
-        data: {
-          result: evaluation.won ? 'won' : 'lost',
-          final_score: finalScore
+            return {
+              success: true,
+              data: {
+                result: evaluation.won ? 'won' : 'lost',
+                final_score: finalScore
+              }
+            };
+          }
         }
-      };
+      } catch (oddsError) {
+        console.warn('Error getting game result from Odds API, falling back to Perplexity:', oddsError);
+      }
+      
+      // If Odds API fails or doesn't have the data, try Perplexity API
+      try {
+        const { perplexityService } = await import('./perplexityService.js');
+        
+        // Yesterday's date for checking results
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const dateStr = yesterday.toISOString().split('T')[0];
+        
+        // Get result from Perplexity
+        const perplexityResult = await perplexityService.getScoresFromPerplexity(
+          pick.home_team,
+          pick.away_team,
+          pick.sport,
+          dateStr
+        );
+        
+        if (perplexityResult.success && perplexityResult.scores) {
+          const scores = perplexityResult.scores;
+          const finalScore = `${scores.away_score}-${scores.home_score}`;
+          
+          // Determine if bet won or lost
+          const betEvaluation = gameResultsService.evaluateBetResult(pick, {
+            scores: {
+              home_score: scores.home_score,
+              away_score: scores.away_score
+            }
+          });
+          
+          return {
+            success: true,
+            data: {
+              result: betEvaluation.won ? 'won' : 'lost',
+              final_score: finalScore
+            }
+          };
+        }
+      } catch (perplexityError) {
+        console.error('Error getting game result from Perplexity:', perplexityError);
+      }
+      
+      return { success: false, error: 'Could not retrieve game results from any sources' };
     } catch (error) {
-      console.error('Error getting game result from API:', error);
-      return { success: false, error };
+      console.error('Error in getGameResultFromOddsAPI:', error);
+      return { success: false, error: error.message || error };
     }
   },
 

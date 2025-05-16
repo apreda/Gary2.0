@@ -50,8 +50,8 @@ export const resultsCheckerService = {
       }
       console.warn(`Retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      // Avoid self-reference that causes circular dependency
-      return withRetry(fn, retries - 1, delay * 1.5);
+      // Use the direct function reference to avoid circular dependency
+      return resultsCheckerService.withRetry(fn, retries - 1, delay * 1.5);
     }
   },
 
@@ -89,8 +89,8 @@ export const resultsCheckerService = {
 
       // 1. Perplexity primary
       try {
-        // Use direct method call to avoid circular reference
-        const perplexityScores = await getScoresFromPerplexity(date, picks);
+        // Use direct method call with proper reference
+        const perplexityScores = await resultsCheckerService.getScoresFromPerplexity(date, picks);
         if (perplexityScores?.success && Object.keys(perplexityScores.scores || {}).length > 0) {
           Object.assign(scores, perplexityScores.scores);
           const foundPicks = new Set(Object.keys(scores));
@@ -226,34 +226,17 @@ export const resultsCheckerService = {
       const errors = [];
       for (const pick of picks) {
         try {
-          if (!pick.pick) continue;
-          const teamMatch = pick.pick.match(/([\w\s]+)(?:\s+[-+]?\d+\.?\d*|ML|\+\d+)?(?:\s+vs\.?\s+|\s+at\s+|\s+@\s+)([\w\s]+)/i);
-          let team1 = '', team2 = '';
-          if (teamMatch && teamMatch.length >= 3) {
-            team1 = teamMatch[1].trim();
-            team2 = teamMatch[2].trim();
-          } else {
-            team1 = pick.pick;
+          const { home_team, away_team, league } = pick;
+          if (!home_team || !away_team || !league) {
+            errors.push(`Missing team or league info for pick: ${pick.pick}`);
+            continue;
           }
-          let searchQuery = `What was the final score for ${team1}`;
-          if (team2) searchQuery += ` vs ${team2}`;
-          searchQuery += ` on ${formattedDate}? Only respond with the score in format "AwayScore-HomeScore" if found.`;
-          const response = await perplexityService.search(searchQuery, {
-            maxTokens: 50, temperature: 0.1
-          });
-          if (response.success && response.data) {
-            const scoreMatch = response.data.match(/(\d+)-(\d+)/);
-            if (scoreMatch) {
-              const [_, awayScore, homeScore] = scoreMatch;
-              const score = parseInt(awayScore) > parseInt(homeScore)
-                ? `${awayScore}-${homeScore}`
-                : `${homeScore}-${awayScore}`;
-              scores[pick.pick] = score;
-            } else {
-              errors.push(`No score found for ${pick.pick}`);
-            }
+          const response = await perplexityService.getScoresFromPerplexity(home_team, away_team, league, date);
+          if (response.success && response.scores) {
+            const pickKey = pick.pick || `${away_team} @ ${home_team}`;
+            scores[pickKey] = response.scores;
           } else {
-            errors.push(`API error for ${pick.pick}: ${response.error}`);
+            errors.push(`API error for ${pick.pick}: ${response.error || 'Unknown error'}`);
           }
           await new Promise(resolve => setTimeout(resolve, 1500));
         } catch (error) {
@@ -261,7 +244,7 @@ export const resultsCheckerService = {
         }
       }
       return {
-        success: errors.length === 0,
+        success: errors.length === 0 && Object.keys(scores).length > 0,
         scores,
         errors: errors.length > 0 ? errors : undefined
       };
@@ -327,14 +310,59 @@ export const resultsCheckerService = {
       }
       const { success, scores, message } = await resultsCheckerService.getGameScores(date, dailyPicks.picks);
       if (!success) throw new Error(`Failed to get scores: ${message}`);
+      
+      // Process scores into the format expected by garyPerformanceService
+      const processedResults = Object.entries(scores).map(([matchup, scoreData]) => {
+        const homeScore = scoreData.home_score;
+        const awayScore = scoreData.away_score;
+        const homeTeam = scoreData.home_team;
+        const awayTeam = scoreData.away_team;
+        
+        // Find the original pick to determine if it was won or lost
+        const originalPick = dailyPicks.picks.find(p => 
+          p.pick === matchup || 
+          (p.home_team === homeTeam && p.away_team === awayTeam)
+        );
+        
+        // Determine win/loss based on the bet type and scores
+        let result = 'unknown';
+        if (originalPick) {
+          // For moneyline bets
+          if (originalPick.type === 'moneyline') {
+            // If the pick was for the home team
+            if (originalPick.pick.includes(homeTeam)) {
+              result = homeScore > awayScore ? 'won' : 'lost';
+            } 
+            // If the pick was for the away team
+            else if (originalPick.pick.includes(awayTeam)) {
+              result = awayScore > homeScore ? 'won' : 'lost';
+            }
+          }
+          // For spread bets
+          else if (originalPick.type === 'spread' && originalPick.spread) {
+            const spread = parseFloat(originalPick.spread);
+            if (originalPick.pick.includes(homeTeam)) {
+              const adjScore = homeScore + spread;
+              result = adjScore > awayScore ? 'won' : (adjScore === awayScore ? 'push' : 'lost');
+            }
+            else if (originalPick.pick.includes(awayTeam)) {
+              const adjScore = awayScore + spread;
+              result = adjScore > homeScore ? 'won' : (adjScore === homeScore ? 'push' : 'lost');
+            }
+          }
+        }
+        
+        return {
+          pick: `${awayTeam} @ ${homeTeam}`,
+          result: result,
+          score: `${awayScore}-${homeScore}`,
+          league: scoreData.league || originalPick?.league || 'NBA'
+        };
+      });
+      
       const { success: recordSuccess, message: recordMessage } = await garyPerformanceService.recordPickResults(
         date,
-        Object.entries(scores).map(([matchup, score]) => ({
-          pick: `${score.away_team} @ ${score.home_team}`,
-          result: score.final ? 'won' : 'lost',
-          score: `${score.away_score}-${score.home_score}`,
-          league: score.league || 'NBA'
-        }))
+        processedResults
       );
       if (!recordSuccess) throw new Error(`Failed to record results: ${recordMessage}`);
       await garyPerformanceService.updatePerformanceStats(date);
