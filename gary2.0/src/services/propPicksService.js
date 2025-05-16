@@ -689,7 +689,7 @@ const propPicksService = {
         return [];
       }
       const valid = playerProps.filter(p => p.confidence >= 0.51);
-      const highConf = valid.filter(p => p.confidence >= 0.75);
+      const highConf = valid.filter(p => p.confidence >= 0.7);
       console.log(
         `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}`
       );

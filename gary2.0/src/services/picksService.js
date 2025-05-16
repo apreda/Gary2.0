@@ -333,12 +333,12 @@ const picksService = {
           // Skip null values
           if (jsonData === null) return false;
           
-          // Use 0.75 as the confidence threshold (updated from 0.6)
+          // Use 0.7 as the confidence threshold (updated from 0.75)
           const confidence = jsonData.confidence || 0;
-          const isAboveThreshold = confidence >= 0.75;
+          const isAboveThreshold = confidence >= 0.7;
           
           if (!isAboveThreshold) {
-            console.warn(`Filtering out pick (${jsonData.homeTeam} vs ${jsonData.awayTeam}) at database storage - confidence ${confidence} below threshold of 0.75`);
+            console.warn(`Filtering out pick (${jsonData.homeTeam} vs ${jsonData.awayTeam}) at database storage - confidence ${confidence} below threshold of 0.7`);
           } else {
             console.log(`Storing pick for ${jsonData.homeTeam} vs ${jsonData.awayTeam} with confidence: ${confidence}`);
           }
