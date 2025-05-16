@@ -49,16 +49,20 @@ const picksService = {
               
               // Get comprehensive team statistics from TheSportsDB
               console.log(`Gathering detailed team statistics for ${game.home_team} vs ${game.away_team}...`);
-              const statsContext = await sportsDataService.buildComprehensiveStatsContext(
+              const statsContext = await sportsDataService.generateTeamStatsForGame(
                 game.home_team,
                 game.away_team,
-                sportName,
-                { // Basic odds data structure
-                  homeOdds: game.bookmakers?.[0]?.markets?.[0]?.outcomes?.[0]?.price,
-                  awayOdds: game.bookmakers?.[0]?.markets?.[0]?.outcomes?.[1]?.price,
-                  pointSpread: game.bookmakers?.[0]?.markets?.[1]?.outcomes?.[0]?.point,
-                }
+                sportName
               );
+              
+              // Add odds data to the stats context
+              if (statsContext.statsAvailable) {
+                statsContext.odds = {
+                  home: game.bookmakers?.[0]?.markets?.[0]?.outcomes?.[0]?.price,
+                  away: game.bookmakers?.[0]?.markets?.[0]?.outcomes?.[1]?.price,
+                  pointSpread: game.bookmakers?.[0]?.markets?.[1]?.outcomes?.[0]?.point
+                };
+              }
               
               // For MLB games, get additional pitcher data if available
               let pitcherData = '';
@@ -93,6 +97,21 @@ const picksService = {
                 teamStats: statsContext,
                 pitcherData: pitcherData
               };
+              
+              // Get enhanced stats for specific sports
+              let enhancedStats = '';
+              try {
+                if (sportName === 'MLB') {
+                  enhancedStats = await sportsDataService.getEnhancedMLBStats(game.home_team, game.away_team);
+                  formattedGameData.enhancedStats = enhancedStats;
+                }
+                
+                // Add the comprehensive stats context
+                formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
+              } catch (statsError) {
+                console.warn('Error getting enhanced stats:', statsError);
+                // Continue with basic stats if enhanced stats fail
+              }
               
               // Make the pick using Gary Engine
               console.log(`Getting stats-driven pick from Gary for ${formattedGameData.matchup}...`);
