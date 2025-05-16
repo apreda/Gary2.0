@@ -363,42 +363,20 @@ const ballDontLieService = {
    * @param {number} season - Season year
    * @returns {Promise<Object>} - Team's season statistics
    */
-  async getMlbTeamSeasonStats(teamId, season = null) {
+  async getMlbTeamSeasonStats(teamId, season = new Date().getFullYear()) {
     try {
-      // Always use 2024 as the current MLB season regardless of the current year
-      // This ensures we have valid data until the 2025 season data becomes available
-      const currentSeason = 2024;
-      const seasonToUse = season || currentSeason;
-      
-      const cacheKey = `mlb-team-season-${teamId}-${seasonToUse}`;
+      const cacheKey = `mlb-team-season-${teamId}-${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`Fetching MLB season stats for team ${teamId} in season ${seasonToUse}`);
+        console.log(`Fetching MLB season stats for team ${teamId} in ${season}`);
         const client = initApi();
         
-        try {
-          const response = await client.mlb.getTeamSeasonStats({
-            season: seasonToUse,
-            team_id: teamId
-          });
-          return response.data?.[0] || null;
-        } catch (apiError) {
-          // If the current season fails, try the previous season as fallback
-          if (seasonToUse === currentSeason) {
-            console.log(`Error with ${currentSeason} season, trying ${currentSeason-1} as fallback...`);
-            try {
-              const fallbackResponse = await client.mlb.getTeamSeasonStats({
-                season: currentSeason - 1,
-                team_id: teamId
-              });
-              return fallbackResponse.data?.[0] || null;
-            } catch (fallbackError) {
-              console.error(`Fallback also failed for team ${teamId}:`, fallbackError);
-              return null;
-            }
-          } else {
-            throw apiError; // Re-throw if we're already using a specific season
-          }
-        }
+        // Using current season only - no fallback as per user requirement
+        const response = await client.mlb.getTeamSeasonStats({
+          season,
+          team_id: teamId
+        });
+        
+        return response.data?.[0] || null;
       });
     } catch (error) {
       console.error(`Error fetching MLB season stats for team ${teamId}:`, error);
