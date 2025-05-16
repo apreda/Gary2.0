@@ -246,6 +246,81 @@ export const perplexityService = {
   },
   
   /**
+   * Get game time, headlines, and storylines using Perplexity's web search
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} league - League name (NBA, MLB, NHL)
+   * @param {string} date - Date in YYYY-MM-DD format (defaults to today)
+   * @returns {Promise<object>} - Object with game time and headlines
+   */
+  getGameTimeAndHeadlines: async (homeTeam, awayTeam, league, date = null) => {
+    try {
+      // Format date for the query - if not provided, use today's date
+      const queryDate = date || new Date().toISOString().split('T')[0];
+      const today = new Date();
+      const formattedDate = `${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${today.getFullYear()}`;
+      
+      // Craft a very specific query to get game time and headlines
+      const query = `FACTUAL ONLY: ${league} game time and headlines for ${homeTeam} vs ${awayTeam} on ${formattedDate}. 
+
+PLEASE PROVIDE EXACTLY:
+1. The EXACT scheduled start time of the game (in ET/Eastern Time)
+2. Top 2-3 storylines or headlines about this specific matchup
+3. Any key injuries or lineup changes for both teams
+
+Format your response as a JSON object with these keys: {
+  "gameTime": "precise game time in ET", 
+  "headlines": ["headline 1", "headline 2"], 
+  "keyInjuries": {"homeTeam": ["player - injury"], "awayTeam": ["player - injury"]}
+}`;
+      
+      // Use web search specifically for this
+      const response = await perplexityService.fetchRealTimeInfo(query, {
+        model: 'sonar', // Best model for web search
+        temperature: 0.1, // Very low temperature for factual data
+        maxTokens: 800   // Need enough tokens for structured response
+      });
+      
+      // Try to parse the response as JSON
+      try {
+        // Find JSON in the response
+        const jsonMatch = response.match(/\{[\s\S]*?\}/); // Match everything between { and }
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          console.log('Successfully parsed game time and headlines:', parsed);
+          return {
+            success: true,
+            gameTime: parsed.gameTime || 'TBD',
+            headlines: parsed.headlines || [],
+            keyInjuries: parsed.keyInjuries || { homeTeam: [], awayTeam: [] },
+            rawResponse: response
+          };
+        }
+      } catch (parseError) {
+        console.warn('Error parsing JSON from Perplexity response:', parseError);
+      }
+      
+      // If parsing fails, still return useful data
+      return {
+        success: false,
+        gameTime: 'TBD',
+        headlines: [],
+        keyInjuries: { homeTeam: [], awayTeam: [] },
+        rawResponse: response
+      };
+    } catch (error) {
+      console.error(`Error getting game time and headlines for ${homeTeam} vs ${awayTeam}:`, error);
+      return {
+        success: false,
+        gameTime: 'TBD',
+        headlines: [],
+        keyInjuries: { homeTeam: [], awayTeam: [] },
+        error: error.message
+      };
+    }
+  },
+  
+  /**
    * Gets team-specific insights and analysis
    * @param {string} teamName - The team to get insights for
    * @param {string} league - The sports league (NBA, MLB, etc.)
