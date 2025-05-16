@@ -8,7 +8,6 @@ import { oddsService } from './oddsService';
 import { supabase } from '../supabaseClient.js';
 import { sportsDataService } from './sportsDataService.js';
 import { apiSportsService } from './apiSportsService.js';
-import { ballDontLieService } from './ballDontLieService';
 
 const picksService = {
   /**
@@ -294,7 +293,9 @@ const picksService = {
                   
                   // PRIORITY 1: Try Ball Don't Lie first for NBA
                   console.log('Attempting to get NBA stats from Ball Don\'t Lie...');
-                  const nbaStats = await ballDontLieService.generateNbaStatsReport(game.home_team, game.away_team);
+                  // Import ballDontLieService dynamically to avoid circular reference
+                  const { ballDontLieService: bdl } = await import('./ballDontLieService');
+                  const nbaStats = await bdl.generateNbaStatsReport(game.home_team, game.away_team);
                   
                   if (nbaStats && !nbaStats.includes('Error')) {
                     console.log('Using Ball Don\'t Lie data for NBA analysis');
