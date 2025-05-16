@@ -4,7 +4,6 @@ import { garyPerformanceService } from './garyPerformanceService';
 import sportsDbApiService from './sportsDbApiService';
 import { ballDontLieService } from './ballDontLieService';
 import openaiService from './openaiService';
-import { extractJsonFromText } from '../utils/helpers';
 import { perplexityService } from './perplexityService';
 import { userPickResultsService } from './userPickResultsService';
 
