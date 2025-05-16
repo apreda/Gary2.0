@@ -304,6 +304,18 @@ const picksService = {
                   // Import ballDontLieService dynamically to avoid circular reference
                   const ballDontLieModule = await import('./ballDontLieService');
                   const bdl = ballDontLieModule.default || ballDontLieModule.ballDontLieService;
+                  
+                  // Add local NBA stats report function since it doesn't exist in the service
+                  bdl.generateNbaStatsReport = async (homeTeam, awayTeam) => {
+                    try {
+                      console.log(`Generating NBA stats report for ${homeTeam} vs ${awayTeam}`);
+                      const statsReport = await sportsDataService.getEnhancedNBAStats(homeTeam, awayTeam);
+                      return statsReport || 'No detailed NBA stats available';
+                    } catch (error) {
+                      console.error('Error in NBA stats report generation:', error);
+                      return 'Error generating NBA statistics';
+                    }
+                  };
                   console.log('Ball Don\'t Lie service:', bdl);
                   const nbaStats = await bdl.generateNbaStatsReport(game.home_team, game.away_team);
                   
