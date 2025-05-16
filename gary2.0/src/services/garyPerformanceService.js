@@ -1,8 +1,40 @@
 import { supabase } from '../supabaseClient';
+import resultCalculator from './resultCalculator';
 
 // Constants for validation and configuration
 const VALID_RESULTS = new Set(['won', 'lost', 'push']);
 const SCORE_REGEX = /^\d+-\d+$/;
+
+// Add the confidence column to the database if it doesn't exist
+async function ensureConfidenceColumn() {
+  try {
+    // Check if the column exists
+    const { data, error } = await supabase.rpc('column_exists', {
+      table_name: 'game_results',
+      column_name: 'confidence'
+    });
+
+    if (error || !data) {
+      // Add the column if it doesn't exist
+      const { error: alterError } = await supabase.rpc('add_float_column', {
+        table_name: 'game_results',
+        column_name: 'confidence',
+        default_value: 1.0
+      });
+
+      if (alterError) {
+        console.error('Error adding confidence column:', alterError);
+      } else {
+        console.log('Added confidence column to game_results table');
+      }
+    }
+  } catch (error) {
+    console.error('Error ensuring confidence column exists:', error);
+  }
+}
+
+// Run the column check when the module loads
+ensureConfidenceColumn();
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
@@ -243,6 +275,9 @@ export const garyPerformanceService = {
       const validationErrors = [];
       const backupFields = ['originalPick', 'pickText', 'text', 'originalPickText'];
       
+      // Ensure confidence column exists
+      await ensureConfidenceColumn();
+      
       // Process each result
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
@@ -376,22 +411,47 @@ export const garyPerformanceService = {
         
         console.log(`Processing batch ${batchNumber} of ${totalBatches} (${batch.length} items)`);
         
+        // Prepare the data to insert with calculated results and confidence
+        const insertData = await Promise.all(batch.map(async (result) => {
+          try {
+            // Calculate the result if we have a score
+            let resultData = { ...result };
+            
+            if (result.final_score) {
+              const calculated = resultCalculator.calculateResult({
+                pick: result.pick,
+                score: result.final_score,
+                league: result.league || 'NBA'
+              });
+              
+              resultData.result = calculated.result;
+              resultData.confidence = calculated.confidence;
+            }
+            
+            return {
+              pick_id: pickId,
+              game_date: date,
+              league: resultData.league || 'NBA',
+              pick_text: resultData.pick,
+              result: resultData.result || 'pending',
+              final_score: resultData.final_score || null,
+              confidence: resultData.confidence || 0.5, // Default confidence if not calculated
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          } catch (error) {
+            console.error('Error preparing result for insertion:', error);
+            return null;
+          }
+        }));
+        
+        // Filter out any failed preparations
+        const validInsertData = insertData.filter(item => item !== null);
+        
         const { error: insertError } = await withRetry(() =>
           supabase
             .from('game_results')
-            .insert(
-              batch.map(result => ({
-                pick_id: pickId,
-                game_date: date,
-                league: result.league || 'NBA', // Default to NBA if not specified
-                pick_text: result.pick,
-                result: result.result,
-                final_score: result.final_score || null,
-                confidence: result.confidence || null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }))
-            )
+            .insert(validInsertData)
         );
 
         if (insertError) {
