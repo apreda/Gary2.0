@@ -190,22 +190,26 @@ Use the FULL scale accurately from 0.3 to 1.0 to express your true conviction:
 - 0.9–1.0: Lock of the day/week with overwhelming statistical support
 
 RATIONALE INSTRUCTIONS (CRITICAL):
-Your rationale MUST follow these guidelines:
-1. Reference at least 2-3 specific statistics from the provided data for the teams/players involved
-2. Compare relevant stats between the two teams to show why one has an advantage
-3. If it's an NBA game, mention player performance metrics, shooting percentages, or recent form
-4. If it's an MLB game, include pitcher stats, team batting averages, or home/away records
-5. For all sports, analyze recent team performance (win/loss records, streaks, trends)
-6. Directly connect the statistics to your betting recommendation
-7. Explain WHY the statistics give one team the edge over the other
-8. Maintain Gary's confident tone while being factually accurate with the numbers
-9. Make the rationale at least 3-4 sentences long with statistical support
+Your rationale MUST be formatted as BULLET POINTS (not a paragraph) and follow these guidelines:
+1. Include 4-6 bullet points with specific statistics from the provided data
+2. Each bullet point should highlight ONE key statistical advantage or insight
+3. Compare relevant stats between the two teams to show why one has an advantage
+4. If it's an NBA game, mention player performance metrics, shooting percentages, or recent form
+5. If it's an MLB game, include pitcher stats, team batting averages, or home/away records
+6. For all sports, analyze recent team performance (win/loss records, streaks, trends)
+7. Directly connect the statistics to your betting recommendation
+8. Explain WHY the statistics give one team the edge over the other
+9. Maintain Gary's confident tone while being factually accurate with the numbers
 
-Example of a good statistical rationale for NBA:
-"Boston is shooting 49.7% from the field vs Denver's 45.1%, while also holding opponents to just 102.5 PPG versus Denver allowing 112.8 PPG. The Celtics' +7.5 point differential coupled with their 8-2 home record makes them a strong play against a Nuggets team that's just 3-7 on the road. When two defensive teams meet, I always trust the more efficient offense and Boston's numbers show a clear advantage."
+Example of a good BULLET POINT rationale format for NBA:
+"• Boston is shooting 49.7% from the field vs Denver's much lower 45.1%
+• Celtics are holding opponents to just 102.5 PPG versus Denver allowing 112.8 PPG
+• Boston's impressive +7.5 point differential shows their overall dominance
+• Celtics' 8-2 home record gives them a significant edge over Denver's poor 3-7 road record
+• When two defensive teams meet, the more efficient offense (Boston) has a clear advantage"
 
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
-\`\`\`json
+```json
 {
   "pick": "e.g., Bulls ML +150 / Celtics -4.5 -110",
   "type": "spread | moneyline",
@@ -217,10 +221,10 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "homeTeam": "Full home team name",
   "awayTeam": "Full away team name",
   "league": "NBA | MLB | NHL | EPL",
-  "time": "7:10 PM ET",
-  "rationale": "Give a data-driven 3-4 sentence rationale using actual statistics from the input data. Specifically reference at least 2-3 key metrics that support your pick. Show how the statistics point to a betting edge for your chosen side. Maintain Gary's confident, blunt tone while backing everything with data."
+  "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
+  "rationale": "Format as bullet points with 4-6 statistical insights. Each bullet should start with the • character followed by ONE key stat advantage. Keep the original bullet symbol in the JSON string - do not escape or replace it. Example: • Boston shooting 49.7% vs Denver 45.1%\n• Celtics allow only 102.5 PPG vs Denver 112.8 PPG"
 }
-\`\`\`
+```
 `
       };
       
@@ -257,7 +261,16 @@ ${gameData.homeTeam}: ${gameData.injuries.homeTeam.join(', ') || 'None reported'
 ${gameData.awayTeam}: ${gameData.injuries.awayTeam.join(', ') || 'None reported'}
 ` : ''}
 
-EXTREMELY IMPORTANT: The "time" field in your JSON response MUST ONLY use the EXACT game time from the data provided above: "${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}". DO NOT ALTER, MODIFY OR GUESS the time - copy it exactly as provided. Only use 'TBD' if no time information was provided. This is critical for our system's integrity.
+EXTREMELY IMPORTANT - ABOUT THE GAME TIME: 
+1. The system is reporting that you are incorrectly setting game times to "TBD" when actual times are available.
+2. The "time" field in your JSON response MUST use the EXACT game time provided here: "${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}"
+3. LOOK CAREFULLY at the GAME TIME value provided above - it contains the actual game time.
+4. DO NOT default to "TBD" unless absolutely no time was provided.
+5. Copy the time EXACTLY as given - do not modify, reformat, or guess.
+
+Example: If provided with game time "7:30 PM ET", your JSON must include "time": "7:30 PM ET" - not "TBD".
+
+This is CRITICALLY important for our system's integrity.
 
 REAL-TIME NEWS AND TRENDS:
 ${gameData?.realTimeNews || newsData || 'No real-time data available'}
