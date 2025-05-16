@@ -126,16 +126,26 @@ const sportsDataService = {
   _calculateWinStreak(events) {
     if (!events?.length) return 'No recent games';
     
+    // Sort events by date in EST timezone (newest first)
+    const sortedEvents = [...events].sort((a, b) => {
+      const dateA = new Date(a.dateEvent);
+      const dateB = new Date(b.dateEvent);
+      const estA = new Date(dateA.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const estB = new Date(dateB.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      return estB - estA; // Newest first
+    });
+    
     let streak = 0;
-    for (const event of events) {
+    for (const event of sortedEvents) {
       const teamScore = parseInt(event.intHomeScore) || 0;
       const opponentScore = parseInt(event.intAwayScore) || 0;
       
       if (teamScore > opponentScore) {
         streak++;
-      } else {
-        break;
+      } else if (teamScore < opponentScore) {
+        break; // Streak ends on a loss
       }
+      // Ties (if any) don't affect the streak
     }
     
     return streak > 0 ? `${streak} game winning streak` : 'No current streak';
@@ -148,18 +158,30 @@ const sportsDataService = {
    * @returns {Object} - Win/loss record
    */
   _calculateRecentRecord(events) {
-    if (!events?.length) return { wins: 0, losses: 0, form: "Unknown" };
+    if (!events?.length) return { wins: 0, losses: 0, record: '0-0' };
     
-    const wins = events.filter(event => {
-      const teamScore = parseInt(event.intHomeScore) || 0;
-      const opponentScore = parseInt(event.intAwayScore) || 0;
-      return teamScore > opponentScore;
-    }).length;
+    // Sort by date in EST timezone and take the last 10 games
+    const sortedEvents = [...events].sort((a, b) => {
+      const dateA = new Date(a.dateEvent);
+      const dateB = new Date(b.dateEvent);
+      const estA = new Date(dateA.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const estB = new Date(dateB.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      return estB - estA; // Newest first
+    }).slice(0, 10);
+    
+    let wins = 0;
+    let losses = 0;
+    
+    sortedEvents.forEach(event => {
+      const result = (event.strResult || '').toUpperCase();
+      if (result === 'W') wins++;
+      else if (result === 'L') losses++;
+    });
     
     return {
       wins,
-      losses: events.length - wins,
-      form: `${wins}-${events.length - wins} in last ${events.length} games`
+      losses,
+      record: `${wins}-${losses}`
     };
   },
 
@@ -257,13 +279,28 @@ const sportsDataService = {
       
       const extractor = statsExtractors[league] || (() => ({}));
       
+      // Sort events by date in EST timezone (newest first)
+      const sortEventsByEST = (events) => {
+        if (!events?.length) return [];
+        return [...events].sort((a, b) => {
+          const dateA = new Date(a.dateEvent);
+          const dateB = new Date(b.dateEvent);
+          const estA = new Date(dateA.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          const estB = new Date(dateB.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          return estB - estA; // Newest first
+        });
+      };
+      
+      const sortedHomeEvents = sortEventsByEST(homeTeamEvents);
+      const sortedAwayEvents = sortEventsByEST(awayTeamEvents);
+      
       homeTeamStats.detailedStats = {
-        ...extractor(homeTeamEvents, homeTeamData),
+        ...extractor(sortedHomeEvents, homeTeamData),
         startingPitcherNote: league === 'MLB' ? "Starting pitcher data not available through current API" : undefined
       };
       
       awayTeamStats.detailedStats = {
-        ...extractor(awayTeamEvents, homeTeamData),
+        ...extractor(sortedAwayEvents, homeTeamData),
         startingPitcherNote: league === 'MLB' ? "Starting pitcher data not available through current API" : undefined
       };
       

@@ -1,0 +1,227 @@
+/* PropPicks Component Styles */
+
+/* Card Styling */
+.prop-picks-card {
+  background: rgba(17, 24, 39, 0.8);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(184, 149, 63, 0.2);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 
+              0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.prop-picks-card:hover {
+  border-color: rgba(184, 149, 63, 0.4);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 
+              0 10px 10px -6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Header Styling */
+.prop-picks-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(184, 149, 63, 0.2);
+  background: linear-gradient(90deg, rgba(17, 24, 39, 0.9), rgba(17, 24, 39, 0.7));
+  position: relative;
+  overflow: hidden;
+}
+
+.prop-picks-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #b8953f, transparent);
+  opacity: 0.5;
+}
+
+/* Table Styling */
+.prop-picks-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.prop-picks-table th {
+  padding: 0.75rem 1.5rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+  background: rgba(31, 41, 55, 0.7);
+  border-bottom: 1px solid rgba(184, 149, 63, 0.2);
+}
+
+.prop-picks-table td {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+  color: #e5e7eb;
+  font-size: 0.875rem;
+}
+
+.prop-picks-table tr:last-child td {
+  border-bottom: none;
+}
+
+.prop-picks-table tr:hover {
+  background: rgba(55, 65, 81, 0.3);
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-won {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-lost {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-push {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-pending {
+  background-color: rgba(107, 114, 128, 0.1);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+/* Performance Bars */
+.performance-bar {
+  height: 0.5rem;
+  background: rgba(75, 85, 99, 0.3);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.performance-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #b8953f, #d4af37);
+  transition: width 0.5s ease-in-out;
+}
+
+/* Gold Accent Elements */
+.gold-accent {
+  position: relative;
+}
+
+.gold-accent::after {
+  content: '';
+  position: absolute;
+  bottom: -0.5rem;
+  left: 0;
+  width: 3rem;
+  height: 2px;
+  background: linear-gradient(90deg, #b8953f, transparent);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .prop-picks-table th,
+  .prop-picks-table td {
+    padding: 0.75rem 1rem;
+  }
+  
+  .prop-picks-header {
+    padding: 1rem;
+  }
+}
+
+/* Animation for loading states */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+.loading-shimmer {
+  background: linear-gradient(90deg, rgba(31, 41, 55, 0.3) 25%, rgba(55, 65, 81, 0.3) 37%, rgba(31, 41, 55, 0.3) 63%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+  border-radius: 0.5rem;
+}
+
+/* Custom Scrollbar */
+.prop-picks-scroll {
+  max-height: 600px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 149, 63, 0.5) transparent;
+}
+
+.prop-picks-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.prop-picks-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.prop-picks-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(184, 149, 63, 0.5);
+  border-radius: 3px;
+}
+
+/* Gold Button */
+.gold-button {
+  background: linear-gradient(135deg, #b8953f, #d4af37);
+  color: #111827;
+  font-weight: 600;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+}
+
+.gold-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(184, 149, 63, 0.2);
+}
+
+.gold-button:active {
+  transform: translateY(0);
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: #b8953f;
+  width: 2rem;
+  height: 2rem;
+  animation: spin 1s ease-in-out infinite;
+  margin: 2rem auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

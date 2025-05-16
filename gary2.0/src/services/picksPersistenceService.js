@@ -7,6 +7,7 @@
  * which preserves the exact OpenAI output format.
  */
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
+import { getCurrentEST, getTodayEST, formatInEST } from '../utils/dateUtils';
 
 export const picksPersistenceService = {
   /**
@@ -22,7 +23,7 @@ export const picksPersistenceService = {
       }
 
       // Store in Supabase for universal access across all devices
-      const timestamp = new Date().toISOString();
+      const timestamp = getCurrentEST().toISOString();
       
       // 2. Try to save to Supabase for multi-user sharing
       try {
@@ -34,10 +35,7 @@ export const picksPersistenceService = {
         }
         
         // Use Eastern Time consistently for all date operations
-        const today = new Date();
-        // Convert to Eastern Time
-        const easternTime = new Date(today.toLocaleString("en-US", {timeZone: "America/New_York"}));
-        const dateString = easternTime.toISOString().split('T')[0]; // YYYY-MM-DD in Eastern Time
+        const dateString = getTodayEST();
         console.log(`Saving picks with Eastern Time date: ${dateString}`);
         console.log('Attempting to save picks for date:', dateString);
         

@@ -1,29 +1,15 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { formatShortDate } from '../utils/dateUtils';
 
 // Helper function to properly format dates from game_date field
 const formatDate = (dateString) => {
-  // Handle both date string formats
   if (!dateString) return 'N/A';
-  
   try {
-    // Parse the date string
-    const date = new Date(dateString);
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.warn('Invalid date format:', dateString);
-      return dateString; // Return the original string if invalid
-    }
-    
-    // Format the date in a user-friendly way: MM/DD/YY
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    });
+    return formatShortDate(dateString);
   } catch (error) {
     console.error('Error formatting date:', error);
-    return dateString; // Return the original string on error
+    return dateString;
   }
 };
 

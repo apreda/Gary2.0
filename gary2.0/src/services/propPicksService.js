@@ -221,15 +221,16 @@ const propPicksService = {
             }
             
             // Filter out games that have already started
-            const currentTime = new Date();
+            const currentTime = getCurrentEST();
             gameOdds = gameOdds.filter(game => {
               if (!game.commence_time) return true; // Keep games with no start time
               
               const gameStartTime = new Date(game.commence_time);
-              const notStarted = gameStartTime > currentTime;
+              const gameStartEST = new Date(gameStartTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+              const notStarted = gameStartEST > currentTime;
               
               if (!notStarted) {
-                console.log(`Skipping game ${game.home_team} vs ${game.away_team} - already started at ${gameStartTime.toLocaleTimeString()}`);
+                console.log(`Skipping game ${game.home_team} vs ${game.away_team} - already started at ${formatInEST(gameStartTime, { hour: '2-digit', minute: '2-digit' })} EST`);
               }
               
               return notStarted;
