@@ -248,10 +248,19 @@ ${gameData?.pitcherData ? `PITCHER DATA:
 ${gameData.pitcherData}
 ` : ''}
 
+${gameData?.headlines && gameData.headlines.length > 0 ? `HEADLINES AND STORYLINES:
+${gameData.headlines.map((headline, i) => `${i+1}. ${headline}`).join('\n')}
+` : ''}
+
+${gameData?.injuries && (gameData.injuries.homeTeam.length > 0 || gameData.injuries.awayTeam.length > 0) ? `KEY INJURIES:
+${gameData.homeTeam}: ${gameData.injuries.homeTeam.join(', ') || 'None reported'}
+${gameData.awayTeam}: ${gameData.injuries.awayTeam.join(', ') || 'None reported'}
+` : ''}
+
 EXTREMELY IMPORTANT: The "time" field in your JSON response MUST ONLY use the EXACT game time from the data provided above: "${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}". DO NOT ALTER, MODIFY OR GUESS the time - copy it exactly as provided. Only use 'TBD' if no time information was provided. This is critical for our system's integrity.
 
-REAL-TIME DATA:
-${newsData || 'No real-time data available'}
+REAL-TIME NEWS AND TRENDS:
+${gameData?.realTimeNews || newsData || 'No real-time data available'}
 
 Decision Weights:
 - **90%** on hard data & stats (team & player metrics, recent team form, player statistics, home/away splits, momentum)

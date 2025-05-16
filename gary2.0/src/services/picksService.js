@@ -80,6 +80,39 @@ const picksService = {
                 }
               }
               
+              // Use Perplexity to get game time and headlines
+              console.log('Fetching game time and headlines from Perplexity...');
+              let gameTimeData = { gameTime: 'TBD', headlines: [], keyInjuries: { homeTeam: [], awayTeam: [] }};
+              try {
+                // Import perplexityService dynamically to avoid circular reference
+                const { perplexityService } = await import('./perplexityService');
+                gameTimeData = await perplexityService.getGameTimeAndHeadlines(
+                  game.home_team,
+                  game.away_team,
+                  sportName
+                );
+                console.log(`Game time data fetched: ${gameTimeData.gameTime}`);
+                console.log(`Headlines: ${gameTimeData.headlines.length > 0 ? 'Available' : 'None'}`); 
+              } catch (perplexityError) {
+                console.error('Error fetching game time and headlines:', perplexityError);
+              }
+              
+              // Get real-time news and trends from Perplexity
+              let gameNews = '';
+              try {
+                // Import perplexityService dynamically to avoid circular reference
+                const { perplexityService } = await import('./perplexityService');
+                gameNews = await perplexityService.getGameNews(
+                  game.home_team,
+                  game.away_team,
+                  sportName
+                );
+                console.log('Game news and trends fetched successfully');
+              } catch (newsError) {
+                console.error('Error fetching game news and trends:', newsError);
+                gameNews = 'Unable to retrieve real-time data. Analysis will proceed with available data.';
+              }
+              
               // Format the game data for Gary's analysis with enhanced statistics
               const formattedGameData = {
                 homeTeam: game.home_team,
@@ -95,7 +128,12 @@ const picksService = {
                 sport: sportName,
                 sportKey: sport,
                 teamStats: statsContext,
-                pitcherData: pitcherData
+                pitcherData: pitcherData,
+                gameTime: gameTimeData.gameTime || 'TBD',
+                time: gameTimeData.gameTime || 'TBD',
+                headlines: gameTimeData.headlines || [],
+                injuries: gameTimeData.keyInjuries || { homeTeam: [], awayTeam: [] },
+                realTimeNews: gameNews || ''
               };
               
               // Get enhanced stats for specific sports
