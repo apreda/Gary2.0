@@ -348,8 +348,11 @@ export const oddsService = {
       
       // Filter games to only include those happening on the current day (between 12pm-12am EST)
       const filteredGames = response.data.filter(game => {
+        if (!game.commence_time) return false;
         const gameTime = new Date(game.commence_time);
-        return gameTime >= twelvePmEST && gameTime <= cutoffTime;
+        // Convert game time to EST for comparison
+        const gameTimeEST = new Date(gameTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        return gameTimeEST >= twelvePmEST && gameTimeEST <= cutoffTime;
       });
       
       console.log(`Filtered from ${response.data.length} games to ${filteredGames.length} games happening between 12pm-12am EST today`);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import { supabase } from '../supabaseClient';
+import { PropPicks } from './PropPicks';
 import '../styles/BillfoldEnhanced.css'; // Consolidated high-tech modern styling
 import '../styles/BillfoldScroll.css'; // Custom scrolling for Recent Picks
 
@@ -31,6 +32,9 @@ export const Billfold = () => {
 
   // State for selected time period filter
   const [selectedTimeFrame, setSelectedTimeFrame] = useState('all');
+  
+  // State for toggling between game picks and prop picks
+  const [showPropPicks, setShowPropPicks] = useState(false);
 
   // Filter options for charts
   const timeFrameOptions = [
@@ -233,6 +237,15 @@ export const Billfold = () => {
     return 'Moneyline';
   };
   
+  // Toggle between game picks and prop picks
+  const togglePicksView = () => {
+    setShowPropPicks(!showPropPicks);
+  };
+
+  if (showPropPicks) {
+    return <PropPicks selectedTimeFrame={selectedTimeFrame} />;
+  }
+
   return (
     <div className="billfold-container min-h-screen font-sans pt-16 relative">
       {/* Grid Background for depth */}
@@ -289,6 +302,34 @@ export const Billfold = () => {
                 zIndex: 5
               }}
             />
+          </div>
+          
+          {/* Toggle between Game Picks and Prop Picks */}
+          <div className="flex justify-center mt-6 mb-8">
+            <div className="inline-flex rounded-md shadow-sm" role="group">
+              <button
+                type="button"
+                onClick={() => setShowPropPicks(false)}
+                className={`px-6 py-2 text-sm font-medium rounded-l-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
+                  !showPropPicks 
+                    ? 'bg-[#b8953f] text-gray-900 font-bold' 
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                Game Picks
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPropPicks(true)}
+                className={`px-6 py-2 text-sm font-medium rounded-r-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
+                  showPropPicks 
+                    ? 'bg-[#b8953f] text-gray-900 font-bold' 
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                Prop Picks
+              </button>
+            </div>
           </div>
         </div>
         

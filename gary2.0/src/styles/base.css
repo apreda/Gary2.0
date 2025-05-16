@@ -1,12 +1,12 @@
 /* Base styles for Gary 2.0 */
 
+/* Import CSS variables - Must be first */
+@import "./variables.css";
+
 /* Tailwind directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import CSS variables */
-@import "./variables.css";
 
 /* Minimal base styles */
 @layer base {

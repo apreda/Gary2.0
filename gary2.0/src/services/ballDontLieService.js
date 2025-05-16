@@ -130,10 +130,10 @@ const ballDontLieService = {
   /**
    * Generate a detailed statistics report for specific players
    * @param {Array<number>} playerIds - Array of player IDs
-   * @param {number} season - Season year
+   * @param {number} [season] - Season year (defaults to current NBA season)
    * @returns {Promise<string>} - Formatted statistics text for GPT prompt
    */
-  async generatePlayerStatsReport(playerIds, season = new Date().getFullYear()) {
+  async generatePlayerStatsReport(playerIds, season = nbaSeason()) {
     if (!playerIds?.length) return '';
     
     try {
