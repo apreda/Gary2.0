@@ -4,6 +4,7 @@ import { garyPerformanceService } from './garyPerformanceService.js';
 import { sportsDbApiService } from './sportsDbApiService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { perplexityService } from './perplexityService.js';
+import { pickResultsAnalyzer } from './pickResultsAnalyzer.js';
 // import { userPickResultsService } from './userPickResultsService'; // Remove if not used
 // import { oddsApiService } from './oddsApiService'; // Remove if not used
 
@@ -445,8 +446,29 @@ export const resultsCheckerService = {
       const processedResults = [];
       
       for (const pick of dailyPicks.picks) {
+        // Extract the team name from the pick by removing the bet type and odds
+        // Example: "Washington Capitals +1.5 -185" becomes "Washington Capitals"
+        // Example: "Dallas Stars ML +110" becomes "Dallas Stars"
+        let teamName = '';
+        
+        if (pick.pick) {
+          // Extract team name by removing bet type and odds
+          teamName = pick.pick.replace(/\+?\d+(\.\d+)?\s+[-+]\d+$/, '').trim(); // Remove spread and odds
+          teamName = teamName.replace(/\s+ML\s+[-+]\d+$/, '').trim(); // Remove ML and odds
+          teamName = teamName.replace(/\s+[-+]\d+$/, '').trim(); // Remove just odds
+          
+          // Store the original team name for reference
+          if (teamName !== pick.pick) {
+            console.log(`Extracted team name "${teamName}" from pick: ${pick.pick}`);
+            
+            // Add team name to the pick object for easier matching
+            pick.team_name = teamName;
+          }
+        }
+        
+        // Get the pick teams (homeTeam/awayTeam format) if available
         const pickTeams = pick.pick?.split(' @ ') || [];
-        if (pickTeams.length !== 2) {
+        if (pickTeams.length !== 2 && !teamName && !pick.pick) {
           console.warn(`Invalid pick format: ${pick.pick}`);
           continue;
         }
@@ -463,8 +485,16 @@ export const resultsCheckerService = {
             const homeTeam = data.home_team;
             const awayTeam = data.away_team;
             
-            if ((pick.home_team === homeTeam && pick.away_team === awayTeam) ||
-                (pickTeams[0] === awayTeam && pickTeams[1] === homeTeam) ||
+            // Check if the extracted team name is part of either team in the matchup
+            if (teamName && (homeTeam.includes(teamName) || awayTeam.includes(teamName) || 
+                teamName.includes(homeTeam) || teamName.includes(awayTeam))) {
+              console.log(`Found matching game for team "${teamName}": ${awayTeam} @ ${homeTeam}`);
+              scoreData = data;
+              break;
+            }
+            // Try traditional matching approaches as fallbacks
+            else if ((pick.home_team === homeTeam && pick.away_team === awayTeam) ||
+                (pickTeams.length === 2 && pickTeams[0] === awayTeam && pickTeams[1] === homeTeam) ||
                 (matchup.includes(pick.home_team) && matchup.includes(pick.away_team))) {
               scoreData = data;
               break;
@@ -476,65 +506,25 @@ export const resultsCheckerService = {
           console.warn(`Could not find score data for pick: ${pick.pick}`);
           continue;
         }
+
+        console.log(`Analyzing pick ${pick.pick} with score data:`, scoreData);
         
-        const homeScore = parseInt(scoreData.home_score);
-        const awayScore = parseInt(scoreData.away_score);
-        const homeTeam = scoreData.home_team;
-        const awayTeam = scoreData.away_team;
+        // Use the new analyzer to determine the result
+        const pickWithId = { ...pick, id: dailyPicks.id };
+        const analyzedResult = await pickResultsAnalyzer.analyzePickResult(pickWithId, scoreData);
         
-        // Determine which team was picked
-        const pickedTeam = pick.pick.includes(homeTeam) ? homeTeam : awayTeam;
-        const isHomeTeamPicked = pickedTeam === homeTeam;
+        console.log(`PickResultsAnalyzer determined: ${analyzedResult.result} for pick: ${pick.pick}`);
         
-        // Determine win/loss based on the bet type and scores
-        let result = 'unknown';
-        
-        // For moneyline bets (straight up win/loss)
-        if (pick.type === 'moneyline' || !pick.type) {
-          if (isHomeTeamPicked) {
-            result = homeScore > awayScore ? 'won' : (homeScore === awayScore ? 'push' : 'lost');
-          } else {
-            result = awayScore > homeScore ? 'won' : (awayScore === homeScore ? 'push' : 'lost');
-          }
-          console.log(`Moneyline pick ${pick.pick}: ${result} (${awayScore}-${homeScore})`);
-        }
-        // For spread bets
-        else if (pick.type === 'spread' && pick.spread) {
-          const spread = parseFloat(pick.spread);
-          
-          if (isHomeTeamPicked) {
-            // Home team with spread
-            const adjScore = homeScore + spread;
-            result = adjScore > awayScore ? 'won' : (adjScore === awayScore ? 'push' : 'lost');
-          } else {
-            // Away team with spread
-            const adjScore = awayScore + spread;
-            result = adjScore > homeScore ? 'won' : (adjScore === homeScore ? 'push' : 'lost');
-          }
-          console.log(`Spread pick ${pick.pick} (${spread}): ${result} (${awayScore}-${homeScore})`);
-        }
-        // For over/under (total) bets
-        else if (pick.type === 'total' && pick.total) {
-          const total = parseFloat(pick.total);
-          const actualTotal = homeScore + awayScore;
-          
-          if (pick.pick.toLowerCase().includes('over')) {
-            result = actualTotal > total ? 'won' : (actualTotal === total ? 'push' : 'lost');
-          } else if (pick.pick.toLowerCase().includes('under')) {
-            result = actualTotal < total ? 'won' : (actualTotal === total ? 'push' : 'lost');
-          }
-          console.log(`Total pick ${pick.pick} (${total}): ${result} (${actualTotal})`);
-        }
-        
+        // Format the result for garyPerformanceService
         processedResults.push({
-          pick: `${awayTeam} @ ${homeTeam}`,
+          pick: analyzedResult.matchup,
           original_pick: pick.pick,
-          result: result,
-          score: `${awayScore}-${homeScore}`,
-          league: scoreData.league || pick.league || 'NBA',
-          type: pick.type || 'moneyline',
-          spread: pick.spread || null,
-          total: pick.total || null
+          pickText: pick.pick,
+          result: analyzedResult.result,
+          score: analyzedResult.final_score,
+          final_score: analyzedResult.final_score,
+          league: analyzedResult.league,
+          confidence: analyzedResult.confidence
         });
       }
       
