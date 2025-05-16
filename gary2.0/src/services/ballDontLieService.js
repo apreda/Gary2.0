@@ -250,40 +250,162 @@ const ballDontLieService = {
     }
   },
 
-  async generatePlayerStatsReport(playerIds, season = nbaSeason()) {
+  /**
+   * Get MLB player season statistics
+   * @param {number} playerId - Player ID
+   * @param {number} season - Season year
+   * @returns {Promise<Object>} - Player's season statistics
+   */
+  async getMlbPlayerSeasonStats(playerId, season = new Date().getFullYear()) {
+    try {
+      const cacheKey = `mlb-player-season-${playerId}-${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching MLB season stats for player ${playerId} in ${season}`);
+        const response = await api.mlb.getSeasonStats({
+          season,
+          player_ids: [playerId]
+        });
+        return response.data?.[0] || null;
+      });
+    } catch (error) {
+      console.error(`Error fetching MLB season stats for player ${playerId}:`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Get MLB player game statistics
+   * @param {number} playerId - Player ID
+   * @param {number} limit - Number of games to fetch
+   * @returns {Promise<Array>} - Array of player's recent game statistics
+   */
+  async getMlbPlayerGameStats(playerId, limit = 5) {
+    try {
+      const cacheKey = `mlb-player-games-${playerId}-${limit}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching MLB game stats for player ${playerId}`);
+        const response = await api.mlb.getStats({
+          player_ids: [playerId],
+          per_page: limit
+        });
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error(`Error fetching MLB game stats for player ${playerId}:`, error);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB team season statistics
+   * @param {number} teamId - Team ID
+   * @param {number} season - Season year
+   * @returns {Promise<Object>} - Team's season statistics
+   */
+  async getMlbTeamSeasonStats(teamId, season = new Date().getFullYear()) {
+    try {
+      const cacheKey = `mlb-team-season-${teamId}-${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching MLB season stats for team ${teamId} in ${season}`);
+        const response = await api.mlb.getTeamSeasonStats({
+          season,
+          team_id: teamId
+        });
+        return response.data?.[0] || null;
+      });
+    } catch (error) {
+      console.error(`Error fetching MLB season stats for team ${teamId}:`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Get MLB player injuries
+   * @param {number} teamId - Team ID (optional)
+   * @returns {Promise<Array>} - Array of injuries
+   */
+  async getMlbPlayerInjuries(teamId = null) {
+    try {
+      const cacheKey = `mlb-injuries-${teamId || 'all'}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = teamId ? { team_ids: [teamId] } : {};
+        console.log(`Fetching MLB injuries ${teamId ? 'for team ' + teamId : 'for all teams'}`);
+        const response = await api.mlb.getPlayerInjuries(params);
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching MLB injuries:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Generate detailed MLB stats report for OpenAI
+   * @param {Array<number>} playerIds - Array of player IDs
+   * @param {number} season - Season year
+   * @returns {Promise<string>} - Formatted statistics report
+   */
+  async generateMlbStatsReport(playerIds, season = new Date().getFullYear()) {
     if (!playerIds?.length) return '';
     
     try {
-      // Get both season averages and recent game stats
-      const [seasonAverages, recentGameStats] = await Promise.all([
-        this.getPlayerAverages(playerIds, season),
-        this.getPlayerRecentGameStats(playerIds, season)
-      ]);
-      
-      // Generate the report
-      let report = 'Player Statistics Report\n\n';
+      let report = '## MLB Player Statistics Report ##\n\n';
       
       for (const playerId of playerIds) {
-        const seasonData = seasonAverages[playerId];
-        const recentData = recentGameStats[playerId];
+        // Get player details, season stats, and recent games
+        const [playerDetails, seasonStats, recentGames, injuries] = await Promise.all([
+          this.getClient().mlb.getPlayer(playerId),
+          this.getMlbPlayerSeasonStats(playerId, season),
+          this.getMlbPlayerGameStats(playerId, 7),
+          this.getMlbPlayerInjuries(null) // Get all injuries and filter below
+        ]);
         
-        if (!seasonData && !recentData) continue;
-        
-        const player = seasonData?.player || recentData?.player;
+        const player = playerDetails?.data;
         if (!player) continue;
         
-        report += `Player: ${player.first_name} ${player.last_name} (${player.team?.abbreviation || 'N/A'})\n`;
+        // Add player basic info
+        report += `PLAYER: ${player.full_name} | ${player.position} | ${player.team?.display_name || 'N/A'}\n`;
+        report += `Age: ${player.age} | Height: ${player.height} | Weight: ${player.weight} | Bats/Throws: ${player.bats_throws}\n\n`;
         
-        if (seasonData) {
-          report += `\nSeason Averages (${season}):\n`;
-          // Add season stats to report
-          // ...
+        // Add injury information if applicable
+        const playerInjury = injuries.find(injury => injury.player?.id === playerId);
+        if (playerInjury) {
+          report += `INJURY STATUS: ${playerInjury.status} - ${playerInjury.type} (${playerInjury.side} ${playerInjury.detail})\n`;
+          report += `Expected Return: ${new Date(playerInjury.return_date).toLocaleDateString()}\n\n`;
         }
         
-        if (recentData) {
-          report += '\nRecent Games:\n';
-          // Add recent game stats to report
-          // ...
+        // Add season statistics
+        if (seasonStats) {
+          const batting = seasonStats.batting_avg ? `AVG: ${seasonStats.batting_avg.toFixed(3)} | OBP: ${seasonStats.batting_obp.toFixed(3)} | SLG: ${seasonStats.batting_slg.toFixed(3)} | OPS: ${seasonStats.batting_ops.toFixed(3)}` : 'No batting stats';
+          
+          report += `SEASON STATS (${season}):\n`;
+          report += `Games: ${seasonStats.batting_gp || 0} | HR: ${seasonStats.batting_hr || 0} | RBI: ${seasonStats.batting_rbi || 0} | Hits: ${seasonStats.batting_h || 0}\n`;
+          report += `${batting}\n`;
+          
+          // Add pitching stats if available
+          if (seasonStats.pitching_era) {
+            report += `ERA: ${seasonStats.pitching_era.toFixed(2)} | W-L: ${seasonStats.pitching_w}-${seasonStats.pitching_l} | WHIP: ${seasonStats.pitching_whip.toFixed(2)} | K: ${seasonStats.pitching_k}\n`;
+          }
+        }
+        
+        // Add recent game performance
+        if (recentGames.length > 0) {
+          report += `\nRECENT GAMES:\n`;
+          recentGames.forEach(game => {
+            const gameDate = new Date(game.game.date).toLocaleDateString();
+            const opponent = game.team_name === game.game.home_team_name ? game.game.away_team_name : game.game.home_team_name;
+            
+            report += `vs ${opponent} (${gameDate}): `;
+            
+            // For batters
+            if (game.hits !== null) {
+              report += `${game.hits}-${game.at_bats} | R: ${game.runs} | RBI: ${game.rbi} | HR: ${game.hr}\n`;
+            }
+            // For pitchers
+            else if (game.ip !== null) {
+              report += `IP: ${game.ip} | ER: ${game.er} | K: ${game.p_k} | ERA: ${game.era !== null ? game.era.toFixed(2) : 'N/A'}\n`;
+            }
+          });
         }
         
         report += '\n' + '-'.repeat(50) + '\n\n';
@@ -292,8 +414,138 @@ const ballDontLieService = {
       return report;
       
     } catch (error) {
-      console.error('Error generating player stats report:', error);
-      return 'Error generating player statistics report.';
+      console.error('Error generating MLB player stats report:', error);
+      return 'Error generating MLB statistics report.';
+    }
+  },
+
+  /**
+   * Generate comprehensive MLB game preview for betting analysis
+   * @param {number} gameId - Game ID
+   * @returns {Promise<string>} - Formatted game preview
+   */
+  async generateMlbGamePreview(gameId) {
+    try {
+      const cacheKey = `mlb-game-preview-${gameId}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const game = await this.getClient().mlb.getGame(gameId);
+        if (!game?.data) return 'Game information not available.';
+        
+        const homeTeamId = game.data.home_team.id;
+        const awayTeamId = game.data.away_team.id;
+        
+        const [homeTeamStats, awayTeamStats, homeTeamInjuries, awayTeamInjuries] = await Promise.all([
+          this.getMlbTeamSeasonStats(homeTeamId),
+          this.getMlbTeamSeasonStats(awayTeamId),
+          this.getMlbPlayerInjuries(homeTeamId),
+          this.getMlbPlayerInjuries(awayTeamId)
+        ]);
+        
+        let preview = `## MLB Game Preview: ${game.data.away_team.display_name} @ ${game.data.home_team.display_name} ##\n\n`;
+        preview += `Date: ${new Date(game.data.date).toLocaleDateString()} ${new Date(game.data.date).toLocaleTimeString()}\n`;
+        preview += `Venue: ${game.data.venue}\n\n`;
+        
+        // Team comparison
+        preview += '### TEAM COMPARISON ###\n\n';
+        
+        if (homeTeamStats && awayTeamStats) {
+          preview += '| Stat | ' + game.data.away_team.short_display_name.padEnd(15) + ' | ' + game.data.home_team.short_display_name.padEnd(15) + ' |\n';
+          preview += '|------|' + '-'.repeat(15) + '|' + '-'.repeat(15) + '|\n';
+          preview += `| Record | ${awayTeamStats.wins}-${awayTeamStats.losses} | ${homeTeamStats.wins}-${homeTeamStats.losses} |\n`;
+          preview += `| Batting Avg | ${awayTeamStats.batting_avg?.toFixed(3) || 'N/A'} | ${homeTeamStats.batting_avg?.toFixed(3) || 'N/A'} |\n`;
+          preview += `| Team ERA | ${awayTeamStats.pitching_era?.toFixed(2) || 'N/A'} | ${homeTeamStats.pitching_era?.toFixed(2) || 'N/A'} |\n`;
+          preview += `| Home/Road | ${awayTeamStats.road_wins}-${awayTeamStats.road_losses} (Road) | ${homeTeamStats.home_wins}-${homeTeamStats.home_losses} (Home) |\n`;
+        }
+        
+        // Injuries
+        if (homeTeamInjuries.length || awayTeamInjuries.length) {
+          preview += '\n### KEY INJURIES ###\n\n';
+          
+          if (awayTeamInjuries.length) {
+            preview += `${game.data.away_team.display_name}:\n`;
+            awayTeamInjuries.slice(0, 5).forEach(injury => {
+              preview += `- ${injury.player.full_name}: ${injury.status} - ${injury.type}\n`;
+            });
+            preview += '\n';
+          }
+          
+          if (homeTeamInjuries.length) {
+            preview += `${game.data.home_team.display_name}:\n`;
+            homeTeamInjuries.slice(0, 5).forEach(injury => {
+              preview += `- ${injury.player.full_name}: ${injury.status} - ${injury.type}\n`;
+            });
+          }
+        }
+        
+        return preview;
+      });
+    } catch (error) {
+      console.error('Error generating MLB game preview:', error);
+      return 'Error generating MLB game preview.';
+    }
+  },
+
+  /**
+   * Generate a comprehensive player stats report for OpenAI
+   * @param {Array<number>} playerIds - Array of player IDs
+   * @param {string} sport - Sport type (NBA or MLB)
+   * @param {number} season - Season year
+   * @returns {Promise<string>} - Formatted statistics report
+   */
+  async generatePlayerStatsReport(playerIds, sport = 'NBA', season = new Date().getFullYear()) {
+    if (!playerIds?.length) return '';
+    
+    if (sport === 'MLB') {
+      return this.generateMlbStatsReport(playerIds, season);
+    } else {
+      // Existing NBA stats implementation
+      try {
+        // Get both season averages and recent game stats for NBA
+        const [seasonAverages, recentGameStats] = await Promise.all([
+          this.getPlayerAverages(playerIds, season),
+          this.getPlayerRecentGameStats(playerIds, season)
+        ]);
+        
+        // Generate the report
+        let report = 'NBA Player Statistics Report\n\n';
+        
+        for (const playerId of playerIds) {
+          const seasonData = seasonAverages[playerId];
+          const recentData = recentGameStats[playerId];
+          
+          if (!seasonData && !recentData) continue;
+          
+          const player = seasonData?.player || recentData?.player;
+          if (!player) continue;
+          
+          report += `Player: ${player.first_name} ${player.last_name} (${player.team?.abbreviation || 'N/A'})\n`;
+          
+          if (seasonData) {
+            report += `\nSeason Averages (${season}):\n`;
+            // Add season stats to report
+            report += `PPG: ${seasonData.pts.toFixed(1)} | RPG: ${seasonData.reb.toFixed(1)} | APG: ${seasonData.ast.toFixed(1)}\n`;
+            report += `FG%: ${(seasonData.fg_pct * 100).toFixed(1)} | 3P%: ${(seasonData.fg3_pct * 100).toFixed(1)} | FT%: ${(seasonData.ft_pct * 100).toFixed(1)}\n`;
+          }
+          
+          if (recentData?.length) {
+            report += '\nRecent Games:\n';
+            recentData.slice(0, 3).forEach(game => {
+              const date = new Date(game.game.date).toLocaleDateString();
+              const opponent = game.game.home_team.id === player.team.id ? 
+                game.game.visitor_team.abbreviation : game.game.home_team.abbreviation;
+              report += `vs ${opponent} (${date}): ${game.pts}pts, ${game.reb}reb, ${game.ast}ast, ${game.stl}stl, ${game.blk}blk\n`;
+            });
+          }
+          
+          report += '\n' + '-'.repeat(50) + '\n\n';
+        }
+        
+        return report;
+        
+      } catch (error) {
+        console.error('Error generating player stats report:', error);
+        return 'Error generating player statistics report.';
+      }
     }
   }
 };
