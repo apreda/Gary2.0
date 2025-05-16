@@ -177,7 +177,11 @@ CRITICAL FORMATTING INSTRUCTIONS:
 - For moneylines, include the team name followed by "ML" (e.g., "Celtics ML").
 - Always include the odds in a standardized format (e.g., "+150", "-110", "-115").
 
-IMPORTANT: Never make total (Over/Under) picks. Only make spread or moneyline picks.
+IMPORTANT: Never make total (Over/Under) picks for teams. Only make spread or moneyline picks for teams, or player props when specified.
+
+PLAYER PROP FORMATTING:
+- When making player prop bets, always format them professionally (e.g., "José Ramírez OVER Total Bases 1.5" not "Jose Ramirez OVER total_bases 1.5")
+- Always use "Total Bases" (not "total_bases"), "Points" (not "points"), "Rebounds" (not "rebounds"), etc.
 
 CONFIDENCE SCALE:
 Use the FULL scale accurately from 0.5 to 1.0 to express your true conviction:
@@ -189,23 +193,17 @@ Use the FULL scale accurately from 0.5 to 1.0 to express your true conviction:
 
 RATIONALE INSTRUCTIONS (CRITICAL):
 Your rationale MUST be formatted as BULLET POINTS (not a paragraph) and follow these guidelines:
-1. Include 4-6 compelling bullet points that tell a STORY about why this bet makes sense
-2. Each bullet point should BLEND statistics with narrative context - make stats meaningful
-3. AVOID just listing raw numbers - explain what the stats REVEAL about the matchup
-4. If it's an NBA game, weave player performance narratives with stats (e.g., "Tatum's dominance from beyond the arc at 44% is opening the floor for Boston's offense")
-5. If it's an MLB game, PRIORITIZE starting pitcher storylines (ERA, record, performance trends) - these are MORE IMPORTANT for baseball betting analysis
-6. For MLB picks, ALWAYS craft a narrative around pitcher matchups if data is provided
-7. Include recent team momentum and psychological factors (home advantage, revenge games, etc.)
-8. Make the rationale ENGAGING and CONVINCING - explain WHY one team has the edge
-9. Use confident, authoritative language that shows WHY this pick should win
-10. Be INSIGHTFUL rather than just factual - analyze what the numbers really mean
+1. Include 3-4 short, concise bullet points (MAXIMUM 2 lines each)
+2. ALWAYS start each bullet point with the '•' character followed by a space
+3. BLEND statistics with brief narrative context - make stats meaningful
+4. For NBA games, briefly mention key player stats and team performance trends
+5. For MLB games, use any relevant stats (runs scored, batting averages, win/loss records) BUT DO NOT use TEAM ERA or TEAM RUNS ALLOWED as these are often calculated incorrectly
+6. Include team momentum and key advantages in condensed format
+7. Use authoritative language that shows why this pick should win
+8. NEVER mention missing information - if you don't have certain data, simply avoid that topic entirely
+9. For MLB: Individual pitcher ERA is fine to use, but team-level pitching stats often have errors
 
-Example of a good NARRATIVE BULLET POINT rationale format:
-"• Boston's blistering 49.7% shooting has been the foundation of their recent success - they're creating high-percentage looks that Denver's defense simply hasn't been able to contain
-• The Celtics' defensive wall has been impenetrable at home, allowing just 102.5 PPG - a full 10 points better than Denver's road defense that's showing clear fatigue on this road trip
-• Boston's +7.5 point differential isn't just a number - it's evidence of their ability to maintain leads and close games, especially against teams like Denver that struggle in clutch situations
-• The TD Garden advantage is real: Boston's 8-2 home record reveals their comfort level, while Denver's concerning 3-7 road record suggests they struggle to adapt to hostile environments
-• When defensive teams collide, execution matters most - Boston's offensive efficiency gives them the critical edge needed to cover this spread"
+
 
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 
@@ -223,7 +221,7 @@ You must return a properly formatted JSON object with the following structure:
   "awayTeam": "Full away team name",
   "league": "NBA | MLB | NHL | EPL",
   "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
-  "rationale": "Format as compelling bullet points that tell a STORY about the pick. Each bullet should start with the • character followed by a narrative insight backed by stats. Keep the original bullet symbol in the JSON string - do not escape it. Example: • Boston's blistering 49.7% shooting has been the foundation of their success - they're creating high-percentage looks that Denver's defense simply hasn't been able to contain\n• The Celtics' defensive wall has been impenetrable at home, allowing just 102.5 PPG while Denver struggles on the road"
+  "rationale": "Format as 3-4 SHORT bullet points. Each bullet MUST begin with the • character followed by a space. Make each bullet MAX 2 lines long. Keep points factual with key stats that support your pick."
 }
 `
       };

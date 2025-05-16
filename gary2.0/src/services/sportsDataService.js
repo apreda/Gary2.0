@@ -417,6 +417,19 @@ const sportsDataService = {
     try {
       console.log(`Getting starting pitchers for ${teamName} vs ${opponentName || 'any opponent'}...`);
       
+      // Local helper function to avoid scope issues
+      const matchTeamNames = (team1, team2) => {
+        if (!team1 || !team2) return false;
+        team1 = team1.toLowerCase().trim();
+        team2 = team2.toLowerCase().trim();
+        
+        // Direct match
+        if (team1 === team2) return true;
+        
+        // Handle team name variations (like 'LA' vs 'Los Angeles')
+        return team1.includes(team2) || team2.includes(team1);
+      };
+      
       // Step 1: Find today's MLB games
       const todaysGames = await this.getTodaysGames('MLB');
       if (!todaysGames.length) {
@@ -429,13 +442,13 @@ const sportsDataService = {
       if (opponentName) {
         // If we know both teams, find their matchup
         targetGame = todaysGames.find(game =>
-          (this._teamNameMatch(game.strHomeTeam, teamName) && this._teamNameMatch(game.strAwayTeam, opponentName)) ||
-          (this._teamNameMatch(game.strHomeTeam, opponentName) && this._teamNameMatch(game.strAwayTeam, teamName))
+          (matchTeamNames(game.strHomeTeam, teamName) && matchTeamNames(game.strAwayTeam, opponentName)) ||
+          (matchTeamNames(game.strHomeTeam, opponentName) && matchTeamNames(game.strAwayTeam, teamName))
         );
       } else {
         // Otherwise just find any game with this team
         targetGame = todaysGames.find(game =>
-          this._teamNameMatch(game.strHomeTeam, teamName) || this._teamNameMatch(game.strAwayTeam, teamName)
+          matchTeamNames(game.strHomeTeam, teamName) || matchTeamNames(game.strAwayTeam, teamName)
         );
       }
       
@@ -454,7 +467,7 @@ const sportsDataService = {
       }
       
       // Step 4: Find the team's starting pitcher from the lineup
-      const isHomeTeam = this._teamNameMatch(targetGame.strHomeTeam, teamName);
+      const isHomeTeam = matchTeamNames(targetGame.strHomeTeam, teamName);
       const teamLineup = isHomeTeam ? lineup.home : lineup.away;
       const opponentLineup = isHomeTeam ? lineup.away : lineup.home;
       
@@ -612,6 +625,19 @@ const sportsDataService = {
   async getFallbackPitcherData(teamName) {
     try {
       console.log(`Using fallback method to get pitcher data for ${teamName}...`);
+      
+      // Local helper function to avoid scope issues
+      const matchTeamNames = (team1, team2) => {
+        if (!team1 || !team2) return false;
+        team1 = team1.toLowerCase().trim();
+        team2 = team2.toLowerCase().trim();
+        
+        // Direct match
+        if (team1 === team2) return true;
+        
+        // Handle team name variations (like 'LA' vs 'Los Angeles')
+        return team1.includes(team2) || team2.includes(team1);
+      };
       
       // Get team data
       const teamData = await this.getTeamData(teamName);
