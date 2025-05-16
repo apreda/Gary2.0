@@ -281,23 +281,60 @@ Format your response as a JSON object with these keys: {
         maxTokens: 800   // Need enough tokens for structured response
       });
       
-      // Try to parse the response as JSON
+      // Try to parse the response as JSON using multiple approaches
       try {
-        // Find JSON in the response
-        const jsonMatch = response.match(/\{[\s\S]*?\}/); // Match everything between { and }
+        // First try to find valid JSON using a more robust approach
+        // Look for JSON block that's likely properly formatted
+        const jsonPattern = /\{[\s\S]*?"gameTime"[\s\S]*?"headlines"[\s\S]*?"keyInjuries"[\s\S]*?\}/;
+        const jsonMatch = response.match(jsonPattern);
+        
         if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          console.log('Successfully parsed game time and headlines:', parsed);
-          return {
-            success: true,
-            gameTime: parsed.gameTime || 'TBD',
-            headlines: parsed.headlines || [],
-            keyInjuries: parsed.keyInjuries || { homeTeam: [], awayTeam: [] },
-            rawResponse: response
-          };
+          try {
+            // Try to parse the extracted JSON
+            const parsed = JSON.parse(jsonMatch[0]);
+            console.log('Successfully parsed game time and headlines:', parsed);
+            return {
+              success: true,
+              gameTime: parsed.gameTime || 'TBD',
+              headlines: parsed.headlines || [],
+              keyInjuries: parsed.keyInjuries || { homeTeam: [], awayTeam: [] },
+              rawResponse: response
+            };
+          } catch (innerError) {
+            console.warn('Found JSON-like structure but failed to parse:', innerError);
+          }
         }
+        
+        // Second approach: Try to extract the data directly using separate regex patterns
+        console.log('Trying alternative extraction approach...');
+        
+        // Extract game time using regex
+        const timeMatch = response.match(/"gameTime"\s*:\s*"([^"]*)"/);
+        const gameTime = timeMatch ? timeMatch[1] : 'TBD';
+        
+        // Extract headlines - look for array structure
+        const headlinesMatch = response.match(/"headlines"\s*:\s*\[(.*?)\]/s);
+        let headlines = [];
+        if (headlinesMatch && headlinesMatch[1]) {
+          // Extract quoted strings from array
+          const headlineStrings = headlinesMatch[1].match(/"([^"]*)"(?:,|$)/g);
+          if (headlineStrings) {
+            headlines = headlineStrings.map(h => h.replace(/[",\s]/g, '').trim()).filter(Boolean);
+          }
+        }
+        
+        // Basic extraction successful
+        console.log('Extracted data using regex:', { gameTime, headlines: headlines.length });
+        return {
+          success: true,
+          gameTime: gameTime,
+          headlines: headlines,
+          keyInjuries: { homeTeam: [], awayTeam: [] }, // Default empty for now
+          extractionMethod: 'regex',
+          rawResponse: response
+        };
       } catch (parseError) {
-        console.warn('Error parsing JSON from Perplexity response:', parseError);
+        console.warn('All JSON parsing methods failed:', parseError);
       }
       
       // If parsing fails, still return useful data
