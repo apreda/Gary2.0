@@ -409,8 +409,42 @@ const sportsDataService = {
     // Implementation will be added
   },
   
-  getEnhancedNBAStats: async function(homeTeam, awayTeam) {
-    // Implementation will be added
+  getEnhancedNBAStats(homeTeam, awayTeam) {
+    // Implementation for NBA stats
+  },
+
+  /**
+   * Get scores for games on a specific date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @param {string} league - League name (NBA, MLB, etc.)
+   * @returns {Promise<Object>} Object with game scores
+   */
+  async getScores(date, league) {
+    try {
+      const formattedLeague = this.mapLeagueToSportsDBFormat(league);
+      const response = await axios.get(
+        `${this.API_BASE_URL}/${this.API_KEY}/eventsday.php`,
+        { params: { d: date, s: 'Basketball', l: formattedLeague } }
+      );
+
+      if (!response.data?.events) {
+        console.log(`No events found for ${league} on ${date}`);
+        return null;
+      }
+
+      const scores = {};
+      response.data.events.forEach(event => {
+        if (event.strHomeTeam && event.strAwayTeam && event.intHomeScore && event.intAwayScore) {
+          const key = `${event.strAwayTeam} @ ${event.strHomeTeam}`;
+          scores[key] = `${event.intAwayScore}-${event.intHomeScore}`;
+        }
+      });
+
+      return Object.keys(scores).length > 0 ? scores : null;
+    } catch (error) {
+      console.error(`Error fetching scores for ${league} on ${date}:`, error);
+      return null;
+    }
   }
 };
 

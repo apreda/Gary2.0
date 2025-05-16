@@ -6,6 +6,64 @@ import axios from 'axios';
 
 export const perplexityService = {
   /**
+   * Search for information using Perplexity API
+   * @param {string} query - The search query
+   * @param {object} options - Additional options for the search
+   * @returns {Promise<object>} - The search results
+   */
+  search: async function(query, options = {}) {
+    try {
+      console.log(`Searching Perplexity for: "${query}"`);
+      
+      // Default options with correct model name from Perplexity documentation
+      const defaultOptions = {
+        model: 'sonar',
+        temperature: 0.3,
+        maxTokens: 500
+      };
+      
+      // Merge options
+      const requestOptions = { ...defaultOptions, ...options };
+      
+      const response = await axios.post(
+        this.API_BASE_URL,
+        {
+          model: requestOptions.model,
+          messages: [
+            {
+              role: 'user',
+              content: query
+            }
+          ],
+          temperature: requestOptions.temperature,
+          max_tokens: requestOptions.maxTokens
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.API_KEY}`
+          },
+          timeout: 30000 // 30 second timeout
+        }
+      );
+      
+      return {
+        success: true,
+        data: response.data.choices?.[0]?.message?.content || 'No results found',
+        raw: response.data
+      };
+      
+    } catch (error) {
+      console.error('Error in Perplexity search:', error);
+      return {
+        success: false,
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  },
+  
+  /**
    * The Perplexity API key (will be loaded from environment variables)
    */
   API_KEY: import.meta.env?.VITE_PERPLEXITY_API_KEY || '',
