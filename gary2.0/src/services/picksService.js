@@ -333,12 +333,12 @@ const picksService = {
           // Skip null values
           if (jsonData === null) return false;
           
-          // Use 0.6 as the confidence threshold
+          // Use 0.75 as the confidence threshold (updated from 0.6)
           const confidence = jsonData.confidence || 0;
-          const isAboveThreshold = confidence >= 0.6;
+          const isAboveThreshold = confidence >= 0.75;
           
           if (!isAboveThreshold) {
-            console.warn(`Filtering out pick (${jsonData.homeTeam} vs ${jsonData.awayTeam}) at database storage - confidence ${confidence} below threshold of 0.6`);
+            console.warn(`Filtering out pick (${jsonData.homeTeam} vs ${jsonData.awayTeam}) at database storage - confidence ${confidence} below threshold of 0.75`);
           } else {
             console.log(`Storing pick for ${jsonData.homeTeam} vs ${jsonData.awayTeam} with confidence: ${confidence}`);
           }
@@ -346,7 +346,7 @@ const picksService = {
           return isAboveThreshold;
         });
       
-      console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output above 0.6 confidence threshold`);
+      console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output above 0.75 confidence threshold`);
       
       // Skip if there are no valid picks
       if (rawJsonOutputs.length === 0) {
@@ -354,11 +354,13 @@ const picksService = {
         return { success: false, message: 'No valid picks to store' };
       }
       
-      // Create data structure for Supabase - only include fields that exist in the schema
+      // Create data structure for Supabase - always stringify the JSON for the picks column
       const pickData = {
         date: currentDateString,
-        picks: rawJsonOutputs
+        picks: JSON.stringify(rawJsonOutputs) // Stringify to ensure proper storage in Supabase
       };
+      
+      console.log('Storing picks as stringified JSON to ensure database compatibility');
       
       // Ensure there's a valid Supabase session before database operation
       await picksService.ensureValidSupabaseSession();
