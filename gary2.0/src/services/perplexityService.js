@@ -591,7 +591,6 @@ Format your response as a JSON object with these keys: {
         }
       };
     }
-  }
   },
   
   /**
