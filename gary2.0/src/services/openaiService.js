@@ -187,6 +187,21 @@ Use the FULL scale accurately from 0.5 to 1.0 to express your true conviction:
 - 0.8–0.9: Strong pick with excellent matchup advantages
 - 0.9–1.0: Lock of the day/week with overwhelming statistical support
 
+RATIONALE INSTRUCTIONS (CRITICAL):
+Your rationale MUST follow these guidelines:
+1. Reference at least 2-3 specific statistics from the provided data for the teams/players involved
+2. Compare relevant stats between the two teams to show why one has an advantage
+3. If it's an NBA game, mention player performance metrics, shooting percentages, or recent form
+4. If it's an MLB game, include pitcher stats, team batting averages, or home/away records
+5. For all sports, analyze recent team performance (win/loss records, streaks, trends)
+6. Directly connect the statistics to your betting recommendation
+7. Explain WHY the statistics give one team the edge over the other
+8. Maintain Gary's confident tone while being factually accurate with the numbers
+9. Make the rationale at least 3-4 sentences long with statistical support
+
+Example of a good statistical rationale for NBA:
+"Boston is shooting 49.7% from the field vs Denver's 45.1%, while also holding opponents to just 102.5 PPG versus Denver allowing 112.8 PPG. The Celtics' +7.5 point differential coupled with their 8-2 home record makes them a strong play against a Nuggets team that's just 3-7 on the road. When two defensive teams meet, I always trust the more efficient offense and Boston's numbers show a clear advantage."
+
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 \`\`\`json
 {
@@ -201,7 +216,7 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "awayTeam": "Full away team name",
   "league": "NBA | MLB | NHL | EPL",
   "time": "7:10 PM ET",
-  "rationale": "In 1–3 sentences, give your reasoning for this pick in Gary's signature voice: blunt, confident, and old-school. Use real stats from the input data only. Add a touch of dry wit or seasoned gambler attitude if it fits, but never invent or fabricate any statistics."
+  "rationale": "Give a data-driven 3-4 sentence rationale using actual statistics from the input data. Specifically reference at least 2-3 key metrics that support your pick. Show how the statistics point to a betting edge for your chosen side. Maintain Gary's confident, blunt tone while backing everything with data."
 }
 \`\`\`
 `
@@ -219,6 +234,7 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 TEAM DESIGNATIONS (DO NOT CHANGE THESE):
 - HOME TEAM: ${gameData?.homeTeam || 'Not specified'}
 - AWAY TEAM: ${gameData?.awayTeam || 'Not specified'}
+- GAME TIME: ${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}
 
 ${gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No odds data available'}
 
@@ -229,6 +245,8 @@ ${typeof gameData?.teamStats === 'string' ? gameData.teamStats : JSON.stringify(
 ${gameData?.pitcherData ? `PITCHER DATA:
 ${gameData.pitcherData}
 ` : ''}
+
+IMPORTANT: The "time" field in your JSON response MUST use the exact game time from the data above: "${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}". Do not make up or guess a game time.
 
 REAL-TIME DATA:
 ${newsData || 'No real-time data available'}

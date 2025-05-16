@@ -197,7 +197,7 @@ const ballDontLieService = {
    * @param {number} [season] - Season year (defaults to current NBA season)
    * @returns {Promise<string>} - Formatted statistics text for GPT prompt
    */
-  // Game data functions
+  // Game data functions with time extraction
   async getNbaGamesByDate(date) {
     try {
       const cacheKey = `nba_games_${date}`;

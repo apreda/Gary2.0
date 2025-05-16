@@ -461,8 +461,194 @@ const sportsDataService = {
     }
   },
   
-  getEnhancedNBAStats(homeTeam, awayTeam) {
-    // Implementation for NBA stats
+  /**
+   * Get enhanced NBA statistics from Ball Don't Lie API
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name 
+   * @returns {Promise<Object>} - Enhanced NBA statistics
+   */
+  getEnhancedNBAStats: async function(homeTeam, awayTeam) {
+    try {
+      console.log(`Fetching enhanced NBA stats for ${homeTeam} vs ${awayTeam}...`);
+      
+      // Get current date in YYYY-MM-DD format
+      const today = new Date();
+      const dateString = today.toISOString().split('T')[0];
+      
+      // Find upcoming game for these teams - checking both regular season and playoff games
+      const regularSeasonGames = await ballDontLieService.getNbaGamesByDate(dateString);
+      
+      // Explicitly fetch playoff games with the postseason parameter
+      const client = ballDontLieService.getClient();
+      const playoffGamesResponse = await client.nba.getGames({ 
+        dates: [dateString],
+        postseason: true,
+        per_page: 100 // Max allowed
+      }).catch(err => {
+        console.warn('Error fetching playoff games:', err);
+        return { data: [] };
+      });
+      
+      const playoffGames = playoffGamesResponse.data || [];
+      
+      // Combine regular season and playoff games
+      const allGames = [...regularSeasonGames, ...playoffGames];
+      
+      console.log(`Found ${allGames.length} NBA games for ${dateString}`);
+      
+      let matchedGame = null;
+      let gameStats = {};
+      
+      // Try to find the exact game by team names
+      for (const game of allGames) {
+        const homeTeamName = game.home_team?.full_name || '';
+        const awayTeamName = game.visitor_team?.full_name || '';
+        
+        // Check for various formats of the team names
+        if ((homeTeamName.includes(homeTeam) || homeTeam.includes(homeTeamName)) && 
+            (awayTeamName.includes(awayTeam) || awayTeam.includes(awayTeamName))) {
+          matchedGame = game;
+          break;
+        }
+      }
+      
+      if (!matchedGame) {
+        console.warn(`Game not found: ${awayTeam} @ ${homeTeam}`);
+        return `Unable to find NBA game data for ${awayTeam} @ ${homeTeam}. Using basic statistics.`;
+      }
+      
+      // Format the game preview with detailed stats
+      let gamePreview = `## NBA Game Preview: ${awayTeam} @ ${homeTeam} ##\n\n`;
+      
+      // Extract game time from datetime if available, otherwise use date
+      const gameTime = matchedGame.datetime ? 
+        new Date(matchedGame.datetime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 
+        'TBD';
+        
+      // Store for returning to the caller
+      gameStats.gameTime = gameTime;
+      gameStats.date = matchedGame.date;
+        
+      // Add basic game info
+      const gameType = matchedGame.postseason ? 'Playoff Game' : 'Regular Season';
+      gamePreview += `**Game Type:** ${gameType}\n`;
+      gamePreview += `**Date:** ${matchedGame.date}\n`;
+      gamePreview += `**Time:** ${gameTime}\n`;
+      
+      // Get team records and standings information
+      const homeTeamId = matchedGame.home_team.id;
+      const awayTeamId = matchedGame.visitor_team.id;
+      
+      // Try to get standings data
+      const standingsResponse = await client.nba.getStandings({ season: today.getFullYear() })
+        .catch(err => {
+          console.warn('Error fetching standings:', err);
+          return { data: [] };
+        });
+      
+      const standings = standingsResponse.data || [];
+      
+      // Find team standings
+      const homeTeamStanding = standings.find(s => s.team.id === homeTeamId);
+      const awayTeamStanding = standings.find(s => s.team.id === awayTeamId);
+      
+      if (homeTeamStanding && awayTeamStanding) {
+        gamePreview += `\n### Team Records ###\n`;
+        gamePreview += `${matchedGame.home_team.full_name}: ${homeTeamStanding.wins}-${homeTeamStanding.losses} (${homeTeamStanding.home_record} Home)\n`;
+        gamePreview += `${matchedGame.visitor_team.full_name}: ${awayTeamStanding.wins}-${awayTeamStanding.losses} (${awayTeamStanding.road_record} Away)\n`;
+        gamePreview += `\n`;
+      }
+      
+      // Get key player stats for both teams
+      const statsResponse = await client.nba.getStats({
+        team_ids: [homeTeamId, awayTeamId],
+        seasons: [today.getFullYear()],
+        per_page: 50
+      }).catch(err => {
+        console.warn('Error fetching player stats:', err);
+        return { data: [] };
+      });
+      
+      const playerStats = statsResponse.data || [];
+      
+      if (playerStats.length > 0) {
+        // Group stats by team
+        const homeTeamPlayerStats = playerStats.filter(s => s.team.id === homeTeamId);
+        const awayTeamPlayerStats = playerStats.filter(s => s.team.id === awayTeamId);
+        
+        // Function to format player stats
+        const formatPlayerStats = (teamStats) => {
+          // Sort by points descending to get top players
+          const sortedStats = [...teamStats].sort((a, b) => b.pts - a.pts);
+          const topPlayers = sortedStats.slice(0, 5); // Get top 5 players
+          
+          let result = '';
+          for (const playerStat of topPlayers) {
+            const player = playerStat.player;
+            result += `${player.first_name} ${player.last_name}: ${playerStat.pts.toFixed(1)} PPG, `;
+            result += `${playerStat.reb.toFixed(1)} RPG, ${playerStat.ast.toFixed(1)} APG, `;
+            result += `${(playerStat.fg_pct * 100).toFixed(1)}% FG, ${(playerStat.fg3_pct * 100).toFixed(1)}% 3PT\n`;
+          }
+          return result;
+        };
+        
+        // Add key player stats to the preview
+        gamePreview += `### Key Player Stats (Season Averages) ###\n\n`;
+        gamePreview += `**${matchedGame.home_team.full_name}:**\n${formatPlayerStats(homeTeamPlayerStats)}\n`;
+        gamePreview += `**${matchedGame.visitor_team.full_name}:**\n${formatPlayerStats(awayTeamPlayerStats)}\n`;
+      }
+      
+      // Try to get player injuries
+      const injuriesResponse = await client.nba.getPlayerInjuries({
+        team_ids: [homeTeamId, awayTeamId]
+      }).catch(err => {
+        console.warn('Error fetching injuries:', err);
+        return { data: [] };
+      });
+      
+      const injuries = injuriesResponse.data || [];
+      
+      if (injuries.length > 0) {
+        // Group injuries by team
+        const homeTeamInjuries = injuries.filter(i => i.player.team_id === homeTeamId);
+        const awayTeamInjuries = injuries.filter(i => i.player.team_id === awayTeamId);
+        
+        if (homeTeamInjuries.length > 0 || awayTeamInjuries.length > 0) {
+          gamePreview += `\n### Key Injuries ###\n`;
+          
+          if (awayTeamInjuries.length > 0) {
+            gamePreview += `**${matchedGame.visitor_team.full_name}:**\n`;
+            awayTeamInjuries.forEach(injury => {
+              gamePreview += `- ${injury.player.first_name} ${injury.player.last_name}: ${injury.status} - ${injury.description}\n`;
+            });
+            gamePreview += '\n';
+          }
+          
+          if (homeTeamInjuries.length > 0) {
+            gamePreview += `**${matchedGame.home_team.full_name}:**\n`;
+            homeTeamInjuries.forEach(injury => {
+              gamePreview += `- ${injury.player.first_name} ${injury.player.last_name}: ${injury.status} - ${injury.description}\n`;
+            });
+          }
+        }
+      }
+      
+      // Add team comparison table
+      if (homeTeamStanding && awayTeamStanding) {
+        gamePreview += `\n### Team Comparison ###\n`;
+        gamePreview += `| Stat | ${matchedGame.visitor_team.abbreviation} | ${matchedGame.home_team.abbreviation} |\n`;
+        gamePreview += `|------|------|---------|\n`;
+        gamePreview += `| Win % | ${(awayTeamStanding.wins / (awayTeamStanding.wins + awayTeamStanding.losses) * 100).toFixed(1)}% | ${(homeTeamStanding.wins / (homeTeamStanding.wins + homeTeamStanding.losses) * 100).toFixed(1)}% |\n`;
+        gamePreview += `| Conference Rank | ${awayTeamStanding.conference_rank} | ${homeTeamStanding.conference_rank} |\n`;
+        gamePreview += `| Home/Away | ${awayTeamStanding.road_record} (Away) | ${homeTeamStanding.home_record} (Home) |\n`;
+      }
+      
+      return gamePreview;
+      
+    } catch (error) {
+      console.error('Error fetching enhanced NBA stats:', error);
+      return `Error fetching enhanced NBA statistics. Using basic information only.\nError: ${error.message}`;
+    }
   },
 
   /**
