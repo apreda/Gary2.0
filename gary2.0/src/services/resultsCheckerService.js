@@ -23,7 +23,7 @@ const adminSupabase = SUPABASE_SERVICE_KEY
 
 sportsDbApiService.initialize();
 
-const resultsCheckerService = {
+export const resultsCheckerService = {
   validateResult(result) {
     if (!VALID_RESULTS.has(result)) {
       console.error(`Invalid result: ${result}. Must be one of: ${Array.from(VALID_RESULTS).join(', ')}`);
@@ -50,7 +50,8 @@ const resultsCheckerService = {
       }
       console.warn(`Retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return resultsCheckerService.withRetry(fn, retries - 1, delay * 1.5);
+      // Avoid self-reference that causes circular dependency
+      return withRetry(fn, retries - 1, delay * 1.5);
     }
   },
 
@@ -88,7 +89,8 @@ const resultsCheckerService = {
 
       // 1. Perplexity primary
       try {
-        const perplexityScores = await resultsCheckerService.getScoresFromPerplexity(date, picks);
+        // Use direct method call to avoid circular reference
+        const perplexityScores = await getScoresFromPerplexity(date, picks);
         if (perplexityScores?.success && Object.keys(perplexityScores.scores || {}).length > 0) {
           Object.assign(scores, perplexityScores.scores);
           const foundPicks = new Set(Object.keys(scores));
@@ -181,7 +183,8 @@ const resultsCheckerService = {
       if (missingGames.length > 0) {
         try {
           console.log('Making final attempt with Perplexity for remaining games...');
-          const finalPerplexityScores = await resultsCheckerService.getScoresFromPerplexity(date, missingGames);
+          // Use direct method reference to avoid circular dependency
+          const finalPerplexityScores = await getScoresFromPerplexity(date, missingGames);
           
           if (finalPerplexityScores && finalPerplexityScores.success) {
             Object.assign(scores, finalPerplexityScores.scores || {});
@@ -357,4 +360,4 @@ const resultsCheckerService = {
   }
 };
 
-export default resultsCheckerService;
+// Use named export only to avoid circular reference issues
