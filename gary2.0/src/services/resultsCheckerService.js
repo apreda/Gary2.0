@@ -1,8 +1,8 @@
 import { supabase } from '../supabaseClient';
 import { createClient } from '@supabase/supabase-js';
 import { garyPerformanceService } from './garyPerformanceService';
-import sportsDbApiService from './sportsDbApiService';
-import { ballDontLieService } from './ballDontLieService';
+import { sportsDbApiService } from './sportsDbApiService';
+import ballDontLieService from './ballDontLieService';
 import openaiService from './openaiService';
 import { perplexityService } from './perplexityService';
 import { userPickResultsService } from './userPickResultsService';
