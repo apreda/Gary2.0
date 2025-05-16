@@ -709,6 +709,23 @@ const sportsDataService = {
     const sentences = text.split('.');
     return sentences.slice(0, 2).join('.') + '.';
   },
+  
+  /**
+   * Helper to check if team names match (handles variations in team names)
+   * @private
+   */
+  _teamNameMatch(team1, team2) {
+    if (!team1 || !team2) return false;
+    
+    // Clean and lowercase both names
+    const clean1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const clean2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Check for exact match or substring match
+    return clean1 === clean2 || 
+           clean1.includes(clean2) || 
+           clean2.includes(clean1);
+  },
 
   /**
    * Extract NBA-specific statistics
