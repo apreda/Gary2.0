@@ -234,73 +234,62 @@ export const garyPerformanceService = {
    * @param {Array} results - Array of objects with pick and result fields
    * @returns {Promise<{ success: boolean, message: string, stats?: Object }>}
    */
-  /**
-   * Manually record the results of Gary's picks with enhanced validation and batching
-   * @param {string} date - Date of the picks in YYYY-MM-DD format
-   * @param {Array} results - Array of objects with pick and result fields
-   * @returns {Promise<{ success: boolean, message: string, stats?: Object }>}
-   */
   recordPickResults: async (date, results) => {
-    // Input validation
+    console.log(`Recording ${results.length} results for ${date}...`);
+    
+    // Validate inputs
     if (!date || !results || !Array.isArray(results)) {
-      console.error('Invalid input parameters to recordPickResults');
-      return { success: false, message: 'Invalid input parameters' };
+      return { success: false, message: 'Invalid date or results' };
     }
-
+    
     try {
-      // Check for existing results
+      // Check if there are existing results for this date
       console.log(`Checking for existing results for ${date}...`);
-      const { data: existingResults, error: checkError } = await withRetry(() => 
-        supabase
-          .from('game_results')
-          .select('id, pick_text, result, game_date')
-          .eq('game_date', date)
-      );
+      const { data: existingResults, error: checkError } = await supabase
+        .from('game_results')
+        .select('*')
+        .eq('game_date', date);
       
       if (checkError) {
         console.error('Error checking for existing results:', checkError);
-        throw checkError;
+        return { success: false, message: checkError.message };
+      }
+      // Find or create the daily_picks entry for this date
+      const { data: dailyPick, error: dailyPickError } = await supabase
+        .from('daily_picks')
+        .select('id')
+        .eq('date', date)
+        .single();
+      
+      if (dailyPickError && dailyPickError.code !== 'PGRST116') {
+        console.error('Error finding daily_picks entry:', dailyPickError);
+        return { success: false, message: dailyPickError.message };
       }
       
-      // Process and validate results
-      console.log(`Processing ${results.length} results for ${date}...`);
+      const dailyPickId = dailyPick?.id;
+      if (!dailyPickId) {
+        console.warn(`No daily_picks entry found for ${date}`);
+      } else {
+        console.log(`Found daily pick for ${date} with ID ${dailyPickId}`);
+      }
+      
+      // Process the results
       const processedResults = [];
       const validationErrors = [];
-      const backupFields = ['originalPick', 'pickText', 'text', 'originalPickText'];
       
-      // Ensure confidence column exists
-      await ensureConfidenceColumn();
-      
-      // Process each result
       for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        
         try {
-          // Advanced recovery for pick text with better validation
-          let finalPickText = result.pick || '';
+          const result = results[i];
           
-          // If pick is missing or invalid, try to recover from backup fields
-          if (!finalPickText || finalPickText === 'result' || finalPickText.length < 5) {
-            for (const field of backupFields) {
-              if (result[field] && typeof result[field] === 'string' && 
-                  result[field] !== 'result' && result[field].length >= 5) {
-                finalPickText = result[field];
-                console.log(`Recovered pick text from ${field}: "${finalPickText}"`);
-                break;
-              }
-            }
-          }
+          // Extract pick from various result formats
+          let finalPickText = '';
+          const possibleFields = ['pick', 'original_pick', 'pickText', 'pick_text'];
           
-          // If still not recovered, try the rawResult object if available
-          if ((!finalPickText || finalPickText === 'result') && result.rawResult) {
-            for (const field of backupFields) {
-              if (result.rawResult[field] && 
-                  typeof result.rawResult[field] === 'string' && 
-                  result.rawResult[field] !== 'result') {
-                finalPickText = result.rawResult[field];
-                console.log(`Recovered pick text from rawResult.${field}: "${finalPickText}"`);
-                break;
-              }
+          for (const field of possibleFields) {
+            if (result[field] && typeof result[field] === 'string') {
+              finalPickText = result[field];
+              console.log(`Recovered pick text from result.${field}: "${finalPickText}"`);
+              break;
             }
           }
           
@@ -312,18 +301,36 @@ export const garyPerformanceService = {
             console.log(`Created descriptive placeholder: "${finalPickText}"`);
           }
           
-          // Create processed result object
+          // Get the final score in the correct format
+          let finalScore = result.final_score || result.score;
+          
+          // Get the matchup in standard format
+          let matchup = result.matchup || finalPickText;
+          
+          // Create processed result object with fields matching the DB schema
           const processedResult = {
-            ...result,
-            pick: finalPickText,
-            originalPick: finalPickText,
-            pickText: finalPickText
+            pick_id: dailyPickId,
+            game_date: date,
+            league: result.league || 'Unknown',
+            result: result.result,
+            final_score: finalScore,
+            pick_text: finalPickText,
+            matchup: matchup,
+            confidence: result.confidence || null
           };
           
-          // Validate result value
-          if (!validateResult(processedResult.result)) {
-            validationErrors.push(`Invalid result value: ${processedResult.result} for pick: ${finalPickText}`);
-            continue;
+          // Ensure result is valid (won, lost, push)
+          if (!processedResult.result || !validateResult(processedResult.result)) {
+            console.warn(`Invalid result '${processedResult.result}' for ${finalPickText}, trying fallback validation...`);
+            
+            // Convert unknown or invalid values to valid ones if possible
+            if (processedResult.result === 'win') processedResult.result = 'won';
+            else if (processedResult.result === 'loss') processedResult.result = 'lost';
+            else if (processedResult.result === 'tie') processedResult.result = 'push';
+            else if (processedResult.result === 'unknown' || !processedResult.result) {
+              validationErrors.push(`Invalid result value: ${processedResult.result} for pick: ${finalPickText}`);
+              continue;
+            }
           }
           
           // Validate final score format if present
@@ -333,7 +340,6 @@ export const garyPerformanceService = {
           }
           
           processedResults.push(processedResult);
-          
         } catch (error) {
           console.error(`Error processing result ${i + 1}:`, error);
           validationErrors.push(`Error processing result: ${error.message}`);
@@ -345,258 +351,39 @@ export const garyPerformanceService = {
         console.warn(`Found ${validationErrors.length} validation errors:`, validationErrors);
       }
       
-      // Check for existing results to prevent duplicates
-      if (existingResults && existingResults.length > 0) {
-        const existingPickTexts = new Set(existingResults.map(r => r.pick_text));
-        const newResults = processedResults.filter(result => !existingPickTexts.has(result.pick));
+      if (processedResults.length > 0) {
+        console.log(`Inserting ${processedResults.length} results into game_results...`);
+        console.log('Sample result being inserted:', processedResults[0]);
         
-        if (newResults.length === 0) {
-          console.log('All results already exist in the database, skipping insertion');
-          return { 
-            success: true, 
-            message: `All ${results.length} results for ${date} already exist`,
-            existingResults: true,
-            stats: {
-              total: existingResults.length,
-              new: 0,
-              skipped: results.length,
-              errors: validationErrors.length
-            }
-          };
-        }
+        const { data: insertData, error: insertError } = await supabase
+          .from('game_results')
+          .insert(processedResults);
         
-        console.log(`Found ${newResults.length} new results to add to ${existingResults.length} existing ones`);
-        // Use only new results for insertion
-        processedResults = newResults;
-      }
-
-      // Get the corresponding daily pick
-      const { data: dailyPick, error: pickError } = await withRetry(() =>
-        supabase
-          .from('daily_picks')
-          .select('*')
-          .eq('date', date)
-          .maybeSingle()
-      );
-
-      if (pickError) {
-        console.error('Error fetching daily pick data for results recording:', pickError);
-        return { success: false, error: pickError, message: 'Error fetching daily pick data' };
-      }
-
-      if (!dailyPick) {
-        console.error('No daily pick found for date:', date);
-        return { success: false, message: `No daily pick found for date: ${date}` };
-      }
-
-      console.log(`Found daily pick for ${date} with ID ${dailyPick.id}`);
-      const pickId = dailyPick.id;
-
-      // Insert results in batches to avoid hitting database limits
-      const BATCH_SIZE = 10;
-      const totalBatches = Math.ceil(processedResults.length / BATCH_SIZE);
-      let successfulInserts = 0;
-      let failedInserts = 0;
-
-      for (let i = 0; i < processedResults.length; i += BATCH_SIZE) {
-        const batch = processedResults.slice(i, i + BATCH_SIZE);
-        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
-        
-        console.log(`Processing batch ${batchNumber} of ${totalBatches} (${batch.length} items)`);
-        
-        // Prepare the data to insert with calculated results and confidence
-        const insertData = await Promise.all(batch.map(async (result) => {
-          try {
-            // Get the original pick to extract confidence
-            const originalPick = result.originalPick || result;
-            
-            // Calculate the result if we have a score
-            let resultData = { ...result };
-            
-            if (result.final_score) {
-              const calculated = resultCalculator.calculateResult({
-                pick: originalPick,
-                score: result.final_score,
-                league: result.league || 'NBA',
-                confidence: result.confidence // Pass through any existing confidence
-              });
-              
-              resultData.result = calculated.result;
-              // Preserve the original confidence from the pick
-              resultData.confidence = calculated.confidence;
-            } else {
-              // If no final score, use the original pick's confidence
-              resultData.confidence = resultCalculator.getConfidence(originalPick);
-              resultData.result = 'pending';
-            }
-            
-            return {
-              pick_id: pickId,
-              game_date: date,
-              league: resultData.league || 'NBA',
-              pick_text: resultData.pick,
-              result: resultData.result || 'pending',
-              final_score: resultData.final_score || null,
-              confidence: resultData.confidence || 0.5, // Default confidence if not calculated
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
-          } catch (error) {
-            console.error('Error preparing result for insertion:', error);
-            return null;
-          }
-        }));
-        
-        // Filter out any failed preparations
-        const validInsertData = insertData.filter(item => item !== null);
-        
-        const { error: insertError } = await withRetry(() =>
-          supabase
-            .from('game_results')
-            .insert(validInsertData)
-        );
-
         if (insertError) {
-          console.error(`Error inserting batch ${batchNumber}:`, insertError);
-          failedInserts += batch.length;
-        } else {
-          successfulInserts += batch.length;
-          console.log(`Successfully inserted batch ${batchNumber}`);
+          console.error('Error inserting results:', insertError);
+          return { success: false, message: insertError.message };
         }
       }
-
-      // Calculate and return statistics
-      const stats = {
-        total: (existingResults?.length || 0) + successfulInserts,
-        new: successfulInserts,
-        skipped: results.length - successfulInserts - failedInserts,
-        failed: failedInserts,
-        errors: validationErrors.length
+      
+      // Update performance stats after successfully recording results
+      await garyPerformanceService.updatePerformanceStats(date);
+      
+      return {
+        success: true,
+        message: `Successfully recorded ${processedResults.length} results for ${date}. ${validationErrors.length} validation errors.`,
+        stats: {
+          added: processedResults.length,
+          errors: validationErrors.length
+        },
+        recorded: true
       };
-
-      if (failedInserts > 0) {
-        const message = `Failed to insert ${failedInserts} out of ${results.length} results. ${successfulInserts} inserted successfully.`;
-        console.error(message);
-        return { success: false, message, stats };
-      }
-
-      const successMessage = `Successfully recorded ${successfulInserts} results for ${date}. ${validationErrors.length} validation errors.`;
-      console.log(successMessage);
-      return { success: true, message: successMessage, stats };
-
     } catch (error) {
-      console.error('Error in recordPickResults:', error);
+      console.error('Error recording pick results:', error);
       return { 
         success: false, 
         message: `Failed to record results: ${error.message}`,
-        error: error.toString() 
+        error: error.stack
       };
-    }
-  },
-
-  /**
-   * Track Gary's picks and update their results in the game_results table
-   * This method reads from daily_picks table and updates game_results table
-   */
-  
-  /**
-   * Track Gary's picks and update their results in the game_results table
-   * This method reads from daily_picks table and updates game_results table
-   */
-  trackPickResults: async () => {
-    try {
-      console.log('Tracking Gary\'s pick results...');
-      
-      // 1. Get all of Gary's picks from daily_picks table
-      const { data: dailyPicksData, error: picksError } = await supabase
-        .from('daily_picks')
-        .select('id, date, picks')
-        .order('date', { ascending: false })
-        .limit(20); // Limit to most recent to avoid processing too many
-      
-      if (picksError) {
-        console.error('Error fetching picks data:', picksError);
-        return { success: false, error: picksError };
-      }
-      
-      if (!dailyPicksData || dailyPicksData.length === 0) {
-        console.log('No daily picks found to process');
-        return { success: true, processed: 0 };
-      }
-      
-      let totalProcessed = 0;
-      let resultsAdded = 0;
-      
-      // Process each day's picks
-      for (const dayData of dailyPicksData) {
-        // Skip if no picks data
-        if (!dayData.picks || !Array.isArray(dayData.picks)) {
-          continue;
-        }
-        
-        // Process each individual pick
-        for (const pick of dayData.picks) {
-          // Skip if no ID
-          if (!pick.id) {
-            continue;
-          }
-          
-          // For this simplified implementation, we'll use mock data to simulate game results
-          // In production, you would connect to an odds/scores API or manually enter results
-          
-          // Check if this pick already has a result recorded
-          const { data: existingResult } = await supabase
-            .from('game_results')
-            .select('*')
-            .eq('pick_id', pick.id)
-            .maybeSingle();
-            
-          if (existingResult) {
-            // Skip if already recorded
-            console.log(`Result for pick ${pick.id} already recorded as ${existingResult.result}`);
-            continue;
-          }
-          
-          // Get pick details for recording
-          const league = pick.league || (pick.sport || '').toUpperCase() || 'UNKNOWN';
-          const gameDate = pick.gameDate || dayData.date || new Date().toISOString().split('T')[0];
-          
-          // For this simplified version, we'll use a random result
-          // In production, you would check the actual game outcome 
-          const possibleResults = ['won', 'lost', 'push'];
-          const randomResult = possibleResults[Math.floor(Math.random() * 2)]; // Bias toward won/lost (not push)
-          
-          // Record the result
-          const { data: newResult, error: insertError } = await supabase
-            .from('game_results')
-            .insert({
-              pick_id: pick.id,
-              game_date: gameDate,
-              league: league,
-              result: randomResult,
-              final_score: 'Mock Score: 100-95' // Mock score for now
-            })
-            .select();
-            
-          if (insertError) {
-            console.error(`Error recording result for pick ${pick.id}:`, insertError);
-          } else {
-            console.log(`Recorded result for pick ${pick.id}: ${randomResult}`);
-            resultsAdded++;
-          }
-          
-          totalProcessed++;
-        }
-      }
-      
-      return { 
-        success: true, 
-        processed: totalProcessed,
-        resultsAdded
-      };
-    } catch (error) {
-      console.error('Error tracking pick results:', error);
-      return { success: false, error };
     }
   },
   
