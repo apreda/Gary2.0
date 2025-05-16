@@ -39,6 +39,72 @@ async function getCachedOrFetch(cacheKey, fetchFn) {
   }
 }
 
+/**
+ * Get NBA games for a specific date
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @returns {Promise<Array>} Array of game objects
+ */
+const getNbaGamesByDate = async (date) => {
+  try {
+    const cacheKey = `nba_games_${date}`;
+    return getCachedOrFetch(cacheKey, async () => {
+      console.log(`Fetching NBA games for ${date} from BallDontLie`);
+      const response = await api.nba.getGames({ 
+        dates: [date],
+        per_page: 100 // Max allowed
+      });
+      return response.data || [];
+    });
+  } catch (error) {
+    console.error('Error fetching NBA games:', error);
+    return [];
+  }
+};
+
+/**
+ * Get MLB games for a specific date
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @returns {Promise<Array>} Array of game objects
+ */
+const getMlbGamesByDate = async (date) => {
+  try {
+    const cacheKey = `mlb_games_${date}`;
+    return getCachedOrFetch(cacheKey, async () => {
+      console.log(`Fetching MLB games for ${date} from BallDontLie`);
+      const response = await api.mlb.getGames({ 
+        dates: [date],
+        per_page: 100 // Max allowed
+      });
+      return response.data || [];
+    });
+  } catch (error) {
+    console.error('Error fetching MLB games:', error);
+    return [];
+  }
+};
+
+/**
+ * Get all games (NBA + MLB) for a specific date
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @returns {Promise<Object>} Object with NBA and MLB games
+ */
+const getAllGamesByDate = async (date) => {
+  try {
+    const [nbaGames, mlbGames] = await Promise.all([
+      getNbaGamesByDate(date),
+      getMlbGamesByDate(date)
+    ]);
+    
+    return {
+      NBA: nbaGames,
+      MLB: mlbGames
+    };
+  } catch (error) {
+    console.error('Error fetching all games:', error);
+    return { NBA: [], MLB: [] };
+  }
+};
+
 // Levenshtein distance for name similarity (kept for backward compatibility)
 function levenshteinDistance(a, b) {
   const matrix = [];
@@ -132,6 +198,58 @@ const ballDontLieService = {
    * @param {number} [season] - Season year (defaults to current NBA season)
    * @returns {Promise<string>} - Formatted statistics text for GPT prompt
    */
+  // Game data functions
+  async getNbaGamesByDate(date) {
+    try {
+      const cacheKey = `nba_games_${date}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching NBA games for ${date} from BallDontLie`);
+        const response = await api.nba.getGames({ 
+          dates: [date],
+          per_page: 100 // Max allowed
+        });
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching NBA games:', error);
+      return [];
+    }
+  },
+
+  async getMlbGamesByDate(date) {
+    try {
+      const cacheKey = `mlb_games_${date}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching MLB games for ${date} from BallDontLie`);
+        const response = await api.mlb.getGames({ 
+          dates: [date],
+          per_page: 100 // Max allowed
+        });
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching MLB games:', error);
+      return [];
+    }
+  },
+
+  async getAllGamesByDate(date) {
+    try {
+      const [nbaGames, mlbGames] = await Promise.all([
+        this.getNbaGamesByDate(date),
+        this.getMlbGamesByDate(date)
+      ]);
+      
+      return {
+        NBA: nbaGames,
+        MLB: mlbGames
+      };
+    } catch (error) {
+      console.error('Error fetching all games:', error);
+      return { NBA: [], MLB: [] };
+    }
+  },
+
   async generatePlayerStatsReport(playerIds, season = nbaSeason()) {
     if (!playerIds?.length) return '';
     
