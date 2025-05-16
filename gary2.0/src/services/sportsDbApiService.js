@@ -1,11 +1,20 @@
 import axios from 'axios';
 
+// Handle environment variables in both Vite and standalone Node.js
+let apiKey = '';
+try {
+  apiKey = import.meta.env?.VITE_THESPORTSDB_API_KEY || process.env.VITE_THESPORTSDB_API_KEY || '';
+} catch (e) {
+  // If import.meta.env is not available (running in Node directly)
+  apiKey = process.env.VITE_THESPORTSDB_API_KEY || '';
+}
+
 /**
  * Service for interacting with TheSportsDB API
  * https://www.thesportsdb.com/api.php
  */
 export const sportsDbApiService = {
-  API_KEY: import.meta.env.VITE_THESPORTSDB_API_KEY || '',
+  API_KEY: apiKey,
   BASE_URL: 'https://www.thesportsdb.com/api/v1/json',
   
   /**

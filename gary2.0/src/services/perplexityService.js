@@ -66,7 +66,13 @@ export const perplexityService = {
   /**
    * The Perplexity API key (will be loaded from environment variables)
    */
-  API_KEY: import.meta.env?.VITE_PERPLEXITY_API_KEY || '',
+  API_KEY: (() => {
+    try {
+      return import.meta.env?.VITE_PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY || '';
+    } catch (e) {
+      return process.env.VITE_PERPLEXITY_API_KEY || '';
+    }
+  })(),
   
   /**
    * Base URL for Perplexity API
