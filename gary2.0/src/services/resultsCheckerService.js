@@ -336,8 +336,8 @@ export const resultsCheckerService = {
         throw new Error(`Failed to record results: ${recordMessage}`);
       }
       
-      // 4. Update performance metrics
-      await garyPerformanceService.updatePerformanceMetrics(dailyPicks.picks, scores);
+      // 4. Update performance metrics for the given date
+      await garyPerformanceService.updatePerformanceStats(date);
       
       return { 
         success: true, 
