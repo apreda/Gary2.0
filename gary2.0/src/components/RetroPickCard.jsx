@@ -570,12 +570,26 @@ function formatGameTitle(game, homeTeam, awayTeam) {
           overflowY: 'auto',
           boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
         }}>
-          {/* CRITICAL: Display the rationale - try multiple possible field names */}
-          <p style={{ margin: 0, fontWeight: 500 }}>
+          {/* CRITICAL: Display the rationale as properly formatted bullet points */}
+          <div style={{ margin: 0, fontWeight: 500 }}>
             {safePick.rationale ? 
-              safePick.rationale : 
+              safePick.rationale.split('•').map((point, index) => {
+                // Skip the first empty item that comes before the first bullet point
+                if (index === 0 && !point.trim()) return null;
+                return point.trim() && (
+                  <div key={index} style={{ 
+                    display: 'flex', 
+                    marginBottom: '0.75rem',
+                    alignItems: 'flex-start'
+                  }}>
+                    <span style={{ marginRight: '6px', fontWeight: 'bold' }}>•</span>
+                    <span>{point.trim()}</span>
+                  </div>
+                );
+              })
+              : 
               (safePick.description || 'Analysis not available.')}
-          </p>
+          </div>
         </div>
       </div>
       
