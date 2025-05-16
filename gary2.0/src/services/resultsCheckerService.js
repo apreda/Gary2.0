@@ -1,9 +1,11 @@
 import { supabase } from '../supabaseClient';
 import { createClient } from '@supabase/supabase-js';
 import { garyPerformanceService } from './garyPerformanceService';
+import sportsDbApiService from './sportsDbApiService';
+import { ballDontLieService } from './ballDontLieService';
+import openaiService from './openaiService';
+import { extractJsonFromText } from '../utils/helpers';
 import { perplexityService } from './perplexityService';
-import { openaiService } from './openaiService';
-import { sportsDbApiService } from './sportsDbApiService';
 import { userPickResultsService } from './userPickResultsService';
 
 // Create a Supabase client with admin privileges that bypasses RLS
@@ -327,7 +329,89 @@ export const resultsCheckerService = {
       console.log(`Fetching sports events for ${date}`);
       const scores = {};
       
-      // Get scores for each league (NBA, NHL, MLB)
+      // First try to get games from BallDontLie (more reliable for NBA/MLB)
+      try {
+        console.log('Attempting to fetch games from BallDontLie...');
+        const ballDontLieGames = await ballDontLieService.getAllGamesByDate(date);
+        
+        // Process NBA games from BallDontLie
+        if (ballDontLieGames.NBA && ballDontLieGames.NBA.length > 0) {
+          console.log(`Found ${ballDontLieGames.NBA.length} NBA games from BallDontLie`);
+          
+          for (const game of ballDontLieGames.NBA) {
+            if (game.status !== 'Final' && !game.status.includes('Final')) {
+              continue; // Skip games that aren't final
+            }
+            
+            const homeTeam = game.home_team?.full_name || game.home_team_name || 'Home Team';
+            const awayTeam = game.visitor_team?.full_name || game.away_team_name || 'Away Team';
+            const homeScore = game.home_team_score;
+            const awayScore = game.visitor_team_score;
+            
+            if (homeScore === undefined || awayScore === undefined) {
+              continue; // Skip games without scores
+            }
+            
+            const matchup = `${awayTeam} @ ${homeTeam}`;
+            
+            scores[matchup] = {
+              matchup,
+              league: 'NBA',
+              homeTeam,
+              awayTeam,
+              homeScore,
+              awayScore,
+              score: `${awayTeam} ${awayScore} - ${homeTeam} ${homeScore}`,
+              scoreText: `${awayTeam} ${awayScore} - ${homeTeam} ${homeScore}`,
+              winner: homeScore > awayScore ? 'home' : (awayScore > homeScore ? 'away' : 'tie'),
+              totalScore: homeScore + awayScore,
+              status: game.status,
+              source: 'BallDontLie'
+            };
+          }
+        }
+        
+        // Process MLB games from BallDontLie
+        if (ballDontLieGames.MLB && ballDontLieGames.MLB.length > 0) {
+          console.log(`Found ${ballDontLieGames.MLB.length} MLB games from BallDontLie`);
+          
+          for (const game of ballDontLieGames.MLB) {
+            if (game.status !== 'STATUS_FINAL' && !game.status.includes('Final')) {
+              continue; // Skip games that aren't final
+            }
+            
+            const homeTeam = game.home_team?.full_name || game.home_team_name || 'Home Team';
+            const awayTeam = game.away_team?.full_name || game.away_team_name || 'Away Team';
+            const homeScore = game.home_team_data?.runs || 0;
+            const awayScore = game.away_team_data?.runs || 0;
+            
+            if (homeScore === undefined || awayScore === undefined) {
+              continue; // Skip games without scores
+            }
+            
+            const matchup = `${awayTeam} @ ${homeTeam}`;
+            
+            scores[matchup] = {
+              matchup,
+              league: 'MLB',
+              homeTeam,
+              awayTeam,
+              homeScore,
+              awayScore,
+              score: `${awayTeam} ${awayScore} - ${homeTeam} ${homeScore}`,
+              scoreText: `${awayTeam} ${awayScore} - ${homeTeam} ${homeScore}`,
+              winner: homeScore > awayScore ? 'home' : (awayScore > homeScore ? 'away' : 'tie'),
+              totalScore: homeScore + awayScore,
+              status: game.status,
+              source: 'BallDontLie'
+            };
+          }
+        }
+      } catch (ballDontLieError) {
+        console.error('Error fetching from BallDontLie, falling back to SportsDB:', ballDontLieError);
+      }
+      
+      // Fall back to SportsDB for any missing leagues or if BallDontLie failed
       const leagues = [
         { id: sportsDbApiService.leagueIds.NBA, name: 'NBA' },
         { id: sportsDbApiService.leagueIds.NHL, name: 'NHL' },
@@ -335,7 +419,15 @@ export const resultsCheckerService = {
       ];
       
       for (const league of leagues) {
+        // Skip if we already have games for this league from BallDontLie
+        const hasLeagueGames = Object.values(scores).some(game => game.league === league.name);
+        if (hasLeagueGames) {
+          console.log(`Skipping ${league.name} as we already have data from BallDontLie`);
+          continue;
+        }
+        
         try {
+          console.log(`Fetching ${league.name} games from SportsDB...`);
           const response = await sportsDbApiService.getEventsByDate(league.id, date);
           
           // Handle both 'events' and 'livescore' formats from TheSportsDB API
@@ -348,27 +440,37 @@ export const resultsCheckerService = {
             events = response;
           }
           
-          console.log(`Found ${events.length} games for ${league.name}`);
+          console.log(`Found ${events.length} ${league.name} games from SportsDB`);
           
           // Log a sample event for debugging
           if (events.length > 0) {
-            console.log(`Sample event data for ${league.name}:`, JSON.stringify(events[0], null, 2));
+            console.log(`Sample ${league.name} event from SportsDB:`, JSON.stringify(events[0], null, 2));
           }
 
           // Process each event to get the scores
           events.forEach(event => {
-            // Check if the game is finished and has scores (allow 0 scores)
-            const isFinished = event.strStatus === 'FT' || 
-                               event.strStatus === 'Match Finished' || 
-                               event.strStatus === 'Final' || 
-                               event.strStatus?.includes('finish');
+            // For NHL playoff games, we'll be more lenient with status checks
+            const isNHLPlayoff = league.name === 'NHL' && 
+                               (event.strLeague?.includes('Playoffs') || 
+                                event.strEvent?.includes('Playoff') ||
+                                event.strSeason?.includes('2024-2025')); // Current season
+            
+            // Check if the game is finished (be more lenient for NHL playoff games)
+            const isFinished = isNHLPlayoff ? 
+              (event.strStatus === 'FT' || event.strStatus === 'Match Finished' || event.strStatus === 'Final' || 
+               event.strStatus?.includes('finish') || event.strStatus?.includes('Played') ||
+               (event.intHomeScore !== null && event.intAwayScore !== null)) :
+              (event.strStatus === 'FT' || event.strStatus === 'Match Finished' || 
+               event.strStatus === 'Final' || event.strStatus?.includes('finish'));
 
-            const hasScores = event.intHomeScore !== undefined && 
-                              event.intHomeScore !== null && 
-                              event.intAwayScore !== undefined && 
-                              event.intAwayScore !== null;
+            // Check if we have valid scores (be more lenient for NHL playoff games)
+            const hasScores = isNHLPlayoff ?
+              ((event.intHomeScore !== null && event.intAwayScore !== null) ||
+               (event.intHomeScore !== undefined && event.intAwayScore !== undefined)) :
+              (event.intHomeScore !== undefined && event.intHomeScore !== null && 
+               event.intAwayScore !== undefined && event.intAwayScore !== null);
 
-            if (isFinished && hasScores) {
+            if ((isFinished || isNHLPlayoff) && hasScores) {
               // Create a unique key for this matchup
               const matchup = `${event.strAwayTeam} @ ${event.strHomeTeam}`;
               
@@ -453,8 +555,65 @@ export const resultsCheckerService = {
         throw new Error('No game scores available for this date');
       }
       
+      // First, try to directly match NHL playoff games without using OpenAI
+      const directResults = [];
+      const remainingPicks = [];
+      
+      // Process each pick to see if we can directly match it to a score
+      for (const pick of picks) {
+        try {
+          // For NHL games, try direct matching first
+          const teamName = pick.pick?.replace(/\s*[-+].*$/, '').trim();
+          const isNHLPick = pick.league === 'NHL' || (pick.league === undefined && teamName && 
+            (teamName.includes('Stars') || teamName.includes('Jets') || 
+             teamName.includes('Rangers') || teamName.includes('Hurricanes')));
+          
+          if (isNHLPick) {
+            // Try to find a matching game
+            const matchingGame = Object.values(scores).find(game => {
+              return (game.awayTeam.includes(teamName) || game.homeTeam.includes(teamName)) &&
+                     game.league === 'NHL';
+            });
+            
+            if (matchingGame) {
+              console.log(`Directly matched NHL playoff game for ${teamName}:`, matchingGame);
+              
+              // Determine if the pick won or lost
+              let result = 'lost';
+              const isHomeTeam = matchingGame.homeTeam.includes(teamName);
+              const isAwayTeam = matchingGame.awayTeam.includes(teamName);
+              
+              if (isHomeTeam && matchingGame.winner === 'home') result = 'won';
+              if (isAwayTeam && matchingGame.winner === 'away') result = 'won';
+              
+              directResults.push({
+                pick: pick.pick || pick,
+                league: 'NHL',
+                result,
+                final_score: `${matchingGame.awayTeam} ${matchingGame.awayScore} - ${matchingGame.homeTeam} ${matchingGame.homeScore}`,
+                matchup: `${matchingGame.awayTeam} @ ${matchingGame.homeTeam}`
+              });
+              continue;
+            }
+          }
+          
+          // If we get here, we couldn't directly match this pick
+          remainingPicks.push(pick);
+          
+        } catch (error) {
+          console.error('Error processing pick directly:', error);
+          remainingPicks.push(pick);
+        }
+      }
+      
+      console.log(`Directly processed ${directResults.length} NHL playoff picks, ${remainingPicks.length} remaining for OpenAI`);
+      
+      // If we've processed all picks directly, return the results
+      if (remainingPicks.length === 0) {
+        return directResults;
+      }
+      
       // Format game scores for the prompt - ensure we give OpenAI the exact scores from the official API
-      // This data must be accurate for proper evaluation
       const scoresText = Object.values(scores)
         .map(game => {
           // Log each game score for verification
@@ -465,22 +624,22 @@ export const resultsCheckerService = {
       
       // Verify we have actual scores text to provide to OpenAI
       if (!scoresText || scoresText.trim().length === 0) {
-        console.error('Empty scores text generated - evaluation will fail');
-        throw new Error('Failed to format game scores for evaluation');
+        console.error('Empty scores text generated - will use direct results only');
+        return directResults; // Return any direct results we have
       }
       
       // Use the actual scores - no fallbacks or mock data
       const finalScoresText = scoresText;
       
-      // Process picks in smaller batches to ensure all picks get evaluated
+      // Process remaining picks in smaller batches to ensure all picks get evaluated
       const BATCH_SIZE = 2; // Process just 2 picks at a time to ensure completeness
-      const allResults = [];
-      const batchCount = Math.ceil(picks.length / BATCH_SIZE);
+      const openAIResults = [];
+      const batchCount = Math.ceil(remainingPicks.length / BATCH_SIZE);
       
-      console.log(`Processing ${picks.length} picks in ${batchCount} batches of max ${BATCH_SIZE} picks each`);
+      console.log(`Processing ${remainingPicks.length} picks in ${batchCount} batches of max ${BATCH_SIZE} picks each`);
       
-      for (let i = 0; i < picks.length; i += BATCH_SIZE) {
-        const batchPicks = picks.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < remainingPicks.length; i += BATCH_SIZE) {
+        const batchPicks = remainingPicks.slice(i, i + BATCH_SIZE);
         const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
         
         console.log(`Processing batch ${batchNumber} with ${batchPicks.length} picks (${i+1}-${Math.min(i+BATCH_SIZE, picks.length)})`);
@@ -580,16 +739,20 @@ Include ONLY the picks from this batch. Provide detailed final scores to show ho
         console.log(`Successfully validated ${batchResults.length} results from batch ${batchNumber}`);
         
         // Store the valid results
-        allResults.push(...batchResults);
+        openAIResults.push(...batchResults);
         
         // Add a short delay between batches to avoid rate limiting
-        if (i + BATCH_SIZE < picks.length) {
+        if (i + BATCH_SIZE < remainingPicks.length) {
           console.log('Waiting 2 seconds before processing next batch...');
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
-      console.log(`Total results across all batches: ${allResults.length}`);
+      console.log(`Total results from OpenAI: ${openAIResults.length}`);
+      
+      // Combine direct results with OpenAI results
+      const allResults = [...directResults, ...openAIResults];
+      console.log(`Total results: ${allResults.length} (${directResults.length} direct, ${openAIResults.length} from OpenAI)`);
       
       // Return all collected results
       return allResults;
@@ -661,12 +824,11 @@ recordResults: async (pickId, results, date, scores) => {
           finalScore.includes('Game not found') ||
           finalScore.includes('No score') ||
           resultValue === 'no_game') {
-        finalScore = null;
-      }
-      
-      // Make sure we store a proper result value even if OpenAI can't find the game
-      if (resultValue === 'no_game') {
-        resultValue = 'push';
+        finalScore = 'Game not found';
+        // Convert 'no_game' to 'push' for database compatibility
+        if (resultValue === 'no_game') {
+          resultValue = 'push';
+        }
       }
       
       // Fix incorrect 'push' results when we have actual scores
@@ -679,11 +841,14 @@ recordResults: async (pickId, results, date, scores) => {
         console.log(`Validating 'push' result with score: ${finalScore}`);
       }
       
+      // Ensure we have a valid result value (won, lost, or push)
+      const validResult = ['won', 'lost', 'push'].includes(resultValue) ? resultValue : 'push';
+      
       return {
         pick_id: pickId,
         game_date: date,
         league: result.league || null,
-        result: resultValue,
+        result: validResult,  // This will always be one of: won, lost, or push
         final_score: finalScore,
         pick_text: result.pick || null,
         matchup: result.matchup || null
