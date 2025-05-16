@@ -7,6 +7,8 @@ import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService';
 import { supabase } from '../supabaseClient.js';
 import { sportsDataService } from './sportsDataService.js';
+import { apiSportsService } from './apiSportsService.js';
+import { ballDontLieService } from './ballDontLieService';
 
 const picksService = {
   /**
@@ -84,57 +86,109 @@ const picksService = {
               let pitcherData = '';
               if (sportName === 'MLB') {
                 try {
-                  console.log('Fetching MLB starting pitcher data from today\'s lineups...');
+                  console.log('Fetching MLB starting pitcher data with prioritized sources...');
                   
-                  // Get detailed starting pitcher data for this specific matchup
-                  const pitcherMatchup = await sportsDataService.getMlbStartingPitchers(game.home_team, game.away_team);
+                  // PRIORITY 1: Try API-Sports first (primary source for MLB)
+                  console.log('PRIORITY 1: Trying API-Sports for MLB pitcher data...');
+                  let pitcherMatchup = await apiSportsService.getMlbStartingPitchers(game.home_team, game.away_team);
+                  let dataSource = 'API-Sports';
+                  
+                  // PRIORITY 2: If API-Sports fails, try TheSportsDB
+                  if (!pitcherMatchup) {
+                    console.log('API-Sports data unavailable, falling back to TheSportsDB...');
+                    pitcherMatchup = await sportsDataService.getMlbStartingPitchers(game.home_team, game.away_team);
+                    dataSource = 'TheSportsDB';
+                  }
+                  
+                  // PRIORITY 3: If both fail, we could try Ball Don't Lie, but it doesn't have detailed pitcher data
+                  // So we'll just use a generic message
                   
                   if (pitcherMatchup) {
-                    pitcherData = 'STARTING PITCHERS:\n';
+                    pitcherData = `STARTING PITCHERS (Data Source: ${dataSource}):\n`;
                     
-                    // Add home team pitcher data if available
-                    if (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.home_team)) {
-                      const homePitcher = pitcherMatchup.teamPitcher;
-                      pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
-                      pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
-                      pitcherData += `- Record: ${homePitcher.stats.record}\n`;
-                      pitcherData += `- K's: ${homePitcher.stats.strikeouts}\n`;
-                      if (homePitcher.stats.WHIP && homePitcher.stats.WHIP !== 'N/A') {
+                    // Format for API-Sports response
+                    if (dataSource === 'API-Sports') {
+                      // Add home pitcher data
+                      if (pitcherMatchup.homePitcher) {
+                        const homePitcher = pitcherMatchup.homePitcher;
+                        pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
+                        pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
                         pitcherData += `- WHIP: ${homePitcher.stats.WHIP}\n`;
+                        pitcherData += `- Record: ${homePitcher.stats.record}\n`;
+                        pitcherData += `- K's: ${homePitcher.stats.strikeouts}\n`;
+                        if (homePitcher.stats.inningsPitched && homePitcher.stats.inningsPitched !== 'N/A') {
+                          pitcherData += `- Innings Pitched: ${homePitcher.stats.inningsPitched}\n`;
+                        }
+                        pitcherData += `- ${homePitcher.stats.description}\n`;
                       }
-                      pitcherData += `- ${homePitcher.stats.description}\n`;
-                    }
-                    
-                    // Add away team pitcher data if available
-                    if (pitcherMatchup.opponentPitcher || 
-                        (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.away_team))) {
-                      const awayPitcher = this._teamNameMatch(pitcherMatchup.team, game.away_team) 
-                        ? pitcherMatchup.teamPitcher 
-                        : pitcherMatchup.opponentPitcher;
-                        
-                      pitcherData += `${game.away_team} Starting Pitcher: ${awayPitcher.name}\n`;
-                      pitcherData += `- ERA: ${awayPitcher.stats.ERA}\n`;
-                      pitcherData += `- Record: ${awayPitcher.stats.record}\n`;
-                      pitcherData += `- K's: ${awayPitcher.stats.strikeouts}\n`;
-                      if (awayPitcher.stats.WHIP && awayPitcher.stats.WHIP !== 'N/A') {
+                      
+                      // Add away pitcher data
+                      if (pitcherMatchup.awayPitcher) {
+                        const awayPitcher = pitcherMatchup.awayPitcher;
+                        pitcherData += `${game.away_team} Starting Pitcher: ${awayPitcher.name}\n`;
+                        pitcherData += `- ERA: ${awayPitcher.stats.ERA}\n`;
                         pitcherData += `- WHIP: ${awayPitcher.stats.WHIP}\n`;
+                        pitcherData += `- Record: ${awayPitcher.stats.record}\n`;
+                        pitcherData += `- K's: ${awayPitcher.stats.strikeouts}\n`;
+                        if (awayPitcher.stats.inningsPitched && awayPitcher.stats.inningsPitched !== 'N/A') {
+                          pitcherData += `- Innings Pitched: ${awayPitcher.stats.inningsPitched}\n`;
+                        }
+                        pitcherData += `- ${awayPitcher.stats.description}\n`;
                       }
-                      pitcherData += `- ${awayPitcher.stats.description}\n`;
+                      
+                      // Add game details if available
+                      if (pitcherMatchup.game) {
+                        pitcherData += `\nGame at ${pitcherMatchup.game.venue} on ${pitcherMatchup.game.date} at ${pitcherMatchup.game.time || 'TBD'}`;
+                      }
+                    } 
+                    // Format for TheSportsDB response (using existing format)
+                    else if (dataSource === 'TheSportsDB') {
+                      // Add home team pitcher data if available
+                      if (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.home_team)) {
+                        const homePitcher = pitcherMatchup.teamPitcher;
+                        pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
+                        pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
+                        pitcherData += `- Record: ${homePitcher.stats.record}\n`;
+                        pitcherData += `- K's: ${homePitcher.stats.strikeouts}\n`;
+                        if (homePitcher.stats.WHIP && homePitcher.stats.WHIP !== 'N/A') {
+                          pitcherData += `- WHIP: ${homePitcher.stats.WHIP}\n`;
+                        }
+                        pitcherData += `- ${homePitcher.stats.description}\n`;
+                      }
+                      
+                      // Add away team pitcher data if available
+                      if (pitcherMatchup.opponentPitcher || 
+                          (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.away_team))) {
+                        const awayPitcher = this._teamNameMatch(pitcherMatchup.team, game.away_team) 
+                          ? pitcherMatchup.teamPitcher 
+                          : pitcherMatchup.opponentPitcher;
+                          
+                        pitcherData += `${game.away_team} Starting Pitcher: ${awayPitcher.name}\n`;
+                        pitcherData += `- ERA: ${awayPitcher.stats.ERA}\n`;
+                        pitcherData += `- Record: ${awayPitcher.stats.record}\n`;
+                        pitcherData += `- K's: ${awayPitcher.stats.strikeouts}\n`;
+                        if (awayPitcher.stats.WHIP && awayPitcher.stats.WHIP !== 'N/A') {
+                          pitcherData += `- WHIP: ${awayPitcher.stats.WHIP}\n`;
+                        }
+                        pitcherData += `- ${awayPitcher.stats.description}\n`;
+                      }
+                      
+                      // Add game details if available
+                      if (pitcherMatchup.game) {
+                        pitcherData += `\nGame at ${pitcherMatchup.game.venue} on ${pitcherMatchup.game.date}`;
+                      }
+                      
+                      // Add note if this is fallback data and not from today's lineup
+                      if (pitcherMatchup.note) {
+                        pitcherData += `\n(${pitcherMatchup.note})`;
+                      }
                     }
                     
-                    // Add note about importance of pitcher stats and game information if available
-                    pitcherData += '\nNOTE: For MLB games, starting pitcher stats are more important than team ERA.';
-                    
-                    if (pitcherMatchup.game) {
-                      pitcherData += `\nGame at ${pitcherMatchup.game.venue} on ${pitcherMatchup.game.date}`;
-                    }
-                    
-                    // Add note if this is fallback data and not from today's lineup
-                    if (pitcherMatchup.note) {
-                      pitcherData += `\n(${pitcherMatchup.note})`;
-                    }
+                    // Add note about importance of pitcher stats
+                    pitcherData += '\n\nNOTE: For MLB games, starting pitcher stats are more important than team ERA.';
                   } else {
-                    // Fallback message if no pitcher data found
+                    // PRIORITY 3 FALLBACK: Use Ball Don't Lie or generic message
+                    console.log('All pitcher data sources failed, using generic message');
                     pitcherData = `PITCHING MATCHUP: No specific starting pitcher data available. Focus on analyzing the pitching matchup using recent performance metrics.`;
                   }
                 } catch (error) {
@@ -199,25 +253,81 @@ const picksService = {
                 realTimeNews: gameNews || ''
               };
               
-              // Get enhanced stats for specific sports, prioritizing TheSportsDB first
+              // Generate team statistics according to sport-specific priority order
+              console.log('Generating team statistics with sport-specific priority...');
               let enhancedStats = '';
               try {
-                // First, ensure we have the comprehensive stats context from TheSportsDB
-                formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
-                
-                // Only as a backup, try Ball Don't Lie for additional stats if TheSportsDB data seems incomplete
-                if (formattedGameData.statsContext.includes('unavailable') || formattedGameData.statsContext.includes('Error')) {
-                  console.log('TheSportsDB data incomplete, trying Ball Don\'t Lie API for backup...');
+                // Different priority order for each sport
+                if (sportName === 'MLB') {
+                  // For MLB: 1) API-Sports → 2) SportsDB → 3) Ball Don't Lie
+                  console.log('MLB STATS PRIORITY: 1) API-Sports → 2) SportsDB → 3) Ball Don\'t Lie');
                   
-                  if (sportName === 'MLB') {
-                    enhancedStats = await sportsDataService.getEnhancedMLBStats(game.home_team, game.away_team);
-                    formattedGameData.enhancedStats = enhancedStats;
+                  // PRIORITY 1: Try API-Sports first
+                  console.log('Attempting to get MLB stats from API-Sports...');
+                  // This will be implemented in future updates
+                  let apiSportsStats = null; // await apiSportsService.getMlbTeamStats(game.home_team, game.away_team);
+                  
+                  if (apiSportsStats) {
+                    console.log('Using API-Sports data for MLB analysis');
+                    formattedGameData.statsContext = apiSportsStats;
+                    formattedGameData.statsSource = 'API-Sports';
+                  } else {
+                    // PRIORITY 2: If API-Sports fails, try TheSportsDB
+                    console.log('API-Sports data unavailable, trying TheSportsDB for MLB...');
+                    formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
+                    formattedGameData.statsSource = 'TheSportsDB';
+                    
+                    // PRIORITY 3: If TheSportsDB data is incomplete, try Ball Don't Lie
+                    if (formattedGameData.statsContext.includes('unavailable') || formattedGameData.statsContext.includes('Error')) {
+                      console.log('TheSportsDB data incomplete, trying Ball Don\'t Lie API for MLB...');
+                      enhancedStats = await sportsDataService.getEnhancedMLBStats(game.home_team, game.away_team);
+                      if (enhancedStats && !enhancedStats.includes('Error')) {
+                        formattedGameData.enhancedStats = enhancedStats;
+                        formattedGameData.statsSource = 'Ball Don\'t Lie';
+                      }
+                    }
                   }
+                } 
+                else if (sportName === 'NBA') {
+                  // For NBA: 1) Ball Don't Lie → 2) SportsDB
+                  console.log('NBA STATS PRIORITY: 1) Ball Don\'t Lie → 2) SportsDB');
+                  
+                  // PRIORITY 1: Try Ball Don't Lie first for NBA
+                  console.log('Attempting to get NBA stats from Ball Don\'t Lie...');
+                  const nbaStats = await ballDontLieService.generateNbaStatsReport(game.home_team, game.away_team);
+                  
+                  if (nbaStats && !nbaStats.includes('Error')) {
+                    console.log('Using Ball Don\'t Lie data for NBA analysis');
+                    formattedGameData.statsContext = nbaStats;
+                    formattedGameData.statsSource = 'Ball Don\'t Lie';
+                  } else {
+                    // PRIORITY 2: If Ball Don't Lie fails, try TheSportsDB
+                    console.log('Ball Don\'t Lie data unavailable, trying TheSportsDB for NBA...');
+                    formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
+                    formattedGameData.statsSource = 'TheSportsDB';
+                  }
+                }
+                else if (sportName === 'NHL') {
+                  // For NHL: SportsDB only
+                  console.log('NHL STATS PRIORITY: SportsDB only');
+                  
+                  // Use TheSportsDB for NHL
+                  console.log('Using TheSportsDB for NHL stats...');
+                  formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
+                  formattedGameData.statsSource = 'TheSportsDB';
                 } else {
-                  console.log('Using primary TheSportsDB data for analysis');
+                  // For any other sport, use TheSportsDB as default
+                  console.log(`Using TheSportsDB as default for ${sportName} stats...`);
+                  formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
+                  formattedGameData.statsSource = 'TheSportsDB';
+                }
+                
+                // Add stats source information to the prompt
+                if (formattedGameData.statsSource) {
+                  console.log(`Final stats source for ${sportName}: ${formattedGameData.statsSource}`);
                 }
               } catch (statsError) {
-                console.warn('Error getting enhanced stats:', statsError);
+                console.error('Error generating team statistics:', statsError);
                 // Continue with basic stats if enhanced stats fail
               }
               
