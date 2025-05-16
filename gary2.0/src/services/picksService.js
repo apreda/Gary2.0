@@ -294,7 +294,9 @@ const picksService = {
                   // PRIORITY 1: Try Ball Don't Lie first for NBA
                   console.log('Attempting to get NBA stats from Ball Don\'t Lie...');
                   // Import ballDontLieService dynamically to avoid circular reference
-                  const { ballDontLieService: bdl } = await import('./ballDontLieService');
+                  const ballDontLieModule = await import('./ballDontLieService');
+                  const bdl = ballDontLieModule.default || ballDontLieModule.ballDontLieService;
+                  console.log('Ball Don\'t Lie service:', bdl);
                   const nbaStats = await bdl.generateNbaStatsReport(game.home_team, game.away_team);
                   
                   if (nbaStats && !nbaStats.includes('Error')) {
@@ -401,6 +403,23 @@ const picksService = {
   /**
    * Ensure we have a valid Supabase session for database operations
    */
+  /**
+   * Helper method to check if team names match (handles variations in team names)
+   * @private
+   */
+  _teamNameMatch(team1, team2) {
+    if (!team1 || !team2) return false;
+    
+    // Clean and lowercase both names
+    const clean1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const clean2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Check for exact match or substring match
+    return clean1 === clean2 || 
+           clean1.includes(clean2) || 
+           clean2.includes(clean1);
+  },
+
   ensureValidSupabaseSession: async () => {
     try {
       // Check if we already have a session
