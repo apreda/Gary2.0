@@ -142,8 +142,16 @@ const picksService = {
                     } 
                     // Format for TheSportsDB response (using existing format)
                     else if (dataSource === 'TheSportsDB') {
+                      // Create local helper for team name matching to avoid scope issues
+                      const matchTeamNames = (team1, team2) => {
+                        if (!team1 || !team2) return false;
+                        const clean1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        const clean2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        return clean1 === clean2 || clean1.includes(clean2) || clean2.includes(clean1);
+                      };
+                      
                       // Add home team pitcher data if available
-                      if (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.home_team)) {
+                      if (pitcherMatchup.teamPitcher && matchTeamNames(pitcherMatchup.team, game.home_team)) {
                         const homePitcher = pitcherMatchup.teamPitcher;
                         pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
                         pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
@@ -157,8 +165,8 @@ const picksService = {
                       
                       // Add away team pitcher data if available
                       if (pitcherMatchup.opponentPitcher || 
-                          (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.away_team))) {
-                        const awayPitcher = this._teamNameMatch(pitcherMatchup.team, game.away_team) 
+                          (pitcherMatchup.teamPitcher && matchTeamNames(pitcherMatchup.team, game.away_team))) {
+                        const awayPitcher = matchTeamNames(pitcherMatchup.team, game.away_team) 
                           ? pitcherMatchup.teamPitcher 
                           : pitcherMatchup.opponentPitcher;
                           
