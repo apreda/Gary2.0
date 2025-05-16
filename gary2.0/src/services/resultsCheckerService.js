@@ -327,6 +327,24 @@ export const resultsCheckerService = {
         scores: {}
       };
     }
+  },
+
+  // Other helper methods...
+  
+  /**
+   * Process team picks and group them by league
+   * @param {Array} picks - Array of pick objects
+   * @returns {Object} Picks grouped by league
+   */
+  /**
+   * Process team picks and group them by league
+   * @param {Array} picks - Array of pick objects
+   * @returns {Object} Picks grouped by league
+   */
+  processTeamPicks: (picks) => {
+    const teamPicks = picks.map(pick => {
+      const pickStr = pick.pick || '';
+      const teamMatch = pickStr.match(/(?:^|vs\.?|@|vs?\s+)([A-Z][A-Za-z0-9\s.]+?)(?:\s*\+|\s*$)/);
       const teamName = teamMatch && teamMatch[1] ? teamMatch[1].trim() : '';
       
       if (!teamName) {
@@ -336,7 +354,7 @@ export const resultsCheckerService = {
       return {
         ...pick,
         teamName,
-        normalizedTeamName: normalizeTeamName(teamName)
+        normalizedTeamName: teamName.toLowerCase().replace(/[^a-z0-9]/g, '')
       };
     }).filter(pick => pick.teamName); // Filter out picks without valid team names
     
@@ -350,162 +368,32 @@ export const resultsCheckerService = {
       picksByLeague[league].push(pick);
     });
     
-    // League-specific URLs for scores
-    const leagueUrls = {
-      nba: [
-        'https://www.nba.com/scores',
-        'https://www.espn.com/nba/scoreboard'
-      ],
-      mlb: [
-        'https://www.mlb.com/scores',
-        'https://www.espn.com/mlb/scoreboard'
-      ],
-      nhl: [
-        'https://www.nhl.com/scores',
-        'https://www.espn.com/nhl/scoreboard'
-      ],
-      unknown: [
-        'https://www.espn.com/nba/scoreboard',
-        'https://www.espn.com/mlb/scoreboard',
-        'https://www.espn.com/nhl/scoreboard'
-      ]
-    };
-    
-    // Create a map to store scores by team name
-    const scores = {};
-    
-    try {
-      // Process each league's picks
-      for (const [league, leaguePicks] of Object.entries(picksByLeague)) {
-        const urls = leagueUrls[league.toLowerCase()] || leagueUrls.unknown;
-        
-        // Process each pick in this league
-        for (const pick of leaguePicks) {
-          try {
-            const teamName = pick.teamName;
-            const normalizedTeam = pick.normalizedTeamName;
-            
-            if (!teamName) {
-              console.warn('Pick is missing team information:', pick);
-              continue;
-            }
-          
-            // Create a specific query for this team's game with strict format
-            const query = `
-              ${formattedDate} ${teamName} final score ${league.toUpperCase()} game.
-              Only include if the game has completed with final scores.
-              Do not include if the game is in progress, postponed, or scheduled.
-              
-              Respond STRICTLY in this exact format:
-              FINAL TEAM1 @ TEAM2: XX-XX
-              
-              Where:
-              - First team is the away team
-              - Second team is the home team
-              - Use @ symbol to separate team names
-              - Use colon and space before the score
-              - Use hyphen between scores (away score first, then home score)
-              
-              Example: FINAL LAL @ BOS: 102-100
-              
-              Do not add any other text, commentary, or explanations.
-              Data sources: ${urls.join(' OR ')}
-            `;
-            
-            console.log(`Searching for: ${teamName} (${league})`);
-            
-            // Get the response from Perplexity
-            const response = await perplexityService.search({
-              query: query.replace(/\s+/g, ' ').trim(), // Clean up whitespace
-              maxResults: 3, // Fewer results since we're being specific
-              includeDomains: urls,
-              focus: 'scores',
-              format: 'text'
-            });
-            
-            // Process the response to extract the score with improved parsing
-            if (response.answers && response.answers.length > 0) {
-              const answer = response.answers[0];
-              
-              // Match format: FINAL AWAY @ HOME: AWAY_SCORE-HOME_SCORE
-              const scoreMatch = answer.match(/FINAL\s+([^@]+)@([^:]+):\s*(\d+)-(\d+)/i);
-              
-              if (scoreMatch) {
-                const awayTeam = scoreMatch[1].trim();
-        }
-        
-        console.log(`Searching for: ${pick.pick} (${pick.league || 'no league'})`);
-        
-        // Extract team names from the pick text if possible
-        const teamMatch = pick.pick.match(/([\w\s]+)(?:\s+[-+]?\d+\.?\d*|ML|\+\d+)?(?:\s+vs\.?\s+|\s+at\s+|\s+@\s+)([\w\s]+)/i);
-        let team1 = '';
-        let team2 = '';
-        
-        if (teamMatch && teamMatch.length >= 3) {
-          team1 = teamMatch[1].trim();
-          team2 = teamMatch[2].trim();
-        } else {
-          // Fallback to using the entire pick text
-          team1 = pick.pick;
-        }
-        
-        // Create a search query for Perplexity
-        let searchQuery = `What was the final score for ${team1}`;
-        if (team2) {
-          searchQuery += ` vs ${team2}`;
-        }
-        searchQuery += ` on ${formattedDate}? Only respond with the score in format "AwayScore-HomeScore" if found.`;
-        
-        console.log(`Search query: "${searchQuery}"`);
-        
-        // Call Perplexity API with the search method
-        const response = await perplexityService.search(searchQuery, {
-          maxTokens: 50, // We only need a short response
-          temperature: 0.1 // More deterministic for scores
-        });
-        
-        if (response.success && response.data) {
-          // Try to extract score from response
-          const scoreMatch = response.data.match(/(\d+)-(\d+)/);
-          if (scoreMatch) {
-            const [_, awayScore, homeScore] = scoreMatch;
-            // Determine if the score is in the correct order (away-home)
-            const score = parseInt(awayScore) > parseInt(homeScore) ? 
-              `${awayScore}-${homeScore}` : `${homeScore}-${awayScore}`;
-              
-            scores[pick.pick] = score;
-            console.log(`Found score for ${pick.pick}: ${score}`);
-          } else {
-            console.log(`No score found in response for ${pick.pick}`);
-            errors.push(`No score found for ${pick.pick}`);
-          }
-        } else {
-          console.error(`Error from Perplexity for ${pick.pick}:`, response.error);
-          errors.push(`API error for ${pick.pick}: ${response.error}`);
-        }
-        
-        // Add a small delay between requests to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-      } catch (error) {
-        console.error(`Error processing pick ${pick.pick || 'unknown'}:`, error);
-        errors.push(`Error processing ${pick.pick || 'unknown pick'}: ${error.message}`);
-      }
-    }
-    
-    return {
-      success: errors.length === 0,
-      scores,
-      errors: errors.length > 0 ? errors : undefined
-    };
-    
-  } catch (error) {
-    console.error('Error in getScoresFromPerplexity:', error);
-    return {
-      success: false,
-      error: error.message,
-      scores: {}
-    };
+    return picksByLeague;
+  },
+  
+  /**
+   * Get league-specific score URLs
+   * @returns {Object} URLs for different leagues
+   */
+  getLeagueUrls: () => ({
+    nba: [
+      'https://www.nba.com/scores',
+      'https://www.espn.com/nba/scoreboard'
+    ],
+    mlb: [
+      'https://www.mlb.com/scores',
+      'https://www.espn.com/mlb/scoreboard'
+    ],
+    nhl: [
+      'https://www.nhl.com/scores',
+      'https://www.espn.com/nhl/scoreboard'
+    ],
+    unknown: [
+      'https://www.espn.com/nba/scoreboard',
+      'https://www.espn.com/mlb/scoreboard',
+      'https://www.espn.com/nhl/scoreboard'
+    ]
+  }),
   checkResults: async (date) => {
     try {
       console.log(`Checking results for date: ${date}`);
