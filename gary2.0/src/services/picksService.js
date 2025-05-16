@@ -10,6 +10,22 @@ import { sportsDataService } from './sportsDataService.js';
 
 const picksService = {
   /**
+   * Helper to check if team names match (handles variations in team names)
+   * @private
+   */
+  _teamNameMatch(team1, team2) {
+    if (!team1 || !team2) return false;
+    
+    // Clean and lowercase both names
+    const clean1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const clean2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Check for exact match or substring match
+    return clean1 === clean2 || 
+           clean1.includes(clean2) || 
+           clean2.includes(clean1);
+  },
+  /**
    * Generate daily picks sequentially by sport to avoid OpenAI rate limits
    */
   generateDailyPicks: async () => {
@@ -66,41 +82,57 @@ const picksService = {
               
               // For MLB games, get additional pitcher data if available
               let pitcherData = '';
-              let homePitchers = null;
-              let awayPitchers = null;
               if (sportName === 'MLB') {
                 try {
-                  console.log('Fetching additional MLB pitcher data from TheSportsDB...');
+                  console.log('Fetching MLB starting pitcher data from today\'s lineups...');
                   
-                  // Get starting pitcher data for both teams using SportsDB
-                  [homePitchers, awayPitchers] = await Promise.all([
-                    sportsDataService.getMlbPitcherStats(game.home_team),
-                    sportsDataService.getMlbPitcherStats(game.away_team)
-                  ]);
+                  // Get detailed starting pitcher data for this specific matchup
+                  const pitcherMatchup = await sportsDataService.getMlbStartingPitchers(game.home_team, game.away_team);
                   
-                  // Format the pitcher data for the prompt
-                  if (homePitchers || awayPitchers) {
+                  if (pitcherMatchup) {
                     pitcherData = 'STARTING PITCHERS:\n';
                     
-                    if (homePitchers && homePitchers.length > 0) {
-                      const homePitcher = homePitchers[0]; // Use the first pitcher as the likely starter
+                    // Add home team pitcher data if available
+                    if (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.home_team)) {
+                      const homePitcher = pitcherMatchup.teamPitcher;
                       pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
                       pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
                       pitcherData += `- Record: ${homePitcher.stats.record}\n`;
                       pitcherData += `- K's: ${homePitcher.stats.strikeouts}\n`;
+                      if (homePitcher.stats.WHIP && homePitcher.stats.WHIP !== 'N/A') {
+                        pitcherData += `- WHIP: ${homePitcher.stats.WHIP}\n`;
+                      }
                       pitcherData += `- ${homePitcher.stats.description}\n`;
                     }
                     
-                    if (awayPitchers && awayPitchers.length > 0) {
-                      const awayPitcher = awayPitchers[0]; // Use the first pitcher as the likely starter
+                    // Add away team pitcher data if available
+                    if (pitcherMatchup.opponentPitcher || 
+                        (pitcherMatchup.teamPitcher && this._teamNameMatch(pitcherMatchup.team, game.away_team))) {
+                      const awayPitcher = this._teamNameMatch(pitcherMatchup.team, game.away_team) 
+                        ? pitcherMatchup.teamPitcher 
+                        : pitcherMatchup.opponentPitcher;
+                        
                       pitcherData += `${game.away_team} Starting Pitcher: ${awayPitcher.name}\n`;
                       pitcherData += `- ERA: ${awayPitcher.stats.ERA}\n`;
                       pitcherData += `- Record: ${awayPitcher.stats.record}\n`;
                       pitcherData += `- K's: ${awayPitcher.stats.strikeouts}\n`;
+                      if (awayPitcher.stats.WHIP && awayPitcher.stats.WHIP !== 'N/A') {
+                        pitcherData += `- WHIP: ${awayPitcher.stats.WHIP}\n`;
+                      }
                       pitcherData += `- ${awayPitcher.stats.description}\n`;
                     }
                     
+                    // Add note about importance of pitcher stats and game information if available
                     pitcherData += '\nNOTE: For MLB games, starting pitcher stats are more important than team ERA.';
+                    
+                    if (pitcherMatchup.game) {
+                      pitcherData += `\nGame at ${pitcherMatchup.game.venue} on ${pitcherMatchup.game.date}`;
+                    }
+                    
+                    // Add note if this is fallback data and not from today's lineup
+                    if (pitcherMatchup.note) {
+                      pitcherData += `\n(${pitcherMatchup.note})`;
+                    }
                   } else {
                     // Fallback message if no pitcher data found
                     pitcherData = `PITCHING MATCHUP: No specific starting pitcher data available. Focus on analyzing the pitching matchup using recent performance metrics.`;
