@@ -15,9 +15,18 @@ const MLB_API_HOST = 'v1.baseball.api-sports.io';
 const NBA_API_HOST = 'v1.basketball.api-sports.io';
 const NHL_API_HOST = 'v1.hockey.api-sports.io';
 
+// Handle environment variables in both Vite and standalone Node.js
+let apiSportsKey = '';
+try {
+  apiSportsKey = import.meta.env?.VITE_API_SPORTS_KEY || process.env.VITE_API_SPORTS_KEY || 'd3318d31b32a103de8357d1f7924e76a';
+} catch (e) {
+  // If import.meta.env is not available (running in Node directly)
+  apiSportsKey = process.env.VITE_API_SPORTS_KEY || 'd3318d31b32a103de8357d1f7924e76a';
+}
+
 const apiSportsService = {
-  // Use the API key from environment variables
-  API_KEY: import.meta.env.VITE_API_SPORTS_KEY,
+  // Use the API key from environment variables with fallback
+  API_KEY: apiSportsKey,
   
   /**
    * Make a request to the API-Sports endpoint
@@ -313,8 +322,73 @@ const apiSportsService = {
   async getMlbTeamStats(homeTeam, awayTeam) {
     try {
       console.log(`Getting MLB team stats for ${homeTeam} vs ${awayTeam}`);
-      // Implementation will be added in future updates
-      return null;
+      
+      // Step 1: Find team IDs for both teams
+      const season = new Date().getFullYear();
+      const teamsResponse = await this.apiRequest('/teams', { league: 1, season }, 'MLB');
+      
+      if (!teamsResponse?.response || teamsResponse.response.length === 0) {
+        console.log('No MLB teams found for the current season');
+        return null;
+      }
+      
+      // Find team IDs by matching names (handle partial matches)
+      const findTeamId = (teamName) => {
+        const team = teamsResponse.response.find(t => 
+          t.name?.toLowerCase().includes(teamName.toLowerCase()) || 
+          teamName.toLowerCase().includes(t.name?.toLowerCase())
+        );
+        return team?.id || null;
+      };
+      
+      const homeTeamId = findTeamId(homeTeam);
+      const awayTeamId = findTeamId(awayTeam);
+      
+      if (!homeTeamId || !awayTeamId) {
+        console.log(`Couldn't find team IDs for ${homeTeam} and/or ${awayTeam}`);
+        return null;
+      }
+      
+      // Step 2: Get team statistics using the team IDs
+      const [homeTeamStats, awayTeamStats] = await Promise.all([
+        this.apiRequest('/teams/statistics', { league: 1, season, team: homeTeamId }, 'MLB'),
+        this.apiRequest('/teams/statistics', { league: 1, season, team: awayTeamId }, 'MLB')
+      ]);
+      
+      // Step 3: Format the statistics
+      const formatTeamStats = (teamData) => {
+        if (!teamData?.response) return null;
+        
+        const stats = teamData.response;
+        return {
+          teamId: stats.team?.id,
+          teamName: stats.team?.name,
+          gamesPlayed: stats.games?.played || 0,
+          wins: stats.games?.wins?.total || 0,
+          losses: stats.games?.loses?.total || 0,
+          homeRecord: `${stats.games?.wins?.home || 0}-${stats.games?.loses?.home || 0}`,
+          awayRecord: `${stats.games?.wins?.away || 0}-${stats.games?.loses?.away || 0}`,
+          batting: {
+            average: stats.batting_average || 'N/A',
+            runs: stats.runs?.total || 0,
+            hits: stats.hits?.total || 0,
+            homeRuns: stats.home_runs || 0,
+            strikeouts: stats.strikeouts?.taken?.total || 0
+          },
+          pitching: {
+            era: stats.era || 'N/A',
+            strikeouts: stats.strikeouts?.pitched?.total || 0,
+            saves: stats.saves || 0,
+            runs: stats.runs?.allowed || 0
+          }
+        };
+      };
+      
+      return {
+        homeTeam: formatTeamStats(homeTeamStats),
+        awayTeam: formatTeamStats(awayTeamStats)
+      };
+      
     } catch (error) {
       console.error('Error getting MLB team stats:', error.message);
       return null;
