@@ -1,5 +1,5 @@
-import { supabase } from '../supabaseClient';
-import resultCalculator from './resultCalculator';
+import { supabase } from '../supabaseClient.js';
+import resultCalculator from './resultCalculator.js';
 
 // Constants for validation and configuration
 const VALID_RESULTS = new Set(['won', 'lost', 'push']);

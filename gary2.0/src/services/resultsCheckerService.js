@@ -1,9 +1,9 @@
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 import { createClient } from '@supabase/supabase-js';
-import { garyPerformanceService } from './garyPerformanceService';
-import { sportsDbApiService } from './sportsDbApiService';
-import { ballDontLieService } from './ballDontLieService';
-import { perplexityService } from './perplexityService';
+import { garyPerformanceService } from './garyPerformanceService.js';
+import { sportsDbApiService } from './sportsDbApiService.js';
+import { ballDontLieService } from './ballDontLieService.js';
+import { perplexityService } from './perplexityService.js';
 // import { userPickResultsService } from './userPickResultsService'; // Remove if not used
 // import { oddsApiService } from './oddsApiService'; // Remove if not used
 
@@ -109,8 +109,8 @@ export const resultsCheckerService = {
       // 2. Ball Don't Lie for NBA
       if (missingGames.length > 0) {
         try {
-          // Call the standard BDL API function instead of the non-existent getGamesByDate
-          const bdlScores = await ballDontLieService.getNBAGamesByDate(date);
+          // Use the correct function name with proper capitalization
+          const bdlScores = await ballDontLieService.getNbaGamesByDate(date);
           const remainingGames = [];
           for (const pick of missingGames) {
             const pickStr = pick.pick || pick.originalPick || '';
@@ -155,8 +155,11 @@ export const resultsCheckerService = {
           const teamName = teamMatch[1].trim();
           const league = (pick.league || 'NBA').toUpperCase();
           try {
-            // Call the standard sportsDbApiService function instead of getScores
-            const sportsDbScores = await sportsDbApiService.getGameResultsByDate(date, league);
+            // Use the correct function from sportsDbApiService
+            const sportsDbScores = await sportsDbApiService.getEventsByDate(
+              sportsDbApiService.leagueIds[league] || sportsDbApiService.leagueIds.NBA,
+              date
+            );
             if (sportsDbScores) {
               const gameKey = Object.keys(sportsDbScores).find(key =>
                 key.toLowerCase().includes(teamName.toLowerCase())
@@ -188,13 +191,49 @@ export const resultsCheckerService = {
           // Use the perplexityService reference to call the function correctly
           const perplexityPromises = missingGames.map(async pick => {
             try {
+              // Extract team names if not explicitly provided
+              const pickStr = pick.pick || pick.originalPick || '';
+              let homeTeam = pick.home_team;
+              let awayTeam = pick.away_team;
+              const league = pick.league || 'NBA';
+              
+              if (!homeTeam || !awayTeam) {
+                // Extract team names from the pick string if not provided
+                const teamMatch = pickStr.match(/([A-Za-z. ]+)\s+(?:@|vs\.?)\s+([A-Za-z. ]+)/i);
+                if (teamMatch && teamMatch.length >= 3) {
+                  awayTeam = teamMatch[1].trim();
+                  homeTeam = teamMatch[2].trim();
+                } else {
+                  // If can't extract both teams, use what we can find
+                  const singleTeamMatch = pickStr.match(/^([A-Za-z. ]+)/i);
+                  const pickTeam = singleTeamMatch ? singleTeamMatch[1].trim() : '';
+                  
+                  if (!homeTeam && !awayTeam) {
+                    // If we don't have either, use the extracted team as both for searching
+                    homeTeam = pickTeam;
+                    awayTeam = pickTeam;
+                  } else if (!homeTeam) {
+                    homeTeam = pickTeam;
+                  } else if (!awayTeam) {
+                    awayTeam = pickTeam;
+                  }
+                }
+              }
+              
+              console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
               const result = await perplexityService.getScoresFromPerplexity(
-                pick.home_team || '', 
-                pick.away_team || '', 
-                pick.league || 'NBA', 
+                homeTeam, 
+                awayTeam, 
+                league, 
                 date
               );
-              return { pick: pick.pick || pick.originalPick, result };
+              
+              return { 
+                pick: pick.pick || pick.originalPick, 
+                pickData: pick,
+                result,
+                processedTeams: { homeTeam, awayTeam, league }
+              };
             } catch (err) {
               console.error(`Error getting scores for ${pick.pick || pick.originalPick}:`, err);
               return { pick: pick.pick || pick.originalPick, result: { success: false } };
@@ -204,9 +243,70 @@ export const resultsCheckerService = {
           const perplexityResults = await Promise.all(perplexityPromises);
           const finalPerplexityScores = { success: true, scores: {} };
           
-          perplexityResults.forEach(({ pick, result }) => {
-            if (result.success && result.scores) {
-              finalPerplexityScores.scores[pick] = result.scores;
+          perplexityResults.forEach(({ pick, pickData, result, processedTeams }) => {
+            if (result && result.success && result.scores) {
+              // Extract the score data
+              const scores = result.scores;
+              
+              // Determine if the bet won by checking which team was picked
+              let betResult = 'unknown';
+              
+              if (pickData) {
+                const pickedTeam = pickData.pick?.split(/\s+/)[0] || '';
+                const spreadMatch = pickData.pick?.match(/([+-]?\d+(\.\d+)?)/i);
+                const hasSpread = spreadMatch && spreadMatch.length > 0;
+                const spread = hasSpread ? parseFloat(spreadMatch[0]) : 0;
+                
+                // Check if we're dealing with a spread bet or moneyline
+                if (hasSpread) {
+                  // It's a spread bet
+                  const isPicked = (team) => pickedTeam.toLowerCase().includes(team.toLowerCase());
+                  let homeScore = parseInt(scores.home_score);
+                  let awayScore = parseInt(scores.away_score);
+                  
+                  // Determine if home or away team was picked
+                  if (isPicked(scores.home_team)) {
+                    // Home team picked with spread
+                    const adjustedScore = homeScore + spread;
+                    if (adjustedScore > awayScore) {
+                      betResult = 'won';
+                    } else if (adjustedScore < awayScore) {
+                      betResult = 'lost';
+                    } else {
+                      betResult = 'push';
+                    }
+                  } else if (isPicked(scores.away_team)) {
+                    // Away team picked with spread
+                    const adjustedScore = awayScore + spread;
+                    if (adjustedScore > homeScore) {
+                      betResult = 'won';
+                    } else if (adjustedScore < homeScore) {
+                      betResult = 'lost';
+                    } else {
+                      betResult = 'push';
+                    }
+                  }
+                } else {
+                  // It's a moneyline bet
+                  const isPicked = (team) => pickedTeam.toLowerCase().includes(team.toLowerCase());
+                  
+                  if (isPicked(scores.home_team)) {
+                    // Home team picked
+                    betResult = scores.home_score > scores.away_score ? 'won' : 'lost';
+                  } else if (isPicked(scores.away_team)) {
+                    // Away team picked
+                    betResult = scores.away_score > scores.home_score ? 'won' : 'lost';
+                  }
+                }
+              }
+              
+              // Add the determined result to the scores object
+              finalPerplexityScores.scores[pick] = {
+                ...scores,
+                result: betResult,
+                final_score: `${scores.away_score}-${scores.home_score}`,
+                processed_teams: processedTeams
+              };
             }
           });
           
@@ -386,7 +486,12 @@ export const resultsCheckerService = {
       
       const { success: recordSuccess, message: recordMessage } = await garyPerformanceService.recordPickResults(
         date,
-        processedResults
+        Object.entries(scores).map(([matchup, score]) => ({
+          pick: `${score.away_team} @ ${score.home_team}`,
+          result: score.result || 'unknown',
+          score: `${score.away_score}-${score.home_score}`,
+          league: score.league || 'NBA'
+        }))
       );
       if (!recordSuccess) throw new Error(`Failed to record results: ${recordMessage}`);
       await garyPerformanceService.updatePerformanceStats(date);

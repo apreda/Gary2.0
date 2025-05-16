@@ -6,7 +6,14 @@
 import { BalldontlieAPI } from '@balldontlie/sdk';
 
 // Initialize the API client with our API key
-let API_KEY = import.meta.env?.VITE_BALLDONTLIE_API_KEY || '3363660a-a082-43b7-a130-6249ff68e5ab'; // Default to GOAT plan key if not in env
+let API_KEY;
+try {
+  API_KEY = import.meta.env?.VITE_BALLDONTLIE_API_KEY || process.env.VITE_BALLDONTLIE_API_KEY || '3363660a-a082-43b7-a130-6249ff68e5ab';
+} catch (e) {
+  // If import.meta.env is not available (running in Node directly)
+  API_KEY = process.env.VITE_BALLDONTLIE_API_KEY || '3363660a-a082-43b7-a130-6249ff68e5ab';
+}
+// Default to GOAT plan key if not in env
 let api;
 
 // Cache for API responses
