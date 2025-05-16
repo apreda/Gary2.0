@@ -85,7 +85,6 @@ const ballDontLieService = {
    */
   initialize() {
     console.log('Initializing Ball Don\'t Lie API Service');
-    console.log(`Using @balldontlie/sdk v${require('@balldontlie/sdk/package.json').version}`);
     console.log(`API key ${API_KEY ? 'is set' : 'is NOT set'}`);
     if (API_KEY) {
       console.log(`🔑 Ball Don't Lie API Key (masked): ${API_KEY.substring(0, 3)}...`);
