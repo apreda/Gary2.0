@@ -209,7 +209,9 @@ Example of a good BULLET POINT rationale format for NBA:
 • When two defensive teams meet, the more efficient offense (Boston) has a clear advantage"
 
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
-```json
+
+You must return a properly formatted JSON object with the following structure:
+
 {
   "pick": "e.g., Bulls ML +150 / Celtics -4.5 -110",
   "type": "spread | moneyline",
@@ -224,7 +226,6 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
   "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
   "rationale": "Format as bullet points with 4-6 statistical insights. Each bullet should start with the • character followed by ONE key stat advantage. Keep the original bullet symbol in the JSON string - do not escape or replace it. Example: • Boston shooting 49.7% vs Denver 45.1%\n• Celtics allow only 102.5 PPG vs Denver 112.8 PPG"
 }
-```
 `
       };
       
