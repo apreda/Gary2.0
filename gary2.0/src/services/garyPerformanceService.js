@@ -18,8 +18,7 @@ async function ensureConfidenceColumn() {
       // Add the column if it doesn't exist
       const { error: alterError } = await supabase.rpc('add_float_column', {
         table_name: 'game_results',
-        column_name: 'confidence',
-        default_value: 1.0
+        column_name: 'confidence'
       });
 
       if (alterError) {
@@ -414,18 +413,27 @@ export const garyPerformanceService = {
         // Prepare the data to insert with calculated results and confidence
         const insertData = await Promise.all(batch.map(async (result) => {
           try {
+            // Get the original pick to extract confidence
+            const originalPick = result.originalPick || result;
+            
             // Calculate the result if we have a score
             let resultData = { ...result };
             
             if (result.final_score) {
               const calculated = resultCalculator.calculateResult({
-                pick: result.pick,
+                pick: originalPick,
                 score: result.final_score,
-                league: result.league || 'NBA'
+                league: result.league || 'NBA',
+                confidence: result.confidence // Pass through any existing confidence
               });
               
               resultData.result = calculated.result;
+              // Preserve the original confidence from the pick
               resultData.confidence = calculated.confidence;
+            } else {
+              // If no final score, use the original pick's confidence
+              resultData.confidence = resultCalculator.getConfidence(originalPick);
+              resultData.result = 'pending';
             }
             
             return {

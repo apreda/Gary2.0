@@ -140,7 +140,7 @@ export const resultsCheckerService = {
       // 1. Try primary sources first (Ball Don't Lie for NBA, SportsDB for others)
       for (const pick of picks) {
         // Extract team names from the pick string
-        const pickStr = pick.pick || '';
+        const pickStr = pick.pick || pick.originalPick || '';
         const teamMatch = pickStr.match(/^([A-Za-z. ]+?)(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?$/);
         
         if (!teamMatch || !teamMatch[1]) {
@@ -150,46 +150,67 @@ export const resultsCheckerService = {
         }
         
         const teamName = teamMatch[1].trim();
-        const isNBA = (pick.league || '').toLowerCase() === 'nba';
+        const league = (pick.league || 'NBA').toUpperCase();
         
         try {
-          if (isNBA) {
-            // Try Ball Don't Lie for NBA games
-            const bdlScores = await ballDontLieService.getGamesByDate(date);
-            if (bdlScores) {
-              // Find the game that includes the team name
-              const gameKey = Object.keys(bdlScores).find(key => 
-                key.toLowerCase().includes(teamName.toLowerCase())
-              );
-              
-              if (gameKey) {
-                scores[teamName] = bdlScores[gameKey];
-                console.log(`Found NBA score from Ball Don't Lie: ${teamName}`);
-                continue;
+          // First try Ball Don't Lie for NBA games
+          if (league === 'NBA') {
+            try {
+              const bdlScores = await ballDontLieService.getGamesByDate(date);
+              if (bdlScores) {
+                // Find the game that includes the team name
+                const gameKey = Object.keys(bdlScores).find(key => 
+                  key.toLowerCase().includes(teamName.toLowerCase())
+                );
+                
+                if (gameKey) {
+                  scores[pick.pick || pick.originalPick] = {
+                    ...bdlScores[gameKey],
+                    league: league,
+                    final: true
+                  };
+                  console.log(`Found NBA score from Ball Don't Lie: ${teamName}`);
+                  continue;
+                }
               }
+            } catch (bdlError) {
+              console.warn(`Error fetching from Ball Don't Lie:`, bdlError);
+              // Continue to next source on error
             }
           }
           
           // Try SportsDB for all sports
-          const sportsDbScores = await sportsDbApiService.getScores(date, pick.league);
-          if (sportsDbScores) {
-            // Find the game that includes the team name
-            const gameKey = Object.keys(sportsDbScores).find(key => 
-              key.toLowerCase().includes(teamName.toLowerCase())
-            );
-            
-            if (gameKey) {
-              scores[teamName] = sportsDbScores[gameKey];
-              console.log(`Found score from SportsDB: ${teamName}`);
-              continue;
+          try {
+            const sportsDbScores = await sportsDataService.getScores(date, league);
+            if (sportsDbScores) {
+              // Find the game that includes the team name
+              const gameKey = Object.keys(sportsDbScores).find(key => 
+                key.toLowerCase().includes(teamName.toLowerCase())
+              );
+              
+              if (gameKey) {
+                scores[pick.pick || pick.originalPick] = {
+                  home_team: gameKey.split(' @ ')[1] || 'Unknown',
+                  away_team: gameKey.split(' @ ')[0] || 'Unknown',
+                  home_score: sportsDbScores[gameKey].split('-')[1],
+                  away_score: sportsDbScores[gameKey].split('-')[0],
+                  league: league,
+                  final: true
+                };
+                console.log(`Found score from SportsDB: ${teamName}`);
+                continue;
+              }
             }
+          } catch (sportsDbError) {
+            console.warn(`Error fetching from SportsDB:`, sportsDbError);
+            // Continue to next source on error
           }
           
           // If we get here, we couldn't find the score from primary sources
           missingGames.push(pick);
           
         } catch (error) {
-          console.warn(`Error fetching score for ${teamName} from primary sources:`, error);
+          console.warn(`Error processing score for ${teamName}:`, error);
           missingGames.push(pick);
         }
       }
