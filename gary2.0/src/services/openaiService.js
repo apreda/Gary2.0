@@ -195,11 +195,12 @@ Your rationale MUST be formatted as BULLET POINTS (not a paragraph) and follow t
 2. Each bullet point should highlight ONE key statistical advantage or insight
 3. Compare relevant stats between the two teams to show why one has an advantage
 4. If it's an NBA game, mention player performance metrics, shooting percentages, or recent form
-5. If it's an MLB game, include pitcher stats, team batting averages, or home/away records
-6. For all sports, analyze recent team performance (win/loss records, streaks, trends)
-7. Directly connect the statistics to your betting recommendation
-8. Explain WHY the statistics give one team the edge over the other
-9. Maintain Gary's confident tone while being factually accurate with the numbers
+5. If it's an MLB game, PRIORITIZE starting pitcher statistics (ERA, record, strikeouts) over team stats - these are MORE IMPORTANT for baseball betting analysis
+6. For MLB picks, ALWAYS include the starting pitcher stats in the rationale if they are provided
+7. For all sports, analyze recent team performance (win/loss records, streaks, trends)
+8. Directly connect the statistics to your betting recommendation
+9. Explain WHY the statistics give one team the edge over the other
+10. Maintain Gary's confident tone while being factually accurate with the numbers
 
 Example of a good BULLET POINT rationale format for NBA:
 "• Boston is shooting 49.7% from the field vs Denver's much lower 45.1%
