@@ -354,13 +354,13 @@ const picksService = {
         return { success: false, message: 'No valid picks to store' };
       }
       
-      // Create data structure for Supabase - always stringify the JSON for the picks column
+      // Create data structure for Supabase - store raw JSON objects directly
       const pickData = {
         date: currentDateString,
-        picks: JSON.stringify(rawJsonOutputs) // Stringify to ensure proper storage in Supabase
+        picks: rawJsonOutputs // Store raw JSON objects directly as Supabase can handle it
       };
       
-      console.log('Storing picks as stringified JSON to ensure database compatibility');
+      console.log('Storing raw JSON objects directly in picks column for Supabase');
       
       // Ensure there's a valid Supabase session before database operation
       await picksService.ensureValidSupabaseSession();
@@ -379,7 +379,7 @@ const picksService = {
             // Alternative approach: Use a simplified object that doesn't trigger any bankroll references
             const simplifiedPickData = {
               date: currentDateString,
-              picks: JSON.stringify(rawJsonOutputs) // Convert to string to ensure compatibility
+              picks: rawJsonOutputs // Keep as raw JSON objects for consistency
             };
             
             // Try direct insert without any triggers/functions that might access bankroll
