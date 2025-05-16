@@ -109,7 +109,8 @@ export const resultsCheckerService = {
       // 2. Ball Don't Lie for NBA
       if (missingGames.length > 0) {
         try {
-          const bdlScores = await ballDontLieService.getGamesByDate(date);
+          // Call the standard BDL API function instead of the non-existent getGamesByDate
+          const bdlScores = await ballDontLieService.getNBAGamesByDate(date);
           const remainingGames = [];
           for (const pick of missingGames) {
             const pickStr = pick.pick || pick.originalPick || '';
@@ -154,7 +155,8 @@ export const resultsCheckerService = {
           const teamName = teamMatch[1].trim();
           const league = (pick.league || 'NBA').toUpperCase();
           try {
-            const sportsDbScores = await sportsDbApiService.getScores(date, league);
+            // Call the standard sportsDbApiService function instead of getScores
+            const sportsDbScores = await sportsDbApiService.getGameResultsByDate(date, league);
             if (sportsDbScores) {
               const gameKey = Object.keys(sportsDbScores).find(key =>
                 key.toLowerCase().includes(teamName.toLowerCase())
@@ -183,8 +185,30 @@ export const resultsCheckerService = {
       if (missingGames.length > 0) {
         try {
           console.log('Making final attempt with Perplexity for remaining games...');
-          // Use direct method reference to avoid circular dependency
-          const finalPerplexityScores = await getScoresFromPerplexity(date, missingGames);
+          // Use the perplexityService reference to call the function correctly
+          const perplexityPromises = missingGames.map(async pick => {
+            try {
+              const result = await perplexityService.getScoresFromPerplexity(
+                pick.home_team || '', 
+                pick.away_team || '', 
+                pick.league || 'NBA', 
+                date
+              );
+              return { pick: pick.pick || pick.originalPick, result };
+            } catch (err) {
+              console.error(`Error getting scores for ${pick.pick || pick.originalPick}:`, err);
+              return { pick: pick.pick || pick.originalPick, result: { success: false } };
+            }
+          });
+          
+          const perplexityResults = await Promise.all(perplexityPromises);
+          const finalPerplexityScores = { success: true, scores: {} };
+          
+          perplexityResults.forEach(({ pick, result }) => {
+            if (result.success && result.scores) {
+              finalPerplexityScores.scores[pick] = result.scores;
+            }
+          });
           
           if (finalPerplexityScores && finalPerplexityScores.success) {
             Object.assign(scores, finalPerplexityScores.scores || {});
