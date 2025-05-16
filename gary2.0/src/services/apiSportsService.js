@@ -5,11 +5,18 @@
  */
 import axios from 'axios';
 
+// Base URLs by sport
 const MLB_API_URL = 'https://v1.baseball.api-sports.io';
 const NBA_API_URL = 'https://v1.basketball.api-sports.io';
 const NHL_API_URL = 'https://v1.hockey.api-sports.io';
 
+// API hosts by sport - MUST match exact host value in headers
+const MLB_API_HOST = 'v1.baseball.api-sports.io';
+const NBA_API_HOST = 'v1.basketball.api-sports.io';
+const NHL_API_HOST = 'v1.hockey.api-sports.io';
+
 const apiSportsService = {
+  // Use the API key from environment variables
   API_KEY: import.meta.env.VITE_API_SPORTS_KEY,
   
   /**
@@ -27,14 +34,26 @@ const apiSportsService = {
                      sport === 'NHL' ? NHL_API_URL :
                      MLB_API_URL;
       
+      // Get the correct API host based on sport
+      const apiHost = sport === 'MLB' ? MLB_API_HOST :
+                     sport === 'NBA' ? NBA_API_HOST :
+                     sport === 'NHL' ? NHL_API_HOST :
+                     MLB_API_HOST;
+      
       const url = `${baseUrl}${endpoint}`;
-      console.log(`API-Sports Request [${sport}]: ${endpoint}`);
+      console.log(`API-Sports Request [${sport}]: ${url} with params:`, params);
+      
+      // Create headers exactly as shown in the API documentation
+      const headers = {
+        'x-rapidapi-key': this.API_KEY,
+        'x-rapidapi-host': apiHost
+      };
+      
+      console.log('Using headers:', headers);
       
       const response = await axios.get(url, {
         params,
-        headers: {
-          'x-apisports-key': this.API_KEY
-        }
+        headers: headers
       });
       
       return response.data;
@@ -60,7 +79,10 @@ const apiSportsService = {
       const today = new Date().toISOString().split('T')[0];
       console.log(`Getting ${sport} games for ${today}`);
       
+      // According to the documentation, we need to use the games endpoint with date parameter
       const response = await this.apiRequest('/games', { date: today }, sport);
+      
+      console.log(`API-Sports ${sport} games response:`, response);
       
       if (response?.response && Array.isArray(response.response)) {
         return response.response;
@@ -82,7 +104,9 @@ const apiSportsService = {
     try {
       console.log(`Getting ${sport} lineup for game ID ${gameId}`);
       
+      // For baseball lineups, we need to use the lineups endpoint with game parameter
       const response = await this.apiRequest('/lineups', { game: gameId }, sport);
+      console.log(`API-Sports lineup response for game ${gameId}:`, response);
       
       if (response?.response && response.response.length > 0) {
         return response.response[0];
@@ -103,20 +127,60 @@ const apiSportsService = {
    */
   async getPlayerStats(playerId, season = new Date().getFullYear(), sport = 'MLB') {
     try {
-      console.log(`Getting ${sport} stats for player ID ${playerId} (${season} season)`);
+      console.log(`Getting ${sport} player stats for player ID ${playerId} in season ${season}`);
       
-      const response = await this.apiRequest('/players/statistics', { 
+      // For player statistics, we need to use specific endpoints with required parameters
+      // Based on API-Sports documentation, we need to specify player, league, and season
+      // For MLB, we use league ID 1 (Major League Baseball)
+      const params = {
         player: playerId,
         season: season
-      }, sport);
+      };
       
-      if (response?.response && response.response.length > 0) {
-        return response.response[0];
+      // Add league parameter for MLB
+      if (sport === 'MLB') {
+        params.league = 1; // MLB league ID
+      }
+      
+      const response = await this.apiRequest('/players/statistics', params, sport);
+      console.log(`API-Sports player stats response for player ${playerId}:`, response);
+      
+      if (response?.response) {
+        return response.response;
       }
       return null;
     } catch (error) {
-      console.error(`Error getting ${sport} stats for player ${playerId}:`, error.message);
+      console.error(`Error getting ${sport} player stats for player ${playerId}:`, error.message);
       return null;
+    }
+  },
+  
+  /**
+   * Get teams in a league
+   * @param {string} sport - Sport type (MLB, NBA, NHL)
+   * @param {number} season - Season year
+   * @returns {Promise<Array>} - List of teams
+   */
+  async getTeams(sport = 'MLB', season = new Date().getFullYear()) {
+    try {
+      console.log(`Getting ${sport} teams for season ${season}`);
+      
+      // For MLB, we use league ID 1 (Major League Baseball)
+      const leagueId = sport === 'MLB' ? 1 : null;
+      
+      const params = { season };
+      if (leagueId) params.league = leagueId;
+      
+      const response = await this.apiRequest('/teams', params, sport);
+      console.log(`API-Sports teams response:`, response);
+      
+      if (response?.response && Array.isArray(response.response)) {
+        return response.response;
+      }
+      return [];
+    } catch (error) {
+      console.error(`Error getting ${sport} teams:`, error.message);
+      return [];
     }
   },
   
