@@ -246,7 +246,7 @@ ${gameData?.pitcherData ? `PITCHER DATA:
 ${gameData.pitcherData}
 ` : ''}
 
-IMPORTANT: The "time" field in your JSON response MUST use the exact game time from the data above: "${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}". Do not make up or guess a game time.
+EXTREMELY IMPORTANT: The "time" field in your JSON response MUST ONLY use the EXACT game time from the data provided above: "${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}". DO NOT ALTER, MODIFY OR GUESS the time - copy it exactly as provided. Only use 'TBD' if no time information was provided. This is critical for our system's integrity.
 
 REAL-TIME DATA:
 ${newsData || 'No real-time data available'}
