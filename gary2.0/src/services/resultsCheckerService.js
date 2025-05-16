@@ -3,9 +3,68 @@ import { createClient } from '@supabase/supabase-js';
 import { garyPerformanceService } from './garyPerformanceService';
 import { sportsDbApiService } from './sportsDbApiService';
 import { ballDontLieService } from './ballDontLieService';
-import openaiService from './openaiService';
 import { perplexityService } from './perplexityService';
 import { userPickResultsService } from './userPickResultsService';
+
+// Constants for validation and configuration
+const VALID_RESULTS = new Set(['won', 'lost', 'push']);
+const SCORE_REGEX = /^\d+-\d+$/;
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+// Database indexes to be created (run these in your database)
+/*
+CREATE INDEX IF NOT EXISTS idx_game_results_pick_id ON public.game_results(pick_id);
+CREATE INDEX IF NOT EXISTS idx_game_results_game_date ON public.game_results(game_date);
+CREATE INDEX IF NOT EXISTS idx_game_results_league ON public.game_results(league);
+*/
+
+/**
+ * Validates the result value
+ * @param {string} result - The result to validate
+ * @returns {boolean} True if valid, false otherwise
+ */
+const validateResult = (result) => {
+  if (!VALID_RESULTS.has(result)) {
+    console.error(`Invalid result: ${result}. Must be one of: ${Array.from(VALID_RESULTS).join(', ')}`);
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Validates the score format
+ * @param {string} score - The score to validate (e.g., "100-98")
+ * @returns {boolean} True if valid, false otherwise
+ */
+const validateScore = (score) => {
+  if (!SCORE_REGEX.test(score)) {
+    console.error(`Invalid score format: ${score}. Expected format: "##-##"`);
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Retry wrapper for API calls
+ * @param {Function} fn - The function to retry
+ * @param {number} retries - Number of retry attempts
+ * @param {number} delay - Delay between retries in ms
+ * @returns {Promise<*>} The result of the function
+ */
+const withRetry = async (fn, retries = MAX_RETRIES, delay = RETRY_DELAY_MS) => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) {
+      console.error(`Max retries reached. Error: ${error.message}`);
+      throw error;
+    }
+    console.warn(`Retry attempt ${MAX_RETRIES - retries + 1}/${MAX_RETRIES}. Retrying in ${delay}ms...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return withRetry(fn, retries - 1, delay * 1.5); // Exponential backoff
+  }
+};
 
 // Create a Supabase client with admin privileges that bypasses RLS
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || 'https://wljxcsmijuhnqumstxvr.supabase.co';
