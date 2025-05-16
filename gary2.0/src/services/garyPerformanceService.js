@@ -8,27 +8,21 @@ const SCORE_REGEX = /^\d+-\d+$/;
 // Add the confidence column to the database if it doesn't exist
 async function ensureConfidenceColumn() {
   try {
-    // Check if the column exists
-    const { data, error } = await supabase.rpc('column_exists', {
-      table_name: 'game_results',
-      column_name: 'confidence'
-    });
+    // For now, let's just check if we can query the game_results table
+    // without trying to modify the schema, since we're not storing
+    // confidence as a separate column
+    const { data, error } = await supabase
+      .from('game_results')
+      .select('id')
+      .limit(1);
 
-    if (error || !data) {
-      // Add the column if it doesn't exist
-      const { error: alterError } = await supabase.rpc('add_float_column', {
-        table_name: 'game_results',
-        column_name: 'confidence'
-      });
-
-      if (alterError) {
-        console.error('Error adding confidence column:', alterError);
-      } else {
-        console.log('Added confidence column to game_results table');
-      }
+    if (error) {
+      console.error('Error checking game_results table:', error);
+    } else {
+      console.log('Successfully connected to game_results table');
     }
   } catch (error) {
-    console.error('Error ensuring confidence column exists:', error);
+    console.error('Error connecting to game_results table:', error);
   }
 }
 
