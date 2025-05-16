@@ -121,20 +121,17 @@ function ResultsAdmin() {
         return;
       }
       
-      // Use the automated results checking that includes Odds API
-      // Update the date in the picksResponse for proper processing
-      const automatedResults = await resultsCheckerService.automateResultsChecking();
+      // Use the checkResults method to verify and record results
+      const checkResultsResponse = await resultsCheckerService.checkResults(date);
       
-      if (!automatedResults.success) {
-        setStatus(`Error: ${automatedResults.message || 'Could not check results'}`);
+      if (!checkResultsResponse.success) {
+        setStatus(`Error: ${checkResultsResponse.message || 'Could not check results'}`);
         setLoading(false);
         return;
       }
       
-      // No need for separate record call as automateResultsChecking includes it
-      
-      // Set the success message directly from automatedResults
-      setStatus(`Success: ${automatedResults.message}`);
+      // Set the success message from the response
+      setStatus(`Success: ${checkResultsResponse.message}`);
       
     } catch (error) {
       setStatus(`Error: ${error.message}`);
