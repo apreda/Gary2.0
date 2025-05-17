@@ -134,6 +134,70 @@ export const perplexityService = {
    * @param {string} league - The sports league (NBA, MLB, etc.)
    * @returns {Promise<string>} - The latest news as text
    */
+  /**
+   * Gets game time, headlines, and key injuries for a specific game
+   * @param {string} homeTeam - The home team name
+   * @param {string} awayTeam - The away team name
+   * @param {string} league - The sports league (NBA, MLB, NHL, etc.)
+   * @returns {Promise<object>} - Game time, headlines and injuries data
+   */
+  getGameTimeAndHeadlines: async function(homeTeam, awayTeam, league) {
+    try {
+      const query = `For the upcoming ${league} game between ${awayTeam} (away) and ${homeTeam} (home):
+        1. When is the scheduled game time (in Eastern Time)?
+        2. What are 2-3 key headlines or storylines about the matchup?
+        3. List any key injuries for either team
+        
+        Format your response as structured data with sections for: gameTime (string), headlines (array), and keyInjuries (object with homeTeam and awayTeam properties)`;
+      
+      const response = await this.search(query, {
+        temperature: 0.2,
+        maxTokens: 400
+      });
+      
+      if (!response.success) {
+        return { gameTime: 'TBD', headlines: [], keyInjuries: { homeTeam: [], awayTeam: [] }};
+      }
+      
+      // Try to parse structured data from the response
+      try {
+        // Look for JSON structure in the response
+        const jsonMatch = response.data.match(/\{[\s\S]*\}/g);
+        if (jsonMatch) {
+          const parsedData = JSON.parse(jsonMatch[0]);
+          return {
+            gameTime: parsedData.gameTime || 'TBD',
+            headlines: Array.isArray(parsedData.headlines) ? parsedData.headlines : [],
+            keyInjuries: parsedData.keyInjuries || { homeTeam: [], awayTeam: [] }
+          };
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse JSON from game time response:', parseError.message);
+      }
+      
+      // Fallback: Try to extract data using regex patterns if JSON parsing fails
+      const gameTimeMatch = response.data.match(/gameTime[:\s]+(\"[^\"]+\"|\d{1,2}:\d{2}\s*[AP]M|\d{1,2}\s*[AP]M|TBD|TBA)/i);
+      const gameTime = gameTimeMatch ? gameTimeMatch[1].replace(/\"/g, '') : 'TBD';
+      
+      // Extract headlines as bullet points or numbered items
+      const headlines = [];
+      const headlineMatches = response.data.match(/headlines:[\s\S]*?((?:-|\d+\.)\s+[^\n]+[\n]?)+/i);
+      if (headlineMatches) {
+        const headlinesList = headlineMatches[0].split(/\n/).filter(line => line.match(/^\s*(?:-|\d+\.)\s+/));
+        headlines.push(...headlinesList.map(h => h.replace(/^\s*(?:-|\d+\.)\s+/, '').trim()));
+      }
+      
+      return {
+        gameTime: gameTime,
+        headlines: headlines.slice(0, 3), // Limit to 3 headlines
+        keyInjuries: { homeTeam: [], awayTeam: [] } // Basic structure for injuries
+      };
+    } catch (error) {
+      console.error('Error in getGameTimeAndHeadlines:', error.message);
+      return { gameTime: 'TBD', headlines: [], keyInjuries: { homeTeam: [], awayTeam: [] }};
+    }
+  },
+  
   getGameNews: async function(homeTeam, awayTeam, league) {
     const query = `What are the latest news and updates for the upcoming ${league} game between ${awayTeam} and ${homeTeam}? Focus only on recent injury reports, lineup changes, and betting trends.`;
     return await this.fetchRealTimeInfo(query, {
