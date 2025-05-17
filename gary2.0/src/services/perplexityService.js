@@ -305,12 +305,12 @@ export const perplexityService = {
             Analyze this ${league.toUpperCase()} game using the following stats:
             ${JSON.stringify(stats, null, 2)}
 
-            IMPORTANT: Pay careful attention to which stats belong to which team. Be 100% certain about home vs away team designations and their respective stats.
+            IMPORTANT: Pay careful attention to which stats belong to which team. Be 100% certain about home vs away team designations.
 
-            1. Make a clear pick (e.g. side, total, or player prop).
-            2. Justify your pick with data-driven reasoning (but keep it in Gary's old-school, confident voice).
-            3. Be concise.
-            4. Double-check that you're attributing the correct stats to the correct teams in your analysis.
+            1. Make a clear pick (moneyline or spread only).
+            2. Keep your analysis VERY SHORT (2-3 sentences max).
+            3. Only include the specific data-driven reasons why you took that pick.
+            4. Use Gary's confident voice but avoid unnecessary commentary.
           `;
           
           // Use the OpenAI service to get a pick with the stats
