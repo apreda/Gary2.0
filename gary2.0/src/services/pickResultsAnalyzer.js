@@ -1,5 +1,5 @@
-// Import with explicit path to ensure proper loading
-import openaiService from './openaiService.js';
+// Import the OpenAI service correctly
+import { openaiService } from './openaiService.js';
 
 /**
  * Service to analyze pick results and determine the correct outcome (won/lost/push)
@@ -223,9 +223,10 @@ Respond with VALID JSON ONLY in this exact format:
 }`;
 
     try {
-      // Ensure we're using the correct method from the openaiService
+      // Use the correct method from the openaiService
       console.log('Calling OpenAI for bet result analysis');
-      const response = await openaiService.generateCompletion({
+      const response = await openaiService.createChatCompletion({
+        // Use the compatible model
         model: 'gpt-3.5-turbo-0125',
         messages: [
           {
@@ -270,15 +271,211 @@ Respond with VALID JSON ONLY in this exact format:
       };
     } catch (error) {
       console.error('Error analyzing with OpenAI:', error);
-      return {
-        pick_id: pick.id,
-        game_date: pick.date,
-        league: pick.league || gameScore.league || 'Unknown',
-        result: 'unknown',
-        final_score: `${gameScore.away_score}-${gameScore.home_score}`,
-        pick_text: pick.pick,
-        matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
-        confidence: pick.confidence || null
+      // If OpenAI call fails, we need a fallback to determine the result
+      // For moneyline: if team won, result is 'won', if team lost, result is 'lost'
+      // For spread: if actual spread meets the pick, result is 'won', else 'lost'
+      // Make a basic determination based on scores
+      try {
+        if (betType === 'moneyline' || betType === 'ML') {
+          const homeScore = parseInt(gameScore.home_score);
+          const awayScore = parseInt(gameScore.away_score);
+          const homeTeam = gameScore.home_team;
+          const awayTeam = gameScore.away_team;
+          const extractedTeamName = pickResultsAnalyzer.extractTeamName(pick.pick);
+          let pickedTeam = '';
+          let isHomeTeamPicked = false;
+          if (extractedTeamName) {
+            if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+              pickedTeam = homeTeam;
+              isHomeTeamPicked = true;
+            } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+              pickedTeam = awayTeam;
+              isHomeTeamPicked = false;
+            }
+          }
+          if (!pickedTeam) {
+            if (pick.pick.includes(homeTeam)) {
+              pickedTeam = homeTeam;
+              isHomeTeamPicked = true;
+            } else if (pick.pick.includes(awayTeam)) {
+              pickedTeam = awayTeam;
+              isHomeTeamPicked = false;
+            } else {
+              console.warn(`Could not determine picked team for ${pick.pick}`);
+              return { result: 'unknown' };
+            }
+          }
+          if (isHomeTeamPicked) {
+            return { 
+              pick_id: pick.id,
+              game_date: pick.date,
+              league: pick.league || gameScore.league || 'Unknown',
+              result: homeScore > awayScore ? 'won' : (homeScore < awayScore ? 'lost' : 'push'),
+              final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+              pick_text: pick.pick,
+              matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+              confidence: pick.confidence || null
+            };
+          } else {
+            return { 
+              pick_id: pick.id,
+              game_date: pick.date,
+              league: pick.league || gameScore.league || 'Unknown',
+              result: awayScore > homeScore ? 'won' : (awayScore < homeScore ? 'lost' : 'push'),
+              final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+              pick_text: pick.pick,
+              matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+              confidence: pick.confidence || null
+            };
+          }
+        } else if (betType === 'spread' && line) {
+          const spreadValue = parseFloat(line);
+          const homeScore = parseInt(gameScore.home_score);
+          const awayScore = parseInt(gameScore.away_score);
+          const homeTeam = gameScore.home_team;
+          const awayTeam = gameScore.away_team;
+          const extractedTeamName = pickResultsAnalyzer.extractTeamName(pick.pick);
+          let pickedTeam = '';
+          let isHomeTeamPicked = false;
+          if (extractedTeamName) {
+            if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+              pickedTeam = homeTeam;
+              isHomeTeamPicked = true;
+            } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+              pickedTeam = awayTeam;
+              isHomeTeamPicked = false;
+            }
+          }
+          if (!pickedTeam) {
+            if (pick.pick.includes(homeTeam)) {
+              pickedTeam = homeTeam;
+              isHomeTeamPicked = true;
+            } else if (pick.pick.includes(awayTeam)) {
+              pickedTeam = awayTeam;
+              isHomeTeamPicked = false;
+            } else {
+              console.warn(`Could not determine picked team for ${pick.pick}`);
+              return { result: 'unknown' };
+            }
+          }
+          if (isHomeTeamPicked) {
+            const adjustedScore = homeScore + spreadValue;
+            return { 
+              pick_id: pick.id,
+              game_date: pick.date,
+              league: pick.league || gameScore.league || 'Unknown',
+              result: adjustedScore > awayScore ? 'won' : (adjustedScore < awayScore ? 'lost' : 'push'),
+              final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+              pick_text: pick.pick,
+              matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+              confidence: pick.confidence || null
+            };
+          } else {
+            const adjustedScore = awayScore + spreadValue;
+            return { 
+              pick_id: pick.id,
+              game_date: pick.date,
+              league: pick.league || gameScore.league || 'Unknown',
+              result: adjustedScore > homeScore ? 'won' : (adjustedScore < homeScore ? 'lost' : 'push'),
+              final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+              pick_text: pick.pick,
+              matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+              confidence: pick.confidence || null
+            };
+          }
+        } else if (betType === 'total' && pick.total) {
+          const totalValue = parseFloat(pick.total);
+          const gameTotal = parseInt(gameScore.home_score) + parseInt(gameScore.away_score);
+          if (pick.pick.toLowerCase().includes('over')) {
+            return { 
+              pick_id: pick.id,
+              game_date: pick.date,
+              league: pick.league || gameScore.league || 'Unknown',
+              result: gameTotal > totalValue ? 'won' : (gameTotal < totalValue ? 'lost' : 'push'),
+              final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+              pick_text: pick.pick,
+              matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+              confidence: pick.confidence || null
+            };
+          } else {
+            return { 
+              pick_id: pick.id,
+              game_date: pick.date,
+              league: pick.league || gameScore.league || 'Unknown',
+              result: gameTotal < totalValue ? 'won' : (gameTotal > totalValue ? 'lost' : 'push'),
+              final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+              pick_text: pick.pick,
+              matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+              confidence: pick.confidence || null
+            };
+          }
+        }
+        
+        // If we couldn't determine anything, use a best guess based on score
+        const homeScore = parseInt(gameScore.home_score);
+        const awayScore = parseInt(gameScore.away_score);
+        const homeTeam = gameScore.home_team;
+        const awayTeam = gameScore.away_team;
+        const extractedTeamName = pickResultsAnalyzer.extractTeamName(pick.pick);
+        let pickedTeam = '';
+        let isHomeTeamPicked = false;
+        if (extractedTeamName) {
+          if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+            pickedTeam = homeTeam;
+            isHomeTeamPicked = true;
+          } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+            pickedTeam = awayTeam;
+            isHomeTeamPicked = false;
+          }
+        }
+        if (!pickedTeam) {
+          if (pick.pick.includes(homeTeam)) {
+            pickedTeam = homeTeam;
+            isHomeTeamPicked = true;
+          } else if (pick.pick.includes(awayTeam)) {
+            pickedTeam = awayTeam;
+            isHomeTeamPicked = false;
+          } else {
+            console.warn(`Could not determine picked team for ${pick.pick}`);
+            return { result: 'unknown' };
+          }
+        }
+        if (isHomeTeamPicked) {
+          return { 
+            pick_id: pick.id,
+            game_date: pick.date,
+            league: pick.league || gameScore.league || 'Unknown',
+            result: homeScore > awayScore ? 'won' : (homeScore < awayScore ? 'lost' : 'push'),
+            final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+            pick_text: pick.pick,
+            matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+            confidence: pick.confidence || null
+          };
+        } else {
+          return { 
+            pick_id: pick.id,
+            game_date: pick.date,
+            league: pick.league || gameScore.league || 'Unknown',
+            result: awayScore > homeScore ? 'won' : (awayScore < homeScore ? 'lost' : 'push'),
+            final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+            pick_text: pick.pick,
+            matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+            confidence: pick.confidence || null
+          };
+        }
+      } catch (fallbackError) {
+        console.error('Error in fallback result determination:', fallbackError);
+        return { 
+          pick_id: pick.id,
+          game_date: pick.date,
+          league: pick.league || gameScore.league || 'Unknown',
+          result: 'unknown',
+          final_score: `${gameScore.away_score}-${gameScore.home_score}`,
+          pick_text: pick.pick,
+          matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
+          confidence: pick.confidence || null
+        };
+      }
       };
     }
   }

@@ -363,6 +363,54 @@ export const resultsCheckerService = {
 
   getScoresFromPerplexity: async (date, picks) => {
     const scores = {};
+    
+    // First try to get scores from TheSportsDB for comparison
+    console.log('Getting scores from TheSportsDB for validation...');
+    let sportsDbScores = {};
+    
+    try {
+      const nhlResults = await sportsDbApiService.getGameResults('4380', date); // NHL league ID: 4380
+      
+      if (nhlResults && nhlResults.events) {
+        nhlResults.events.forEach(game => {
+          const matchup = `${game.strAwayTeam} @ ${game.strHomeTeam}`;
+          sportsDbScores[matchup] = {
+            home_team: game.strHomeTeam,
+            away_team: game.strAwayTeam,
+            home_score: parseInt(game.intHomeScore) || 0,
+            away_score: parseInt(game.intAwayScore) || 0,
+            league: 'NHL',
+            final: game.strStatus === 'FT',
+            source: 'TheSportsDB'
+          };
+          
+          // Also index by teams individually for easier lookup
+          sportsDbScores[game.strHomeTeam] = {
+            home_team: game.strHomeTeam,
+            away_team: game.strAwayTeam,
+            home_score: parseInt(game.intHomeScore) || 0,
+            away_score: parseInt(game.intAwayScore) || 0,
+            league: 'NHL',
+            final: game.strStatus === 'FT',
+            source: 'TheSportsDB'
+          };
+          
+          sportsDbScores[game.strAwayTeam] = {
+            home_team: game.strHomeTeam,
+            away_team: game.strAwayTeam,
+            home_score: parseInt(game.intHomeScore) || 0,
+            away_score: parseInt(game.intAwayScore) || 0,
+            league: 'NHL',
+            final: game.strStatus === 'FT',
+            source: 'TheSportsDB'
+          };
+        });
+        
+        console.log(`Found ${Object.keys(sportsDbScores).length} games from TheSportsDB for validation`);
+      }
+    } catch (sportsDbError) {
+      console.error('Error fetching from TheSportsDB:', sportsDbError.message);
+    }
 
     // Process each pick
     for (const pick of picks) {
@@ -380,35 +428,77 @@ export const resultsCheckerService = {
         const awayTeam = teams[0].trim();
         console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
         
+        // First check if we already have score data from TheSportsDB
+        const matchupKey = `${awayTeam} @ ${homeTeam}`;
+        if (sportsDbScores[matchupKey]) {
+          console.log(`Found score in TheSportsDB for ${matchupKey}: ${sportsDbScores[matchupKey].away_score}-${sportsDbScores[matchupKey].home_score}`);
+          scores[pickText] = sportsDbScores[matchupKey];
+          continue;
+        }
+        
+        // Check if we can find the home or away team individually
+        if (sportsDbScores[homeTeam]) {
+          console.log(`Found score in TheSportsDB for ${homeTeam}: ${sportsDbScores[homeTeam].away_score}-${sportsDbScores[homeTeam].home_score}`);
+          scores[pickText] = sportsDbScores[homeTeam];
+          continue;
+        }
+        
+        if (sportsDbScores[awayTeam]) {
+          console.log(`Found score in TheSportsDB for ${awayTeam}: ${sportsDbScores[awayTeam].away_score}-${sportsDbScores[awayTeam].home_score}`);
+          scores[pickText] = sportsDbScores[awayTeam];
+          continue;
+        }
+        
+        // If we can't find scores in the database, use Perplexity as a fallback
+        console.log(`No scores found in database for ${matchupKey}, using Perplexity as fallback`);
+        
         // Create a focused query to get the final score
         const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        const query = `ONLY FACTUAL INFO: What was the EXACT final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Respond with JSON only: {"home_score": X, "away_score": Y, "home_team": "${homeTeam}", "away_team": "${awayTeam}"}`;
+        const query = `What was the final score of the ${league} game: ${awayTeam} at ${homeTeam} on ${formattedDate}? Include the exact score for both teams. Do NOT add any explanation, just provide the team names and score.`;
         
         try {
           const result = await perplexityService.fetchRealTimeInfo(query, {
             model: 'sonar',
             temperature: 0.1,
-            maxTokens: 200
+            maxTokens: 150
           });
           
           if (result) {
-            // Try to extract JSON
-            const jsonMatch = result.match(/\{[\s\S]*?\}/);
-            if (jsonMatch) {
-              try {
-                const scoreData = JSON.parse(jsonMatch[0]);
-                scores[pickText] = {
-                  home_score: parseInt(scoreData.home_score),
-                  away_score: parseInt(scoreData.away_score),
-                  home_team: scoreData.home_team || homeTeam,
-                  away_team: scoreData.away_team || awayTeam,
-                  league,
-                  final: true
-                };
-                continue; // Move to next pick if successful
-              } catch (e) {
-                console.error('Error parsing JSON from Perplexity response:', e);
+            // Try to parse the result using regex
+            const scorePattern = new RegExp(`(${awayTeam}|${homeTeam})\\s*(\\d+)[^\\d]+(\\d+)\\s*(${homeTeam}|${awayTeam})`, 'i');
+            const scoreMatch = result.match(scorePattern);
+            
+            if (scoreMatch && scoreMatch.length >= 5) {
+              // Determine which team is home and which is away
+              const firstTeam = scoreMatch[1].trim();
+              const secondTeam = scoreMatch[4].trim();
+              
+              const firstScore = parseInt(scoreMatch[2]);
+              const secondScore = parseInt(scoreMatch[3]);
+              
+              let homeScore, awayScore;
+              
+              if (firstTeam.toLowerCase().includes(homeTeam.toLowerCase())) {
+                homeScore = firstScore;
+                awayScore = secondScore;
+              } else {
+                homeScore = secondScore;
+                awayScore = firstScore;
               }
+              
+              scores[pickText] = {
+                home_team: homeTeam,
+                away_team: awayTeam,
+                home_score: homeScore,
+                away_score: awayScore,
+                league,
+                final: true,
+                source: 'Perplexity'
+              };
+              
+              console.log(`Successfully extracted score for ${awayTeam} @ ${homeTeam}: ${awayScore}-${homeScore}`);
+            } else {
+              console.error(`Could not find score pattern in Perplexity response: ${result}`);
             }
           }
         } catch (error) {
@@ -427,51 +517,172 @@ export const resultsCheckerService = {
           
         console.log(`Extracted team name "${teamName}" from pick: ${pickText}`);
         
-        // Create a query to find games involving this team
-        const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        const query = `ONLY FACTUAL INFO: What was the final score of the ${league} game involving ${teamName} on ${formattedDate}? Respond with JSON only: {"home_team": "Team Name", "away_team": "Opponent Name", "home_score": X, "away_score": Y}`;
+        // First check if we already have score data from the database
+        if (sportsDbScores[teamName]) {
+          console.log(`Found score in TheSportsDB for ${teamName}: ${sportsDbScores[teamName].away_score}-${sportsDbScores[teamName].home_score}`);
+          scores[pickText] = sportsDbScores[teamName];
+          continue;
+        }
         
-        try {
-          const result = await perplexityService.fetchRealTimeInfo(query, {
-            model: 'sonar',
-            temperature: 0.1,
-            maxTokens: 200
-          });
+        // If team isn't found directly, try a more lenient match
+        const teamKeys = Object.keys(sportsDbScores);
+        for (const key of teamKeys) {
+          if (key.toLowerCase().includes(teamName.toLowerCase()) || 
+              teamName.toLowerCase().includes(key.toLowerCase())) {
+            console.log(`Found partial match in TheSportsDB for ${teamName} -> ${key}: ${sportsDbScores[key].away_score}-${sportsDbScores[key].home_score}`);
+            scores[pickText] = sportsDbScores[key];
+            break;
+          }
+        }
+        
+        // If we still don't have a match, use Perplexity as a fallback
+        if (!scores[pickText]) {
+          console.log(`No scores found in database for ${teamName}, using Perplexity as fallback`);
           
-          if (result) {
-            // Try to extract JSON
-            const jsonMatch = result.match(/\{[\s\S]*?\}/);
-            if (jsonMatch) {
+          // Create a query to find games involving this team
+          const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const query = `What was the final score of the ${league} game involving ${teamName} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
+          
+          try {
+            const result = await perplexityService.fetchRealTimeInfo(query, {
+              model: 'sonar',
+              temperature: 0.1,
+              maxTokens: 150
+            });
+            
+            if (result) {
+              // Try to find team names and scores with enhanced regex patterns
+              // Try JSON format first
+              let match = null;
+              
               try {
-                const scoreData = JSON.parse(jsonMatch[0]);
-                // Verify the team we asked about is in the game
-                const homeTeamMatches = scoreData.home_team.toLowerCase().includes(teamName.toLowerCase()) || 
-                                       teamName.toLowerCase().includes(scoreData.home_team.toLowerCase());
-                const awayTeamMatches = scoreData.away_team.toLowerCase().includes(teamName.toLowerCase()) || 
-                                       teamName.toLowerCase().includes(scoreData.away_team.toLowerCase());
+                const jsonMatch = result.match(/\{[^\}]+\}/g);
+                if (jsonMatch) {
+                  const jsonData = JSON.parse(jsonMatch[0]);
+                  if (jsonData.home_score !== undefined && jsonData.away_score !== undefined) {
+                    return {
+                      away_team: jsonData.away_team,
+                      home_team: jsonData.home_team,
+                      away_score: parseInt(jsonData.away_score),
+                      home_score: parseInt(jsonData.home_score),
+                      league,
+                      final: true,
+                      source: 'Perplexity JSON'
+                    };
+                  }
+                }
+              } catch (jsonError) {
+                console.log('Not a valid JSON response, trying text patterns');
+              }
+              
+              // Try multiple regex patterns to handle different formatting
+              const patterns = [
+                // Pattern 1: Team A 3 - 2 Team B
+                /(\w[\w\s]+\w)\s+(\d+)\s*[-–]\s*(\d+)\s+(\w[\w\s]+\w)/i,
                 
-                if (homeTeamMatches || awayTeamMatches) {
+                // Pattern 2: Team A defeated Team B 3-2
+                /(\w[\w\s]+\w)\s+(?:defeated|beat|won against)\s+(\w[\w\s]+\w)\s+(?:by a score of|with a score of|)\s*(\d+)\s*[-–]\s*(\d+)/i,
+                
+                // Pattern 3: The final score was Team A 3, Team B 2
+                /(?:final score|score)\s+(?:was|:|is)?\s*(\w[\w\s]+\w)\s+(\d+)(?:,|\s+)\s*(\w[\w\s]+\w)\s+(\d+)/i
+              ];
+              
+              // Try each pattern until we find a match
+              for (const pattern of patterns) {
+                const patternMatch = result.match(pattern);
+                if (patternMatch && patternMatch.length >= 5) {
+                  match = patternMatch;
+                  break;
+                }
+              }
+              
+              // If no match yet, try a simpler pattern to just extract numbers
+              if (!match) {
+                const simpleScorePattern = /(\d+)\s*[-–]\s*(\d+)/i;
+                const simpleMatch = result.match(simpleScorePattern);
+                
+                if (simpleMatch) {
+                  // We found scores but not team names, use the teamName we have
+                  const score1 = parseInt(simpleMatch[1]);
+                  const score2 = parseInt(simpleMatch[2]);
+                  
+                  // We'll need to guess which team is home vs away
+                  const keywords = result.toLowerCase();
+                  const isTeamAway = keywords.includes('away') && keywords.includes(teamName.toLowerCase());
+                  
+                  if (isTeamAway) {
+                    return {
+                      away_team: teamName,
+                      home_team: 'Opponent',
+                      away_score: score1,
+                      home_score: score2,
+                      league,
+                      final: true,
+                      source: 'Perplexity Simple'
+                    };
+                  } else {
+                    return {
+                      away_team: 'Opponent',
+                      home_team: teamName,
+                      away_score: score2,
+                      home_score: score1,
+                      league,
+                      final: true,
+                      source: 'Perplexity Simple'
+                    };
+                  }
+                }
+              }
+              
+              if (match && match.length >= 5) {
+                const teamA = match[1].trim();
+                const teamB = match[4].trim();
+                const scoreA = parseInt(match[2]);
+                const scoreB = parseInt(match[3]);
+                
+                const isTeamAMatch = teamA.toLowerCase().includes(teamName.toLowerCase()) || 
+                                     teamName.toLowerCase().includes(teamA.toLowerCase());
+                                     
+                if (isTeamAMatch) {
+                  // If teamA matches our search team, determine if it's home or away
+                  // For simplicity, we'll assume first mentioned team is away, second is home
+                  // This is a common convention but not universal
                   scores[pickText] = {
-                    home_score: parseInt(scoreData.home_score),
-                    away_score: parseInt(scoreData.away_score),
-                    home_team: scoreData.home_team,
-                    away_team: scoreData.away_team,
+                    away_team: teamA,
+                    home_team: teamB,
+                    away_score: scoreA,
+                    home_score: scoreB,
                     league,
-                    final: true
+                    final: true,
+                    source: 'Perplexity'
                   };
                 } else {
-                  console.warn(`Team mismatch: Asked about ${teamName} but got ${scoreData.home_team} vs ${scoreData.away_team}`);
+                  // If teamB matches our search team
+                  scores[pickText] = {
+                    away_team: teamA,
+                    home_team: teamB,
+                    away_score: scoreA,
+                    home_score: scoreB,
+                    league,
+                    final: true,
+                    source: 'Perplexity'
+                  };
                 }
-              } catch (e) {
-                console.error('Error parsing JSON from Perplexity response:', e);
+                
+                console.log(`Successfully extracted score for ${teamName}: ${scores[pickText].away_team} ${scores[pickText].away_score} - ${scores[pickText].home_score} ${scores[pickText].home_team}`);
+              } else {
+                console.error(`Could not find score pattern in Perplexity response: ${result}`);
               }
             }
+          } catch (error) {
+            console.error(`Error with Perplexity API: ${error.message}`);
           }
-        } catch (error) {
-          console.error(`Error with Perplexity API: ${error.message}`);
         }
       }
     }
+    
+    // Log the final scores we've collected
+    console.log('Final collected scores:', JSON.stringify(scores, null, 2));
 
     return {
       success: Object.keys(scores).length > 0,

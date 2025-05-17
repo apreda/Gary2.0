@@ -618,203 +618,280 @@ Format your response as a JSON object with these keys: {
           league: gameData.league || 'unknown',
           query_time: new Date().toISOString()
         }
-        // We're making an assumption here about the order
-        // A more robust implementation would need to determine which score belongs to which team
-        return {
-          success: true,
-          scores: {
-            home_score: parseInt(scoreMatch[1]),
-
-// Try to identify away team injuries
-const awayTeamPattern = new RegExp(`${awayTeam}[:\s]+(.*?)(?:${homeTeam}|$)`, 'is');
-const awayTeamMatch = injuryText.match(awayTeamPattern);
-
-if (awayTeamMatch && awayTeamMatch[1]) {
-  // Extract individual injuries
-  const injuries = awayTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
-  keyInjuries.awayTeam = injuries;
-  console.log(`Found ${injuries.length} injuries for away team`);
-}
-} catch (injuryError) {
-  console.warn('Error extracting injuries:', injuryError);
-  // Keep default empty arrays
-}
-
-// Basic extraction successful
-console.log('Extracted data using regex approach:', {
-  gameTime, 
-  headlines: headlines.length,
-  homeTeamInjuries: keyInjuries.homeTeam.length,
-  awayTeamInjuries: keyInjuries.awayTeam.length
-});
-
-return {
-  success: true,
-  gameTime: gameTime,
-  headlines: headlines,
-  keyInjuries: keyInjuries,
-  extractionMethod: 'regex',
-  rawResponse: response
-};
-} catch (parseError) {
-  console.warn('All JSON parsing methods failed:', parseError);
-}
-
-// If parsing fails, still return useful data
-return {
-  success: false,
-  gameTime: 'TBD',
-  headlines: [],
-  keyInjuries: { homeTeam: [], awayTeam: [] },
-  rawResponse: response
-};
-} catch (error) {
-  console.error(`Error getting game time and headlines for ${homeTeam} vs ${awayTeam}:`, error);
-  return {
-    success: false,
-    gameTime: 'TBD',
-    headlines: [],
-    keyInjuries: { homeTeam: [], awayTeam: [] },
-    error: error.message
-  };
-}
-
-/**
- * Gets team-specific insights and analysis
- * @param {string} teamName - The team to get insights for
- * @param {string} league - The sports league (NBA, MLB, etc.)
- * @returns {Promise<string>} - Team insights as text
- */
-getTeamInsights: async (teamName, league) => {
-  try {
-    const query = `${league} ${teamName}: current form, injuries, betting trends, last 5 games performance. Brief facts only.`;
-    
-    return await perplexityService.fetchRealTimeInfo(query, {
-      model: 'sonar',
-      temperature: 0.4,
-      maxTokens: 400
-    });
-  } catch (error) {
-    console.error(`Error getting insights for ${teamName}:`, error);
-    // Return a message that indicates the issue rather than null
-    return `Unable to retrieve real-time data for ${teamName} due to API timeout. Analysis will proceed with available data.`;
-  }
-},
-
-/**
- * Gets player-specific insights for prop betting
- * @param {object} gameData - Game data containing teams, league, and player info
- * @returns {Promise<object>} - Structured player insights for prop betting
- */
-getPlayerPropInsights: async (gameData) => {
-  try {
-    console.log(`Fetching player prop insights for ${gameData.matchup}`);
-    
-    // Extract home and away team names
-    const homeTeam = gameData.homeTeam || '';
-    const awayTeam = gameData.awayTeam || '';
-    const league = gameData.league || '';
-    
-    // Get list of key players (if available)
-    let keyPlayers = [];
-    
-    // Extract players from playerStats if available
-    if (gameData.playerStats) {
-      // Add home team players
-      if (gameData.playerStats.homeTeam && gameData.playerStats.homeTeam.players) {
-        keyPlayers = [...keyPlayers, ...gameData.playerStats.homeTeam.players.slice(0, 5)
-          .map(p => p.name || p.player_name)]
-      }
-      // Add away team players
-      if (gameData.playerStats.awayTeam && gameData.playerStats.awayTeam.players) {
-        keyPlayers = [...keyPlayers, ...gameData.playerStats.awayTeam.players.slice(0, 5)
-          .map(p => p.name || p.player_name)]
-      }
+      };
     }
-    
-    // Construct league-specific query for player props with strong emphasis on factual data
-    let propQuery = '';
-    
-    if (league === 'MLB') {
-      propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} MLB game TODAY. For each of the key players, provide EXACT stats from their last 10 games including:
-      
-        1. EXACT number of home runs hit in last 10 games (not an estimate)
-        2. EXACT number of hits in last 10 games
-        3. EXACT number of total bases in last 10 games
-        4. For pitchers: EXACT strikeout totals in last 10 games
-        5. Any statistical home/away or matchup splits
-        
-        EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-        When stating a stat (e.g., "hit 3 home runs in last 10 games"), it MUST be factually correct and verifiable.
-        If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-    } else if (league === 'NBA') {
-      propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NBA game TODAY. For each key player, provide EXACT stats from their last 10 games including:
-      
-        1. EXACT points per game in last 10 games (not an estimate)
-        2. EXACT rebounds per game in last 10 games
-        3. EXACT assists per game in last 10 games
-        4. EXACT 3-pointers made in last 10 games
-        5. Any statistical home/away or matchup splits
-        
-        EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-        When stating a stat (e.g., "averaged 26.3 points in last 10 games"), it MUST be factually correct and verifiable.
-        If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-    } else if (league === 'NHL') {
-      propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NHL game TODAY. For each key player, provide EXACT stats from their last 10 games including:
-      
-        1. EXACT goals scored in last 10 games (not an estimate)
-        2. EXACT assists in last 10 games
-        3. EXACT shots on goal in last 10 games
-        4. EXACT minutes played in last 10 games
-        5. Any statistical home/away or matchup splits
-        
-        EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-        When stating a stat (e.g., "scored 5 goals in last 10 games"), it MUST be factually correct and verifiable.
-        If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
+  },
+  
+  /**
+   * Process score matches from text response
+   * @param {array} scoreMatch - Regex match for scores
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {object} - Structured score object
+   */
+  processScoreMatches: (scoreMatch, homeTeam, awayTeam) => {
+    // We're making an assumption here about the order
+    // A more robust implementation would need to determine which score belongs to which team
+    if (scoreMatch && scoreMatch.length >= 3) {
+      return {
+        success: true,
+        scores: {
+          home_score: parseInt(scoreMatch[1]),
+          away_score: parseInt(scoreMatch[2])
+        }
+      };
     }
-    
-    // If we have key players, add them to the query
-    if (keyPlayers.length > 0) {
-      propQuery += `\n\nPROVIDE DETAILED STATS SPECIFICALLY FOR THESE PLAYERS: ${keyPlayers.join(', ')}`;
-    }
-    
-    propQuery += `\n\nRETURN FORMAT: Format each player's stats as bullet points, with the player name followed by a list of EXACT, VERIFIED stats. NEVER invent or estimate statistics.`;
-    
-    // Call Perplexity with our specialized query
-    const insights = await perplexityService.fetchRealTimeInfo(propQuery, {
-      model: 'sonar',
-      temperature: 0.2, // Lower temperature for factual data
-      maxTokens: 650    // Need more tokens for detailed player insights
-    });
-    
-    // Process the insights to create a structured result
     return {
-      player_insights: insights,
-      meta: {
-        query_time: new Date().toISOString(),
-        game: gameData.matchup,
-        league: gameData.league,
-        insight_weight: '20%' // Indicate this should be 20% of decision weight
-      }
+      success: false,
+      scores: null
     };
-  } catch (error) {
-    console.error(`Error getting player prop insights: ${error.message}`);
-    return {
-      player_insights: `Unable to retrieve player trend data. Analysis will proceed with available statistical data only.`,
-      meta: {
-        error: error.message,
-        game: gameData.matchup,
-        league: gameData.league || 'unknown',
-        query_time: new Date().toISOString()
+  },
+  
+  /**
+   * Extract injury information from text
+   * @param {string} injuryText - Text containing injury information
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {object} - Structured injury information
+   */
+  extractInjuries: (injuryText, homeTeam, awayTeam) => {
+    try {
+      const keyInjuries = { homeTeam: [], awayTeam: [] };
+      
+      // Try to identify home team injuries
+      const homeTeamPattern = new RegExp(`${homeTeam}[:\s]+(.*?)(?:${awayTeam}|$)`, 'is');
+      const homeTeamMatch = injuryText.match(homeTeamPattern);
+      
+      if (homeTeamMatch && homeTeamMatch[1]) {
+        // Extract individual injuries
+        const injuries = homeTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
+        keyInjuries.homeTeam = injuries;
+        console.log(`Found ${injuries.length} injuries for home team`);
       }
-    };
-  }
-},
+      
+      // Try to identify away team injuries
+      const awayTeamPattern = new RegExp(`${awayTeam}[:\s]+(.*?)(?:${homeTeam}|$)`, 'is');
+      const awayTeamMatch = injuryText.match(awayTeamPattern);
+      
+      if (awayTeamMatch && awayTeamMatch[1]) {
+        // Extract individual injuries
+        const injuries = awayTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
+        keyInjuries.awayTeam = injuries;
+        console.log(`Found ${injuries.length} injuries for away team`);
+      }
+      
+      return keyInjuries;
+    } catch (injuryError) {
+      console.warn('Error extracting injuries:', injuryError);
+      // Return empty arrays as default
+      return { homeTeam: [], awayTeam: [] };
+    }
+  },
+  
+  /**
+   * Extract game information from response text
+   * @param {string} response - Response text from API
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {object} - Structured game information
+   */
+  extractGameInfo: (response, homeTeam, awayTeam) => {
+    try {
+      let gameTime = 'TBD';
+      let headlines = [];
+      const keyInjuries = { homeTeam: [], awayTeam: [] };
+      
+      // Try to extract time using regex
+      const timePattern = /scheduled for\s+([^.]+)/i;
+      const timeMatch = response.match(timePattern);
+      if (timeMatch) {
+        gameTime = timeMatch[1].trim();
+      }
+      
+      // Extract potential headlines
+      const sentences = response.split(/\. |\n/);
+      headlines = sentences.filter(s => s.length > 20 && 
+                                  !s.includes('scheduled for') && 
+                                  !s.includes('injury') &&
+                                  s.trim().length > 0);
+      
+      // Extract injury information
+      const injuryText = response;
+      const extractedInjuries = perplexityService.extractInjuries(injuryText, homeTeam, awayTeam);
+      
+      // Basic extraction successful
+      console.log('Extracted data using regex approach:', {
+        gameTime, 
+        headlines: headlines.length,
+        homeTeamInjuries: extractedInjuries.homeTeam.length,
+        awayTeamInjuries: extractedInjuries.awayTeam.length
+      });
+      
+      return {
+        success: true,
+        gameTime: gameTime,
+        headlines: headlines,
+        keyInjuries: extractedInjuries,
+        extractionMethod: 'regex',
+        rawResponse: response
+      };
+    } catch (parseError) {
+      console.warn('Game info parsing failed:', parseError);
+      
+      // If parsing fails, still return useful data
+      return {
+        success: false,
+        gameTime: 'TBD',
+        headlines: [],
+        keyInjuries: { homeTeam: [], awayTeam: [] },
+        rawResponse: response
+      };
+    }
+  },
 
-getScoresFromPerplexity: async (homeTeam, awayTeam, response) => {
-  try {
-    const scorePattern = new RegExp(`(${homeTeam}|${awayTeam})\\s+(\\d+)\\s*[-–]\\s*(\\d+)\\s*(${awayTeam}|${homeTeam})`, 'i');
-    const scoreMatch = response.match(scorePattern);
+  /**
+   * Gets team-specific insights and analysis
+   * @param {string} teamName - The team to get insights for
+   * @param {string} league - The sports league (NBA, MLB, etc.)
+   * @returns {Promise<string>} - Team insights as text
+   */
+  getTeamInsights: async (teamName, league) => {
+    try {
+      const query = `${league} ${teamName}: current form, injuries, betting trends, last 5 games performance. Brief facts only.`;
+      
+      return await perplexityService.fetchRealTimeInfo(query, {
+        model: 'sonar',
+        temperature: 0.4,
+        maxTokens: 400
+      });
+    } catch (error) {
+      console.error(`Error getting insights for ${teamName}:`, error);
+      // Return a message that indicates the issue rather than null
+      return `Unable to retrieve real-time data for ${teamName} due to API timeout. Analysis will proceed with available data.`;
+    }
+  },
+
+  /**
+   * Gets player-specific insights for prop betting
+   * @param {object} gameData - Game data containing teams, league, and player info
+   * @returns {Promise<object>} - Structured player insights for prop betting
+   */
+  getPlayerPropInsights: async (gameData) => {
+    try {
+      console.log(`Fetching player prop insights for ${gameData.matchup}`);
+      
+      // Extract home and away team names
+      const homeTeam = gameData.homeTeam || '';
+      const awayTeam = gameData.awayTeam || '';
+      const league = gameData.league || '';
+      
+      // Get list of key players (if available)
+      let keyPlayers = [];
+      
+      // Extract players from playerStats if available
+      if (gameData.playerStats) {
+        // Add home team players
+        if (gameData.playerStats.homeTeam && gameData.playerStats.homeTeam.players) {
+          keyPlayers = [...keyPlayers, ...gameData.playerStats.homeTeam.players.slice(0, 5)
+            .map(p => p.name || p.player_name)];
+        }
+        // Add away team players
+        if (gameData.playerStats.awayTeam && gameData.playerStats.awayTeam.players) {
+          keyPlayers = [...keyPlayers, ...gameData.playerStats.awayTeam.players.slice(0, 5)
+            .map(p => p.name || p.player_name)];
+        }
+      }
+      
+      // Construct league-specific query for player props with strong emphasis on factual data
+      let propQuery = '';
+      
+      if (league === 'MLB') {
+        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} MLB game TODAY. For each of the key players, provide EXACT stats from their last 10 games including:
+        
+          1. EXACT number of home runs hit in last 10 games (not an estimate)
+          2. EXACT number of hits in last 10 games
+          3. EXACT number of total bases in last 10 games
+          4. For pitchers: EXACT strikeout totals in last 10 games
+          5. Any statistical home/away or matchup splits
+          
+          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
+          When stating a stat (e.g., "hit 3 home runs in last 10 games"), it MUST be factually correct and verifiable.
+          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
+      } else if (league === 'NBA') {
+        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NBA game TODAY. For each key player, provide EXACT stats from their last 10 games including:
+        
+          1. EXACT points per game in last 10 games (not an estimate)
+          2. EXACT rebounds per game in last 10 games
+          3. EXACT assists per game in last 10 games
+          4. EXACT 3-pointers made in last 10 games
+          5. Any statistical home/away or matchup splits
+          
+          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
+          When stating a stat (e.g., "averaged 26.3 points in last 10 games"), it MUST be factually correct and verifiable.
+          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
+      } else if (league === 'NHL') {
+        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NHL game TODAY. For each key player, provide EXACT stats from their last 10 games including:
+        
+          1. EXACT goals scored in last 10 games (not an estimate)
+          2. EXACT assists in last 10 games
+          3. EXACT shots on goal in last 10 games
+          4. EXACT minutes played in last 10 games
+          5. Any statistical home/away or matchup splits
+          
+          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
+          When stating a stat (e.g., "scored 5 goals in last 10 games"), it MUST be factually correct and verifiable.
+          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
+      }
+      
+      // If we have key players, add them to the query
+      if (keyPlayers.length > 0) {
+        propQuery += `\n\nPROVIDE DETAILED STATS SPECIFICALLY FOR THESE PLAYERS: ${keyPlayers.join(', ')}`;
+      }
+      
+      propQuery += `\n\nRETURN FORMAT: Format each player's stats as bullet points, with the player name followed by a list of EXACT, VERIFIED stats. NEVER invent or estimate statistics.`;
+      
+      // Call Perplexity with our specialized query
+      const insights = await perplexityService.fetchRealTimeInfo(propQuery, {
+        model: 'sonar',
+        temperature: 0.2, // Lower temperature for factual data
+        maxTokens: 650    // Need more tokens for detailed player insights
+      });
+      
+      // Process the insights to create a structured result
+      return {
+        player_insights: insights,
+        meta: {
+          query_time: new Date().toISOString(),
+          game: gameData.matchup,
+          league: gameData.league,
+          insight_weight: '20%' // Indicate this should be 20% of decision weight
+        }
+      };
+    } catch (error) {
+      console.error(`Error getting player prop insights: ${error.message}`);
+      return {
+        player_insights: `Unable to retrieve player trend data. Analysis will proceed with available statistical data only.`,
+        meta: {
+          error: error.message,
+          game: gameData.matchup,
+          league: gameData.league || 'unknown',
+          query_time: new Date().toISOString()
+        }
+      };
+    }
+  },
+
+  /**
+   * Gets game scores from Perplexity response
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} response - Response text from API
+   * @returns {Promise<object>} - Structured scores object
+   */
+  getScoresFromPerplexity: async (homeTeam, awayTeam, response) => {
+    try {
+      const scorePattern = new RegExp(`(${homeTeam}|${awayTeam})\s+(\d+)\s*[-–]\s*(\d+)\s*(${awayTeam}|${homeTeam})`, 'i');
+      const scoreMatch = response.match(scorePattern);
     
     if (scoreMatch) {
       return {
