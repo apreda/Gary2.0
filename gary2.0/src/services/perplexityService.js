@@ -143,16 +143,77 @@ export const perplexityService = {
    */
   getGameTimeAndHeadlines: async function(homeTeam, awayTeam, league) {
     try {
-      const query = `For the upcoming ${league} game between ${awayTeam} (away) and ${homeTeam} (home):
-        1. When is the scheduled game time (in Eastern Time)?
-        2. What are 2-3 key headlines or storylines about the matchup?
-        3. List any key injuries for either team
+      // First, try to get accurate game time from ESPN API
+      try {
+        console.log(`Getting ESPN game data for ${league} game: ${awayTeam} @ ${homeTeam}`);
+        const gameLinks = await this.getEspnGameLinks(league === 'MLB' ? 'mlb' : league === 'NBA' ? 'nba' : league === 'NHL' ? 'nhl' : 'mlb');
         
-        Format your response as structured data with sections for: gameTime (string), headlines (array), and keyInjuries (object with homeTeam and awayTeam properties)`;
+        if (gameLinks && gameLinks.length > 0) {
+          // Find the matching game link by matching team names
+          const normalizedHomeTeam = homeTeam.toLowerCase().replace(/\s+/g, '');
+          const normalizedAwayTeam = awayTeam.toLowerCase().replace(/\s+/g, '');
+          
+          // Get the first game that matches either home or away team
+          for (const link of gameLinks) {
+            const stats = await this.extractStatsFromEspn(link, league.toLowerCase());
+            if (stats && stats['Game information']) {
+              const gameInfo = stats['Game information'];
+              // Check if this is the right game by matching team names
+              const infoStr = JSON.stringify(gameInfo).toLowerCase();
+              if (infoStr.includes(normalizedHomeTeam) || infoStr.includes(normalizedAwayTeam)) {
+                // Extract game time
+                if (gameInfo.Date && gameInfo.Time) {
+                  console.log(`Found ESPN game time: ${gameInfo.Date} at ${gameInfo.Time}`);
+                  // Add headlines and return
+                  const headlines = [];
+                  if (stats['Team leaders']) headlines.push(`Team leaders: ${JSON.stringify(stats['Team leaders']).slice(0, 100)}...`);
+                  if (stats['Last 5 games']) headlines.push(`Recent form: ${JSON.stringify(stats['Last 5 games']).slice(0, 100)}...`);
+                  
+                  // Get injuries
+                  const keyInjuries = { homeTeam: [], awayTeam: [] };
+                  if (stats['Full injury report']) {
+                    // Parse injuries by team
+                    Object.entries(stats['Full injury report']).forEach(([team, players]) => {
+                      if (team.toLowerCase().includes(normalizedHomeTeam)) {
+                        keyInjuries.homeTeam = Array.isArray(players) ? players : [players];
+                      } else if (team.toLowerCase().includes(normalizedAwayTeam)) {
+                        keyInjuries.awayTeam = Array.isArray(players) ? players : [players];
+                      }
+                    });
+                  }
+                  
+                  return {
+                    gameTime: `${gameInfo.Time} ET`,
+                    headlines: headlines.slice(0, 3),
+                    keyInjuries
+                  };
+                }
+              }
+            }
+          }
+        }
+      } catch (espnError) {
+        console.warn('Failed to get game time from ESPN:', espnError.message);
+      }
+      
+      // Fallback to Perplexity with a more specific query
+      const query = `Search for the exact scheduled game time (in Eastern Time) for the upcoming ${league} game between ${awayTeam} (away) and ${homeTeam} (home) happening today or tomorrow. Also provide 2-3 key headlines about the matchup and list any key injuries for either team.
+
+This is VERY important: Format your response in valid JSON like this exact structure:
+{
+  "gameTime": "7:05 PM ET", 
+  "headlines": ["headline 1", "headline 2", "headline 3"],
+  "keyInjuries": {
+    "homeTeam": ["Player 1 (Status)", "Player 2 (Status)"],
+    "awayTeam": ["Player 3 (Status)", "Player 4 (Status)"]
+  }
+}`;
       
       const response = await this.search(query, {
-        temperature: 0.2,
-        maxTokens: 400
+        temperature: 0.1, // Lower temperature for more factual responses
+        maxTokens: 600,
+        model: 'sonar-medium',
+        systemMessage: 'You are a sports data extraction assistant that provides precise, accurate game information in valid JSON format. Always return valid JSON, never include explanations outside the JSON structure.'
       });
       
       if (!response.success) {
@@ -165,8 +226,20 @@ export const perplexityService = {
         const jsonMatch = response.data.match(/\{[\s\S]*\}/g);
         if (jsonMatch) {
           const parsedData = JSON.parse(jsonMatch[0]);
+          const gameTime = parsedData.gameTime || 'TBD';
+          console.log(`Extracted game time from Perplexity: ${gameTime}`);
+          
+          // If game time starts with a number but doesn't include AM/PM or ET, add ET
+          if (/^\d/.test(gameTime) && !/(AM|PM|ET)$/i.test(gameTime)) {
+            return {
+              gameTime: `${gameTime} ET`,
+              headlines: Array.isArray(parsedData.headlines) ? parsedData.headlines : [],
+              keyInjuries: parsedData.keyInjuries || { homeTeam: [], awayTeam: [] }
+            };
+          }
+          
           return {
-            gameTime: parsedData.gameTime || 'TBD',
+            gameTime: gameTime,
             headlines: Array.isArray(parsedData.headlines) ? parsedData.headlines : [],
             keyInjuries: parsedData.keyInjuries || { homeTeam: [], awayTeam: [] }
           };
