@@ -9,7 +9,7 @@ import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
 import { sportsDbApiService } from './sportsDbApiService';
 import { ballDontLieService } from './ballDontLieService';
-import { nbaSeason, formatSeason } from '../utils/dateUtils';
+import { nbaSeason, formatSeason, getCurrentEST } from '../utils/dateUtils';
 
 /**
  * Fetch active players for a team with their current season stats
