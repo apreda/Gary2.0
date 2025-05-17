@@ -99,8 +99,88 @@ const picksService = {
                     dataSource = 'TheSportsDB';
                   }
                   
-                  // PRIORITY 3: If both fail, we could try Ball Don't Lie, but it doesn't have detailed pitcher data
-                  // So we'll just use a generic message
+                  // PRIORITY 3: Try ESPN via Perplexity
+                  // This is the same data source that's working well for prop picks
+                  if (!pitcherMatchup || !pitcherMatchup.homePitcher || !pitcherMatchup.awayPitcher) {
+                    console.log('Traditional services failed to provide pitcher data. Trying ESPN via Perplexity...');
+                    try {
+                      // Import perplexityService dynamically to avoid circular reference
+                      const { perplexityService } = await import('./perplexityService.js');
+                      
+                      // Get ESPN game links for today
+                      const gameLinks = await perplexityService.getEspnGameLinks('mlb');
+                      
+                      if (gameLinks && gameLinks.length > 0) {
+                        // Normalize team names for matching
+                        const normalizedHomeTeam = game.home_team.toLowerCase().replace(/\s+/g, '');
+                        const normalizedAwayTeam = game.away_team.toLowerCase().replace(/\s+/g, '');
+                        
+                        // Try each game link to find our matchup
+                        for (const link of gameLinks) {
+                          console.log(`Checking ESPN link for pitcher data: ${link}`);
+                          const stats = await perplexityService.extractStatsFromEspn(link, 'mlb');
+                          
+                          if (stats && stats['Game information']) {
+                            // Check if this is the right game
+                            const infoStr = JSON.stringify(stats['Game information']).toLowerCase();
+                            if (infoStr.includes(normalizedHomeTeam) || infoStr.includes(normalizedAwayTeam)) {
+                              console.log('✅ Found matching ESPN game data!');
+                              
+                              // Extract pitcher data if available
+                              if (stats['Probable pitchers']) {
+                                dataSource = 'ESPN via Perplexity';
+                                console.log('Found pitcher data from ESPN!');
+                                
+                                // Create a compatible format with our other sources
+                                pitcherMatchup = {
+                                  homePitcher: null,
+                                  awayPitcher: null,
+                                  game: { venue: stats['Game information'].Venue || '', date: stats['Game information'].Date || '', time: stats['Game information'].Time || '' }
+                                };
+                                
+                                // Parse the ESPN pitcher data for home and away
+                                const pitchers = stats['Probable pitchers'];
+                                for (const key in pitchers) {
+                                  const pitcherInfo = pitchers[key];
+                                  // Determine if this is home or away pitcher
+                                  const isHomePitcher = key.toLowerCase().includes(normalizedHomeTeam);
+                                  
+                                  const pitcher = {
+                                    name: pitcherInfo.Name || 'Unknown',
+                                    stats: {
+                                      ERA: pitcherInfo.ERA || 'N/A',
+                                      WHIP: pitcherInfo.WHIP || 'N/A',
+                                      record: pitcherInfo.Record || 'N/A',
+                                      strikeouts: pitcherInfo.K || 'N/A',
+                                      inningsPitched: pitcherInfo.IP || 'N/A',
+                                      description: `${pitcherInfo.Name || 'Pitcher'} (${pitcherInfo.Record || '0-0'}, ${pitcherInfo.ERA || '0.00'} ERA)`
+                                    }
+                                  };
+                                  
+                                  // Assign to correct spot
+                                  if (isHomePitcher) {
+                                    pitcherMatchup.homePitcher = pitcher;
+                                  } else {
+                                    pitcherMatchup.awayPitcher = pitcher;
+                                  }
+                                }
+                                
+                                // Break loop if we found good data
+                                if (pitcherMatchup.homePitcher && pitcherMatchup.awayPitcher) {
+                                  console.log('Found both pitchers from ESPN data!');
+                                  break;
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    } catch (espnError) {
+                      console.error('Error fetching pitcher data from ESPN:', espnError.message);
+                    }
+                  }
+                  
+                  // PRIORITY 4: If all else fails, just continue without pitcher data
                   
                   if (pitcherMatchup) {
                     pitcherData = `STARTING PITCHERS (Data Source: ${dataSource}):\n`;
