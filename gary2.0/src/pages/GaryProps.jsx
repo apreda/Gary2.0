@@ -217,9 +217,19 @@ export default function GaryProps() {
                               {/* Bottom Section - Pick Details (fixed at bottom) */}
                               <div style={{ marginTop: '-5px', paddingTop: '0' }}>
                                 <div style={{ fontSize: '0.84rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.1rem' }}>Pick Details</div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                                  <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>EV</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.ev ? `+${Math.round(pick.ev)}%` : 'N/A'}</p></div>
-                                  <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}><p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Confidence</p><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.confidence ? (typeof pick.confidence === 'number' ? pick.confidence.toFixed(2) : pick.confidence) : 'Medium'}</p></div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.35rem' }}>
+                                  <div style={{ padding: '0.4rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}>
+                                    <p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>EV</p>
+                                    <p style={{ fontSize: '0.85rem', fontWeight: 700 }}>{pick.ev ? `+${Math.round(pick.ev)}%` : 'N/A'}</p>
+                                  </div>
+                                  <div style={{ padding: '0.4rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}>
+                                    <p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Confidence</p>
+                                    <p style={{ fontSize: '0.85rem', fontWeight: 700 }}>{pick.confidence ? (typeof pick.confidence === 'number' ? pick.confidence.toFixed(2) : pick.confidence) : 'Medium'}</p>
+                                  </div>
+                                  <div style={{ padding: '0.4rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}>
+                                    <p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Odds</p>
+                                    <p style={{ fontSize: '0.85rem', fontWeight: 700 }}>{pick.odds ? pick.odds : 'N/A'}</p>
+                                  </div>
                                 </div>
                               </div>
                             </div>
