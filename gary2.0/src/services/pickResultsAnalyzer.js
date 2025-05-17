@@ -1,4 +1,5 @@
-import { openaiService } from './openaiService.js';
+// Import with explicit path to ensure proper loading
+import openaiService from './openaiService.js';
 
 /**
  * Service to analyze pick results and determine the correct outcome (won/lost/push)
@@ -222,7 +223,9 @@ Respond with VALID JSON ONLY in this exact format:
 }`;
 
     try {
-      const response = await openaiService.getCompletion({
+      // Ensure we're using the correct method from the openaiService
+      console.log('Calling OpenAI for bet result analysis');
+      const response = await openaiService.generateCompletion({
         model: 'gpt-3.5-turbo-0125',
         messages: [
           {

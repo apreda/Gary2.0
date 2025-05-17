@@ -339,47 +339,144 @@ export const resultsCheckerService = {
     }
   },
 
+  generatePerplexityQuery: (homeTeam, awayTeam, date) => {
+    // Don't query if both teams are the same or if one is a placeholder
+    if (homeTeam === awayTeam || homeTeam === "Opponent" || awayTeam === "Opponent") {
+      return null;
+    }
+    
+    // Format date for human-readability
+    const gameDate = new Date(date);
+    const month = gameDate.toLocaleString('default', { month: 'long' });
+    const day = gameDate.getDate();
+    const year = gameDate.getFullYear();
+    const humanDate = `${month} ${day}, ${year}`;
+
+    // Yesterday's date for recent games
+    const yesterday = new Date(gameDate);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayMonth = yesterday.toLocaleString('default', { month: 'short' });
+    const yesterdayDay = yesterday.getDate();
+
+    return `ONLY FACTUAL INFO: What was the EXACT final score of the game between ${awayTeam} and ${homeTeam} on ${yesterdayMonth} ${yesterdayDay}, ${year}? Respond in this JSON format only: {"home_score": X, "away_score": Y, "home_team": "${homeTeam}", "away_team": "${awayTeam}"}`;
+  },
+
   getScoresFromPerplexity: async (date, picks) => {
-    try {
-      if (!picks || picks.length === 0) {
-        return { success: false, message: 'No picks provided' };
-      }
-      const formattedDate = new Date(date).toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
-      const scores = {};
-      const errors = [];
-      for (const pick of picks) {
+    const scores = {};
+
+    // Process each pick
+    for (const pick of picks) {
+      const pickText = pick.pick || '';
+      const league = pick.league || 'NHL'; // Default to NHL
+
+      // Extract clean team name from formatted pick
+      let teamName = '';
+      
+      // Extract teams from the pick if it has @ format
+      const teams = pickText.split(' @ ');
+      if (teams.length === 2) {
+        // Use both teams for better query
+        const homeTeam = teams[1].trim();
+        const awayTeam = teams[0].trim();
+        console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
+        
+        // Create a focused query to get the final score
+        const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const query = `ONLY FACTUAL INFO: What was the EXACT final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Respond with JSON only: {"home_score": X, "away_score": Y, "home_team": "${homeTeam}", "away_team": "${awayTeam}"}`;
+        
         try {
-          const { home_team, away_team, league } = pick;
-          if (!home_team || !away_team || !league) {
-            errors.push(`Missing team or league info for pick: ${pick.pick}`);
-            continue;
+          const result = await perplexityService.fetchRealTimeInfo(query, {
+            model: 'sonar',
+            temperature: 0.1,
+            maxTokens: 200
+          });
+          
+          if (result) {
+            // Try to extract JSON
+            const jsonMatch = result.match(/\{[\s\S]*?\}/);
+            if (jsonMatch) {
+              try {
+                const scoreData = JSON.parse(jsonMatch[0]);
+                scores[pickText] = {
+                  home_score: parseInt(scoreData.home_score),
+                  away_score: parseInt(scoreData.away_score),
+                  home_team: scoreData.home_team || homeTeam,
+                  away_team: scoreData.away_team || awayTeam,
+                  league,
+                  final: true
+                };
+                continue; // Move to next pick if successful
+              } catch (e) {
+                console.error('Error parsing JSON from Perplexity response:', e);
+              }
+            }
           }
-          const response = await perplexityService.getScoresFromPerplexity(home_team, away_team, league, date);
-          if (response.success && response.scores) {
-            const pickKey = pick.pick || `${away_team} @ ${home_team}`;
-            scores[pickKey] = response.scores;
-          } else {
-            errors.push(`API error for ${pick.pick}: ${response.error || 'Unknown error'}`);
-          }
-          await new Promise(resolve => setTimeout(resolve, 1500));
         } catch (error) {
-          errors.push(`Error processing ${pick.pick || 'unknown pick'}: ${error.message}`);
+          console.error(`Error with Perplexity API: ${error.message}`);
+        }
+      } else {
+        // This is a formatted pick like "Team +1.5 -110"
+        // Extract team name by removing betting elements
+        teamName = pickText
+          .replace(/\s+[+-]?\d+(\.\d+)?\s+[+-]\d+$/, '') // Remove spread and odds
+          .replace(/\s+ML\s+[+-]\d+$/, '')               // Remove ML and odds
+          .replace(/\s+[+-]\d+$/, '')                    // Remove just odds
+          .replace(/\s+OVER\s+.*$/i, '')                 // Remove OVER
+          .replace(/\s+UNDER\s+.*$/i, '')                // Remove UNDER
+          .trim();
+          
+        console.log(`Extracted team name "${teamName}" from pick: ${pickText}`);
+        
+        // Create a query to find games involving this team
+        const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const query = `ONLY FACTUAL INFO: What was the final score of the ${league} game involving ${teamName} on ${formattedDate}? Respond with JSON only: {"home_team": "Team Name", "away_team": "Opponent Name", "home_score": X, "away_score": Y}`;
+        
+        try {
+          const result = await perplexityService.fetchRealTimeInfo(query, {
+            model: 'sonar',
+            temperature: 0.1,
+            maxTokens: 200
+          });
+          
+          if (result) {
+            // Try to extract JSON
+            const jsonMatch = result.match(/\{[\s\S]*?\}/);
+            if (jsonMatch) {
+              try {
+                const scoreData = JSON.parse(jsonMatch[0]);
+                // Verify the team we asked about is in the game
+                const homeTeamMatches = scoreData.home_team.toLowerCase().includes(teamName.toLowerCase()) || 
+                                       teamName.toLowerCase().includes(scoreData.home_team.toLowerCase());
+                const awayTeamMatches = scoreData.away_team.toLowerCase().includes(teamName.toLowerCase()) || 
+                                       teamName.toLowerCase().includes(scoreData.away_team.toLowerCase());
+                
+                if (homeTeamMatches || awayTeamMatches) {
+                  scores[pickText] = {
+                    home_score: parseInt(scoreData.home_score),
+                    away_score: parseInt(scoreData.away_score),
+                    home_team: scoreData.home_team,
+                    away_team: scoreData.away_team,
+                    league,
+                    final: true
+                  };
+                } else {
+                  console.warn(`Team mismatch: Asked about ${teamName} but got ${scoreData.home_team} vs ${scoreData.away_team}`);
+                }
+              } catch (e) {
+                console.error('Error parsing JSON from Perplexity response:', e);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error with Perplexity API: ${error.message}`);
         }
       }
-      return {
-        success: errors.length === 0 && Object.keys(scores).length > 0,
-        scores,
-        errors: errors.length > 0 ? errors : undefined
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-        scores: {}
-      };
     }
+
+    return {
+      success: Object.keys(scores).length > 0,
+      scores
+    };
   },
 
   processTeamPicks: (picks) => {
