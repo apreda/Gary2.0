@@ -190,7 +190,7 @@ export default function GaryProps() {
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
                                   {pick.player && pick.bet && pick.prop ? 
-                                    `${pick.player} ${pick.bet.toUpperCase()} ${pick.prop}` : 
+                                    `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)}` : 
                                     '(No pick available)'}
                                 </div>
                               </div>
