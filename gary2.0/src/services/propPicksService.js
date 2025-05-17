@@ -9,7 +9,7 @@ import { openaiService } from './openaiService.js';
 import { perplexityService } from './perplexityService';
 import { sportsDbApiService } from './sportsDbApiService';
 import { ballDontLieService } from './ballDontLieService';
-import { nbaSeason, formatSeason, getCurrentEST } from '../utils/dateUtils';
+import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
 
 /**
  * Fetch active players for a team with their current season stats
@@ -221,20 +221,26 @@ const propPicksService = {
             }
             
             // Filter out games that have already started
-            const currentTime = getCurrentEST();
-            gameOdds = gameOdds.filter(game => {
-              if (!game.commence_time) return true; // Keep games with no start time
+            try {
+              const currentTime = getCurrentEST();
+              gameOdds = gameOdds.filter(game => {
+                if (!game.commence_time) return true; // Keep games with no start time
+                
+                const gameStartTime = new Date(game.commence_time);
+                const gameStartEST = new Date(gameStartTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+                const notStarted = gameStartEST > currentTime;
               
-              const gameStartTime = new Date(game.commence_time);
-              const gameStartEST = new Date(gameStartTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-              const notStarted = gameStartEST > currentTime;
-              
-              if (!notStarted) {
-                console.log(`Skipping game ${game.home_team} vs ${game.away_team} - already started at ${formatInEST(gameStartTime, { hour: '2-digit', minute: '2-digit' })} EST`);
-              }
-              
-              return notStarted;
-            });
+                if (!notStarted) {
+                  console.log(`Skipping game ${game.home_team} vs ${game.away_team} - already started at ${formatInEST(gameStartTime, { hour: '2-digit', minute: '2-digit' })} EST`);
+                }
+                
+                return notStarted;
+              });
+            } catch (error) {
+              console.error('Error filtering games by start time:', error.message);
+              // Continue with all games if time filtering fails
+              console.log('Proceeding with all available games due to time filtering error');
+            }
             
             if (gameOdds.length === 0) {
               console.log(`All games for ${sport} on ${today} have already started`);

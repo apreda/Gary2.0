@@ -294,11 +294,28 @@ export const perplexityService = {
           const stats = await this.extractStatsFromEspn(url, league);
           console.log('Extracted stats from ESPN', Object.keys(stats));
           
-          // Only proceed if we got meaningful stats
-          if (Object.keys(stats).length < 2) {
-            console.log(`Insufficient stats extracted for ${url}`);
+          // Define the expected data fields we should have
+          const expectedFields = [
+            'Game information',
+            'Probable pitchers',
+            'Batting leaders',
+            'Team stats',
+            'Last 5 games',
+            'Full injury report'
+          ];
+          
+          // Calculate completeness score (0.0 to 1.0)
+          const availableFields = Object.keys(stats);
+          const completenessScore = availableFields.length / expectedFields.length;
+          
+          // Only proceed if we got sufficient stats (at least 75% of expected fields)
+          if (completenessScore < 0.75) {
+            console.log(`Insufficient stats extracted for ${url}: Score ${completenessScore.toFixed(2)} (${availableFields.length}/${expectedFields.length} fields)`);
+            console.log(`Missing fields: ${expectedFields.filter(field => !availableFields.some(key => key.includes(field))).join(', ')}`);
             continue;
           }
+          
+          console.log(`✅ Stats completeness score for ${url}: ${(completenessScore * 100).toFixed(0)}%`);
           
           // Build a prompt for OpenAI using the extracted stats
           const openAIPrompt = `
