@@ -89,7 +89,7 @@ export const perplexityService = {
    * @param {object} options - Additional options for the request
    * @returns {Promise<string>} - The search results as text
    */
-  fetchRealTimeInfo: async (query, options = {}) => {
+  fetchRealTimeInfo: async function(query, options = {}) {
     try {
       console.log(`Fetching real-time information: "${query}"`);
       
@@ -116,143 +116,12 @@ export const perplexityService = {
       // Merge default options with provided options
       const requestOptions = { ...defaultOptions, ...options };
       
-      try {
-        console.log('📤 Making direct API call to Perplexity API');
-        
-        // Check if we should use the proxy endpoint (when available) or direct API call
-        const useProxy = typeof import.meta.env?.VITE_USE_API_PROXY !== 'undefined' 
-          ? import.meta.env.VITE_USE_API_PROXY === 'true'
-          : false;
-        
-        const apiUrl = useProxy 
-          ? '/api/perplexity' // Path to Vercel serverless function for Vite projects
-          : perplexityService.API_BASE_URL;
-          
-        console.log(`Using ${useProxy ? 'proxy endpoint' : 'direct API call'} for Perplexity: ${apiUrl}`);
-        
-        // Use optimized query for faster responses
-        console.log(`Original query length: ${query.length} chars | Optimized length: ${optimizedQuery.length} chars`);
-        // Implement retry logic for resilience
-        const maxRetries = 2;
-        let retryCount = 0;
-        let response;
-        
-        while (retryCount <= maxRetries) {
-          try {
-            // If this is a retry, log it
-            if (retryCount > 0) {
-              console.log(`Retry attempt ${retryCount}/${maxRetries} for Perplexity API call`);
-            }
-            
-            // Check cache first before making API call
-            const cacheKey = `perplexity_${optimizedQuery.replace(/\s+/g, '_').substring(0, 100)}`;
-            const cachedResult = cache.get(cacheKey);
-            
-            if (cachedResult && (Date.now() - cachedResult.timestamp < CACHE_TTL)) {
-              console.log('🔍 Using cached Perplexity response');
-              response = { data: cachedResult.data };
-              break;
-            }
-            
-            // Make request with optimized query and parameters based on Perplexity documentation
-            response = await axios.post(
-              apiUrl,
-              {
-                model: requestOptions.model || 'sonar', // Use recommended model from docs
-                messages: [{ role: 'user', content: optimizedQuery }],
-                temperature: requestOptions.temperature,
-                max_tokens: requestOptions.maxTokens,
-                frequency_penalty: 1.0, // Help reduce repetition per docs
-                web_search_options: {
-                  search_context_size: retryCount > 0 ? "low" : "medium" // Use low on retries
-                }
-              },
-              {
-                headers: {
-                  'Authorization': `Bearer ${perplexityService.API_KEY}`,
-                  'Content-Type': 'application/json'
-                },
-                timeout: retryCount > 0 ? 60000 : 90000 // Increased timeout to 90s with 60s for retries
-              }
-            );
-            
-            // If we get here, the request succeeded, so we can break out of the retry loop
-            break;
-          } catch (retryError) {
-            // If this is our last retry, throw the error
-            if (retryCount === maxRetries) {
-              throw retryError;
-            }
-            
-            // If it's a timeout or 504, wait and retry
-            if (retryError.code === 'ECONNABORTED' || 
-                retryError.message.includes('timeout') || 
-                (retryError.response && retryError.response.status === 504)) {
-              // Exponential backoff (1s, 2s, 4s, etc.)
-              const waitTime = 1000 * Math.pow(2, retryCount);
-              console.log(`Request timed out. Waiting ${waitTime}ms before retry ${retryCount + 1}/${maxRetries}`);
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-              retryCount++;
-            } else {
-              // For non-timeout errors, don't retry
-              throw retryError;
-            }
-          }
-        }
-        
-        // Log successful response status
-        console.log('Successfully retrieved real-time information from Perplexity');
-        
-        // Save to cache
-        if (response && response.data) {
-          cache.set(cacheKey, {
-            data: response.data,
-            timestamp: Date.now()
-          });
-          console.log(`Cached Perplexity response with key: ${cacheKey}`);
-        }
-        
-        // Log the full response to help debug JSON parsing issues
-        console.log('Perplexity response:', response.data);
-        
-        // Extract the response content
-        if (response.data && response.data.choices && response.data.choices.length > 0) {
-          const result = response.data.choices[0].message.content;
-          // Log the first 200 characters of the response to see what we're getting
-          console.log('Perplexity response preview:', result.substring(0, 200) + '...');
-          console.log('Perplexity response length:', result.length);
-          return result;
-        } else {
-          console.error('Invalid response format from Perplexity API:', response.data);
-          // No fallbacks - require proper API response
-          throw new Error('Invalid response format from Perplexity API');
-        }
-      } catch (apiError) {
-        console.error('❌ API call to Perplexity failed:', apiError.message);
-        
-        // Error handling for premium tier - RETURN fallback messages instead of throwing errors
-        if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout') || 
-            (apiError.response && apiError.response.status === 504)) {
-          console.log('⚠️ Request timed out. Returning fallback message to allow processing to continue.');
-          
-          // Return fallback message instead of throwing
-          return `Unable to retrieve real-time data for this request due to API timeout. Analysis will proceed with available data.`;
-        } else if (apiError.response && apiError.response.status === 429) {
-          console.log('⚠️ Rate limit exceeded. Returning fallback message.');
-          return 'API rate limit exceeded. Analysis will proceed with available data.';
-        } else if (apiError.response && apiError.response.status === 401) {
-          console.log('⚠️ Authentication error. Returning fallback message.');
-          return 'Unable to authenticate with real-time data source. Analysis will proceed with available data.';
-        } else {
-          // Return fallback message for any other error
-          console.log('⚠️ Other API error. Returning fallback message.');
-          return `Unable to retrieve real-time data: ${apiError.message}. Analysis will proceed with available data.`;
-        }
-      }
+      const response = await this.search(optimizedQuery, requestOptions);
+      return response.success ? response.data : '';
+      
     } catch (error) {
       console.error('Error in fetchRealTimeInfo:', error);
-      // Return a fallback message instead of throwing
-      return `Unable to retrieve real-time data. Analysis will proceed with available data.`;
+      return '';
     }
   },
   
@@ -265,655 +134,225 @@ export const perplexityService = {
    * @param {string} league - The sports league (NBA, MLB, etc.)
    * @returns {Promise<string>} - The latest news as text
    */
-  getGameNews: async (homeTeam, awayTeam, league) => {
-    try {
-      const query = `${league} ${homeTeam} vs ${awayTeam}: key injuries, recent form, betting trends, last 5 games. Factual only, no opinions.`;
-      
-      return await perplexityService.fetchRealTimeInfo(query, {
-        model: 'sonar',
-        temperature: 0.3, // Lower temperature for more factual responses
-        maxTokens: 500    // Reasonable context length
-      });
-    } catch (error) {
-      console.error(`Error getting game news for ${homeTeam} vs ${awayTeam}:`, error);
-      // Return a message that indicates the issue rather than null
-      return `Unable to retrieve real-time data for ${homeTeam} vs ${awayTeam} due to API timeout. Analysis will proceed with available data.`;
-    }
+  getGameNews: async function(homeTeam, awayTeam, league) {
+    const query = `What are the latest news and updates for the upcoming ${league} game between ${awayTeam} and ${homeTeam}? Focus only on recent injury reports, lineup changes, and betting trends.`;
+    return await this.fetchRealTimeInfo(query, {
+      temperature: 0.2,
+      maxTokens: 200
+    });
   },
   
   /**
-   * Get game time, headlines, and storylines using Perplexity's web search
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @param {string} league - League name (NBA, MLB, NHL)
-   * @param {string} date - Date in YYYY-MM-DD format (defaults to today)
-   * @returns {Promise<object>} - Object with game time and headlines
+   * Extract sports stats from an ESPN game page using Perplexity
+   * This uses Perplexity to scrape ESPN for detailed stats
+   * @param {string} gameUrl - The ESPN game page URL
+   * @param {string} league - The league code ('mlb', 'nba', 'nhl')
+   * @returns {Promise<Object>} - Stats as JSON
    */
-  getGameTimeAndHeadlines: async (homeTeam, awayTeam, league, date = null) => {
+  extractStatsFromEspn: async function(gameUrl, league = 'mlb') {
     try {
-      // Format date for the query - if not provided, use today's date
-      const queryDate = date || new Date().toISOString().split('T')[0];
-      const today = new Date();
-      const formattedDate = `${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${today.getFullYear()}`;
+      // Create league-specific prompts
+      let prompt = '';
       
-      // Craft a very specific query to get game time and headlines
-      const query = `FACTUAL ONLY: ${league} game time and headlines for ${homeTeam} vs ${awayTeam} on ${formattedDate}. 
+      if (league === 'mlb') {
+        prompt = `
+        Go to ${gameUrl}.
+        Extract the following as JSON:
+          - Game information (Teams WITH designations of home and away, Venue, Date, Time in ET)
+          - Probable pitchers with team clearly specified for each (Name, Team, Handedness, Record, ERA, WHIP, IP, H, K, BB, HR)
+          - Batting leaders for each team with clear team labels (Team, Name, HR, AVG, RBI, OBP, SLG)
+          - Team stats with explicit home/away designations (Team, Home/Away, AVG, Runs, Hits, HR, OBP, SLG, ERA, WHIP, BB, K, OBA)
+          - Last 5 games for each team WITH EXPLICIT TEAM NAMES (Team, Date, Opponent, Result, Runs Scored, Runs Allowed)
+          - Full injury report with team specificity (Team, Player, Position, Status, Return Date)
+        `;
+      } else if (league === 'nba') {
+        prompt = `
+        Go to ${gameUrl}.
+        Extract the following as JSON:
+          - Game information (Teams WITH designations of home and away, Venue, Date, Time in ET)
+          - Team leaders WITH team name clearly indicated (Team, Player, Points, Rebounds, Assists) for each team
+          - Team stats with explicit home/away designations (Team, Home/Away, PPG, RPG, APG, FG%, 3P%, FT%)
+          - Last 5 games for each team WITH EXPLICIT TEAM NAMES (Team, Date, Opponent, Result, Points Scored, Points Allowed)
+          - Full injury report with team specificity (Team, Player, Position, Status, Return Date)
+          - Head to head stats for the season with clear team identification
+        `;
+      } else if (league === 'nhl') {
+        prompt = `
+        Go to ${gameUrl}.
+        Extract the following as JSON:
+          - Game information (Teams WITH designations of home and away, Venue, Date, Time in ET)
+          - Team stats with explicit home/away designations (Team, Home/Away, Goals/Game, Goals Against/Game, Shots/Game, PP%, PK%)
+          - Team leaders WITH team name clearly indicated (Team, Player, Goals, Assists, Points) for each team
+          - Goalie stats with team specification (Team, Goalie, W-L, GAA, SV%)
+          - Last 5 games for each team WITH EXPLICIT TEAM NAMES (Team, Date, Opponent, Result, Goals For, Goals Against)
+          - Full injury report with team specificity (Team, Player, Position, Status, Return Date)
+        `;
+      }
 
-PLEASE PROVIDE EXACTLY:
-1. The EXACT scheduled start time of the game (in ET/Eastern Time)
-2. Top 2-3 storylines or headlines about this specific matchup
-3. Any key injuries or lineup changes for both teams
-
-Format your response as a JSON object with these keys: {
-  "gameTime": "precise game time in ET", 
-  "headlines": ["headline 1", "headline 2"], 
-  "keyInjuries": {"homeTeam": ["player - injury"], "awayTeam": ["player - injury"]}
-}`;
-      
-      // Use web search specifically for this
-      const response = await perplexityService.fetchRealTimeInfo(query, {
-        model: 'sonar', // Best model for web search
-        temperature: 0.1, // Very low temperature for factual data
-        maxTokens: 800   // Need enough tokens for structured response
+      // Call Perplexity with specialized prompt as an expert sports data assistant
+      const response = await this.search(prompt, {
+        model: 'sonar',
+        temperature: 0.2,
+        maxTokens: 1024,
+        systemMessage: 'You are an expert sports data assistant. Extract the requested data from ESPN as structured JSON. Format all statistics exactly as they appear on the site.'
       });
+
+      if (!response.success) {
+        console.error('Perplexity API call failed');
+        return {};
+      }
+
+      const result = response.data;
       
-      // Skip JSON parsing entirely and go straight to regex extraction, which is more reliable
+      // Parse and return only the JSON block from the Perplexity response
       try {
-        console.log('Using direct regex extraction for game time and headlines');
-        
-        // Extract game time using regex - look for time patterns
-        let gameTime = 'TBD';
-        
-        // Try multiple regex patterns to find a game time
-        const timePatterns = [
-          // Match "gameTime": "7:30 PM ET"
-          /"gameTime"\s*:\s*"([^"]*)"/, 
-          
-          // Match time in format like "7:30 PM ET" or "7:30 PM Eastern"
-          /(\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:ET|Eastern))/, 
-          
-          // Match time in format like "7:30 PM"
-          /(\d{1,2}:\d{2}\s*(?:AM|PM))/, 
-          
-          // Match just time like XX:XX anywhere in text
-          /(\d{1,2}:\d{2})/ 
-        ];
-        
-        // Try each pattern until we find a match
-        for (const pattern of timePatterns) {
-          const match = response.match(pattern);
-          if (match && match[1]) {
-            gameTime = match[1];
-            console.log(`Found game time: ${gameTime} using pattern: ${pattern}`);
-            break;
+        // Try to extract the first JSON object from the response content
+        const match = result.match(/\{[\s\S]*\}/g);
+        if (match) {
+          return JSON.parse(match[0]);
+        }
+        return {};
+      } catch (err) {
+        console.error(`Failed to parse JSON from Perplexity response: ${err.message}`);
+        return {};
+      }
+    } catch (error) {
+      console.error(`Error extracting ESPN game stats: ${error.message}`);
+      return {};
+    }
+  },
+  
+  /**
+   * Fetch ESPN game URLs for a given league ('mlb', 'nba', 'nhl') and date (YYYYMMDD).
+   * Uses ESPN's data endpoint to get game IDs and build the URLs.
+   * @param {string} league - League code ('mlb', 'nba', 'nhl')
+   * @param {string} dateStr - Date string in YYYYMMDD format (null for today)
+   * @returns {Promise<string[]>} - Array of ESPN game URLs
+   */
+  getEspnGameLinks: async function(league = 'mlb', dateStr = null) {
+    try {
+      // Get today's date in YYYYMMDD format if not provided
+      function getTodayYMD() {
+        const d = new Date();
+        const month = `${d.getMonth() + 1}`.padStart(2, '0');
+        const day = `${d.getDate()}`.padStart(2, '0');
+        return `${d.getFullYear()}${month}${day}`;
+      }
+      
+      const date = dateStr || getTodayYMD();
+      const espnLeague = league.toLowerCase();
+      
+      // ESPN's data endpoint
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague}/scoreboard?dates=${date}`;
+      
+      // Fetch the data
+      const response = await axios.get(url);
+      const data = response.data;
+      
+      // Extract game IDs and build ESPN game URLs
+      const gameLinks = [];
+      if (data && data.events) {
+        for (const event of data.events) {
+          if (event.id) {
+            gameLinks.push(`https://www.espn.com/${espnLeague}/game/_/gameId/${event.id}`);
           }
         }
-        
-        // If still no game time, look for "TBD" or "Not scheduled" or similar phrases
-        if (gameTime === 'TBD') {
-          const tbdMatch = response.match(/(TBD|Not scheduled|No game|postponed|canceled)/i);
-          if (tbdMatch) {
-            gameTime = 'TBD'; // Keep as TBD
-            console.log('Game appears to be unscheduled or TBD');
-          }
-        }
-        
-        // Extract headlines using various patterns
-        let headlines = [];
-        
-        // Try multiple patterns to extract headlines
-        const headlinePatterns = [
-          // Try to match headlines array in JSON first
-          /"headlines"\s*:\s*\[([^\]]*)\]/s,
-          
-          // Match numbered lists
-          /\d+\.\s*([^\n\d\.]+)/g,
-          
-          // Match bullet points
-          /•\s*([^\n•]+)/g,
-          
-          // Match anything that looks like a headline (sentence ending with period)
-          /([A-Z][^\n\.]+\.[^\n]+)/g
-        ];
-        
-        // First try the JSON pattern
-        const headlinesMatch = response.match(headlinePatterns[0]);
-        if (headlinesMatch && headlinesMatch[1]) {
-          // Extract quoted strings from array
-          const headlineStrings = headlinesMatch[1].match(/"([^"]*)"(?:,|$)/g);
-          if (headlineStrings) {
-            headlines = headlineStrings.map(h => h.replace(/[",\s]/g, '').trim())
-              .filter(h => h.length > 10); // Ensure headlines are substantial
-            console.log(`Found ${headlines.length} headlines in JSON structure`);
-          }
-        }
-        
-        // If no headlines from JSON, try the other patterns
-        if (headlines.length === 0) {
-          console.log('Trying alternative headline extraction patterns');
-          
-          // Look for numbered lists (1. Headline text)
-          const numberedMatches = [...response.matchAll(/\d+\.\s*([^\n\d\.]{15,})/g)];
-          if (numberedMatches.length > 0) {
-            headlines = numberedMatches.map(m => m[1].trim())
-              .filter(h => h.length > 10);
-            console.log(`Found ${headlines.length} headlines in numbered list`);
-          }
-          
-          // If still no headlines, look for bullet points
-          if (headlines.length === 0) {
-            const bulletMatches = [...response.matchAll(/[•\-]\s*([^\n•\-]{15,})/g)];
-            if (bulletMatches.length > 0) {
-              headlines = bulletMatches.map(m => m[1].trim())
-                .filter(h => h.length > 10);
-              console.log(`Found ${headlines.length} headlines in bullet points`);
-            }
-          }
-        }
-        
-        // Extract injuries if possible
-        let keyInjuries = { homeTeam: [], awayTeam: [] };
-        
-        // Try to find injury information for both teams
+      }
+      
+      return gameLinks;
+    } catch (error) {
+      console.error(`Error fetching ESPN game links: ${error.message}`);
+      return [];
+    }
+  },
+  
+  /**
+   * Fetch game stats for all games today and provide to OpenAI for pick generation
+   * This method combines ESPN stats extraction with OpenAI for normal pick generation
+   * @param {string} league - League code ('mlb', 'nba', 'nhl')
+   * @param {string} dateStr - Date string in YYYYMMDD format (null for today) 
+   * @returns {Promise<Array>} - Array of picks with stats and reasoning
+   */
+  getPicksWithEspnStats: async function(league = 'mlb', dateStr = null) {
+    try {
+      // 1. Get all game links
+      const links = await this.getEspnGameLinks(league, dateStr);
+      console.log(`Fetched ${links.length} ESPN game links for ${league}`);
+      
+      const allPicksWithStats = [];
+      
+      // 2. For each link, get stats from Perplexity
+      for (const url of links) {
         try {
-          // Try to match injuries section first
-          const injuriesSection = response.match(/(?:key injuries|injury report|players out|injured players)[:\s\n]+(.*?)(?:\n\n|$)/is);
+          console.log(`Processing: ${url}`);
           
-          if (injuriesSection) {
-            const injuryText = injuriesSection[1];
-            console.log('Found injury section:', injuryText);
-            
-            // Try to identify home team injuries
-            const homeTeamPattern = new RegExp(`${homeTeam}[:\s]+(.*?)(?:${awayTeam}|$)`, 'is');
-            const homeTeamMatch = injuryText.match(homeTeamPattern);
-            
-            if (homeTeamMatch && homeTeamMatch[1]) {
-              // Extract individual injuries
-              const injuries = homeTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
-              keyInjuries.homeTeam = injuries;
-              console.log(`Found ${injuries.length} injuries for home team`);
-            }
-            
-            // Try to identify away team injuries
-            const awayTeamPattern = new RegExp(`${awayTeam}[:\s]+(.*?)(?:${homeTeam}|$)`, 'is');
-            const awayTeamMatch = injuryText.match(awayTeamPattern);
-            
-            if (awayTeamMatch && awayTeamMatch[1]) {
-              // Extract individual injuries
-              const injuries = awayTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
-              keyInjuries.awayTeam = injuries;
-              console.log(`Found ${injuries.length} injuries for away team`);
-            }
+          // Extract teams from URL if possible
+          const urlParts = url.split('/');
+          const gameId = urlParts[urlParts.length - 1];
+          
+          // Extract stats using Perplexity
+          const stats = await this.extractStatsFromEspn(url, league);
+          console.log('Extracted stats from ESPN', Object.keys(stats));
+          
+          // Only proceed if we got meaningful stats
+          if (Object.keys(stats).length < 2) {
+            console.log(`Insufficient stats extracted for ${url}`);
+            continue;
           }
-        } catch (injuryError) {
-          console.warn('Error extracting injuries:', injuryError);
-          // Keep default empty arrays
-        }
-        
-        // Basic extraction successful
-        console.log('Extracted data using regex approach:', {
-          gameTime, 
-          headlines: headlines.length,
-          homeTeamInjuries: keyInjuries.homeTeam.length,
-          awayTeamInjuries: keyInjuries.awayTeam.length
-        });
-        
-        return {
-          success: true,
-          gameTime: gameTime,
-          headlines: headlines,
-          keyInjuries: keyInjuries,
-          extractionMethod: 'regex',
-          rawResponse: response
-        };
-      } catch (parseError) {
-        console.warn('All JSON parsing methods failed:', parseError);
-      }
-      
-      // If parsing fails, still return useful data
-      return {
-        success: false,
-        gameTime: 'TBD',
-        headlines: [],
-        keyInjuries: { homeTeam: [], awayTeam: [] },
-        rawResponse: response
-      };
-    } catch (error) {
-      console.error(`Error getting game time and headlines for ${homeTeam} vs ${awayTeam}:`, error);
-      return {
-        success: false,
-        gameTime: 'TBD',
-        headlines: [],
-        keyInjuries: { homeTeam: [], awayTeam: [] },
-        error: error.message
-      };
-    }
-  },
-  
-  /**
-   * Gets team-specific insights and analysis
-   * @param {string} teamName - The team to get insights for
-   * @param {string} league - The sports league (NBA, MLB, etc.)
-   * @returns {Promise<string>} - Team insights as text
-   */
-  getTeamInsights: async (teamName, league) => {
-    try {
-      const query = `${league} ${teamName}: current form, injuries, betting trends, last 5 games performance. Brief facts only.`;
-      
-      return await perplexityService.fetchRealTimeInfo(query, {
-        model: 'sonar',
-        temperature: 0.4,
-        maxTokens: 400
-      });
-    } catch (error) {
-      console.error(`Error getting insights for ${teamName}:`, error);
-      // Return a message that indicates the issue rather than null
-      return `Unable to retrieve real-time data for ${teamName} due to API timeout. Analysis will proceed with available data.`;
-    }
-  },
-  
-  /**
-   * Gets player-specific insights for prop betting
-   * @param {object} gameData - Game data containing teams, league, and player info
-   * @returns {Promise<object>} - Structured player insights for prop betting
-   */
-  getPlayerPropInsights: async (gameData) => {
-    try {
-      console.log(`Fetching player prop insights for ${gameData.matchup}`);
-      
-      // Extract home and away team names
-      const homeTeam = gameData.homeTeam || '';
-      const awayTeam = gameData.awayTeam || '';
-      const league = gameData.league || '';
-      
-      // Get list of key players (if available)
-      let keyPlayers = [];
-      
-      // Extract players from playerStats if available
-      if (gameData.playerStats) {
-        // Add home team players
-        if (gameData.playerStats.homeTeam && gameData.playerStats.homeTeam.players) {
-          keyPlayers = [...keyPlayers, ...gameData.playerStats.homeTeam.players.slice(0, 5)
-            .map(p => p.name || p.player_name)]
-        }
-        // Add away team players
-        if (gameData.playerStats.awayTeam && gameData.playerStats.awayTeam.players) {
-          keyPlayers = [...keyPlayers, ...gameData.playerStats.awayTeam.players.slice(0, 5)
-            .map(p => p.name || p.player_name)]
-        }
-      }
-      
-      // Construct league-specific query for player props with strong emphasis on factual data
-      let propQuery = '';
-      
-      if (league === 'MLB') {
-        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} MLB game TODAY. For each of the key players, provide EXACT stats from their last 10 games including:
-        
-          1. EXACT number of home runs hit in last 10 games (not an estimate)
-          2. EXACT number of hits in last 10 games
-          3. EXACT number of total bases in last 10 games
-          4. For pitchers: EXACT strikeout totals in last 10 games
-          5. Any statistical home/away or matchup splits
           
-          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-          When stating a stat (e.g., "hit 3 home runs in last 10 games"), it MUST be factually correct and verifiable.
-          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-      } else if (league === 'NBA') {
-        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NBA game TODAY. For each key player, provide EXACT stats from their last 10 games including:
-        
-          1. EXACT points per game in last 10 games (not an estimate)
-          2. EXACT rebounds per game in last 10 games
-          3. EXACT assists per game in last 10 games
-          4. EXACT 3-pointers made in last 10 games
-          5. Any statistical home/away or matchup splits
+          // Build a prompt for OpenAI using the extracted stats
+          const openAIPrompt = `
+            Analyze this ${league.toUpperCase()} game using the following stats:
+            ${JSON.stringify(stats, null, 2)}
+
+            IMPORTANT: Pay careful attention to which stats belong to which team. Be 100% certain about home vs away team designations and their respective stats.
+
+            1. Make a clear pick (e.g. side, total, or player prop).
+            2. Justify your pick with data-driven reasoning (but keep it in Gary's old-school, confident voice).
+            3. Be concise.
+            4. Double-check that you're attributing the correct stats to the correct teams in your analysis.
+          `;
           
-          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-          When stating a stat (e.g., "averaged 26.3 points in last 10 games"), it MUST be factually correct and verifiable.
-          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-      } else if (league === 'NHL') {
-        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NHL game TODAY. For each key player, provide EXACT stats from their last 10 games including:
-        
-          1. EXACT goals scored in last 10 games (not an estimate)
-          2. EXACT assists in last 10 games
-          3. EXACT shots on goal in last 10 games
-          4. EXACT minutes played in last 10 games
-          5. Any statistical home/away or matchup splits
+          // Use the OpenAI service to get a pick with the stats
+          const { openaiService } = await import('./openaiService.js');
+          const garyPick = await openaiService.getCompletion(openAIPrompt, {
+            model: 'gpt-4o',
+            temperature: 0.7,
+            systemMessage: "You are Gary, a veteran sports betting analyst with swagger. Give confident, data-driven picks."
+          });
           
-          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-          When stating a stat (e.g., "scored 5 goals in last 10 games"), it MUST be factually correct and verifiable.
-          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-      }
-      
-      // If we have key players, add them to the query
-      if (keyPlayers.length > 0) {
-        propQuery += `\n\nPROVIDE DETAILED STATS SPECIFICALLY FOR THESE PLAYERS: ${keyPlayers.join(', ')}`;
-      }
-      
-      propQuery += `\n\nRETURN FORMAT: Format each player's stats as bullet points, with the player name followed by a list of EXACT, VERIFIED stats. NEVER invent or estimate statistics.`;
-      
-      // Call Perplexity with our specialized query
-      const insights = await perplexityService.fetchRealTimeInfo(propQuery, {
-        model: 'sonar',
-        temperature: 0.2, // Lower temperature for factual data
-        maxTokens: 650    // Need more tokens for detailed player insights
-      });
-      
-      // Process the insights to create a structured result
-      return {
-        player_insights: insights,
-        meta: {
-          query_time: new Date().toISOString(),
-          game: gameData.matchup,
-          league: gameData.league,
-          insight_weight: '20%' // Indicate this should be 20% of decision weight
+          // Add the result to our collection
+          allPicksWithStats.push({
+            url,
+            gameId,
+            stats,
+            pick: garyPick,
+            league,
+            timestamp: new Date().toISOString()
+          });
+          
+        } catch (err) {
+          console.error(`Failed to process ${url}: ${err.message}`);
         }
-      };
-    } catch (error) {
-      console.error(`Error getting player prop insights: ${error.message}`);
-      return {
-        player_insights: `Unable to retrieve player trend data. Analysis will proceed with available statistical data only.`,
-        meta: {
-          error: error.message,
-          game: gameData.matchup,
-          league: gameData.league || 'unknown',
-          query_time: new Date().toISOString()
-        }
-      };
-    }
-  },
-  
-  /**
-   * Process score matches from text response
-   * @param {array} scoreMatch - Regex match for scores
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @returns {object} - Structured score object
-   */
-  processScoreMatches: (scoreMatch, homeTeam, awayTeam) => {
-    // We're making an assumption here about the order
-    // A more robust implementation would need to determine which score belongs to which team
-    if (scoreMatch && scoreMatch.length >= 3) {
-      return {
-        success: true,
-        scores: {
-          home_score: parseInt(scoreMatch[1]),
-          away_score: parseInt(scoreMatch[2])
-        }
-      };
-    }
-    return {
-      success: false,
-      scores: null
-    };
-  },
-  
-  /**
-   * Extract injury information from text
-   * @param {string} injuryText - Text containing injury information
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @returns {object} - Structured injury information
-   */
-  extractInjuries: (injuryText, homeTeam, awayTeam) => {
-    try {
-      const keyInjuries = { homeTeam: [], awayTeam: [] };
-      
-      // Try to identify home team injuries
-      const homeTeamPattern = new RegExp(`${homeTeam}[:\s]+(.*?)(?:${awayTeam}|$)`, 'is');
-      const homeTeamMatch = injuryText.match(homeTeamPattern);
-      
-      if (homeTeamMatch && homeTeamMatch[1]) {
-        // Extract individual injuries
-        const injuries = homeTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
-        keyInjuries.homeTeam = injuries;
-        console.log(`Found ${injuries.length} injuries for home team`);
       }
-      
-      // Try to identify away team injuries
-      const awayTeamPattern = new RegExp(`${awayTeam}[:\s]+(.*?)(?:${homeTeam}|$)`, 'is');
-      const awayTeamMatch = injuryText.match(awayTeamPattern);
-      
-      if (awayTeamMatch && awayTeamMatch[1]) {
-        // Extract individual injuries
-        const injuries = awayTeamMatch[1].split(/,|\n/).map(i => i.trim()).filter(Boolean);
-        keyInjuries.awayTeam = injuries;
-        console.log(`Found ${injuries.length} injuries for away team`);
-      }
-      
-      return keyInjuries;
-    } catch (injuryError) {
-      console.warn('Error extracting injuries:', injuryError);
-      // Return empty arrays as default
-      return { homeTeam: [], awayTeam: [] };
-    }
-  },
-  
-  /**
-   * Extract game information from response text
-   * @param {string} response - Response text from API
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @returns {object} - Structured game information
-   */
-  extractGameInfo: (response, homeTeam, awayTeam) => {
-    try {
-      let gameTime = 'TBD';
-      let headlines = [];
-      const keyInjuries = { homeTeam: [], awayTeam: [] };
-      
-      // Try to extract time using regex
-      const timePattern = /scheduled for\s+([^.]+)/i;
-      const timeMatch = response.match(timePattern);
-      if (timeMatch) {
-        gameTime = timeMatch[1].trim();
-      }
-      
-      // Extract potential headlines
-      const sentences = response.split(/\. |\n/);
-      headlines = sentences.filter(s => s.length > 20 && 
-                                  !s.includes('scheduled for') && 
-                                  !s.includes('injury') &&
-                                  s.trim().length > 0);
-      
-      // Extract injury information
-      const injuryText = response;
-      const extractedInjuries = perplexityService.extractInjuries(injuryText, homeTeam, awayTeam);
-      
-      // Basic extraction successful
-      console.log('Extracted data using regex approach:', {
-        gameTime, 
-        headlines: headlines.length,
-        homeTeamInjuries: extractedInjuries.homeTeam.length,
-        awayTeamInjuries: extractedInjuries.awayTeam.length
-      });
       
       return {
         success: true,
-        gameTime: gameTime,
-        headlines: headlines,
-        keyInjuries: extractedInjuries,
-        extractionMethod: 'regex',
-        rawResponse: response
+        picks: allPicksWithStats,
+        count: allPicksWithStats.length,
+        league,
+        date: dateStr || 'today'
       };
-    } catch (parseError) {
-      console.warn('Game info parsing failed:', parseError);
       
-      // If parsing fails, still return useful data
+    } catch (error) {
+      console.error(`Error in getPicksWithEspnStats: ${error.message}`);
       return {
         success: false,
-        gameTime: 'TBD',
-        headlines: [],
-        keyInjuries: { homeTeam: [], awayTeam: [] },
-        rawResponse: response
+        error: error.message,
+        picks: []
       };
     }
-  },
-
-  /**
-   * Gets team-specific insights and analysis
-   * @param {string} teamName - The team to get insights for
-   * @param {string} league - The sports league (NBA, MLB, etc.)
-   * @returns {Promise<string>} - Team insights as text
-   */
-  getTeamInsights: async (teamName, league) => {
-    try {
-      const query = `${league} ${teamName}: current form, injuries, betting trends, last 5 games performance. Brief facts only.`;
-      
-      return await perplexityService.fetchRealTimeInfo(query, {
-        model: 'sonar',
-        temperature: 0.4,
-        maxTokens: 400
-      });
-    } catch (error) {
-      console.error(`Error getting insights for ${teamName}:`, error);
-      // Return a message that indicates the issue rather than null
-      return `Unable to retrieve real-time data for ${teamName} due to API timeout. Analysis will proceed with available data.`;
-    }
-  },
-
-  /**
-   * Gets player-specific insights for prop betting
-   * @param {object} gameData - Game data containing teams, league, and player info
-   * @returns {Promise<object>} - Structured player insights for prop betting
-   */
-  getPlayerPropInsights: async (gameData) => {
-    try {
-      console.log(`Fetching player prop insights for ${gameData.matchup}`);
-      
-      // Extract home and away team names
-      const homeTeam = gameData.homeTeam || '';
-      const awayTeam = gameData.awayTeam || '';
-      const league = gameData.league || '';
-      
-      // Get list of key players (if available)
-      let keyPlayers = [];
-      
-      // Extract players from playerStats if available
-      if (gameData.playerStats) {
-        // Add home team players
-        if (gameData.playerStats.homeTeam && gameData.playerStats.homeTeam.players) {
-          keyPlayers = [...keyPlayers, ...gameData.playerStats.homeTeam.players.slice(0, 5)
-            .map(p => p.name || p.player_name)];
-        }
-        // Add away team players
-        if (gameData.playerStats.awayTeam && gameData.playerStats.awayTeam.players) {
-          keyPlayers = [...keyPlayers, ...gameData.playerStats.awayTeam.players.slice(0, 5)
-            .map(p => p.name || p.player_name)];
-        }
-      }
-      
-      // Construct league-specific query for player props with strong emphasis on factual data
-      let propQuery = '';
-      
-      if (league === 'MLB') {
-        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} MLB game TODAY. For each of the key players, provide EXACT stats from their last 10 games including:
-        
-          1. EXACT number of home runs hit in last 10 games (not an estimate)
-          2. EXACT number of hits in last 10 games
-          3. EXACT number of total bases in last 10 games
-          4. For pitchers: EXACT strikeout totals in last 10 games
-          5. Any statistical home/away or matchup splits
-          
-          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-          When stating a stat (e.g., "hit 3 home runs in last 10 games"), it MUST be factually correct and verifiable.
-          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-      } else if (league === 'NBA') {
-        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NBA game TODAY. For each key player, provide EXACT stats from their last 10 games including:
-        
-          1. EXACT points per game in last 10 games (not an estimate)
-          2. EXACT rebounds per game in last 10 games
-          3. EXACT assists per game in last 10 games
-          4. EXACT 3-pointers made in last 10 games
-          5. Any statistical home/away or matchup splits
-          
-          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-          When stating a stat (e.g., "averaged 26.3 points in last 10 games"), it MUST be factually correct and verifiable.
-          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-      } else if (league === 'NHL') {
-        propQuery = `CRITICAL: Provide ONLY VERIFIABLE FACTUAL stats for ${homeTeam} vs ${awayTeam} NHL game TODAY. For each key player, provide EXACT stats from their last 10 games including:
-        
-          1. EXACT goals scored in last 10 games (not an estimate)
-          2. EXACT assists in last 10 games
-          3. EXACT shots on goal in last 10 games
-          4. EXACT minutes played in last 10 games
-          5. Any statistical home/away or matchup splits
-          
-          EXTREMELY IMPORTANT: Do NOT invent or estimate stats. ONLY provide EXACT numbers that you can verify.
-          When stating a stat (e.g., "scored 5 goals in last 10 games"), it MUST be factually correct and verifiable.
-          If you cannot find precise stats for a player, explicitly state "No verified data available" rather than providing estimates.`;
-      }
-      
-      // If we have key players, add them to the query
-      if (keyPlayers.length > 0) {
-        propQuery += `\n\nPROVIDE DETAILED STATS SPECIFICALLY FOR THESE PLAYERS: ${keyPlayers.join(', ')}`;
-      }
-      
-      propQuery += `\n\nRETURN FORMAT: Format each player's stats as bullet points, with the player name followed by a list of EXACT, VERIFIED stats. NEVER invent or estimate statistics.`;
-      
-      // Call Perplexity with our specialized query
-      const insights = await perplexityService.fetchRealTimeInfo(propQuery, {
-        model: 'sonar',
-        temperature: 0.2, // Lower temperature for factual data
-        maxTokens: 650    // Need more tokens for detailed player insights
-      });
-      
-      // Process the insights to create a structured result
-      return {
-        player_insights: insights,
-        meta: {
-          query_time: new Date().toISOString(),
-          game: gameData.matchup,
-          league: gameData.league,
-          insight_weight: '20%' // Indicate this should be 20% of decision weight
-        }
-      };
-    } catch (error) {
-      console.error(`Error getting player prop insights: ${error.message}`);
-      return {
-        player_insights: `Unable to retrieve player trend data. Analysis will proceed with available statistical data only.`,
-        meta: {
-          error: error.message,
-          game: gameData.matchup,
-          league: gameData.league || 'unknown',
-          query_time: new Date().toISOString()
-        }
-      };
-    }
-  },
-
-  /**
-   * Gets game scores from Perplexity response
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @param {string} response - Response text from API
-   * @returns {Promise<object>} - Structured scores object
-   */
-  getScoresFromPerplexity: async (homeTeam, awayTeam, response) => {
-    try {
-      // Create a safer regex pattern with standard string concatenation instead of template literals
-      const safeHomeTeam = homeTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const safeAwayTeam = awayTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const scorePattern = new RegExp('(' + safeHomeTeam + '|' + safeAwayTeam + ')\\s+(\\d+)\\s*[-]\\s*(\\d+)\\s*(' + safeAwayTeam + '|' + safeHomeTeam + ')', 'i');
-      const scoreMatch = response.match(scorePattern);
-    
-    if (scoreMatch) {
-      return {
-        success: true,
-        scores: {
-          home_score: parseInt(scoreMatch[2]),
-          away_score: parseInt(scoreMatch[3]),
-          home_team: homeTeam,
-          away_team: awayTeam
-        }
-      };
-    } else {
-      return { success: false, error: 'Could not extract score from response' };
-    }
-  } catch (error) {
-    console.error(`Error in getScoresFromPerplexity: ${error.message}`);
-    return { success: false, error: error.message };
   }
-}
 };
 
 export default perplexityService;
