@@ -476,7 +476,6 @@ Respond with VALID JSON ONLY in this exact format:
           confidence: pick.confidence || null
         };
       }
-      };
     }
   }
 };

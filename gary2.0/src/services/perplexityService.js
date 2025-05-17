@@ -890,7 +890,10 @@ Format your response as a JSON object with these keys: {
    */
   getScoresFromPerplexity: async (homeTeam, awayTeam, response) => {
     try {
-      const scorePattern = new RegExp(`(${homeTeam}|${awayTeam})\s+(\d+)\s*[-–]\s*(\d+)\s*(${awayTeam}|${homeTeam})`, 'i');
+      // Create a safer regex pattern with standard string concatenation instead of template literals
+      const safeHomeTeam = homeTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const safeAwayTeam = awayTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const scorePattern = new RegExp('(' + safeHomeTeam + '|' + safeAwayTeam + ')\\s+(\\d+)\\s*[-]\\s*(\\d+)\\s*(' + safeAwayTeam + '|' + safeHomeTeam + ')', 'i');
       const scoreMatch = response.match(scorePattern);
     
     if (scoreMatch) {
