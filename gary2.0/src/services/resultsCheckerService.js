@@ -222,12 +222,54 @@ export const resultsCheckerService = {
               }
               
               console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
-              const result = await perplexityService.getScoresFromPerplexity(
-                homeTeam, 
-                awayTeam, 
-                league, 
-                date
-              );
+              
+              // Fix for function signature mismatch - create proper query format
+              const previousDay = new Date(date);
+              previousDay.setDate(previousDay.getDate() - 1);
+              const previousDayString = previousDay.toISOString().split('T')[0];
+              
+              // Use Perplexity directly for this specific score lookup
+              const query = `What was the final score of the ${league} game involving ${awayTeam} on ${previousDayString}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
+              
+              // Call perplexity directly instead of trying to use getScoresFromPerplexity
+              const perplexityResponse = await perplexityService.fetchRealTimeInfo(query, {
+                model: 'sonar',
+                temperature: 0.1,
+                maxTokens: 150
+              });
+              
+              let result = { success: false };
+              
+              if (perplexityResponse) {
+                // Try to extract the score using a more flexible pattern
+                const scorePattern = /([A-Za-z\s.]+)\s*(\d+)[^\d]+(\d+)\s*([A-Za-z\s.]+)/i;
+                const scoreMatch = perplexityResponse.match(scorePattern);
+                
+                if (scoreMatch && scoreMatch.length >= 5) {
+                  console.log(`Successfully extracted score: ${scoreMatch[0]}`);
+                  const firstTeam = scoreMatch[1].trim();
+                  const secondTeam = scoreMatch[4].trim();
+                  const firstScore = parseInt(scoreMatch[2]);
+                  const secondScore = parseInt(scoreMatch[3]);
+                  
+                  result = {
+                    success: true,
+                    scores: {
+                      [pickStr]: {
+                        home_team: homeTeam,
+                        away_team: awayTeam,
+                        home_score: homeTeam.toLowerCase().includes(firstTeam.toLowerCase()) ? firstScore : secondScore,
+                        away_score: awayTeam.toLowerCase().includes(firstTeam.toLowerCase()) ? firstScore : secondScore,
+                        league: league,
+                        final: true,
+                        source: 'Perplexity'
+                      }
+                    }
+                  };
+                } else {
+                  console.log(`Could not extract score pattern from response: ${perplexityResponse}`);
+                }
+              }
               
               return { 
                 pick: pick.pick || pick.originalPick, 
