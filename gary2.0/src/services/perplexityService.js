@@ -196,17 +196,121 @@ export const perplexityService = {
         console.warn('Failed to get game time from ESPN:', espnError.message);
       }
       
-      // Fallback to Perplexity with a more specific query
+      // FALLBACK 1: Try to get game time from The Odds API
+      try {
+        console.log(`Trying The Odds API to get game time for ${league} game: ${awayTeam} @ ${homeTeam}`);
+        
+        // Import oddsService
+        const { oddsService } = await import('./oddsService.js');
+        
+        // Map league to sport key format used by The Odds API
+        const sportKey = league === 'NBA' ? 'basketball_nba' : 
+                        league === 'MLB' ? 'baseball_mlb' : 
+                        league === 'NHL' ? 'icehockey_nhl' : null;
+        
+        if (sportKey) {
+          const games = await oddsService.getUpcomingGames(sportKey);
+          
+          // Find the matching game
+          const game = games.find(g => {
+            const gameHomeTeam = g.home_team.toLowerCase();
+            const gameAwayTeam = g.away_team.toLowerCase();
+            const searchHomeTeam = homeTeam.toLowerCase();
+            const searchAwayTeam = awayTeam.toLowerCase();
+            
+            return (
+              (gameHomeTeam.includes(searchHomeTeam) || searchHomeTeam.includes(gameHomeTeam)) &&
+              (gameAwayTeam.includes(searchAwayTeam) || searchAwayTeam.includes(gameAwayTeam))
+            );
+          });
+          
+          if (game && game.commence_time) {
+            // Format the game time from ISO to readable format
+            const gameDate = new Date(game.commence_time);
+            // Convert to Eastern Time
+            const options = { 
+              timeZone: 'America/New_York',
+              hour: 'numeric',
+              minute: 'numeric',
+              hour12: true
+            };
+            const gameTimeET = gameDate.toLocaleTimeString('en-US', options);
+            console.log(`Found game time from The Odds API: ${gameTimeET} ET`);
+            
+            return {
+              gameTime: `${gameTimeET} ET`,
+              headlines: [],
+              keyInjuries: { homeTeam: [], awayTeam: [] }
+            };
+          }
+        }
+      } catch (oddsApiError) {
+        console.warn('Failed to get game time from The Odds API:', oddsApiError.message);
+      }
+      
+      // FALLBACK 2: Try to get game time from TheSportsDB API
+      try {
+        console.log(`Trying TheSportsDB API to get game time for ${league} game: ${awayTeam} @ ${homeTeam}`);
+        
+        // Import sportsDbApiService
+        const { sportsDbApiService } = await import('./sportsDbApiService.js');
+        
+        // Map league to league ID used by TheSportsDB
+        const leagueId = league === 'NBA' ? sportsDbApiService.leagueIds.NBA : 
+                        league === 'MLB' ? sportsDbApiService.leagueIds.MLB : 
+                        league === 'NHL' ? sportsDbApiService.leagueIds.NHL : null;
+        
+        if (leagueId) {
+          // Get today's date in YYYY-MM-DD format
+          const today = new Date().toISOString().split('T')[0];
+          const events = await sportsDbApiService.getEventsByDate(leagueId, today);
+          
+          if (events && events.length > 0) {
+            // Find the matching event
+            const event = events.find(e => {
+              const eventHomeTeam = (e.strHomeTeam || '').toLowerCase();
+              const eventAwayTeam = (e.strAwayTeam || '').toLowerCase();
+              const searchHomeTeam = homeTeam.toLowerCase();
+              const searchAwayTeam = awayTeam.toLowerCase();
+              
+              return (
+                (eventHomeTeam.includes(searchHomeTeam) || searchHomeTeam.includes(eventHomeTeam)) &&
+                (eventAwayTeam.includes(searchAwayTeam) || searchAwayTeam.includes(eventAwayTeam))
+              );
+            });
+            
+            if (event && event.strTime) {
+              console.log(`Found game time from TheSportsDB API: ${event.strTime}`);
+              
+              // Format the time to ensure it includes ET
+              let gameTime = event.strTime;
+              if (!gameTime.includes('ET')) {
+                gameTime = `${gameTime} ET`;
+              }
+              
+              return {
+                gameTime: gameTime,
+                headlines: [],
+                keyInjuries: { homeTeam: [], awayTeam: [] }
+              };
+            }
+          }
+        }
+      } catch (sportsDbError) {
+        console.warn('Failed to get game time from TheSportsDB API:', sportsDbError.message);
+      }
+      
+      // FALLBACK 3: Use Perplexity with a more specific query
       const query = `Search for the exact scheduled game time (in Eastern Time) for the upcoming ${league} game between ${awayTeam} (away) and ${homeTeam} (home) happening today or tomorrow. Also provide 2-3 key headlines about the matchup and list any key injuries for either team.
 
 This is VERY important: Format your response in valid JSON like this exact structure:
 {
-  "gameTime": "7:05 PM ET", 
-  "headlines": ["headline 1", "headline 2", "headline 3"],
-  "keyInjuries": {
-    "homeTeam": ["Player 1 (Status)", "Player 2 (Status)"],
-    "awayTeam": ["Player 3 (Status)", "Player 4 (Status)"]
-  }
+"gameTime": "7:05 PM ET", 
+"headlines": ["headline 1", "headline 2", "headline 3"],
+"keyInjuries": {
+  "homeTeam": ["Player 1 (Status)", "Player 2 (Status)"],
+  "awayTeam": ["Player 3 (Status)", "Player 4 (Status)"]
+}
 }`;
       
       const response = await this.search(query, {
@@ -217,7 +321,22 @@ This is VERY important: Format your response in valid JSON like this exact struc
       });
       
       if (!response.success) {
-        return { gameTime: 'TBD', headlines: [], keyInjuries: { homeTeam: [], awayTeam: [] }};
+        // FALLBACK 4: If all else fails, generate a reasonable default time based on league
+        const defaultTimes = {
+          'NBA': '7:30 PM ET',
+          'MLB': '7:05 PM ET',
+          'NHL': '7:00 PM ET'
+        };
+        
+        // Use league-specific default or general default
+        const defaultTime = defaultTimes[league] || '7:00 PM ET';
+        console.log(`Using default time for ${league} game: ${defaultTime}`);
+        
+        return { 
+          gameTime: defaultTime, 
+          headlines: [], 
+          keyInjuries: { homeTeam: [], awayTeam: [] }
+        };
       }
       
       // Try to parse structured data from the response
@@ -229,17 +348,24 @@ This is VERY important: Format your response in valid JSON like this exact struc
           const gameTime = parsedData.gameTime || 'TBD';
           console.log(`Extracted game time from Perplexity: ${gameTime}`);
           
-          // If game time starts with a number but doesn't include AM/PM or ET, add ET
-          if (/^\d/.test(gameTime) && !/(AM|PM|ET)$/i.test(gameTime)) {
-            return {
-              gameTime: `${gameTime} ET`,
-              headlines: Array.isArray(parsedData.headlines) ? parsedData.headlines : [],
-              keyInjuries: parsedData.keyInjuries || { homeTeam: [], awayTeam: [] }
+          // If Perplexity returned TBD, use our league-specific default
+          if (gameTime === 'TBD') {
+            const defaultTimes = {
+              'NBA': '7:30 PM ET',
+              'MLB': '7:05 PM ET',
+              'NHL': '7:00 PM ET'
             };
+            const defaultTime = defaultTimes[league] || '7:00 PM ET';
+            parsedData.gameTime = defaultTime;
+          }
+          
+          // If game time doesn't include ET, add it
+          if (!parsedData.gameTime.includes('ET')) {
+            parsedData.gameTime = `${parsedData.gameTime} ET`;
           }
           
           return {
-            gameTime: gameTime,
+            gameTime: parsedData.gameTime,
             headlines: Array.isArray(parsedData.headlines) ? parsedData.headlines : [],
             keyInjuries: parsedData.keyInjuries || { homeTeam: [], awayTeam: [] }
           };
@@ -454,12 +580,26 @@ This is VERY important: Format your response in valid JSON like this exact struc
           
           console.log(`✅ Stats completeness score for ${url}: ${(completenessScore * 100).toFixed(0)}%`);
           
-          // Build a prompt for OpenAI using the extracted stats
+          // Build a prompt for OpenAI using the extracted stats - with sport-specific instructions
+          let dataSourcesText = '';
+          
+          // Sport-specific data source instructions
+          if (league === 'mlb') {
+            dataSourcesText = 'Game info, probable pitchers, batting leaders, team stats, last 5 games, injury report';
+          } else if (league === 'nba') {
+            dataSourcesText = 'Game info, team leaders, team stats, last 5 games, injury report, head-to-head stats';
+          } else if (league === 'nhl') {
+            dataSourcesText = 'Game info, team stats, team leaders, goalie stats, last 5 games, injury report';
+          }
+          
           const openAIPrompt = `
             Analyze this ${league.toUpperCase()} game using the following stats:
             ${JSON.stringify(stats, null, 2)}
 
             IMPORTANT: Pay careful attention to which stats belong to which team. Be 100% certain about home vs away team designations.
+            
+            CRITICAL: Your rationale MUST ONLY use the following data points: ${dataSourcesText}.
+            DO NOT use any other data sources or information outside what is provided above.
 
             1. Make a clear pick (moneyline or spread only).
             2. Keep your analysis VERY SHORT (2-3 sentences max).
