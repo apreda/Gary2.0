@@ -102,9 +102,8 @@ const propResultsService = {
           pick_text: apiResult.pick_text,
           matchup: apiResult.matchup || null,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          player_id: apiResult.player_id
-          // Removed game_id as it's not in the Supabase schema
+          updated_at: new Date().toISOString()
+          // Removed player_id and game_id as they're not in the Supabase schema
         };
       });
       
@@ -280,9 +279,8 @@ const propResultsService = {
         pick_text: apiResult.pick_text,
         matchup: apiResult.matchup || null,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        player_id: apiResult.player_id
-        // Removed game_id as it's not in the Supabase schema
+        updated_at: new Date().toISOString()
+        // Removed player_id and game_id as they're not in the Supabase schema
       }));
       
       // 5. Check if we already have results for this pick
