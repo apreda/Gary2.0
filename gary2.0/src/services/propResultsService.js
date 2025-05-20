@@ -122,119 +122,55 @@ const propResultsService = {
         console.log(`Fetching MLB stats for team ${team}`);
         
         try {
-          // Get MLB team stats and player stats
-          const playerStatsData = await apiSportsService.getMlbTeamStats(team, '');
+          // Get player stats by team and date using our new method designed for props
+          const playerStatsData = await apiSportsService.getPlayerStatsForProps(team, date, 'MLB');
           
           if (!playerStatsData) {
-            console.log(`No MLB player stats found for ${team} from API-Sports`);
+            console.log(`No MLB player stats found for ${team} on ${date} from API-Sports`);
             continue;
           }
           
           // Add player stats to the global stats map
-          if (playerStatsData.players) {
+          if (playerStatsData.players && playerStatsData.players.length > 0) {
+            console.log(`Found stats for ${playerStatsData.players.length} players on ${team}`);
+            
             playerStatsData.players.forEach(player => {
               if (!allPlayerStats[player.name]) {
-                // Store the stats and normalize names to match our schema
-                const normalizedStats = {
-                  ...player.statistics,
-                  hits: player.statistics.hits || 0,
-                  runs: player.statistics.runs || 0,
-                  rbi: player.statistics.rbi || 0,
-                  total_bases: player.statistics.total_bases || 0,
-                  strikeouts: player.statistics.strikeouts || 0,
-                  outs: player.statistics.outs || 0,
-                  hits_runs_rbis: (player.statistics.hits || 0) + 
-                                 (player.statistics.runs || 0) + 
-                                 (player.statistics.rbi || 0)
-                };
-                
-                allPlayerStats[player.name] = normalizedStats;
+                // Store the stats - they should already be normalized from the API call
+                allPlayerStats[player.name] = player.statistics;
                 
                 // Also try name variations (for example "Jr." vs "Jr")
                 const nameVariations = generateNameVariations(player.name);
                 nameVariations.forEach(variation => {
                   if (!allPlayerStats[variation]) {
-                    allPlayerStats[variation] = normalizedStats;
+                    allPlayerStats[variation] = player.statistics;
                   }
                 });
+                
+                // Also try first initial + last name for better matching
+                const nameParts = player.name.split(' ');
+                if (nameParts.length >= 2) {
+                  const firstInitialLastName = `${nameParts[0][0]}. ${nameParts[nameParts.length-1]}`;
+                  if (!allPlayerStats[firstInitialLastName]) {
+                    allPlayerStats[firstInitialLastName] = player.statistics;
+                  }
+                }
               }
             });
+          } else {
+            console.log(`No player data found in response for ${team}`);
           }
         } catch (error) {
           console.error(`Error getting MLB stats for team ${team}:`, error.message);
         }
       }
       
-      // For demo/testing: If we still don't have enough real stats, generate some mock MLB stats
-      // This is just to demonstrate the UI functionality
+      // If we can't get enough real stats, guide the user to the admin panel
       if (Object.keys(allPlayerStats).length < mlbPicks.length / 2) {
-        console.log('Generating mock MLB stats for demonstration');
-        
-        for (const pick of mlbPicks) {
-          if (!allPlayerStats[pick.player_name]) {
-            // Generate reasonable mock stats based on prop type
-            const mockStats = {};
-            const propType = pick.prop_type.toLowerCase();
-            const propLine = parseFloat(pick.prop_line);
-            const pickDirection = (pick.pick_direction || '').toLowerCase();
-            
-            // Generate a realistic baseball stat value based on the prop type
-            // Baseball stats should be integers, not decimals
-            if (propType === 'hits') {
-              // For hits over/under 0.5, realistic outcomes are 0, 1, 2, 3, or 4 hits
-              // Make about 70% of players get at least 1 hit in a game
-              if (Math.random() < 0.3) {
-                mockStats.hits = 0; // No hits
-              } else {
-                // 1-4 hits with decreasing probability
-                const hitProbabilities = [0, 0.7, 0.2, 0.08, 0.02]; // 0, 1, 2, 3, 4 hits
-                const rand = Math.random();
-                let cumulativeProb = 0;
-                
-                for (let i = 1; i < hitProbabilities.length; i++) {
-                  cumulativeProb += hitProbabilities[i];
-                  if (rand <= cumulativeProb) {
-                    mockStats.hits = i;
-                    break;
-                  }
-                }
-              }
-            } else if (propType === 'total_bases') {
-              // Total bases tend to be 0-6 in a game
-              if (Math.random() < 0.25) {
-                mockStats.total_bases = 0; // 25% chance of 0 total bases
-              } else {
-                // 1-6 total bases
-                mockStats.total_bases = Math.floor(Math.random() * 6) + 1;
-              }
-            } else if (propType === 'strikeouts') {
-              // Strikeouts for pitchers range from 0-12 typically
-              // Make it realistic for the prop line
-              if (propLine < 4) {
-                // Lower strikeout pitchers: 0-6 Ks
-                mockStats.strikeouts = Math.floor(Math.random() * 7);
-              } else {
-                // Higher strikeout pitchers: 3-10 Ks
-                mockStats.strikeouts = Math.floor(Math.random() * 8) + 3;
-              }
-            } else if (propType === 'outs') {
-              // Outs recorded = innings pitched * 3
-              // Typical range: 3 (1 inning) to 21 (7 innings)
-              mockStats.outs = Math.floor(Math.random() * 7) * 3 + 3;
-            } else if (propType === 'hits_runs_rbis') {
-              // Set individual components then add them up
-              mockStats.hits = Math.floor(Math.random() * 3); // 0-2 hits
-              mockStats.runs = Math.floor(Math.random() * 2); // 0-1 runs
-              mockStats.rbi = Math.floor(Math.random() * 3);  // 0-2 RBIs
-              mockStats.hits_runs_rbis = mockStats.hits + mockStats.runs + mockStats.rbi;
-            }
-            
-            allPlayerStats[pick.player_name] = mockStats;
-          }
-        }
+        console.log('Insufficient player stats from APIs. For best results, please visit the admin panel at https://www.betwithgary.ai/admin/results to manually review and update player prop results.');
       }
       
-      console.log(`Player stats collected for ${Object.keys(allPlayerStats).length} players`);
+      console.log(`Real player stats collected for ${Object.keys(allPlayerStats).length} players`);
       
       // Process each MLB pick to determine the result
       const results = [];
