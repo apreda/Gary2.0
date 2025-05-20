@@ -1124,7 +1124,20 @@ export const resultsCheckerService = {
           console.log(`No scores found in database for ${teamName}, using Perplexity as fallback`);
           
           // Create a query to find games involving this team
-          const gameDate = new Date(date);
+          console.log(`Raw date value received in getScoresFromPerplexity: ${date}, type: ${typeof date}`);
+          
+          // DEBUG: Parse the date string manually to avoid timezone issues
+          let gameDate;
+          if (typeof date === 'string' && date.includes('-')) {
+            // Parse YYYY-MM-DD format manually to avoid timezone issues
+            const [year, month, day] = date.split('-').map(num => parseInt(num, 10));
+            // Note: month is 0-indexed in JavaScript Date
+            gameDate = new Date(year, month - 1, day);
+            console.log(`Date parsed manually: ${year}-${month}-${day} → ${gameDate.toISOString()}`);
+          } else {
+            gameDate = new Date(date);
+          }
+          
           // Ensure we're using the provided date, not hardcoding May 16
           const formattedDate = gameDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
           console.log(`Querying for scores on date: ${formattedDate}`);
