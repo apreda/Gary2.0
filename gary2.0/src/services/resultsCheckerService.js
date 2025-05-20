@@ -505,7 +505,6 @@ export const resultsCheckerService = {
           pick_text: pick.pick,
           matchup: `${pick.awayTeam || pick.away_team} @ ${pick.homeTeam || pick.home_team}`,
           confidence: pick.confidence || null,
-          type: pick.type || 'moneyline',  // Set a default type if not available
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
@@ -1492,8 +1491,17 @@ export const resultsCheckerService = {
 
         console.log(`Analyzing pick ${pick.pick} with score data:`, scoreData);
         
-        // Use the new analyzer to determine the result
-        const pickWithId = { ...pick, id: dailyPicks.id };
+        // Log the original confidence and type before processing
+        console.log(`Processing pick with confidence: ${pick.confidence}, type: ${pick.type}`);
+        
+        // Use the new analyzer to determine the result, ensuring we pass the original confidence and type
+        const pickWithId = { 
+          ...pick, 
+          id: dailyPicks.id,
+          confidence: pick.confidence, // Ensure confidence is preserved
+          type: pick.type || (pick.pick && pick.pick.includes('ML') ? 'moneyline' : (pick.pick && /[+\-]\d+\.?\d*/.test(pick.pick) ? 'spread' : 'moneyline'))
+        };
+        
         const analyzedResult = await pickResultsAnalyzer.analyzePickResult(pickWithId, scoreData);
         
         console.log(`PickResultsAnalyzer determined: ${analyzedResult.result} for pick: ${pick.pick}`);
