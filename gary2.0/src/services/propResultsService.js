@@ -555,7 +555,6 @@ const propResultsService = {
         
         results.push(resultObj);
       }
-    }
       
       // 4. Store results in the prop_results table
       if (results.length > 0) {
