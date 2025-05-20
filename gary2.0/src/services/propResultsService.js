@@ -417,186 +417,145 @@ const propResultsService = {
       
       // Process each pick individually
       for (const pick of mlbPicks) {
-          console.log(`Processing prop for ${pick.player_name} (${pick.prop_type}) as ${pick.pick_direction}`);
+        console.log(`Processing prop for ${pick.player_name} (${pick.prop_type}) as ${pick.pick_direction}`);
+        
+        // Default values if we don't find stats
+        let resultStatus = 'postponed'; // Default to postponed if no stats available
+        let actualResult = null;
+        let playerMatchFound = false;
+        
+        // Find the player stats in our data
+        const playerName = pick.player_name;
+        let nameVariations = generateNameVariations(playerName);
+        
+        // Try with different name variations to find a matching player
+        let playerStats = null;
+        
+        // Skip the team stats check since we're using Perplexity directly
+        // Go straight to Perplexity API to search for player stats and determine result
+        try {
+          console.log(`Using Perplexity to find stats and determine result for ${playerName} ${pick.prop_type}`);
           
-          // Default values if we don't find stats
-          let resultStatus = 'postponed'; // Default to postponed if no stats available
-          let actualResult = null;
-          let playerMatchFound = false;
+          const perplexityResult = await determineResultWithPerplexity(
+            playerName,
+            pick.team,
+            date,
+            pick.prop_type,
+            parseFloat(pick.prop_line),
+            pick.pick_direction
+          );
           
-          // Find the player stats in our data
-          const playerName = pick.player_name;
-          let nameVariations = generateNameVariations(playerName);
-          
-          // Try with different name variations to find a matching player
-          let playerStats = null;
-          
-          // First try to find player stats from the team stats results
-          if (teamPlayerStats && teamPlayerStats.players) {
-            // Try to match by exact name first
-            let playerMatches = teamPlayerStats.players.filter(p => {
-              const pName = p.name.toLowerCase();
-              const targetName = playerName.toLowerCase();
-              return pName === targetName || targetName === pName;
-            });
-            
-            // If no exact match, try variations
-            if (!playerMatches || playerMatches.length === 0) {
-              playerMatches = teamPlayerStats.players.filter(p => {
-                const pName = p.name.toLowerCase();
-                
-                // Check if player name matches any of our variations
-                for (const variant of nameVariations) {
-                  const vLower = variant.toLowerCase();
-                  if (pName.includes(vLower) || vLower.includes(pName)) {
-                    return true;
-                  }
-                }
-                return false;
-              });
-            }
-            
-            // Use the first match if available
-            if (playerMatches && playerMatches.length > 0) {
-              playerStats = playerMatches[0].statistics;
-              playerMatchFound = true;
-              console.log(`Found stats for ${playerMatches[0].name} from team data`);
-            }
+          // Update the actual result if Perplexity found it
+          if (perplexityResult.actualResult !== null) {
+            actualResult = perplexityResult.actualResult;
+            console.log(`Perplexity found stat: ${playerName} ${pick.prop_type} = ${actualResult}`);
+            playerMatchFound = true;
+            playerStats = { [pick.prop_type]: actualResult, source: 'Perplexity API' };
           }
           
-          // If still no match, try to fetch the individual player directly
-          if (!playerMatchFound) {
-            // STEP 3: Try direct player search with Ball Don't Lie
-            try {
-              console.log(`Step 3: Trying direct player search for ${playerName} on ${date} with Ball Don't Lie API`);
-              const individualPlayerData = await ballDontLieApiService.getPlayerStatsForProps(playerName, date);
-              
-              if (individualPlayerData && individualPlayerData.statistics) {
-                playerStats = individualPlayerData.statistics;
-                playerMatchFound = true;
-                console.log(`Found stats for ${individualPlayerData.player.full_name} from direct player search`);
-              } else {
-                console.log(`No player stats found for ${playerName} from direct Ball Don't Lie search`);
-                
-                // STEP 4: Try Perplexity API to search the web for player stats
-                console.log(`Step 4: Searching web with Perplexity for ${playerName} stats`);
-                const perplexityStats = await searchPerplexityForPlayerStats(
-                  playerName, 
-                  pick.team, 
-                  date, 
-                  pick.prop_type
-                );
-                
-                if (perplexityStats && Object.keys(perplexityStats).length > 0) {
-                  playerStats = perplexityStats;
-                  playerMatchFound = true;
-                  console.log(`Found ${playerName} stats via Perplexity web search: ${JSON.stringify(perplexityStats)}`);
-                } else {
-                  console.log(`No stats found for ${playerName} from Perplexity either`);
-                }
-              }
-            } catch (playerError) {
-              console.error(`Error fetching individual player stats for ${playerName}:`, playerError);
-            }
-          }
-          
-          if (!playerMatchFound) {
-            console.log(`No player match found for ${playerName} after all attempts`);
-          }
-          
-          // Map prop_type to the correct stat key
-          const statKey = pick.prop_type.toLowerCase();
-          const statMapping = {
-            'hits': 'hits',
-            'runs': 'runs',
-            'rbi': 'rbi',
-            'total_bases': 'total_bases',
-            'strikeouts': 'strikeouts',
-            'outs': 'outs',
-            'hits_runs_rbis': 'hits_runs_rbis'
-          };
-          
-          // Check if we have the needed stat
-          let statFound = false;
-          let mappedStatKey;
-          
-          if (statKey in statMapping) {
-            mappedStatKey = statMapping[statKey];
-            if (playerStats && playerStats[mappedStatKey] !== undefined) {
-              actualResult = playerStats[mappedStatKey];
-              statFound = true;
-              console.log(`Found stat ${mappedStatKey} = ${actualResult} for ${playerName}`);
-            }
-          } else if (playerStats && playerStats[statKey] !== undefined) {
-            // If we don't have a mapping, try to use the prop type directly as a key
-            actualResult = playerStats[statKey];
-            statFound = true;
-            console.log(`Found direct stat ${statKey} = ${actualResult} for ${playerName}`);
-          }
-          
-          // STEP 5: Try to determine the result
-          if (statFound) {
-            // If we already have the stats, calculate the result directly
-            console.log(`Found stats for ${playerName} ${statKey} = ${actualResult}. Calculating result...`);
-            
-            const propLine = parseFloat(pick.prop_line);
-            const normalizedDirection = pick.pick_direction.toUpperCase();
-            
-            if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
-              resultStatus = actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-            } else {
-              resultStatus = actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-            }
-            
-            console.log(`Calculated ${playerName} ${statKey} ${actualResult} vs line ${propLine} (${pick.pick_direction}) = ${resultStatus}`);
-          } else {
-            // We don't have stats yet, use Perplexity to determine the result directly
-            console.log(`Step 5: Using Perplexity to determine the result for ${playerName} ${pick.prop_type}`);
-            
-            const perplexityResult = await determineResultWithPerplexity(
-              playerName,
-              pick.team,
-              pick.date,
-              pick.prop_type,
-              parseFloat(pick.prop_line),
-              pick.pick_direction
-            );
-            
-            // Update the actual result if Perplexity found it
-            if (perplexityResult.actualResult !== null) {
-              actualResult = perplexityResult.actualResult;
-              console.log(`Perplexity found stat: ${playerName} ${pick.prop_type} = ${actualResult}`);
-            }
-            
-            // Update the result status
-            resultStatus = perplexityResult.result;
-            console.log(`Perplexity determined ${playerName} ${pick.prop_type} result = ${resultStatus}`);
-          }
-          
-          if (!playerMatchFound) {
-            console.log(`No stats found for player ${playerName}`);
-          }
-          
-          // Create result object with only columns that exist in the database schema
-          const resultObj = {
-            prop_pick_id: pick.id,
-            game_date: pick.date, // Use the date from the pick as game_date
-            player_name: pick.player_name,
-            prop_type: pick.prop_type,
-            line_value: pick.prop_line, // This matches the line_value column in DB
-            actual_value: actualResult, // This matches the actual_value column in DB
-            result: resultStatus,
-            bet: pick.pick_direction, // Store the bet direction (over/under) - this field was previously empty
-            odds: pick.odds || null, // Add odds if available
-            pick_text: pick.pick_text || `${pick.player_name} ${pick.pick_direction} ${pick.prop_line} ${pick.prop_type}`,
-            matchup: pick.matchup || null, // Add matchup if available
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          results.push(resultObj);
+          // Update the result status
+          resultStatus = perplexityResult.result;
+          console.log(`Perplexity determined ${playerName} ${pick.prop_type} result = ${resultStatus}`);
+        } catch (perplexityError) {
+          console.error(`Error using Perplexity for ${playerName}:`, perplexityError);
         }
+          
+        if (!playerMatchFound) {
+          console.log(`No player match found for ${playerName} after all attempts`);
+        }
+        // Map prop_type to the correct stat key
+        const statKey = pick.prop_type.toLowerCase();
+        const statMapping = {
+          'hits': 'hits',
+          'runs': 'runs',
+          'rbi': 'rbi',
+          'total_bases': 'total_bases',
+          'strikeouts': 'strikeouts',
+          'outs': 'outs',
+          'hits_runs_rbis': 'hits_runs_rbis'
+        };
+        
+        // Check if we have the needed stat
+        let statFound = false;
+        let mappedStatKey;
+        
+        if (statKey in statMapping) {
+          mappedStatKey = statMapping[statKey];
+          if (playerStats && playerStats[mappedStatKey] !== undefined) {
+            actualResult = playerStats[mappedStatKey];
+            statFound = true;
+            console.log(`Found stat ${mappedStatKey} = ${actualResult} for ${playerName}`);
+          }
+        } else if (playerStats && playerStats[statKey] !== undefined) {
+          // If we don't have a mapping, try to use the prop type directly as a key
+          actualResult = playerStats[statKey];
+          statFound = true;
+          console.log(`Found direct stat ${statKey} = ${actualResult} for ${playerName}`);
+        }
+          
+        // STEP 5: Try to determine the result
+        if (statFound) {
+          // If we already have the stats, calculate the result directly
+          console.log(`Found stats for ${playerName} ${statKey} = ${actualResult}. Calculating result...`);
+          
+          const propLine = parseFloat(pick.prop_line);
+          const normalizedDirection = pick.pick_direction.toUpperCase();
+          
+          if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
+            resultStatus = actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
+          } else {
+            resultStatus = actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
+          }
+          
+          console.log(`Calculated ${playerName} ${statKey} ${actualResult} vs line ${propLine} (${pick.pick_direction}) = ${resultStatus}`);
+        } else {
+          // We don't have stats yet, use Perplexity to determine the result directly
+          console.log(`Step 5: Using Perplexity to determine the result for ${playerName} ${pick.prop_type}`);
+          
+          const perplexityResult = await determineResultWithPerplexity(
+            playerName,
+            pick.team,
+            pick.date,
+            pick.prop_type,
+            parseFloat(pick.prop_line),
+            pick.pick_direction
+          );
+          
+          // Update the actual result if Perplexity found it
+          if (perplexityResult.actualResult !== null) {
+            actualResult = perplexityResult.actualResult;
+            console.log(`Perplexity found stat: ${playerName} ${pick.prop_type} = ${actualResult}`);
+          }
+          
+          // Update the result status
+          resultStatus = perplexityResult.result;
+          console.log(`Perplexity determined ${playerName} ${pick.prop_type} result = ${resultStatus}`);
+        }
+          
+        if (!playerMatchFound) {
+          console.log(`No stats found for player ${playerName}`);
+        }
+        
+        // Create result object with only columns that exist in the database schema
+        const resultObj = {
+          prop_pick_id: pick.id,
+          game_date: pick.date, // Use the date from the pick as game_date
+          player_name: pick.player_name,
+          prop_type: pick.prop_type,
+          line_value: pick.prop_line, // This matches the line_value column in DB
+          actual_value: actualResult, // This matches the actual_value column in DB
+          result: resultStatus,
+          bet: pick.pick_direction, // Store the bet direction (over/under) - this field was previously empty
+          odds: pick.odds || null, // Add odds if available
+          pick_text: pick.pick_text || `${pick.player_name} ${pick.pick_direction} ${pick.prop_line} ${pick.prop_type}`,
+          matchup: pick.matchup || null, // Add matchup if available
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        results.push(resultObj);
       }
+    }
       
       // 4. Store results in the prop_results table
       if (results.length > 0) {
@@ -636,10 +595,7 @@ const propResultsService = {
     try {
       const { data, error } = await supabase
         .from('prop_results')
-        .select(`
-          *,
-          prop_picks (*)
-        `)
+        .select('*, prop_picks(*)')
         .eq('prop_picks.date', date);
         
       if (error) {
