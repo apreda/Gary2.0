@@ -243,13 +243,8 @@ const propResultsService = {
           // Simplify the query even further for maximum compatibility
           const query = `${playerName} ${statName} stats on ${searchDate}`;
           
-          // Use the predefined Perplexity API key
-          const perplexityApiKey = 'pplx-maOpm1wMJhpwKGh368l9rEwMGClb7f2pvUolfC7fVyPkWev';
-          
-          if (!perplexityApiKey) {
-            console.log('Perplexity API key not available');
-            return { result: 'pending', actualResult: null };
-          }
+          // We'll use our server-side proxy to handle the Perplexity API key securely
+          // and avoid CORS issues
           
           // Helper function to process Perplexity API responses
           function processPerplexityResponse(response, playerName, propType, statName, propLine, pickDirection) {
@@ -324,26 +319,20 @@ const propResultsService = {
             return { result: 'pending', actualResult: null };
           }
           
-          // Implement Perplexity API call using their latest API specification
-          // Using their recommended model and format to fix 400 errors
+          // Use our server-side proxy for Perplexity API calls
+          // This avoids CORS issues and keeps the API key secure
           try {
-            console.log(`Making request to Perplexity API with model: pplx-7b-online`);
+            console.log(`Making request to Perplexity API via proxy with model: pplx-7b-online`);
             
-            // Use exactly the format shown in the example
-            const response = await axios.post('https://api.perplexity.ai/chat/completions', {
+            // Call our server-side proxy instead of the Perplexity API directly
+            const response = await axios.post('/api/perplexity-proxy', {
               model: 'pplx-7b-online',
               messages: [
                 {
                   role: 'user',
                   content: query
                 }
-              ],
-              max_tokens: 256
-            }, {
-              headers: {
-                'Authorization': `Bearer ${perplexityApiKey}`,
-                'Content-Type': 'application/json'
-              }
+              ]
             });
             
             console.log('Perplexity API request successful');
@@ -364,21 +353,15 @@ const propResultsService = {
             try {
               console.log(`Trying fallback model: mistral-7b-instruct`);
               
-              // Use exactly the same structure for the fallback model
-              const fallbackResponse = await axios.post('https://api.perplexity.ai/chat/completions', {
+              // Use our server-side proxy for the fallback model as well
+              const fallbackResponse = await axios.post('/api/perplexity-proxy', {
                 model: 'mistral-7b-instruct',
                 messages: [
                   {
                     role: 'user',
                     content: query
                   }
-                ],
-                max_tokens: 256
-              }, {
-                headers: {
-                  'Authorization': `Bearer ${perplexityApiKey}`,
-                  'Content-Type': 'application/json'
-                }
+                ]
               });
               
               console.log('Perplexity API fallback request successful');
