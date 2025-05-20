@@ -33,7 +33,7 @@
   z-index: 10;
 }
 
-/* Gold accent for the table header */
+/* Black border for the table header */
 .recent-picks-header th {
-  border-bottom: 2px solid #b8953f;
+  border-bottom: 2px solid #000000;
 }
