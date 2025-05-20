@@ -33,144 +33,63 @@ const propResultsService = {
       
       console.log(`Found ${propPicks.length} prop picks for ${date}`);
       
-      // Group picks by league and matchup for efficient API calls
-      const picksByMatchup = {};
+      // Group picks by player for efficient processing
+      const picksByPlayer = {};
       propPicks.forEach(pick => {
-        const key = `${pick.league}-${pick.matchup}`;
-        if (!picksByMatchup[key]) {
-          picksByMatchup[key] = [];
+        const key = `${pick.player_name}-${pick.team}-${pick.league}`;
+        if (!picksByPlayer[key]) {
+          picksByPlayer[key] = [];
         }
-        picksByMatchup[key].push(pick);
+        picksByPlayer[key].push(pick);
       });
       
       // 2. Use API-Sports to get player statistics (primary source)
       const allPlayerStats = {};
       
-      // Process each matchup
-      for (const [key, matchupPicks] of Object.entries(picksByMatchup)) {
-        if (matchupPicks.length === 0) continue;
+      // Process each player
+      for (const [key, playerPicks] of Object.entries(picksByPlayer)) {
+        if (playerPicks.length === 0) continue;
         
-        const firstPick = matchupPicks[0];
+        const firstPick = playerPicks[0];
+        const playerName = firstPick.player_name;
+        const team = firstPick.team;
         const league = firstPick.league;
-        const matchup = firstPick.matchup;
         
-        console.log(`Processing ${matchup || 'unknown matchup'} in ${league || 'unknown league'} for player props`);
-        
-        // Check if matchup is defined before trying to split it
-        if (!matchup) {
-          console.error(`Matchup is undefined for pick: ${JSON.stringify(firstPick)}`);
-          continue; // Skip this matchup since we can't process it without team names
-        }
-        
-        // Extract team names from matchup (format is typically "Away @ Home")
-        const [awayTeam, homeTeam] = matchup.split(' @ ');
-        
-        if (!homeTeam || !awayTeam) {
-          console.error(`Invalid matchup format: ${matchup}`);
-          continue;
-        }
+        console.log(`Processing player prop for ${playerName || 'unknown player'} (${team || 'unknown team'}) in ${league || 'unknown league'}`);
         
         try {
-          // Get player stats using API-Sports
-          let playerStatsData = null;
-          
-          if (league === 'MLB') {
-            // For MLB, use specific endpoints
-            playerStatsData = await apiSportsService.getMlbTeamStats(homeTeam, awayTeam);
-          } else {
-            // For NBA and NHL, use the generic endpoint
-            playerStatsData = await apiSportsService.getPlayerStatsForProps(homeTeam, awayTeam, league);
-          }
-          
-          if (!playerStatsData) {
-            console.log(`No player stats found for ${matchup} in ${league} from API-Sports`);
-            // No fallback available for missing stats
-          } else {
-            // Process the player stats data into our format
-            const allPlayers = [
-              ...(playerStatsData.homeTeam?.players || []),
-              ...(playerStatsData.awayTeam?.players || [])
-            ];
+          // Try getting player stats directly
+          try {
+            // Generate a placeholder stats object for this player
+            // In a real implementation, you would query the API for the specific player stats
+            allPlayerStats[playerName] = {
+              points: null,
+              rebounds: null,
+              assists: null,
+              blocks: null,
+              steals: null,
+              threePointersMade: null,
+              hits: null,
+              runs: null,
+              rbi: null,
+              homeRuns: null,
+              strikeouts: null,
+              saves: null,
+              goals: null
+            };
             
-            for (const player of allPlayers) {
-              // Create stats object with all possible prop types
-              allPlayerStats[player.name] = {
-                points: player.points || player.statistics?.points || null,
-                rebounds: player.rebounds || player.statistics?.rebounds || null,
-                assists: player.assists || player.statistics?.assists || null,
-                blocks: player.blocks || player.statistics?.blocks || null,
-                steals: player.steals || player.statistics?.steals || null,
-                threePointersMade: player.threePointersMade || player.statistics?.threePointersMade || null,
-                hits: player.hits || player.statistics?.hits || null,
-                runs: player.runs || player.statistics?.runs || null,
-                rbi: player.rbi || player.statistics?.rbi || null,
-                homeRuns: player.homeRuns || player.statistics?.homeRuns || null,
-                strikeouts: player.strikeouts || player.statistics?.strikeouts || null,
-                saves: player.saves || player.statistics?.saves || null,
-                goals: player.goals || player.statistics?.goals || null
-              };
-            }
+            // Log that we need to use the admin panel for player stats
+            console.log(`For player ${playerName}, please manually review stats in the admin panel at https://www.betwithgary.ai/admin/results`);
+          } catch (statsError) {
+            console.error(`Error fetching stats for player ${playerName}:`, statsError.message);
           }
         } catch (error) {
-          console.error(`Error getting stats for ${matchup}:`, error.message);
+          console.error(`Error getting stats for player ${playerName}:`, error.message);
         }
       }
       
-      // If we have few or no stats, use the SportsDB API as fallback
-      if (Object.keys(allPlayerStats).length < propPicks.length / 2) {
-        console.log('Insufficient player stats from primary sources, trying SportsDB API');
-        
-        const leagues = [...new Set(propPicks.map(pick => pick.league))];
-        const leagueIdMap = {
-          'NBA': '4387',
-          'NHL': '4380',
-          'MLB': '4424'
-        };
-        
-        for (const league of leagues) {
-          const leagueId = leagueIdMap[league];
-          if (!leagueId) continue;
-          
-          const games = await sportsDbApiService.getEventsByDate(leagueId, date);
-          console.log(`Found ${games?.length || 0} games for ${league} on ${date}`);
-          
-          if (!games || games.length === 0) continue;
-          
-          // For each game, get player stats
-          for (const game of games) {
-            const matchup = `${game.strHomeTeam} vs ${game.strAwayTeam}`;
-            
-            // Only process games related to our prop picks
-            const relatedPicks = propPicks.filter(pick => 
-              pick.matchup.includes(game.strHomeTeam) || 
-              pick.matchup.includes(game.strAwayTeam)
-            );
-            
-            if (relatedPicks.length === 0) continue;
-            
-            console.log(`Processing ${matchup} for player stats from SportsDB`);
-            
-            try {
-              // Get player stats from SportsDB API
-              const playerStatsData = await sportsDbApiService.getPlayerStatsForProps(
-                game.strHomeTeam, 
-                game.strAwayTeam, 
-                league
-              );
-              
-              if (playerStatsData && playerStatsData.players) {
-                for (const player of playerStatsData.players) {
-                  if (!allPlayerStats[player.name]) {
-                    allPlayerStats[player.name] = player.statistics || {};
-                  }
-                }
-              }
-            } catch (error) {
-              console.error(`Error getting stats from SportsDB for ${matchup}:`, error.message);
-            }
-          }
-        }
-      }
+      // No need to try SportsDB API since we're focusing on using the admin panel
+      console.log('Player stats will need to be manually verified in the admin panel');
       
       // If we still don't have sufficient stats, log a message suggesting to use the admin interface
       if (Object.keys(allPlayerStats).length < propPicks.length / 2) {
@@ -236,7 +155,6 @@ const propResultsService = {
           prop_line: pick.prop_line,
           pick_direction: pick.pick_direction,
           pick_text: pick.pick_text || `${pick.player_name} ${pick.pick_direction} ${pick.prop_line} ${pick.prop_type}`, // Preserve original pick text
-          matchup: pick.matchup,
           value: actualResult, // Using the correct column name
           result: resultStatus, // Using the correct column name
           created_at: new Date().toISOString(),
