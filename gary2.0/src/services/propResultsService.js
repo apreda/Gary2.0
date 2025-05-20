@@ -54,7 +54,13 @@ const propResultsService = {
         const league = firstPick.league;
         const matchup = firstPick.matchup;
         
-        console.log(`Processing ${matchup} in ${league} for player props`);
+        console.log(`Processing ${matchup || 'unknown matchup'} in ${league || 'unknown league'} for player props`);
+        
+        // Check if matchup is defined before trying to split it
+        if (!matchup) {
+          console.error(`Matchup is undefined for pick: ${JSON.stringify(firstPick)}`);
+          continue; // Skip this matchup since we can't process it without team names
+        }
         
         // Extract team names from matchup (format is typically "Away @ Home")
         const [awayTeam, homeTeam] = matchup.split(' @ ');
