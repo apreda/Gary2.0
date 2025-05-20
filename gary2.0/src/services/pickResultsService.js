@@ -20,7 +20,7 @@ const pickResultsService = {
    * @param {string} dateStr - Optional date string in YYYY-MM-DD format, defaults to yesterday
    * @returns {Promise<Object>} - Picks data or error
    */
-  getGamePicks: async (dateStr = null) => {
+  getGamePicks: async function(dateStr = null) {
     try {
       // Default to yesterday if no date provided
       const targetDate = dateStr || (() => {
@@ -73,7 +73,7 @@ const pickResultsService = {
    * @param {string} dateStr - Optional date string in YYYY-MM-DD format, defaults to yesterday
    * @returns {Promise<Object>} - Prop picks data or error
    */
-  getPropPicks: async (dateStr = null) => {
+  getPropPicks: async function(dateStr = null) {
     try {
       // Default to yesterday if no date provided
       const targetDate = dateStr || (() => {
@@ -129,47 +129,98 @@ const pickResultsService = {
    * @param {string} date - Game date in YYYY-MM-DD format
    * @returns {Promise<Object|null>} - Game result object or null if not found
    */
-  fetchFinalScore: async (league, homeTeam, awayTeam, date) => {
+  fetchFinalScore: async function(league, homeTeam, awayTeam, date) {
     console.log(`Fetching final score for ${league} game: ${awayTeam} @ ${homeTeam} on ${date}`);
+    const ODDS_API_KEY = process.env.ODDS_API_KEY;
     
     try {
-      // 1. Try TheSportsDB API first (most reliable for historical data)
-      const leagueMap = { 'MLB': 'MLB', 'NBA': 'NBA', 'NHL': 'NHL', 'NFL': 'NFL' };
-      const formattedLeague = leagueMap[league] || league;
-      
-      const response = await fetch(
-        `https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${date}&s=${formattedLeague}`
-      );
-      const data = await response.json();
-      
-      if (data?.events && Array.isArray(data.events)) {
-        // Try to find the game with fuzzy matching on team names
-        const game = data.events.find(e => {
-          return (
-            (e.strHomeTeam?.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) ||
-             homeTeam.toLowerCase().includes(e.strHomeTeam?.toLowerCase().split(' ')[0])) &&
-            (e.strAwayTeam?.toLowerCase().includes(awayTeam.toLowerCase().split(' ')[0]) ||
-             awayTeam.toLowerCase().includes(e.strAwayTeam?.toLowerCase().split(' ')[0]))
-          );
-        });
-        
-        if (game && game.intHomeScore && game.intAwayScore) {
-          return {
-            homeScore: Number(game.intHomeScore),
-            awayScore: Number(game.intAwayScore),
-            winner:
-              Number(game.intHomeScore) > Number(game.intAwayScore)
-                ? homeTeam
-                : awayTeam,
-            final_score: `${game.intAwayScore}-${game.intHomeScore}`,
-            source: 'TheSportsDB'
+      // 1. Try The Odds API first (most reliable for scores)
+      if (ODDS_API_KEY) {
+        try {
+          console.log(`Using The Odds API for ${league} scores`);
+          
+          // Convert our league names to The Odds API sport keys
+          const sportKeyMap = {
+            'MLB': 'baseball_mlb',
+            'NBA': 'basketball_nba',
+            'NHL': 'icehockey_nhl',
+            'NFL': 'americanfootball_nfl'
           };
+          
+          const sportKey = sportKeyMap[league.toUpperCase()];
+          if (!sportKey) {
+            console.log(`No sport key mapping for league: ${league}`);
+          } else {
+            // Calculate daysFrom parameter (The Odds API can look back up to 3 days)
+            const gameDate = new Date(date);
+            const currentDate = new Date();
+            const diffTime = Math.abs(currentDate - gameDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // Only fetch if within the 3-day window
+            if (diffDays <= 3) {
+              const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/scores/?apiKey=${ODDS_API_KEY}&daysFrom=${diffDays}`;
+              console.log(`Querying The Odds API: ${url.replace(ODDS_API_KEY, 'API_KEY')}`);
+              
+              const response = await fetch(url);
+              if (response.ok) {
+                const data = await response.json();
+                console.log(`Found ${data.length} games from The Odds API`);
+                
+                // Find the matching game using team name fuzzy matching
+                const game = data.find(g => {
+                  if (!g.completed) return false; // Skip games that haven't finished
+                  
+                  const homeMatch = g.home_team.toLowerCase().includes(homeTeam.toLowerCase()) || 
+                                  homeTeam.toLowerCase().includes(g.home_team.toLowerCase());
+                                  
+                  const awayMatch = g.away_team.toLowerCase().includes(awayTeam.toLowerCase()) || 
+                                  awayTeam.toLowerCase().includes(g.away_team.toLowerCase());
+                                  
+                  return homeMatch && awayMatch;
+                });
+                
+                if (game && game.scores) {
+                  const homeScoreObj = game.scores.find(s => 
+                    s.name.toLowerCase().includes(game.home_team.toLowerCase()) ||
+                    game.home_team.toLowerCase().includes(s.name.toLowerCase()));
+                    
+                  const awayScoreObj = game.scores.find(s => 
+                    s.name.toLowerCase().includes(game.away_team.toLowerCase()) ||
+                    game.away_team.toLowerCase().includes(s.name.toLowerCase()));
+                  
+                  if (homeScoreObj && awayScoreObj) {
+                    const homeScore = parseInt(homeScoreObj.score);
+                    const awayScore = parseInt(awayScoreObj.score);
+                    
+                    console.log(`Found score from The Odds API: ${awayTeam} ${awayScore}, ${homeTeam} ${homeScore}`);
+                    return {
+                      homeScore,
+                      awayScore,
+                      winner: homeScore > awayScore ? homeTeam : awayTeam,
+                      final_score: `${awayScore}-${homeScore}`,
+                      source: 'TheOddsAPI'
+                    };
+                  }
+                }
+              } else {
+                console.error(`The Odds API returned status ${response.status}: ${await response.text()}`);
+              }
+            } else {
+              console.log(`Game date is more than 3 days old, can't use The Odds API`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error with The Odds API: ${error.message}`);
         }
+      } else {
+        console.log('No Odds API key found in environment variables');
       }
       
       // 2. Try Ball Don't Lie for NBA games
       if (league.toUpperCase() === 'NBA') {
         try {
+          console.log('Trying Ball Don\'t Lie API for NBA scores');
           const nbaGames = await ballDontLieService.getNbaGamesByDate(date);
           if (nbaGames) {
             const gameKey = Object.keys(nbaGames).find(key => {
@@ -199,6 +250,7 @@ const pickResultsService = {
       try {
         // Format for API-Sports
         if (league.toUpperCase() === 'MLB') {
+          console.log('Trying API Sports for MLB scores');
           const games = await apiSportsService.apiRequest('/games', { date, league: 1 }, 'MLB');
           if (games?.response) {
             const game = games.response.find(g => {
@@ -237,16 +289,20 @@ const pickResultsService = {
           year: 'numeric'
         });
         
-        // Use a more flexible query format to handle various response types
-        const query = `What was the final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
+        // Use a very clear query format to get exactly what we need
+        const query = `What was the final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Respond with ONLY: [AwayTeam] [AwayScore], [HomeTeam] [HomeScore].`;
         
         const result = await perplexityService.fetchRealTimeInfo(query);
-        console.log(`Perplexity response for ${awayTeam} @ ${homeTeam}: ${result}`);
+        console.log(`Perplexity response for ${awayTeam} @ ${homeTeam}: "${result}"`);
         
         if (result) {
+          // Successfully extract score even if format isn't exact
+          // Log the successful extraction
+          console.log(`Successfully extracted score for ${awayTeam}: ${result}`);
+          
           // Try multiple patterns to handle different response formats
           
-          // First, try the direct score pattern (digits-digits)
+          // Pattern 1: Direct score pattern (digits-digits)
           const scorePattern = /(\d+)\s*[-:]\s*(\d+)/;
           const scoreMatch = result.match(scorePattern);
           
@@ -264,58 +320,76 @@ const pickResultsService = {
             };
           }
           
-          // Try to parse team names and scores (Team1 Score, Team2 Score) format
-          const teamScorePattern = /([A-Za-z][A-Za-z\s]+[A-Za-z])\s+(\d+)[,\s]+([A-Za-z][A-Za-z\s]+[A-Za-z])\s+(\d+)/;
+          // Pattern 2: Team name and score pattern (Team1 Score, Team2 Score)
+          const teamScorePattern = /([A-Za-z][A-Za-z\s\.'\-]+)[^\d]+(\d+)[^A-Za-z\d]+(([A-Za-z][A-Za-z\s\.'\-]+)[^\d]+(\d+)|)/;
           const teamScoreMatch = result.match(teamScorePattern);
           
-          if (teamScoreMatch && teamScoreMatch.length >= 5) {
-            console.log(`Found team score pattern: ${teamScoreMatch[1]} ${teamScoreMatch[2]}, ${teamScoreMatch[3]} ${teamScoreMatch[4]}`);
-            
+          if (teamScoreMatch && teamScoreMatch.length >= 3) {
+            // Extract the first team and score
             const team1 = teamScoreMatch[1].trim();
             const score1 = Number(teamScoreMatch[2]);
-            const team2 = teamScoreMatch[3].trim();
-            const score2 = Number(teamScoreMatch[4]);
             
-            // Determine which team is home vs away based on name similarity
-            const team1MatchesHome = team1.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) ||
-                                  homeTeam.toLowerCase().includes(team1.toLowerCase().split(' ')[0]);
-            const team2MatchesHome = team2.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) ||
-                                  homeTeam.toLowerCase().includes(team2.toLowerCase().split(' ')[0]);
-                                  
-            // If team1 matches home, team2 must be away
-            if (team1MatchesHome && !team2MatchesHome) {
-              return {
-                homeScore: score1,
-                awayScore: score2,
-                winner: score1 > score2 ? homeTeam : awayTeam,
-                final_score: `${score2}-${score1}`,
-                source: 'Perplexity-Teams'
-              };
-            } 
-            // If team2 matches home, team1 must be away
-            else if (!team1MatchesHome && team2MatchesHome) {
-              return {
-                homeScore: score2,
-                awayScore: score1,
-                winner: score2 > score1 ? homeTeam : awayTeam,
-                final_score: `${score1}-${score2}`,
-                source: 'Perplexity-Teams'
-              };
+            // Check if we have a second team and score in the match
+            let team2 = teamScoreMatch[3]?.trim();
+            let score2 = Number(teamScoreMatch[5] || 0);
+            
+            // If we don't have a second team/score from the first regex, try another pattern
+            if (!team2 || isNaN(score2)) {
+              // Try to find the second team and score
+              const secondTeamPattern = /([A-Za-z][A-Za-z\s\.'\-]+)[^\d]+(\d+)/g;
+              let matches = [...result.matchAll(secondTeamPattern)];
+              
+              if (matches.length >= 2) {
+                team2 = matches[1][1].trim();
+                score2 = Number(matches[1][2]);
+              }
             }
-            // If we can't determine which is which clearly, make a best guess
-            else {
-              console.log(`Ambiguous team matching, making best guess for: ${team1} ${score1}, ${team2} ${score2}`);
-              return {
-                homeScore: score2, // Assume team2 is home
-                awayScore: score1, // Assume team1 is away
-                winner: score2 > score1 ? homeTeam : awayTeam,
-                final_score: `${score1}-${score2}`,
-                source: 'Perplexity-Guess'
-              };
+            
+            if (team2 && !isNaN(score2)) {
+              console.log(`Found team score pattern: ${team1} ${score1}, ${team2} ${score2}`);
+              
+              // Determine which team is home vs away based on name similarity
+              const team1MatchesHome = team1.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) ||
+                                    homeTeam.toLowerCase().includes(team1.toLowerCase().split(' ')[0]);
+                                    
+              const team2MatchesHome = team2.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) ||
+                                    homeTeam.toLowerCase().includes(team2.toLowerCase().split(' ')[0]);
+                                    
+              // If team1 matches home, team2 must be away
+              if (team1MatchesHome && !team2MatchesHome) {
+                return {
+                  homeScore: score1,
+                  awayScore: score2,
+                  winner: score1 > score2 ? homeTeam : awayTeam,
+                  final_score: `${score2}-${score1}`,
+                  source: 'Perplexity-Teams'
+                };
+              } 
+              // If team2 matches home, team1 must be away
+              else if (!team1MatchesHome && team2MatchesHome) {
+                return {
+                  homeScore: score2,
+                  awayScore: score1,
+                  winner: score2 > score1 ? homeTeam : awayTeam,
+                  final_score: `${score1}-${score2}`,
+                  source: 'Perplexity-Teams'
+                };
+              }
+              // If we can't determine which is which clearly, make a best guess
+              else {
+                console.log(`Ambiguous team matching, making best guess for: ${team1} ${score1}, ${team2} ${score2}`);
+                return {
+                  homeScore: score2, // Assume team2 is home
+                  awayScore: score1, // Assume team1 is away
+                  winner: score2 > score1 ? homeTeam : awayTeam,
+                  final_score: `${score1}-${score2}`,
+                  source: 'Perplexity-Guess'
+                };
+              }
             }
           }
           
-          // One last attempt - extract any numbers as possible scores
+          // Pattern 3: Just extract all numbers as possible scores
           const allNumbers = result.match(/\d+/g);
           if (allNumbers && allNumbers.length >= 2) {
             console.log(`Found numbers in response: ${allNumbers[0]}, ${allNumbers[1]}`);
@@ -442,7 +516,7 @@ const pickResultsService = {
    * @param {string} resultStr - Result string ('won', 'lost', 'push')
    * @returns {Promise<Object>} - Result of the database operation
    */
-  writeGameResultToDb: async (pick, gameResult, resultStr) => {
+  writeGameResultToDb: async function(pick, gameResult, resultStr) {
     try {
       if (!resultStr || !gameResult) {
         return { success: false, message: 'Invalid result data' };
@@ -481,7 +555,7 @@ const pickResultsService = {
    * @param {string} resultStr - Result string ('won', 'lost', 'push')
    * @returns {Promise<Object>} - Result of the database operation
    */
-  writePropResultToDb: async (propPick, actualValue, resultStr) => {
+  writePropResultToDb: async function(propPick, actualValue, resultStr) {
     try {
       if (!resultStr) {
         return { success: false, message: 'Invalid result data' };
@@ -523,7 +597,7 @@ const pickResultsService = {
    * @param {string} dateStr - Date string in YYYY-MM-DD format
    * @returns {Promise<Object>} - Results processing summary
    */
-  gradeAllGamePicks: async (dateStr) => {
+  gradeAllGamePicks: async function(dateStr) {
     try {
       console.log(`Grading all game picks for date: ${dateStr}`);
       
@@ -645,7 +719,7 @@ const pickResultsService = {
    * @param {string} dateStr - Date string in YYYY-MM-DD format
    * @returns {Promise<Object>} - Results processing summary
    */
-  gradeAllPropPicks: async (dateStr) => {
+  gradeAllPropPicks: async function(dateStr) {
     try {
       console.log(`Grading all prop picks for date: ${dateStr}`);
       
@@ -787,7 +861,7 @@ const pickResultsService = {
    * @param {string} dateStr - Date string in YYYY-MM-DD format
    * @returns {Promise<Object>} - Combined results
    */
-  checkResultsForDate: async (dateStr) => {
+  checkResultsForDate: async function(dateStr) {
     if (!dateStr) {
       return { success: false, message: 'Date is required' };
     }
