@@ -637,31 +637,8 @@ export const resultsCheckerService = {
           }
           const teamName = teamMatch[1].trim();
           const league = (pick.league || 'NBA').toUpperCase();
-          try {
-            // Use the correct function from sportsDbApiService
-            const sportsDbScores = await sportsDbApiService.getEventsByDate(
-              sportsDbApiService.leagueIds[league] || sportsDbApiService.leagueIds.NBA,
-              date
-            );
-            if (sportsDbScores) {
-              const gameKey = Object.keys(sportsDbScores).find(key =>
-                key.toLowerCase().includes(teamName.toLowerCase())
-              );
-              if (gameKey) {
-                scores[pick.pick || pick.originalPick] = {
-                  home_team: gameKey.split(' @ ')[1] || 'Unknown',
-                  away_team: gameKey.split(' @ ')[0] || 'Unknown',
-                  home_score: sportsDbScores[gameKey].split('-')[1],
-                  away_score: sportsDbScores[gameKey].split('-')[0],
-                  league,
-                  final: true
-                };
-                continue;
-              }
-            }
-          } catch (err) {
-            console.error('SportsDB failed', err);
-          }
+          // No longer using SportsDB API for results
+          // We'll use The Odds API as primary source and Perplexity as fallback
           remainingGames.push(pick);
         }
         missingGames = remainingGames;
@@ -951,8 +928,7 @@ export const resultsCheckerService = {
     // Try getting scores from The Odds API first
     console.log('Getting scores from The Odds API...');
     let oddsApiScores = {};
-    // Initialize an empty object for any legacy API scores - will be empty but prevents reference errors
-    let sportsDbScores = {};
+    // We no longer use sportsDbScores since we've moved away from TheSportsDB
     
     try {
       // Try fetching from The Odds API first
@@ -1040,26 +1016,9 @@ export const resultsCheckerService = {
         const awayTeam = teams[0].trim();
         console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
         
-        // First check if we already have score data from TheSportsDB
+        // No longer using TheSportsDB for scores
+        // Just defining matchupKey for logging purposes
         const matchupKey = `${awayTeam} @ ${homeTeam}`;
-        if (sportsDbScores[matchupKey]) {
-          console.log(`Found score in TheSportsDB for ${matchupKey}: ${sportsDbScores[matchupKey].away_score}-${sportsDbScores[matchupKey].home_score}`);
-          scores[pickText] = sportsDbScores[matchupKey];
-          continue;
-        }
-        
-        // Check if we can find the home or away team individually
-        if (sportsDbScores[homeTeam]) {
-          console.log(`Found score in TheSportsDB for ${homeTeam}: ${sportsDbScores[homeTeam].away_score}-${sportsDbScores[homeTeam].home_score}`);
-          scores[pickText] = sportsDbScores[homeTeam];
-          continue;
-        }
-        
-        if (sportsDbScores[awayTeam]) {
-          console.log(`Found score in TheSportsDB for ${awayTeam}: ${sportsDbScores[awayTeam].away_score}-${sportsDbScores[awayTeam].home_score}`);
-          scores[pickText] = sportsDbScores[awayTeam];
-          continue;
-        }
         
         // If we can't find scores in the database, use Perplexity as a fallback
         console.log(`No scores found in database for ${matchupKey}, using Perplexity as fallback`);
@@ -1160,30 +1119,18 @@ export const resultsCheckerService = {
           
         console.log(`Extracted team name "${teamName}" from pick: ${pickText}`);
         
-        // First check if we already have score data from the database
-        if (sportsDbScores[teamName]) {
-          console.log(`Found score in TheSportsDB for ${teamName}: ${sportsDbScores[teamName].away_score}-${sportsDbScores[teamName].home_score}`);
-          scores[pickText] = sportsDbScores[teamName];
-          continue;
-        }
-        
-        // If team isn't found directly, try a more lenient match
-        const teamKeys = Object.keys(sportsDbScores);
-        for (const key of teamKeys) {
-          if (key.toLowerCase().includes(teamName.toLowerCase()) || 
-              teamName.toLowerCase().includes(key.toLowerCase())) {
-            console.log(`Found partial match in TheSportsDB for ${teamName} -> ${key}: ${sportsDbScores[key].away_score}-${sportsDbScores[key].home_score}`);
-            scores[pickText] = sportsDbScores[key];
-            break;
-          }
-        }
+        // We no longer use TheSportsDB for scores
+        // We use The Odds API as primary source and Perplexity as fallback
         
         // If we still don't have a match, use Perplexity as a fallback
         if (!scores[pickText]) {
           console.log(`No scores found in database for ${teamName}, using Perplexity as fallback`);
           
           // Create a query to find games involving this team
-          const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const gameDate = new Date(date);
+          // Ensure we're using the provided date, not hardcoding May 16
+          const formattedDate = gameDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          console.log(`Querying for scores on date: ${formattedDate}`);
           const query = `What was the final score of the ${league} game involving ${teamName} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
           
           try {
@@ -1227,7 +1174,13 @@ export const resultsCheckerService = {
                 /(\w[\w\s]+\w)\s+(?:defeated|beat|won against)\s+(\w[\w\s]+\w)\s+(?:by a score of|with a score of|)\s*(\d+)\s*[-–]\s*(\d+)/i,
                 
                 // Pattern 3: The final score was Team A 3, Team B 2
-                /(?:final score|score)\s+(?:was|:|is)?\s*(\w[\w\s]+\w)\s+(\d+)(?:,|\s+)\s*(\w[\w\s]+\w)\s+(\d+)/i
+                /(?:final score|score)\s+(?:was|:|is)?\s*(\w[\w\s]+\w)\s+(\d+)(?:,|\s+)\s*(\w[\w\s]+\w)\s+(\d+)/i,
+                
+                // Pattern 4: Team A X, Team B Y (comma-separated format)
+                /([\w\s\.\-']+)\s+(\d+)\s*,\s*([\w\s\.\-']+)\s+(\d+)/i,
+                
+                // Pattern 5: Another comma variation with possible period at end
+                /([\w\s\.\-']+)\s+(\d+),\s*([\w\s\.\-']+)\s+(\d+)\.*$/i
               ];
               
               // Try each pattern until we find a match
