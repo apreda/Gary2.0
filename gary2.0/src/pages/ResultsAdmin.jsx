@@ -258,7 +258,7 @@ function ResultsAdmin() {
                       <th className="px-4 py-2 text-left">Player</th>
                       <th className="px-4 py-2 text-left">Prop</th>
                       <th className="px-4 py-2 text-left">Line</th>
-                      <th className="px-4 py-2 text-left">Direction</th>
+                      <th className="px-4 py-2 text-left">Bet</th>
                       <th className="px-4 py-2 text-left">Actual</th>
                       <th className="px-4 py-2 text-left">Result</th>
                     </tr>
@@ -269,7 +269,7 @@ function ResultsAdmin() {
                         <td className="px-4 py-2">{result.player_name}</td>
                         <td className="px-4 py-2">{result.prop_type}</td>
                         <td className="px-4 py-2">{result.line_value}</td>
-                        <td className="px-4 py-2">{result.pick_direction || '-'}</td>
+                        <td className="px-4 py-2">{result.bet ? result.bet.toLowerCase() : '-'}</td>
                         <td className="px-4 py-2">{result.actual_value !== null ? result.actual_value : 'N/A'}</td>
                         <td className="px-4 py-2">
                           <span className={`px-2 py-1 rounded text-xs font-bold ${result.result === 'won' ? 'bg-green-500/20 text-green-400' : 
