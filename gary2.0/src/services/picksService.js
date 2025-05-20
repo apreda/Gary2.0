@@ -644,9 +644,16 @@ const picksService = {
         return { success: false, message: 'No picks provided' };
       }
       
-      // Current date in YYYY-MM-DD format for database storage
+      // Current date in YYYY-MM-DD format for database storage using EST timezone
       const currentDate = new Date();
-      const currentDateString = currentDate.toISOString().split('T')[0];
+      
+      // Format date in EST timezone (America/New_York)
+      const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+      const estDate = new Intl.DateTimeFormat('en-US', options).format(currentDate);
+      
+      // Convert from MM/DD/YYYY to YYYY-MM-DD format
+      const [month, day, year] = estDate.split('/');
+      const currentDateString = `${year}-${month}-${day}`;
       
       // Check if picks for today already exist
       const picksExist = await picksService.checkForExistingPicks(currentDateString);
