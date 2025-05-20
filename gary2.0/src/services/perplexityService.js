@@ -501,26 +501,41 @@ This is VERY important: Format your response in valid JSON like this exact struc
       
       // Define league-specific terms
       const leagueNames = {
-        'mlb': 'MLB baseball',
-        'nba': 'NBA basketball',
-        'nhl': 'NHL hockey'
+        'mlb': 'MLB',
+        'nba': 'NBA',
+        'nhl': 'NHL'
       };
       
       const leagueName = leagueNames[league.toLowerCase()] || 'sports';
       
-      // Create a query to get today's games for the league
-      const query = `What ${leagueName} games are scheduled for ${formattedDate}? Only list games with teams and ESPN game IDs if available.`;
+      // Create more effective queries for different sports
+      // For MLB, we'll try to get specific team matchups with pitcher info
+      let query = '';
+      if (league.toLowerCase() === 'mlb') {
+        query = `For today (${formattedDate}), give me all ${leagueName} games scheduled with home and away teams, starting times (ET), and pitcher matchups. If you know the ESPN game IDs, include those too. Format each game as: Team1 vs Team2, Time ET, Game ID: [id if known]`;
+      } else {
+        query = `What ${leagueName} games are scheduled for ${formattedDate}? List all games with format: Team1 vs Team2, Time ET. Include ESPN game IDs if known.`;
+      }
       
-      // Use Perplexity to get the information
+      // Use Perplexity to get the information with a specialized system prompt
       console.log(`Getting ESPN game data via Perplexity for ${league} on ${formattedDate}`);
-      const result = await this.search(query, false);
+      const systemMessage = 'You are a professional sports data analyst who specializes in retrieving accurate game schedules. Format your response with clear team vs team matchups, one per line. Include ESPN game IDs whenever possible.';
+      const result = await this.search(query, {
+        systemMessage,
+        temperature: 0.2,
+        maxTokens: 1024
+      });
       
-      // Parse the result to extract ESPN game links
-      // The format returned by Perplexity will be variable, so we look for patterns that might include ESPN game IDs
+      // Extract team matchups from the result
+      const teamMatchups = this._extractTeamMatchups(result, league);
+      console.log(`Extracted ${teamMatchups.length} game matchups for ${league}`);
+      
+      // First, try to match these with The Odds API to get IDs
+      const oddsMatches = await this._matchWithOddsApi(teamMatchups, league);
+      
+      // If we found direct ESPN URLs, add them
       const gameLinks = [];
-      
-      // First, look for direct ESPN URLs in the response
-      const espnUrlRegex = /https?:\/\/(?:www\.)?espn\.com\/[^\/]+\/game\/_\/gameId\/(\d+)/g;
+      const espnUrlRegex = /https?:\/\/(?:www\.)?espn\.com\/[^\/]+\/game\_\/gameId\/(\d+)/g;
       let match;
       while ((match = espnUrlRegex.exec(result)) !== null) {
         if (!gameLinks.includes(match[0])) {
@@ -528,26 +543,165 @@ This is VERY important: Format your response in valid JSON like this exact struc
         }
       }
       
-      // If no direct URLs found, look for game IDs and construct URLs
-      if (gameLinks.length === 0) {
-        const gameIdRegex = /game\s*id\s*[:=]?\s*(\d{9,})|espn\s*game\s*id\s*[:=]?\s*(\d{9,})|gameId\/(\d{9,})/gi;
-        let idMatch;
-        while ((idMatch = gameIdRegex.exec(result)) !== null) {
-          const gameId = idMatch[1] || idMatch[2] || idMatch[3];
-          if (gameId) {
-            const espnUrl = `https://www.espn.com/${league.toLowerCase()}/game/_/gameId/${gameId}`;
-            if (!gameLinks.includes(espnUrl)) {
-              gameLinks.push(espnUrl);
-            }
+      // Extract game IDs if present
+      const gameIdRegex = /game\s*id\s*[:=]?\s*(\d{9,})|espn\s*game\s*id\s*[:=]?\s*(\d{9,})|gameId\/(\d{9,})/gi;
+      let idMatch;
+      while ((idMatch = gameIdRegex.exec(result)) !== null) {
+        const gameId = idMatch[1] || idMatch[2] || idMatch[3];
+        if (gameId) {
+          const espnUrl = `https://www.espn.com/${league.toLowerCase()}/game/_/gameId/${gameId}`;
+          if (!gameLinks.includes(espnUrl)) {
+            gameLinks.push(espnUrl);
           }
         }
       }
       
-      console.log(`Found ${gameLinks.length} ESPN game links for ${league} via Perplexity`);
+      // If we still have no links but have team matchups, we'll create generic team search links
+      if (gameLinks.length === 0 && teamMatchups.length > 0) {
+        for (const match of teamMatchups) {
+          // Create a link that will help find stats even without a game ID
+          const searchableTeams = `${match.homeTeam} ${match.awayTeam}`.toLowerCase().replace(/\s+/g, '+');
+          const espnUrl = `https://www.espn.com/${league.toLowerCase()}/game?teams=${searchableTeams}`;
+          gameLinks.push(espnUrl);
+        }
+      }
+      
+      console.log(`Found ${gameLinks.length} ESPN links for ${league} via Perplexity`);
       return gameLinks;
     } catch (error) {
       console.error(`Error fetching ESPN game links: ${error.message}`);
       return [];
+    }
+  },
+  
+  /**
+   * Extract team matchups from Perplexity response
+   * @param {string} response - Perplexity response text
+   * @param {string} league - League code
+   * @returns {Array} - Array of team matchup objects
+   * @private
+   */
+  _extractTeamMatchups: function(response, league) {
+    const matchups = [];
+    const lines = response.split('\n');
+    
+    // Different patterns for different sports
+    const mlbPattern = /(\w[\w\s.&'-]+)\s+(?:vs\.?|at|@)\s+(\w[\w\s.&'-]+)/gi;
+    const generalPattern = /(\w[\w\s.&'-]+)\s+(?:vs\.?|at|@)\s+(\w[\w\s.&'-]+)/gi;
+    
+    const pattern = league.toLowerCase() === 'mlb' ? mlbPattern : generalPattern;
+    
+    for (const line of lines) {
+      // Skip empty lines or lines that don't look like game matchups
+      if (!line.trim() || line.trim().length < 10) continue;
+      
+      let matchFound = false;
+      let match;
+      
+      // Try to extract team matchups from the line
+      while ((match = pattern.exec(line)) !== null) {
+        const homeTeam = match[1].trim();
+        const awayTeam = match[2].trim();
+        
+        // Validate team names (basic sanity check)
+        if (homeTeam.length < 3 || awayTeam.length < 3) continue;
+        
+        // Check if this matchup was already added
+        const isDuplicate = matchups.some(m => 
+          (m.homeTeam === homeTeam && m.awayTeam === awayTeam) ||
+          (m.homeTeam === awayTeam && m.awayTeam === homeTeam)
+        );
+        
+        if (!isDuplicate) {
+          matchups.push({
+            homeTeam,
+            awayTeam,
+            line: line.trim()
+          });
+          matchFound = true;
+        }
+      }
+      
+      // If we didn't find a match with the pattern, try a more general approach
+      if (!matchFound && line.includes('vs')) {
+        const parts = line.split('vs');
+        if (parts.length === 2) {
+          const homeTeam = parts[0].trim();
+          // Extract away team (remove time/other info)
+          let awayTeam = parts[1].trim();
+          awayTeam = awayTeam.split(',')[0].trim();
+          
+          // Validate team names
+          if (homeTeam.length >= 3 && awayTeam.length >= 3) {
+            matchups.push({
+              homeTeam,
+              awayTeam,
+              line: line.trim()
+            });
+          }
+        }
+      }
+    }
+    
+    return matchups;
+  },
+  
+  /**
+   * Match team matchups with The Odds API data
+   * @param {Array} matchups - Team matchup objects
+   * @param {string} league - League code
+   * @returns {Array} - Matchups with IDs if found
+   * @private
+   */
+  _matchWithOddsApi: async function(matchups, league) {
+    try {
+      // If no matchups, just return
+      if (!matchups || matchups.length === 0) return matchups;
+      
+      // Import oddsService dynamically to avoid circular dependencies
+      const { oddsService } = await import('./oddsService.js');
+      
+      // Convert league codes
+      const oddsLeague = league.toLowerCase() === 'mlb' ? 'baseball_mlb' :
+                         league.toLowerCase() === 'nba' ? 'basketball_nba' :
+                         league.toLowerCase() === 'nhl' ? 'hockey_nhl' : null;
+      
+      if (!oddsLeague) return matchups;
+      
+      // Get today's games from Odds API
+      const options = { timeZone: 'America/New_York' };
+      const today = new Date().toLocaleString('en-US', options).split(',')[0];
+      
+      const games = await oddsService.getGamesForSport(oddsLeague, today);
+      
+      if (!games || games.length === 0) return matchups;
+      
+      // Match team names with Odds API data
+      for (const matchup of matchups) {
+        // Normalize team names for comparison
+        const homeTeamNorm = matchup.homeTeam.toLowerCase().replace(/\s+/g, '');
+        const awayTeamNorm = matchup.awayTeam.toLowerCase().replace(/\s+/g, '');
+        
+        // Find matching game from Odds API
+        const match = games.find(game => {
+          const apiHome = game.home_team.toLowerCase().replace(/\s+/g, '');
+          const apiAway = game.away_team.toLowerCase().replace(/\s+/g, '');
+          
+          return (apiHome.includes(homeTeamNorm) || homeTeamNorm.includes(apiHome)) &&
+                 (apiAway.includes(awayTeamNorm) || awayTeamNorm.includes(apiAway));
+        });
+        
+        if (match) {
+          matchup.id = match.id;
+          matchup.gameTime = match.commence_time;
+          matchup.matchedTeams = { home: match.home_team, away: match.away_team };
+        }
+      }
+      
+      return matchups;
+    } catch (error) {
+      console.error('Error matching with Odds API:', error.message);
+      return matchups;
     }
   },
   
