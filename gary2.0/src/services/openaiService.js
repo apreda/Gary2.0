@@ -1,6 +1,8 @@
 /**
- * Service for interacting with the OpenAI API
- * Provides Gary's analysis and betting recommendations
+ * OpenAI service for generating sports analysis and picks
+ * This service uses OpenAI to generate Gary's betting analysis and recommendations
+ * Provides betting insights through the legendary Gary the Grizzly Bear character
+ * Deployment: 2025-05-19
  */
 import axios from 'axios';
 import { apiCache } from '../utils/apiCache';
