@@ -275,24 +275,116 @@ export const resultsCheckerService = {
           year: 'numeric'
         });
         
-        const query = `What was the final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Reply with ONLY the final score in the format: AwayTeam Score - HomeTeam Score. Include no other text.`;
+        // Use a more specific query format to get exactly what we need
+        const query = `What was the final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Respond with ONLY: [Team1] [Score1], [Team2] [Score2].`;
         
         const result = await perplexityService.fetchRealTimeInfo(query);
+        console.log(`Perplexity response for ${awayTeam} @ ${homeTeam}: "${result}"`);
+        
         if (result) {
-          // Try to parse scores with regex
-          const scorePattern = /(\d+)\s*[-:]\s*(\d+)/;
-          const match = result.match(scorePattern);
+          console.log(`Successfully extracted score: ${result}`);
           
-          if (match && match.length >= 3) {
-            const awayScore = Number(match[1]);
-            const homeScore = Number(match[2]);
+          // Try multiple patterns to handle different response formats
+          
+          // Pattern 1: Direct score pattern (digits-digits)
+          const directScorePattern = /(\d+)\s*[-:]\s*(\d+)/;
+          const directMatch = result.match(directScorePattern);
+          
+          if (directMatch && directMatch.length >= 3) {
+            console.log(`Found direct score pattern: ${directMatch[1]}-${directMatch[2]}`);
+            const score1 = Number(directMatch[1]);
+            const score2 = Number(directMatch[2]);
+            
+            // Since we don't know which is home/away in this format, match with team names
+            return {
+              homeScore: score2, // Assuming second score is home
+              awayScore: score1, // Assuming first score is away
+              winner: score2 > score1 ? homeTeam : awayTeam,
+              final_score: `${score1}-${score2}`,
+              source: 'Perplexity-Direct'
+            };
+          }
+          
+          // Pattern 2: Team name and score pattern like "Detroit Tigers 5, Toronto Blue Jays 4"
+          const teamScorePattern = /([A-Za-z][A-Za-z\s\.\-']+)\s*(\d+)\s*,\s*([A-Za-z][A-Za-z\s\.\-']+)\s*(\d+)/i;
+          const teamMatch = result.match(teamScorePattern);
+          
+          if (teamMatch && teamMatch.length >= 5) {
+            console.log(`Found team name and score pattern`);
+            const team1 = teamMatch[1].trim();
+            const score1 = Number(teamMatch[2]);
+            const team2 = teamMatch[3].trim();
+            const score2 = Number(teamMatch[4]);
+            
+            console.log(`Team 1: ${team1} (${score1}), Team 2: ${team2} (${score2})`);
+            
+            // Determine which team is home vs away
+            let homeTeamName = homeTeam;
+            let awayTeamName = awayTeam;
+            
+            // The strings might be null or undefined, so add safety checks
+            const safeHomeTeam = (homeTeamName || '').toLowerCase();
+            const safeAwayTeam = (awayTeamName || '').toLowerCase();
+            const safeTeam1 = (team1 || '').toLowerCase();
+            const safeTeam2 = (team2 || '').toLowerCase();
+            
+            let homeMatchesTeam1 = safeTeam1.includes(safeHomeTeam) || safeHomeTeam.includes(safeTeam1);
+            let homeMatchesTeam2 = safeTeam2.includes(safeHomeTeam) || safeHomeTeam.includes(safeTeam2);
+            
+            if (homeMatchesTeam1) {
+              return {
+                homeScore: score1,
+                awayScore: score2,
+                winner: score1 > score2 ? homeTeam : awayTeam,
+                final_score: `${score2}-${score1}`,
+                source: 'Perplexity-Teams'
+              };
+            } else if (homeMatchesTeam2) {
+              return {
+                homeScore: score2,
+                awayScore: score1,
+                winner: score2 > score1 ? homeTeam : awayTeam,
+                final_score: `${score1}-${score2}`,
+                source: 'Perplexity-Teams'
+              };
+            } else {
+              // If matching is unclear, try another approach - look for words like "at"
+              const isHomeSecond = result.includes(' at ') || result.includes(' @ ');
+              
+              if (isHomeSecond) {
+                return {
+                  homeScore: score2,
+                  awayScore: score1,
+                  winner: score2 > score1 ? homeTeam : awayTeam,
+                  final_score: `${score1}-${score2}`,
+                  source: 'Perplexity-AtFormat'
+                };
+              } else {
+                // If all else fails, make a best guess based on which team was mentioned first
+                return {
+                  homeScore: score2,
+                  awayScore: score1,
+                  winner: score2 > score1 ? homeTeam : awayTeam,
+                  final_score: `${score1}-${score2}`,
+                  source: 'Perplexity-Guess'
+                };
+              }
+            }
+          }
+          
+          // Pattern 3: Just extract all numbers as possible scores
+          const allNumbers = result.match(/\d+/g);
+          if (allNumbers && allNumbers.length >= 2) {
+            console.log(`Found numbers in response: ${allNumbers[0]}, ${allNumbers[1]}`);
+            const score1 = Number(allNumbers[0]);
+            const score2 = Number(allNumbers[1]);
             
             return {
-              homeScore,
-              awayScore,
-              winner: homeScore > awayScore ? homeTeam : awayTeam,
-              final_score: `${homeScore}-${awayScore}`,
-              source: 'Perplexity'
+              homeScore: score2, // Assume second number is home score
+              awayScore: score1, // Assume first number is away score
+              winner: score2 > score1 ? homeTeam : awayTeam,
+              final_score: `${score1}-${score2}`,
+              source: 'Perplexity-Numbers'
             };
           }
         }
@@ -642,14 +734,39 @@ export const resultsCheckerService = {
                   const firstScore = parseInt(scoreMatch[2]);
                   const secondScore = parseInt(scoreMatch[3]);
                   
+                  // Add safety checks for undefined homeTeam, awayTeam, or firstTeam
+                  const safeHomeTeam = homeTeam ? homeTeam.toLowerCase() : '';
+                  const safeAwayTeam = awayTeam ? awayTeam.toLowerCase() : '';
+                  const safeFirstTeam = firstTeam ? firstTeam.toLowerCase() : '';
+                  const safeSecondTeam = secondTeam ? secondTeam.toLowerCase() : '';
+                  
+                  // Determine home/away scores using safer comparisons
+                  let homeScore, awayScore;
+                  
+                  // Try to match team names
+                  const firstMatchesHome = safeFirstTeam.includes(safeHomeTeam) || safeHomeTeam.includes(safeFirstTeam);
+                  const secondMatchesHome = safeSecondTeam.includes(safeHomeTeam) || safeHomeTeam.includes(safeSecondTeam);
+                  
+                  if (firstMatchesHome) {
+                    homeScore = firstScore;
+                    awayScore = secondScore;
+                  } else if (secondMatchesHome) {
+                    homeScore = secondScore;
+                    awayScore = firstScore;
+                  } else {
+                    // If no matches, make best guess (assume second team is home)
+                    homeScore = secondScore;
+                    awayScore = firstScore;
+                  }
+                  
                   result = {
                     success: true,
                     scores: {
                       [pickStr]: {
-                        home_team: homeTeam,
-                        away_team: awayTeam,
-                        home_score: homeTeam.toLowerCase().includes(firstTeam.toLowerCase()) ? firstScore : secondScore,
-                        away_score: awayTeam.toLowerCase().includes(firstTeam.toLowerCase()) ? firstScore : secondScore,
+                        home_team: homeTeam || 'Unknown',
+                        away_team: awayTeam || 'Unknown',
+                        home_score: homeScore,
+                        away_score: awayScore,
                         league: league,
                         final: true,
                         source: 'Perplexity'
