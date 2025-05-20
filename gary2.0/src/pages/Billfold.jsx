@@ -32,8 +32,8 @@ export const Billfold = () => {
   // State for selected time period filter
   const [selectedTimeFrame, setSelectedTimeFrame] = useState('all');
   
-  // State for toggling between all picks, game picks, and prop picks
-  const [showPicksType, setShowPicksType] = useState('all'); // 'all', 'games', 'props'
+  // State for toggling between game picks and prop picks
+  const [showPicksType, setShowPicksType] = useState('games'); // 'games' or 'props'
 
   // Filter options for charts
   const timeFrameOptions = [
@@ -320,14 +320,13 @@ export const Billfold = () => {
     return 'Moneyline';
   };
   
-  // Toggle between all picks, game picks, and prop picks
-  const togglePicksView = (type) => {
-    setShowPicksType(type);
+  // Toggle between game picks and prop picks
+  const togglePicksView = () => {
+    setShowPicksType(showPicksType === 'games' ? 'props' : 'games');
   };
 
   // Filter the betting log based on the selected type
   const filteredBettingLog = bettingLog.filter(bet => {
-    if (showPicksType === 'all') return true;
     return bet.type === (showPicksType === 'games' ? 'game' : 'prop');
   });
 
@@ -391,24 +390,13 @@ export const Billfold = () => {
             />
           </div>
           
-          {/* Toggle between All Picks, Game Picks and Prop Picks */}
+          {/* Toggle between Game Picks and Prop Picks */}
           <div className="flex justify-center mt-6 mb-8">
             <div className="inline-flex rounded-md shadow-sm" role="group">
               <button
                 type="button"
-                onClick={() => togglePicksView('all')}
-                className={`px-4 py-2 text-sm font-medium focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors rounded-l-lg ${
-                  showPicksType === 'all' 
-                    ? 'bg-[#b8953f] text-gray-900 font-bold' 
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                All Picks
-              </button>
-              <button
-                type="button"
-                onClick={() => togglePicksView('games')}
-                className={`px-4 py-2 text-sm font-medium focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
+                onClick={() => setShowPicksType('games')}
+                className={`px-6 py-2 text-sm font-medium rounded-l-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
                   showPicksType === 'games' 
                     ? 'bg-[#b8953f] text-gray-900 font-bold' 
                     : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -418,8 +406,8 @@ export const Billfold = () => {
               </button>
               <button
                 type="button"
-                onClick={() => togglePicksView('props')}
-                className={`px-4 py-2 text-sm font-medium rounded-r-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
+                onClick={() => setShowPicksType('props')}
+                className={`px-6 py-2 text-sm font-medium rounded-r-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
                   showPicksType === 'props' 
                     ? 'bg-[#b8953f] text-gray-900 font-bold' 
                     : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
