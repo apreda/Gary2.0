@@ -92,8 +92,8 @@ export function Pricing() {
                 </div>
               </div>
               
-              {/* Ticket body - with a dark contrast */}
-              <div className="flex-grow bg-black text-white p-6 flex flex-col justify-between"> 
+              {/* Ticket body - with a solid black background */}
+              <div className="flex-grow text-white p-6 flex flex-col justify-between" style={{ backgroundColor: '#000000', opacity: 1, position: 'relative', zIndex: 5 }}> 
                 <div>
                   <h3 className="text-lg font-bold mb-4 text-[#b8953f]">Pro Membership</h3>
                   <ul className="space-y-3 text-gray-300">
@@ -132,7 +132,7 @@ export function Pricing() {
               </div>
               
               {/* Ticket footer with action button */}
-              <div className="bg-black relative p-4 rounded-b-xl group-hover:shadow-md transition duration-300 overflow-hidden">
+              <div className="relative p-4 rounded-b-xl group-hover:shadow-md transition duration-300 overflow-hidden" style={{ backgroundColor: '#000000', opacity: 1, position: 'relative', zIndex: 5 }}>
                 <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
                   style={{
                     background: "linear-gradient(135deg, #b8953f 0%, #d4af37 75%)",
