@@ -564,6 +564,20 @@ export const Billfold = () => {
                 {formatPropPickText(bestWin.pick) || ''}
                 {bestWin.odds && <span className="ml-1">{bestWin.odds}</span>}
               </div>
+              <div className="text-xs mb-2" style={{ color: 'var(--gary-text-tertiary)' }}>
+                {bestWin.rawGameDate ? (
+                  // Parse the date string directly to preserve the exact date from Supabase
+                  (() => {
+                    const dateParts = bestWin.rawGameDate.split('T')[0].split('-');
+                    const year = dateParts[0];
+                    const month = new Date(`${year}-${dateParts[1]}-01`).toLocaleString('en-US', { month: 'short' });
+                    const day = parseInt(dateParts[2]);
+                    return `${month} ${day}`;
+                  })()
+                ) : (
+                  bestWin.date?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                )}
+              </div>
               <div className="inline-block px-3 py-1 rounded text-black font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
                 +${bestWin.winAmount || 100}
               </div>
@@ -592,7 +606,20 @@ export const Billfold = () => {
                 <tbody>
                   {bettingLog.map((bet, index) => (
                   <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-800/50 transition-colors">
-                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.rawGameDate ? new Date(bet.rawGameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">
+                      {bet.rawGameDate ? (
+                        // Parse the date string directly and preserve the exact date from Supabase
+                        (() => {
+                          const dateParts = bet.rawGameDate.split('T')[0].split('-');
+                          const year = dateParts[0];
+                          const month = new Date(`${year}-${dateParts[1]}-01`).toLocaleString('en-US', { month: 'short' });
+                          const day = parseInt(dateParts[2]);
+                          return `${month} ${day}`;
+                        })()
+                      ) : (
+                        new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                      )}
+                    </td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.sport}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{bet.matchup || 'Game not found'}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6">
