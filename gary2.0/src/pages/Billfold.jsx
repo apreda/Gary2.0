@@ -620,7 +620,7 @@ export const Billfold = () => {
                   <tr>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>DATE</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>SPORT</th>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>MATCHUP</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>{showPicksType === 'props' ? 'ODDS' : 'MATCHUP'}</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>PICK</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f', textAlign: 'right' }}>RESULT</th>
                   </tr>
@@ -632,7 +632,11 @@ export const Billfold = () => {
                       {formatDateFromSupabase(bet.rawGameDate) || new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.sport}</td>
-                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{bet.matchup || 'Game not found'}</td>
+                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{
+                      showPicksType === 'props' ? 
+                        (bet.odds || 'N/A') : 
+                        (bet.matchup || 'Game not found')
+                    }</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6">
                       <div className="flex items-center">
                         <span className="inline-block w-2 h-2 rounded-sm bg-[#b8953f]"></span>
