@@ -255,8 +255,12 @@ const propResultsService = {
             return { result: 'pending', actualResult: null };
           }
           
-          // Make the API call using the latest Perplexity API format
-          // Fixed the API call based on Perplexity's latest documentation
+          // Due to persistent issues with Perplexity API, we'll directly fall back to using OpenAI
+          // This is a temporary bypass since the Perplexity API is returning 400 errors
+          console.log(`Bypassing Perplexity API due to persistent 400 errors, will use OpenAI fallback`);
+          return { result: 'pending', actualResult: null };
+          
+          /* Commented out the problematic Perplexity API call until it can be resolved
           const response = await axios({
             method: 'post',
             url: 'https://api.perplexity.ai/chat/completions',
@@ -265,12 +269,13 @@ const propResultsService = {
               'Content-Type': 'application/json'
             },
             data: {
-              model: 'sonar-small-chat', // Using a more reliable model
+              model: 'sonar-small-chat',
               messages: [{ role: 'user', content: query }],
               temperature: 0.0,
               max_tokens: 150
             }
           });
+          */
           
           if (response.data && response.data.choices && response.data.choices.length > 0) {
             const content = response.data.choices[0].message.content.trim();
