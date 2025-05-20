@@ -240,7 +240,7 @@ const propResultsService = {
           else if (propType === 'hits_runs_rbis') statName = 'combined hits, runs, and RBIs';
           
           // Create a direct, simple query just asking for the stat total
-          const query = `How many ${statName} did ${playerName} have in the game on ${searchDate} against ${team}? Please provide only the number.`;
+          const query = `How many ${statName} did ${playerName} have in the game on ${searchDate}?`;
           
           // Check if Perplexity API key is available
           const perplexityApiKey = import.meta.env?.VITE_PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
@@ -326,21 +326,22 @@ const propResultsService = {
           // Implement Perplexity API call using their latest API specification
           // Using their recommended model and format to fix 400 errors
           try {
-            console.log(`Making request to Perplexity API with model: claude-3-opus-20240229`);
+            console.log(`Making request to Perplexity API with model: pplx-7b-online`);
             
-            const response = await axios({
-              method: 'post',
-              url: 'https://api.perplexity.ai/chat/completions',
+            // Use exactly the format shown in the example
+            const response = await axios.post('https://api.perplexity.ai/chat/completions', {
+              model: 'pplx-7b-online',
+              messages: [
+                {
+                  role: 'user',
+                  content: query
+                }
+              ],
+              max_tokens: 256
+            }, {
               headers: {
                 'Authorization': `Bearer ${perplexityApiKey}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              data: {
-                model: 'pplx-7b-online', // Using online model which is better for real-time sports information
-                messages: [{ role: 'user', content: query }],
-                max_tokens: 512,
-                temperature: 0.0
+                'Content-Type': 'application/json'
               }
             });
             
@@ -353,19 +354,20 @@ const propResultsService = {
             try {
               console.log(`Trying fallback model: llama-3-sonar-online`);
               
-              const fallbackResponse = await axios({
-                method: 'post',
-                url: 'https://api.perplexity.ai/chat/completions',
+              // Use exactly the same structure for the fallback model
+              const fallbackResponse = await axios.post('https://api.perplexity.ai/chat/completions', {
+                model: 'llama-3-sonar-online',
+                messages: [
+                  {
+                    role: 'user',
+                    content: query
+                  }
+                ],
+                max_tokens: 256
+              }, {
                 headers: {
                   'Authorization': `Bearer ${perplexityApiKey}`,
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json'
-                },
-                data: {
-                  model: 'llama-3-sonar-online', // Fallback to another online model
-                  messages: [{ role: 'user', content: query }],
-                  max_tokens: 512,
-                  temperature: 0.0
+                  'Content-Type': 'application/json'
                 }
               });
               
