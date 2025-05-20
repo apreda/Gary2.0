@@ -358,18 +358,51 @@ export const Billfold = () => {
   const determineBetType = (pickText) => {
     if (!pickText) return 'Unknown';
     
-    const lowerCaseText = pickText.toLowerCase();
+    const lowerText = pickText.toLowerCase();
     
-    if (lowerCaseText.includes('under') || lowerCaseText.includes('over')) {
-      return 'Total';
-    } else if (lowerCaseText.includes('+') || lowerCaseText.includes('-')) {
-      if (lowerCaseText.includes('spread') || lowerCaseText.includes('cover')) {
-        return 'Spread';
-      }
+    if (lowerText.includes('spread') || lowerText.includes('covering') || lowerText.includes('points')) {
+      return 'Spread';
     }
     
-    // Default to moneyline if no specific indicators
+    if (lowerText.includes('under') || lowerText.includes('over') || lowerText.includes('total') || lowerText.includes('o/u')) {
+      return 'Total';
+    }
+    
+    if (lowerText.includes('won') || lowerText.includes('win') || lowerText.includes('winner') || lowerText.includes('ml')) {
+      return 'Moneyline';
+    }
+    
+    if (lowerText.includes('parlay')) {
+      return 'Parlay';
+    }
+    
     return 'Moneyline';
+  };
+  
+  // Helper function to format bet type names (capitalize and replace underscores with spaces)
+  const formatBetTypeName = (betType) => {
+    if (!betType) return '';
+    
+    // Special cases for MLB prop types
+    const specialCases = {
+      'hits': 'Hits',
+      'strikeouts': 'Strikeouts',
+      'total_bases': 'Total Bases',
+      'hits_runs_rbis': 'Hits Runs RBIs',
+      'outs': 'Outs',
+      'Player Prop': 'Player Prop'
+    };
+    
+    // If we have a special case mapping, use it
+    if (specialCases[betType]) {
+      return specialCases[betType];
+    }
+    
+    // Otherwise, split by underscores, capitalize each word, and join with spaces
+    return betType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   };
   
   // Toggle between game picks and prop picks
@@ -617,7 +650,7 @@ export const Billfold = () => {
                                            index === 1 ? 'var(--gary-gold-light)' : 
                                            'var(--gary-gold-tint)' 
                            }}></div>
-                      <span className="ml-3 font-medium" style={{ color: 'var(--gary-text-primary)' }}>{betType.betType}</span>
+                      <span className="ml-3 font-medium" style={{ color: 'var(--gary-text-primary)' }}>{formatBetTypeName(betType.betType)}</span>
                     </div>
                     <div className="gary-flex">
                       <span className="font-medium" style={{ color: 'var(--gary-text-primary)' }}>{betType.count}</span>
@@ -632,7 +665,7 @@ export const Billfold = () => {
                   <div className="mb-2 text-sm" style={{ color: 'var(--gary-text-tertiary)' }}>MOST PROFITABLE BET TYPE</div>
                   <div className="inline-block py-2 px-4 rounded-full" 
                        style={{ backgroundColor: 'var(--gary-gold-tint)', color: 'var(--gary-gold)' }}>
-                    <span className="font-bold">Moneyline +14.2%</span>
+                    <span className="font-bold">{formatBetTypeName(stats.mostProfitableBetType?.betType)} {stats.mostProfitableBetType?.displayRate}</span>
                   </div>
                 </div>
               </div>
