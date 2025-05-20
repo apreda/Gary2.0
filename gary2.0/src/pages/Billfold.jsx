@@ -641,7 +641,7 @@ export const Billfold = () => {
             </div>
             <div className="gary-card-body">
               <div className="gary-grid" style={{ gap: 'var(--space-md)' }}>
-                {stats.betTypePerformance.map((betType, index) => (
+                {stats.betTypePerformance && stats.betTypePerformance.length > 0 ? stats.betTypePerformance.map((betType, index) => (
                   <div key={index} className="gary-flex-between">
                     <div className="gary-flex">
                       <div className="w-3 h-3 rounded-sm" 
@@ -657,16 +657,23 @@ export const Billfold = () => {
                       <span className="text-sm ml-1" style={{ color: 'var(--gary-text-secondary)' }}>({Math.round(betType.percentage)}%)</span>
                     </div>
                   </div>
-                ))}
+                )) : <div className="text-center py-3" style={{ color: 'var(--gary-text-tertiary)' }}>No bet type data available</div>}
               </div>
               
               <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--gary-border-secondary)' }}>
                 <div className="text-center">
                   <div className="mb-2 text-sm" style={{ color: 'var(--gary-text-tertiary)' }}>MOST PROFITABLE BET TYPE</div>
-                  <div className="inline-block py-2 px-4 rounded-full" 
-                       style={{ backgroundColor: 'var(--gary-gold-tint)', color: 'var(--gary-gold)' }}>
-                    <span className="font-bold">{formatBetTypeName(stats.mostProfitableBetType?.betType)} {stats.mostProfitableBetType?.displayRate}</span>
-                  </div>
+                  {stats.mostProfitableBetType ? (
+                    <div className="inline-block py-2 px-4 rounded-full" 
+                         style={{ backgroundColor: 'var(--gary-gold-tint)', color: 'var(--gary-gold)' }}>
+                      <span className="font-bold">{formatBetTypeName(stats.mostProfitableBetType.betType)} {stats.mostProfitableBetType.displayRate}</span>
+                    </div>
+                  ) : (
+                    <div className="inline-block py-2 px-4 rounded-full" 
+                         style={{ backgroundColor: 'var(--gary-gold-tint)', color: 'var(--gary-gold)' }}>
+                      <span className="font-bold">No data available</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
