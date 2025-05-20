@@ -245,6 +245,9 @@ ${gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No 
 
 ${gameData?.lineMovement ? `Line Movement: ${JSON.stringify(gameData.lineMovement, null, 2)}` : 'No line movement data available'}
 
+TEAM STATISTICS:
+${gameData?.statsContext || ''}
+${(gameData?.enhancedStats && typeof gameData?.enhancedStats === 'string') ? gameData.enhancedStats : ''}
 ${typeof gameData?.teamStats === 'string' ? gameData.teamStats : JSON.stringify(gameData?.teamStats || '', null, 2)}
 
 ${gameData?.pitcherData ? `PITCHER DATA:
