@@ -618,11 +618,11 @@ export const Billfold = () => {
               <table className="gary-table w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                 <thead>
                   <tr>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>DATE</th>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>SPORT</th>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>{showPicksType === 'props' ? 'ODDS' : 'MATCHUP'}</th>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>PICK</th>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f', textAlign: 'right' }}>RESULT</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>DATE</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>SPORT</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>{showPicksType === 'props' ? 'ODDS' : 'MATCHUP'}</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>PICK</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000', textAlign: 'right' }}>RESULT</th>
                   </tr>
                 </thead>
                 <tbody>
