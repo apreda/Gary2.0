@@ -255,84 +255,124 @@ const propResultsService = {
             return { result: 'pending', actualResult: null };
           }
           
-          // Due to persistent issues with Perplexity API, we'll directly fall back to using OpenAI
-          // This is a temporary bypass since the Perplexity API is returning 400 errors
-          console.log(`Bypassing Perplexity API due to persistent 400 errors, will use OpenAI fallback`);
-          return { result: 'pending', actualResult: null };
-          
-          /* Commented out the problematic Perplexity API call until it can be resolved
-          const response = await axios({
-            method: 'post',
-            url: 'https://api.perplexity.ai/chat/completions',
-            headers: {
-              'Authorization': `Bearer ${perplexityApiKey}`,
-              'Content-Type': 'application/json'
-            },
-            data: {
-              model: 'sonar-small-chat',
-              messages: [{ role: 'user', content: query }],
-              temperature: 0.0,
-              max_tokens: 150
-            }
-          });
-          */
-          
-          if (response.data && response.data.choices && response.data.choices.length > 0) {
-            const content = response.data.choices[0].message.content.trim();
-            console.log(`Perplexity result for ${playerName} ${propType}: "${content}"`);
-            
-            // Extract actual value if present in the response
-            let actualResult = null;
-            const statsMatch = content.match(/had\s+(\d+(?:\.\d+)?)\s+${statName}/i) || 
-                              content.match(/recorded\s+(\d+(?:\.\d+)?)\s+${statName}/i) ||
-                              content.match(/${statName}:\s*(\d+(?:\.\d+)?)/i);
-            
-            if (statsMatch) {
-              actualResult = parseFloat(statsMatch[1]);
-              console.log(`Extracted actual result: ${actualResult} ${statName}`);
-            }
-            
-            // Extract the final verdict - look for won/lost/push at the end or in specific patterns
-            if (content.toLowerCase().match(/\bwon\b\s*$/)) {
-              console.log(`Perplexity determined result: WON`);
-              return { result: 'won', actualResult };
-            } else if (content.toLowerCase().match(/\blost\b\s*$/)) {
-              console.log(`Perplexity determined result: LOST`);
-              return { result: 'lost', actualResult };
-            } else if (content.toLowerCase().match(/\bpush\b\s*$/)) {
-              console.log(`Perplexity determined result: PUSH`);
-              return { result: 'push', actualResult };
-            }
-            
-            // If no clear verdict at the end, search the entire text
-            if (content.toLowerCase().includes('bet won') || 
-                content.toLowerCase().includes('the bet would win') || 
-                content.toLowerCase().includes('is a win')) {
-              console.log(`Perplexity determined result from context: WON`);
-              return { result: 'won', actualResult };
-            } else if (content.toLowerCase().includes('bet lost') || 
-                       content.toLowerCase().includes('the bet would lose') ||
-                       content.toLowerCase().includes('is a loss')) {
-              console.log(`Perplexity determined result from context: LOST`);
-              return { result: 'lost', actualResult };
-            } else if (content.toLowerCase().includes('push') ||
-                       content.toLowerCase().includes('bet tied')) {
-              console.log(`Perplexity determined result from context: PUSH`);
-              return { result: 'push', actualResult };
-            }
-            
-            // If we extracted the stats but couldn't find a verdict, calculate it ourselves
-            if (actualResult !== null) {
-              const normalizedDirection = pickDirection.toUpperCase();
-              if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
-                const result = actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-                console.log(`Calculated result based on extracted stats: ${result}`);
-                return { result, actualResult };
-              } else {
-                const result = actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-                console.log(`Calculated result based on extracted stats: ${result}`);
-                return { result, actualResult };
+          // Helper function to process Perplexity API responses
+          function processPerplexityResponse(response, playerName, propType, statName, propLine, pickDirection) {
+            if (response.data && response.data.choices && response.data.choices.length > 0) {
+              const content = response.data.choices[0].message.content.trim();
+              console.log(`Perplexity result for ${playerName} ${propType}: "${content}"`);
+              
+              // Extract actual value if present in the response
+              let actualResult = null;
+              const statsMatch = content.match(/had\s+(\d+(?:\.\d+)?)\s+${statName}/i) || 
+                                content.match(/recorded\s+(\d+(?:\.\d+)?)\s+${statName}/i) ||
+                                content.match(/${statName}:\s*(\d+(?:\.\d+)?)/i);
+              
+              if (statsMatch) {
+                actualResult = parseFloat(statsMatch[1]);
+                console.log(`Extracted actual result: ${actualResult} ${statName}`);
               }
+              
+              // Extract the final verdict - look for won/lost/push at the end or in specific patterns
+              if (content.toLowerCase().match(/\bwon\b\s*$/)) {
+                console.log(`Perplexity determined result: WON`);
+                return { result: 'won', actualResult };
+              } else if (content.toLowerCase().match(/\blost\b\s*$/)) {
+                console.log(`Perplexity determined result: LOST`);
+                return { result: 'lost', actualResult };
+              } else if (content.toLowerCase().match(/\bpush\b\s*$/)) {
+                console.log(`Perplexity determined result: PUSH`);
+                return { result: 'push', actualResult };
+              }
+              
+              // If no clear verdict at the end, search the entire text
+              if (content.toLowerCase().includes('bet won') || 
+                  content.toLowerCase().includes('the bet would win') || 
+                  content.toLowerCase().includes('is a win')) {
+                console.log(`Perplexity determined result from context: WON`);
+                return { result: 'won', actualResult };
+              } else if (content.toLowerCase().includes('bet lost') || 
+                         content.toLowerCase().includes('the bet would lose') ||
+                         content.toLowerCase().includes('is a loss')) {
+                console.log(`Perplexity determined result from context: LOST`);
+                return { result: 'lost', actualResult };
+              } else if (content.toLowerCase().includes('push') ||
+                         content.toLowerCase().includes('bet tied')) {
+                console.log(`Perplexity determined result from context: PUSH`);
+                return { result: 'push', actualResult };
+              }
+              
+              // If we extracted the stats but couldn't find a verdict, calculate it ourselves
+              if (actualResult !== null) {
+                const normalizedDirection = pickDirection.toUpperCase();
+                if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
+                  const result = actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
+                  console.log(`Calculated result based on extracted stats: ${result}`);
+                  return { result, actualResult };
+                } else {
+                  const result = actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
+                  console.log(`Calculated result based on extracted stats: ${result}`);
+                  return { result, actualResult };
+                }
+              }
+            }
+            
+            // If we couldn't process the response, return pending
+            console.log(`Could not extract a clear result from Perplexity response`);
+            return { result: 'pending', actualResult: null };
+          }
+          
+          // Implement Perplexity API call using their latest API specification
+          // Using their recommended model and format to fix 400 errors
+          try {
+            console.log(`Making request to Perplexity API with model: claude-3-opus-20240229`);
+            
+            const response = await axios({
+              method: 'post',
+              url: 'https://api.perplexity.ai/chat/completions',
+              headers: {
+                'Authorization': `Bearer ${perplexityApiKey}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              data: {
+                model: 'claude-3-opus-20240229', // Using Claude model which is supported by Perplexity
+                messages: [{ role: 'user', content: query }],
+                max_tokens: 150,
+                temperature: 0.0
+              }
+            });
+            
+            console.log('Perplexity API request successful');
+            return processPerplexityResponse(response, playerName, propType, statName, propLine, pickDirection);
+          } catch (apiError) {
+            console.error(`Perplexity API error details:`, apiError.response?.data || apiError.message);
+            
+            // If the claude model fails, try with mixtral as a fallback
+            try {
+              console.log(`Trying fallback model: mixtral-8x7b-instruct`);
+              
+              const fallbackResponse = await axios({
+                method: 'post',
+                url: 'https://api.perplexity.ai/chat/completions',
+                headers: {
+                  'Authorization': `Bearer ${perplexityApiKey}`,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+                },
+                data: {
+                  model: 'mixtral-8x7b-instruct', // Fallback to mixtral model
+                  messages: [{ role: 'user', content: query }],
+                  max_tokens: 150,
+                  temperature: 0.0
+                }
+              });
+              
+              console.log('Perplexity API fallback request successful');
+              return processPerplexityResponse(fallbackResponse, playerName, propType, statName, propLine, pickDirection);
+            } catch (fallbackError) {
+              console.error(`Perplexity API fallback error:`, fallbackError.response?.data || fallbackError.message);
+              console.log(`All Perplexity API requests failed, returning pending result`);
+              return { result: 'pending', actualResult: null };
             }
           }
           
