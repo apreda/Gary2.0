@@ -134,7 +134,7 @@ export const Billfold = () => {
           sport: 'MLB', // Props are currently MLB only
           matchup: prop.matchup || 'Player Prop',
           player: prop.player_name,
-          pick: prop.pick_text || `${prop.player_name} ${prop.prop_type} ${prop.bet || ''} ${prop.line_value}`,
+          pick: prop.pick_text ? formatPropPickText(prop.pick_text) : `${prop.player_name} ${formatBetTypeName(prop.prop_type)} ${prop.bet || ''} ${prop.line_value}`,
           propType: prop.prop_type,
           line: prop.line_value,
           result: prop.result,
@@ -319,7 +319,7 @@ export const Billfold = () => {
             
             topPropWin = {
               matchup: bestProp.matchup || `${bestProp.player_name} Prop`,
-              pick: bestProp.pick_text || `${bestProp.player_name} ${bestProp.prop_type} ${bestProp.bet || ''} ${bestProp.line_value}`,
+              pick: bestProp.pick_text ? formatPropPickText(bestProp.pick_text) : `${bestProp.player_name} ${formatBetTypeName(bestProp.prop_type)} ${bestProp.bet || ''} ${bestProp.line_value}`,
               odds: bestProp.odds,
               date: new Date(bestProp.game_date),
               rawGameDate: bestProp.game_date, // Store the original date string for display
@@ -403,6 +403,36 @@ export const Billfold = () => {
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  };
+  
+  // Helper function to format prop pick text for display
+  const formatPropPickText = (pickText) => {
+    if (!pickText) return '';
+    
+    // If it already has proper capitalization, return as is
+    if (pickText.includes('Total Bases') || pickText.includes('Hits Runs RBIs')) {
+      return pickText;
+    }
+    
+    // Special cases for MLB prop types to replace in the pick text
+    const propTypeReplacements = {
+      'total_bases': 'Total Bases',
+      'hits_runs_rbis': 'Hits Runs RBIs',
+      'hits': 'Hits',
+      'strikeouts': 'Strikeouts',
+      'outs': 'Outs'
+    };
+    
+    // Replace each prop type in the pick text
+    let formattedText = pickText;
+    
+    Object.keys(propTypeReplacements).forEach(propType => {
+      // Create a regex that captures the prop type with word boundaries
+      const regex = new RegExp(`\\b${propType}\\b`, 'gi');
+      formattedText = formattedText.replace(regex, propTypeReplacements[propType]);
+    });
+    
+    return formattedText;
   };
   
   // Toggle between game picks and prop picks
@@ -531,7 +561,7 @@ export const Billfold = () => {
                 {bestWin.matchup || ''}
               </div>
               <div className="font-medium text-sm mb-2" style={{ color: 'var(--gary-text-tertiary)' }}>
-                {bestWin.pick || ''}
+                {formatPropPickText(bestWin.pick) || ''}
                 {bestWin.odds && <span className="ml-1">{bestWin.odds}</span>}
               </div>
               <div className="inline-block px-3 py-1 rounded text-black font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
@@ -568,7 +598,7 @@ export const Billfold = () => {
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6">
                       <div className="flex items-center">
                         <span className="inline-block w-2 h-2 rounded-sm bg-[#b8953f]"></span>
-                        <span className="ml-2 text-gray-200">{bet.pick || 'No pick data'}</span>
+                        <span className="ml-2 text-gray-200">{formatPropPickText(bet.pick) || 'No pick data'}</span>
                       </div>
                     </td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-right">
