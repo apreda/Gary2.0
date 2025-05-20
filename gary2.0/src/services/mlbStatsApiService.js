@@ -10,31 +10,132 @@ const MLB_API_BASE_URL = 'https://statsapi.mlb.com/api/v1';
 
 const mlbStatsApiService = {
   /**
-   * Maps a player name to their MLB Player ID
+   * Maps a player name to their MLB Player ID using multiple search strategies
    * @param {string} playerName - The name of the player to search for
    * @returns {Promise<number|null>} - The player's MLB ID or null if not found
    */
   getPlayerId: async (playerName) => {
     try {
       console.log(`[MLB API] Searching for player ID for ${playerName}`);
-      const response = await axios.get(`${MLB_API_BASE_URL}/people/search`, {
-        params: {
-          names: encodeURIComponent(playerName),
-          limit: 5
-        }
-      });
       
-      if (response.data && response.data.people && response.data.people.length > 0) {
-        // Return the first matching player ID
-        const player = response.data.people[0];
-        console.log(`[MLB API] Found player ID for ${playerName}: ${player.id}`);
-        return player.id;
+      // STRATEGY 1: Search current season active players
+      try {
+        const searchResponse = await axios.get(`${MLB_API_BASE_URL}/sports/1/players`, {
+          params: {
+            season: new Date().getFullYear(),
+            fields: 'people,id,fullName,firstName,lastName,primaryNumber,currentTeam,nameFirstLast'
+          }
+        });
+        
+        if (searchResponse.data && searchResponse.data.people) {
+          // Search through all active players
+          const normalizedSearchName = playerName.toLowerCase().replace(/\s+/g, ' ').trim();
+          
+          // Try exact match first
+          let matchedPlayer = searchResponse.data.people.find(p => 
+            (p.fullName && p.fullName.toLowerCase() === normalizedSearchName) ||
+            (p.nameFirstLast && p.nameFirstLast.toLowerCase() === normalizedSearchName) ||
+            (p.firstName && p.lastName && 
+              (p.firstName.toLowerCase() + ' ' + p.lastName.toLowerCase() === normalizedSearchName))
+          );
+          
+          // If no exact match, try partial match
+          if (!matchedPlayer) {
+            // First look if the player name contains our search term
+            matchedPlayer = searchResponse.data.people.find(p => 
+              (p.fullName && p.fullName.toLowerCase().includes(normalizedSearchName)) ||
+              (p.nameFirstLast && p.nameFirstLast.toLowerCase().includes(normalizedSearchName))
+            );
+            
+            // If still no match, check if our search term contains the player name
+            if (!matchedPlayer) {
+              matchedPlayer = searchResponse.data.people.find(p => 
+                (p.fullName && normalizedSearchName.includes(p.fullName.toLowerCase())) ||
+                (p.nameFirstLast && normalizedSearchName.includes(p.nameFirstLast.toLowerCase()))
+              );
+            }
+          }
+          
+          if (matchedPlayer) {
+            console.log(`[MLB API] Found player ID for ${playerName}: ${matchedPlayer.id}`);
+            return matchedPlayer.id;
+          }
+        }
+      } catch (searchError) {
+        console.log(`[MLB API] Error with primary search method: ${searchError.message}, trying fallback`);
       }
       
-      console.log(`[MLB API] No player ID found for ${playerName}`);
+      // STRATEGY 2: Direct search using the people/search endpoint
+      try {
+        const response = await axios.get(`${MLB_API_BASE_URL}/people/search`, {
+          params: {
+            name: playerName,
+            limit: 10
+          }
+        });
+        
+        if (response.data && response.data.people && response.data.people.length > 0) {
+          // Return the first matching player ID
+          const player = response.data.people[0];
+          console.log(`[MLB API] Found player ID for ${playerName}: ${player.id}`);
+          return player.id;
+        }
+      } catch (directSearchError) {
+        console.log(`[MLB API] Error with direct search: ${directSearchError.message}, trying next method`);
+      }
+      
+      // STRATEGY 3: Try with alternate parameter
+      try {
+        const response = await axios.get(`${MLB_API_BASE_URL}/people/search`, {
+          params: {
+            names: playerName,
+            limit: 10
+          }
+        });
+        
+        if (response.data && response.data.people && response.data.people.length > 0) {
+          // Return the first matching player ID
+          const player = response.data.people[0];
+          console.log(`[MLB API] Found player ID for ${playerName}: ${player.id}`);
+          return player.id;
+        }
+      } catch (alternateSearchError) {
+        console.log(`[MLB API] Error with alternate search: ${alternateSearchError.message}`);
+      }
+      
+      // STRATEGY 4: Last resort - try historical players
+      try {
+        // Check past seasons (useful for recently retired players)
+        const pastYearResponse = await axios.get(`${MLB_API_BASE_URL}/sports/1/players`, {
+          params: {
+            season: new Date().getFullYear() - 1,
+            fields: 'people,id,fullName,firstName,lastName,primaryNumber,currentTeam,nameFirstLast'
+          }
+        });
+        
+        if (pastYearResponse.data && pastYearResponse.data.people) {
+          const normalizedSearchName = playerName.toLowerCase().replace(/\s+/g, ' ').trim();
+          
+          const matchedPlayer = pastYearResponse.data.people.find(p => 
+            (p.fullName && p.fullName.toLowerCase().includes(normalizedSearchName)) ||
+            (p.nameFirstLast && p.nameFirstLast.toLowerCase().includes(normalizedSearchName))
+          );
+          
+          if (matchedPlayer) {
+            console.log(`[MLB API] Found historical player ID for ${playerName}: ${matchedPlayer.id}`);
+            return matchedPlayer.id;
+          }
+        }
+      } catch (historicalSearchError) {
+        console.log(`[MLB API] Error with historical search: ${historicalSearchError.message}`);
+      }
+      
+      // If we got this far, no player ID was found
+      console.log(`[MLB API] No player ID found for ${playerName} after trying all methods`);
       return null;
     } catch (error) {
       console.error(`[MLB API] Error getting player ID for ${playerName}:`, error.message);
+      console.error(`[MLB API] Error details:`, error.response?.data || 'No response data');
       return null;
     }
   },
