@@ -6,7 +6,6 @@ import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
 import { sportsDbApiService } from './sportsDbApiService.js';
 import { apiSportsService } from './apiSportsService.js';
-import { theOddsApiService } from './theOddsApiService.js';
 
 const propResultsService = {
   /**
@@ -67,7 +66,7 @@ const propResultsService = {
         
         try {
           // Get player stats using API-Sports
-          let playerStatsData;
+          let playerStatsData = null;
           
           if (league === 'MLB') {
             // For MLB, use specific endpoints
@@ -79,31 +78,7 @@ const propResultsService = {
           
           if (!playerStatsData) {
             console.log(`No player stats found for ${matchup} in ${league} from API-Sports`);
-            
-            // Try fallback to The Odds API
-            console.log(`Trying fallback to The Odds API for ${matchup}`);
-            const oddsApiData = await theOddsApiService.getPlayerPerformance(league, homeTeam, awayTeam, date);
-            
-            if (oddsApiData && oddsApiData.players) {
-              // Process player data
-              for (const player of oddsApiData.players) {
-                allPlayerStats[player.name] = {
-                  points: player.points || null,
-                  rebounds: player.rebounds || null,
-                  assists: player.assists || null,
-                  blocks: player.blocks || null,
-                  steals: player.steals || null,
-                  threePointersMade: player.threePointersMade || null,
-                  hits: player.hits || null,
-                  runs: player.runs || null,
-                  rbi: player.rbi || null,
-                  homeRuns: player.homeRuns || null,
-                  strikeouts: player.strikeouts || null,
-                  saves: player.saves || null,
-                  goals: player.goals || null
-                };
-              }
-            }
+            // No fallback available for missing stats
           } else {
             // Process the player stats data into our format
             const allPlayers = [
@@ -345,7 +320,7 @@ const propResultsService = {
   }
 };
 
-// This function has been removed as we're now relying on accurate data sources only
+// This comment replaces the removed function
 // For missing stats, we recommend using the admin panel at https://www.betwithgary.ai/admin/results
 
 export { propResultsService };
