@@ -109,8 +109,8 @@ const propResultsService = {
           prop_type: pick.prop_type,
           prop_line: pick.prop_line,
           pick_direction: pick.pick_direction,
-          actual_result: actualResult,
-          result_status: resultStatus
+          value: actualResult, // Changed from actual_result to value
+          result: resultStatus // Changed from result_status to result
         });
       }
       
