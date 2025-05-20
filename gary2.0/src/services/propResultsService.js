@@ -4,8 +4,7 @@
  * Uses multiple data sources with fallback mechanisms:
  * 1. Ball Don't Lie API (primary source)
  * 2. SportsDB API (fallback #1)
- * 3. Perplexity API for web searches (fallback #2)
- * 4. OpenAI for complex prop bet outcome determination
+ * 3. Perplexity API for web searches (fallback #2 and direct result determination)
  */
 import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
@@ -88,15 +87,8 @@ const propResultsService = {
       
       console.log(`Found ${mlbPicks.length} MLB prop picks to process`);
       
-      // Group MLB picks by team for efficient API calls
-      const teamGroupedPicks = {};
-      mlbPicks.forEach(pick => {
-        const team = pick.team || 'unknown';
-        if (!teamGroupedPicks[team]) {
-          teamGroupedPicks[team] = [];
-        }
-        teamGroupedPicks[team].push(pick);
-      });
+      // Process each pick individually using Perplexity API for best results
+      // Skip team grouping to avoid API-Sports calls
       
       // Helper function to generate name variations for better matching
       function generateNameVariations(name) {
@@ -417,81 +409,14 @@ const propResultsService = {
         }
       }
       
-      // Process each team's picks
+      // Process each pick individually
       const results = [];
-      for (const team in teamGroupedPicks) {
-        const picks = teamGroupedPicks[team];
-        
-        console.log(`Processing ${picks.length} prop picks for team ${team}`);
-        
-        // Get player stats data using Ball Don't Lie API
-        let teamPlayerStats = null;
-        
-        try {
-          // STEP 1: Try to get data from Ball Don't Lie API (primary source)
-          console.log(`Step 1: Getting MLB player stats for team ${team} on ${date} from Ball Don't Lie API`);
-          const playerStatsData = await ballDontLieApiService.getTeamPlayersStatsForDate(team, date);
-          
-          if (playerStatsData && playerStatsData.players && playerStatsData.players.length > 0) {
-            teamPlayerStats = playerStatsData;
-            console.log(`Successfully retrieved stats for ${teamPlayerStats.team} (${teamPlayerStats.players.length} players)`);
-          } else {
-            console.log(`No player stats found for team ${team} from Ball Don't Lie API, trying SportsDB...`);
-            
-            // STEP 2: Try SportsDB API as fallback
-            try {
-              console.log(`Step 2: Getting MLB player stats for team ${team} from SportsDB API`);
-              const sportsDbStats = await sportsDbApiService.getPlayerStatsForProps(team, null, 'MLB');
-              
-              if (sportsDbStats && 
-                 ((sportsDbStats.homeTeam && sportsDbStats.homeTeam.players && sportsDbStats.homeTeam.players.length > 0) ||
-                  (sportsDbStats.awayTeam && sportsDbStats.awayTeam.players && sportsDbStats.awayTeam.players.length > 0))) {
-                
-                console.log(`Retrieved player data from SportsDB API for ${team}`);
-                
-                // Format SportsDB data to match our expected format
-                const players = [];
-                const teamData = sportsDbStats.homeTeam.name.toLowerCase().includes(team.toLowerCase()) || 
-                                team.toLowerCase().includes(sportsDbStats.homeTeam.name.toLowerCase()) ?
-                                sportsDbStats.homeTeam : sportsDbStats.awayTeam;
-                
-                if (teamData && teamData.players) {
-                  teamData.players.forEach(player => {
-                    players.push({
-                      name: player.name,
-                      statistics: {
-                        // Since SportsDB doesn't provide game-by-game stats, we'll need to look them up separately
-                        hits: null,
-                        runs: null,
-                        rbi: null,
-                        hr: null,
-                        strikeouts: null,
-                        total_bases: null,
-                        source: 'SportsDB API'
-                      }
-                    });
-                  });
-                }
-                
-                teamPlayerStats = {
-                  team: teamData.name,
-                  players: players
-                };
-                
-                console.log(`Formatted ${players.length} players from SportsDB data`);
-              } else {
-                console.log(`No player data found from SportsDB for team ${team}`);
-              }
-            } catch (sportsDbError) {
-              console.error(`Error getting stats from SportsDB for team ${team}:`, sportsDbError);
-            }
-          }
-        } catch (statsError) {
-          console.error(`Error getting player stats for team ${team}:`, statsError);          
-        }
-        
-        // Process each pick for this team
-        for (const pick of picks) {
+      const playersWithStats = {}; // Store any player stats we collect
+      
+      console.log(`Processing ${mlbPicks.length} MLB player prop bets directly with Perplexity`);
+      
+      // Process each pick individually
+      for (const pick of mlbPicks) {
           console.log(`Processing prop for ${pick.player_name} (${pick.prop_type}) as ${pick.pick_direction}`);
           
           // Default values if we don't find stats
@@ -661,6 +586,7 @@ const propResultsService = {
             line_value: pick.prop_line, // This matches the line_value column in DB
             actual_value: actualResult, // This matches the actual_value column in DB
             result: resultStatus,
+            bet: pick.pick_direction, // Store the bet direction (over/under) - this field was previously empty
             odds: pick.odds || null, // Add odds if available
             pick_text: pick.pick_text || `${pick.player_name} ${pick.pick_direction} ${pick.prop_line} ${pick.prop_type}`,
             matchup: pick.matchup || null, // Add matchup if available
