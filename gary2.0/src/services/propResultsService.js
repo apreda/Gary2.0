@@ -178,25 +178,54 @@ const propResultsService = {
             const propLine = parseFloat(pick.prop_line);
             const pickDirection = (pick.pick_direction || '').toLowerCase();
             
-            // Set the actual stat value just above or below the line based on pick direction
-            // This gives us a mix of wins/losses for demonstration
-            let randomOffset = Math.random();
-            if (Math.random() > 0.65) { // Create some variation in win/loss
-              randomOffset = -randomOffset;
-            }
-            
+            // Generate a realistic baseball stat value based on the prop type
+            // Baseball stats should be integers, not decimals
             if (propType === 'hits') {
-              mockStats.hits = propLine + randomOffset;
+              // For hits over/under 0.5, realistic outcomes are 0, 1, 2, 3, or 4 hits
+              // Make about 70% of players get at least 1 hit in a game
+              if (Math.random() < 0.3) {
+                mockStats.hits = 0; // No hits
+              } else {
+                // 1-4 hits with decreasing probability
+                const hitProbabilities = [0, 0.7, 0.2, 0.08, 0.02]; // 0, 1, 2, 3, 4 hits
+                const rand = Math.random();
+                let cumulativeProb = 0;
+                
+                for (let i = 1; i < hitProbabilities.length; i++) {
+                  cumulativeProb += hitProbabilities[i];
+                  if (rand <= cumulativeProb) {
+                    mockStats.hits = i;
+                    break;
+                  }
+                }
+              }
             } else if (propType === 'total_bases') {
-              mockStats.total_bases = propLine + randomOffset;
+              // Total bases tend to be 0-6 in a game
+              if (Math.random() < 0.25) {
+                mockStats.total_bases = 0; // 25% chance of 0 total bases
+              } else {
+                // 1-6 total bases
+                mockStats.total_bases = Math.floor(Math.random() * 6) + 1;
+              }
             } else if (propType === 'strikeouts') {
-              mockStats.strikeouts = propLine + randomOffset;
+              // Strikeouts for pitchers range from 0-12 typically
+              // Make it realistic for the prop line
+              if (propLine < 4) {
+                // Lower strikeout pitchers: 0-6 Ks
+                mockStats.strikeouts = Math.floor(Math.random() * 7);
+              } else {
+                // Higher strikeout pitchers: 3-10 Ks
+                mockStats.strikeouts = Math.floor(Math.random() * 8) + 3;
+              }
             } else if (propType === 'outs') {
-              mockStats.outs = propLine + randomOffset;
+              // Outs recorded = innings pitched * 3
+              // Typical range: 3 (1 inning) to 21 (7 innings)
+              mockStats.outs = Math.floor(Math.random() * 7) * 3 + 3;
             } else if (propType === 'hits_runs_rbis') {
-              mockStats.hits = Math.floor(Math.random() * 2);
-              mockStats.runs = Math.floor(Math.random() * 2);
-              mockStats.rbi = Math.floor(Math.random() * 2);
+              // Set individual components then add them up
+              mockStats.hits = Math.floor(Math.random() * 3); // 0-2 hits
+              mockStats.runs = Math.floor(Math.random() * 2); // 0-1 runs
+              mockStats.rbi = Math.floor(Math.random() * 3);  // 0-2 RBIs
               mockStats.hits_runs_rbis = mockStats.hits + mockStats.runs + mockStats.rbi;
             }
             
