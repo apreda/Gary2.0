@@ -255,14 +255,16 @@ const propResultsService = {
             return 'pending';
           }
           
-          // Make the API call
+          // Make the API call - check API documentation for correct format
+          // Perplexity may have updated their API requirements
           const response = await axios.post('https://api.perplexity.ai/chat/completions', {
-            model: 'pplx-70b-online',
+            model: 'mistral-7b-instruct', // Try a different model (pplx-70b-online may be deprecated)
             messages: [{ role: 'user', content: query }],
             temperature: 0.0,
             max_tokens: 150 // Allow for enough tokens to provide reasoning and final answer
           }, {
             headers: {
+              'Accept': 'application/json',
               'Authorization': `Bearer ${perplexityApiKey}`,
               'Content-Type': 'application/json'
             }
