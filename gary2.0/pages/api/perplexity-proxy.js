@@ -1,86 +1,108 @@
 import axios from 'axios';
 
-// CORS headers to allow requests from betwithgary.ai
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*', // Allow from any origin in development and production for testing
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type'
-};
-
-// Array of supported Perplexity models
-const supportedModels = [
-  'pplx-7b-online', 
-  'pplx-70b-online', 
-  'mixtral-8x7b-instruct',
-  'mistral-7b-instruct'  // Our fallback model
-];
-
-// This configuration is needed for Vercel deployment
+// Explicitly define configuration for Next.js API route
 export const config = {
   api: {
+    // Enable body parsing
     bodyParser: true,
+    // Increase the payload size limit if needed
+    bodyParser: {
+      sizeLimit: '1mb'
+    },
+    // Disable default CORS handling (we'll do it manually)
+    externalResolver: true,
   },
 };
 
-export default async function handler(req, res) {
-  // Set CORS headers for all responses
-  Object.entries(corsHeaders).forEach(([key, value]) => {
-    res.setHeader(key, value);
-  });
+// Define supported models
+const SUPPORTED_MODELS = [
+  'pplx-7b-online',
+  'pplx-70b-online',
+  'mixtral-8x7b-instruct',
+  'mistral-7b-instruct'
+];
 
-  // Handle preflight OPTIONS requests
+/**
+ * API route handler for perplexity-proxy
+ */
+export default function handler(req, res) {
+  // Set CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Handle OPTIONS requests (CORS preflight)
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(204).end();
+    return;
   }
   
-  // Only allow POST requests beyond this point
+  // Only accept POST requests
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    // Explicitly indicate which methods are allowed
+    res.setHeader('Allow', ['POST', 'OPTIONS']);
+    res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+    return;
   }
+  
+  // Now handle the actual proxy logic
+  handlePerplexityProxy(req, res);
+}
 
-  // Debug log to verify the endpoint is being hit correctly
-  console.log('Perplexity proxy received request:', { 
-    method: req.method,
+/**
+ * Handles the actual proxy request to Perplexity API
+ */
+async function handlePerplexityProxy(req, res) {
+  console.log('[PERPLEXITY PROXY] Received request:', {
     url: req.url,
-    headers: req.headers,
+    method: req.method,
+    bodyPresent: !!req.body,
     bodyKeys: Object.keys(req.body || {})
   });
-
+  
   try {
-    // Get data from the request body
+    // Extract request data
     const { model, messages } = req.body;
-
-    // More debug logging
-    console.log('Request payload:', { model, messageCount: messages?.length });
-
-    // Validate model
-    const selectedModel = model || 'pplx-7b-online';
-    if (!supportedModels.includes(selectedModel)) {
-      return res.status(400).json({ 
-        error: 'Invalid model', 
-        message: `Model ${selectedModel} is not supported. Please use one of: ${supportedModels.join(', ')}`
-      });
+    
+    // Validate required parameters
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      console.log('[PERPLEXITY PROXY] Invalid request - missing messages array');
+      res.status(400).json({ error: 'Missing required parameter: messages' });
+      return;
     }
-
-    // API key is stored server-side for security - NEVER expose in client code
+    
+    // Select and validate model
+    const selectedModel = model || 'pplx-7b-online';
+    if (!SUPPORTED_MODELS.includes(selectedModel)) {
+      console.log(`[PERPLEXITY PROXY] Invalid model requested: ${selectedModel}`);
+      res.status(400).json({
+        error: 'Invalid model',
+        message: `Model '${selectedModel}' is not supported. Please use one of: ${SUPPORTED_MODELS.join(', ')}`
+      });
+      return;
+    }
+    
+    // Get API key from environment
     const apiKey = process.env.PERPLEXITY_API_KEY;
     if (!apiKey) {
-      console.error('PERPLEXITY_API_KEY environment variable is not set');
-      return res.status(500).json({ error: 'Server configuration error' });
+      console.error('[PERPLEXITY PROXY] Missing API key in environment');
+      res.status(500).json({ error: 'Server configuration error: Missing API key' });
+      return;
     }
-
-    // Prepare the request payload
-    const requestPayload = {
+    
+    // Prepare request to Perplexity API
+    const requestData = {
       model: selectedModel,
       messages,
       max_tokens: 256
     };
-
-    // Make the request to Perplexity from the server
-    console.log('Sending request to Perplexity API');
-    const response = await axios.post(
+    
+    console.log(`[PERPLEXITY PROXY] Forwarding request to Perplexity API with model: ${selectedModel}`);
+    
+    // Send request to Perplexity API
+    const perplexityResponse = await axios.post(
       'https://api.perplexity.ai/chat/completions',
-      requestPayload,
+      requestData,
       {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -88,20 +110,31 @@ export default async function handler(req, res) {
         }
       }
     );
-
-    console.log('Perplexity API responded successfully');
     
-    // Return the data from Perplexity
-    return res.status(200).json(response.data);
+    console.log('[PERPLEXITY PROXY] Successfully received response from Perplexity API');
+    
+    // Forward the response back to the client
+    res.status(200).json(perplexityResponse.data);
   } catch (error) {
-    console.error('Perplexity API proxy error:', error);
+    console.error('[PERPLEXITY PROXY] Error:', error.message);
     
-    // Return detailed error information
-    return res.status(error.response?.status || 500).json({
+    // Structured error response
+    const errorResponse = {
       error: 'Error calling Perplexity API',
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data
-    });
+      message: error.message
+    };
+    
+    // Add more details if available
+    if (error.response) {
+      errorResponse.status = error.response.status;
+      errorResponse.data = error.response.data;
+      console.error(`[PERPLEXITY PROXY] Status: ${error.response.status}`, error.response.data);
+      
+      // Forward the actual error status
+      res.status(error.response.status).json(errorResponse);
+    } else {
+      // Generic server error if no response
+      res.status(500).json(errorResponse);
+    }
   }
 }
