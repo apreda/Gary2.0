@@ -682,13 +682,12 @@ export const resultsCheckerService = {
               
               console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
               
-              // Fix for function signature mismatch - create proper query format
-              const previousDay = new Date(date);
-              previousDay.setDate(previousDay.getDate() - 1);
-              const previousDayString = previousDay.toISOString().split('T')[0];
+              // Use the exact date provided in the query
+              const gameDate = new Date(date);
+              const formattedDate = gameDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
               
               // Use Perplexity directly for this specific score lookup
-              const query = `What was the final score of the ${league} game involving ${awayTeam} on ${previousDayString}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
+              const query = `What was the final score of the ${league} game involving ${awayTeam} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
               
               // Call perplexity directly instead of trying to use getScoresFromPerplexity
               const perplexityResponse = await perplexityService.fetchRealTimeInfo(query, {
@@ -913,13 +912,11 @@ export const resultsCheckerService = {
     const year = gameDate.getFullYear();
     const humanDate = `${month} ${day}, ${year}`;
 
-    // Yesterday's date for recent games
-    const yesterday = new Date(gameDate);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayMonth = yesterday.toLocaleString('default', { month: 'short' });
-    const yesterdayDay = yesterday.getDate();
+      // Use the exact date provided, not yesterday
+    const formattedMonth = gameDate.toLocaleString('default', { month: 'short' });
+    const formattedDay = gameDate.getDate();
 
-    return `ONLY FACTUAL INFO: What was the EXACT final score of the game between ${awayTeam} and ${homeTeam} on ${yesterdayMonth} ${yesterdayDay}, ${year}? Respond in this JSON format only: {"home_score": X, "away_score": Y, "home_team": "${homeTeam}", "away_team": "${awayTeam}"}`;
+    return `ONLY FACTUAL INFO: What was the EXACT final score of the game between ${awayTeam} and ${homeTeam} on ${formattedMonth} ${formattedDay}, ${year}? Respond in this JSON format only: {"home_score": X, "away_score": Y, "home_team": "${homeTeam}", "away_team": "${awayTeam}"}`;
   },
 
   getScoresFromPerplexity: async (date, picks) => {
