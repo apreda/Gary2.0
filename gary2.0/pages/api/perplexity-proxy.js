@@ -1,16 +1,11 @@
 import axios from 'axios';
 
-// Explicitly define configuration for Next.js API route
+// Standard configuration for Next.js Pages Router API
 export const config = {
   api: {
-    // Enable body parsing
-    bodyParser: true,
-    // Increase the payload size limit if needed
     bodyParser: {
-      sizeLimit: '1mb'
+      sizeLimit: '1mb',
     },
-    // Disable default CORS handling (we'll do it manually)
-    externalResolver: true,
   },
 };
 
@@ -19,19 +14,20 @@ const SUPPORTED_MODELS = [
   'pplx-7b-online',
   'pplx-70b-online',
   'mixtral-8x7b-instruct',
-  'mistral-7b-instruct'
+  'mistral-7b-instruct',
+  'llama-3-sonar-online',
+  'llama-3-70b-online'
 ];
 
 /**
  * API route handler for perplexity-proxy
  */
 export default function handler(req, res) {
-  // Set CORS headers for all responses
+  // Handle CORS preflight
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
-  // Handle OPTIONS requests (CORS preflight)
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;
@@ -39,13 +35,16 @@ export default function handler(req, res) {
   
   // Only accept POST requests
   if (req.method !== 'POST') {
-    // Explicitly indicate which methods are allowed
-    res.setHeader('Allow', ['POST', 'OPTIONS']);
-    res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+    res.setHeader('Allow', ['POST']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
     return;
   }
   
-  // Now handle the actual proxy logic
+  // Per documentation: "The API does not support CORS for browser requests.
+  // Best Practice: Always call the API from your backend, not directly from the browser."
+  // This proxy acts as that backend bridge
+  
+  // Handle the POST request
   handlePerplexityProxy(req, res);
 }
 
@@ -53,6 +52,7 @@ export default function handler(req, res) {
  * Handles the actual proxy request to Perplexity API
  */
 async function handlePerplexityProxy(req, res) {
+  // Log request info for debugging
   console.log('[PERPLEXITY PROXY] Received request:', {
     url: req.url,
     method: req.method,
@@ -61,7 +61,7 @@ async function handlePerplexityProxy(req, res) {
   });
   
   try {
-    // Extract request data
+    // Extract request data from the parsed body (bodyParser middleware handles this)
     const { model, messages } = req.body;
     
     // Validate required parameters
@@ -94,12 +94,12 @@ async function handlePerplexityProxy(req, res) {
     const requestData = {
       model: selectedModel,
       messages,
-      max_tokens: 256
+      max_tokens: 512 // Increased from 256 to match your preferred configuration
     };
     
     console.log(`[PERPLEXITY PROXY] Forwarding request to Perplexity API with model: ${selectedModel}`);
     
-    // Send request to Perplexity API
+    // Send request to Perplexity API using axios
     const perplexityResponse = await axios.post(
       'https://api.perplexity.ai/chat/completions',
       requestData,
