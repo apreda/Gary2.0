@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import { supabase } from '../supabaseClient';
-import { PropPicks } from './PropPicks';
 import '../styles/BillfoldEnhanced.css'; // Consolidated high-tech modern styling
 import '../styles/BillfoldScroll.css'; // Custom scrolling for Recent Picks
 
@@ -33,8 +32,8 @@ export const Billfold = () => {
   // State for selected time period filter
   const [selectedTimeFrame, setSelectedTimeFrame] = useState('all');
   
-  // State for toggling between game picks and prop picks
-  const [showPropPicks, setShowPropPicks] = useState(false);
+  // State for toggling between all picks, game picks, and prop picks
+  const [showPicksType, setShowPicksType] = useState('all'); // 'all', 'games', 'props'
 
   // Filter options for charts
   const timeFrameOptions = [
@@ -50,19 +49,16 @@ export const Billfold = () => {
     setSelectedTimeFrame(timeFrame);
   };
 
-  // Fetch data directly from Supabase game_results table
+  // Fetch data directly from Supabase game_results and prop_results tables
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
       
       try {
-        // Fetch game results from Supabase
-        let query = supabase.from('game_results').select('*');
-        
-        // Apply time filter if not 'all'
+        // Prepare date filter
+        let dateFilter = null;
         if (selectedTimeFrame !== 'all') {
-          let dateFilter;
           const now = new Date();
           
           switch (selectedTimeFrame) {
@@ -81,27 +77,39 @@ export const Billfold = () => {
             default:
               dateFilter = null;
           }
-          
-          if (dateFilter) {
-            query = query.gte('game_date', dateFilter.toISOString());
-          }
         }
         
-        // Execute the query
-        const { data: gameResults, error: gameResultsError } = await query.order('game_date', { ascending: false });
+        // STEP 1: Fetch game results
+        let gameQuery = supabase.from('game_results').select('*');
+        if (dateFilter) {
+          gameQuery = gameQuery.gte('game_date', dateFilter.toISOString());
+        }
+        const { data: gameResults, error: gameResultsError } = await gameQuery.order('game_date', { ascending: false });
         
         if (gameResultsError) {
           throw new Error(`Error fetching game results: ${gameResultsError.message}`);
         }
         
-        if (!gameResults || gameResults.length === 0) {
-          setError('No game results found. Check back later for updated picks.');
+        // STEP 2: Fetch prop results
+        let propQuery = supabase.from('prop_results').select('*');
+        if (dateFilter) {
+          propQuery = propQuery.gte('game_date', dateFilter.toISOString());
+        }
+        const { data: propResults, error: propResultsError } = await propQuery.order('game_date', { ascending: false });
+        
+        if (propResultsError) {
+          throw new Error(`Error fetching prop results: ${propResultsError.message}`);
+        }
+        
+        // Check if we have any results at all
+        if ((!gameResults || gameResults.length === 0) && (!propResults || propResults.length === 0)) {
+          setError('No results found. Check back later for updated picks.');
           setIsLoading(false);
           return;
         }
         
-        // Process game results data
-        const processedBettingLog = gameResults.map(game => ({
+        // STEP 3: Process game results
+        const processedGameLog = gameResults ? gameResults.map(game => ({
           id: game.id,
           date: new Date(game.game_date),
           sport: game.league,
@@ -109,49 +117,116 @@ export const Billfold = () => {
           pick: game.pick_text,
           result: game.result,
           odds: game.odds,
-          final_score: game.final_score
-        }));
+          final_score: game.final_score,
+          type: 'game' // Add type to distinguish from props
+        })) : [];
         
-        setBettingLog(processedBettingLog);
+        // STEP 4: Process prop results
+        const processedPropLog = propResults ? propResults.map(prop => ({
+          id: prop.id,
+          date: new Date(prop.game_date),
+          sport: 'MLB', // Props are currently MLB only
+          matchup: prop.matchup || 'Player Prop',
+          player: prop.player_name,
+          pick: prop.pick_text || `${prop.player_name} ${prop.prop_type} ${prop.bet || ''} ${prop.line_value}`,
+          propType: prop.prop_type,
+          line: prop.line_value,
+          result: prop.result,
+          odds: prop.odds,
+          actual: prop.actual_value,
+          bet: prop.bet, // over/under
+          type: 'prop' // Add type to distinguish from games
+        })) : [];
         
-        // Calculate stats
-        const wins = gameResults.filter(game => game.result === 'won').length;
-        const losses = gameResults.filter(game => game.result === 'lost').length;
-        const pushes = gameResults.filter(game => game.result === 'push').length;
-        const total = gameResults.length;
-        const winRate = total > 0 ? (wins / total) : 0;
+        // STEP 5: Combine both types of bets
+        const combinedBettingLog = [...processedGameLog, ...processedPropLog].sort(
+          (a, b) => b.date - a.date // Sort by date, most recent first
+        );
         
-        // Group by sport/league
+        setBettingLog(combinedBettingLog);
+        
+        // STEP 6: Calculate combined stats
+        const gameWins = gameResults ? gameResults.filter(game => game.result === 'won').length : 0;
+        const gameLosses = gameResults ? gameResults.filter(game => game.result === 'lost').length : 0;
+        const gamePushes = gameResults ? gameResults.filter(game => game.result === 'push').length : 0;
+        
+        const propWins = propResults ? propResults.filter(prop => prop.result === 'won').length : 0;
+        const propLosses = propResults ? propResults.filter(prop => prop.result === 'lost').length : 0;
+        const propPushes = propResults ? propResults.filter(prop => prop.result === 'push').length : 0;
+        
+        const totalWins = gameWins + propWins;
+        const totalLosses = gameLosses + propLosses;
+        const totalPushes = gamePushes + propPushes;
+        const totalBets = (gameResults?.length || 0) + (propResults?.length || 0);
+        const winRate = totalBets > 0 ? (totalWins / totalBets) : 0;
+        
+        // STEP 7: Group by sport/league
         const sportBreakdown = {};
-        gameResults.forEach(game => {
-          if (!sportBreakdown[game.league]) {
-            sportBreakdown[game.league] = { sport: game.league, wins: 0, losses: 0, pushes: 0 };
+        
+        // Add game results to sport breakdown
+        if (gameResults) {
+          gameResults.forEach(game => {
+            if (!sportBreakdown[game.league]) {
+              sportBreakdown[game.league] = { sport: game.league, wins: 0, losses: 0, pushes: 0 };
+            }
+            
+            if (game.result === 'won') sportBreakdown[game.league].wins++;
+            else if (game.result === 'lost') sportBreakdown[game.league].losses++;
+            else if (game.result === 'push') sportBreakdown[game.league].pushes++;
+          });
+        }
+        
+        // Add prop results to sport breakdown (MLB only for now)
+        if (propResults && propResults.length > 0) {
+          if (!sportBreakdown['MLB']) {
+            sportBreakdown['MLB'] = { sport: 'MLB', wins: 0, losses: 0, pushes: 0 };
           }
           
-          if (game.result === 'won') sportBreakdown[game.league].wins++;
-          else if (game.result === 'lost') sportBreakdown[game.league].losses++;
-          else if (game.result === 'push') sportBreakdown[game.league].pushes++;
-        });
+          propResults.forEach(prop => {
+            if (prop.result === 'won') sportBreakdown['MLB'].wins++;
+            else if (prop.result === 'lost') sportBreakdown['MLB'].losses++;
+            else if (prop.result === 'push') sportBreakdown['MLB'].pushes++;
+          });
+        }
         
-        // Group by bet type
+        // STEP 8: Group by bet type
         const betTypeBreakdown = {};
-        gameResults.forEach(game => {
-          const betType = determineBetType(game.pick_text);
-          if (!betTypeBreakdown[betType]) {
-            betTypeBreakdown[betType] = { betType, count: 0, wins: 0, losses: 0, pushes: 0 };
-          }
-          
-          betTypeBreakdown[betType].count++;
-          if (game.result === 'won') betTypeBreakdown[betType].wins++;
-          else if (game.result === 'lost') betTypeBreakdown[betType].losses++;
-          else if (game.result === 'push') betTypeBreakdown[betType].pushes++;
-        });
         
-        // Find most profitable bet type
+        // Add game bet types
+        if (gameResults) {
+          gameResults.forEach(game => {
+            const betType = determineBetType(game.pick_text);
+            if (!betTypeBreakdown[betType]) {
+              betTypeBreakdown[betType] = { betType, count: 0, wins: 0, losses: 0, pushes: 0 };
+            }
+            
+            betTypeBreakdown[betType].count++;
+            if (game.result === 'won') betTypeBreakdown[betType].wins++;
+            else if (game.result === 'lost') betTypeBreakdown[betType].losses++;
+            else if (game.result === 'push') betTypeBreakdown[betType].pushes++;
+          });
+        }
+        
+        // Add prop bet types
+        if (propResults) {
+          propResults.forEach(prop => {
+            const propBetType = prop.prop_type || 'Player Prop';
+            if (!betTypeBreakdown[propBetType]) {
+              betTypeBreakdown[propBetType] = { betType: propBetType, count: 0, wins: 0, losses: 0, pushes: 0 };
+            }
+            
+            betTypeBreakdown[propBetType].count++;
+            if (prop.result === 'won') betTypeBreakdown[propBetType].wins++;
+            else if (prop.result === 'lost') betTypeBreakdown[propBetType].losses++;
+            else if (prop.result === 'push') betTypeBreakdown[propBetType].pushes++;
+          });
+        }
+        
+        // STEP 9: Find most profitable bet type
         let mostProfitableBetType = { betType: 'N/A', winRate: 0 };
         Object.values(betTypeBreakdown).forEach(bt => {
           const btWinRate = (bt.wins + bt.losses) > 0 ? (bt.wins / (bt.wins + bt.losses)) : 0;
-          if (bt.count >= 5 && btWinRate > mostProfitableBetType.winRate) {
+          if (bt.count >= 3 && btWinRate > mostProfitableBetType.winRate) { // Lowered threshold to 3 bets minimum
             mostProfitableBetType = { 
               betType: bt.betType, 
               winRate: btWinRate,
@@ -160,23 +235,24 @@ export const Billfold = () => {
           }
         });
         
-        // Find best win
-        const winningGames = gameResults.filter(game => game.result === 'won');
+        // STEP 10: Find best win
+        const winningBets = [...(gameResults || []), ...(propResults || [])].filter(bet => bet.result === 'won');
         let topWin = null;
         
-        if (winningGames.length > 0) {
+        if (winningBets.length > 0) {
           // Sort by date (most recent first)
-          const sortedWins = [...winningGames].sort(
-            (a, b) => new Date(b.game_date) - new Date(a.game_date)
+          const sortedWins = [...winningBets].sort(
+            (a, b) => new Date(b.game_date || b.date) - new Date(a.game_date || a.date)
           );
           
-          const bestGame = sortedWins[0];
+          const bestBet = sortedWins[0];
+          const isProp = 'prop_type' in bestBet;
           
           // Calculate win amount based on odds
           let winAmount = 100; // Default amount if odds not available
           
-          if (bestGame.odds && typeof bestGame.odds === 'string') {
-            const oddsValue = parseInt(bestGame.odds.replace(/[^0-9-]/g, ''));
+          if (bestBet.odds && typeof bestBet.odds === 'string') {
+            const oddsValue = parseInt(bestBet.odds.replace(/[^0-9-]/g, ''));
             if (!isNaN(oddsValue)) {
               if (oddsValue > 0) {
                 winAmount = oddsValue;
@@ -187,35 +263,42 @@ export const Billfold = () => {
           }
           
           topWin = {
-            matchup: bestGame.matchup,
-            pick: bestGame.pick_text,
-            odds: bestGame.odds,
-            date: new Date(bestGame.game_date),
+            matchup: bestBet.matchup || (isProp ? `${bestBet.player_name} Prop` : 'Unknown'),
+            pick: bestBet.pick_text || (isProp ? `${bestBet.player_name} ${bestBet.prop_type} ${bestBet.bet || ''} ${bestBet.line_value}` : 'Unknown'),
+            odds: bestBet.odds,
+            date: new Date(bestBet.game_date || bestBet.date),
             winAmount
           };
         }
         
         setBestWin(topWin);
         
+        // STEP 11: Set the final stats
         setStats({
-          record: `${wins}-${losses}${pushes > 0 ? `-${pushes}` : ''}`,
-          totalBets: total,
-          totalWins: wins,
-          totalLosses: losses,
-          pushes,
+          record: `${totalWins}-${totalLosses}${totalPushes > 0 ? `-${totalPushes}` : ''}`,
+          totalBets,
+          totalWins,
+          totalLosses,
+          pushes: totalPushes,
           winLoss: winRate,
           sportPerformance: Object.values(sportBreakdown),
-          betTypePerformance: Object.values(betTypeBreakdown),
+          betTypePerformance: Object.values(betTypeBreakdown)
+            .map(bt => ({
+              ...bt,
+              percentage: totalBets > 0 ? (bt.count / totalBets) * 100 : 0
+            }))
+            .sort((a, b) => b.count - a.count),
           mostProfitableBetType
         });
+        
+        setIsLoading(false);
       } catch (err) {
-        console.error('Error processing data:', err);
-        setError('Failed to load your performance data. Please try again later.');
-      } finally {
+        console.error('Error fetching Billfold data:', err);
+        setError(`Error fetching data: ${err.message}`);
         setIsLoading(false);
       }
     };
-
+    
     fetchData();
   }, [selectedTimeFrame]);
   
@@ -237,14 +320,18 @@ export const Billfold = () => {
     return 'Moneyline';
   };
   
-  // Toggle between game picks and prop picks
-  const togglePicksView = () => {
-    setShowPropPicks(!showPropPicks);
+  // Toggle between all picks, game picks, and prop picks
+  const togglePicksView = (type) => {
+    setShowPicksType(type);
   };
 
-  if (showPropPicks) {
-    return <PropPicks selectedTimeFrame={selectedTimeFrame} />;
-  }
+  // Filter the betting log based on the selected type
+  const filteredBettingLog = bettingLog.filter(bet => {
+    if (showPicksType === 'all') return true;
+    return bet.type === (showPicksType === 'games' ? 'game' : 'prop');
+  });
+
+  // No longer needed as we're showing all picks within one component
 
   return (
     <div className="billfold-container min-h-screen font-sans pt-16 relative">
