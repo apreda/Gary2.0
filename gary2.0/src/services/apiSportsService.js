@@ -657,6 +657,124 @@ const apiSportsService = {
       console.error('Error getting MLB team stats:', error.message);
       return null;
     }
+  },
+  /**
+   * Get player statistics specifically for prop betting
+   * @param {string} teamName - Team name to get player stats for
+   * @param {string} date - Game date in YYYY-MM-DD format
+   * @param {string} sport - Sport (only 'MLB' supported for now)
+   * @returns {Promise<Object>} - Player statistics indexed by player name
+   */
+  async getPlayerStatsForProps(teamName, date, sport = 'MLB') {
+    try {
+      console.log(`Getting ${sport} player stats for team ${teamName} on ${date}`);
+      
+      if (sport !== 'MLB') {
+        console.log(`Sport ${sport} not yet supported for player prop stats`);
+        return null;
+      }
+      
+      // First, find the team ID
+      const options = { timeZone: 'America/New_York' };
+      const season = date ? date.split('-')[0] : new Date().toLocaleString('en-US', options).split('/')[2].split(',')[0];
+      const teamsResponse = await this.apiRequest('/teams', { league: 1, season }, 'MLB');
+      
+      if (!teamsResponse?.response || teamsResponse.response.length === 0) {
+        console.log('No MLB teams found for the current season');
+        return null;
+      }
+      
+      // Find team ID by matching name (handle partial matches)
+      const team = teamsResponse.response.find(t => 
+        t.name?.toLowerCase().includes(teamName.toLowerCase()) || 
+        teamName.toLowerCase().includes(t.name?.toLowerCase())
+      );
+      
+      if (!team) {
+        console.log(`Couldn't find team ID for ${teamName}`);
+        return null;
+      }
+      
+      const teamId = team.id;
+      console.log(`Found team ID ${teamId} for ${teamName}`);
+      
+      // Find games for this team on the specified date
+      const gamesParams = { date, team: teamId, league: 1, season };
+      console.log('Looking for games with params:', gamesParams);
+      const gamesResponse = await this.apiRequest('/games', gamesParams, 'MLB');
+      
+      if (!gamesResponse?.response || gamesResponse.response.length === 0) {
+        console.log(`No games found for ${teamName} on ${date}`);
+        return null;
+      }
+      
+      // Get the first game ID (there should only be one per day per team)
+      const gameId = gamesResponse.response[0].id;
+      console.log(`Found game ID ${gameId} for ${teamName} on ${date}`);
+      
+      // Get player statistics for this game
+      const playerStatsResponse = await this.apiRequest('/games/statistics', { id: gameId }, 'MLB');
+      
+      if (!playerStatsResponse?.response || playerStatsResponse.response.length === 0) {
+        console.log(`No player statistics found for game ${gameId}`);
+        return null;
+      }
+      
+      // Find the team's statistics in the response
+      const teamStats = playerStatsResponse.response.find(stats => 
+        stats.team.id === teamId
+      );
+      
+      if (!teamStats) {
+        console.log(`Couldn't find team stats for ${teamName} in game ${gameId}`);
+        return null;
+      }
+      
+      // Extract player statistics
+      const players = [];
+      
+      // Process hitters
+      if (teamStats.players) {
+        teamStats.players.forEach(player => {
+          const playerName = player.player.name;
+          const stats = {
+            hits: parseInt(player.statistics.hitting.hits) || 0,
+            runs: parseInt(player.statistics.hitting.runs) || 0,
+            rbi: parseInt(player.statistics.hitting.runs_batted_in) || 0,
+            home_runs: parseInt(player.statistics.hitting.home_runs) || 0,
+            total_bases: parseInt(player.statistics.hitting.total_bases) || 0,
+            at_bats: parseInt(player.statistics.hitting.at_bats) || 0,
+            hits_runs_rbis: (parseInt(player.statistics.hitting.hits) || 0) + 
+                          (parseInt(player.statistics.hitting.runs) || 0) + 
+                          (parseInt(player.statistics.hitting.runs_batted_in) || 0)
+          };
+          
+          // Add pitcher stats if applicable
+          if (player.statistics.pitching) {
+            stats.strikeouts = parseInt(player.statistics.pitching.strikeouts) || 0;
+            stats.innings = player.statistics.pitching.innings_pitched || 0;
+            stats.outs = Math.floor(parseFloat(player.statistics.pitching.innings_pitched) * 3) || 0;
+            stats.earned_runs = parseInt(player.statistics.pitching.earned_runs) || 0;
+          }
+          
+          players.push({
+            name: playerName,
+            statistics: stats
+          });
+        });
+      }
+      
+      // Return formatted data
+      console.log(`Retrieved ${players.length} player statistics for ${teamName}`);
+      return {
+        team: teamName,
+        players: players
+      };
+      
+    } catch (error) {
+      console.error(`Error getting ${sport} player stats for ${teamName}:`, error.message);
+      return null;
+    }
   }
 };
 
