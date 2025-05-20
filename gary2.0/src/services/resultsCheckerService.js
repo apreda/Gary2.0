@@ -1184,19 +1184,25 @@ export const resultsCheckerService = {
               // Try multiple regex patterns to handle different formatting
               const patterns = [
                 // Pattern 1: Team A 3 - 2 Team B
-                /(\w[\w\s]+\w)\s+(\d+)\s*[-–]\s*(\d+)\s+(\w[\w\s]+\w)/i,
+                /(\w[\w\s.\-']+\w)\s+(\d+)\s*[-–]\s*(\d+)\s+(\w[\w\s.\-']+\w)/i,
                 
                 // Pattern 2: Team A defeated Team B 3-2
-                /(\w[\w\s]+\w)\s+(?:defeated|beat|won against)\s+(\w[\w\s]+\w)\s+(?:by a score of|with a score of|)\s*(\d+)\s*[-–]\s*(\d+)/i,
+                /(\w[\w\s.\-']+\w)\s+(?:defeated|beat|won against)\s+(\w[\w\s.\-']+\w)\s+(?:by a score of|with a score of|)\s*(\d+)\s*[-–]\s*(\d+)/i,
                 
                 // Pattern 3: The final score was Team A 3, Team B 2
-                /(?:final score|score)\s+(?:was|:|is)?\s*(\w[\w\s]+\w)\s+(\d+)(?:,|\s+)\s*(\w[\w\s]+\w)\s+(\d+)/i,
+                /(?:final score|score)\s+(?:was|:|is)?\s*(\w[\w\s.\-']+\w)\s+(\d+)(?:,|\s+)\s*(\w[\w\s.\-']+\w)\s+(\d+)/i,
                 
                 // Pattern 4: Team A X, Team B Y (comma-separated format)
-                /([\w\s\.\-']+)\s+(\d+)\s*,\s*([\w\s\.\-']+)\s+(\d+)/i,
+                /([\w\s.\-']+)\s+(\d+)\s*,\s*([\w\s.\-']+)\s+(\d+)/i,
                 
                 // Pattern 5: Another comma variation with possible period at end
-                /([\w\s\.\-']+)\s+(\d+),\s*([\w\s\.\-']+)\s+(\d+)\.*$/i
+                /([\w\s.\-']+)\s+(\d+),\s*([\w\s.\-']+)\s+(\d+)\.*/i,
+
+                // Pattern 6: Simple Team A X - Y Team B without requiring spaces around dash
+                /([\w\s.\-']+)\s(\d+)[-–](\d+)\s([\w\s.\-']+)/i,
+
+                // Pattern 7: Handle "Team A X - Team B Y" format
+                /([\w\s.\-']+)\s(\d+)\s*[-–]\s*([\w\s.\-']+)\s(\d+)/i
               ];
               
               // Try each pattern until we find a match
@@ -1218,14 +1224,50 @@ export const resultsCheckerService = {
                   const score1 = parseInt(simpleMatch[1]);
                   const score2 = parseInt(simpleMatch[2]);
                   
-                  // We'll need to guess which team is home vs away
-                  const keywords = result.toLowerCase();
-                  const isTeamAway = keywords.includes('away') && keywords.includes(teamName.toLowerCase());
+                  // For simple score patterns, try to extract full teams from the text
+                  const teamsRegex = /([A-Z][A-Za-z\s.]+)\s+(?:vs|versus|@|at|against|and)\s+([A-Z][A-Za-z\s.]+)/i;
+                  const teamsMatch = result.match(teamsRegex);
+                  
+                  let teamA = '';
+                  let teamB = '';
+                  
+                  if (teamsMatch && teamsMatch.length >= 3) {
+                    teamA = teamsMatch[1].trim();
+                    teamB = teamsMatch[2].trim();
+                  } else {
+                    teamA = teamName;
+                    
+                    // Try to find the opponent team name
+                    const potentialTeams = [];
+                    for (const word of result.split(/\s+/)) {
+                      if (word.length > 3 && !teamName.toLowerCase().includes(word.toLowerCase()) && 
+                          !/^\d+$/.test(word) && !/^[\W_]+$/.test(word) && 
+                          /^[A-Z]/.test(word)) {
+                        potentialTeams.push(word);
+                      }
+                    }
+                    
+                    if (potentialTeams.length > 0) {
+                      teamB = potentialTeams.join(' ');
+                    } else {
+                      teamB = 'Opponent';
+                    }
+                  }
+                  
+                  // Determine home vs away using text analysis
+                  const isTeamAway = result.toLowerCase().includes('away') && 
+                                     result.toLowerCase().includes(teamName.toLowerCase());
+                  
+                  // Verify the scores are valid
+                  if (isNaN(score1) || isNaN(score2)) {
+                    console.error(`Invalid scores for simple pattern: score1=${score1}, score2=${score2}`);
+                    continue;
+                  }
                   
                   if (isTeamAway) {
                     return {
-                      away_team: teamName,
-                      home_team: 'Opponent',
+                      away_team: teamA,
+                      home_team: teamB,
                       away_score: score1,
                       home_score: score2,
                       league,
@@ -1234,8 +1276,8 @@ export const resultsCheckerService = {
                     };
                   } else {
                     return {
-                      away_team: 'Opponent',
-                      home_team: teamName,
+                      away_team: teamB,
+                      home_team: teamA,
                       away_score: score2,
                       home_score: score1,
                       league,
@@ -1249,9 +1291,28 @@ export const resultsCheckerService = {
               if (match && match.length >= 5) {
                 // Extract team names and scores
                 let teamA = match[1].trim();
-                let scoreA = parseInt(match[2]);
+                let scoreA = match[2] ? parseInt(match[2]) : null;
                 let teamB = match[3].trim();
-                let scoreB = parseInt(match[4]);
+                let scoreB = match[4] ? parseInt(match[4]) : null;
+                
+                // Verify we have valid numbers for scores
+                if (isNaN(scoreA) || isNaN(scoreB)) {
+                  console.error(`Invalid scores extracted: scoreA=${scoreA}, scoreB=${scoreB}`);
+                  // Try to swap positions if pattern 7 was matched (Team A X - Team B Y)
+                  if (isNaN(scoreB) && !isNaN(parseInt(match[4] || ''))) {
+                    // This might be pattern 7 format
+                    teamA = match[1].trim();
+                    scoreA = parseInt(match[2] || 0);
+                    teamB = match[3].trim();
+                    scoreB = parseInt(match[4] || 0);
+                  }
+                }
+                
+                // Double-check score validity after potential correction
+                if (isNaN(scoreA) || isNaN(scoreB)) {
+                  console.error(`Still invalid scores after correction: scoreA=${scoreA}, scoreB=${scoreB}`);
+                  continue;
+                }
                 
                 // Create a proper score object with correct team name matching
                 scores[pickText] = {
