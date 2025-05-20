@@ -240,10 +240,11 @@ const propResultsService = {
           else if (propType === 'hits_runs_rbis') statName = 'combined hits, runs, and RBIs';
           
           // Create a direct, simple query just asking for the stat total
-          const query = `How many ${statName} did ${playerName} have in the game on ${searchDate}?`;
+          // Simplify the query even further for maximum compatibility
+          const query = `${playerName} ${statName} stats on ${searchDate}`;
           
-          // Check if Perplexity API key is available
-          const perplexityApiKey = import.meta.env?.VITE_PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
+          // Use the predefined Perplexity API key
+          const perplexityApiKey = 'pplx-maOpm1wMJhpwKGh368l9rEwMGClb7f2pvUolfC7fVyPkWev';
           
           if (!perplexityApiKey) {
             console.log('Perplexity API key not available');
@@ -348,15 +349,24 @@ const propResultsService = {
             console.log('Perplexity API request successful');
             return processPerplexityResponse(response, playerName, propType, statName, propLine, pickDirection);
           } catch (apiError) {
-            console.error(`Perplexity API error details:`, apiError.response?.data || apiError.message);
+            // Log detailed error information for debugging
+            console.error(`Perplexity API error details:`, apiError.message);
+            
+            if (apiError.response) {
+              console.error(`Status code: ${apiError.response.status}`);
+              console.error(`Response data:`, apiError.response.data);
+              console.error(`Response headers:`, apiError.response.headers);
+            } else if (apiError.request) {
+              console.error(`No response received:`, apiError.request);
+            }
             
             // If the first model fails, try with another online model as a fallback
             try {
-              console.log(`Trying fallback model: llama-3-sonar-online`);
+              console.log(`Trying fallback model: mistral-7b-instruct`);
               
               // Use exactly the same structure for the fallback model
               const fallbackResponse = await axios.post('https://api.perplexity.ai/chat/completions', {
-                model: 'llama-3-sonar-online',
+                model: 'mistral-7b-instruct',
                 messages: [
                   {
                     role: 'user',
@@ -374,7 +384,16 @@ const propResultsService = {
               console.log('Perplexity API fallback request successful');
               return processPerplexityResponse(fallbackResponse, playerName, propType, statName, propLine, pickDirection);
             } catch (fallbackError) {
-              console.error(`Perplexity API fallback error:`, fallbackError.response?.data || fallbackError.message);
+              // Log detailed error information for the fallback request
+              console.error(`Perplexity API fallback error:`, fallbackError.message);
+              
+              if (fallbackError.response) {
+                console.error(`Fallback status code: ${fallbackError.response.status}`);
+                console.error(`Fallback response data:`, fallbackError.response.data);
+                console.error(`Fallback response headers:`, fallbackError.response.headers);
+              } else if (fallbackError.request) {
+                console.error(`No fallback response received:`, fallbackError.request);
+              }
               console.log(`All Perplexity API requests failed, returning pending result`);
               return { result: 'pending', actualResult: null };
             }
