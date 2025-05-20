@@ -318,6 +318,7 @@ const picksService = {
               }
               
               // Format the game data for Gary's analysis with enhanced statistics
+              // We'll be flexible about what stats we pass - OpenAI will see everything in context
               const formattedGameData = {
                 homeTeam: game.home_team,
                 awayTeam: game.away_team,
@@ -337,7 +338,14 @@ const picksService = {
                 time: gameTimeData.gameTime || 'TBD',
                 headlines: gameTimeData.headlines || [],
                 injuries: gameTimeData.keyInjuries || { homeTeam: [], awayTeam: [] },
-                realTimeNews: gameNews || ''
+                realTimeNews: gameNews || '',
+                // Add a special field that will contain ALL the stats we collect from various sources
+                // This way we send everything we have to OpenAI without being too strict
+                allCollectedStats: {
+                  date: date,
+                  mlbSpecific: sportName === 'MLB' ? { is2025Season: true } : null,
+                  sources: []  // We'll collect all stats from all sources here
+                }
               };
               
               // Generate team statistics according to sport-specific priority order
@@ -346,11 +354,37 @@ const picksService = {
               try {
                 // Different priority order for each sport
                 if (sportName === 'MLB') {
-                  // For MLB: 1) API-Sports → 2) SportsDB → 3) Ball Don't Lie
-                  console.log('MLB STATS PRIORITY: 1) API-Sports → 2) SportsDB → 3) Ball Don\'t Lie');
+                  // For MLB now we prioritize Ball Don't Lie for pitcher data, which is the most critical
+                  console.log('MLB STATS PRIORITY: 1) Ball Don\'t Lie for pitcher data → 2) API-Sports for team data → 3) SportsDB as fallback');
                   
-                  // PRIORITY 1: Try API-Sports first
-                  console.log('Attempting to get MLB stats from API-Sports...');
+                  // PRIORITY 1: Try Ball Don't Lie for pitcher data first
+                  console.log('Attempting to get 2025 MLB pitcher stats from Ball Don\'t Lie...');
+                  // Import ballDontLieService first for pitcher data
+                  const ballDontLieModule = await import('./ballDontLieService');
+                  const ballDontLieService = ballDontLieModule.ballDontLieService;
+                  
+                  // Get pitcher matchup data with 2025 stats only
+                  let pitcherStats = null;
+                  let mlbComprehensiveStats = null;
+                  try {
+                    // First, try to get the comprehensive MLB game stats
+                    mlbComprehensiveStats = await ballDontLieService.getComprehensiveMlbGameStats(game.home_team, game.away_team);
+                    
+                    if (mlbComprehensiveStats) {
+                      console.log('Successfully retrieved comprehensive MLB stats from Ball Don\'t Lie');
+                      // Extract pitcher matchup
+                      pitcherStats = mlbComprehensiveStats.pitcherMatchup;
+                    } else {
+                      // Fallback to just pitcher matchup
+                      console.log('Falling back to just pitcher matchup data...');
+                      pitcherStats = await ballDontLieService.getMlbPitcherMatchup(game.home_team, game.away_team);
+                    }
+                  } catch (error) {
+                    console.error('Error getting MLB stats from Ball Don\'t Lie:', error);
+                  }
+                  
+                  // PRIORITY 2: Also get team stats from API-Sports as a supplement
+                  console.log('Attempting to supplement with team stats from API-Sports...');
                   // Import API-Sports service and MLB player stats service
                   const [apiSportsModule, mlbPlayerStatsModule] = await Promise.all([
                     import('./apiSportsService'),
@@ -365,26 +399,63 @@ const picksService = {
                     mlbPlayerStatsService.generateMlbPlayerStatsReport(game.home_team, game.away_team, date)
                   ]);
                   
-                  if (apiSportsStats) {
-                    console.log('Using API-Sports data for MLB analysis');
+                  // Combine Ball Don't Lie pitcher data with API-Sports team stats
+                  if (pitcherStats || apiSportsStats) {
+                    console.log('Integrating Ball Don\'t Lie pitcher data with team stats for MLB analysis');
                     
-                    // Format the data for OpenAI prompt to emphasize player-level statistics
-                    const homeTeam = apiSportsStats.homeTeam;
-                    const awayTeam = apiSportsStats.awayTeam;
+                    // First, ensure we have a base structure even if API-Sports data is missing
+                    const homeTeam = apiSportsStats?.homeTeam || { teamName: game.home_team, wins: 0, losses: 0, homeRecord: 'N/A', batting: {}, pitching: {} };
+                    const awayTeam = apiSportsStats?.awayTeam || { teamName: game.away_team, wins: 0, losses: 0, awayRecord: 'N/A', batting: {}, pitching: {} };
                     
-                    let formattedStatsContext = ``;
+                    let formattedStatsContext = `**2025 MLB CURRENT SEASON DATA ONLY**\n\n`;
                     
-                    // First add player-level statistics if available
-                    if (playerStatsReport && !playerStatsReport.includes('Error')) {
-                      console.log('Including detailed MLB player stats in analysis');
-                      formattedStatsContext += playerStatsReport;
-                      formattedStatsContext += '\n\n';
-                    } else {
-                      console.log('No detailed player stats available, using team stats only');
+                    // FIRST: Add Ball Don't Lie pitcher data (2025 season stats only)
+                    if (pitcherStats) {
+                      console.log('Including 2025 pitcher matchup data from Ball Don\'t Lie');
+                      formattedStatsContext += `## STARTING PITCHER MATCHUP (2025 SEASON ONLY)\n`;
+                      
+                      // Home pitcher
+                      if (pitcherStats.homePitcher) {
+                        const hp = pitcherStats.homePitcher;
+                        formattedStatsContext += `### HOME: ${hp.name} (${game.home_team})\n`;
+                        formattedStatsContext += `* ERA: ${hp.stats.ERA}\n`;
+                        formattedStatsContext += `* WHIP: ${hp.stats.WHIP}\n`;
+                        formattedStatsContext += `* Record: ${hp.stats.record}\n`;
+                        formattedStatsContext += `* Innings Pitched: ${hp.stats.inningsPitched}\n`;
+                        formattedStatsContext += `* Strikeouts: ${hp.stats.strikeouts}\n`;
+                        formattedStatsContext += `* Opponent Batting Avg: ${hp.stats.opponentAvg}\n\n`;
+                      } else {
+                        formattedStatsContext += `### HOME: No 2025 starting pitcher data available for ${game.home_team}\n\n`;
+                      }
+                      
+                      // Away pitcher
+                      if (pitcherStats.awayPitcher) {
+                        const ap = pitcherStats.awayPitcher;
+                        formattedStatsContext += `### AWAY: ${ap.name} (${game.away_team})\n`;
+                        formattedStatsContext += `* ERA: ${ap.stats.ERA}\n`;
+                        formattedStatsContext += `* WHIP: ${ap.stats.WHIP}\n`;
+                        formattedStatsContext += `* Record: ${ap.stats.record}\n`;
+                        formattedStatsContext += `* Innings Pitched: ${ap.stats.inningsPitched}\n`;
+                        formattedStatsContext += `* Strikeouts: ${ap.stats.strikeouts}\n`;
+                        formattedStatsContext += `* Opponent Batting Avg: ${ap.stats.opponentAvg}\n\n`;
+                      } else {
+                        formattedStatsContext += `### AWAY: No 2025 starting pitcher data available for ${game.away_team}\n\n`;
+                      }
+                      
+                      // Save the pitcher data to formattedGameData
+                      formattedGameData.pitcherData = pitcherStats;
                     }
                     
-                    // Then add team-level statistics
-                    formattedStatsContext += `MLB TEAM STATISTICS:\n\n`;
+                    // SECOND: Add player-level statistics if available
+                    if (playerStatsReport && !playerStatsReport.includes('Error')) {
+                      console.log('Including detailed MLB player stats in analysis');
+                      formattedStatsContext += `## TEAM AND PLAYER STATISTICS (2025 SEASON)\n`;
+                      formattedStatsContext += playerStatsReport;
+                      formattedStatsContext += '\n\n';
+                    }
+                    
+                    // THIRD: Add team-level statistics
+                    formattedStatsContext += `## MLB TEAM STATISTICS (2025 SEASON):\n\n`;
                     
                     // Home team stats
                     formattedStatsContext += `${homeTeam?.teamName || game.home_team} (Home):\n`;
@@ -419,19 +490,101 @@ const picksService = {
                     formattedGameData.statsContext = formattedStatsContext;
                     formattedGameData.enhancedStats = `TEAM STATS SUMMARY:\n${formattedStatsContext}`;
                     formattedGameData.statsSource = 'API-Sports with Player Stats';
+                    
+                    // Add these stats to our collection as well - be flexible
+                    formattedGameData.allCollectedStats.sources.push({
+                      source: 'API-Sports',
+                      data: { apiSportsStats, playerStatsReport, formattedStats: formattedStatsContext }
+                    });
+                    
+                    // If we have pitcher data from Ball Don't Lie, add that too
+                    if (pitcherStats) {
+                      formattedGameData.allCollectedStats.sources.push({
+                        source: 'Ball Don\'t Lie',
+                        data: { pitcherStats, note: '2025 MLB Pitcher Data Only' }
+                      });
+                    }
                   } else {
                     // PRIORITY 2: If API-Sports fails, try TheSportsDB
                     console.log('API-Sports data unavailable, trying TheSportsDB for MLB...');
                     formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
                     formattedGameData.statsSource = 'TheSportsDB';
                     
-                    // PRIORITY 3: If TheSportsDB data is incomplete, try Ball Don't Lie
-                    if (formattedGameData.statsContext.includes('unavailable') || formattedGameData.statsContext.includes('Error')) {
-                      console.log('TheSportsDB data incomplete, trying Ball Don\'t Lie API for MLB...');
-                      enhancedStats = await sportsDataService.getEnhancedMLBStats(game.home_team, game.away_team);
-                      if (enhancedStats && !enhancedStats.includes('Error')) {
-                        formattedGameData.enhancedStats = enhancedStats;
-                        formattedGameData.statsSource = 'Ball Don\'t Lie';
+                    // Add these stats to our collection as well
+                    formattedGameData.allCollectedStats.sources.push({
+                      source: 'TheSportsDB',
+                      data: { rawStats: statsContext, formattedStats: formattedGameData.statsContext }
+                    });
+                    
+                    // If we have pitcher data from Ball Don't Lie, add that too
+                    if (pitcherStats) {
+                      formattedGameData.allCollectedStats.sources.push({
+                        source: 'Ball Don\'t Lie',
+                        data: { pitcherStats, note: '2025 MLB Pitcher Data Only' }
+                      });
+                    }
+                    
+                    // If we still need more stats, try Ball Don't Lie, but don't be too strict
+                  // We'll only make this extra call if we have almost no usable stats at all
+                    if ((!pitcherStats && !apiSportsStats) || 
+                        (formattedGameData.statsContext && 
+                         (formattedGameData.statsContext.includes('No stats available') || 
+                          formattedGameData.statsContext.includes('Error retrieving')))) {
+                      console.log('Previous data sources incomplete, making final attempt with Ball Don\'t Lie comprehensive API for MLB...');
+                      // Import ballDontLieService if we haven't already
+                      if (!ballDontLieService) {
+                        const ballDontLieModule = await import('./ballDontLieService');
+                        ballDontLieService = ballDontLieModule.ballDontLieService;
+                      }
+                      
+                      try {
+                        // Get comprehensive MLB stats with 2025 data only
+                        const mlbComprehensiveStats = await ballDontLieService.getComprehensiveMlbGameStats(game.home_team, game.away_team);
+                        
+                        if (mlbComprehensiveStats) {
+                          console.log('Successfully retrieved 2025-only comprehensive MLB stats from Ball Don\'t Lie');
+                          
+                          // Format the comprehensive data
+                          let bdlStatsContext = `**COMPREHENSIVE 2025 MLB SEASON DATA ONLY (Ball Don't Lie)**\n\n`;
+                          
+                          // Add pitcher matchup
+                          if (mlbComprehensiveStats.pitcherMatchup) {
+                            bdlStatsContext += `## STARTING PITCHER MATCHUP:\n`;
+                            const pm = mlbComprehensiveStats.pitcherMatchup;
+                            
+                            if (pm.homePitcher) {
+                              bdlStatsContext += `HOME: ${pm.homePitcher.name} - ERA: ${pm.homePitcher.stats.ERA}, WHIP: ${pm.homePitcher.stats.WHIP}, Record: ${pm.homePitcher.stats.record}\n`;
+                            }
+                            
+                            if (pm.awayPitcher) {
+                              bdlStatsContext += `AWAY: ${pm.awayPitcher.name} - ERA: ${pm.awayPitcher.stats.ERA}, WHIP: ${pm.awayPitcher.stats.WHIP}, Record: ${pm.awayPitcher.stats.record}\n`;
+                            }
+                            
+                            bdlStatsContext += `\n`;
+                          }
+                          
+                          // Add team stats
+                          bdlStatsContext += `## TEAM STATS:\n`;
+                          bdlStatsContext += `${game.home_team} (HOME): ${JSON.stringify(mlbComprehensiveStats.homeTeam || {})}\n`;
+                          bdlStatsContext += `${game.away_team} (AWAY): ${JSON.stringify(mlbComprehensiveStats.awayTeam || {})}\n\n`;
+                          
+                          // Use this as our enhanced stats
+                          formattedGameData.enhancedStats = bdlStatsContext;
+                          formattedGameData.statsSource = 'Ball Don\'t Lie (2025 Season Only)';
+                          
+                          // If we didn't have pitcher data before, add it now
+                          if (!formattedGameData.pitcherData && mlbComprehensiveStats.pitcherMatchup) {
+                            formattedGameData.pitcherData = mlbComprehensiveStats.pitcherMatchup;
+                          }
+                          
+                          // Add these stats to our collection as well
+                          formattedGameData.allCollectedStats.sources.push({
+                            source: 'Ball Don\'t Lie Comprehensive',
+                            data: { mlbComprehensiveStats, formattedStats: bdlStatsContext }
+                          });
+                        }
+                      } catch (bdlError) {
+                        console.error('Error in final Ball Don\'t Lie data retrieval:', bdlError);
                       }
                     }
                   }

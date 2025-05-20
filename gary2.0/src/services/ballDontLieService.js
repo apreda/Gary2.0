@@ -223,8 +223,225 @@ const ballDontLieService = {
     }
   },
 
-  // ... (other methods remain the same with proper method syntax)
-
+  /**
+   * Get current 2025 MLB starting pitcher stats by team name
+   * @param {string} teamName - Team name to get pitcher stats for 
+   * @returns {Promise<Array>} Array of pitcher stats
+   */
+  async getMlbPitcherStatsByTeam(teamName) {
+    try {
+      console.log(`Getting 2025 season pitchers for ${teamName}...`);
+      
+      // First get the team ID
+      const teams = await this.getClient().mlb.getTeams();
+      if (!teams || !teams.data || !teams.data.length) {
+        console.error('No MLB teams found');
+        return null;
+      }
+      
+      // Find team by name (with fuzzy matching)
+      const normalizedTeamName = teamName.toLowerCase().replace(/\s+/g, '');
+      const team = teams.data.find(t => 
+        t.display_name.toLowerCase().replace(/\s+/g, '').includes(normalizedTeamName) ||
+        normalizedTeamName.includes(t.display_name.toLowerCase().replace(/\s+/g, '')) ||
+        t.name.toLowerCase().replace(/\s+/g, '').includes(normalizedTeamName) ||
+        normalizedTeamName.includes(t.name.toLowerCase().replace(/\s+/g, '')) ||
+        t.location.toLowerCase().replace(/\s+/g, '').includes(normalizedTeamName) ||
+        normalizedTeamName.includes(t.location.toLowerCase().replace(/\s+/g, ''))
+      );
+      
+      if (!team) {
+        console.error(`Team not found: ${teamName}`);
+        return null;
+      }
+      
+      console.log(`Found team: ${team.display_name} (ID: ${team.id})`);
+      
+      // Get active players for the team - specifically starting pitchers
+      const activePlayers = await this.getClient().mlb.getActivePlayers({
+        team_ids: [team.id],
+        per_page: 100
+      });
+      
+      if (!activePlayers || !activePlayers.data || !activePlayers.data.length) {
+        console.error(`No active players found for ${teamName}`);
+        return null;
+      }
+      
+      // Filter for pitchers only (Starting Pitcher and Relief Pitcher)
+      const pitchers = activePlayers.data.filter(player => 
+        player.position && (player.position.includes('Pitcher'))
+      );
+      
+      if (!pitchers.length) {
+        console.error(`No pitchers found for ${teamName}`);
+        return null;
+      }
+      
+      console.log(`Found ${pitchers.length} pitchers for ${teamName}`);
+      
+      // Get 2025 season stats for each pitcher
+      const currentYear = 2025; // Hard-code to 2025 as specified
+      const pitcherStats = [];
+      
+      for (const pitcher of pitchers.slice(0, 5)) { // Limit to 5 pitchers to avoid rate limits
+        try {
+          const stats = await this.getMlbPlayerSeasonStats(pitcher.id, currentYear);
+          if (stats) {
+            // Combine player data with their stats
+            pitcherStats.push({
+              ...pitcher,
+              seasonStats: stats
+            });
+          }
+        } catch (error) {
+          console.error(`Error getting stats for pitcher ${pitcher.full_name}:`, error);
+        }
+      }
+      
+      return pitcherStats;
+    } catch (error) {
+      console.error(`Error getting MLB pitcher stats for ${teamName}:`, error);
+      return null;
+    }
+  },
+  
+  /**
+   * Get starting pitcher matchup for a game
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {Promise<Object>} Pitcher matchup data
+   */
+  async getMlbPitcherMatchup(homeTeam, awayTeam) {
+    try {
+      console.log(`Getting pitcher matchup for ${awayTeam} @ ${homeTeam}...`);
+      
+      // Get pitcher stats for both teams in parallel
+      const [homePitchers, awayPitchers] = await Promise.all([
+        this.getMlbPitcherStatsByTeam(homeTeam),
+        this.getMlbPitcherStatsByTeam(awayTeam)
+      ]);
+      
+      // Find likely starting pitchers (first in rotation or best ERA)
+      const findStartingPitcher = (pitchers) => {
+        if (!pitchers || !pitchers.length) return null;
+        
+        // First look for pitchers with position exactly "Starting Pitcher"
+        const startingPitchers = pitchers.filter(p => p.position === 'Starting Pitcher');
+        
+        if (startingPitchers.length > 0) {
+          // Sort by ERA (ascending) and take the best
+          return startingPitchers.sort((a, b) => {
+            const aERA = a.seasonStats?.pitching_era || 999;
+            const bERA = b.seasonStats?.pitching_era || 999;
+            return aERA - bERA;
+          })[0];
+        }
+        
+        // If no starting pitchers found, just take the pitcher with the best ERA
+        return pitchers.sort((a, b) => {
+          const aERA = a.seasonStats?.pitching_era || 999;
+          const bERA = b.seasonStats?.pitching_era || 999;
+          return aERA - bERA;
+        })[0];
+      };
+      
+      const homePitcher = findStartingPitcher(homePitchers);
+      const awayPitcher = findStartingPitcher(awayPitchers);
+      
+      // Format pitcher data for OpenAI analysis
+      const formatPitcherData = (pitcher) => {
+        if (!pitcher) return null;
+        
+        const stats = pitcher.seasonStats || {};
+        return {
+          name: pitcher.full_name,
+          position: pitcher.position,
+          stats: {
+            ERA: stats.pitching_era?.toFixed(2) || 'N/A',
+            WHIP: stats.pitching_whip?.toFixed(2) || 'N/A', 
+            record: `${stats.pitching_w || 0}-${stats.pitching_l || 0}`,
+            inningsPitched: stats.pitching_ip?.toFixed(1) || 'N/A',
+            strikeouts: stats.pitching_k || 'N/A',
+            opponentAvg: stats.pitching_oba?.toFixed(3) || 'N/A',
+            description: `${pitcher.full_name} has a ${stats.pitching_era?.toFixed(2) || 'N/A'} ERA over ${stats.pitching_ip?.toFixed(1) || 0} innings in 2025.`
+          }
+        };
+      };
+      
+      return {
+        homePitcher: formatPitcherData(homePitcher),
+        awayPitcher: formatPitcherData(awayPitcher),
+        game: {
+          venue: 'TBD', // These will be populated from other sources if available
+          date: 'TBD',
+          time: 'TBD'
+        },
+        note: 'Pitcher data from Ball Don\'t Lie API (2025 season stats only)'
+      };
+    } catch (error) {
+      console.error(`Error getting pitcher matchup for ${awayTeam} @ ${homeTeam}:`, error);
+      return null;
+    }
+  },
+  
+  /**
+   * Get comprehensive MLB game stats for OpenAI analysis
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {Promise<Object>} Complete game stats
+   */
+  async getComprehensiveMlbGameStats(homeTeam, awayTeam) {
+    try {
+      console.log(`Getting comprehensive 2025 MLB stats for ${awayTeam} @ ${homeTeam}...`);
+      
+      // Get pitcher matchup
+      const pitcherMatchup = await this.getMlbPitcherMatchup(homeTeam, awayTeam);
+      
+      // Get team season stats
+      const teams = await this.getClient().mlb.getTeams();
+      if (!teams || !teams.data) {
+        throw new Error('Failed to fetch MLB teams');
+      }
+      
+      const findTeam = (teamName) => {
+        const normalizedTeamName = teamName.toLowerCase().replace(/\s+/g, '');
+        return teams.data.find(t => 
+          t.display_name.toLowerCase().replace(/\s+/g, '').includes(normalizedTeamName) ||
+          normalizedTeamName.includes(t.display_name.toLowerCase().replace(/\s+/g, ''))
+        );
+      };
+      
+      const homeTeamData = findTeam(homeTeam);
+      const awayTeamData = findTeam(awayTeam);
+      
+      if (!homeTeamData || !awayTeamData) {
+        throw new Error(`Team not found: ${!homeTeamData ? homeTeam : awayTeam}`);
+      }
+      
+      // Get 2025 team season stats
+      const currentYear = 2025;
+      const [homeTeamStats, awayTeamStats] = await Promise.all([
+        this.getMlbTeamSeasonStats(homeTeamData.id, currentYear),
+        this.getMlbTeamSeasonStats(awayTeamData.id, currentYear)
+      ]);
+      
+      return {
+        pitcherMatchup,
+        homeTeam: homeTeamStats,
+        awayTeam: awayTeamStats,
+        battingLeaders: {
+          home: [], // This would require additional API calls to populate
+          away: []
+        },
+        note: 'Data source: Ball Don\'t Lie API - 2025 season only'
+      };
+    } catch (error) {
+      console.error(`Error getting comprehensive MLB game stats: ${error}`);
+      return null;
+    }
+  },
+  
   
   /**
    * Generate a detailed statistics report for specific players
