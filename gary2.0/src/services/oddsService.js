@@ -306,7 +306,7 @@ export const oddsService = {
    * Get upcoming games with comprehensive odds data
    * @param {string} sport - Sport key
    * @param {Object} options - Request options
-   * @returns {Promise<Object>} Upcoming games with odds that happen on the current day
+   * @returns {Promise<Object>} Upcoming games with odds that happen on the current day (EST timezone)
    */
   getUpcomingGames: async (sport = 'upcoming', options = {}) => {
     try {
@@ -316,20 +316,22 @@ export const oddsService = {
         throw new Error('API key is required for The Odds API');
       }
       
-      // Get the current date in EST timezone (for 12pm cutoff)
+      // Get the current date in EST timezone
       const now = new Date();
       // Convert to EST (UTC-4 or UTC-5 depending on daylight savings)
       const estOffset = -4; // Adjust for daylight savings if needed
       const estTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (estOffset * 3600000));
       
-      // Set to 12pm EST today for our reference point
-      const twelvePmEST = new Date(estTime);
-      twelvePmEST.setHours(12, 0, 0, 0);
+      // Create start and end dates for the current day in EST
+      const startOfDay = new Date(estTime);
+      startOfDay.setHours(0, 0, 0, 0); // Beginning of the day (midnight EST)
       
-      // Calculate 12 hours from 12pm EST (midnight EST)
-      const cutoffTime = new Date(twelvePmEST.getTime() + (12 * 60 * 60 * 1000));
+      const endOfDay = new Date(estTime);
+      endOfDay.setHours(23, 59, 59, 999); // End of the day (11:59:59.999 PM EST)
       
-      console.log(`Fetching games between ${twelvePmEST.toISOString()} and ${cutoffTime.toISOString()} EST`);
+      // Format date for logging
+      const estDateStr = estTime.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+      console.log(`Fetching games for ${estDateStr} in EST timezone (${startOfDay.toISOString()} to ${endOfDay.toISOString()})`);
       
       // Use only basic markets for initial game fetch (prop markets require separate API calls)
       // This avoids 422 Unprocessable Content errors with lower tier API subscriptions
@@ -346,16 +348,16 @@ export const oddsService = {
         }
       });
       
-      // Filter games to only include those happening on the current day (between 12pm-12am EST)
+      // Filter games to only include those happening on the current day in EST timezone
       const filteredGames = response.data.filter(game => {
         if (!game.commence_time) return false;
         const gameTime = new Date(game.commence_time);
         // Convert game time to EST for comparison
         const gameTimeEST = new Date(gameTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-        return gameTimeEST >= twelvePmEST && gameTimeEST <= cutoffTime;
+        return gameTimeEST >= startOfDay && gameTimeEST <= endOfDay;
       });
       
-      console.log(`Filtered from ${response.data.length} games to ${filteredGames.length} games happening between 12pm-12am EST today`);
+      console.log(`Filtered from ${response.data.length} games to ${filteredGames.length} games happening today in EST timezone`);
       
       return filteredGames;
     } catch (error) {
