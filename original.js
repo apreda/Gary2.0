@@ -1,8 +1,6 @@
 /**
- * OpenAI service for generating sports analysis and picks
- * This service uses OpenAI to generate Gary's betting analysis and recommendations
- * Provides betting insights through the legendary Gary the Grizzly Bear character
- * Deployment: 2025-05-19
+ * Service for interacting with the OpenAI API
+ * Provides Gary's analysis and betting recommendations
  */
 import axios from 'axios';
 import { apiCache } from '../utils/apiCache';
@@ -225,109 +223,77 @@ You must return a properly formatted JSON object with the following structure:
   "rationale": "Write a single paragraph in first person as Gary, explaining why you made this pick and why you're confident in it. Include relevant statistics and insights that support your analysis."
 }
 `
-    };
-    
-    /**
-     * Combine all input data and format it for the user prompt
-     */
-    // Prepare all game stats in a flexible way - we'll pass whatever we have to OpenAI
-    // This follows user's direction to be flexible with stats formatting
-    let statsSection = '';  
+      };
       
-    // Add any stats we have - don't be picky about structure, OpenAI can parse them
-      
-    // 1. First add the standard stats context if available
-    if (gameData?.statsContext) {
-      statsSection += gameData.statsContext;
-      statsSection += '\n\n';
-    }
-      
-    // 2. Add any enhanced stats if available
-    if (gameData?.enhancedStats) {
-      statsSection += gameData.enhancedStats;
-      statsSection += '\n\n';
-    }
-      
-    // 3. If we have pitcher data (critical for MLB), add it prominently
-    if (gameData?.pitcherData) {
-      statsSection += 'STARTING PITCHER MATCHUP:\n';
+      // For MLB, ensure we collect and emphasize all MLB-specific data
+      let mlbDataSection = '';
+      if (gameData?.sport === 'MLB' || gameData?.league === 'MLB') {
+        mlbDataSection = `
+
+MLB SPECIFIC DATA (USE THIS FOR YOUR ANALYSIS):
+${gameData?.pitcherData ? `PITCHER DATA:
+${gameData.pitcherData}
+` : ''}
+`;
         
-      if (typeof gameData.pitcherData === 'string') {
-        statsSection += gameData.pitcherData;
-      } else {
-        const homePitcher = gameData.pitcherData.homePitcher;
-        const awayPitcher = gameData.pitcherData.awayPitcher;
-          
-        if (homePitcher) {
-          statsSection += `HOME: ${homePitcher.name} - `;
-          if (homePitcher.stats) {
-            statsSection += Object.entries(homePitcher.stats)
-              .map(([key, val]) => `${key}: ${val}`)
-              .join(', ');
-          }
-          statsSection += '\n';
+        // Add detailed pitcher matchup data if available
+        if (gameData?.pitcherMatchup) {
+          mlbDataSection += `PITCHER MATCHUP DETAILS:
+${JSON.stringify(gameData.pitcherMatchup, null, 2)}
+
+`;
         }
-          
-        if (awayPitcher) {
-          statsSection += `AWAY: ${awayPitcher.name} - `;
-          if (awayPitcher.stats) {
-            statsSection += Object.entries(awayPitcher.stats)
-              .map(([key, val]) => `${key}: ${val}`)
-              .join(', ');
-          }
-          statsSection += '\n';
+        
+        // Add batting leaders if available
+        if (gameData?.mlbStats?.battingLeaders) {
+          mlbDataSection += `BATTING LEADERS:
+${JSON.stringify(gameData.mlbStats.battingLeaders, null, 2)}
+
+`;
+        }
+        
+        // Add team stats if available
+        if (gameData?.mlbStats?.teamStats) {
+          mlbDataSection += `TEAM STATS:
+${JSON.stringify(gameData.mlbStats.teamStats, null, 2)}
+
+`;
         }
       }
-      statsSection += '\n';
-    }
       
-    // 4. Include MLB-specific note if this is MLB data
-    if (gameData?.sport === 'MLB' || gameData?.league === 'MLB') {
-      statsSection += '**NOTE: All MLB data is from the current 2025 season**\n\n';
-    }
+      // Format the game data for the prompt
+      const gameDataSection = typeof gameData === 'object' ? 
+        JSON.stringify(gameData, null, 2) : gameData;
       
-    // 5. Include any team stats we have
-    if (gameData?.teamStats && typeof gameData.teamStats === 'object') {
-      statsSection += 'TEAM STATISTICS SUMMARY:\n';
-      try {
-        statsSection += JSON.stringify(gameData.teamStats, null, 2);
-      } catch (e) {
-        statsSection += 'Team stats available but in non-JSON format';
-      }
-      statsSection += '\n\n';
-    } else if (typeof gameData?.teamStats === 'string') {
-      statsSection += gameData.teamStats;
-      statsSection += '\n\n';
-    }
-      
-    // 6. Include all collected stats if we have them
-    if (gameData?.allCollectedStats && gameData.allCollectedStats.sources?.length > 0) {
-      statsSection += 'COLLECTED STATS FROM MULTIPLE SOURCES:\n';
-      statsSection += `${gameData.allCollectedStats.sources.length} data sources available\n`;
-      statsSection += 'Data sources: ' + gameData.allCollectedStats.sources.map(s => s.source).join(', ') + '\n\n';
-    }
-      
-    // If we still have no stats at all, just say so
-    if (!statsSection.trim()) {
-      statsSection = 'No detailed statistics available. Analysis will be based on limited data.\n';
-    }
-      
-    // Combine everything into the user input in a format Gary can analyze
-    const userPrompt = {
-      role: 'user',
-      content: `Analyze this upcoming ${gameData?.sport || ''} game: ${gameData?.homeTeam || 'Home'} vs ${gameData?.awayTeam || 'Away'}
+      // Combine everything into the user input
+      const userPrompt = {
+        role: 'user',
+        content: `Analyze this upcoming ${gameData?.sport || ''} game: ${gameData?.game || ''}
 
 TEAM DESIGNATIONS (DO NOT CHANGE THESE):
 - HOME TEAM: ${gameData?.homeTeam || 'Not specified'}
 - AWAY TEAM: ${gameData?.awayTeam || 'Not specified'}
 - GAME TIME: ${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}
+${mlbDataSection}
 
 ${gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No odds data available'}
 
 ${gameData?.lineMovement ? `Line Movement: ${JSON.stringify(gameData.lineMovement, null, 2)}` : 'No line movement data available'}
 
-TEAM STATISTICS AND DATA:
-${statsSection}
+${typeof gameData?.teamStats === 'string' ? gameData.teamStats : JSON.stringify(gameData?.teamStats || '', null, 2)}
+
+${gameData?.pitcherData ? `PITCHER DATA:
+${gameData.pitcherData}
+` : ''}
+
+${gameData?.headlines && gameData.headlines.length > 0 ? `HEADLINES AND STORYLINES:
+${gameData.headlines.map((headline, i) => `${i+1}. ${headline}`).join('\n')}
+` : ''}
+
+${gameData?.injuries && (gameData.injuries.homeTeam.length > 0 || gameData.injuries.awayTeam.length > 0) ? `KEY INJURIES:
+${gameData.homeTeam}: ${gameData.injuries.homeTeam.join(', ') || 'None reported'}
+${gameData.awayTeam}: ${gameData.injuries.awayTeam.join(', ') || 'None reported'}
+` : ''}
 
 EXTREMELY IMPORTANT - ABOUT THE GAME TIME: 
 1. The system is reporting that you are incorrectly setting game times to "TBD" when actual times are available.
@@ -374,23 +340,6 @@ Provide your betting analysis in the exact JSON format specified. Remember to ON
   },
   /**
    * Generate prop picks recommendations from OpenAI
-   * @param {string} prompt - The detailed prompt with game data and available props
-   * @param {Object} options - Additional options for the generation
-   * @returns {Promise<string>} - The generated prop picks response
-   */
-  generatePropPicks: async function(prompt, options = {}) {
-    try {
-      console.log('Generating prop picks from OpenAI...');
-      
-      const systemMessage = {
-        role: 'system',
-        content: "You are Gary, a professional sports bettor and statistical analyst specializing in player prop bets. \n\nYour task is to analyze player statistics and betting lines to identify the most profitable player prop bets.\n\nYour analysis should be data-driven, focusing on:\n1. Player recent form and consistency\n2. Matchup advantages and disadvantages\n3. Historical performance in similar situations\n4. Value in the current betting line\n5. Trends and patterns in prop performance\n\nFor each recommended prop bet, you must provide:\n- Player name and team\n- Prop type (points, rebounds, assists, etc.)\n- Recommendation (over or under)\n- Confidence level (0.1-1.0 scale)\n- Brief rationale with key statistics\n- EV+ calculation (expected value per $100 bet)\n\nTo calculate EV+:\n1. Estimate the true probability (p) that your selection wins based on the player stats and matchup\n2. Convert market odds to implied probability: i = 1/d where d is decimal odds\n   (e.g., for American odds -110, convert to decimal: 1.91)\n3. Calculate EV per $1: EV = p × (d - 1) - (1 - p)\n4. Calculate EV+ (per $100): EV+ = EV × 100\n\nResponse format (valid JSON):\n```json\n[\n  {\n    \"player\": \"Player Name\",\n    \"team\": \"Full Team Name\",\n    \"prop\": \"Prop Type and Line (e.g., hits 0.5)\",\n    \"line\": 0.5,\n    \"bet\": \"over\",\n    \"odds\": -110,\n    \"confidence\": 0.85,\n    \"ev\": 12.5,\n    \"rationale\": \"3-4 detailed sentences with key stats and reasoning supporting this pick\"\n  },\n  {...}\n]\n```\n\nYou may provide up to 5 high-confidence picks. Only include picks with a confidence level of 0.73 or higher.\n\nIMPORTANT: Format the \"prop\" field as \"[prop type] [line value]\" (e.g., \"hits 0.5\", \"strikeouts 5.5\") so it's easy to display in the UI.\n\nIMPORTANT: Always use the full team name (e.g., 'Cleveland Guardians') rather than abbreviations in the team field."
-      };
-      
-      const userMessage = {
-        role: 'user',
-        content: prompt
-      };
       
       // Use our standard generateResponse method to make the API call
       return await this.generateResponse([systemMessage, userMessage], {
