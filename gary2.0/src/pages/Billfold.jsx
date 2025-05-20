@@ -112,6 +112,14 @@ export const Billfold = () => {
           return;
         }
         
+        // For debugging - let's see what dates we're getting from Supabase
+        if (gameResults?.length > 0) {
+          console.log('Sample game_date from Supabase:', gameResults[0].game_date);
+        }
+        if (propResults?.length > 0) {
+          console.log('Sample prop_date from Supabase:', propResults[0].game_date);
+        }
+
         // STEP 3: Process game results
         const processedGameLog = gameResults ? gameResults.map(game => ({
           id: game.id,
@@ -405,6 +413,30 @@ export const Billfold = () => {
       .join(' ');
   };
   
+  // Direct date formatting from raw Supabase dates
+  const formatDateFromSupabase = (dateString) => {
+    if (!dateString) return '';
+    
+    try {
+      // Just parse the exact date parts from the ISO string
+      // Format: 2023-05-17T00:00:00 -> May 17
+      const dateParts = dateString.split('T')[0].split('-');
+      const monthNum = parseInt(dateParts[1]); // 05 for May
+      const day = parseInt(dateParts[2]);
+      
+      // Map month numbers to names directly without using Date object
+      const monthNames = {
+        1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+        7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'
+      };
+      
+      return `${monthNames[monthNum]} ${day}`;
+    } catch (error) {
+      console.error('Error parsing date:', error);
+      return '';
+    }
+  };
+  
   // Helper function to format prop pick text for display
   const formatPropPickText = (pickText) => {
     if (!pickText) return '';
@@ -565,18 +597,7 @@ export const Billfold = () => {
                 {bestWin.odds && <span className="ml-1">{bestWin.odds}</span>}
               </div>
               <div className="text-xs mb-2" style={{ color: 'var(--gary-text-tertiary)' }}>
-                {bestWin.rawGameDate ? (
-                  // Parse the date string directly to preserve the exact date from Supabase
-                  (() => {
-                    const dateParts = bestWin.rawGameDate.split('T')[0].split('-');
-                    const year = dateParts[0];
-                    const month = new Date(`${year}-${dateParts[1]}-01`).toLocaleString('en-US', { month: 'short' });
-                    const day = parseInt(dateParts[2]);
-                    return `${month} ${day}`;
-                  })()
-                ) : (
-                  bestWin.date?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                )}
+                {formatDateFromSupabase(bestWin.rawGameDate) || bestWin.date?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </div>
               <div className="inline-block px-3 py-1 rounded text-black font-bold text-sm" style={{ backgroundColor: 'var(--gary-gold)' }}>
                 +${bestWin.winAmount || 100}
@@ -592,33 +613,23 @@ export const Billfold = () => {
             <div className="gary-card-header">
               <h3 className="gary-text-accent font-bold text-lg tracking-wide mb-0">RECENT PICKS</h3>
             </div>
-            <div className="recent-picks-scroll">
-              <table className="gary-table">
-                <thead className="recent-picks-header">
+            {/* Fixed header table structure with proper sticky header */}
+            <div className="table-container" style={{ position: 'relative', overflowY: 'auto', maxHeight: '400px' }}>
+              <table className="gary-table w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                <thead>
                   <tr>
-                    <th>DATE</th>
-                    <th>SPORT</th>
-                    <th>MATCHUP</th>
-                    <th>PICK</th>
-                    <th style={{ textAlign: 'right' }}>RESULT</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>DATE</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>SPORT</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>MATCHUP</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f' }}>PICK</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #b8953f', textAlign: 'right' }}>RESULT</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bettingLog.map((bet, index) => (
                   <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-800/50 transition-colors">
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">
-                      {bet.rawGameDate ? (
-                        // Parse the date string directly and preserve the exact date from Supabase
-                        (() => {
-                          const dateParts = bet.rawGameDate.split('T')[0].split('-');
-                          const year = dateParts[0];
-                          const month = new Date(`${year}-${dateParts[1]}-01`).toLocaleString('en-US', { month: 'short' });
-                          const day = parseInt(dateParts[2]);
-                          return `${month} ${day}`;
-                        })()
-                      ) : (
-                        new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                      )}
+                      {formatDateFromSupabase(bet.rawGameDate) || new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.sport}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{bet.matchup || 'Game not found'}</td>
