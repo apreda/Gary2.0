@@ -1,12 +1,10 @@
 import { supabase } from '../supabaseClient.js';
 import { createClient } from '@supabase/supabase-js';
-import { garyPerformanceService } from './garyPerformanceService.js';
-import { sportsDbApiService } from './sportsDbApiService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { perplexityService } from './perplexityService.js';
 import { pickResultsAnalyzer } from './pickResultsAnalyzer.js';
-// import { userPickResultsService } from './userPickResultsService'; // Remove if not used
-// import { oddsApiService } from './oddsApiService'; // Remove if not used
+import { oddsService } from './oddsService.js';
+import { apiSportsService } from './apiSportsService.js';
 
 const VALID_RESULTS = new Set(['won', 'lost', 'push']);
 const SCORE_REGEX = /^\d+-\d+$/;
@@ -22,9 +20,114 @@ const adminSupabase = SUPABASE_SERVICE_KEY
     })
   : supabase;
 
-sportsDbApiService.initialize();
+// Initialize services as needed
 
 export const resultsCheckerService = {
+  /**
+   * Get yesterday's game picks from daily_picks table
+   * @param {string} dateStr - Optional date string in YYYY-MM-DD format, defaults to yesterday
+   * @returns {Promise<Object>} - Picks data or error
+   */
+  getYesterdayGamePicks: async (dateStr = null) => {
+    try {
+      // Default to yesterday if no date provided
+      const targetDate = dateStr || (() => {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return yesterday.toISOString().split('T')[0]; // YYYY-MM-DD format
+      })();
+      
+      console.log(`Fetching game picks for date: ${targetDate}`);
+      
+      // Get daily picks from the specified date
+      const { data, error } = await supabase
+        .from('daily_picks')
+        .select('*')
+        .eq('date', targetDate);
+
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        return { success: false, message: 'No picks found for the specified date' };
+      }
+      
+      // Extract picks from each row
+      const allPicks = [];
+      for (const row of data) {
+        if (row.picks && Array.isArray(JSON.parse(row.picks))) {
+          const parsedPicks = JSON.parse(row.picks).map(pick => ({
+            ...pick,
+            pick_id: row.id,
+            game_date: targetDate
+          }));
+          allPicks.push(...parsedPicks);
+        }
+      }
+      
+      return { 
+        success: true, 
+        data: allPicks, 
+        date: targetDate,
+        originalData: data
+      };
+    } catch (error) {
+      console.error('Error in getYesterdayGamePicks:', error);
+      return { success: false, message: error.message };
+    }
+  },
+  
+  /**
+   * Get yesterday's prop picks from prop_picks table
+   * @param {string} dateStr - Optional date string in YYYY-MM-DD format, defaults to yesterday
+   * @returns {Promise<Object>} - Prop picks data or error
+   */
+  getYesterdayPropPicks: async (dateStr = null) => {
+    try {
+      // Default to yesterday if no date provided
+      const targetDate = dateStr || (() => {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return yesterday.toISOString().split('T')[0]; // YYYY-MM-DD format
+      })();
+      
+      console.log(`Fetching prop picks for date: ${targetDate}`);
+      
+      // Get prop picks from the specified date
+      const { data, error } = await supabase
+        .from('prop_picks')
+        .select('*')
+        .eq('date', targetDate);
+
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        return { success: false, message: 'No prop picks found for the specified date' };
+      }
+      
+      // Extract picks from each row
+      const allPropPicks = [];
+      for (const row of data) {
+        if (row.picks && Array.isArray(JSON.parse(row.picks))) {
+          const parsedPicks = JSON.parse(row.picks).map(pick => ({
+            ...pick,
+            prop_pick_id: row.id,
+            game_date: targetDate
+          }));
+          allPropPicks.push(...parsedPicks);
+        }
+      }
+      
+      return { 
+        success: true, 
+        data: allPropPicks, 
+        date: targetDate,
+        originalData: data
+      };
+    } catch (error) {
+      console.error('Error in getYesterdayPropPicks:', error);
+      return { success: false, message: error.message };
+    }
+  },
   validateResult(result) {
     if (!VALID_RESULTS.has(result)) {
       console.error(`Invalid result: ${result}. Must be one of: ${Array.from(VALID_RESULTS).join(', ')}`);
@@ -56,26 +159,313 @@ export const resultsCheckerService = {
     }
   },
 
-  getYesterdaysPicks: async () => {
+  /**
+   * Fetch final score for a specific game from various sports APIs
+   * @param {string} league - League code (MLB, NBA, NHL)
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} date - Game date in YYYY-MM-DD format
+   * @returns {Promise<Object|null>} - Game result object or null if not found
+   */
+  fetchFinalScore: async (league, homeTeam, awayTeam, date) => {
+    console.log(`Fetching final score for ${league} game: ${awayTeam} @ ${homeTeam} on ${date}`);
+    
     try {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const formattedDate = yesterday.toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('daily_picks')
-        .select('*')
-        .eq('date', formattedDate)
-        .single();
-      if (error) {
-        console.error("Error fetching yesterday's picks:", error);
-        return { success: false, message: error.message };
+      // 1. Try TheSportsDB API first (most reliable for historical data)
+      const leagueMap = { 'MLB': 'MLB', 'NBA': 'NBA', 'NHL': 'NHL', 'NFL': 'NFL' };
+      const formattedLeague = leagueMap[league] || league;
+      
+      const response = await fetch(
+        `https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${date}&s=${formattedLeague}`
+      );
+      const data = await response.json();
+      
+      if (data?.events && Array.isArray(data.events)) {
+        // Try to find the game with fuzzy matching on team names
+        const game = data.events.find(e => {
+          return (
+            (e.strHomeTeam?.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) ||
+             homeTeam.toLowerCase().includes(e.strHomeTeam?.toLowerCase().split(' ')[0])) &&
+            (e.strAwayTeam?.toLowerCase().includes(awayTeam.toLowerCase().split(' ')[0]) ||
+             awayTeam.toLowerCase().includes(e.strAwayTeam?.toLowerCase().split(' ')[0]))
+          );
+        });
+        
+        if (game && game.intHomeScore && game.intAwayScore) {
+          return {
+            homeScore: Number(game.intHomeScore),
+            awayScore: Number(game.intAwayScore),
+            winner:
+              Number(game.intHomeScore) > Number(game.intAwayScore)
+                ? homeTeam
+                : awayTeam,
+            final_score: `${game.intHomeScore}-${game.intAwayScore}`,
+            source: 'TheSportsDB'
+          };
+        }
       }
-      if (!data || !data.picks || data.picks.length === 0) {
-        return { success: false, message: 'No picks found for yesterday' };
+      
+      // 2. Try Ball Don't Lie for NBA games
+      if (league.toUpperCase() === 'NBA') {
+        try {
+          const nbaGames = await ballDontLieService.getNbaGamesByDate(date);
+          if (nbaGames) {
+            const gameKey = Object.keys(nbaGames).find(key => {
+              return (
+                key.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) &&
+                key.toLowerCase().includes(awayTeam.toLowerCase().split(' ')[0])
+              );
+            });
+            
+            if (gameKey && nbaGames[gameKey]) {
+              const [awayScore, homeScore] = nbaGames[gameKey].split('-').map(Number);
+              return {
+                homeScore,
+                awayScore,
+                winner: homeScore > awayScore ? homeTeam : awayTeam,
+                final_score: `${homeScore}-${awayScore}`,
+                source: 'BallDontLie'
+              };
+            }
+          }
+        } catch (error) {
+          console.error('Ball Don\'t Lie API error:', error);
+        }
       }
-      return { success: true, data: data.picks, date: formattedDate, id: data.id };
+      
+      // 3. Try API Sports as another option
+      try {
+        // Format for API-Sports
+        if (league.toUpperCase() === 'MLB') {
+          const games = await apiSportsService.apiRequest('/games', { date, league: 1 }, 'MLB');
+          if (games?.response) {
+            const game = games.response.find(g => {
+              return (
+                (g.teams?.home?.name?.toLowerCase().includes(homeTeam.toLowerCase()) ||
+                 homeTeam.toLowerCase().includes(g.teams?.home?.name?.toLowerCase())) &&
+                (g.teams?.away?.name?.toLowerCase().includes(awayTeam.toLowerCase()) ||
+                 awayTeam.toLowerCase().includes(g.teams?.away?.name?.toLowerCase()))
+              );
+            });
+            
+            if (game?.scores) {
+              return {
+                homeScore: Number(game.scores.home?.total || 0),
+                awayScore: Number(game.scores.away?.total || 0),
+                winner:
+                  Number(game.scores.home?.total) > Number(game.scores.away?.total)
+                    ? homeTeam
+                    : awayTeam,
+                final_score: `${game.scores.home?.total || 0}-${game.scores.away?.total || 0}`,
+                source: 'API-Sports'
+              };
+            }
+          }
+        }
+      } catch (error) {
+        console.error('API Sports error:', error);
+      }
+
+      // 4. Use Perplexity as last resort
+      try {
+        console.log('Using Perplexity as fallback for game result');
+        const formattedDate = new Date(date).toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        
+        const query = `What was the final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Reply with ONLY the final score in the format: AwayTeam Score - HomeTeam Score. Include no other text.`;
+        
+        const result = await perplexityService.fetchRealTimeInfo(query);
+        if (result) {
+          // Try to parse scores with regex
+          const scorePattern = /(\d+)\s*[-:]\s*(\d+)/;
+          const match = result.match(scorePattern);
+          
+          if (match && match.length >= 3) {
+            const awayScore = Number(match[1]);
+            const homeScore = Number(match[2]);
+            
+            return {
+              homeScore,
+              awayScore,
+              winner: homeScore > awayScore ? homeTeam : awayTeam,
+              final_score: `${homeScore}-${awayScore}`,
+              source: 'Perplexity'
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Perplexity error:', error);
+      }
+      
+      console.log(`Could not find score for ${league} game: ${awayTeam} @ ${homeTeam}`);
+      return null;
     } catch (error) {
-      console.error('Error in getYesterdaysPicks:', error);
+      console.error(`Error fetching game result: ${error.message}`);
+      return null;
+    }
+  },
+  
+  /**
+   * Grade a pick (determine win/loss/push) based on final score
+   * @param {Object} pick - Pick object containing details of the bet
+   * @param {Object} gameResult - Game result with scores
+   * @returns {string} - 'won', 'lost', or 'push'
+   */
+  gradePick: (pick, gameResult) => {
+    if (!gameResult) return null;
+    
+    // Extract data from the pick
+    const pickText = pick.pick || '';
+    const type = pick.type?.toLowerCase() || '';
+    const homeTeam = pick.homeTeam || pick.home_team || '';
+    const awayTeam = pick.awayTeam || pick.away_team || '';
+    const { homeScore, awayScore } = gameResult;
+    
+    try {
+      // Handle different bet types
+      if (type === 'moneyline' || type.includes('ml')) {
+        // For moneyline, check if picked team won
+        const pickedTeam = pickText.toLowerCase().includes(homeTeam.toLowerCase()) ? homeTeam : awayTeam;
+        const winner = gameResult.winner || (homeScore > awayScore ? homeTeam : awayTeam);
+        
+        return pickedTeam.toLowerCase() === winner.toLowerCase() ? 'won' : 'lost';
+      }
+      
+      if (type === 'spread' || pickText.match(/[-+][0-9]+(\.[0-9]+)?/)) {
+        // For spread bets, extract the spread value
+        const spreadMatch = pickText.match(/([+-][0-9]+(\.[0-9]+)?)/); 
+        if (!spreadMatch) return null;
+        
+        const spread = parseFloat(spreadMatch[0]);
+        const isHomeTeamPick = pickText.toLowerCase().includes(homeTeam.toLowerCase());
+        
+        // Calculate with spread applied
+        if (isHomeTeamPick) {
+          // Home team with spread vs away team straight
+          const homeScoreWithSpread = homeScore + spread;
+          if (homeScoreWithSpread > awayScore) return 'won';
+          if (homeScoreWithSpread < awayScore) return 'lost';
+          return 'push';
+        } else {
+          // Away team with spread vs home team straight
+          const awayScoreWithSpread = awayScore + spread;
+          if (awayScoreWithSpread > homeScore) return 'won';
+          if (awayScoreWithSpread < homeScore) return 'lost';
+          return 'push';
+        }
+      }
+      
+      if (type === 'total' || type === 'over/under' || pickText.includes('over') || pickText.includes('under')) {
+        // For totals, check if total score is over/under the line
+        const totalScore = homeScore + awayScore;
+        const lineMatch = pickText.match(/([0-9]+(\.[0-9]+)?)/); 
+        if (!lineMatch) return null;
+        
+        const line = parseFloat(lineMatch[0]);
+        const isOver = pickText.toLowerCase().includes('over');
+        
+        if (isOver) {
+          if (totalScore > line) return 'won';
+          if (totalScore < line) return 'lost';
+          return 'push';
+        } else {
+          if (totalScore < line) return 'won';
+          if (totalScore > line) return 'lost';
+          return 'push';
+        }
+      }
+      
+      // Default fallback
+      console.error(`Could not determine result for pick type: ${type}`);
+      return null;
+    } catch (error) {
+      console.error(`Error grading pick: ${error.message}`);
+      return null;
+    }
+  },
+  
+  /**
+   * Store graded game pick result in game_results table
+   * @param {Object} pick - Original pick data
+   * @param {Object} gameResult - Game result with scores
+   * @param {string} resultStr - Result string ('won', 'lost', 'push')
+   * @returns {Promise<Object>} - Result of the database operation
+   */
+  writeGameResultToDb: async (pick, gameResult, resultStr) => {
+    try {
+      if (!resultStr || !gameResult) {
+        return { success: false, message: 'Invalid result data' };
+      }
+      
+      console.log(`Writing game result to db: ${pick.pick} -> ${resultStr}`);
+      
+      const { error } = await supabase
+        .from('game_results')
+        .insert({
+          pick_id: pick.pick_id,
+          game_date: pick.game_date,
+          league: pick.league,
+          result: resultStr,
+          final_score: gameResult.final_score,
+          pick_text: pick.pick,
+          matchup: `${pick.awayTeam || pick.away_team} @ ${pick.homeTeam || pick.home_team}`,
+          confidence: pick.confidence,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`Error writing game result to db: ${error.message}`);
+      return { success: false, message: error.message };
+    }
+  },
+  
+  /**
+   * Store graded prop pick result in prop_results table
+   * @param {Object} propPick - Original prop pick data
+   * @param {Object} gameResult - Game result with scores
+   * @param {string} resultStr - Result string ('won', 'lost', 'push')
+   * @returns {Promise<Object>} - Result of the database operation
+   */
+  writePropResultToDb: async (propPick, actualValue, resultStr) => {
+    try {
+      if (!resultStr) {
+        return { success: false, message: 'Invalid result data' };
+      }
+      
+      console.log(`Writing prop result to db: ${propPick.player} ${propPick.prop} -> ${resultStr}`);
+      
+      const propType = propPick.prop?.split(' ')[0] || 'unknown';
+      const lineValue = parseFloat(propPick.prop?.split(' ')[1]) || 0;
+      
+      const { error } = await supabase
+        .from('prop_results')
+        .insert({
+          prop_pick_id: propPick.prop_pick_id,
+          game_date: propPick.game_date,
+          player_name: propPick.player,
+          prop_type: propType,
+          line_value: lineValue,
+          actual_value: actualValue || 0,
+          result: resultStr,
+          odds: propPick.odds.toString(),
+          pick_text: `${propPick.player} ${propPick.prop} ${propPick.bet}`,
+          matchup: propPick.team,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`Error writing prop result to db: ${error.message}`);
       return { success: false, message: error.message };
     }
   },
@@ -406,52 +796,78 @@ export const resultsCheckerService = {
   getScoresFromPerplexity: async (date, picks) => {
     const scores = {};
     
-    // First try to get scores from TheSportsDB for comparison
-    console.log('Getting scores from TheSportsDB for validation...');
-    let sportsDbScores = {};
+    // Try getting scores from The Odds API first
+    console.log('Getting scores from The Odds API...');
+    let oddsApiScores = {};
     
     try {
-      const nhlResults = await sportsDbApiService.getGameResults('4380', date); // NHL league ID: 4380
-      
-      if (nhlResults && nhlResults.events) {
-        nhlResults.events.forEach(game => {
-          const matchup = `${game.strAwayTeam} @ ${game.strHomeTeam}`;
-          sportsDbScores[matchup] = {
-            home_team: game.strHomeTeam,
-            away_team: game.strAwayTeam,
-            home_score: parseInt(game.intHomeScore) || 0,
-            away_score: parseInt(game.intAwayScore) || 0,
-            league: 'NHL',
-            final: game.strStatus === 'FT',
-            source: 'TheSportsDB'
-          };
+      // Try fetching from The Odds API first
+      const leagues = ['nba', 'nhl', 'mlb'];
+      for (const league of leagues) {
+        try {
+          console.log(`Fetching ${league.toUpperCase()} scores from The Odds API for ${date}`);
+          const gameResults = await oddsService.getCompletedGamesByDate(league, date);
           
-          // Also index by teams individually for easier lookup
-          sportsDbScores[game.strHomeTeam] = {
-            home_team: game.strHomeTeam,
-            away_team: game.strAwayTeam,
-            home_score: parseInt(game.intHomeScore) || 0,
-            away_score: parseInt(game.intAwayScore) || 0,
-            league: 'NHL',
-            final: game.strStatus === 'FT',
-            source: 'TheSportsDB'
-          };
-          
-          sportsDbScores[game.strAwayTeam] = {
-            home_team: game.strHomeTeam,
-            away_team: game.strAwayTeam,
-            home_score: parseInt(game.intHomeScore) || 0,
-            away_score: parseInt(game.intAwayScore) || 0,
-            league: 'NHL',
-            final: game.strStatus === 'FT',
-            source: 'TheSportsDB'
-          };
-        });
-        
-        console.log(`Found ${Object.keys(sportsDbScores).length} games from TheSportsDB for validation`);
+          if (gameResults && Array.isArray(gameResults)) {
+            console.log(`Found ${gameResults.length} ${league.toUpperCase()} games from The Odds API`);
+            
+            gameResults.forEach(game => {
+              if (game.completed) {
+                const homeTeam = game.home_team;
+                const awayTeam = game.away_team;
+                const matchup = `${awayTeam} @ ${homeTeam}`;
+                
+                const homeScore = game.scores?.home || 0;
+                const awayScore = game.scores?.away || 0;
+                
+                // Store by matchup
+                oddsApiScores[matchup] = {
+                  home_team: homeTeam,
+                  away_team: awayTeam,
+                  home_score: homeScore,
+                  away_score: awayScore,
+                  league: league.toUpperCase(),
+                  final: true,
+                  source: 'TheOddsAPI'
+                };
+                
+                // Also store by team names for easier lookup
+                oddsApiScores[homeTeam] = {
+                  home_team: homeTeam,
+                  away_team: awayTeam,
+                  home_score: homeScore,
+                  away_score: awayScore,
+                  league: league.toUpperCase(),
+                  final: true,
+                  source: 'TheOddsAPI'
+                };
+                
+                oddsApiScores[awayTeam] = {
+                  home_team: homeTeam,
+                  away_team: awayTeam,
+                  home_score: homeScore,
+                  away_score: awayScore,
+                  league: league.toUpperCase(),
+                  final: true,
+                  source: 'TheOddsAPI'
+                };
+              }
+            });
+          }
+        } catch (leagueError) {
+          console.warn(`Error fetching ${league.toUpperCase()} scores from The Odds API:`, leagueError);
+        }
       }
-    } catch (sportsDbError) {
-      console.error('Error fetching from TheSportsDB:', sportsDbError.message);
+      
+      // Add any games found to our scores object
+      if (Object.keys(oddsApiScores).length > 0) {
+        console.log(`Found ${Object.keys(oddsApiScores).length} total games from The Odds API`);
+        Object.assign(scores, oddsApiScores);
+      } else {
+        console.log('No games found from The Odds API, will try Perplexity as fallback');
+      }
+    } catch (oddsApiError) {
+      console.error('Error fetching from The Odds API:', oddsApiError.message);
     }
 
     // Process each pick
