@@ -2,9 +2,45 @@
 import { openaiService } from './openaiService.js';
 
 /**
+ * Helper function to safely check if a string includes another string
+ * Handles undefined, null, and non-string values
+ * @param {string} str1 - The first string
+ * @param {string} str2 - The second string
+ * @returns {boolean} - True if str1 includes str2 or str2 includes str1
+ */
+const safeStringIncludes = (str1, str2) => {
+  if (!str1 || !str2) return false;
+  if (typeof str1 !== 'string' || typeof str2 !== 'string') return false;
+  
+  const safe1 = String(str1).toLowerCase();
+  const safe2 = String(str2).toLowerCase();
+  
+  return safe1.includes(safe2) || safe2.includes(safe1);
+};
+
+/**
  * Service to analyze pick results and determine the correct outcome (won/lost/push)
  */
 export const pickResultsAnalyzer = {
+  /**
+   * Safely check if a pick text indicates an OVER bet
+   * @param {string} pickText - The pick text to check
+   * @returns {boolean} - True if the pick is an OVER bet
+   */
+  isOverPick: (pickText) => {
+    if (!pickText || typeof pickText !== 'string') return false;
+    return pickText.toLowerCase().includes('over');
+  },
+  
+  /**
+   * Safely check if a pick text indicates an UNDER bet
+   * @param {string} pickText - The pick text to check
+   * @returns {boolean} - True if the pick is an UNDER bet
+   */
+  isUnderPick: (pickText) => {
+    if (!pickText || typeof pickText !== 'string') return false;
+    return pickText.toLowerCase().includes('under');
+  },
   /**
    * Analyze a pick and the final game score to determine if the pick was a win, loss, or push
    * @param {Object} pick - The pick object from daily_picks
@@ -76,13 +112,28 @@ export const pickResultsAnalyzer = {
    * @returns {Object} The analyzed result with win/loss/push determination
    */
   determineResult: (pick, gameScore) => {
-    if (!gameScore || !gameScore.home_score || !gameScore.away_score) {
-      console.warn('Invalid game score data');
+    // More comprehensive validation of game score data
+    if (!gameScore) {
+      console.warn('Game score data is null or undefined');
       return { result: 'unknown' };
     }
     
+    // Check for missing scores
+    if (gameScore.home_score === undefined || gameScore.home_score === null || 
+        gameScore.away_score === undefined || gameScore.away_score === null) {
+      console.warn(`Invalid game score data: home_score=${gameScore.home_score}, away_score=${gameScore.away_score}`);
+      return { result: 'unknown' };
+    }
+    
+    // Check for non-parseable scores
     const homeScore = parseInt(gameScore.home_score);
     const awayScore = parseInt(gameScore.away_score);
+    if (isNaN(homeScore) || isNaN(awayScore)) {
+      console.warn(`Non-numeric game scores: home_score=${gameScore.home_score}, away_score=${gameScore.away_score}`);
+      return { result: 'unknown' };
+    }
+    
+    // Get team names
     const homeTeam = gameScore.home_team;
     const awayTeam = gameScore.away_team;
     
@@ -95,11 +146,11 @@ export const pickResultsAnalyzer = {
     
     // First try to use the extracted team name
     if (extractedTeamName) {
-      if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+      if (safeStringIncludes(homeTeam, extractedTeamName)) {
         pickedTeam = homeTeam;
         isHomeTeamPicked = true;
         console.log(`Matched extracted team name "${extractedTeamName}" to home team "${homeTeam}"`);
-      } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+      } else if (safeStringIncludes(awayTeam, extractedTeamName)) {
         pickedTeam = awayTeam;
         isHomeTeamPicked = false;
         console.log(`Matched extracted team name "${extractedTeamName}" to away team "${awayTeam}"`);
@@ -108,10 +159,10 @@ export const pickResultsAnalyzer = {
     
     // If no match with extracted name, try original pick string
     if (!pickedTeam) {
-      if (pick.pick.includes(homeTeam)) {
+      if (pick && pick.pick && safeStringIncludes(pick.pick, homeTeam)) {
         pickedTeam = homeTeam;
         isHomeTeamPicked = true;
-      } else if (pick.pick.includes(awayTeam)) {
+      } else if (pick && pick.pick && safeStringIncludes(pick.pick, awayTeam)) {
         pickedTeam = awayTeam;
         isHomeTeamPicked = false;
       } else {
@@ -150,9 +201,9 @@ export const pickResultsAnalyzer = {
       const total = parseFloat(pick.total);
       const actualTotal = homeScore + awayScore;
       
-      if (pick.pick.toLowerCase().includes('over')) {
+      if (pickResultsAnalyzer.isOverPick(pick.pick)) {
         result = actualTotal > total ? 'won' : (actualTotal === total ? 'push' : 'lost');
-      } else if (pick.pick.toLowerCase().includes('under')) {
+      } else if (pickResultsAnalyzer.isUnderPick(pick.pick)) {
         result = actualTotal < total ? 'won' : (actualTotal === total ? 'push' : 'lost');
       }
     }
@@ -225,35 +276,51 @@ Respond with VALID JSON ONLY in this exact format:
     try {
       // Use the correct method from the openaiService
       console.log('Calling OpenAI for bet result analysis');
-      const response = await openaiService.createChatCompletion({
-        // Use the compatible model
+      const response = await openaiService.generateResponse([
+        {
+          role: 'system',
+          content: 'You are a sports betting expert who analyzes picks and determines if they won, lost, or pushed based on the final score and pick details. Respond with valid JSON only in the format specified.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ], {
         model: 'gpt-3.5-turbo-0125',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a sports betting expert who analyzes picks and determines if they won, lost, or pushed based on the final score and pick details. Respond with valid JSON only in the format specified.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1
+        temperature: 0.1,
+        maxTokens: 500
       });
       
+      // The response from openaiService.generateResponse might already be parsed or might be a string
       let analysis;
-      try {
-        analysis = JSON.parse(response);
-      } catch (e) {
-        console.error('Failed to parse OpenAI response as JSON:', e);
-        console.log('Raw response:', response);
-        analysis = { result: 'unknown', explanation: 'Error parsing analysis' };
+      
+      if (typeof response === 'string') {
+        try {
+          // Try to parse if it's a string
+          analysis = JSON.parse(response);
+        } catch (e) {
+          console.error('Failed to parse OpenAI response as JSON:', e);
+          console.log('Raw response:', response);
+          analysis = { result: 'unknown', explanation: 'Error parsing analysis' };
+        }
+      } else {
+        // If it's already an object, use it directly
+        analysis = response;
+      }
+      
+      // Make sure analysis is not null/undefined
+      if (!analysis) {
+        analysis = { result: 'unknown', explanation: 'No analysis returned' };
+      }
+      
+      // Make sure analysis.result is not null/undefined
+      if (!analysis.result) {
+        analysis.result = 'unknown';
       }
       
       // Validate that the result is one of the allowed values
       if (!['won', 'lost', 'push'].includes(analysis.result)) {
-        console.warn(`OpenAI returned invalid result: ${analysis.result}, defaulting to unknown`);
+        console.warn(`OpenAI returned invalid result: ${analysis?.result || 'undefined'}, defaulting to unknown`);
         analysis.result = 'unknown';
       }
       
@@ -285,19 +352,19 @@ Respond with VALID JSON ONLY in this exact format:
           let pickedTeam = '';
           let isHomeTeamPicked = false;
           if (extractedTeamName) {
-            if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+            if (safeStringIncludes(homeTeam, extractedTeamName)) {
               pickedTeam = homeTeam;
               isHomeTeamPicked = true;
-            } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+            } else if (safeStringIncludes(awayTeam, extractedTeamName)) {
               pickedTeam = awayTeam;
               isHomeTeamPicked = false;
             }
           }
           if (!pickedTeam) {
-            if (pick.pick.includes(homeTeam)) {
+            if (pick && pick.pick && safeStringIncludes(pick.pick, homeTeam)) {
               pickedTeam = homeTeam;
               isHomeTeamPicked = true;
-            } else if (pick.pick.includes(awayTeam)) {
+            } else if (pick && pick.pick && safeStringIncludes(pick.pick, awayTeam)) {
               pickedTeam = awayTeam;
               isHomeTeamPicked = false;
             } else {
@@ -338,19 +405,19 @@ Respond with VALID JSON ONLY in this exact format:
           let pickedTeam = '';
           let isHomeTeamPicked = false;
           if (extractedTeamName) {
-            if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+            if (safeStringIncludes(homeTeam, extractedTeamName)) {
               pickedTeam = homeTeam;
               isHomeTeamPicked = true;
-            } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+            } else if (safeStringIncludes(awayTeam, extractedTeamName)) {
               pickedTeam = awayTeam;
               isHomeTeamPicked = false;
             }
           }
           if (!pickedTeam) {
-            if (pick.pick.includes(homeTeam)) {
+            if (pick && pick.pick && safeStringIncludes(pick.pick, homeTeam)) {
               pickedTeam = homeTeam;
               isHomeTeamPicked = true;
-            } else if (pick.pick.includes(awayTeam)) {
+            } else if (pick && pick.pick && safeStringIncludes(pick.pick, awayTeam)) {
               pickedTeam = awayTeam;
               isHomeTeamPicked = false;
             } else {
@@ -386,7 +453,9 @@ Respond with VALID JSON ONLY in this exact format:
         } else if (betType === 'total' && pick.total) {
           const totalValue = parseFloat(pick.total);
           const gameTotal = parseInt(gameScore.home_score) + parseInt(gameScore.away_score);
-          if (pick.pick.toLowerCase().includes('over')) {
+          const isOver = pickResultsAnalyzer.isOverPick(pick.pick);
+          const isUnder = pickResultsAnalyzer.isUnderPick(pick.pick);
+          if (isOver) {
             return { 
               pick_id: pick.id,
               game_date: pick.date,
@@ -397,7 +466,7 @@ Respond with VALID JSON ONLY in this exact format:
               matchup: `${gameScore.away_team} @ ${gameScore.home_team}`,
               confidence: pick.confidence || null
             };
-          } else {
+          } else if (isUnder) { 
             return { 
               pick_id: pick.id,
               game_date: pick.date,
@@ -420,19 +489,19 @@ Respond with VALID JSON ONLY in this exact format:
         let pickedTeam = '';
         let isHomeTeamPicked = false;
         if (extractedTeamName) {
-          if (homeTeam.includes(extractedTeamName) || extractedTeamName.includes(homeTeam)) {
+          if (safeStringIncludes(homeTeam, extractedTeamName)) {
             pickedTeam = homeTeam;
             isHomeTeamPicked = true;
-          } else if (awayTeam.includes(extractedTeamName) || extractedTeamName.includes(awayTeam)) {
+          } else if (safeStringIncludes(awayTeam, extractedTeamName)) {
             pickedTeam = awayTeam;
             isHomeTeamPicked = false;
           }
         }
         if (!pickedTeam) {
-          if (pick.pick.includes(homeTeam)) {
+          if (pick && pick.pick && safeStringIncludes(pick.pick, homeTeam)) {
             pickedTeam = homeTeam;
             isHomeTeamPicked = true;
-          } else if (pick.pick.includes(awayTeam)) {
+          } else if (pick && pick.pick && safeStringIncludes(pick.pick, awayTeam)) {
             pickedTeam = awayTeam;
             isHomeTeamPicked = false;
           } else {
