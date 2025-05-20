@@ -18,18 +18,22 @@ let api;
 
 // Cache for API responses
 const cache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+// MLB data needs fresher cache for current 2025 season data (1 minute for MLB, 5 minutes for others)
+const MLB_CACHE_TTL = 60 * 1000; // 1 minute cache TTL for MLB data
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL for other data
 
 // Helper function to get data from cache or fetch it
-const getCachedOrFetch = async (cacheKey, fetchFn) => {
+const getCachedOrFetch = async (cacheKey, fetchFn, isMLB = false) => {
   const now = Date.now();
   const cached = cache.get(cacheKey);
+  const ttl = isMLB ? MLB_CACHE_TTL : CACHE_TTL;
   
-  if (cached && (now - cached.timestamp < CACHE_TTL)) {
-    console.log(`Using cached data for ${cacheKey}`);
+  if (cached && (now - cached.timestamp < ttl)) {
+    console.log(`Using cached data for ${cacheKey} (TTL: ${isMLB ? '1 minute' : '5 minutes'})`);
     return cached.data;
   }
   
+  console.log(`Cache miss or expired for ${cacheKey}, fetching fresh data...`);
   const data = await fetchFn();
   cache.set(cacheKey, { data, timestamp: now });
   return data;
@@ -75,7 +79,7 @@ const getMlbGamesByDate = async (date) => {
   try {
     const cacheKey = `mlb_games_${date}`;
     return getCachedOrFetch(cacheKey, async () => {
-      console.log(`Fetching MLB games for ${date} from BallDontLie`);
+      console.log(`Fetching MLB games for ${date} from BallDontLie (2025 season)`);
       
       // Make sure API is initialized
       if (!api) {
@@ -92,6 +96,7 @@ const getMlbGamesByDate = async (date) => {
       
       const response = await api.mlb.getGames({ 
         dates: [date],
+        season: 2025, // Explicitly request 2025 season data
         per_page: 100 // Max allowed
       });
       return response.data || [];
@@ -233,7 +238,10 @@ const ballDontLieService = {
       console.log(`Getting 2025 season pitchers for ${teamName}...`);
       
       // First get the team ID
-      const teams = await this.getClient().mlb.getTeams();
+      const cacheKey = `mlb_teams_${teamName}`;
+      const teams = await getCachedOrFetch(cacheKey, async () => {
+        return this.getClient().mlb.getTeams();
+      }, true); // Use MLB-specific shorter cache TTL
       if (!teams || !teams.data || !teams.data.length) {
         console.error('No MLB teams found');
         return null;
@@ -258,10 +266,14 @@ const ballDontLieService = {
       console.log(`Found team: ${team.display_name} (ID: ${team.id})`);
       
       // Get active players for the team - specifically starting pitchers
-      const activePlayers = await this.getClient().mlb.getActivePlayers({
-        team_ids: [team.id],
-        per_page: 100
-      });
+      const playerCacheKey = `mlb_active_players_${team.id}_2025`;
+      const activePlayers = await getCachedOrFetch(playerCacheKey, async () => {
+        return this.getClient().mlb.getActivePlayers({
+          team_ids: [team.id],
+          season: 2025, // Explicitly request 2025 season data
+          per_page: 100
+        });
+      }, true); // Use MLB-specific shorter cache TTL
       
       if (!activePlayers || !activePlayers.data || !activePlayers.data.length) {
         console.error(`No active players found for ${teamName}`);
@@ -398,8 +410,11 @@ const ballDontLieService = {
       // Get pitcher matchup
       const pitcherMatchup = await this.getMlbPitcherMatchup(homeTeam, awayTeam);
       
-      // Get team season stats
-      const teams = await this.getClient().mlb.getTeams();
+      // Get team season stats with shorter cache for fresher 2025 data
+      const teamCacheKey = `mlb_teams_${homeTeam}_${awayTeam}`;
+      const teams = await getCachedOrFetch(teamCacheKey, async () => {
+        return this.getClient().mlb.getTeams();
+      }, true); // Use MLB-specific shorter cache TTL
       if (!teams || !teams.data) {
         throw new Error('Failed to fetch MLB teams');
       }
@@ -536,23 +551,20 @@ const ballDontLieService = {
   /**
    * Get MLB player season statistics
    * @param {number} playerId - Player ID
-   * @param {number} season - Season year
-   * @returns {Promise<Object>} - Player's season statistics
-   */
-  async getMlbPlayerSeasonStats(playerId, season = new Date().getFullYear()) {
-    try {
-      const cacheKey = `mlb-player-season-${playerId}-${season}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`Fetching MLB season stats for player ${playerId} in ${season}`);
-        const client = initApi();
-        const response = await client.mlb.getSeasonStats({
-          season,
-          player_ids: [playerId]
+   * @param {number} season - Season year (default to 2025 for current season)
         });
         return response.data?.[0] || null;
       });
     } catch (error) {
       console.error(`Error fetching MLB season stats for player ${playerId}:`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Get MLB player season statistics for 2025 season
+   * @param {number} playerId - Player ID
+      console.error(`Error fetching MLB 2025 season stats for player ${playerId}:`, error);
       return null;
     }
   },
@@ -584,19 +596,8 @@ const ballDontLieService = {
   /**
    * Get MLB team season statistics
    * @param {number} teamId - Team ID
-   * @param {number} season - Season year
-   * @returns {Promise<Object>} - Team's season statistics
-   */
-  async getMlbTeamSeasonStats(teamId, season = new Date().getFullYear()) {
-    try {
-      const cacheKey = `mlb-team-season-${teamId}-${season}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`Fetching MLB season stats for team ${teamId} in ${season}`);
-        const client = initApi();
-        
-        // Using current season only - no fallback as per user requirement
-        const response = await client.mlb.getTeamSeasonStats({
-          season,
+   * @param {number} season - Season year (explicitly defaults to 2025 for current season)
+          season: 2025, // Always force 2025 season data regardless of parameter
           team_id: teamId
         });
         
