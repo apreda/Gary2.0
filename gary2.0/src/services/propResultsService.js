@@ -191,11 +191,9 @@ const propResultsService = {
         }
       }
       
-      // If we still don't have sufficient stats, use OpenAI as a last resort
+      // If we still don't have sufficient stats, log a message suggesting to use the admin interface
       if (Object.keys(allPlayerStats).length < propPicks.length / 2) {
-        console.log('Insufficient player stats from APIs, using OpenAI to generate missing stats');
-        const aiStats = await generatePlayerStatsWithAI(propPicks, date);
-        Object.assign(allPlayerStats, aiStats);
+        console.log('Insufficient player stats from APIs. For best results, please visit the admin panel at https://www.betwithgary.ai/admin/results to manually review and update player prop results.');
       }
       
       // 3. Process each pick and determine if it won or lost
@@ -347,92 +345,7 @@ const propResultsService = {
   }
 };
 
-/**
- * Generate player statistics using OpenAI when API data is insufficient
- */
-async function generatePlayerStatsWithAI(propPicks, date) {
-  try {
-    // Create list of players we need stats for
-    const players = propPicks.map(pick => ({
-      name: pick.player_name,
-      team: pick.team,
-      propType: pick.prop_type,
-      league: pick.league,
-      matchup: pick.matchup
-    }));
-    
-    // Group players by matchup
-    const playersByMatchup = {};
-    players.forEach(player => {
-      if (!playersByMatchup[player.matchup]) {
-        playersByMatchup[player.matchup] = [];
-      }
-      playersByMatchup[player.matchup].push(player);
-    });
-    
-    const allPlayerStats = {};
-    
-    // Process each matchup
-    for (const [matchup, matchupPlayers] of Object.entries(playersByMatchup)) {
-      if (matchupPlayers.length === 0) continue;
-      
-      const league = matchupPlayers[0].league;
-      
-      // Create a prompt for OpenAI to generate player stats
-      const prompt = `
-        I need player statistics for a ${league} game that occurred on ${date}.
-        
-        Game: ${matchup}
-        
-        Please provide realistic statistics for these specific players:
-        ${matchupPlayers.map(p => `- ${p.name} (${p.team}): Need ${p.propType}`).join('\n')}
-        
-        Return a JSON object with player names as keys and statistics as values:
-        {
-          "Player Name": {
-            "points": number,
-            "rebounds": number,
-            "assists": number,
-            ...include all relevant stats for the player's sport
-          },
-          ...for each player
-        }
-        
-        Be realistic with the statistics. For basketball players include points, rebounds, assists, steals, blocks and threePointersMade.
-        For baseball players include hits, runs, rbi, homeRuns, and strikeouts if they're pitchers.
-        For hockey players include goals and assists.
-        Only include players from the list above.
-      `;
-      
-      const response = await openaiService.generateResponse(prompt, {
-        temperature: 0.7, // Higher temperature for more varied responses
-        max_tokens: 1000
-      });
-      
-      // Extract JSON from response
-      try {
-        // First attempt direct JSON parsing
-        const playerStats = JSON.parse(response);
-        Object.assign(allPlayerStats, playerStats);
-      } catch (error) {
-        // Try to extract JSON using regex
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            const playerStats = JSON.parse(jsonMatch[0]);
-            Object.assign(allPlayerStats, playerStats);
-          } catch (innerError) {
-            console.error('Error parsing extracted JSON:', innerError);
-          }
-        }
-      }
-    }
-    
-    return allPlayerStats;
-  } catch (error) {
-    console.error('Error generating player stats with AI:', error);
-    return {};
-  }
-}
+// This function has been removed as we're now relying on accurate data sources only
+// For missing stats, we recommend using the admin panel at https://www.betwithgary.ai/admin/results
 
 export { propResultsService };
