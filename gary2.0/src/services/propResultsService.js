@@ -103,8 +103,8 @@ const propResultsService = {
           matchup: apiResult.matchup || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          player_id: apiResult.player_id,
-          game_id: apiResult.game_id
+          player_id: apiResult.player_id
+          // Removed game_id as it's not in the Supabase schema
         };
       });
       
@@ -281,8 +281,8 @@ const propResultsService = {
         matchup: apiResult.matchup || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        player_id: apiResult.player_id,
-        game_id: apiResult.game_id
+        player_id: apiResult.player_id
+        // Removed game_id as it's not in the Supabase schema
       }));
       
       // 5. Check if we already have results for this pick
