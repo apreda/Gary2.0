@@ -1228,41 +1228,43 @@ export const resultsCheckerService = {
               }
               
               if (match && match.length >= 5) {
-                const teamA = match[1].trim();
-                const teamB = match[4].trim();
-                const scoreA = parseInt(match[2]);
-                const scoreB = parseInt(match[3]);
+                // Extract team names and scores
+                let teamA = match[1].trim();
+                let scoreA = parseInt(match[2]);
+                let teamB = match[3].trim();
+                let scoreB = parseInt(match[4]);
                 
-                const isTeamAMatch = teamA.toLowerCase().includes(teamName.toLowerCase()) || 
-                                     teamName.toLowerCase().includes(teamA.toLowerCase());
-                                     
-                if (isTeamAMatch) {
-                  // If teamA matches our search team, determine if it's home or away
-                  // For simplicity, we'll assume first mentioned team is away, second is home
-                  // This is a common convention but not universal
+                // Create a proper score object with correct team name matching
+                scores[pickText] = {
+                  home_team: teamB,  // Second team is usually the home team in most formats
+                  away_team: teamA,  // First team is usually the away team
+                  home_score: scoreB,
+                  away_score: scoreA,
+                  league,
+                  final: true,
+                  source: 'Perplexity'
+                };
+                
+                // If our search team is clearly the home team, swap if needed
+                if (teamName.toLowerCase().includes('home') || 
+                    (teamB.toLowerCase().includes(teamName.toLowerCase()) &&
+                     !teamA.toLowerCase().includes(teamName.toLowerCase()))) {
+                  // Keep as is - teamB is correctly the home team
+                } else if (teamA.toLowerCase().includes(teamName.toLowerCase()) &&
+                           !teamB.toLowerCase().includes(teamName.toLowerCase())) {
+                  // Swap teams - our search team is in position A but should be home
                   scores[pickText] = {
-                    away_team: teamA,
-                    home_team: teamB,
-                    away_score: scoreA,
-                    home_score: scoreB,
-                    league,
-                    final: true,
-                    source: 'Perplexity'
-                  };
-                } else {
-                  // If teamB matches our search team
-                  scores[pickText] = {
-                    away_team: teamA,
-                    home_team: teamB,
-                    away_score: scoreA,
-                    home_score: scoreB,
+                    home_team: teamA,
+                    away_team: teamB,
+                    home_score: scoreA,
+                    away_score: scoreB,
                     league,
                     final: true,
                     source: 'Perplexity'
                   };
                 }
                 
-                console.log(`Successfully extracted score for ${teamName}: ${scores[pickText].away_team} ${scores[pickText].away_score} - ${scores[pickText].home_score} ${scores[pickText].home_team}`);
+                console.log(`Successfully extracted score for ${teamName}: ${scores[pickText].away_team} ${scores[pickText].away_score} - ${scores[pickText].home_team} ${scores[pickText].home_score}`);
               } else {
                 console.error(`Could not find score pattern in Perplexity response: ${result}`);
               }
