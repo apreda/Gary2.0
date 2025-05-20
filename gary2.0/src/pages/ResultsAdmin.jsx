@@ -268,15 +268,15 @@ function ResultsAdmin() {
                       <tr key={index} className={index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-900'}>
                         <td className="px-4 py-2">{result.player_name}</td>
                         <td className="px-4 py-2">{result.prop_type}</td>
-                        <td className="px-4 py-2">{result.prop_line}</td>
-                        <td className="px-4 py-2">{result.pick_direction}</td>
-                        <td className="px-4 py-2">{result.actual_result || 'N/A'}</td>
+                        <td className="px-4 py-2">{result.line_value}</td>
+                        <td className="px-4 py-2">{result.pick_direction || '-'}</td>
+                        <td className="px-4 py-2">{result.actual_value !== null ? result.actual_value : 'N/A'}</td>
                         <td className="px-4 py-2">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${result.result_status === 'won' ? 'bg-green-500/20 text-green-400' : 
-                            result.result_status === 'lost' ? 'bg-red-500/20 text-red-400' : 
-                            result.result_status === 'push' ? 'bg-yellow-500/20 text-yellow-400' : 
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${result.result === 'won' ? 'bg-green-500/20 text-green-400' : 
+                            result.result === 'lost' ? 'bg-red-500/20 text-red-400' : 
+                            result.result === 'push' ? 'bg-yellow-500/20 text-yellow-400' : 
                             'bg-gray-500/20 text-gray-400'}`}>
-                            {result.result_status.toUpperCase()}
+                            {result.result ? result.result.toUpperCase() : 'PENDING'}
                           </span>
                         </td>
                       </tr>
