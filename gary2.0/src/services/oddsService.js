@@ -36,6 +36,96 @@ const PROP_MARKETS = {
 /**
  * Service for fetching data from The Odds API
  */
+const getApiKey = () => {
+  // First try environment variable
+  let apiKey = process.env.ODDS_API_KEY || import.meta.env.VITE_ODDS_API_KEY;
+  
+  // Fallback to config loader
+  if (!apiKey) {
+    try {
+      const config = configLoader.getConfig();
+      apiKey = config.ODDS_API_KEY;
+    } catch (error) {
+      console.warn('Could not load ODDS_API_KEY from config:', error);
+    }
+  }
+  
+  if (!apiKey) {
+    console.error('ODDS_API_KEY is not configured');
+  }
+  
+  return apiKey;
+};
+
+/**
+ * Fetches completed games from The Odds API for a specific date and sport
+ * @param {string} sport - Sport key (nba, nhl, mlb)
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @returns {Promise<Array>} - Array of completed games with scores
+ */
+const getCompletedGamesByDate = async (sport, date) => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error('Odds API key not configured');
+  }
+  
+  // Map our internal sport codes to The Odds API sport keys
+  const sportKeyMap = {
+    'nba': 'basketball_nba',
+    'nhl': 'icehockey_nhl',
+    'mlb': 'baseball_mlb'
+  };
+  
+  const sportKey = sportKeyMap[sport.toLowerCase()] || sport;
+  
+  try {
+    // Format date for API (The Odds API uses ISO format with timezone)
+    const apiDate = new Date(date);
+    apiDate.setUTCHours(0, 0, 0, 0);
+    const commenceDateFrom = apiDate.toISOString();
+    
+    // Set end date to the next day
+    const endDate = new Date(apiDate);
+    endDate.setDate(endDate.getDate() + 1);
+    const commenceDateTo = endDate.toISOString();
+    
+    const url = `${ODDS_API_BASE_URL}/sports/${sportKey}/scores`;
+    const params = {
+      apiKey,
+      daysFrom: 1,
+      commenceTimeFrom: commenceDateFrom,
+      commenceTimeTo: commenceDateTo
+    };
+    
+    console.log(`Fetching scores from The Odds API for ${sport} on ${date}`);
+    const response = await axios.get(url, { params });
+    
+    if (response.data && Array.isArray(response.data)) {
+      // Filter for completed games only and map to our format
+      return response.data
+        .filter(game => game.completed || game.completed_at)
+        .map(game => ({
+          id: game.id,
+          sport_key: game.sport_key,
+          home_team: game.home_team,
+          away_team: game.away_team,
+          scores: {
+            home: game.scores?.[0]?.score || 0,
+            away: game.scores?.[1]?.score || 0
+          },
+          completed: true,
+          commence_time: game.commence_time,
+          completed_at: game.completed_at
+        }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error(`Error fetching ${sport} scores from The Odds API:`, error);
+    return [];
+  }
+};
+
 // Bet analysis helper functions
 const analyzeBettingMarkets = (game) => {
   if (!game || !game.bookmakers || !Array.isArray(game.bookmakers)) {
@@ -301,6 +391,14 @@ export const oddsService = {
       throw error;
     }
   },
+
+  /**
+   * Fetches completed games from The Odds API for a specific date and sport
+   * @param {string} sport - Sport key (nba, nhl, mlb)
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Array>} - Array of completed games with scores
+   */
+  getCompletedGamesByDate,
 
   /**
    * Get upcoming games with comprehensive odds data
