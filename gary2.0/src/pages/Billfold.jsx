@@ -19,6 +19,9 @@ export const Billfold = () => {
 
   // State for betting log/history
   const [bettingLog, setBettingLog] = useState([]);
+  
+  // State for combined bet type distribution (to show on both tabs)
+  const [betTypeDistribution, setBetTypeDistribution] = useState([]);
 
   // State for best win (for featured Top Win section)
   const [bestWin, setBestWin] = useState(null);
@@ -113,6 +116,7 @@ export const Billfold = () => {
         const processedGameLog = gameResults ? gameResults.map(game => ({
           id: game.id,
           date: new Date(game.game_date),
+          rawGameDate: game.game_date,  // Store the original date string
           sport: game.league,
           matchup: game.matchup,
           pick: game.pick_text,
@@ -126,6 +130,7 @@ export const Billfold = () => {
         const processedPropLog = propResults ? propResults.map(prop => ({
           id: prop.id,
           date: new Date(prop.game_date),
+          rawGameDate: prop.game_date,  // Store the original date string
           sport: 'MLB', // Props are currently MLB only
           matchup: prop.matchup || 'Player Prop',
           player: prop.player_name,
@@ -142,7 +147,70 @@ export const Billfold = () => {
         // STEP 5: Store both betting logs for switching between tabs
         setBettingLog(showPicksType === 'games' ? processedGameLog : processedPropLog);
         
-        // STEP 6: Calculate stats based on the selected tab (games or props)
+        // STEP 6: Calculate combined bet type distribution (to show on both tabs)
+        const combinedBetTypeBreakdown = {};
+        
+        // Add game bet types to combined distribution
+        if (gameResults) {
+          gameResults.forEach(game => {
+            const betType = determineBetType(game.pick_text);
+            if (!combinedBetTypeBreakdown[betType]) {
+              combinedBetTypeBreakdown[betType] = { betType, count: 0, wins: 0, losses: 0, pushes: 0 };
+            }
+            
+            combinedBetTypeBreakdown[betType].count++;
+            if (game.result === 'won') combinedBetTypeBreakdown[betType].wins++;
+            else if (game.result === 'lost') combinedBetTypeBreakdown[betType].losses++;
+            else if (game.result === 'push') combinedBetTypeBreakdown[betType].pushes++;
+          });
+        }
+        
+        // Add prop bet types to combined distribution
+        if (propResults) {
+          propResults.forEach(prop => {
+            const propType = prop.prop_type || 'Player Prop';
+            if (!combinedBetTypeBreakdown[propType]) {
+              combinedBetTypeBreakdown[propType] = { betType: propType, count: 0, wins: 0, losses: 0, pushes: 0 };
+            }
+            
+            combinedBetTypeBreakdown[propType].count++;
+            if (prop.result === 'won') combinedBetTypeBreakdown[propType].wins++;
+            else if (prop.result === 'lost') combinedBetTypeBreakdown[propType].losses++;
+            else if (prop.result === 'push') combinedBetTypeBreakdown[propType].pushes++;
+          });
+        }
+        
+        // Calculate total bets for percentage calculation
+        const totalAllBets = (gameResults?.length || 0) + (propResults?.length || 0);
+        
+        // Create the final bet type distribution array
+        const betTypeDistributionArray = Object.values(combinedBetTypeBreakdown)
+          .map(bt => ({
+            ...bt,
+            percentage: totalAllBets > 0 ? (bt.count / totalAllBets) * 100 : 0
+          }))
+          .sort((a, b) => b.count - a.count);
+        
+        // Find most profitable bet type overall
+        let mostProfitableBetType = { betType: 'N/A', winRate: 0 };
+        Object.values(combinedBetTypeBreakdown).forEach(bt => {
+          const btWinRate = (bt.wins + bt.losses) > 0 ? (bt.wins / (bt.wins + bt.losses)) : 0;
+          if (bt.count >= 3 && btWinRate > mostProfitableBetType.winRate) {
+            mostProfitableBetType = { 
+              betType: bt.betType, 
+              winRate: btWinRate,
+              displayRate: `+${(btWinRate * 100).toFixed(1)}%`
+            };
+          }
+        });
+        
+        // Store the combined bet type distribution
+        setBetTypeDistribution({
+          betTypePerformance: betTypeDistributionArray,
+          mostProfitableBetType
+        });
+        
+        // STEP 7: Calculate tab-specific stats based on the selected tab (games or props)
         if (showPicksType === 'games') {
           // CALCULATE GAME STATS
           const gameWins = gameResults ? gameResults.filter(game => game.result === 'won').length : 0;
@@ -164,35 +232,6 @@ export const Billfold = () => {
               else if (game.result === 'push') sportBreakdown[game.league].pushes++;
             });
           }
-          
-          // Group game results by bet type
-          const betTypeBreakdown = {};
-          if (gameResults) {
-            gameResults.forEach(game => {
-              const betType = determineBetType(game.pick_text);
-              if (!betTypeBreakdown[betType]) {
-                betTypeBreakdown[betType] = { betType, count: 0, wins: 0, losses: 0, pushes: 0 };
-              }
-              
-              betTypeBreakdown[betType].count++;
-              if (game.result === 'won') betTypeBreakdown[betType].wins++;
-              else if (game.result === 'lost') betTypeBreakdown[betType].losses++;
-              else if (game.result === 'push') betTypeBreakdown[betType].pushes++;
-            });
-          }
-          
-          // Find most profitable game bet type
-          let mostProfitableBetType = { betType: 'N/A', winRate: 0 };
-          Object.values(betTypeBreakdown).forEach(bt => {
-            const btWinRate = (bt.wins + bt.losses) > 0 ? (bt.wins / (bt.wins + bt.losses)) : 0;
-            if (bt.count >= 3 && btWinRate > mostProfitableBetType.winRate) {
-              mostProfitableBetType = { 
-                betType: bt.betType, 
-                winRate: btWinRate,
-                displayRate: `+${(btWinRate * 100).toFixed(1)}%`
-              };
-            }
-          });
           
           // Find best game win
           let topWin = null;
@@ -225,13 +264,14 @@ export const Billfold = () => {
               pick: bestGame.pick_text,
               odds: bestGame.odds,
               date: new Date(bestGame.game_date),
+              rawGameDate: bestGame.game_date, // Store the original date string for display
               winAmount
             };
           }
           
           setBestWin(topWin);
           
-          // Set game stats
+          // Set game stats (using combined bet type distribution)
           setStats({
             record: `${gameWins}-${gameLosses}${gamePushes > 0 ? `-${gamePushes}` : ''}`,
             totalBets: totalGameBets,
@@ -240,13 +280,8 @@ export const Billfold = () => {
             pushes: gamePushes,
             winLoss: gameWinRate,
             sportPerformance: Object.values(sportBreakdown),
-            betTypePerformance: Object.values(betTypeBreakdown)
-              .map(bt => ({
-                ...bt,
-                percentage: totalGameBets > 0 ? (bt.count / totalGameBets) * 100 : 0
-              }))
-              .sort((a, b) => b.count - a.count),
-            mostProfitableBetType
+            betTypePerformance: betTypeDistribution.betTypePerformance, // Use combined distribution
+            mostProfitableBetType: betTypeDistribution.mostProfitableBetType // Use combined most profitable
           });
         } else {
           // CALCULATE PROP STATS
@@ -255,35 +290,6 @@ export const Billfold = () => {
           const propPushes = propResults ? propResults.filter(prop => prop.result === 'push').length : 0;
           const totalPropBets = propResults?.length || 0;
           const propWinRate = totalPropBets > 0 ? (propWins / totalPropBets) : 0;
-          
-          // Group prop results by type
-          const propTypeBreakdown = {};
-          if (propResults) {
-            propResults.forEach(prop => {
-              const propType = prop.prop_type || 'Player Prop';
-              if (!propTypeBreakdown[propType]) {
-                propTypeBreakdown[propType] = { betType: propType, count: 0, wins: 0, losses: 0, pushes: 0 };
-              }
-              
-              propTypeBreakdown[propType].count++;
-              if (prop.result === 'won') propTypeBreakdown[propType].wins++;
-              else if (prop.result === 'lost') propTypeBreakdown[propType].losses++;
-              else if (prop.result === 'push') propTypeBreakdown[propType].pushes++;
-            });
-          }
-          
-          // Find most profitable prop type
-          let mostProfitablePropType = { betType: 'N/A', winRate: 0 };
-          Object.values(propTypeBreakdown).forEach(pt => {
-            const ptWinRate = (pt.wins + pt.losses) > 0 ? (pt.wins / (pt.wins + pt.losses)) : 0;
-            if (pt.count >= 3 && ptWinRate > mostProfitablePropType.winRate) {
-              mostProfitablePropType = { 
-                betType: pt.betType, 
-                winRate: ptWinRate,
-                displayRate: `+${(ptWinRate * 100).toFixed(1)}%`
-              };
-            }
-          });
           
           // Find best prop win
           let topPropWin = null;
@@ -316,13 +322,14 @@ export const Billfold = () => {
               pick: bestProp.pick_text || `${bestProp.player_name} ${bestProp.prop_type} ${bestProp.bet || ''} ${bestProp.line_value}`,
               odds: bestProp.odds,
               date: new Date(bestProp.game_date),
+              rawGameDate: bestProp.game_date, // Store the original date string for display
               winAmount
             };
           }
           
           setBestWin(topPropWin);
           
-          // Set prop stats
+          // Set prop stats (using combined bet type distribution)
           setStats({
             record: `${propWins}-${propLosses}${propPushes > 0 ? `-${propPushes}` : ''}`,
             totalBets: totalPropBets,
@@ -331,13 +338,8 @@ export const Billfold = () => {
             pushes: propPushes,
             winLoss: propWinRate,
             sportPerformance: [{ sport: 'MLB', wins: propWins, losses: propLosses, pushes: propPushes }],
-            betTypePerformance: Object.values(propTypeBreakdown)
-              .map(pt => ({
-                ...pt,
-                percentage: totalPropBets > 0 ? (pt.count / totalPropBets) * 100 : 0
-              }))
-              .sort((a, b) => b.count - a.count),
-            mostProfitableBetType: mostProfitablePropType
+            betTypePerformance: betTypeDistribution.betTypePerformance, // Use combined distribution
+            mostProfitableBetType: betTypeDistribution.mostProfitableBetType // Use combined most profitable
           });
         }
         
@@ -527,7 +529,7 @@ export const Billfold = () => {
                 <tbody>
                   {bettingLog.map((bet, index) => (
                   <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-800/50 transition-colors">
-                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.rawGameDate ? new Date(bet.rawGameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.sport}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{bet.matchup || 'Game not found'}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6">
