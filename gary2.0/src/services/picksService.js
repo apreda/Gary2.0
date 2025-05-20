@@ -317,6 +317,13 @@ const picksService = {
                 gameNews = 'Unable to retrieve real-time data. Analysis will proceed with available data.';
               }
               
+              // Get the current date in EST timezone (for sports betting context)
+              const currentDate = new Date();
+              const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+              const estDate = new Intl.DateTimeFormat('en-US', options).format(currentDate);
+              const [month, day, year] = estDate.split('/');
+              const currentDateString = `${year}-${month}-${day}`;
+              
               // Format the game data for Gary's analysis with enhanced statistics
               // We'll be flexible about what stats we pass - OpenAI will see everything in context
               const formattedGameData = {
@@ -336,13 +343,14 @@ const picksService = {
                 pitcherData: pitcherData,
                 gameTime: gameTimeData.gameTime || 'TBD',
                 time: gameTimeData.gameTime || 'TBD',
+                datetime: currentDateString + ' ' + (gameTimeData.gameTime || 'TBD'),
                 headlines: gameTimeData.headlines || [],
                 injuries: gameTimeData.keyInjuries || { homeTeam: [], awayTeam: [] },
                 realTimeNews: gameNews || '',
                 // Add a special field that will contain ALL the stats we collect from various sources
                 // This way we send everything we have to OpenAI without being too strict
                 allCollectedStats: {
-                  date: date,
+                  date: currentDateString,
                   mlbSpecific: sportName === 'MLB' ? { is2025Season: true } : null,
                   sources: []  // We'll collect all stats from all sources here
                 }

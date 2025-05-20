@@ -93,11 +93,13 @@ const sportsDataService = {
    */
   async getTodaysGames(league) {
     try {
-      // Format date as YYYY-MM-DD for TheSportsDB API
-      const today = new Date();
-      const formattedDate = today.toISOString().split('T')[0];
+      // Format date as YYYY-MM-DD for TheSportsDB API using EST timezone
+      const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+      const estDate = new Intl.DateTimeFormat('en-US', options).format(new Date());
+      const [month, day, year] = estDate.split('/');
+      const formattedDate = `${year}-${month}-${day}`;
       
-      console.log(`Fetching ${league} games for ${formattedDate}...`);
+      console.log(`Fetching ${league} games for ${formattedDate} (EST date)...`);
       const data = await this.apiGet('eventsday.php', { d: formattedDate, l: league });
       
       if (data?.events?.length > 0) {

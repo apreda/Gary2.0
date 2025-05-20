@@ -486,42 +486,64 @@ This is VERY important: Format your response in valid JSON like this exact struc
   },
   
   /**
-   * Fetch ESPN game URLs for a given league ('mlb', 'nba', 'nhl') and date (YYYYMMDD).
-   * Uses ESPN's data endpoint to get game IDs and build the URLs.
+   * Fetch ESPN game URLs for a given league ('mlb', 'nba', 'nhl') and date.
+   * Uses Perplexity to search for game data instead of direct ESPN API calls to avoid CORS issues.
+   * This method is similar to what's used in prop picks to retrieve game data.
    * @param {string} league - League code ('mlb', 'nba', 'nhl')
-   * @param {string} dateStr - Date string in YYYYMMDD format (null for today)
+   * @param {string} dateStr - Date string in format like "2025-05-19" (null for today)
    * @returns {Promise<string[]>} - Array of ESPN game URLs
    */
   getEspnGameLinks: async function(league = 'mlb', dateStr = null) {
     try {
-      // Get today's date in YYYYMMDD format if not provided
-      function getTodayYMD() {
-        const d = new Date();
-        const month = `${d.getMonth() + 1}`.padStart(2, '0');
-        const day = `${d.getDate()}`.padStart(2, '0');
-        return `${d.getFullYear()}${month}${day}`;
+      // Format the date for the query
+      const today = new Date();
+      const formattedDate = dateStr || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
+      // Define league-specific terms
+      const leagueNames = {
+        'mlb': 'MLB baseball',
+        'nba': 'NBA basketball',
+        'nhl': 'NHL hockey'
+      };
+      
+      const leagueName = leagueNames[league.toLowerCase()] || 'sports';
+      
+      // Create a query to get today's games for the league
+      const query = `What ${leagueName} games are scheduled for ${formattedDate}? Only list games with teams and ESPN game IDs if available.`;
+      
+      // Use Perplexity to get the information
+      console.log(`Getting ESPN game data via Perplexity for ${league} on ${formattedDate}`);
+      const result = await this.search(query, false);
+      
+      // Parse the result to extract ESPN game links
+      // The format returned by Perplexity will be variable, so we look for patterns that might include ESPN game IDs
+      const gameLinks = [];
+      
+      // First, look for direct ESPN URLs in the response
+      const espnUrlRegex = /https?:\/\/(?:www\.)?espn\.com\/[^\/]+\/game\/_\/gameId\/(\d+)/g;
+      let match;
+      while ((match = espnUrlRegex.exec(result)) !== null) {
+        if (!gameLinks.includes(match[0])) {
+          gameLinks.push(match[0]);
+        }
       }
       
-      const date = dateStr || getTodayYMD();
-      const espnLeague = league.toLowerCase();
-      
-      // ESPN's data endpoint
-      const url = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague}/scoreboard?dates=${date}`;
-      
-      // Fetch the data
-      const response = await axios.get(url);
-      const data = response.data;
-      
-      // Extract game IDs and build ESPN game URLs
-      const gameLinks = [];
-      if (data && data.events) {
-        for (const event of data.events) {
-          if (event.id) {
-            gameLinks.push(`https://www.espn.com/${espnLeague}/game/_/gameId/${event.id}`);
+      // If no direct URLs found, look for game IDs and construct URLs
+      if (gameLinks.length === 0) {
+        const gameIdRegex = /game\s*id\s*[:=]?\s*(\d{9,})|espn\s*game\s*id\s*[:=]?\s*(\d{9,})|gameId\/(\d{9,})/gi;
+        let idMatch;
+        while ((idMatch = gameIdRegex.exec(result)) !== null) {
+          const gameId = idMatch[1] || idMatch[2] || idMatch[3];
+          if (gameId) {
+            const espnUrl = `https://www.espn.com/${league.toLowerCase()}/game/_/gameId/${gameId}`;
+            if (!gameLinks.includes(espnUrl)) {
+              gameLinks.push(espnUrl);
+            }
           }
         }
       }
       
+      console.log(`Found ${gameLinks.length} ESPN game links for ${league} via Perplexity`);
       return gameLinks;
     } catch (error) {
       console.error(`Error fetching ESPN game links: ${error.message}`);
