@@ -723,16 +723,39 @@ export const resultsCheckerService = {
               let result = { success: false };
               
               if (perplexityResponse) {
-                // Try to extract the score using a more flexible pattern
-                const scorePattern = /([A-Za-z\s.]+)\s*(\d+)[^\d]+(\d+)\s*([A-Za-z\s.]+)/i;
-                const scoreMatch = perplexityResponse.match(scorePattern);
+                // Try to extract the score using multiple patterns
+                // Pattern 1: Standard format with scores between team names
+                const scorePattern1 = /([A-Za-z\s.]+)\s*(\d+)[^\d]+(\d+)\s*([A-Za-z\s.]+)/i;
+                // Pattern 2: Comma-separated format like "Team A 5, Team B 3"
+                const scorePattern2 = /([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)\s*,\s*([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)/i;
+                
+                // Try each pattern in sequence
+                let scoreMatch = perplexityResponse.match(scorePattern1);
+                if (!scoreMatch) {
+                  scoreMatch = perplexityResponse.match(scorePattern2);
+                }
                 
                 if (scoreMatch && scoreMatch.length >= 5) {
                   console.log(`Successfully extracted score: ${scoreMatch[0]}`);
-                  const firstTeam = scoreMatch[1].trim();
-                  const secondTeam = scoreMatch[4].trim();
-                  const firstScore = parseInt(scoreMatch[2]);
-                  const secondScore = parseInt(scoreMatch[3]);
+                  // Check if we matched against scorePattern2 (comma-separated format)
+                  const isCommaFormat = scoreMatch[0].includes(',');
+                  
+                  let firstTeam, secondTeam, firstScore, secondScore;
+                  
+                  if (isCommaFormat) {
+                    // In comma format, team names and scores are in different positions
+                    // "Team A 5, Team B 3" => first = A, first score = 5, second = B, second score = 3
+                    firstTeam = scoreMatch[1].trim();
+                    firstScore = parseInt(scoreMatch[2]);
+                    secondTeam = scoreMatch[3].trim();
+                    secondScore = parseInt(scoreMatch[4]);
+                  } else {
+                    // Standard format: "Team A 5 - 3 Team B"
+                    firstTeam = scoreMatch[1].trim();
+                    secondTeam = scoreMatch[4].trim();
+                    firstScore = parseInt(scoreMatch[2]);
+                    secondScore = parseInt(scoreMatch[3]);
+                  }
                   
                   // Add safety checks for undefined homeTeam, awayTeam, or firstTeam
                   const safeHomeTeam = homeTeam ? homeTeam.toLowerCase() : '';
@@ -1053,17 +1076,48 @@ export const resultsCheckerService = {
           });
           
           if (result) {
-            // Try to parse the result using regex
-            const scorePattern = new RegExp(`(${awayTeam}|${homeTeam})\\s*(\\d+)[^\\d]+(\\d+)\\s*(${homeTeam}|${awayTeam})`, 'i');
-            const scoreMatch = result.match(scorePattern);
+            // Try to parse the result using multiple regex patterns
+            // Escape regex special characters in team names
+            const escAwayTeam = awayTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const escHomeTeam = homeTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            // Pattern 1: Standard format with scores between team names
+            const scorePattern1 = new RegExp(`(${escAwayTeam}|${escHomeTeam})\\s*(\\d+)[^\\d]+(\\d+)\\s*(${escHomeTeam}|${escAwayTeam})`, 'i');
+            // Pattern 2: Comma-separated format like "Team A 5, Team B 3"
+            const scorePattern2 = new RegExp(`(${escAwayTeam}|${escHomeTeam})\\s*(\\d+)\\s*,\\s*(${escHomeTeam}|${escAwayTeam})\\s*(\\d+)`, 'i');
+            // Pattern 3: Generic comma-separated format when team names may not match exactly
+            const scorePattern3 = /([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)\s*,\s*([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)/i;
+            
+            // Try each pattern in sequence
+            let scoreMatch = result.match(scorePattern1);
+            if (!scoreMatch) {
+              scoreMatch = result.match(scorePattern2);
+            }
+            if (!scoreMatch) {
+              scoreMatch = result.match(scorePattern3);
+            }
             
             if (scoreMatch && scoreMatch.length >= 5) {
               // Determine which team is home and which is away
-              const firstTeam = scoreMatch[1].trim();
-              const secondTeam = scoreMatch[4].trim();
+              // Check if we matched against a comma-separated format
+              const isCommaFormat = scoreMatch[0].includes(',');
               
-              const firstScore = parseInt(scoreMatch[2]);
-              const secondScore = parseInt(scoreMatch[3]);
+              let firstTeam, secondTeam, firstScore, secondScore;
+              
+              if (isCommaFormat) {
+                // In comma format, team names and scores are in different positions
+                // "Team A 5, Team B 3" => first = A, first score = 5, second = B, second score = 3
+                firstTeam = scoreMatch[1].trim();
+                firstScore = parseInt(scoreMatch[2]);
+                secondTeam = scoreMatch[3].trim();
+                secondScore = parseInt(scoreMatch[4]);
+              } else {
+                // Standard format: "Team A 5 - 3 Team B"
+                firstTeam = scoreMatch[1].trim();
+                secondTeam = scoreMatch[4].trim();
+                firstScore = parseInt(scoreMatch[2]);
+                secondScore = parseInt(scoreMatch[3]);
+              }
               
               let homeScore, awayScore;
               
