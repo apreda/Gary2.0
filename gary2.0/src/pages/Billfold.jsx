@@ -391,14 +391,25 @@ export const Billfold = () => {
             />
           </div>
           
-          {/* Toggle between Game Picks and Prop Picks */}
+          {/* Toggle between All Picks, Game Picks and Prop Picks */}
           <div className="flex justify-center mt-6 mb-8">
             <div className="inline-flex rounded-md shadow-sm" role="group">
               <button
                 type="button"
-                onClick={() => setShowPropPicks(false)}
-                className={`px-6 py-2 text-sm font-medium rounded-l-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
-                  !showPropPicks 
+                onClick={() => togglePicksView('all')}
+                className={`px-4 py-2 text-sm font-medium focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors rounded-l-lg ${
+                  showPicksType === 'all' 
+                    ? 'bg-[#b8953f] text-gray-900 font-bold' 
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                All Picks
+              </button>
+              <button
+                type="button"
+                onClick={() => togglePicksView('games')}
+                className={`px-4 py-2 text-sm font-medium focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
+                  showPicksType === 'games' 
                     ? 'bg-[#b8953f] text-gray-900 font-bold' 
                     : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                 }`}
@@ -407,9 +418,9 @@ export const Billfold = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setShowPropPicks(true)}
-                className={`px-6 py-2 text-sm font-medium rounded-r-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
-                  showPropPicks 
+                onClick={() => togglePicksView('props')}
+                className={`px-4 py-2 text-sm font-medium rounded-r-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
+                  showPicksType === 'props' 
                     ? 'bg-[#b8953f] text-gray-900 font-bold' 
                     : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                 }`}
