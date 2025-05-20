@@ -504,7 +504,8 @@ export const resultsCheckerService = {
           final_score: gameResult.final_score,
           pick_text: pick.pick,
           matchup: `${pick.awayTeam || pick.away_team} @ ${pick.homeTeam || pick.home_team}`,
-          confidence: pick.confidence,
+          confidence: pick.confidence || null,
+          type: pick.type || 'moneyline',  // Set a default type if not available
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
@@ -1138,8 +1139,13 @@ export const resultsCheckerService = {
             gameDate = new Date(date);
           }
           
-          // Ensure we're using the provided date, not hardcoding May 16
-          const formattedDate = gameDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          // Format the date properly - avoid timezone issues by using the date object
+          const formattedDate = gameDate.toLocaleDateString('en-US', { 
+            month: 'long', 
+            day: 'numeric', 
+            year: 'numeric',
+            timeZone: 'UTC'  // Use UTC to avoid timezone shifts
+          });
           console.log(`Querying for scores on date: ${formattedDate}`);
           const query = `What was the final score of the ${league} game involving ${teamName} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
           
