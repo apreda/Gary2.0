@@ -547,6 +547,29 @@ const ballDontLieService = {
       return { NBA: [], MLB: [] };
     }
   },
+  /**
+   * Get MLB player season statistics for 2025 season
+   * @param {number} playerId - Player ID
+   * @param {number} season - Season year (explicitly defaults to 2025 for current season)
+   * @returns {Promise<Object>} - Player's 2025 season statistics
+   */
+  async getMlbPlayerSeasonStats(playerId, season = 2025) {
+    try {
+      const cacheKey = `mlb-player-season-${playerId}-${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching MLB 2025 season stats for player ${playerId}`);
+        const client = initApi();
+        const response = await client.mlb.getSeasonStats({
+          season: 2025, // Always force 2025 season data regardless of parameter
+          player_ids: [playerId]
+        });
+        return response.data?.[0] || null;
+      }, true); // Use MLB-specific shorter cache TTL for fresher data
+    } catch (error) {
+      console.error(`Error fetching MLB 2025 season stats for player ${playerId}:`, error);
+      return null;
+    }
+  },
 
   /**
    * Get MLB player season statistics
