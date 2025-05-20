@@ -239,8 +239,8 @@ const propResultsService = {
           else if (propType === 'total_bases') statName = 'total bases';
           else if (propType === 'hits_runs_rbis') statName = 'combined hits, runs, and RBIs';
           
-          // Create a direct, specific prompt for Perplexity to determine the outcome
-          const query = `Did ${playerName} have ${pickDirection.toUpperCase() === 'OVER' ? 'more than' : 'fewer than'} ${propLine} ${statName} in the game on ${gameDate} against ${team}? Please provide their exact ${statName} total and whether the ${pickDirection} ${propLine} ${statName} bet would win, lose, or push. End your answer with either "won", "lost", or "push".`;
+          // Create a direct, simple query just asking for the stat total
+          const query = `How many ${statName} did ${playerName} have in the game on ${searchDate} against ${team}? Please provide only the number.`;
           
           // Check if Perplexity API key is available
           const perplexityApiKey = import.meta.env?.VITE_PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
@@ -258,9 +258,16 @@ const propResultsService = {
               
               // Extract actual value if present in the response
               let actualResult = null;
-              const statsMatch = content.match(/had\s+(\d+(?:\.\d+)?)\s+${statName}/i) || 
+              
+              // First try to match just a number by itself (for our simplified query)
+              const simpleNumberMatch = content.match(/^\s*(\d+(?:\.\d+)?)\s*$/);
+              
+              // Then try the more complex patterns for descriptive responses
+              const statsMatch = simpleNumberMatch || 
+                                content.match(/had\s+(\d+(?:\.\d+)?)\s+${statName}/i) || 
                                 content.match(/recorded\s+(\d+(?:\.\d+)?)\s+${statName}/i) ||
-                                content.match(/${statName}:\s*(\d+(?:\.\d+)?)/i);
+                                content.match(/${statName}:\s*(\d+(?:\.\d+)?)/i) ||
+                                content.match(/(\d+(?:\.\d+)?)\s+${statName}/i);
               
               if (statsMatch) {
                 actualResult = parseFloat(statsMatch[1]);
