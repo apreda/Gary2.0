@@ -413,10 +413,11 @@ const picksService = {
                       }
                     }
                     
-                    // Store both raw and formatted stats
+                    // Store both raw and formatted stats - ensure they're properly formatted for OpenAI
                     formattedGameData.rawStatsData = apiSportsStats;
                     formattedGameData.playerStats = playerStatsReport;
                     formattedGameData.statsContext = formattedStatsContext;
+                    formattedGameData.enhancedStats = `TEAM STATS SUMMARY:\n${formattedStatsContext}`;
                     formattedGameData.statsSource = 'API-Sports with Player Stats';
                   } else {
                     // PRIORITY 2: If API-Sports fails, try TheSportsDB
