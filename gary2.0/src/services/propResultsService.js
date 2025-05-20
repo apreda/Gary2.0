@@ -119,10 +119,10 @@ const propResultsService = {
       for (const team in teamGroupedPicks) {
         if (team === 'unknown') continue;
         
-        console.log(`Fetching MLB stats for team ${team}`);
+        console.log(`Fetching MLB stats for team ${team} on date ${date}`);
         
         try {
-          // Get player stats by team and date using our new method designed for props
+          // Get player stats by team and date using our method designed for props
           const playerStatsData = await apiSportsService.getPlayerStatsForProps(team, date, 'MLB');
           
           if (!playerStatsData) {
@@ -132,7 +132,12 @@ const propResultsService = {
           
           // Add player stats to the global stats map
           if (playerStatsData.players && playerStatsData.players.length > 0) {
-            console.log(`Found stats for ${playerStatsData.players.length} players on ${team}`);
+            console.log(`Found real stats for ${playerStatsData.players.length} players on ${team}`);
+            
+            // Log detailed player data for debugging
+            playerStatsData.players.forEach(player => {
+              console.log(`Player ${player.name} stats:`, JSON.stringify(player.statistics));
+            });
             
             playerStatsData.players.forEach(player => {
               if (!allPlayerStats[player.name]) {
@@ -158,7 +163,7 @@ const propResultsService = {
               }
             });
           } else {
-            console.log(`No player data found in response for ${team}`);
+            console.log(`No player data found in API response for ${team}`);
           }
         } catch (error) {
           console.error(`Error getting MLB stats for team ${team}:`, error.message);
@@ -190,6 +195,8 @@ const propResultsService = {
         const playerStats = allPlayerStats[playerName];
         
         if (playerStats) {
+          console.log(`Processing prop for ${playerName} with real data`);
+          
           // Map prop_type to the correct stat key
           const statKey = propType.toLowerCase();
           const statMapping = {
@@ -202,27 +209,45 @@ const propResultsService = {
             'hits_runs_rbis': 'hits_runs_rbis'
           };
           
-          actualResult = 0;
+          // Check if we have the needed stat
+          let statFound = false;
+          let mappedStatKey;
           
           if (statKey in statMapping) {
-            const mappedStatKey = statMapping[statKey];
-            actualResult = playerStats[mappedStatKey] || 0;
-          } else {
+            mappedStatKey = statMapping[statKey];
+            if (playerStats[mappedStatKey] !== undefined) {
+              actualResult = playerStats[mappedStatKey];
+              statFound = true;
+              console.log(`Found stat ${mappedStatKey} = ${actualResult} for ${playerName}`);
+            }
+          } else if (playerStats[statKey] !== undefined) {
             // If we don't have a mapping, try to use the prop type directly as a key
-            actualResult = playerStats[statKey] || 0;
+            actualResult = playerStats[statKey];
+            statFound = true;
+            console.log(`Found direct stat ${statKey} = ${actualResult} for ${playerName}`);
           }
           
-          // Determine if pick won or lost
-          const normalizedDirection = (pick.pick_direction || '').toUpperCase();
-          if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
-            resultStatus = actualResult > propLine ? 'won' : 
-                          actualResult === propLine ? 'push' : 'lost';
-          } else if (normalizedDirection === 'UNDER' || normalizedDirection === 'U') {
-            resultStatus = actualResult < propLine ? 'won' : 
-                          actualResult === propLine ? 'push' : 'lost';
+          // Only determine a result if we actually have the required stat
+          if (statFound) {
+            // Determine if pick won or lost
+            const normalizedDirection = (pick.pick_direction || '').toUpperCase();
+            if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
+              resultStatus = actualResult > propLine ? 'won' : 
+                            actualResult === propLine ? 'push' : 'lost';
+              console.log(`${playerName} ${statKey} ${actualResult} vs line ${propLine} (OVER) = ${resultStatus}`);
+            } else if (normalizedDirection === 'UNDER' || normalizedDirection === 'U') {
+              resultStatus = actualResult < propLine ? 'won' : 
+                            actualResult === propLine ? 'push' : 'lost';
+              console.log(`${playerName} ${statKey} ${actualResult} vs line ${propLine} (UNDER) = ${resultStatus}`);
+            } else {
+              console.log(`Unknown pick direction: ${pick.pick_direction}`);
+            }
           } else {
-            console.log(`Unknown pick direction: ${pick.pick_direction}`);
+            console.log(`Required stat for ${playerName} (${statKey}) not found in data`);
+            resultStatus = 'pending';
           }
+        } else {
+          console.log(`No stats found for player ${playerName}`);
         }
         
         // Create result object with only columns that exist in the database schema
