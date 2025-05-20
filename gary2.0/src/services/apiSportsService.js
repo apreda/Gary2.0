@@ -84,9 +84,12 @@ const apiSportsService = {
    */
   async getTodaysGames(sport = 'MLB') {
     try {
-      // Format today's date as YYYY-MM-DD
-      const today = new Date().toISOString().split('T')[0];
-      console.log(`Getting ${sport} games for ${today}`);
+      // Format today's date as YYYY-MM-DD using EST timezone
+      const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+      const estDate = new Intl.DateTimeFormat('en-US', options).format(new Date());
+      const [month, day, year] = estDate.split('/');
+      const today = `${year}-${month}-${day}`;
+      console.log(`Getting ${sport} games for ${today} (EST date)`);
       
       // According to the documentation, we need to use the games endpoint with date parameter
       const response = await this.apiRequest('/games', { date: today }, sport);
@@ -134,7 +137,12 @@ const apiSportsService = {
    * @param {string} sport - Sport type (MLB, NBA, NHL)
    * @returns {Promise<Object>} - Player statistics
    */
-  async getPlayerStats(playerId, season = new Date().getFullYear(), sport = 'MLB') {
+  async getPlayerStats(playerId, season = null, sport = 'MLB') {
+    // Use EST timezone to determine the current year if season not provided
+    if (!season) {
+      const options = { timeZone: 'America/New_York' };
+      season = new Date().toLocaleString('en-US', options).split('/')[2].split(',')[0];
+    }
     try {
       console.log(`Getting ${sport} player stats for player ID ${playerId} in season ${season}`);
       
@@ -170,7 +178,12 @@ const apiSportsService = {
    * @param {number} season - Season year
    * @returns {Promise<Array>} - List of teams
    */
-  async getTeams(sport = 'MLB', season = new Date().getFullYear()) {
+  async getTeams(sport = 'MLB', season = null) {
+    // Use EST timezone to determine the current year if season not provided
+    if (!season) {
+      const options = { timeZone: 'America/New_York' };
+      season = new Date().toLocaleString('en-US', options).split('/')[2].split(',')[0];
+    }
     try {
       console.log(`Getting ${sport} teams for season ${season}`);
       
@@ -241,7 +254,9 @@ const apiSportsService = {
       }
       
       // Step 5: Get detailed stats for both pitchers
-      const season = new Date().getFullYear();
+      // Get current year in EST timezone
+      const options = { timeZone: 'America/New_York' };
+      const season = new Date().toLocaleString('en-US', options).split('/')[2].split(',')[0];
       let homePitcherStats = null;
       let awayPitcherStats = null;
       
@@ -324,7 +339,9 @@ const apiSportsService = {
       console.log(`Getting MLB team stats for ${homeTeam} vs ${awayTeam}`);
       
       // Step 1: Find team IDs for both teams
-      const season = new Date().getFullYear();
+      // Get current year in EST timezone
+      const options = { timeZone: 'America/New_York' };
+      const season = new Date().toLocaleString('en-US', options).split('/')[2].split(',')[0];
       const teamsResponse = await this.apiRequest('/teams', { league: 1, season }, 'MLB');
       
       if (!teamsResponse?.response || teamsResponse.response.length === 0) {
