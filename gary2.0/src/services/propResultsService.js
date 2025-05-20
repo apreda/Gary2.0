@@ -1,15 +1,17 @@
 /**
  * Prop Results Service
- * Handles checking and recording player prop bet results
- * Uses Perplexity API for web searches for player stats and result determination
+ * Handles checking and recording MLB player prop bet results
+ * Uses MLB Stats API for retrieving player stats and determining prop results
  */
 import { supabase } from '../supabaseClient.js';
-import { openaiService } from './openaiService.js';
-import axios from 'axios';
+import { mlbStatsApiService } from './mlbStatsApiService.js';
 
 const propResultsService = {
   /**
    * Check and process results for player props
+   * Uses MLB Stats API service to determine results
+   * @param {string} date - Date to check results for (YYYY-MM-DD)
+   * @returns {Object} - Results object
    */
   checkPropResults: async (date) => {
     try {
@@ -34,35 +36,32 @@ const propResultsService = {
       }
       
       // Parse the picks array from the JSON column
-      let allPropPicks = [];
+      let propsList = [];
       for (const row of propPicksRows) {
         if (row.picks && Array.isArray(row.picks)) {
-          // Transform the picks array format into our expected format
+          // Format the picks for processing
           const formattedPicks = row.picks.map(pick => ({
-            id: row.id, // Use the row ID as the prop_pick_id
+            prop_pick_id: row.id, // Store the prop_pick_id for DB relation
             date: row.date,
-            player_name: pick.player,
+            player: pick.player,
             team: pick.team,
-            league: row.league || null, // Use the league from the row if available
-            prop_type: pick.prop?.split(' ')?.[0] || pick.prop, // Extract prop type from "hits 0.5"
-            prop_line: pick.line || parseFloat(pick.prop?.split(' ')?.[1]) || 0, // Extract line from prop or use provided line
-            pick_direction: pick.bet,
-            pick_text: `${pick.player} ${pick.bet} ${pick.line || (pick.prop?.split(' ')?.[1] || '')} ${pick.prop?.split(' ')?.[0] || pick.prop}`,
+            league: row.league || 'MLB', // Default to MLB
+            prop: pick.prop?.split(' ')?.[0] || pick.prop, // Extract prop type
+            line: pick.line || parseFloat(pick.prop?.split(' ')?.[1]) || 0, // Extract line
+            bet: pick.bet, // Over/Under
             odds: pick.odds,
             confidence: pick.confidence,
-            matchup: row.matchup || null
+            matchup: row.matchup || null,
+            pick_text: `${pick.player} ${pick.bet} ${pick.line || (pick.prop?.split(' ')?.[1] || '')} ${pick.prop?.split(' ')?.[0] || pick.prop}`
           }));
           
-          allPropPicks = [...allPropPicks, ...formattedPicks];
+          propsList = [...propsList, ...formattedPicks];
         }
       }
       
-      console.log(`Found ${allPropPicks.length} individual prop picks for ${date}`);
+      console.log(`Found ${propsList.length} individual prop picks for ${date}`);
       
-      // For prop results, we only care about MLB stats
-      console.log('Processing MLB prop stats with multiple data sources (Ball Don\'t Lie API, SportsDB API, Perplexity, and OpenAI)');
-      
-      // Filter to MLB picks only and add any picks with MLB teams
+      // 2. Filter to MLB picks only
       const mlbTeams = [
         'New York Yankees', 'New York Mets', 'Chicago White Sox', 'Chicago Cubs', 
         'Detroit Tigers', 'Toronto Blue Jays', 'St. Louis Cardinals', 'Washington Nationals',
@@ -74,557 +73,81 @@ const propResultsService = {
       ];
       
       // Identify MLB picks by league or team name
-      const mlbPicks = allPropPicks.filter(pick => {
+      const mlbPropsList = propsList.filter(pick => {
         return pick.league === 'MLB' || 
-          (pick.team && mlbTeams.some(team => pick.team.toLowerCase().includes(team.toLowerCase()) || 
-                                     team.toLowerCase().includes(pick.team.toLowerCase())));
+          (pick.team && mlbTeams.some(team => 
+            pick.team.toLowerCase().includes(team.toLowerCase()) || 
+            team.toLowerCase().includes(pick.team.toLowerCase())
+          ));
       });
       
-      console.log(`Found ${mlbPicks.length} MLB prop picks to process`);
+      console.log(`Found ${mlbPropsList.length} MLB prop picks to process`);
       
-      // Process each pick individually using Perplexity API for best results
-      // Skip team grouping to avoid API-Sports calls
+      // 3. Use MLB Stats API to process all props in one batch
+      const apiResults = await mlbStatsApiService.automateProps(mlbPropsList, date);
+      console.log(`MLB Stats API returned results for ${apiResults.length} props`);
       
-      // Helper function to generate name variations for better matching
-      function generateNameVariations(name) {
-        const variations = [];
-        
-        // Always include the original name
-        variations.push(name);
-        
-        // Remove suffixes like Jr./Sr.
-        if (name.includes(' Jr.')) {
-          variations.push(name.replace(' Jr.', ''));
-          variations.push(name.replace(' Jr.', ' Jr'));
-        }
-        
-        if (name.includes(' Sr.')) {
-          variations.push(name.replace(' Sr.', ''));
-          variations.push(name.replace(' Sr.', ' Sr'));
-        }
-        
-        // Handle middle initials
-        const parts = name.split(' ');
-        if (parts.length > 2) {
-          // Remove middle name/initial
-          variations.push(`${parts[0]} ${parts[parts.length-1]}`);
-          
-          // First initial + last name
-          if (parts[0].length > 0) {
-            variations.push(`${parts[0][0]}. ${parts[parts.length-1]}`);
-          }
-        }
-        
-        return variations;
-      }
-      
-      /**
-       * Query Perplexity API to search for player statistics
-       * Used as a fallback when other APIs don't return data
-       */
-      async function searchPerplexityForPlayerStats(playerName, team, date, propType) {
-        try {
-          console.log(`Searching Perplexity for stats for ${playerName} (${team}) on ${date} for ${propType}`);
-          
-          // Format the date for better search results (May 20, 2025)
-          const searchDate = new Date(date).toLocaleDateString('en-US', { 
-            month: 'long', day: 'numeric', year: 'numeric'
-          });
-          
-          // Create a direct, specific prompt as recommended
-          let statName = propType;
-          // Map our internal prop types to natural language for better results
-          if (propType === 'hits') statName = 'hits';
-          else if (propType === 'runs') statName = 'runs';
-          else if (propType === 'rbi') statName = 'RBIs';
-          else if (propType === 'hr') statName = 'home runs';
-          else if (propType === 'strikeouts') statName = 'strikeouts';
-          else if (propType === 'total_bases') statName = 'total bases';
-          else if (propType === 'hits_runs_rbis') statName = 'combined hits, runs, and RBIs';
-          
-          const query = `How many ${statName} did ${playerName} have in the ${team} MLB game on ${searchDate}? Return just the number of ${statName}, and nothing else.`;
-          
-          // Check if Perplexity API key is available
-          const perplexityApiKey = import.meta.env?.VITE_PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
-          
-          if (!perplexityApiKey) {
-            console.log('Perplexity API key not available');
-            return null;
-          }
-          
-          // Make the API call as recommended
-          const response = await axios.post('https://api.perplexity.ai/chat/completions', {
-            model: 'pplx-70b-online', // Use the recommended model
-            messages: [{ role: 'user', content: query }],
-            temperature: 0.0, // Keep temperature at 0 for more deterministic answers
-            max_tokens: 50
-          }, {
-            headers: {
-              'Authorization': `Bearer ${perplexityApiKey}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          // Parse the result
-          if (response.data && response.data.choices && response.data.choices.length > 0) {
-            const content = response.data.choices[0].message.content.trim();
-            console.log(`Perplexity result for ${playerName} ${propType}: "${content}"`);
-            
-            // First check if the entire content is just a number
-            if (/^\d+(\.\d+)?$/.test(content)) {
-              const statValue = parseFloat(content);
-              console.log(`Found exact stat value for ${playerName}: ${statValue}`);
-              return {
-                [propType]: statValue,
-                source: 'Perplexity API'
-              };
-            }
-            
-            // Otherwise try to extract a number from the response
-            const numberMatch = content.match(/\d+(\.\d+)?/);
-            if (numberMatch) {
-              const statValue = parseFloat(numberMatch[0]);
-              console.log(`Extracted stat value for ${playerName}: ${statValue}`);
-              return {
-                [propType]: statValue,
-                source: 'Perplexity API'
-              };
-            }
-            
-            // Look for written numbers (zero, one, two, etc.)
-            const writtenNumbers = {
-              'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-              'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
-            };
-            
-            for (const [word, value] of Object.entries(writtenNumbers)) {
-              if (content.toLowerCase().includes(word)) {
-                console.log(`Found written number ${word} (${value}) for ${playerName}`);
-                return {
-                  [propType]: value,
-                  source: 'Perplexity API'
-                };
-              }
-            }
-          }
-          
-          console.log(`Could not extract a valid statistic value from Perplexity response for ${playerName}`);
-          return null;
-        } catch (error) {
-          console.error(`Error searching Perplexity for ${playerName}:`, error);
-          return null;
-        }
-      }
-      
-      /**
-       * Use Perplexity to directly determine if a prop bet is a win, loss, or push by searching the web
-       * This combines the stat lookup and outcome determination in one step
-       */
-      async function determineResultWithPerplexity(playerName, team, date, propType, propLine, pickDirection) {
-        try {
-          console.log(`Using Perplexity to determine result for ${playerName}'s ${propType} ${pickDirection} ${propLine}`);
-          
-          // Format the date for better search results (May 20, 2025)
-          const searchDate = new Date(date).toLocaleDateString('en-US', { 
-            month: 'long', day: 'numeric', year: 'numeric'
-          });
-          
-          // Map our internal prop types to natural language for better results
-          let statName = propType;
-          if (propType === 'hits') statName = 'hits';
-          else if (propType === 'runs') statName = 'runs';
-          else if (propType === 'rbi') statName = 'RBIs';
-          else if (propType === 'hr') statName = 'home runs';
-          else if (propType === 'strikeouts') statName = 'strikeouts';
-          else if (propType === 'total_bases') statName = 'total bases';
-          else if (propType === 'hits_runs_rbis') statName = 'combined hits, runs, and RBIs';
-          
-          // Create a direct, simple query just asking for the stat total
-          // Simplify the query even further for maximum compatibility
-          const query = `${playerName} ${statName} stats on ${searchDate}`;
-          
-          // We'll use our server-side proxy to handle the Perplexity API key securely
-          // and avoid CORS issues
-          
-          // Helper function to process Perplexity API responses
-          function processPerplexityResponse(response, playerName, propType, statName, propLine, pickDirection) {
-            if (response.data && response.data.choices && response.data.choices.length > 0) {
-              const content = response.data.choices[0].message.content.trim();
-              console.log(`Perplexity result for ${playerName} ${propType}: "${content}"`);
-              
-              // Extract actual value if present in the response
-              let actualResult = null;
-              
-              // First try to match just a number by itself (for our simplified query)
-              const simpleNumberMatch = content.match(/^\s*(\d+(?:\.\d+)?)\s*$/);
-              
-              // Then try the more complex patterns for descriptive responses
-              const statsMatch = simpleNumberMatch || 
-                                content.match(/had\s+(\d+(?:\.\d+)?)\s+${statName}/i) || 
-                                content.match(/recorded\s+(\d+(?:\.\d+)?)\s+${statName}/i) ||
-                                content.match(/${statName}:\s*(\d+(?:\.\d+)?)/i) ||
-                                content.match(/(\d+(?:\.\d+)?)\s+${statName}/i);
-              
-              if (statsMatch) {
-                actualResult = parseFloat(statsMatch[1]);
-                console.log(`Extracted actual result: ${actualResult} ${statName}`);
-              }
-              
-              // Extract the final verdict - look for won/lost/push at the end or in specific patterns
-              if (content.toLowerCase().match(/\bwon\b\s*$/)) {
-                console.log(`Perplexity determined result: WON`);
-                return { result: 'won', actualResult };
-              } else if (content.toLowerCase().match(/\blost\b\s*$/)) {
-                console.log(`Perplexity determined result: LOST`);
-                return { result: 'lost', actualResult };
-              } else if (content.toLowerCase().match(/\bpush\b\s*$/)) {
-                console.log(`Perplexity determined result: PUSH`);
-                return { result: 'push', actualResult };
-              }
-              
-              // If no clear verdict at the end, search the entire text
-              if (content.toLowerCase().includes('bet won') || 
-                  content.toLowerCase().includes('the bet would win') || 
-                  content.toLowerCase().includes('is a win')) {
-                console.log(`Perplexity determined result from context: WON`);
-                return { result: 'won', actualResult };
-              } else if (content.toLowerCase().includes('bet lost') || 
-                         content.toLowerCase().includes('the bet would lose') ||
-                         content.toLowerCase().includes('is a loss')) {
-                console.log(`Perplexity determined result from context: LOST`);
-                return { result: 'lost', actualResult };
-              } else if (content.toLowerCase().includes('push') ||
-                         content.toLowerCase().includes('bet tied')) {
-                console.log(`Perplexity determined result from context: PUSH`);
-                return { result: 'push', actualResult };
-              }
-              
-              // If we extracted the stats but couldn't find a verdict, calculate it ourselves
-              if (actualResult !== null) {
-                const normalizedDirection = pickDirection.toUpperCase();
-                if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
-                  const result = actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-                  console.log(`Calculated result based on extracted stats: ${result}`);
-                  return { result, actualResult };
-                } else {
-                  const result = actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-                  console.log(`Calculated result based on extracted stats: ${result}`);
-                  return { result, actualResult };
-                }
-              }
-            }
-            
-            // If we couldn't process the response, return pending
-            console.log(`Could not extract a clear result from Perplexity response`);
-            return { result: 'pending', actualResult: null };
-          }
-          
-          // Use our server-side proxy for Perplexity API calls
-          // This avoids CORS issues and keeps the API key secure
-          try {
-            console.log(`Making request to Perplexity API via proxy with model: pplx-7b-online`);
-            
-            // Call our server-side proxy instead of the Perplexity API directly
-            const response = await axios.post('/api/perplexity-proxy', {
-              model: 'pplx-7b-online',
-              messages: [
-                {
-                  role: 'user',
-                  content: query
-                }
-              ]
-            });
-            
-            console.log('Perplexity API request successful');
-            return processPerplexityResponse(response, playerName, propType, statName, propLine, pickDirection);
-          } catch (apiError) {
-            // Log detailed error information for debugging
-            console.error(`Perplexity API error details:`, apiError.message);
-            
-            if (apiError.response) {
-              console.error(`Status code: ${apiError.response.status}`);
-              console.error(`Response data:`, apiError.response.data);
-              console.error(`Response headers:`, apiError.response.headers);
-            } else if (apiError.request) {
-              console.error(`No response received:`, apiError.request);
-            }
-            
-            // If the first model fails, try with another online model as a fallback
-            try {
-              console.log(`Trying fallback model: mistral-7b-instruct`);
-              
-              // Use our server-side proxy for the fallback model as well
-              const fallbackResponse = await axios.post('/api/perplexity-proxy', {
-                model: 'mistral-7b-instruct',
-                messages: [
-                  {
-                    role: 'user',
-                    content: query
-                  }
-                ]
-              });
-              
-              console.log('Perplexity API fallback request successful');
-              return processPerplexityResponse(fallbackResponse, playerName, propType, statName, propLine, pickDirection);
-            } catch (fallbackError) {
-              // Log detailed error information for the fallback request
-              console.error(`Perplexity API fallback error:`, fallbackError.message);
-              
-              if (fallbackError.response) {
-                console.error(`Fallback status code: ${fallbackError.response.status}`);
-                console.error(`Fallback response data:`, fallbackError.response.data);
-                console.error(`Fallback response headers:`, fallbackError.response.headers);
-              } else if (fallbackError.request) {
-                console.error(`No fallback response received:`, fallbackError.request);
-              }
-              console.log(`All Perplexity API requests failed, returning pending result`);
-              return { result: 'pending', actualResult: null };
-            }
-          }
-          
-          console.log(`Could not determine result from Perplexity response`);
-          return { result: 'pending', actualResult: null };
-        } catch (error) {
-          console.error(`Error using Perplexity to determine result:`, error);
-          return { result: 'pending', actualResult: null };
-        }
-      }
-      
-      /**
-       * Use OpenAI to determine if a prop bet is a win, loss, or push
-       */
-      async function determineResultWithOpenAI(playerName, propType, propLine, pickDirection, actualResult) {
-        try {
-          console.log(`Using OpenAI to determine result for ${playerName} ${propType} ${pickDirection} ${propLine} (actual: ${actualResult})`);
-          
-          if (actualResult === null) {
-            console.log('No actual result available for OpenAI to analyze');
-            return 'pending';
-          }
-          
-          const prompt = `
-            You are tasked with determining the outcome of a sports prop bet based on the following information:
-            
-            Player: ${playerName}
-            Prop Type: ${propType}
-            Prop Line: ${propLine}
-            Pick Direction: ${pickDirection} (OVER or UNDER)
-            Actual Result: ${actualResult}
-            
-            Based solely on comparing the actual result to the prop line and pick direction, determine if this bet is a WIN, LOSS, or PUSH.
-            
-            A bet is a WIN if:
-            - For OVER bets: The actual result is greater than the prop line
-            - For UNDER bets: The actual result is less than the prop line
-            
-            A bet is a LOSS if:
-            - For OVER bets: The actual result is less than the prop line
-            - For UNDER bets: The actual result is greater than the prop line
-            
-            A bet is a PUSH if the actual result equals exactly the prop line.
-            
-            Respond with only one word: 'won', 'lost', or 'push'.
-          `;
-          
-          const response = await openaiService.generateResponse([
-            { role: 'system', content: 'You are a sports betting expert focusing on determining prop bet outcomes. Respond with only one word: "won", "lost", or "push".' },
-            { role: 'user', content: prompt }
-          ], { temperature: 0, maxTokens: 10 });
-          
-          // Normalize the response
-          const normalizedResponse = response.toLowerCase().trim();
-          
-          if (['won', 'lost', 'push'].includes(normalizedResponse)) {
-            console.log(`OpenAI determined result for ${playerName} ${propType}: ${normalizedResponse}`);
-            return normalizedResponse;
-          } else {
-            console.log(`OpenAI returned unexpected response: ${normalizedResponse}`); 
-            // Fall back to basic logic
-            const normalizedDirection = pickDirection.toUpperCase();
-            if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
-              return actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-            } else {
-              return actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-            }
-          }
-        } catch (error) {
-          console.error(`Error using OpenAI to determine result:`, error);
-          // Fall back to basic logic
-          const normalizedDirection = pickDirection.toUpperCase();
-          if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
-            return actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-          } else {
-            return actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-          }
-        }
-      }
-      
-      // Process each pick individually
-      const results = [];
-      const playersWithStats = {}; // Store any player stats we collect
-      
-      console.log(`Processing ${mlbPicks.length} MLB player prop bets directly with Perplexity`);
-      
-      // Process each pick individually
-      for (const pick of mlbPicks) {
-        console.log(`Processing prop for ${pick.player_name} (${pick.prop_type}) as ${pick.pick_direction}`);
-        
-        // Default values if we don't find stats
-        let resultStatus = 'postponed'; // Default to postponed if no stats available
-        let actualResult = null;
-        let playerMatchFound = false;
-        
-        // Find the player stats in our data
-        const playerName = pick.player_name;
-        let nameVariations = generateNameVariations(playerName);
-        
-        // Try with different name variations to find a matching player
-        let playerStats = null;
-        
-        // Skip the team stats check since we're using Perplexity directly
-        // Go straight to Perplexity API to search for player stats and determine result
-        try {
-          console.log(`Using Perplexity to find stats and determine result for ${playerName} ${pick.prop_type}`);
-          
-          const perplexityResult = await determineResultWithPerplexity(
-            playerName,
-            pick.team,
-            date,
-            pick.prop_type,
-            parseFloat(pick.prop_line),
-            pick.pick_direction
-          );
-          
-          // Update the actual result if Perplexity found it
-          if (perplexityResult.actualResult !== null) {
-            actualResult = perplexityResult.actualResult;
-            console.log(`Perplexity found stat: ${playerName} ${pick.prop_type} = ${actualResult}`);
-            playerMatchFound = true;
-            playerStats = { [pick.prop_type]: actualResult, source: 'Perplexity API' };
-          }
-          
-          // Update the result status
-          resultStatus = perplexityResult.result;
-          console.log(`Perplexity determined ${playerName} ${pick.prop_type} result = ${resultStatus}`);
-        } catch (perplexityError) {
-          console.error(`Error using Perplexity for ${playerName}:`, perplexityError);
-        }
-          
-        if (!playerMatchFound) {
-          console.log(`No player match found for ${playerName} after all attempts`);
-        }
-        // Map prop_type to the correct stat key
-        const statKey = pick.prop_type.toLowerCase();
-        const statMapping = {
-          'hits': 'hits',
-          'runs': 'runs',
-          'rbi': 'rbi',
-          'total_bases': 'total_bases',
-          'strikeouts': 'strikeouts',
-          'outs': 'outs',
-          'hits_runs_rbis': 'hits_runs_rbis'
-        };
-        
-        // Check if we have the needed stat
-        let statFound = false;
-        let mappedStatKey;
-        
-        if (statKey in statMapping) {
-          mappedStatKey = statMapping[statKey];
-          if (playerStats && playerStats[mappedStatKey] !== undefined) {
-            actualResult = playerStats[mappedStatKey];
-            statFound = true;
-            console.log(`Found stat ${mappedStatKey} = ${actualResult} for ${playerName}`);
-          }
-        } else if (playerStats && playerStats[statKey] !== undefined) {
-          // If we don't have a mapping, try to use the prop type directly as a key
-          actualResult = playerStats[statKey];
-          statFound = true;
-          console.log(`Found direct stat ${statKey} = ${actualResult} for ${playerName}`);
-        }
-          
-        // STEP 5: Try to determine the result
-        if (statFound) {
-          // If we already have the stats, calculate the result directly
-          console.log(`Found stats for ${playerName} ${statKey} = ${actualResult}. Calculating result...`);
-          
-          const propLine = parseFloat(pick.prop_line);
-          const normalizedDirection = pick.pick_direction.toUpperCase();
-          
-          if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
-            resultStatus = actualResult > propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-          } else {
-            resultStatus = actualResult < propLine ? 'won' : actualResult === propLine ? 'push' : 'lost';
-          }
-          
-          console.log(`Calculated ${playerName} ${statKey} ${actualResult} vs line ${propLine} (${pick.pick_direction}) = ${resultStatus}`);
-        } else {
-          // We don't have stats yet, use Perplexity to determine the result directly
-          console.log(`Step 5: Using Perplexity to determine the result for ${playerName} ${pick.prop_type}`);
-          
-          const perplexityResult = await determineResultWithPerplexity(
-            playerName,
-            pick.team,
-            pick.date,
-            pick.prop_type,
-            parseFloat(pick.prop_line),
-            pick.pick_direction
-          );
-          
-          // Update the actual result if Perplexity found it
-          if (perplexityResult.actualResult !== null) {
-            actualResult = perplexityResult.actualResult;
-            console.log(`Perplexity found stat: ${playerName} ${pick.prop_type} = ${actualResult}`);
-          }
-          
-          // Update the result status
-          resultStatus = perplexityResult.result;
-          console.log(`Perplexity determined ${playerName} ${pick.prop_type} result = ${resultStatus}`);
-        }
-          
-        if (!playerMatchFound) {
-          console.log(`No stats found for player ${playerName}`);
-        }
-        
-        // Create result object with only columns that exist in the database schema
-        const resultObj = {
-          prop_pick_id: pick.id,
-          game_date: pick.date, // Use the date from the pick as game_date
-          player_name: pick.player_name,
-          prop_type: pick.prop_type,
-          line_value: pick.prop_line, // This matches the line_value column in DB
-          actual_value: actualResult, // This matches the actual_value column in DB
-          result: resultStatus,
-          bet: pick.pick_direction, // Store the bet direction (over/under) - this field was previously empty
-          odds: pick.odds || null, // Add odds if available
-          pick_text: pick.pick_text || `${pick.player_name} ${pick.pick_direction} ${pick.prop_line} ${pick.prop_type}`,
-          matchup: pick.matchup || null, // Add matchup if available
+      // 4. Format results for storage in Supabase prop_results table
+      const resultsToInsert = apiResults.map(apiResult => {
+        return {
+          prop_pick_id: apiResult.prop_pick_id,
+          game_date: date,
+          player_name: apiResult.player,
+          prop_type: apiResult.prop,
+          line_value: apiResult.line,
+          actual_value: apiResult.actual !== null ? apiResult.actual : null,
+          result: apiResult.result,
+          bet: apiResult.bet,
+          odds: apiResult.odds || null,
+          pick_text: apiResult.pick_text,
+          matchup: apiResult.matchup || null,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          player_id: apiResult.player_id,
+          game_id: apiResult.game_id
         };
-        
-        results.push(resultObj);
-      }
+      });
       
-      // 4. Store results in the prop_results table
-      if (results.length > 0) {
-        const { error: insertError } = await supabase
+      // 5. Store results in Supabase prop_results table
+      if (resultsToInsert.length > 0) {
+        // First, check if we already have results for these prop picks
+        const propPickIds = resultsToInsert.map(r => r.prop_pick_id);
+        const { data: existingResults, error: fetchError } = await supabase
           .from('prop_results')
-          .insert(results);
+          .select('prop_pick_id')
+          .in('prop_pick_id', propPickIds);
           
-        if (insertError) {
-          console.error('Error inserting prop results:', insertError);
-          throw new Error(`Failed to store prop results: ${insertError.message}`);
+        if (fetchError) {
+          console.error('Error checking existing results:', fetchError);
+          throw new Error(`Failed to check existing results: ${fetchError.message}`);
         }
         
-        console.log(`Successfully recorded ${results.length} prop results`);
+        // Filter out props that already have results
+        const existingPickIds = existingResults?.map(r => r.prop_pick_id) || [];
+        const newResults = resultsToInsert.filter(r => !existingPickIds.includes(r.prop_pick_id));
+        
+        if (newResults.length > 0) {
+          console.log(`Inserting ${newResults.length} new prop results`);
+          const { error: insertError } = await supabase
+            .from('prop_results')
+            .insert(newResults);
+            
+          if (insertError) {
+            console.error('Error inserting prop results:', insertError);
+            throw new Error(`Failed to store prop results: ${insertError.message}`);
+          }
+          
+          console.log(`Successfully recorded ${newResults.length} prop results`);
+        } else {
+          console.log('No new prop results to insert');
+        }
       }
       
       return {
         success: true,
-        message: `Processed ${results.length} prop results`,
-        count: results.length,
-        results: results
+        message: `Processed ${resultsToInsert.length} prop results`,
+        count: resultsToInsert.length,
+        results: resultsToInsert
       };
       
     } catch (error) {
@@ -639,13 +162,15 @@ const propResultsService = {
   
   /**
    * Get prop results for a specific date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Array} - Array of prop results
    */
   getPropResultsByDate: async (date) => {
     try {
       const { data, error } = await supabase
         .from('prop_results')
         .select('*, prop_picks(*)')
-        .eq('prop_picks.date', date);
+        .eq('game_date', date);
         
       if (error) {
         console.error('Error fetching prop results:', error);
@@ -661,6 +186,10 @@ const propResultsService = {
   
   /**
    * Manually update a prop result
+   * Used by the admin panel at betwithgary.ai/admin/results
+   * @param {number} resultId - ID of the result to update
+   * @param {Object} updates - Updates to apply
+   * @returns {Object} - Result of the update operation
    */
   updatePropResult: async (resultId, updates) => {
     try {
@@ -681,6 +210,156 @@ const propResultsService = {
     } catch (error) {
       console.error('Error updating prop result:', error);
       return { success: false, error: error.message };
+    }
+  },
+  
+  /**
+   * Manually check a single prop result
+   * Useful for the admin panel
+   * @param {number} propPickId - ID of the prop pick to check
+   * @returns {Object} - Result of the check
+   */
+  checkSinglePropResult: async (propPickId) => {
+    try {
+      // 1. Get the prop pick from the database
+      const { data: propPick, error: propPickError } = await supabase
+        .from('prop_picks')
+        .select('*')
+        .eq('id', propPickId)
+        .single();
+        
+      if (propPickError) {
+        throw new Error(`Error getting prop pick: ${propPickError.message}`);
+      }
+      
+      if (!propPick || !propPick.picks || !Array.isArray(propPick.picks) || propPick.picks.length === 0) {
+        return {
+          success: false,
+          message: `No prop pick found with ID ${propPickId}`,
+          result: null
+        };
+      }
+      
+      // 2. Format the pick for the MLB Stats API
+      const formattedProps = propPick.picks.map(pick => ({
+        prop_pick_id: propPick.id,
+        date: propPick.date,
+        player: pick.player,
+        team: pick.team,
+        league: propPick.league || 'MLB',
+        prop: pick.prop?.split(' ')?.[0] || pick.prop,
+        line: pick.line || parseFloat(pick.prop?.split(' ')?.[1]) || 0,
+        bet: pick.bet,
+        odds: pick.odds,
+        confidence: pick.confidence,
+        matchup: propPick.matchup || null,
+        pick_text: `${pick.player} ${pick.bet} ${pick.line || (pick.prop?.split(' ')?.[1] || '')} ${pick.prop?.split(' ')?.[0] || pick.prop}`
+      }));
+      
+      // 3. Process with MLB Stats API
+      const apiResults = await mlbStatsApiService.automateProps(formattedProps, propPick.date);
+      if (!apiResults || apiResults.length === 0) {
+        return {
+          success: false,
+          message: `Could not determine results for prop pick ${propPickId}`,
+          result: null
+        };
+      }
+      
+      // 4. Format the result for storage
+      const resultsToInsert = apiResults.map(apiResult => ({
+        prop_pick_id: apiResult.prop_pick_id,
+        game_date: propPick.date,
+        player_name: apiResult.player,
+        prop_type: apiResult.prop,
+        line_value: apiResult.line,
+        actual_value: apiResult.actual !== null ? apiResult.actual : null,
+        result: apiResult.result,
+        bet: apiResult.bet,
+        odds: apiResult.odds || null,
+        pick_text: apiResult.pick_text,
+        matchup: apiResult.matchup || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        player_id: apiResult.player_id,
+        game_id: apiResult.game_id
+      }));
+      
+      // 5. Check if we already have results for this pick
+      const { data: existingResults, error: fetchError } = await supabase
+        .from('prop_results')
+        .select('*')
+        .eq('prop_pick_id', propPickId);
+        
+      if (fetchError) {
+        console.error('Error checking existing results:', fetchError);
+        throw new Error(`Failed to check existing results: ${fetchError.message}`);
+      }
+      
+      // 6. Insert or update results
+      if (existingResults && existingResults.length > 0) {
+        // Update existing results
+        for (const result of resultsToInsert) {
+          const matchingExisting = existingResults.find(e => 
+            e.player_name === result.player_name && 
+            e.prop_type === result.prop_type
+          );
+          
+          if (matchingExisting) {
+            const { error: updateError } = await supabase
+              .from('prop_results')
+              .update({
+                ...result,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', matchingExisting.id);
+              
+            if (updateError) {
+              console.error('Error updating prop result:', updateError);
+              throw new Error(`Failed to update prop result: ${updateError.message}`);
+            }
+          } else {
+            // Insert as new
+            const { error: insertError } = await supabase
+              .from('prop_results')
+              .insert([result]);
+              
+            if (insertError) {
+              console.error('Error inserting prop result:', insertError);
+              throw new Error(`Failed to insert prop result: ${insertError.message}`);
+            }
+          }
+        }
+        
+        return {
+          success: true,
+          message: `Updated results for prop pick ${propPickId}`,
+          results: resultsToInsert
+        };
+      } else {
+        // Insert new results
+        const { error: insertError } = await supabase
+          .from('prop_results')
+          .insert(resultsToInsert);
+          
+        if (insertError) {
+          console.error('Error inserting prop results:', insertError);
+          throw new Error(`Failed to store prop results: ${insertError.message}`);
+        }
+        
+        return {
+          success: true,
+          message: `Recorded results for prop pick ${propPickId}`,
+          results: resultsToInsert
+        };
+      }
+    } catch (error) {
+      console.error(`Error checking single prop result: ${error.message}`);
+      return {
+        success: false,
+        message: `Error checking prop result: ${error.message}`,
+        error: error.message
+      };
     }
   }
 };
