@@ -252,21 +252,23 @@ const propResultsService = {
           
           if (!perplexityApiKey) {
             console.log('Perplexity API key not available');
-            return 'pending';
+            return { result: 'pending', actualResult: null };
           }
           
-          // Make the API call - check API documentation for correct format
-          // Perplexity may have updated their API requirements
-          const response = await axios.post('https://api.perplexity.ai/chat/completions', {
-            model: 'mistral-7b-instruct', // Try a different model (pplx-70b-online may be deprecated)
-            messages: [{ role: 'user', content: query }],
-            temperature: 0.0,
-            max_tokens: 150 // Allow for enough tokens to provide reasoning and final answer
-          }, {
+          // Make the API call using the latest Perplexity API format
+          // Fixed the API call based on Perplexity's latest documentation
+          const response = await axios({
+            method: 'post',
+            url: 'https://api.perplexity.ai/chat/completions',
             headers: {
-              'Accept': 'application/json',
               'Authorization': `Bearer ${perplexityApiKey}`,
               'Content-Type': 'application/json'
+            },
+            data: {
+              model: 'sonar-small-chat', // Using a more reliable model
+              messages: [{ role: 'user', content: query }],
+              temperature: 0.0,
+              max_tokens: 150
             }
           });
           
