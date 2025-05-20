@@ -1,15 +1,10 @@
 /**
  * Prop Results Service
  * Handles checking and recording player prop bet results
- * Uses multiple data sources with fallback mechanisms:
- * 1. Ball Don't Lie API (primary source)
- * 2. SportsDB API (fallback #1)
- * 3. Perplexity API for web searches (fallback #2 and direct result determination)
+ * Uses Perplexity API for web searches for player stats and result determination
  */
 import { supabase } from '../supabaseClient.js';
 import { openaiService } from './openaiService.js';
-import { sportsDbApiService } from './sportsDbApiService.js';
-import { ballDontLieApiService } from './ballDontLieApiService.js';
 import axios from 'axios';
 
 const propResultsService = {
