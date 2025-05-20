@@ -480,30 +480,84 @@ const mlbStatsApiService = {
       
       // Function to extract the starting pitcher from a team
       const getStarter = (teamType) => {
-        const team = boxscore.teams[teamType];
-        const pitchers = team.pitchers;
-        
-        if (!pitchers || pitchers.length === 0) return null;
-        
-        // The first pitcher in the list is usually the starter
-        const starterId = pitchers[0];
-        const player = team.players[`ID${starterId}`];
-        
-        if (!player) return null;
-        
-        return {
-          id: starterId,
-          name: player.person.fullName,
-          team: teamType === 'home' ? boxscore.teams.home.team.name : boxscore.teams.away.team.name,
-          stats: player.stats.pitching || {},
-          seasonStats: player.seasonStats?.pitching || {}
-        };
+        try {
+          const team = boxscore.teams[teamType];
+          if (!team) {
+            console.log(`[MLB API] No ${teamType} team data found in boxscore`);  
+            return null;
+          }
+          
+          // Try to get pitchers list
+          const pitchers = team.pitchers || [];
+          
+          if (pitchers.length === 0) {
+            console.log(`[MLB API] No pitchers found for ${teamType} team`); 
+            
+            // Alternative: Try looking through all players for pitchers
+            if (team.players) {
+              const allPlayers = Object.values(team.players);
+              const possiblePitchers = allPlayers.filter(p => 
+                p.position && p.position.code === '1' // Position code 1 is for pitchers
+              );
+              
+              if (possiblePitchers.length > 0) {
+                const firstPitcher = possiblePitchers[0];
+                console.log(`[MLB API] Found pitcher ${firstPitcher.person?.fullName || 'unknown'} through position search`);
+                
+                return {
+                  id: firstPitcher.person?.id,
+                  fullName: firstPitcher.person?.fullName || 'Unknown Pitcher',
+                  firstName: firstPitcher.person?.firstName || '',
+                  lastName: firstPitcher.person?.lastName || '',
+                  number: firstPitcher.jerseyNumber || '',
+                  team: team.team?.name || '',
+                  stats: firstPitcher.stats?.pitching || {},
+                  seasonStats: firstPitcher.seasonStats?.pitching || {}
+                };
+              }
+            }
+            
+            return null;
+          }
+          
+          // Normal path - use the first pitcher in the list (usually the starter)
+          const starterId = pitchers[0];
+          const playerKey = `ID${starterId}`;
+          const player = team.players[playerKey];
+          
+          if (!player) {
+            console.log(`[MLB API] Player data not found for ${teamType} starter ID ${starterId}`);
+            return {
+              id: starterId,
+              fullName: 'Unknown Pitcher',
+              team: team.team?.name || '',
+            };
+          }
+          
+          return {
+            id: starterId,
+            fullName: player.person?.fullName || 'Unknown Pitcher',
+            firstName: player.person?.firstName || '',
+            lastName: player.person?.lastName || '',
+            number: player.jerseyNumber || '',
+            team: team.team?.name || '',
+            stats: player.stats?.pitching || {},
+            seasonStats: player.seasonStats?.pitching || {}
+          };
+        } catch (err) {
+          console.log(`[MLB API] Error extracting ${teamType} starter:`, err.message);
+          return null;
+        }
       };
       
-      return {
+      const result = {
         homeStarter: getStarter('home'),
         awayStarter: getStarter('away')
       };
+      
+      console.log(`[MLB API] Found starters - Home: ${result.homeStarter?.fullName || 'Not found'}, Away: ${result.awayStarter?.fullName || 'Not found'}`);
+      
+      return result;
     } catch (error) {
       console.error(`[MLB API] Error getting starting pitchers for game ${gamePk}:`, error.message);
       return { homeStarter: null, awayStarter: null };
@@ -512,40 +566,76 @@ const mlbStatsApiService = {
   
   /**
    * Gets starting pitcher season stats
-   * @param {number} playerId - The MLB player ID
+   * @param {number|string} playerId - The MLB player ID
    * @returns {Promise<Object>} - Pitcher's season stats
    */
   getPitcherSeasonStats: async (playerId) => {
     try {
-      console.log(`[MLB API] Getting season stats for pitcher ${playerId}`);
-      const response = await axios.get(`${MLB_API_BASE_URL}/people/${playerId}/stats`, {
-        params: {
-          stats: 'season',
-          group: 'pitching',
-          gameType: 'R', // Regular season
-          season: new Date().getFullYear() // Current year
-        }
-      });
-      
-      if (response.data && response.data.stats && response.data.stats.length > 0) {
-        const stats = response.data.stats[0].splits[0]?.stat || {};
-        return {
-          era: stats.era || 0,
-          wins: stats.wins || 0,
-          losses: stats.losses || 0,
-          inningsPitched: stats.inningsPitched || 0,
-          strikeouts: stats.strikeOuts || 0,
-          whip: stats.whip || 0,
-          walks: stats.baseOnBalls || 0,
-          hits: stats.hits || 0,
-          homeRuns: stats.homeRuns || 0,
-          gamesStarted: stats.gamesStarted || 0,
-          saveOpportunities: stats.saveOpportunities || 0,
-          saves: stats.saves || 0
-        };
+      // Return empty object if no player ID provided
+      if (!playerId) {
+        console.log(`[MLB API] No player ID provided for pitcher stats lookup`);
+        return {};
       }
       
-      return {};
+      console.log(`[MLB API] Getting season stats for pitcher ${playerId}`);
+      
+      // Get current year and try up to 2 years back if needed
+      const currentYear = new Date().getFullYear();
+      let stats = {};
+      
+      // Try to get stats for current year
+      try {
+        const response = await axios.get(`${MLB_API_BASE_URL}/people/${playerId}/stats`, {
+          params: {
+            stats: 'season',
+            group: 'pitching',
+            gameType: 'R', // Regular season
+            season: currentYear
+          }
+        });
+        
+        if (response.data && response.data.stats && response.data.stats.length > 0 && 
+            response.data.stats[0].splits && response.data.stats[0].splits.length > 0) {
+          stats = response.data.stats[0].splits[0]?.stat || {};
+        } else {
+          // If no current year stats, try last year
+          console.log(`[MLB API] No current year stats found for pitcher ${playerId}, trying last year`);
+          
+          const lastYearResponse = await axios.get(`${MLB_API_BASE_URL}/people/${playerId}/stats`, {
+            params: {
+              stats: 'season',
+              group: 'pitching',
+              gameType: 'R', // Regular season
+              season: currentYear - 1
+            }
+          });
+          
+          if (lastYearResponse.data && lastYearResponse.data.stats && lastYearResponse.data.stats.length > 0 &&
+              lastYearResponse.data.stats[0].splits && lastYearResponse.data.stats[0].splits.length > 0) {
+            stats = lastYearResponse.data.stats[0].splits[0]?.stat || {};
+          }
+        }
+      } catch (apiError) {
+        console.log(`[MLB API] Error fetching stats for pitcher ${playerId}:`, apiError.message);
+      }
+      
+      // Return formatted stats object
+      return {
+        era: stats.era || 0,
+        wins: stats.wins || 0,
+        losses: stats.losses || 0,
+        inningsPitched: stats.inningsPitched || '0.0',
+        strikeouts: stats.strikeOuts || 0,
+        whip: stats.whip || 0,
+        walks: stats.baseOnBalls || 0,
+        hits: stats.hits || 0,
+        homeRuns: stats.homeRuns || 0,
+        gamesStarted: stats.gamesStarted || 0,
+        saveOpportunities: stats.saveOpportunities || 0,
+        saves: stats.saves || 0,
+        year: stats.era ? currentYear : currentYear - 1, // Year for which stats were found
+        gamesPitched: stats.gamesPitched || 0
+      };
     } catch (error) {
       console.error(`[MLB API] Error getting season stats for pitcher ${playerId}:`, error.message);
       return {};
