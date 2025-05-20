@@ -417,99 +417,211 @@ const sportsDataService = {
    */
   async getMlbStartingPitchers(teamName, opponentName = null) {
     try {
-      console.log(`Getting starting pitchers for ${teamName} vs ${opponentName || 'any opponent'}...`);
+      console.log(`SportsDB: Getting MLB pitcher data for ${teamName} vs ${opponentName || 'any opponent'}`);
       
       // Local helper function to avoid scope issues
       const matchTeamNames = (team1, team2) => {
         if (!team1 || !team2) return false;
-        team1 = team1.toLowerCase().trim();
-        team2 = team2.toLowerCase().trim();
-        
-        // Direct match
-        if (team1 === team2) return true;
-        
-        // Handle team name variations (like 'LA' vs 'Los Angeles')
+        team1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
+        team2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
         return team1.includes(team2) || team2.includes(team1);
       };
       
-      // Step 1: Find today's MLB games
+      // Get today's games
       const todaysGames = await this.getTodaysGames('MLB');
-      if (!todaysGames.length) {
-        console.log('No MLB games found for today');
-        return await this.getFallbackPitcherData(teamName); // Fall back to generic pitcher data
+      
+      if (!todaysGames || todaysGames.length === 0) {
+        console.log('SportsDB: No MLB games found for today');
+        return this._createFallbackPitcherResponse(teamName, opponentName);
       }
       
-      // Step 2: Find the specific game for this team
-      let targetGame = null;
-      if (opponentName) {
-        // If we know both teams, find their matchup
-        targetGame = todaysGames.find(game =>
-          (matchTeamNames(game.strHomeTeam, teamName) && matchTeamNames(game.strAwayTeam, opponentName)) ||
-          (matchTeamNames(game.strHomeTeam, opponentName) && matchTeamNames(game.strAwayTeam, teamName))
-        );
+      console.log(`SportsDB: Found ${todaysGames.length} MLB games for today`);
+      
+      // Find the specific game for this team and optional opponent
+      const game = todaysGames.find(g => {
+        const homeTeam = g.strHomeTeam;
+        const awayTeam = g.strAwayTeam;
+        
+        // If opponent is specified, make sure both teams match
+        if (opponentName) {
+          return (matchTeamNames(homeTeam, teamName) && matchTeamNames(awayTeam, opponentName)) ||
+                 (matchTeamNames(awayTeam, teamName) && matchTeamNames(homeTeam, opponentName));
+        }
+        
+        // Otherwise just match the target team
+        return matchTeamNames(homeTeam, teamName) || matchTeamNames(awayTeam, teamName);
+      });
+      
+      if (!game) {
+        console.log(`SportsDB: No game found for ${teamName}`);
+        return this._createFallbackPitcherResponse(teamName, opponentName);
+      }
+      
+      console.log(`SportsDB: Found game: ${game.strAwayTeam} @ ${game.strHomeTeam} (ID: ${game.idEvent})`);
+      
+      // Get lineup for this game
+      const lineup = await this.getGameLineup(game.idEvent);
+      
+      if (!lineup) {
+        console.log(`SportsDB: No lineup available for game ID ${game.idEvent}, using fallback data`);
+        return this._createFallbackPitcherResponse(teamName, opponentName, game);
+      }
+      
+      // Determine if our team is home or away
+      const isTargetHome = matchTeamNames(game.strHomeTeam, teamName);
+      let ourPitcher = null;
+      let opposingPitcher = null;
+      
+      // Extract pitchers from lineup
+      if (lineup.home && lineup.away) {
+        console.log(`SportsDB: Processing lineup data - Home pitchers: ${lineup.home.filter(p => p.strPosition === 'P').length}, Away pitchers: ${lineup.away.filter(p => p.strPosition === 'P').length}`);
+        
+        const homePitchers = lineup.home.filter(player => player.strPosition === 'P');
+        const awayPitchers = lineup.away.filter(player => player.strPosition === 'P');
+        
+        // Get the first pitcher (usually the starter)
+        const homePitcher = homePitchers[0] || null;
+        const awayPitcher = awayPitchers[0] || null;
+        
+        if (isTargetHome) {
+          ourPitcher = homePitcher;
+          opposingPitcher = awayPitcher;
+        } else {
+          ourPitcher = awayPitcher;
+          opposingPitcher = homePitcher;
+        }
       } else {
-        // Otherwise just find any game with this team
-        targetGame = todaysGames.find(game =>
-          matchTeamNames(game.strHomeTeam, teamName) || matchTeamNames(game.strAwayTeam, teamName)
-        );
+        console.log(`SportsDB: Lineup data is missing home or away teams`);
       }
       
-      if (!targetGame) {
-        console.log(`No game found for ${teamName} today, using fallback data`);
-        return await this.getFallbackPitcherData(teamName); // Fall back to generic pitcher data
+      // If no pitcher found, use fallback
+      if (!ourPitcher) {
+        console.log(`SportsDB: No pitcher found for ${teamName} in lineup, using fallback data`);
+        return this._createFallbackPitcherResponse(teamName, opponentName, game);
       }
       
-      console.log(`Found game: ${targetGame.strHomeTeam} vs ${targetGame.strAwayTeam} (ID: ${targetGame.idEvent})`);
+      // Get detailed pitcher stats
+      console.log(`SportsDB: Getting detailed stats for pitcher: ${ourPitcher.strPlayer}`);
+      const pitcherDetails = await this.getDetailedPitcherStats(ourPitcher);
+      let opposingPitcherDetails = null;
       
-      // Step 3: Get the game lineup to find starting pitchers
-      const lineup = await this.getGameLineup(targetGame.idEvent);
-      if (!lineup || (!lineup.home && !lineup.away)) {
-        console.log('No lineup data available, using fallback pitcher data');
-        return await this.getFallbackPitcherData(teamName);
+      if (opposingPitcher) {
+        console.log(`SportsDB: Getting detailed stats for opposing pitcher: ${opposingPitcher.strPlayer}`);
+        opposingPitcherDetails = await this.getDetailedPitcherStats(opposingPitcher);
       }
       
-      // Step 4: Find the team's starting pitcher from the lineup
-      const isHomeTeam = matchTeamNames(targetGame.strHomeTeam, teamName);
-      const teamLineup = isHomeTeam ? lineup.home : lineup.away;
-      const opponentLineup = isHomeTeam ? lineup.away : lineup.home;
-      
-      // Find pitchers (marked with position 'P' in lineup)
-      let startingPitcher = null;
-      let opponentPitcher = null;
-      
-      if (teamLineup?.lineup) {
-        startingPitcher = teamLineup.lineup.find(player => player.strPosition === 'P');
-      }
-      
-      if (opponentLineup?.lineup) {
-        opponentPitcher = opponentLineup.lineup.find(player => player.strPosition === 'P');
-      }
-      
-      // Step 5: Get detailed stats for both pitchers
-      const result = {
-        game: {
-          homeTeam: targetGame.strHomeTeam,
-          awayTeam: targetGame.strAwayTeam,
-          date: targetGame.dateEvent,
-          time: targetGame.strTime,
-          venue: targetGame.strVenue
-        },
-        team: teamName,
-        teamPitcher: startingPitcher ? await this.getDetailedPitcherStats(startingPitcher) : null,
-        opponentPitcher: opponentPitcher ? await this.getDetailedPitcherStats(opponentPitcher) : null
+      // Format the response in a way compatible with other services
+      return {
+        home: isTargetHome ? {
+          name: ourPitcher.strPlayer,
+          team: game.strHomeTeam,
+          teamDisplayName: teamName,
+          stats: pitcherDetails || {
+            ERA: 'N/A',
+            WHIP: 'N/A',
+            record: 'N/A',
+            description: 'Detailed statistics not available'
+          }
+        } : (opposingPitcher ? {
+          name: opposingPitcher.strPlayer,
+          team: game.strHomeTeam,
+          teamDisplayName: game.strHomeTeam,
+          stats: opposingPitcherDetails || {
+            ERA: 'N/A',
+            WHIP: 'N/A',
+            record: 'N/A',
+            description: 'Detailed statistics not available'
+          }
+        } : null),
+        away: !isTargetHome ? {
+          name: ourPitcher.strPlayer,
+          team: game.strAwayTeam,
+          teamDisplayName: teamName,
+          stats: pitcherDetails || {
+            ERA: 'N/A',
+            WHIP: 'N/A',
+            record: 'N/A',
+            description: 'Detailed statistics not available'
+          }
+        } : (opposingPitcher ? {
+          name: opposingPitcher.strPlayer,
+          team: game.strAwayTeam,
+          teamDisplayName: game.strAwayTeam,
+          stats: opposingPitcherDetails || {
+            ERA: 'N/A',
+            WHIP: 'N/A',
+            record: 'N/A',
+            description: 'Detailed statistics not available'
+          }
+        } : null),
+        gameId: game.idEvent,
+        source: 'TheSportsDB'
       };
       
-      // If we still don't have pitcher data, fall back to the generic method
-      if (!result.teamPitcher && !result.opponentPitcher) {
-        console.log('No pitcher data found in lineup, using fallback method');
-        return await this.getFallbackPitcherData(teamName);
-      }
-      
-      return result;
     } catch (error) {
-      console.error(`Error getting starting pitcher data for ${teamName}:`, error);
-      return await this.getFallbackPitcherData(teamName);
+      console.error('SportsDB Error getting MLB starting pitchers:', error.message);
+      return this._createFallbackPitcherResponse(teamName, opponentName);
     }
+  },
+  
+  /**
+   * Create a standardized fallback response for pitcher data
+   * @param {string} teamName - The team name
+   * @param {string} opponentName - Optional opponent name
+   * @param {Object} game - Optional game data if available
+   * @returns {Object} - Formatted pitcher data response
+   * @private
+   */
+  _createFallbackPitcherResponse(teamName, opponentName = null, game = null) {
+    console.log(`SportsDB: Creating fallback pitcher response for ${teamName} vs ${opponentName || 'unknown opponent'}`);
+    
+    const fallbackStats = {
+      ERA: 'TBD',
+      WHIP: 'TBD',
+      record: 'TBD',
+      strikeouts: 'TBD',
+      description: 'Starting pitcher information not available from TheSportsDB'
+    };
+    
+    // If we have a game, we can at least provide team names
+    if (game) {
+      const isTargetHome = this._teamNameMatch(game.strHomeTeam, teamName);
+      
+      return {
+        home: {
+          name: 'TBD',
+          team: game.strHomeTeam,
+          teamDisplayName: isTargetHome ? teamName : game.strHomeTeam,
+          stats: fallbackStats
+        },
+        away: {
+          name: 'TBD',
+          team: game.strAwayTeam,
+          teamDisplayName: !isTargetHome ? teamName : game.strAwayTeam,
+          stats: fallbackStats
+        },
+        gameId: game.idEvent,
+        source: 'TheSportsDB (Fallback)'
+      };
+    }
+    
+    // Complete fallback when we don't even have game data
+    return {
+      home: opponentName ? {
+        name: 'TBD',
+        team: opponentName,
+        teamDisplayName: opponentName,
+        stats: fallbackStats
+      } : null,
+      away: {
+        name: 'TBD',
+        team: teamName,
+        teamDisplayName: teamName,
+        stats: fallbackStats
+      },
+      gameId: null,
+      source: 'TheSportsDB (Complete Fallback)'
+    };
   },
   
   /**
@@ -617,6 +729,109 @@ const sportsDataService = {
         description: this._getShortDescription(playerDetails.strDescriptionEN)
       }
     };
+  },
+  
+  /**
+   * Get probable starting pitcher for a team on a specific date
+   * @param {string} teamName - Team name
+   * @param {string} dateStr - Date in YYYY-MM-DD format
+   * @returns {Promise<Object>} - Pitcher data with name and stats
+   */
+  async getProbableStarter(teamName, dateStr) {
+    try {
+      console.log(`Looking for probable starting pitcher for ${teamName} on ${dateStr}`);
+      
+      // Step 1: Find the team in the database
+      const teamData = await this.getTeamData(teamName);
+      if (!teamData) {
+        console.log(`Team not found: ${teamName}`);
+        return null;
+      }
+      
+      // Step 2: Find today's game involving this team
+      // Format date for TheSportsDB API
+      const [year, month, day] = dateStr.split('-');
+      const formattedDate = `${year}-${month}-${day}`;
+      
+      // Get games for this date in the team's league
+      const leagueGames = await this.apiGet('eventsday.php', { 
+        d: formattedDate, 
+        l: teamData.strLeague || 'MLB' 
+      });
+      
+      if (!leagueGames?.events || leagueGames.events.length === 0) {
+        console.log(`No games found for ${dateStr}`);
+        return null;
+      }
+      
+      // Find the game involving our team
+      const teamGame = leagueGames.events.find(game => 
+        this._teamNameMatch(game.strHomeTeam, teamName) || 
+        this._teamNameMatch(game.strAwayTeam, teamName)
+      );
+      
+      if (!teamGame) {
+        console.log(`No game found for ${teamName} on ${dateStr}`);
+        return null;
+      }
+      
+      console.log(`Found game: ${teamGame.strAwayTeam} @ ${teamGame.strHomeTeam}`);
+      
+      // Step 3: Try to get lineup information which should include pitchers
+      const lineup = await this.getGameLineup(teamGame.idEvent);
+      
+      if (!lineup) {
+        console.log(`No lineup available for game: ${teamGame.idEvent}`);
+        return null;
+      }
+      
+      // Determine if the team is home or away
+      const isHome = this._teamNameMatch(teamGame.strHomeTeam, teamName);
+      
+      // Step 4: Find the pitcher in the lineup
+      const teamLineup = lineup.filter(player => {
+        const playerTeamId = player.idTeam || player.idHomeTeam || player.idAwayTeam;
+        return playerTeamId === teamData.idTeam;
+      });
+      
+      // Look for starting pitcher designation
+      const pitcher = teamLineup.find(player => 
+        player.strPosition?.toLowerCase().includes('pitcher') &&
+        (player.strStatus?.toLowerCase().includes('starter') || 
+         player.strStatus?.toLowerCase().includes('starting'))
+      );
+      
+      if (pitcher) {
+        return {
+          name: pitcher.strPlayer,
+          id: pitcher.idPlayer,
+          position: 'Starting Pitcher',
+          teamId: teamData.idTeam,
+          gameId: teamGame.idEvent
+        };
+      }
+      
+      // If no explicit starting pitcher, look for any pitcher
+      const anyPitcher = teamLineup.find(player => 
+        player.strPosition?.toLowerCase().includes('pitcher')
+      );
+      
+      if (anyPitcher) {
+        return {
+          name: anyPitcher.strPlayer,
+          id: anyPitcher.idPlayer,
+          position: 'Pitcher',
+          teamId: teamData.idTeam,
+          gameId: teamGame.idEvent
+        };
+      }
+      
+      console.log(`No pitchers found in lineup for ${teamName}`);
+      return null;
+    } catch (error) {
+      console.error(`Error getting probable starter for ${teamName}:`, error.message);
+      return null;
+    }
   },
   
   /**

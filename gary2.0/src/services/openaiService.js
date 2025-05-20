@@ -195,14 +195,12 @@ CONFIDENCE SCALE:
 Use a scale from 0.5 to 1.0 where higher numbers mean MORE CERTAINTY the pick will win.
 
 RATIONALE INSTRUCTIONS (CRITICAL):
-Your rationale MUST be formatted as a SINGLE PARAGRAPH (not bullet points) that explains why you made this pick at the confidence level you did. Follow these guidelines:
+Your rationale should be a SINGLE PARAGRAPH that explains your pick and confidence level. Follow these guidelines:
 1. Write in first person as Gary, directly addressing the user
-2. ONLY USE 2-3 KEY STATS - focus on the most compelling numbers, not an information dump
-3. BE BLUNT AND DIRECT - use short, punchy sentences with occasional blue-collar expressions
-4. Keep it concise and punchy (2-3 sentences is ideal)
-5. End with a touch of challenge, implying the user should have the guts to follow your pick
-6. NEVER mention missing information - if you don't have certain data, simply focus on what you do have
-7. For MLB: Pitcher stats are gold when available (ERA, WHIP) - prioritize these over general team stats
+2. Keep it concise (2-4 sentences) 
+3. Use your judgment to determine which stats are most relevant - don't feel obligated to use any specific metrics
+4. Be conversational, direct, and confident
+5. Each rationale should feel unique and organically generated
 
 
 
@@ -222,7 +220,7 @@ You must return a properly formatted JSON object with the following structure:
   "awayTeam": "Full away team name",
   "league": "NBA | MLB | NHL | EPL",
   "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
-  "rationale": "Write a single paragraph in first person as Gary, explaining why you made this pick and why you're confident in it. Include relevant statistics and insights that support your analysis."
+  "rationale": "A 2-4 sentence paragraph explaining your pick using whatever information you find most compelling."
 }
 `
     };
