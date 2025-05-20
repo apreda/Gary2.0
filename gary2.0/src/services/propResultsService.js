@@ -72,13 +72,14 @@ const propResultsService = {
             // Get player stats using API-Sports by team
             let playerStatsData = null;
             
+            // Currently only MLB team stats method exists
             if (league === 'MLB') {
-              // For MLB, we need to try to find the team's opponent
-              // Since we don't have matchup info, we'll try to get all teams' stats
+              // For MLB, try to get team stats
               playerStatsData = await apiSportsService.getMlbTeamStats(team, '');
             } else {
-              // For NBA and NHL, try to get player stats by team name
-              playerStatsData = await apiSportsService.getPlayerStatsForProps(team, '', league);
+              // For NBA and NHL, log that we don't have a method yet
+              console.log(`No API method available for ${league} player stats lookup`);
+              playerStatsData = null;
             }
             
             if (!playerStatsData) {
@@ -241,20 +242,23 @@ const propResultsService = {
           }
         }
         
-        results.push({
+        // Create result object with only columns that exist in the database schema
+        const resultObj = {
           prop_pick_id: pick.id,
+          game_date: pick.date, // Use the date from the pick as game_date
           player_name: pick.player_name,
-          team: pick.team,
-          league: pick.league,
           prop_type: pick.prop_type,
-          prop_line: pick.prop_line,
-          pick_direction: pick.pick_direction,
-          pick_text: pick.pick_text || `${pick.player_name} ${pick.pick_direction} ${pick.prop_line} ${pick.prop_type}`, // Preserve original pick text
-          value: actualResult, // Using the correct column name
-          result: resultStatus, // Using the correct column name
+          line_value: pick.prop_line, // This matches the line_value column in DB
+          actual_value: actualResult, // This matches the actual_value column in DB
+          result: resultStatus,
+          odds: pick.odds || null, // Add odds if available
+          pick_text: pick.pick_text || `${pick.player_name} ${pick.pick_direction} ${pick.prop_line} ${pick.prop_type}`,
+          matchup: pick.matchup || null, // Add matchup if available
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        });
+        };
+        
+        results.push(resultObj);
       }
       
       // 4. Store results in the prop_results table
