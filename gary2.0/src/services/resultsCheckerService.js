@@ -5,6 +5,7 @@ import { perplexityService } from './perplexityService.js';
 import { pickResultsAnalyzer } from './pickResultsAnalyzer.js';
 import { oddsService } from './oddsService.js';
 import { apiSportsService } from './apiSportsService.js';
+import { garyPerformanceService } from './garyPerformanceService.js';
 
 const VALID_RESULTS = new Set(['won', 'lost', 'push']);
 const SCORE_REGEX = /^\d+-\d+$/;
