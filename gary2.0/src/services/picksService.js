@@ -81,202 +81,217 @@ const picksService = {
                 };
               }
               
-              // For MLB games, get additional pitcher data if available
+              // For MLB games, get additional pitcher data and comprehensive team stats if available
               let pitcherData = '';
               if (sportName === 'MLB') {
                 try {
-                  console.log('Fetching MLB starting pitcher data with prioritized sources...');
+                  console.log('Fetching MLB comprehensive stats with Ball Don\'t Lie as primary source...');
                   
-                  // PRIORITY 1: Try API-Sports first (primary source for MLB)
-                  console.log('PRIORITY 1: Trying API-Sports for MLB pitcher data...');
-                  let pitcherMatchup = await apiSportsService.getMlbStartingPitchers(game.home_team, game.away_team);
-                  let dataSource = 'API-Sports';
+                  // Initialize pitcher objects for both teams
+                  let homePitcher = null;
+                  let awayPitcher = null;
+                  let dataSource = null;
                   
-                  // PRIORITY 2: If API-Sports fails, try TheSportsDB
-                  if (!pitcherMatchup) {
-                    console.log('API-Sports data unavailable, falling back to TheSportsDB...');
-                    pitcherMatchup = await sportsDataService.getMlbStartingPitchers(game.home_team, game.away_team);
-                    dataSource = 'TheSportsDB';
+                  // Import ballDontLieService dynamically to avoid circular imports
+                  const { ballDontLieService } = await import('./ballDontLieService.js');
+                  
+                  // PRIORITY 1: Try Ball Don't Lie first (most reliable for MLB)
+                  console.log('PRIORITY 1: Trying Ball Don\'t Lie for MLB pitcher data...');
+                  try {
+                    const bdlPitcherMatchup = await ballDontLieService.getMlbPitcherMatchup(game.home_team, game.away_team);
+                    if (bdlPitcherMatchup && (bdlPitcherMatchup.home || bdlPitcherMatchup.away)) {
+                      console.log('Got pitcher data from Ball Don\'t Lie!');
+                      homePitcher = bdlPitcherMatchup.home;
+                      awayPitcher = bdlPitcherMatchup.away;
+                      dataSource = 'Ball Don\'t Lie';
+                      
+                      // Get comprehensive team stats from Ball Don't Lie
+                      console.log('Getting comprehensive MLB team stats from Ball Don\'t Lie...');
+                      const compStats = await ballDontLieService.getComprehensiveMlbGameStats(game.home_team, game.away_team);
+                      if (compStats) {
+                        // Add the comprehensive stats to the statsContext for Gary Engine
+                        statsContext.homeTeam = { ...statsContext.homeTeam, ...compStats.homeTeam };
+                        statsContext.awayTeam = { ...statsContext.awayTeam, ...compStats.awayTeam };
+                        console.log('Added comprehensive team stats from Ball Don\'t Lie');
+                      }
+                    }
+                  } catch (bdlError) {
+                    console.error('Error fetching pitcher data from Ball Don\'t Lie:', bdlError.message);
                   }
                   
-                  // PRIORITY 3: Try ESPN via Perplexity
-                  // This is the same data source that's working well for prop picks
-                  if (!pitcherMatchup || !pitcherMatchup.homePitcher || !pitcherMatchup.awayPitcher) {
-                    console.log('Traditional services failed to provide pitcher data. Trying ESPN via Perplexity...');
+                  // PRIORITY 2: Try API-Sports if Ball Don't Lie failed
+                  if (!dataSource) {
+                    console.log('PRIORITY 2: Ball Don\'t Lie failed, trying API-Sports...');
+                    const apiSportsPitchers = await apiSportsService.getMlbStartingPitchers(game.home_team, game.away_team);
+                  
+                    if (apiSportsPitchers && (apiSportsPitchers.home || apiSportsPitchers.away)) {
+                      console.log('Got pitcher data from API-Sports!');
+                      homePitcher = apiSportsPitchers.home;
+                      awayPitcher = apiSportsPitchers.away;
+                      dataSource = 'API-Sports';
+                                
+                    }
+                  }
+                  
+                  // PRIORITY 3: Try SportsDB if others failed
+                  if (!dataSource) {
+                    console.log('PRIORITY 3: API-Sports failed, trying SportsDB...');
+                    const sportsDBPitchers = await sportsDataService.getMlbStartingPitchers(game.home_team, game.away_team);
+                    
+                    if (sportsDBPitchers && (sportsDBPitchers.home || sportsDBPitchers.away)) {
+                      console.log('Got pitcher data from SportsDB!');
+                      homePitcher = sportsDBPitchers.home;
+                      awayPitcher = sportsDBPitchers.away;
+                      dataSource = 'SportsDB';
+                    }
+                  }
+                  
+                  // PRIORITY 4: Try Perplexity for ESPN data as last resort
+                  if (!dataSource) {
+                    console.log('PRIORITY 4: All traditional sources failed, trying Perplexity for ESPN data...');
                     try {
-                      // Import perplexityService dynamically to avoid circular reference
+                      // Import perplexityService dynamically
                       const { perplexityService } = await import('./perplexityService.js');
                       
                       // Get ESPN game links for today
                       const gameLinks = await perplexityService.getEspnGameLinks('mlb');
                       
                       if (gameLinks && gameLinks.length > 0) {
-                        // Normalize team names for matching
+                        console.log(`Found ${gameLinks.length} ESPN links via Perplexity, checking for pitcher data...`);
+                        // Clean team names for matching
                         const normalizedHomeTeam = game.home_team.toLowerCase().replace(/\s+/g, '');
                         const normalizedAwayTeam = game.away_team.toLowerCase().replace(/\s+/g, '');
                         
-                        // Try each game link to find our matchup
+                        // Try each game link
                         for (const link of gameLinks) {
-                          console.log(`Checking ESPN link for pitcher data: ${link}`);
+                          console.log(`Checking ESPN data: ${link}`);
                           const stats = await perplexityService.extractStatsFromEspn(link, 'mlb');
                           
-                          if (stats && stats['Game information']) {
-                            // Check if this is the right game
+                          if (stats && stats['Game information'] && stats['Probable pitchers']) {
+                            // Check if this is our matchup
                             const infoStr = JSON.stringify(stats['Game information']).toLowerCase();
-                            if (infoStr.includes(normalizedHomeTeam) || infoStr.includes(normalizedAwayTeam)) {
-                              console.log('✅ Found matching ESPN game data!');
+                            if (infoStr.includes(normalizedHomeTeam) && infoStr.includes(normalizedAwayTeam)) {
+                              console.log('Found matching ESPN game with pitcher data!');
+                              dataSource = 'ESPN via Perplexity';
                               
-                              // Extract pitcher data if available
-                              if (stats['Probable pitchers']) {
-                                dataSource = 'ESPN via Perplexity';
-                                console.log('Found pitcher data from ESPN!');
+                              // Process the ESPN pitcher data
+                              const pitchers = stats['Probable pitchers'];
+                              for (const key in pitchers) {
+                                const pitcherInfo = pitchers[key];
+                                // Determine if home or away
+                                const isHomePitcher = key.toLowerCase().includes(normalizedHomeTeam);
                                 
-                                // Create a compatible format with our other sources
-                                pitcherMatchup = {
-                                  homePitcher: null,
-                                  awayPitcher: null,
-                                  game: { venue: stats['Game information'].Venue || '', date: stats['Game information'].Date || '', time: stats['Game information'].Time || '' }
+                                const pitcher = {
+                                  name: pitcherInfo.Name || 'Unknown',
+                                  team: isHomePitcher ? game.home_team : game.away_team,
+                                  teamDisplayName: isHomePitcher ? game.home_team : game.away_team,
+                                  stats: {
+                                    ERA: pitcherInfo.ERA || 'N/A',
+                                    WHIP: pitcherInfo.WHIP || 'N/A',
+                                    record: pitcherInfo.Record || 'N/A',
+                                    strikeouts: pitcherInfo.K || 'N/A',
+                                    inningsPitched: pitcherInfo.IP || 'N/A',
+                                    description: `${pitcherInfo.Name || 'Pitcher'} (${pitcherInfo.Record || '0-0'}, ${pitcherInfo.ERA || '0.00'} ERA)`
+                                  }
                                 };
                                 
-                                // Parse the ESPN pitcher data for home and away
-                                const pitchers = stats['Probable pitchers'];
-                                for (const key in pitchers) {
-                                  const pitcherInfo = pitchers[key];
-                                  // Determine if this is home or away pitcher
-                                  const isHomePitcher = key.toLowerCase().includes(normalizedHomeTeam);
-                                  
-                                  const pitcher = {
-                                    name: pitcherInfo.Name || 'Unknown',
-                                    stats: {
-                                      ERA: pitcherInfo.ERA || 'N/A',
-                                      WHIP: pitcherInfo.WHIP || 'N/A',
-                                      record: pitcherInfo.Record || 'N/A',
-                                      strikeouts: pitcherInfo.K || 'N/A',
-                                      inningsPitched: pitcherInfo.IP || 'N/A',
-                                      description: `${pitcherInfo.Name || 'Pitcher'} (${pitcherInfo.Record || '0-0'}, ${pitcherInfo.ERA || '0.00'} ERA)`
-                                    }
-                                  };
-                                  
-                                  // Assign to correct spot
-                                  if (isHomePitcher) {
-                                    pitcherMatchup.homePitcher = pitcher;
-                                  } else {
-                                    pitcherMatchup.awayPitcher = pitcher;
-                                  }
+                                // Assign to correct variables
+                                if (isHomePitcher) {
+                                  homePitcher = pitcher;
+                                } else {
+                                  awayPitcher = pitcher;
                                 }
-                                
-                                // Break loop if we found good data
-                                if (pitcherMatchup.homePitcher && pitcherMatchup.awayPitcher) {
-                                  console.log('Found both pitchers from ESPN data!');
-                                  break;
-                                }
+                              }
+                              
+                              // Break if we found both pitchers
+                              if (homePitcher && awayPitcher) {
+                                console.log('Successfully extracted both pitchers from ESPN data!');
+                                break;
                               }
                             }
                           }
                         }
                       }
                     } catch (espnError) {
-                      console.error('Error fetching pitcher data from ESPN:', espnError.message);
+                      console.error('Error fetching pitcher data from ESPN via Perplexity:', espnError.message);
                     }
                   }
                   
-                  // PRIORITY 4: If all else fails, just continue without pitcher data
-                  
-                  if (pitcherMatchup) {
-                    pitcherData = `STARTING PITCHERS (Data Source: ${dataSource}):\n`;
+                  // Add pitcher data to the statsContext for Gary Engine analysis
+                  if (homePitcher || awayPitcher) {
+                    // Make sure pitchers arrays exist in the statsContext
+                    if (!statsContext.homeTeam.pitchers) statsContext.homeTeam.pitchers = [];
+                    if (!statsContext.awayTeam.pitchers) statsContext.awayTeam.pitchers = [];
                     
-                    // Format for API-Sports response
-                    if (dataSource === 'API-Sports') {
-                      // Add home pitcher data
-                      if (pitcherMatchup.homePitcher) {
-                        const homePitcher = pitcherMatchup.homePitcher;
-                        pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
-                        pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
-                        pitcherData += `- WHIP: ${homePitcher.stats.WHIP}\n`;
-                        pitcherData += `- Record: ${homePitcher.stats.record}\n`;
-                        pitcherData += `- K's: ${homePitcher.stats.strikeouts}\n`;
-                        if (homePitcher.stats.inningsPitched && homePitcher.stats.inningsPitched !== 'N/A') {
-                          pitcherData += `- Innings Pitched: ${homePitcher.stats.inningsPitched}\n`;
+                    if (homePitcher) {
+                      statsContext.homeTeam.pitchers.push({
+                        name: homePitcher.name || 'TBD',
+                        handedness: homePitcher.handedness || 'Unknown',
+                        stats: homePitcher.stats || {}
+                      });
+                    }
+                    
+                    if (awayPitcher) {
+                      statsContext.awayTeam.pitchers.push({
+                        name: awayPitcher.name || 'TBD',
+                        handedness: awayPitcher.handedness || 'Unknown',
+                        stats: awayPitcher.stats || {}
+                      });
+                    }
+                    
+                    // Add pitcher data to statsContext.pitcher with backward compatibility
+                    statsContext.pitcher = {
+                      home: homePitcher,
+                      away: awayPitcher,
+                      source: dataSource
+                    };
+                    
+                    // Format human-readable pitcher data for logs and debugging
+                    pitcherData = `\nSTARTING PITCHERS (Data Source: ${dataSource}):`;
+                    
+                    // Home pitcher stats
+                    if (homePitcher) {
+                      pitcherData += `\n${game.home_team} Starting Pitcher: ${homePitcher.name || 'TBD'}`;
+                      
+                      if (homePitcher.stats) {
+                        const stats = homePitcher.stats;
+                        if (stats.ERA) pitcherData += `\n  ERA: ${stats.ERA}`;
+                        if (stats.WHIP) pitcherData += `\n  WHIP: ${stats.WHIP}`;
+                        if (stats.record) pitcherData += `\n  Record: ${stats.record}`;
+                        if (stats.strikeouts) pitcherData += `\n  K's: ${stats.strikeouts}`;
+                        if (stats.inningsPitched && stats.inningsPitched !== 'N/A') {
+                          pitcherData += `\n  Innings Pitched: ${stats.inningsPitched}`;
                         }
-                        pitcherData += `- ${homePitcher.stats.description}\n`;
+                        if (stats.description) pitcherData += `\n  ${stats.description}`;
                       }
+                    } else {
+                      pitcherData += `\n${game.home_team} Starting Pitcher: Unknown`;
+                    }
+                    
+                    // Away pitcher stats
+                    if (awayPitcher) {
+                      pitcherData += `\n${game.away_team} Starting Pitcher: ${awayPitcher.name || 'TBD'}`;
                       
-                      // Add away pitcher data
-                      if (pitcherMatchup.awayPitcher) {
-                        const awayPitcher = pitcherMatchup.awayPitcher;
-                        pitcherData += `${game.away_team} Starting Pitcher: ${awayPitcher.name}\n`;
-                        pitcherData += `- ERA: ${awayPitcher.stats.ERA}\n`;
-                        pitcherData += `- WHIP: ${awayPitcher.stats.WHIP}\n`;
-                        pitcherData += `- Record: ${awayPitcher.stats.record}\n`;
-                        pitcherData += `- K's: ${awayPitcher.stats.strikeouts}\n`;
-                        if (awayPitcher.stats.inningsPitched && awayPitcher.stats.inningsPitched !== 'N/A') {
-                          pitcherData += `- Innings Pitched: ${awayPitcher.stats.inningsPitched}\n`;
+                      if (awayPitcher.stats) {
+                        const stats = awayPitcher.stats;
+                        if (stats.ERA) pitcherData += `\n  ERA: ${stats.ERA}`;
+                        if (stats.WHIP) pitcherData += `\n  WHIP: ${stats.WHIP}`;
+                        if (stats.record) pitcherData += `\n  Record: ${stats.record}`;
+                        if (stats.strikeouts) pitcherData += `\n  K's: ${stats.strikeouts}`;
+                        if (stats.inningsPitched && stats.inningsPitched !== 'N/A') {
+                          pitcherData += `\n  Innings Pitched: ${stats.inningsPitched}`;
                         }
-                        pitcherData += `- ${awayPitcher.stats.description}\n`;
+                        if (stats.description) pitcherData += `\n  ${stats.description}`;
                       }
-                      
-                      // Add game details if available
-                      if (pitcherMatchup.game) {
-                        pitcherData += `\nGame at ${pitcherMatchup.game.venue} on ${pitcherMatchup.game.date} at ${pitcherMatchup.game.time || 'TBD'}`;
-                      }
-                    } 
-                    // Format for TheSportsDB response (using existing format)
-                    else if (dataSource === 'TheSportsDB') {
-                      // Create local helper for team name matching to avoid scope issues
-                      const matchTeamNames = (team1, team2) => {
-                        if (!team1 || !team2) return false;
-                        const clean1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
-                        const clean2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
-                        return clean1 === clean2 || clean1.includes(clean2) || clean2.includes(clean1);
-                      };
-                      
-                      // Add home team pitcher data if available
-                      if (pitcherMatchup.teamPitcher && matchTeamNames(pitcherMatchup.team, game.home_team)) {
-                        const homePitcher = pitcherMatchup.teamPitcher;
-                        pitcherData += `${game.home_team} Starting Pitcher: ${homePitcher.name}\n`;
-                        pitcherData += `- ERA: ${homePitcher.stats.ERA}\n`;
-                        pitcherData += `- Record: ${homePitcher.stats.record}\n`;
-                        pitcherData += `- K's: ${homePitcher.stats.strikeouts}\n`;
-                        if (homePitcher.stats.WHIP && homePitcher.stats.WHIP !== 'N/A') {
-                          pitcherData += `- WHIP: ${homePitcher.stats.WHIP}\n`;
-                        }
-                        pitcherData += `- ${homePitcher.stats.description}\n`;
-                      }
-                      
-                      // Add away team pitcher data if available
-                      if (pitcherMatchup.opponentPitcher || 
-                          (pitcherMatchup.teamPitcher && matchTeamNames(pitcherMatchup.team, game.away_team))) {
-                        const awayPitcher = matchTeamNames(pitcherMatchup.team, game.away_team) 
-                          ? pitcherMatchup.teamPitcher 
-                          : pitcherMatchup.opponentPitcher;
-                          
-                        pitcherData += `${game.away_team} Starting Pitcher: ${awayPitcher.name}\n`;
-                        pitcherData += `- ERA: ${awayPitcher.stats.ERA}\n`;
-                        pitcherData += `- Record: ${awayPitcher.stats.record}\n`;
-                        pitcherData += `- K's: ${awayPitcher.stats.strikeouts}\n`;
-                        if (awayPitcher.stats.WHIP && awayPitcher.stats.WHIP !== 'N/A') {
-                          pitcherData += `- WHIP: ${awayPitcher.stats.WHIP}\n`;
-                        }
-                        pitcherData += `- ${awayPitcher.stats.description}\n`;
-                      }
-                      
-                      // Add game details if available
-                      if (pitcherMatchup.game) {
-                        pitcherData += `\nGame at ${pitcherMatchup.game.venue} on ${pitcherMatchup.game.date}`;
-                      }
-                      
-                      // Add note if this is fallback data and not from today's lineup
-                      if (pitcherMatchup.note) {
-                        pitcherData += `\n(${pitcherMatchup.note})`;
-                      }
+                    } else {
+                      pitcherData += `\n${game.away_team} Starting Pitcher: Unknown`;
                     }
                     
                     // Add note about importance of pitcher stats
                     pitcherData += '\n\nNOTE: For MLB games, starting pitcher stats are more important than team ERA.';
                   } else {
-                    // PRIORITY 3 FALLBACK: Use Ball Don't Lie or generic message
-                    console.log('All pitcher data sources failed, using generic message');
-                    pitcherData = `PITCHING MATCHUP: No specific starting pitcher data available. Focus on analyzing the pitching matchup using recent performance metrics.`;
+                    console.log('No pitcher data available from any source');
+                    pitcherData = `\nPITCHING MATCHUP: No specific starting pitcher data available. Focus on analyzing the pitching matchup using recent performance metrics.`;
                   }
                 } catch (error) {
                   console.error('Error fetching MLB pitcher data:', error.message);
@@ -284,21 +299,40 @@ const picksService = {
                 }
               }
               
-              // Use Perplexity to get game time and headlines
-              console.log('Fetching game time and headlines from Perplexity...');
+              // Get game time from Odds API and headlines from Perplexity
+              console.log('Using game time from Odds API and fetching headlines from Perplexity...');
               let gameTimeData = { gameTime: 'TBD', headlines: [], keyInjuries: { homeTeam: [], awayTeam: [] }};
+              
+              // Format the game time from Odds API commence_time
+              if (game.commence_time) {
+                try {
+                  const gameDateTime = new Date(game.commence_time);
+                  // Format the time in EST timezone as HH:MM AM/PM
+                  const timeOptions = { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true };
+                  const formattedTime = gameDateTime.toLocaleTimeString('en-US', timeOptions);
+                  gameTimeData.gameTime = formattedTime;
+                  console.log(`Game time from Odds API: ${formattedTime}`);
+                } catch (timeError) {
+                  console.error('Error formatting game time from Odds API:', timeError);
+                }
+              }
+              
+              // Still get headlines from Perplexity
               try {
                 // Import perplexityService dynamically to avoid circular reference
                 const { perplexityService } = await import('./perplexityService');
-                gameTimeData = await perplexityService.getGameTimeAndHeadlines(
+                const perplexityData = await perplexityService.getGameTimeAndHeadlines(
                   game.home_team,
                   game.away_team,
                   sportName
                 );
-                console.log(`Game time data fetched: ${gameTimeData.gameTime}`);
-                console.log(`Headlines: ${gameTimeData.headlines.length > 0 ? 'Available' : 'None'}`); 
+                
+                // Only take headlines and injuries, keep our Odds API time
+                gameTimeData.headlines = perplexityData.headlines || [];
+                gameTimeData.keyInjuries = perplexityData.keyInjuries || { homeTeam: [], awayTeam: [] };
+                console.log(`Headlines: ${gameTimeData.headlines.length > 0 ? 'Available' : 'None'}`);
               } catch (perplexityError) {
-                console.error('Error fetching game time and headlines:', perplexityError);
+                console.error('Error fetching headlines from Perplexity:', perplexityError);
               }
               
               // Get real-time news and trends from Perplexity
@@ -402,9 +436,17 @@ const picksService = {
                   const mlbPlayerStatsService = mlbPlayerStatsModule.default || mlbPlayerStatsModule.mlbPlayerStatsService;
                   
                   // Get team stats and player stats in parallel
+                  // Format current date in YYYY-MM-DD for player stats API
+                  const currentDate = new Date();
+                  const estOptions = { timeZone: 'America/New_York' };
+                  // Format date as YYYY-MM-DD with proper padding
+                  const dateParts = currentDate.toLocaleDateString('en-US', estOptions).split('/');
+                  // American format is MM/DD/YYYY so we need to rearrange
+                  const formattedDate = `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
+                  
                   const [apiSportsStats, playerStatsReport] = await Promise.all([
                     apiSportsService.getMlbTeamStats(game.home_team, game.away_team),
-                    mlbPlayerStatsService.generateMlbPlayerStatsReport(game.home_team, game.away_team, date)
+                    mlbPlayerStatsService.generateMlbPlayerStatsReport(game.home_team, game.away_team, formattedDate)
                   ]);
                   
                   // Combine Ball Don't Lie pitcher data with API-Sports team stats
@@ -495,28 +537,6 @@ const picksService = {
                     // Store both raw and formatted stats - ensure they're properly formatted for OpenAI
                     formattedGameData.rawStatsData = apiSportsStats;
                     formattedGameData.playerStats = playerStatsReport;
-                    formattedGameData.statsContext = formattedStatsContext;
-                    formattedGameData.enhancedStats = `TEAM STATS SUMMARY:\n${formattedStatsContext}`;
-                    formattedGameData.statsSource = 'API-Sports with Player Stats';
-                    
-                    // Add these stats to our collection as well - be flexible
-                    formattedGameData.allCollectedStats.sources.push({
-                      source: 'API-Sports',
-                      data: { apiSportsStats, playerStatsReport, formattedStats: formattedStatsContext }
-                    });
-                    
-                    // If we have pitcher data from Ball Don't Lie, add that too
-                    if (pitcherStats) {
-                      formattedGameData.allCollectedStats.sources.push({
-                        source: 'Ball Don\'t Lie',
-                        data: { pitcherStats, note: '2025 MLB Pitcher Data Only' }
-                      });
-                    }
-                  } else {
-                    // PRIORITY 2: If API-Sports fails, try TheSportsDB
-                    console.log('API-Sports data unavailable, trying TheSportsDB for MLB...');
-                    formattedGameData.statsContext = sportsDataService.buildComprehensiveStatsContext(statsContext);
-                    formattedGameData.statsSource = 'TheSportsDB';
                     
                     // Add these stats to our collection as well
                     formattedGameData.allCollectedStats.sources.push({
@@ -530,6 +550,43 @@ const picksService = {
                         source: 'Ball Don\'t Lie',
                         data: { pitcherStats, note: '2025 MLB Pitcher Data Only' }
                       });
+                      
+                      // Make sure pitcher data is also explicitly added to teamStats for Gary Engine
+                      if (!formattedGameData.teamStats) {
+                        formattedGameData.teamStats = {
+                          homeTeamStats: { name: game.home_team },
+                          awayTeamStats: { name: game.away_team }
+                        };
+                      }
+                      
+                      // Add home team pitcher data
+                      if (pitcherStats.homePitcher && formattedGameData.teamStats.homeTeamStats) {
+                        formattedGameData.teamStats.homeTeamStats.pitcher = pitcherStats.homePitcher;
+                        // Also add to detailedStats for better visibility
+                        if (!formattedGameData.teamStats.homeTeamStats.detailedStats) {
+                          formattedGameData.teamStats.homeTeamStats.detailedStats = {};
+                        }
+                        formattedGameData.teamStats.homeTeamStats.detailedStats.startingPitcher = pitcherStats.homePitcher.name;
+                        formattedGameData.teamStats.homeTeamStats.detailedStats.pitcherERA = pitcherStats.homePitcher.stats?.ERA || 'N/A';
+                        formattedGameData.teamStats.homeTeamStats.detailedStats.pitcherWHIP = pitcherStats.homePitcher.stats?.WHIP || 'N/A';
+                      }
+                      
+                      // Add away team pitcher data
+                      if (pitcherStats.awayPitcher && formattedGameData.teamStats.awayTeamStats) {
+                        formattedGameData.teamStats.awayTeamStats.pitcher = pitcherStats.awayPitcher;
+                        // Also add to detailedStats for better visibility
+                        if (!formattedGameData.teamStats.awayTeamStats.detailedStats) {
+                          formattedGameData.teamStats.awayTeamStats.detailedStats = {};
+                        }
+                        formattedGameData.teamStats.awayTeamStats.detailedStats.startingPitcher = pitcherStats.awayPitcher.name;
+                        formattedGameData.teamStats.awayTeamStats.detailedStats.pitcherERA = pitcherStats.awayPitcher.stats?.ERA || 'N/A';
+                        formattedGameData.teamStats.awayTeamStats.detailedStats.pitcherWHIP = pitcherStats.awayPitcher.stats?.WHIP || 'N/A';
+                      }
+                    }
+                    
+                    // Ensure player stats are added to teamStats object for Gary Engine
+                    if (playerStatsReport && formattedGameData.teamStats) {
+                      formattedGameData.teamStats.playerStats = playerStatsReport;
                     }
                     
                     // If we still need more stats, try Ball Don't Lie, but don't be too strict
