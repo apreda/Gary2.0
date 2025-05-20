@@ -15,27 +15,53 @@ const propResultsService = {
     try {
       console.log(`Checking player prop results for ${date}`);
       
-      // 1. Get all player prop picks for the specified date
-      const { data: propPicks, error: propPicksError } = await supabase
+      // 1. Get prop picks from the database
+      const { data: propPicksRows, error: propPicksError } = await supabase
         .from('prop_picks')
         .select('*')
         .eq('date', date);
         
       if (propPicksError) {
-        console.error('Error fetching prop picks:', propPicksError);
-        throw new Error(`Failed to fetch prop picks: ${propPicksError.message}`);
+        throw new Error(`Error getting prop picks: ${propPicksError.message}`);
       }
       
-      if (!propPicks || propPicks.length === 0) {
-        console.log(`No prop picks found for ${date}`);
-        return { success: true, message: 'No prop picks to process', count: 0 };
+      if (!propPicksRows || propPicksRows.length === 0) {
+        return {
+          success: false,
+          message: `No prop picks found for ${date}`,
+          results: []
+        };
       }
       
-      console.log(`Found ${propPicks.length} prop picks for ${date}`);
+      // Parse the picks array from the JSON column
+      let allPropPicks = [];
+      for (const row of propPicksRows) {
+        if (row.picks && Array.isArray(row.picks)) {
+          // Transform the picks array format into our expected format
+          const formattedPicks = row.picks.map(pick => ({
+            id: row.id, // Use the row ID as the prop_pick_id
+            date: row.date,
+            player_name: pick.player,
+            team: pick.team,
+            league: row.league || null, // Use the league from the row if available
+            prop_type: pick.prop?.split(' ')?.[0] || pick.prop, // Extract prop type from "hits 0.5"
+            prop_line: pick.line || parseFloat(pick.prop?.split(' ')?.[1]) || 0, // Extract line from prop or use provided line
+            pick_direction: pick.bet,
+            pick_text: `${pick.player} ${pick.bet} ${pick.line || (pick.prop?.split(' ')?.[1] || '')} ${pick.prop?.split(' ')?.[0] || pick.prop}`,
+            odds: pick.odds,
+            confidence: pick.confidence,
+            matchup: row.matchup || null
+          }));
+          
+          allPropPicks = [...allPropPicks, ...formattedPicks];
+        }
+      }
       
-      // Group picks by league for efficient API calls
+      console.log(`Found ${allPropPicks.length} individual prop picks for ${date}`);
+      
+      // 2. Organize picks by player, team, and league
       const picksByLeague = {};
-      propPicks.forEach(pick => {
+      allPropPicks.forEach(pick => {
         const league = pick.league;
         if (!picksByLeague[league]) {
           picksByLeague[league] = [];
@@ -43,7 +69,7 @@ const propResultsService = {
         picksByLeague[league].push(pick);
       });
       
-      // 2. Use API-Sports to get player statistics (primary source)
+      // 3. Get player stats from API-Sports or other data source
       const allPlayerStats = {};
       
       // First try to get stats using API-Sports directly
@@ -117,10 +143,10 @@ const propResultsService = {
       }
       
       // If we have few or no stats, use the SportsDB API as fallback
-      if (Object.keys(allPlayerStats).length < propPicks.length / 2) {
+      if (Object.keys(allPlayerStats).length < allPropPicks.length / 2) {
         console.log('Insufficient player stats from primary sources, trying SportsDB API');
         
-        const leagues = [...new Set(propPicks.map(pick => pick.league))];
+        const leagues = [...new Set(allPropPicks.map(pick => pick.league))];
         const leagueIdMap = {
           'NBA': '4387',
           'NHL': '4380',
@@ -132,7 +158,7 @@ const propResultsService = {
           if (!leagueId) continue;
           
           // Get all players for this league
-          const leaguePicks = propPicks.filter(pick => pick.league === league);
+          const leaguePicks = allPropPicks.filter(pick => pick.league === league);
           if (leaguePicks.length === 0) continue;
           
           // Group by team
@@ -188,23 +214,30 @@ const propResultsService = {
       }
       
       // If we still don't have sufficient stats, log a message suggesting to use the admin interface
-      if (Object.keys(allPlayerStats).length < propPicks.length / 2) {
+      if (Object.keys(allPlayerStats).length < allPropPicks.length / 2) {
         console.log('Insufficient player stats from APIs. For best results, please visit the admin panel at https://www.betwithgary.ai/admin/results to manually review and update player prop results.');
       }
       
-      // 3. Process each pick and determine if it won or lost
+      // Process each pick to determine the result
       const results = [];
       
-      for (const pick of propPicks) {
-        // Get stats for the player
-        const playerStats = allPlayerStats[pick.player_name];
+      for (const pick of allPropPicks) {
+        const playerName = pick.player_name;
+        const propType = pick.prop_type;
+        const propLine = parseFloat(pick.prop_line);
+        const pickDirection = pick.pick_direction;
         
-        let resultStatus = 'pending';
+        console.log(`Processing ${playerName} ${propType} ${pickDirection} ${propLine}`);
+        
         let actualResult = null;
+        let resultStatus = 'pending';
+        
+        // Get stats for this player
+        const playerStats = allPlayerStats[playerName];
         
         if (playerStats) {
           // Map prop_type to the correct stat key
-          const propType = pick.prop_type.toLowerCase();
+          const statKey = propType.toLowerCase();
           const statMapping = {
             'points': 'points',
             'rebounds': 'rebounds',
@@ -225,20 +258,29 @@ const propResultsService = {
             'goals': 'goals'
           };
           
-          const statKey = statMapping[propType] || propType;
-          const statValue = playerStats[statKey];
+          actualResult = 0;
           
-          if (statValue !== undefined && statValue !== null) {
-            actualResult = statValue;
-            
-            // Determine if pick won or lost
-            if (pick.pick_direction === 'OVER') {
-              resultStatus = actualResult > pick.prop_line ? 'won' : 
-                            actualResult === pick.prop_line ? 'push' : 'lost';
-            } else { // UNDER
-              resultStatus = actualResult < pick.prop_line ? 'won' : 
-                            actualResult === pick.prop_line ? 'push' : 'lost';
-            }
+          if (statKey in statMapping) {
+            const mappedStatKey = statMapping[statKey];
+            actualResult = playerStats[mappedStatKey] || 0;
+          } else if (statKey === 'hits_runs_rbis') {
+            // Special case for combined stats
+            actualResult = (playerStats.hits || 0) + (playerStats.runs || 0) + (playerStats.rbi || 0);
+          } else {
+            // If we don't have a mapping, try to use the prop type directly as a key
+            actualResult = playerStats[statKey] || 0;
+          }
+          
+          // Determine if pick won or lost
+          const normalizedDirection = (pick.pick_direction || '').toUpperCase();
+          if (normalizedDirection === 'OVER' || normalizedDirection === 'O') {
+            resultStatus = actualResult > propLine ? 'won' : 
+                          actualResult === propLine ? 'push' : 'lost';
+          } else if (normalizedDirection === 'UNDER' || normalizedDirection === 'U') {
+            resultStatus = actualResult < propLine ? 'won' : 
+                          actualResult === propLine ? 'push' : 'lost';
+          } else {
+            console.log(`Unknown pick direction: ${pick.pick_direction}`);
           }
         }
         
