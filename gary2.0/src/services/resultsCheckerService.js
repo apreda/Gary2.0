@@ -1139,12 +1139,12 @@ export const resultsCheckerService = {
             gameDate = new Date(date);
           }
           
-          // Format the date properly - avoid timezone issues by using the date object
+          // Format the date properly - use Eastern Time since all sports schedules use ET
           const formattedDate = gameDate.toLocaleDateString('en-US', { 
             month: 'long', 
             day: 'numeric', 
             year: 'numeric',
-            timeZone: 'UTC'  // Use UTC to avoid timezone shifts
+            timeZone: 'America/New_York'  // Use Eastern Time for sports schedules
           });
           console.log(`Querying for scores on date: ${formattedDate}`);
           const query = `What was the final score of the ${league} game involving ${teamName} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
@@ -1508,10 +1508,15 @@ export const resultsCheckerService = {
         console.log(`PickResultsAnalyzer determined: ${analyzedResult.result} for pick: ${pick.pick}`);
         
         // Format the result for garyPerformanceService
+        // CRITICAL: send pick_text as the original bet text from daily_picks table
         processedResults.push({
-          pick: analyzedResult.matchup,
+          // This is the matchup but we DON'T want this as pick_text
+          matchup: analyzedResult.matchup,
+          // These are the ACTUAL FULL PICK TEXT we want to store in DB
+          pick: pick.pick,
           original_pick: pick.pick,
           pickText: pick.pick,
+          pick_text: pick.pick,
           result: analyzedResult.result,
           score: analyzedResult.final_score,
           final_score: analyzedResult.final_score,
