@@ -810,7 +810,13 @@ export const resultsCheckerService = {
                 // Check if we're dealing with a spread bet or moneyline
                 if (hasSpread) {
                   // It's a spread bet
-                  const isPicked = (team) => pickedTeam.toLowerCase().includes(team.toLowerCase());
+                  const isPicked = (team) => {
+                    // Add safety checks for undefined variables
+                    if (!pickedTeam || !team) return false;
+                    const safePickedTeam = String(pickedTeam).toLowerCase();
+                    const safeTeam = String(team).toLowerCase();
+                    return safePickedTeam.includes(safeTeam);
+                  };
                   let homeScore = parseInt(scores.home_score);
                   let awayScore = parseInt(scores.away_score);
                   
@@ -838,7 +844,13 @@ export const resultsCheckerService = {
                   }
                 } else {
                   // It's a moneyline bet
-                  const isPicked = (team) => pickedTeam.toLowerCase().includes(team.toLowerCase());
+                  const isPicked = (team) => {
+                    // Add safety checks for undefined variables
+                    if (!pickedTeam || !team) return false;
+                    const safePickedTeam = String(pickedTeam).toLowerCase();
+                    const safeTeam = String(team).toLowerCase();
+                    return safePickedTeam.includes(safeTeam);
+                  };
                   
                   if (isPicked(scores.home_team)) {
                     // Home team picked
@@ -916,6 +928,8 @@ export const resultsCheckerService = {
     // Try getting scores from The Odds API first
     console.log('Getting scores from The Odds API...');
     let oddsApiScores = {};
+    // Initialize an empty object for any legacy API scores - will be empty but prevents reference errors
+    let sportsDbScores = {};
     
     try {
       // Try fetching from The Odds API first
