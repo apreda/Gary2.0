@@ -240,12 +240,7 @@ const propResultsService = {
           else if (propType === 'hits_runs_rbis') statName = 'combined hits, runs, and RBIs';
           
           // Create a direct, specific prompt for Perplexity to determine the outcome
-          const query = `I need to check a baseball prop bet outcome. ${playerName} playing for ${team} on ${searchDate} had a prop bet of ${pickDirection} ${propLine} ${statName}. 
-          1. First, find how many ${statName} ${playerName} had in that game exactly. 
-          2. Then determine if the bet WON, LOST, or was a PUSH based on these rules:
-             - For OVER bets: Bet WON if actual > ${propLine}, LOST if actual < ${propLine}, PUSH if equal
-             - For UNDER bets: Bet WON if actual < ${propLine}, LOST if actual > ${propLine}, PUSH if equal
-          Answer with ONLY ONE WORD at the end: "won", "lost", or "push".`;
+          const query = `Did ${playerName} have ${pickDirection.toUpperCase() === 'OVER' ? 'more than' : 'fewer than'} ${propLine} ${statName} in the game on ${gameDate} against ${team}? Please provide their exact ${statName} total and whether the ${pickDirection} ${propLine} ${statName} bet would win, lose, or push. End your answer with either "won", "lost", or "push".`;
           
           // Check if Perplexity API key is available
           const perplexityApiKey = import.meta.env?.VITE_PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
@@ -335,9 +330,9 @@ const propResultsService = {
                 'Accept': 'application/json'
               },
               data: {
-                model: 'claude-3-opus-20240229', // Using Claude model which is supported by Perplexity
+                model: 'pplx-7b-online', // Using online model which is better for real-time sports information
                 messages: [{ role: 'user', content: query }],
-                max_tokens: 150,
+                max_tokens: 512,
                 temperature: 0.0
               }
             });
@@ -347,9 +342,9 @@ const propResultsService = {
           } catch (apiError) {
             console.error(`Perplexity API error details:`, apiError.response?.data || apiError.message);
             
-            // If the claude model fails, try with mixtral as a fallback
+            // If the first model fails, try with another online model as a fallback
             try {
-              console.log(`Trying fallback model: mixtral-8x7b-instruct`);
+              console.log(`Trying fallback model: llama-3-sonar-online`);
               
               const fallbackResponse = await axios({
                 method: 'post',
@@ -360,9 +355,9 @@ const propResultsService = {
                   'Accept': 'application/json'
                 },
                 data: {
-                  model: 'mixtral-8x7b-instruct', // Fallback to mixtral model
+                  model: 'llama-3-sonar-online', // Fallback to another online model
                   messages: [{ role: 'user', content: query }],
-                  max_tokens: 150,
+                  max_tokens: 512,
                   temperature: 0.0
                 }
               });
