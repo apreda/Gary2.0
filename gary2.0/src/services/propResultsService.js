@@ -87,17 +87,37 @@ const propResultsService = {
       const apiResults = await mlbStatsApiService.automateProps(mlbPropsList, date);
       console.log(`MLB Stats API returned results for ${apiResults.length} props`); 
       
-      // Filter to only keep the top 10 prop picks with highest confidence levels
-      let filteredApiResults = [...apiResults];
-      if (filteredApiResults.length > 10) {
-        console.log(`Limiting prop picks to the top 10 highest confidence picks (out of ${filteredApiResults.length})`);
+      // Group props by date to filter per day
+      const propsByDate = {};
+      apiResults.forEach(prop => {
+        const propDate = prop.game_date || date;
+        if (!propsByDate[propDate]) {
+          propsByDate[propDate] = [];
+        }
+        propsByDate[propDate].push(prop);
+      });
+
+      // For each date, filter to keep only top 10 with highest confidence
+      let filteredApiResults = [];
+      Object.keys(propsByDate).forEach(propDate => {
+        const propsForDate = propsByDate[propDate];
+        console.log(`Processing ${propsForDate.length} props for date ${propDate}`);
+        
         // Sort by confidence level in descending order (highest confidence first)
-        filteredApiResults.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-        // Keep only the top 10
-        filteredApiResults = filteredApiResults.slice(0, 10);
-        console.log(`Selected top 10 prop picks with confidence levels: ${filteredApiResults.map(r => r.confidence).join(', ')}`);
-      } else {
-        console.log(`Keeping all ${filteredApiResults.length} prop picks as count is <= 10`);
+        propsForDate.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+        
+        // Keep only the top 10 for this date
+        const topPropsForDate = propsForDate.slice(0, 10);
+        console.log(`Selected top ${topPropsForDate.length} prop picks for ${propDate} with confidence levels: ${topPropsForDate.map(r => r.confidence || 'unknown').join(', ')}`);
+        
+        // Add to final filtered list
+        filteredApiResults = [...filteredApiResults, ...topPropsForDate];
+      });
+      
+      console.log(`Total filtered prop picks across all dates: ${filteredApiResults.length}`);
+      if (filteredApiResults.length === 0) {
+        console.warn('No prop picks met the filtering criteria');
+        return { success: false, message: 'No prop picks met the filtering criteria', count: 0 };
       }
       
       // 4. Format results for storage in Supabase prop_results table
