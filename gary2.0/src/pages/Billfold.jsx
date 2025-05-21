@@ -135,7 +135,35 @@ export const Billfold = () => {
         })) : [];
         
         // STEP 4: Process prop results
-        const processedPropLog = propResults ? propResults.map(prop => ({
+        // Group prop results by date
+        const propResultsByDate = {};
+        if (propResults) {
+          propResults.forEach(prop => {
+            const gameDate = prop.game_date?.split('T')[0] || 'unknown';
+            if (!propResultsByDate[gameDate]) {
+              propResultsByDate[gameDate] = [];
+            }
+            propResultsByDate[gameDate].push(prop);
+          });
+        }
+        
+        // For each date, sort by confidence and take top 10
+        let limitedPropResults = [];
+        Object.keys(propResultsByDate).forEach(date => {
+          // Sort by confidence (if available) in descending order
+          const sorted = [...propResultsByDate[date]].sort((a, b) => {
+            const confA = a.confidence || 0;
+            const confB = b.confidence || 0;
+            return confB - confA;
+          });
+          
+          // Take only top 10 for each date
+          const topPicks = sorted.slice(0, 10);
+          limitedPropResults = [...limitedPropResults, ...topPicks];
+        });
+        
+        // Map the limited prop results to our standard format
+        const processedPropLog = limitedPropResults ? limitedPropResults.map(prop => ({
           id: prop.id,
           date: new Date(prop.game_date),
           rawGameDate: prop.game_date,  // Store the original date string

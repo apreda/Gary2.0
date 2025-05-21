@@ -76,8 +76,36 @@ export const PropPicks = ({ selectedTimeFrame }) => {
           return;
         }
         
-        // Process prop results data
-        const processedBettingLog = propResults.map(prop => ({
+        // Group prop results by date
+        const propResultsByDate = {};
+        propResults.forEach(prop => {
+          const gameDate = prop.game_date?.split('T')[0] || 'unknown';
+          if (!propResultsByDate[gameDate]) {
+            propResultsByDate[gameDate] = [];
+          }
+          propResultsByDate[gameDate].push(prop);
+        });
+        
+        // For each date, sort by confidence and take top 10
+        let limitedPropResults = [];
+        Object.keys(propResultsByDate).forEach(date => {
+          // Sort by confidence (if available) in descending order
+          const sorted = [...propResultsByDate[date]].sort((a, b) => {
+            const confA = a.confidence || 0;
+            const confB = b.confidence || 0;
+            return confB - confA;
+          });
+          
+          // Take only top 10 for each date
+          const topPicks = sorted.slice(0, 10);
+          limitedPropResults = [...limitedPropResults, ...topPicks];
+        });
+        
+        // Use the limited set of prop results for all operations below
+        const filteredPropResults = limitedPropResults;
+        
+        // Process prop results data - use the filtered list instead of full list
+        const processedBettingLog = filteredPropResults.map(prop => ({
           id: prop.id,
           date: new Date(prop.created_at),
           sport: prop.league,
@@ -91,16 +119,16 @@ export const PropPicks = ({ selectedTimeFrame }) => {
         
         setBettingLog(processedBettingLog);
         
-        // Calculate stats
-        const wins = propResults.filter(prop => prop.result_status === 'won').length;
-        const losses = propResults.filter(prop => prop.result_status === 'lost').length;
-        const pushes = propResults.filter(prop => prop.result_status === 'push').length;
-        const total = propResults.length;
+        // Calculate stats using filtered prop results
+        const wins = filteredPropResults.filter(prop => prop.result_status === 'won').length;
+        const losses = filteredPropResults.filter(prop => prop.result_status === 'lost').length;
+        const pushes = filteredPropResults.filter(prop => prop.result_status === 'push').length;
+        const total = filteredPropResults.length;
         const winRate = total > 0 ? (wins / (wins + losses)) : 0;
         
         // Group by sport/league
         const sportBreakdown = {};
-        propResults.forEach(prop => {
+        filteredPropResults.forEach(prop => {
           if (!sportBreakdown[prop.league]) {
             sportBreakdown[prop.league] = { sport: prop.league, wins: 0, losses: 0, pushes: 0 };
           }
@@ -110,9 +138,9 @@ export const PropPicks = ({ selectedTimeFrame }) => {
           else if (prop.result_status === 'push') sportBreakdown[prop.league].pushes++;
         });
         
-        // Group by prop type
+        // Group by prop type using filtered prop results
         const propTypeBreakdown = {};
-        propResults.forEach(prop => {
+        filteredPropResults.forEach(prop => {
           if (!propTypeBreakdown[prop.prop_type]) {
             propTypeBreakdown[prop.prop_type] = { 
               propType: prop.prop_type, 
