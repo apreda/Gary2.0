@@ -624,10 +624,11 @@ const propPicksService = {
         .from('prop_picks')
         .select('*')
         .eq('date', dateString)
-        .order('created_at', { ascending: false });
+        .order('confidence', { ascending: false })
+        .limit(10);
       if (error) throw new Error(`Fetch error: ${error.message}`);
       if (!data?.length) return [];
-      console.log(`Found ${data.length} entries for ${dateString}`);
+      console.log(`Found ${data.length} entries for ${dateString} (limited to top 10 by confidence)`);
       return data;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
