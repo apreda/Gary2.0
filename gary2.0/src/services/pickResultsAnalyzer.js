@@ -217,7 +217,9 @@ export const pickResultsAnalyzer = {
       final_score: `${awayScore}-${homeScore}`,
       pick_text: pick.pick,
       matchup: `${awayTeam} @ ${homeTeam}`,
-      confidence: pick.confidence || null
+      confidence: pick.confidence || null,
+      pick_type: pick.type || null,
+      type: pick.type || 'moneyline'
     };
   },
   
