@@ -1010,15 +1010,15 @@ const picksService = {
               });
               
               if (pick && pick.success && pick.rawAnalysis?.rawOpenAIOutput) {
-                // Initial confidence filter - final filtering with 0.78 threshold happens at storage time
+                // Initial confidence filter - applying 0.79 threshold for higher quality picks
                 const confidence = pick.rawAnalysis.rawOpenAIOutput.confidence || 0;
-                console.log('Pick generated with confidence:', confidence);
                 
-                if (confidence >= 0.75) {
+                // Only include picks with higher confidence
+                if (confidence >= 0.79) {
                   allPicks.push(pick);
                   console.log('Success! Pick added:', pick.rawAnalysis.rawOpenAIOutput.pick || 'No pick text');
                 } else {
-                  console.log(`Filtering out pick for ${formattedGameData.homeTeam} vs ${formattedGameData.awayTeam} - confidence ${confidence} below threshold of 0.75`);
+                  console.log(`Filtering out pick for ${formattedGameData.homeTeam} vs ${formattedGameData.awayTeam} - confidence ${confidence} below threshold of 0.79`);
                 }
               } else {
                 console.warn(`No pick generated for ${formattedGameData.matchup}. Likely confidence below threshold.`);

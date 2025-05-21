@@ -627,8 +627,35 @@ const propPicksService = {
         .order('created_at', { ascending: false });
       if (error) throw new Error(`Fetch error: ${error.message}`);
       if (!data?.length) return [];
-      console.log(`Found ${data.length} entries for ${dateString}`);
-      return data;
+      
+      // Process each entry to filter picks by confidence
+      const processedEntries = data.map(entry => {
+        // If the entry has picks and they're in an array format
+        if (entry.picks && Array.isArray(entry.picks)) {
+          // Filter by confidence threshold (>= 0.85)
+          const highConfidencePicks = entry.picks.filter(pick => 
+            typeof pick.confidence === 'number' && pick.confidence >= 0.85
+          );
+          
+          // For debugging
+          const originalCount = entry.picks.length;
+          const filteredCount = highConfidencePicks.length;
+          if (originalCount !== filteredCount) {
+            console.log(`Filtered ${entry.id || 'entry'}: ${originalCount} -> ${filteredCount} picks (85%+ confidence)`); 
+          }
+          
+          // Return the entry with filtered picks
+          return {
+            ...entry,
+            picks: highConfidencePicks,
+            originalPickCount: originalCount
+          };
+        }
+        return entry;
+      });
+      
+      console.log(`Found ${data.length} entries for ${dateString}, filtered to 85%+ confidence threshold`);
+      return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
       throw error;
