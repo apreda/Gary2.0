@@ -396,33 +396,168 @@ const picksService = {
               try {
                 // Different priority order for each sport
                 if (sportName === 'MLB') {
-                  // For MLB now we prioritize Ball Don't Lie for pitcher data, which is the most critical
-                  console.log('MLB STATS PRIORITY: 1) Ball Don\'t Lie for pitcher data → 2) API-Sports for team data → 3) SportsDB as fallback');
+                  // Now we prioritize MLB Stats API as the primary source for MLB data
+                  console.log('MLB STATS PRIORITY: 1) MLB Stats API for pitcher and batter data → 2) API-Sports as fallback → 3) SportsDB as final fallback');
                   
-                  // PRIORITY 1: Try Ball Don't Lie for pitcher data first
-                  console.log('Attempting to get 2025 MLB pitcher stats from Ball Don\'t Lie...');
-                  // Import ballDontLieService first for pitcher data
-                  const ballDontLieModule = await import('./ballDontLieService');
-                  const ballDontLieService = ballDontLieModule.ballDontLieService;
+                  // Import MLB Stats API service
+                  const mlbStatsApiModule = await import('./mlbStatsApiService');
+                  const mlbStatsApiService = mlbStatsApiModule.mlbStatsApiService;
                   
-                  // Get pitcher matchup data with 2025 stats only
+                  // Get pitcher and batter stats using MLB Stats API
                   let pitcherStats = null;
+                  let topHitters = { home: [], away: [] };
                   let mlbComprehensiveStats = null;
+                  
                   try {
-                    // First, try to get the comprehensive MLB game stats
-                    mlbComprehensiveStats = await ballDontLieService.getComprehensiveMlbGameStats(game.home_team, game.away_team);
+                    console.log(`Getting MLB Stats API data for ${game.home_team} vs ${game.away_team}...`);
                     
-                    if (mlbComprehensiveStats) {
-                      console.log('Successfully retrieved comprehensive MLB stats from Ball Don\'t Lie');
-                      // Extract pitcher matchup
-                      pitcherStats = mlbComprehensiveStats.pitcherMatchup;
+                    // Step 1: Get today's games to find the game we're analyzing
+                    const todaysGames = await mlbStatsApiService.getTodaysGames();
+                    let targetGame = null;
+                    
+                    // Find the game that matches our home and away teams
+                    for (const g of todaysGames) {
+                      if ((g.homeTeam.toLowerCase().includes(game.home_team.toLowerCase()) || 
+                          game.home_team.toLowerCase().includes(g.homeTeam.toLowerCase())) && 
+                          (g.awayTeam.toLowerCase().includes(game.away_team.toLowerCase()) || 
+                          game.away_team.toLowerCase().includes(g.awayTeam.toLowerCase()))) {
+                        targetGame = g;
+                        break;
+                      }
+                    }
+                    
+                    if (targetGame) {
+                      console.log(`Found matching game: ${targetGame.homeTeam} vs ${targetGame.awayTeam} (ID: ${targetGame.gameId})`);
+                      
+                      // Step 2: Get starting pitchers for the game
+                      const startingPitchers = await mlbStatsApiService.getStartingPitchers(targetGame.gameId);
+                      
+                      // Step 3: Get season stats for each starting pitcher
+                      let homePitcherStats = null;
+                      let awayPitcherStats = null;
+                      
+                      if (startingPitchers.homeStarter?.id) {
+                        homePitcherStats = await mlbStatsApiService.getPitcherSeasonStats(startingPitchers.homeStarter.id);
+                      }
+                      
+                      if (startingPitchers.awayStarter?.id) {
+                        awayPitcherStats = await mlbStatsApiService.getPitcherSeasonStats(startingPitchers.awayStarter.id);
+                      }
+                      
+                      // Step 4: Get top hitters for each team
+                      // First, get team IDs
+                      let homeTeamId = targetGame.homeTeamId;
+                      let awayTeamId = targetGame.awayTeamId;
+                      
+                      // Get top hitters for both teams
+                      if (homeTeamId) {
+                        try {
+                          console.log(`Getting top hitters for ${targetGame.homeTeam} (ID: ${homeTeamId})...`);
+                          const rosterRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${homeTeamId}/roster/Active`);
+                          const rosterData = await rosterRes.json();
+                          const players = rosterData.roster;
+                          
+                          const statPromises = players
+                            .filter(player => player.position.code !== '1') // Filter out pitchers
+                            .map(async (player) => {
+                              const pid = player.person.id;
+                              const statRes = await fetch(`https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=season&group=hitting&season=2025`);
+                              const statData = await statRes.json();
+                              const stat = statData.stats[0]?.splits[0]?.stat || {};
+                              return {
+                                name: player.person.fullName,
+                                avg: Number(stat.avg) || 0,
+                                hr: Number(stat.homeRuns) || 0,
+                                rbi: Number(stat.rbi) || 0,
+                                hits: Number(stat.hits) || 0,
+                                atBats: Number(stat.atBats) || 0
+                              };
+                            });
+                            
+                          const stats = await Promise.all(statPromises);
+                          
+                          // Filter out players with too few at-bats
+                          const qualifiedStats = stats.filter(player => player.atBats >= 20);
+                          
+                          // Get top 3 in each category
+                          const topAvg = [...qualifiedStats].sort((a, b) => b.avg - a.avg).slice(0, 3);
+                          const topHR = [...qualifiedStats].sort((a, b) => b.hr - a.hr).slice(0, 3);
+                          const topRBI = [...qualifiedStats].sort((a, b) => b.rbi - a.rbi).slice(0, 3);
+                          
+                          topHitters.home = { topAvg, topHR, topRBI };
+                        } catch (error) {
+                          console.error(`Error getting top hitters for ${targetGame.homeTeam}:`, error);
+                        }
+                      }
+                      
+                      if (awayTeamId) {
+                        try {
+                          console.log(`Getting top hitters for ${targetGame.awayTeam} (ID: ${awayTeamId})...`);
+                          const rosterRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${awayTeamId}/roster/Active`);
+                          const rosterData = await rosterRes.json();
+                          const players = rosterData.roster;
+                          
+                          const statPromises = players
+                            .filter(player => player.position.code !== '1') // Filter out pitchers
+                            .map(async (player) => {
+                              const pid = player.person.id;
+                              const statRes = await fetch(`https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=season&group=hitting&season=2025`);
+                              const statData = await statRes.json();
+                              const stat = statData.stats[0]?.splits[0]?.stat || {};
+                              return {
+                                name: player.person.fullName,
+                                avg: Number(stat.avg) || 0,
+                                hr: Number(stat.homeRuns) || 0,
+                                rbi: Number(stat.rbi) || 0,
+                                hits: Number(stat.hits) || 0,
+                                atBats: Number(stat.atBats) || 0
+                              };
+                            });
+                            
+                          const stats = await Promise.all(statPromises);
+                          
+                          // Filter out players with too few at-bats
+                          const qualifiedStats = stats.filter(player => player.atBats >= 20);
+                          
+                          // Get top 3 in each category
+                          const topAvg = [...qualifiedStats].sort((a, b) => b.avg - a.avg).slice(0, 3);
+                          const topHR = [...qualifiedStats].sort((a, b) => b.hr - a.hr).slice(0, 3);
+                          const topRBI = [...qualifiedStats].sort((a, b) => b.rbi - a.rbi).slice(0, 3);
+                          
+                          topHitters.away = { topAvg, topHR, topRBI };
+                        } catch (error) {
+                          console.error(`Error getting top hitters for ${targetGame.awayTeam}:`, error);
+                        }
+                      }
+                      
+                      // Format pitcher stats for our existing structure
+                      pitcherStats = {
+                        home: homePitcherStats ? {
+                          name: startingPitchers.homeStarter.name,
+                          ERA: homePitcherStats.era,
+                          WHIP: homePitcherStats.whip,
+                          record: `${homePitcherStats.wins}-${homePitcherStats.losses}`,
+                          IP: homePitcherStats.inningsPitched,
+                          K: homePitcherStats.strikeouts,
+                          BB: homePitcherStats.walks
+                        } : null,
+                        away: awayPitcherStats ? {
+                          name: startingPitchers.awayStarter.name,
+                          ERA: awayPitcherStats.era,
+                          WHIP: awayPitcherStats.whip,
+                          record: `${awayPitcherStats.wins}-${awayPitcherStats.losses}`,
+                          IP: awayPitcherStats.inningsPitched,
+                          K: awayPitcherStats.strikeouts,
+                          BB: awayPitcherStats.walks
+                        } : null,
+                      };
+                      
+                      console.log('Successfully retrieved MLB stats from MLB Stats API');
                     } else {
-                      // Fallback to just pitcher matchup
-                      console.log('Falling back to just pitcher matchup data...');
-                      pitcherStats = await ballDontLieService.getMlbPitcherMatchup(game.home_team, game.away_team);
+                      console.warn(`Could not find a game matching ${game.home_team} vs ${game.away_team} in today's MLB schedule`);
                     }
                   } catch (error) {
-                    console.error('Error getting MLB stats from Ball Don\'t Lie:', error);
+                    console.error('Error getting MLB stats from MLB Stats API:', error);
                   }
                   
                   // PRIORITY 2: Also get team stats from API-Sports as a supplement
@@ -449,9 +584,9 @@ const picksService = {
                     mlbPlayerStatsService.generateMlbPlayerStatsReport(game.home_team, game.away_team, formattedDate)
                   ]);
                   
-                  // Combine Ball Don't Lie pitcher data with API-Sports team stats
-                  if (pitcherStats || apiSportsStats) {
-                    console.log('Integrating Ball Don\'t Lie pitcher data with team stats for MLB analysis');
+                  // Combine MLB Stats API pitcher data with team stats and top hitters
+                  if (pitcherStats || apiSportsStats || topHitters) {
+                    console.log('Integrating MLB Stats API pitcher and batting data for analysis');
                     
                     // First, ensure we have a base structure even if API-Sports data is missing
                     const homeTeam = apiSportsStats?.homeTeam || { teamName: game.home_team, wins: 0, losses: 0, homeRecord: 'N/A', batting: {}, pitching: {} };
@@ -459,9 +594,9 @@ const picksService = {
                     
                     let formattedStatsContext = `**2025 MLB CURRENT SEASON DATA ONLY**\n\n`;
                     
-                    // FIRST: Add Ball Don't Lie pitcher data (2025 season stats only)
+                    // FIRST: Add MLB Stats API pitcher data (2025 season stats only)
                     if (pitcherStats) {
-                      console.log('Including 2025 pitcher matchup data from Ball Don\'t Lie');
+                      console.log('Including 2025 pitcher matchup data from MLB Stats API');
                       formattedStatsContext += `## STARTING PITCHER MATCHUP (2025 SEASON ONLY)\n`;
                       
                       // Home pitcher
@@ -518,6 +653,81 @@ const picksService = {
                     formattedStatsContext += `Record: ${awayTeam?.wins || 0}-${awayTeam?.losses || 0} (${awayTeam?.awayRecord || 'N/A'} on road)\n`;
                     formattedStatsContext += `Team Batting: AVG: ${awayTeam?.batting?.average || 'N/A'}, Runs: ${awayTeam?.batting?.runs || 0}, HR: ${awayTeam?.batting?.homeRuns || 0}\n`;
                     formattedStatsContext += `Team Pitching: ERA: ${awayTeam?.pitching?.era || 'N/A'}, Strikeouts: ${awayTeam?.pitching?.strikeouts || 0}\n\n`;
+                    
+                    // FOURTH: Add top hitters data from MLB Stats API
+                    if (topHitters && (topHitters.home?.topAvg?.length > 0 || topHitters.away?.topAvg?.length > 0)) {
+                      formattedStatsContext += `## TOP HITTERS (2025 SEASON):\n\n`;
+                      
+                      // Home team top hitters
+                      formattedStatsContext += `${homeTeam?.teamName || game.home_team} Top Hitters:\n`;
+                      
+                      // Top batting average hitters
+                      if (topHitters.home?.topAvg?.length > 0) {
+                        formattedStatsContext += `Top AVG: `;
+                        topHitters.home.topAvg.forEach((player, index) => {
+                          formattedStatsContext += `${player.name} (.${(player.avg * 1000).toFixed(0).padStart(3, '0')})`;
+                          if (index < topHitters.home.topAvg.length - 1) formattedStatsContext += `, `;
+                        });
+                        formattedStatsContext += `\n`;
+                      }
+                      
+                      // Top home run hitters
+                      if (topHitters.home?.topHR?.length > 0) {
+                        formattedStatsContext += `Top HR: `;
+                        topHitters.home.topHR.forEach((player, index) => {
+                          formattedStatsContext += `${player.name} (${player.hr})`;
+                          if (index < topHitters.home.topHR.length - 1) formattedStatsContext += `, `;
+                        });
+                        formattedStatsContext += `\n`;
+                      }
+                      
+                      // Top RBI hitters
+                      if (topHitters.home?.topRBI?.length > 0) {
+                        formattedStatsContext += `Top RBI: `;
+                        topHitters.home.topRBI.forEach((player, index) => {
+                          formattedStatsContext += `${player.name} (${player.rbi})`;
+                          if (index < topHitters.home.topRBI.length - 1) formattedStatsContext += `, `;
+                        });
+                        formattedStatsContext += `\n`;
+                      }
+                      
+                      formattedStatsContext += `\n`;
+                      
+                      // Away team top hitters
+                      formattedStatsContext += `${awayTeam?.teamName || game.away_team} Top Hitters:\n`;
+                      
+                      // Top batting average hitters
+                      if (topHitters.away?.topAvg?.length > 0) {
+                        formattedStatsContext += `Top AVG: `;
+                        topHitters.away.topAvg.forEach((player, index) => {
+                          formattedStatsContext += `${player.name} (.${(player.avg * 1000).toFixed(0).padStart(3, '0')})`;
+                          if (index < topHitters.away.topAvg.length - 1) formattedStatsContext += `, `;
+                        });
+                        formattedStatsContext += `\n`;
+                      }
+                      
+                      // Top home run hitters
+                      if (topHitters.away?.topHR?.length > 0) {
+                        formattedStatsContext += `Top HR: `;
+                        topHitters.away.topHR.forEach((player, index) => {
+                          formattedStatsContext += `${player.name} (${player.hr})`;
+                          if (index < topHitters.away.topHR.length - 1) formattedStatsContext += `, `;
+                        });
+                        formattedStatsContext += `\n`;
+                      }
+                      
+                      // Top RBI hitters
+                      if (topHitters.away?.topRBI?.length > 0) {
+                        formattedStatsContext += `Top RBI: `;
+                        topHitters.away.topRBI.forEach((player, index) => {
+                          formattedStatsContext += `${player.name} (${player.rbi})`;
+                          if (index < topHitters.away.topRBI.length - 1) formattedStatsContext += `, `;
+                        });
+                        formattedStatsContext += `\n`;
+                      }
+                      
+                      formattedStatsContext += `\n`;
+                    }
                     
                     // Add pitcher data if available and wasn't already included in player stats report
                     if (formattedGameData.pitcherData && !playerStatsReport) {
@@ -725,11 +935,11 @@ const picksService = {
                 const confidence = pick.rawAnalysis.rawOpenAIOutput.confidence || 0;
                 console.log('Pick generated with confidence:', confidence);
                 
-                if (confidence >= 0.7) {
+                if (confidence >= 0.75) {
                   allPicks.push(pick);
                   console.log('Success! Pick added:', pick.rawAnalysis.rawOpenAIOutput.pick || 'No pick text');
                 } else {
-                  console.warn(`Filtering out pick for ${formattedGameData.matchup} - confidence ${confidence} below threshold of 0.7`);
+                  console.log(`Filtering out pick for ${formattedGameData.homeTeam} vs ${formattedGameData.awayTeam} - confidence ${confidence} below threshold of 0.75`);
                 }
               } else {
                 console.warn(`No pick generated for ${formattedGameData.matchup}. Likely confidence below threshold.`);
@@ -952,25 +1162,19 @@ const picksService = {
           console.log(`Successfully extracted JSON for: ${pick.game}, confidence: ${jsonData.confidence || 'unknown'}`);
           return jsonData;
         })
-        // Filter out null values and picks with confidence below threshold
+        // Filter out null values but don't filter by confidence here (already did that earlier)
         .filter(jsonData => {
           // Skip null values
           if (jsonData === null) return false;
           
-          // Use 0.78 as the confidence threshold
+          // Log what we're storing (all picks that made it this far should have confidence >= 0.75)
           const confidence = jsonData.confidence || 0;
-          const isAboveThreshold = confidence >= 0.78;
+          console.log(`Storing pick for ${jsonData.homeTeam} vs ${jsonData.awayTeam} with confidence: ${confidence}`);
           
-          if (!isAboveThreshold) {
-            console.warn(`Filtering out pick (${jsonData.homeTeam} vs ${jsonData.awayTeam}) at database storage - confidence ${confidence} below threshold of 0.78`);
-          } else {
-            console.log(`Storing pick for ${jsonData.homeTeam} vs ${jsonData.awayTeam} with confidence: ${confidence}`);
-          }
-          
-          return isAboveThreshold;
+          return true;
         });
       
-      console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output above 0.78 confidence threshold`);
+      console.log(`After filtering, storing ${rawJsonOutputs.length} valid picks with raw OpenAI output at 0.75 confidence threshold`);
       
       // Skip if there are no valid picks
       if (rawJsonOutputs.length === 0) {
