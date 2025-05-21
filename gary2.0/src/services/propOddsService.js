@@ -139,20 +139,8 @@ export const propOddsService = {
                   let overOdds = outcome.name === 'Over' ? outcome.price : null;
                   let underOdds = outcome.name === 'Under' ? outcome.price : null;
                   
-                  // Clean up extreme odds values that are likely errors
-                  if (overOdds !== null) {
-                    // For positive odds, cap at +300
-                    if (overOdds > 300) overOdds = 300;
-                    // For negative odds, cap at -200
-                    if (overOdds < -200) overOdds = -200;
-                  }
-                  
-                  if (underOdds !== null) {
-                    // For positive odds, cap at +300
-                    if (underOdds > 300) underOdds = 300;
-                    // For negative odds, cap at -200
-                    if (underOdds < -200) underOdds = -200;
-                  }
+                  // Use the real odds values as provided by the odds API
+                  // No capping of extreme odds values
                   
                   allPlayerProps.push({
                     player: outcome.description, // Player name
