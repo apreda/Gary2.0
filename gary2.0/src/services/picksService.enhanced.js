@@ -189,35 +189,61 @@ export const picksService = {
     const awayStats = gameData.teamStats?.awayTeam;
     const gameContext = gameData.gameContext;
     
-    // Build moneyline odds string
+    // Add odds information if available from either source
     let oddsString = '';
-    if (game.bookmakers && game.bookmakers.length > 0 && game.bookmakers[0].markets) {
-      const moneylineMarket = game.bookmakers[0].markets.find(m => 
-        m.key === 'h2h' || m.outcomes.some(o => o.name === homeTeam || o.name === awayTeam)
-      );
+    
+    // Try to get odds from combinedMlbService first (via gameData.odds)
+    if (gameData.odds?.bookmakers?.length > 0) {
+      console.log(`[Enhanced Picks Service] Using odds data from combinedMlbService`);
+      const bookmaker = gameData.odds.bookmakers[0];
       
-      if (moneylineMarket) {
-        const homeOdds = moneylineMarket.outcomes.find(o => o.name === homeTeam);
-        const awayOdds = moneylineMarket.outcomes.find(o => o.name === awayTeam);
+      // Get moneyline odds
+      const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
+      if (h2hMarket) {
+        const homeMoneyline = h2hMarket.outcomes.find(o => o.name === homeTeam || o.name.includes(homeTeam) || homeTeam.includes(o.name));
+        const awayMoneyline = h2hMarket.outcomes.find(o => o.name === awayTeam || o.name.includes(awayTeam) || awayTeam.includes(o.name));
         
-        if (homeOdds && awayOdds) {
-          oddsString = `Current moneyline odds: ${homeTeam} (${homeOdds.price}), ${awayTeam} (${awayOdds.price})`;
+        if (homeMoneyline && awayMoneyline) {
+          oddsString = `Current moneyline odds: ${homeTeam} (${homeMoneyline.price}), ${awayTeam} (${awayMoneyline.price})`;
         }
       }
       
-      // Add spread odds if available
-      const spreadMarket = game.bookmakers[0].markets.find(m => 
-        m.key === 'spreads' || m.outcomes.some(o => o.point)
-      );
-      
+      // Get spread odds
+      const spreadMarket = bookmaker.markets?.find(m => m.key === 'spreads');
       if (spreadMarket) {
-        const homeSpread = spreadMarket.outcomes.find(o => o.name === homeTeam);
-        const awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam);
+        const homeSpread = spreadMarket.outcomes.find(o => o.name === homeTeam || o.name.includes(homeTeam) || homeTeam.includes(o.name));
+        const awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam || o.name.includes(awayTeam) || awayTeam.includes(o.name));
         
         if (homeSpread && awaySpread) {
           oddsString += `\nCurrent spread: ${homeTeam} (${homeSpread.point}), ${awayTeam} (${awaySpread.point})`;
         }
       }
+    } 
+    // Fallback to game object if available
+    else if (game.bookmakers?.length > 0) {
+      console.log(`[Enhanced Picks Service] Using odds data from game object fallback`);
+      const h2hMarket = game.bookmakers[0]?.markets?.find(m => m.key === 'h2h');
+      const spreadMarket = game.bookmakers[0]?.markets?.find(m => m.key === 'spreads');
+      
+      if (h2hMarket) {
+        const homeMoneyline = h2hMarket.outcomes.find(o => o.name === homeTeam);
+        const awayMoneyline = h2hMarket.outcomes.find(o => o.name === awayTeam);
+        
+        if (homeMoneyline && awayMoneyline) {
+          oddsString = `Current moneyline odds: ${homeTeam} (${homeMoneyline.price}), ${awayTeam} (${awayMoneyline.price})`;
+        }
+        
+        if (spreadMarket) {
+          const homeSpread = spreadMarket.outcomes.find(o => o.name === homeTeam);
+          const awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam);
+          
+          if (homeSpread && awaySpread) {
+            oddsString += `\nCurrent spread: ${homeTeam} (${homeSpread.point}), ${awayTeam} (${awaySpread.point})`;
+          }
+        }
+      }
+    } else {
+      console.log(`[Enhanced Picks Service] No odds data available for ${homeTeam} vs ${awayTeam}`);
     }
     
     // Start building the prompt
@@ -293,7 +319,7 @@ export const picksService = {
     
     // Add instructions for generating the analysis
     prompt += `Based on the above information, provide a detailed analysis of this matchup. Then, recommend the best moneyline and/or spread bet for this game. Provide a confidence score between 0.0-1.0 for each recommendation.\n\n`;
-    prompt += `Your analysis should cover team form, pitching matchup, head-to-head history, betting trends, and any other relevant factors.\n\n`;
+    prompt += `Your analysis should cover team form, pitching matchup (particularly emphasize pitcher ERA when available), head-to-head history, betting trends, and any other relevant factors.\n\n`;
     prompt += `IMPORTANT: Focus ONLY on moneyline and spread bets. DO NOT recommend totals or player props.\n\n`;
     prompt += `Return a JSON object with the following structure: { "analysis": "Your detailed analysis here", "recommendations": [{ "type": "moneyline", "team": "Team name", "odds": "Current odds", "confidence": 0.XX }, { "type": "spread", "team": "Team name", "line": "Current spread", "confidence": 0.XX }] }`;
     
