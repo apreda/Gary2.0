@@ -695,7 +695,7 @@ const propPicksService = {
         return [];
       }
       const valid = playerProps.filter(p => p.confidence >= 0.51);
-      const highConf = valid.filter(p => p.confidence >= 0.78);
+      const highConf = valid.filter(p => p.confidence >= 0.85);
       
       // Sort by confidence (highest first) and take only the top 10
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
