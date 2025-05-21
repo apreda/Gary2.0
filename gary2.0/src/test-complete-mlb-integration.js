@@ -9,7 +9,7 @@
  */
 import dotenv from 'dotenv';
 import { ballDontLieService } from './services/ballDontLieService.js';
-import { mlbStatsApiService } from './services/mlbStatsApiService.enhanced.js';
+import { mlbStatsApiService } from './services/mlbStatsApiService.js';
 import { perplexityService } from './services/perplexityService.js';
 
 // Load environment variables
