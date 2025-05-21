@@ -426,11 +426,21 @@ const mlbStatsApiService = {
     try {
       // Step 1: Get all games for the day
       const games = await mlbStatsApiService.getTodaysGames(date) || [];
+      console.log(`[MLB API] Found ${games.length} games for ${date}`);
       
-      // Step 2: For each game, get the starting pitchers
+      // Step 2: Enhance games with more data
+      const enhancedGames = games.map(game => ({
+        ...game,
+        matchup: `${game.awayTeam} at ${game.homeTeam}`,
+        gameTime: new Date(game.gameDate).toLocaleString(),
+        timeStamp: Date.now()
+      }));
+      console.log(`[MLB API] Enhanced ${enhancedGames.length} games for ${date}`);
+      
+      // Step 3: For each game, get the starting pitchers
       const gamesWithPitchers = [];
       
-      for (const game of games) {
+      for (const game of enhancedGames) {
         if (!game || !game.gameId) {
           console.log(`[MLB API] Skipping game with missing data:`, game);
           continue;
@@ -443,7 +453,7 @@ const mlbStatsApiService = {
           let homeStarterSeasonStats = {};
           let awayStarterSeasonStats = {};
           
-          if (pitchers.homeStarter?.id) {
+          if (pitchers && pitchers.homeStarter && pitchers.homeStarter.id) {
             try {
               homeStarterSeasonStats = await mlbStatsApiService.getPitcherSeasonStats(pitchers.homeStarter.id);
             } catch (homeStatsError) {
@@ -451,7 +461,7 @@ const mlbStatsApiService = {
             }
           }
           
-          if (pitchers.awayStarter?.id) {
+          if (pitchers && pitchers.awayStarter && pitchers.awayStarter.id) {
             try {
               awayStarterSeasonStats = await mlbStatsApiService.getPitcherSeasonStats(pitchers.awayStarter.id);
             } catch (awayStatsError) {
@@ -463,11 +473,11 @@ const mlbStatsApiService = {
           gamesWithPitchers.push({
             ...game,
             pitchers: {
-              home: pitchers.homeStarter ? {
+              home: pitchers && pitchers.homeStarter ? {
                 ...pitchers.homeStarter,
                 seasonStats: homeStarterSeasonStats || {}
               } : null,
-              away: pitchers.awayStarter ? {
+              away: pitchers && pitchers.awayStarter ? {
                 ...pitchers.awayStarter,
                 seasonStats: awayStarterSeasonStats || {}
               } : null
@@ -475,13 +485,23 @@ const mlbStatsApiService = {
           });
         } catch (gameError) {
           console.error(`[MLB API] Error processing game ${game.gameId}:`, gameError.message);
+          // Still include the game but without pitcher data
+          gamesWithPitchers.push({
+            ...game,
+            pitchers: { home: null, away: null },
+            error: gameError.message
+          });
         }
       }
       
-      // Step 3: Get injury list
+      // Step 4: Get injury list (if available)
       let injuries = [];
       try {
-        injuries = await mlbStatsApiService.getILTransactions();
+        if (typeof mlbStatsApiService.getILTransactions === 'function') {
+          injuries = await mlbStatsApiService.getILTransactions() || [];
+        } else {
+          console.log(`[MLB API] IL Transactions function not available`);
+        }
       } catch (injuriesError) {
         console.error(`[MLB API] Error getting IL transactions:`, injuriesError.message);
       }
@@ -680,7 +700,7 @@ getPitcherSeasonStats: async (playerId) => {
     });
     
     if (response.data && response.data.stats && response.data.stats.length > 0) {
-      const stats = response.data.stats[0].splits[0]?.stat || {};
+      const stats = response.data.stats[0].splits?.[0]?.stat || {};
       return {
         era: stats.era || 0,
         wins: stats.wins || 0,
@@ -688,6 +708,7 @@ getPitcherSeasonStats: async (playerId) => {
         inningsPitched: stats.inningsPitched || '0.0',
         strikeouts: stats.strikeOuts || 0,
         whip: stats.whip || 0,
+        battingAvgAgainst: stats.avg || '.000',  // Added this field from our fix
         walks: stats.baseOnBalls || 0,
         hits: stats.hits || 0,
         homeRuns: stats.homeRuns || 0,
@@ -716,31 +737,46 @@ getHitterStats: async (gamePk) => {
     console.log(`[MLB API] Getting hitter stats for game ${gamePk}`);
     const boxscore = await mlbStatsApiService.getBoxscore(gamePk);
     
-    if (!boxscore) return { home: [], away: [] };
+    if (!boxscore || !boxscore.teams) {
+      console.log(`[MLB API] No valid boxscore data found for game ${gamePk}`);
+      return { home: [], away: [] };
+    }
     
     // Function to extract hitters from a team
     const getHitters = (teamType) => {
+      if (!boxscore.teams[teamType] || !boxscore.teams[teamType].players) {
+        console.log(`[MLB API] No ${teamType} team data found in boxscore for game ${gamePk}`);
+        return [];
+      }
+      
       const team = boxscore.teams[teamType];
       
-      return Object.values(team.players)
-        .filter(p => p.stats?.batting && p.stats.batting.atBats > 0)
-        .map(p => ({
-          id: p.person.id,
-          name: p.person.fullName,
-          position: p.position?.abbreviation || '',
-          team: teamType === 'home' ? boxscore.teams.home.team.name : boxscore.teams.away.team.name,
-          stats: {
-            hits: p.stats.batting.hits || 0,
-            rbi: p.stats.batting.rbi || 0,
-            homeRuns: p.stats.batting.homeRuns || 0,
-            runs: p.stats.batting.runs || 0,
-            atBats: p.stats.batting.atBats || 0,
-            avg: p.stats.batting.avg || '.000',
-            totalBases: p.stats.batting.totalBases || 0,
-            strikeouts: p.stats.batting.strikeOuts || 0,
-            walks: p.stats.batting.baseOnBalls || 0
-          }
-        }));
+      try {
+        return Object.values(team.players)
+          .filter(p => p && p.stats && p.stats.batting && p.stats.batting.atBats > 0)
+          .map(p => ({
+            id: p.person ? p.person.id : 0,
+            name: p.person ? p.person.fullName : 'Unknown Player',
+            position: p.position ? (p.position.abbreviation || '') : '',
+            team: teamType === 'home' ? 
+              (boxscore.teams.home.team ? boxscore.teams.home.team.name : 'Home Team') : 
+              (boxscore.teams.away.team ? boxscore.teams.away.team.name : 'Away Team'),
+            stats: {
+              hits: p.stats.batting.hits || 0,
+              rbi: p.stats.batting.rbi || 0,
+              homeRuns: p.stats.batting.homeRuns || 0,
+              runs: p.stats.batting.runs || 0,
+              atBats: p.stats.batting.atBats || 0,
+              avg: p.stats.batting.avg || '.000',
+              totalBases: p.stats.batting.totalBases || 0,
+              strikeouts: p.stats.batting.strikeOuts || 0,
+              walks: p.stats.batting.baseOnBalls || 0
+            }
+          }));
+      } catch (err) {
+        console.error(`[MLB API] Error extracting ${teamType} hitters:`, err.message);
+        return [];
+      }
     };
     
     return {
