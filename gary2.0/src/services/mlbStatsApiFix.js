@@ -2,6 +2,10 @@
  * MLB Stats API - Pitcher Data Retrieval Functions
  * Improved error handling to prevent TypeErrors when accessing properties of undefined objects
  */
+import axios from 'axios';
+
+// Define the API base URL (same as in mlbStatsApiService.js)
+const MLB_API_BASE_URL = 'https://statsapi.mlb.com/api/v1';
 
 // Enhanced function for retrieving pitcher season stats
 const getPitcherSeasonStatsFixed = async (playerId) => {
