@@ -396,20 +396,43 @@ const picksService = {
               try {
                 // Different priority order for each sport
                 if (sportName === 'MLB') {
-                  // Now we prioritize MLB Stats API as the primary source for MLB data
-                  console.log('MLB STATS PRIORITY: 1) MLB Stats API for pitcher and batter data → 2) API-Sports as fallback → 3) SportsDB as final fallback');
+                  // For MLB we prioritize Ball Don't Lie for pitcher data and team stats, only using MLB Stats API for top hitters data
+                  console.log('MLB STATS PRIORITY: 1) Ball Don\'t Lie for pitcher data → 2) MLB Stats API for top hitters → 3) API-Sports for team data → 4) SportsDB as fallback');
                   
-                  // Import MLB Stats API service
+                  // Import Ball Don't Lie service for team stats and pitcher data
+                  const ballDontLieModule = await import('./ballDontLieService');
+                  const ballDontLieService = ballDontLieModule.ballDontLieService;
+                  
+                  // Import MLB Stats API for player stats
                   const mlbStatsApiModule = await import('./mlbStatsApiService');
                   const mlbStatsApiService = mlbStatsApiModule.mlbStatsApiService;
                   
-                  // Get pitcher and batter stats using MLB Stats API
+                  // Variables to hold data
                   let pitcherStats = null;
-                  let topHitters = { home: [], away: [] };
                   let mlbComprehensiveStats = null;
+                  let topHitters = { home: [], away: [] };
                   
+                  // PRIORITY 1: Get pitcher matchup data from Ball Don't Lie (keep existing team stats logic)
                   try {
-                    console.log(`Getting MLB Stats API data for ${game.home_team} vs ${game.away_team}...`);
+                    // First, try to get the comprehensive MLB game stats
+                    mlbComprehensiveStats = await ballDontLieService.getComprehensiveMlbGameStats(game.home_team, game.away_team);
+                    
+                    if (mlbComprehensiveStats) {
+                      console.log('Successfully retrieved comprehensive MLB stats from Ball Don\'t Lie');
+                      // Extract pitcher matchup
+                      pitcherStats = mlbComprehensiveStats.pitcherMatchup;
+                    } else {
+                      // Fallback to just pitcher matchup
+                      console.log('Falling back to just pitcher matchup data...');
+                      pitcherStats = await ballDontLieService.getMlbPitcherMatchup(game.home_team, game.away_team);
+                    }
+                  } catch (error) {
+                    console.error('Error getting MLB stats from Ball Don\'t Lie:', error);
+                  }
+                  
+                  // PRIORITY 2: Get top hitters data from MLB Stats API
+                  try {
+                    console.log(`Getting MLB Stats API player data for ${game.home_team} vs ${game.away_team}...`);
                     
                     // Step 1: Get today's games to find the game we're analyzing
                     const todaysGames = await mlbStatsApiService.getTodaysGames();
@@ -429,23 +452,7 @@ const picksService = {
                     if (targetGame) {
                       console.log(`Found matching game: ${targetGame.homeTeam} vs ${targetGame.awayTeam} (ID: ${targetGame.gameId})`);
                       
-                      // Step 2: Get starting pitchers for the game
-                      const startingPitchers = await mlbStatsApiService.getStartingPitchers(targetGame.gameId);
-                      
-                      // Step 3: Get season stats for each starting pitcher
-                      let homePitcherStats = null;
-                      let awayPitcherStats = null;
-                      
-                      if (startingPitchers.homeStarter?.id) {
-                        homePitcherStats = await mlbStatsApiService.getPitcherSeasonStats(startingPitchers.homeStarter.id);
-                      }
-                      
-                      if (startingPitchers.awayStarter?.id) {
-                        awayPitcherStats = await mlbStatsApiService.getPitcherSeasonStats(startingPitchers.awayStarter.id);
-                      }
-                      
-                      // Step 4: Get top hitters for each team
-                      // First, get team IDs
+                      // Get team IDs to fetch player data
                       let homeTeamId = targetGame.homeTeamId;
                       let awayTeamId = targetGame.awayTeamId;
                       
@@ -530,34 +537,12 @@ const picksService = {
                         }
                       }
                       
-                      // Format pitcher stats for our existing structure
-                      pitcherStats = {
-                        home: homePitcherStats ? {
-                          name: startingPitchers.homeStarter.name,
-                          ERA: homePitcherStats.era,
-                          WHIP: homePitcherStats.whip,
-                          record: `${homePitcherStats.wins}-${homePitcherStats.losses}`,
-                          IP: homePitcherStats.inningsPitched,
-                          K: homePitcherStats.strikeouts,
-                          BB: homePitcherStats.walks
-                        } : null,
-                        away: awayPitcherStats ? {
-                          name: startingPitchers.awayStarter.name,
-                          ERA: awayPitcherStats.era,
-                          WHIP: awayPitcherStats.whip,
-                          record: `${awayPitcherStats.wins}-${awayPitcherStats.losses}`,
-                          IP: awayPitcherStats.inningsPitched,
-                          K: awayPitcherStats.strikeouts,
-                          BB: awayPitcherStats.walks
-                        } : null,
-                      };
-                      
-                      console.log('Successfully retrieved MLB stats from MLB Stats API');
+                      console.log('Successfully retrieved top hitters data from MLB Stats API');
                     } else {
                       console.warn(`Could not find a game matching ${game.home_team} vs ${game.away_team} in today's MLB schedule`);
                     }
                   } catch (error) {
-                    console.error('Error getting MLB stats from MLB Stats API:', error);
+                    console.error('Error getting player stats from MLB Stats API:', error);
                   }
                   
                   // PRIORITY 2: Also get team stats from API-Sports as a supplement
