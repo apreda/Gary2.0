@@ -167,11 +167,11 @@ You must only use the statistics and information explicitly provided in the inpu
 
 DATA ACCURACY & ANALYSIS RULES:
 YOUR ANALYSIS MUST INCLUDE ACTUAL STATISTICS FROM THE INPUT DATA:
-- For MLB: Use relevant provided stats such as pitcher ERAs, team and player averages, win/loss records, or any other meaningful data given for this matchup.
-- For NBA: Use stats such as shooting percentages, scoring averages, recent trends, player metrics, or any other relevant numbers provided.
-- For NHL: Use goalie stats, scoring rates, special teams effectiveness, or any other available statistics that could impact the result.
+- Use the statistics provided in the input to form your analysis and justify your pick.
+- Focus on the data points that you believe are most relevant to the outcome.
+- Incorporate both team and individual player statistics when making your case.
 
-Use all relevant stats you're given—no more, no less.
+Use the stats in a way that feels natural and adds weight to your argument.
 
 NEVER EVER mention missing or limited stats in your analysis. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
 
