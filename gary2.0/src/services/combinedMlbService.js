@@ -6,7 +6,7 @@
  * 3. Perplexity for game context, storylines, and other relevant data
  */
 import { ballDontLieService } from './ballDontLieService.js';
-import { mlbStatsApiService } from './mlbStatsApiService.js';
+import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 import { perplexityService } from './perplexityService.js';
 
 const combinedMlbService = {
