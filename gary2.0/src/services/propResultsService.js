@@ -85,10 +85,24 @@ const propResultsService = {
       
       // 3. Use MLB Stats API to process all props in one batch
       const apiResults = await mlbStatsApiService.automateProps(mlbPropsList, date);
-      console.log(`MLB Stats API returned results for ${apiResults.length} props`);
+      console.log(`MLB Stats API returned results for ${apiResults.length} props`); 
+      
+      // Filter to only keep the top 10 prop picks with highest confidence levels
+      let filteredApiResults = [...apiResults];
+      if (filteredApiResults.length > 10) {
+        console.log(`Limiting prop picks to the top 10 highest confidence picks (out of ${filteredApiResults.length})`);
+        // Sort by confidence level in descending order (highest confidence first)
+        filteredApiResults.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+        // Keep only the top 10
+        filteredApiResults = filteredApiResults.slice(0, 10);
+        console.log(`Selected top 10 prop picks with confidence levels: ${filteredApiResults.map(r => r.confidence).join(', ')}`);
+      } else {
+        console.log(`Keeping all ${filteredApiResults.length} prop picks as count is <= 10`);
+      }
       
       // 4. Format results for storage in Supabase prop_results table
-      const resultsToInsert = apiResults.map(apiResult => {
+      // Use the filtered list (which has at most 10 items) instead of the full list
+      const resultsToInsert = filteredApiResults.map(apiResult => {
         return {
           prop_pick_id: apiResult.prop_pick_id,
           game_date: date,
