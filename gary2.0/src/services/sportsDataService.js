@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { oddsService } from './oddsService';
+import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService';
 
 /**

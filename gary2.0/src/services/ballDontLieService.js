@@ -459,65 +459,7 @@ const ballDontLieService = {
     }
   },
   
-  /**
-   * Get comprehensive MLB game stats for OpenAI analysis
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @returns {Promise<Object>} Complete game stats
-   */
-  async getComprehensiveMlbGameStats(homeTeam, awayTeam) {
-    try {
-      console.log(`Getting comprehensive 2025 MLB stats for ${awayTeam} @ ${homeTeam}...`);
-      
-      // Get pitcher matchup
-      const pitcherMatchup = await this.getMlbPitcherMatchup(homeTeam, awayTeam);
-      
-      // Get team season stats with shorter cache for fresher 2025 data
-      const teamCacheKey = `mlb_teams_${homeTeam}_${awayTeam}`;
-      const teams = await getCachedOrFetch(teamCacheKey, async () => {
-        return this.getClient().mlb.getTeams();
-      }, true); // Use MLB-specific shorter cache TTL
-      if (!teams || !teams.data) {
-        throw new Error('Failed to fetch MLB teams');
-      }
-      
-      const findTeam = (teamName) => {
-        const normalizedTeamName = teamName.toLowerCase().replace(/\s+/g, '');
-        return teams.data.find(t => 
-          t.display_name.toLowerCase().replace(/\s+/g, '').includes(normalizedTeamName) ||
-          normalizedTeamName.includes(t.display_name.toLowerCase().replace(/\s+/g, ''))
-        );
-      };
-      
-      const homeTeamData = findTeam(homeTeam);
-      const awayTeamData = findTeam(awayTeam);
-      
-      if (!homeTeamData || !awayTeamData) {
-        throw new Error(`Team not found: ${!homeTeamData ? homeTeam : awayTeam}`);
-      }
-      
-      // Get 2025 team season stats
-      const currentYear = 2025;
-      const [homeTeamStats, awayTeamStats] = await Promise.all([
-        this.getMlbTeamSeasonStats(homeTeamData.id, currentYear),
-        this.getMlbTeamSeasonStats(awayTeamData.id, currentYear)
-      ]);
-      
-      return {
-        pitcherMatchup,
-        homeTeam: homeTeamStats,
-        awayTeam: awayTeamStats,
-        battingLeaders: {
-          home: [], // This would require additional API calls to populate
-          away: []
-        },
-        note: 'Data source: Ball Don\'t Lie API - 2025 season only'
-      };
-    } catch (error) {
-      console.error(`Error getting comprehensive MLB game stats: ${error}`);
-      return null;
-    }
-  },
+  // MLB game stats function moved down - see comprehensive implementation at line ~620
   
   
   /**
@@ -643,9 +585,8 @@ const ballDontLieService = {
           lastTenGames: teamComparison.homeTeam.lastTenGames,
           homeRecord: teamComparison.homeTeam.homeRecord,
           battingAvg: teamComparison.summary.homeBattingAVG,
-          era: teamComparison.summary.homePitchingERA,
-          runsScored: teamComparison.summary.homeRunsScored,
-          runsAllowed: teamComparison.summary.homeRunsAllowed,
+          // Team ERA removed to avoid confusion with starting pitcher ERA
+          // Runs scored and allowed removed to avoid confusing OpenAI
           pitcher: pitcherMatchup.homePitcher,
         },
         awayTeam: {
@@ -653,19 +594,18 @@ const ballDontLieService = {
           record: teamComparison.awayTeam.record,
           divisionRank: teamComparison.awayTeam.divisionRank,
           lastTenGames: teamComparison.awayTeam.lastTenGames,
-          awayRecord: teamComparison.awayTeam.awayRecord,
+          awayRecord: teamComparison.awayTeam.roadRecord,
           battingAvg: teamComparison.summary.awayBattingAVG,
-          era: teamComparison.summary.awayPitchingERA,
-          runsScored: teamComparison.summary.awayRunsScored,
-          runsAllowed: teamComparison.summary.awayRunsAllowed,
+          // Team ERA removed to avoid confusion with starting pitcher ERA
+          // Runs scored and allowed removed to avoid confusing OpenAI
           pitcher: pitcherMatchup.awayPitcher,
         },
-        venue: pitcherMatchup.game?.venue || 'TBD',
-        gameTime: pitcherMatchup.game?.time || 'TBD',
-        note: 'Comprehensive MLB game data including verified starting pitchers and team statistics'
+        statsAvailable: true,
+        pitcherMatchupText: pitcherMatchup.pitcherMatchupText,
+        teamComparisonText: teamComparison.teamComparisonText
       };
     } catch (error) {
-      console.error(`Error getting comprehensive MLB game stats: ${error.message}`);
+      console.error(`Error generating comprehensive MLB game stats for ${homeTeamName} vs ${awayTeamName}:`, error);
       return null;
     }
   },
@@ -750,6 +690,68 @@ const ballDontLieService = {
   },
   
   /**
+   * Get team information by team name
+   * @param {string} teamName - The name of the team to look up
+   * @returns {Promise<Object>} - Team object or null if not found
+   */
+  async getTeamByName(teamName) {
+    try {
+      console.log(`Looking up team: ${teamName}`);
+      // Normalize team name for comparison
+      const normalizedName = teamName.toLowerCase().trim();
+      
+      // Use the getMlbGamesByDate to get a list of teams
+      const todayDate = new Date().toISOString().split('T')[0];
+      const games = await this.getMlbGamesByDate(todayDate);
+      
+      // Extract all teams from today's games
+      const teams = [];
+      games.forEach(game => {
+        if (game.home_team && !teams.some(t => t.id === game.home_team.id)) {
+          teams.push(game.home_team);
+        }
+        if (game.away_team && !teams.some(t => t.id === game.away_team.id)) {
+          teams.push(game.away_team);
+        }
+      });
+      
+      // If no teams found in today's games, return null
+      if (teams.length === 0) {
+        console.log('No teams found in today\'s games, cannot find team by name');
+        return null;
+      }
+      
+      // Find the team by comparing names
+      const team = teams.find(t => {
+        const teamDisplayName = t.display_name?.toLowerCase() || '';
+        const teamShortName = t.short_display_name?.toLowerCase() || '';
+        const teamLocation = t.location?.toLowerCase() || '';
+        const teamFullName = `${teamLocation} ${t.name?.toLowerCase() || ''}`;
+        
+        return (
+          teamDisplayName.includes(normalizedName) ||
+          normalizedName.includes(teamDisplayName) ||
+          teamShortName.includes(normalizedName) ||
+          normalizedName.includes(teamShortName) ||
+          teamFullName.includes(normalizedName) ||
+          normalizedName.includes(teamFullName)
+        );
+      });
+      
+      if (team) {
+        console.log(`Found team: ${team.display_name} (ID: ${team.id})`);
+        return team;
+      }
+      
+      console.log(`Could not find team matching: ${teamName}`);
+      return null;
+    } catch (error) {
+      console.error(`Error finding team by name (${teamName}):`, error);
+      return null;
+    }
+  },
+
+  /**
    * Get comprehensive MLB team stats with standings for a matchup
    * @param {string} homeTeamName - Home team name
    * @param {string} awayTeamName - Away team name
@@ -831,14 +833,10 @@ const ballDontLieService = {
           awayTeamName: awayTeam.display_name,
           homeTeamRecord: homeTeamStanding ? `${homeTeamStanding.wins}-${homeTeamStanding.losses}` : 'N/A',
           awayTeamRecord: awayTeamStanding ? `${awayTeamStanding.wins}-${awayTeamStanding.losses}` : 'N/A',
-          homePitchingERA: homeTeamSeasonStats?.pitching_era?.toFixed(2) || 'N/A',
-          awayPitchingERA: awayTeamSeasonStats?.pitching_era?.toFixed(2) || 'N/A',
+          // Team ERA stats removed to avoid confusing OpenAI when using starting pitcher stats
           homeBattingAVG: homeTeamSeasonStats?.batting_avg?.toFixed(3) || 'N/A',
           awayBattingAVG: awayTeamSeasonStats?.batting_avg?.toFixed(3) || 'N/A',
-          homeRunsScored: homeTeamSeasonStats?.batting_r || 'N/A',
-          awayRunsScored: awayTeamSeasonStats?.batting_r || 'N/A',
-          homeRunsAllowed: homeTeamSeasonStats?.pitching_er || 'N/A',
-          awayRunsAllowed: awayTeamSeasonStats?.pitching_er || 'N/A',
+          // Runs scored and allowed removed to avoid confusing OpenAI when making picks
         }
       };
     } catch (error) {
@@ -1051,7 +1049,7 @@ const ballDontLieService = {
           preview += '|------|' + '-'.repeat(15) + '|' + '-'.repeat(15) + '|\n';
           preview += `| Record | ${awayTeamStats.wins}-${awayTeamStats.losses} | ${homeTeamStats.wins}-${homeTeamStats.losses} |\n`;
           preview += `| Batting Avg | ${awayTeamStats.batting_avg?.toFixed(3) || 'N/A'} | ${homeTeamStats.batting_avg?.toFixed(3) || 'N/A'} |\n`;
-          preview += `| Team ERA | ${awayTeamStats.pitching_era?.toFixed(2) || 'N/A'} | ${homeTeamStats.pitching_era?.toFixed(2) || 'N/A'} |\n`;
+          // Team ERA line removed to avoid confusing OpenAI
           preview += `| Home/Road | ${awayTeamStats.road_wins}-${awayTeamStats.road_losses} (Road) | ${homeTeamStats.home_wins}-${homeTeamStats.home_losses} (Home) |\n`;
         }
         

@@ -1,13 +1,22 @@
 /**
  * Enhanced Picks Service
- * Generates picks sequentially by sport using sports statistics from TheSportsDB
- * and stores raw OpenAI responses in Supabase.
+ * Generates picks sequentially by sport using the best data sources available:
+ * - For MLB normal picks (moneyline/spread): Uses the enhanced system with Ball Don't Lie for team stats,
+ *   MLB Stats API for pitcher data, and Perplexity for game context
+ * - For MLB prop picks: Uses the existing system with specialized prop pick generation
+ * - For other sports: Uses the existing system
  */
 import { makeGaryPick } from './garyEngine.js';
-import { oddsService } from './oddsService';
+import { oddsService } from './oddsService.js';
 import { supabase } from '../supabaseClient.js';
 import { sportsDataService } from './sportsDataService.js';
 import { apiSportsService } from './apiSportsService.js';
+
+// Import the enhanced picks service for normal MLB picks
+import { picksService as enhancedPicksService } from './picksService.enhanced.js';
+
+// Import the MLB props generation service
+import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 
 const picksService = {
   /**
@@ -37,7 +46,7 @@ const picksService = {
       const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl']; // Fixed NHL sport key to match Odds API
       const allPicks = [];
       
-      // Process one sport at a time to avoid overwhelming OpenAI API
+      // Process one sport at a time to avoid overwhelming OpenAI
       for (const sport of sportsToAnalyze) {
         console.log(`\n==== Processing ${sport} games ====`);
         
@@ -57,7 +66,41 @@ const picksService = {
                           sport.includes('hockey') ? 'NHL' :
                           sport.includes('football') ? 'NFL' : 'Unknown';
           
-          // Generate picks for each game in this sport, one at a time
+          // Special handling for MLB games using the enhanced system for normal picks
+          if (sportName === 'MLB') {
+            console.log(`Using enhanced system for MLB normal picks (moneyline/spread)`);
+            
+            // 1. Generate normal picks (moneyline/spread) using our enhanced system
+            console.log(`Generating normal MLB picks with enhanced system...`);
+            const normalPicks = await enhancedPicksService.generateDailyPicks(sport);
+            console.log(`Generated ${normalPicks.length} normal MLB picks (moneyline/spread)`); 
+            
+            // Add normal picks to the overall picks array
+            normalPicks.forEach(pick => {
+              pick.pickType = 'normal'; // Mark as normal pick
+              allPicks.push(pick);
+            });
+            
+            // 2. Generate prop picks using specialized MLB picks generation service
+            console.log(`Generating MLB prop picks...`);
+            try {
+              const propPicks = await mlbPicksGenerationService.generateMLBPropPicks(games);
+              console.log(`Generated ${propPicks.length} MLB prop picks`);
+              
+              // Add prop picks to the overall picks array
+              propPicks.forEach(pick => {
+                pick.pickType = 'prop'; // Mark as prop pick
+                allPicks.push(pick);
+              });
+            } catch (propError) {
+              console.error(`Error generating MLB prop picks:`, propError);
+            }
+            
+            // Skip the standard picks generation for MLB since we've already handled it
+            continue;
+          }
+          
+          // Standard picks generation for non-MLB sports
           console.log(`Generating picks for ${games.length} ${sportName} games...`);
           
           for (const game of games) {

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { configLoader } from './configLoader';
+import { getConfigValue } from './configLoader.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
@@ -43,8 +43,7 @@ const getApiKey = () => {
   // Fallback to config loader
   if (!apiKey) {
     try {
-      const config = configLoader.getConfig();
-      apiKey = config.ODDS_API_KEY;
+      apiKey = getConfigValue('ODDS_API_KEY');
     } catch (error) {
       console.warn('Could not load ODDS_API_KEY from config:', error);
     }

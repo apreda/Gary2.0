@@ -7,6 +7,74 @@ import { supabase } from '../supabaseClient.js';
 
 const mlbPicksGenerationService = {
   /**
+   * Generate MLB prop picks for use in the main picksService
+   * @param {Array} games - Array of games from oddsService
+   * @param {number} numPicks - Number of picks to generate, defaults to 3
+   * @returns {Promise<Array>} - Array of MLB prop picks
+   */
+  generateMLBPropPicks: async (games, numPicks = 3) => {
+    try {
+      console.log(`[MLB Picks] Generating ${numPicks} MLB prop picks for ${games.length} games`);
+      
+      // Get current date
+      const date = new Date().toISOString().slice(0, 10);
+      
+      // Call our regular prop picks generation with today's date
+      const propPicksResult = await mlbPicksGenerationService.generatePicks(date, numPicks);
+      
+      if (!propPicksResult.success || !propPicksResult.picks || propPicksResult.picks.length === 0) {
+        console.log(`[MLB Picks] Failed to generate prop picks: ${propPicksResult.message}`);
+        return [];
+      }
+      
+      // Format prop picks for integration with the main picksService
+      const formattedPropPicks = propPicksResult.picks.map(pick => {
+        // Find the corresponding game from oddsService
+        const game = games.find(g => 
+          g.home_team.includes(pick.team) || 
+          g.away_team.includes(pick.team) ||
+          pick.team.includes(g.home_team) ||
+          pick.team.includes(g.away_team)
+        );
+        
+        const recommendationType = pick.prop.toLowerCase().includes('strikeout') ? 'strikeouts' :
+                                pick.prop.toLowerCase().includes('hit') ? 'hits' :
+                                pick.prop.toLowerCase().includes('base') ? 'total_bases' : 'prop';
+        
+        // Create a recommendation object in the format expected by picksService
+        const recommendation = {
+          type: 'prop',
+          player: pick.player,
+          prop: `${pick.prop} ${pick.bet}`,
+          confidence: pick.confidence / 10 // Convert to 0-1 scale
+        };
+        
+        // Format into the structure expected by picksService
+        return {
+          id: game?.id || `mlb-prop-${Date.now()}`,
+          sport: 'baseball_mlb',
+          homeTeam: game?.home_team || pick.matchup.split(' at ')[1] || 'Unknown',
+          awayTeam: game?.away_team || pick.matchup.split(' at ')[0] || 'Unknown',
+          analysisPrompt: `MLB prop bet analysis for ${pick.player} ${pick.prop} ${pick.bet}`,
+          analysis: JSON.stringify({
+            analysis: pick.analysis || `Analysis for ${pick.player} ${pick.prop} ${pick.bet} based on statistical analysis.`,
+            recommendations: [recommendation]
+          }),
+          gameTime: game?.commence_time || new Date().toISOString(),
+          pickType: 'prop',
+          timestamp: new Date().toISOString(),
+          propDetails: pick
+        };
+      });
+      
+      console.log(`[MLB Picks] Successfully generated ${formattedPropPicks.length} prop picks`);
+      return formattedPropPicks;
+    } catch (error) {
+      console.error(`[MLB Picks] Error generating MLB prop picks: ${error.message}`);
+      return [];
+    }
+  },
+  /**
    * Generate MLB prop picks for the given date
    * @param {string} date - Date in YYYY-MM-DD format, defaults to today
    * @param {number} numPicks - Number of picks to generate, defaults to 3

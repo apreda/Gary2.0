@@ -80,10 +80,17 @@ export const perplexityService = {
    * The Perplexity API key (will be loaded from environment variables)
    */
   API_KEY: (() => {
-    try {
-      return import.meta.env?.VITE_PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY || '';
-    } catch (e) {
+    // When running in Node.js environment, dotenv should already have loaded
+    // the environment variables from .env file
+    if (typeof process !== 'undefined' && process.env) {
       return process.env.VITE_PERPLEXITY_API_KEY || '';
+    }
+    // When running in browser environment with Vite
+    try {
+      return import.meta.env?.VITE_PERPLEXITY_API_KEY || '';
+    } catch (e) {
+      console.error('Error loading Perplexity API key:', e);
+      return '';
     }
   })(),
   
@@ -154,28 +161,54 @@ export const perplexityService = {
         // This is a simplified implementation - in reality, you'd need more robust team name matching
       }
       
-      // If we couldn't get info from ESPN, try The Odds API as a fallback
-      console.log(`Trying The Odds API to get game time for ${league} game: ${awayTeam} @ ${homeTeam}`);
-      const oddsService = (await import('./oddsService')).default;
-      const games = await oddsService.getGamesForToday(league);
+      // If we couldn't get info from ESPN, try Ball Don't Lie API as a fallback
+      console.log(`Trying Ball Don't Lie API to get game time for ${league} game: ${awayTeam} @ ${homeTeam}`);
+    
+      const { ballDontLieService } = await import('./ballDontLieService.js');
+    
+      let games = [];
+      try {
+        if (league.toUpperCase() === 'MLB') {
+          games = await ballDontLieService.getMlbGamesByDate(new Date().toISOString().split('T')[0]);
+        } else if (league.toUpperCase() === 'NBA') {
+          games = await ballDontLieService.getNbaGamesByDate(new Date().toISOString().split('T')[0]);
+        } else {
+          console.log(`League ${league} not supported for game time lookup`);
+        }
+      } catch (err) {
+        console.error(`Error getting games from Ball Don't Lie API:`, err);
+      }
       
-      // Filter for the specific game
+      // Filter for the specific game using new Ball Don't Lie API data structure
       const targetGame = games.find(game => {
+        // Check if home_team and away_team objects exist and have display_name properties
+        const homeTeamName = game.home_team?.display_name || game.home_team || '';
+        const awayTeamName = game.away_team?.display_name || game.away_team || '';
+        
         return (
-          (game.home_team.includes(homeTeam) || homeTeam.includes(game.home_team)) && 
-          (game.away_team.includes(awayTeam) || awayTeam.includes(game.away_team))
+          (homeTeamName.toLowerCase().includes(homeTeam.toLowerCase()) || 
+           homeTeam.toLowerCase().includes(homeTeamName.toLowerCase())) && 
+          (awayTeamName.toLowerCase().includes(awayTeam.toLowerCase()) || 
+           awayTeam.toLowerCase().includes(awayTeamName.toLowerCase()))
         );
       });
       
       if (targetGame) {
-        const gameTimeET = new Date(targetGame.commence_time).toLocaleTimeString('en-US', {
-          timeZone: 'America/New_York',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        }) + " ET";
+        // Format the game time from the Ball Don't Lie API
+        const gameTime = targetGame.time || targetGame.start_time || targetGame.commence_time;
+        const gameDate = new Date(gameTime);
         
-        console.log(`Found game time from The Odds API: ${gameTimeET}`);
+        // Check if the date is valid before formatting
+        const gameTimeET = !isNaN(gameDate.getTime()) ? 
+          gameDate.toLocaleTimeString('en-US', {
+            timeZone: 'America/New_York',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }) + " ET" : 
+          (targetGame.time || 'TBD');
+        
+        console.log(`Found game time from Ball Don't Lie API: ${gameTimeET}`);
         return {
           gameTime: gameTimeET,
           headlines: [],
