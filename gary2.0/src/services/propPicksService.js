@@ -696,10 +696,16 @@ const propPicksService = {
       }
       const valid = playerProps.filter(p => p.confidence >= 0.51);
       const highConf = valid.filter(p => p.confidence >= 0.78);
+      
+      // Sort by confidence (highest first) and take only the top 10
+      const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
+      const topTenPicks = sortedByConfidence.slice(0, 10);
+      
       console.log(
-        `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}`
+        `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}, Top 10: ${topTenPicks.length}`
       );
-      return highConf;
+      
+      return topTenPicks;
     } catch (error) {
       console.error('Error generating prop picks:', error);
       return [];
