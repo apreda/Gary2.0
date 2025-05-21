@@ -8,6 +8,7 @@
 import { ballDontLieService } from './ballDontLieService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 import { perplexityService } from './perplexityService.js';
+import { oddsService } from './oddsService.js';
 
 const combinedMlbService = {
   /**
@@ -92,7 +93,29 @@ Format your response in clean JSON format with these exact keys: playoffStatus, 
         console.error(`[Combined MLB Service] Error getting game context from Perplexity:`, perplexityError.message);
       }
       
-      // 6. Combine and structure all the data
+      // 6. Get odds data from The Odds API
+      let oddsData = null;
+      try {
+        console.log(`[Combined MLB Service] Getting odds data for ${awayTeamName} @ ${homeTeamName}`);
+        const mlbGames = await oddsService.getUpcomingGames('baseball_mlb');
+        
+        // Find the matching game in odds data
+        const matchingGame = mlbGames.find(game => {
+          return (game.home_team.includes(homeTeamName) || homeTeamName.includes(game.home_team)) && 
+                 (game.away_team.includes(awayTeamName) || awayTeamName.includes(game.away_team));
+        });
+        
+        if (matchingGame) {
+          console.log(`[Combined MLB Service] Found odds data for ${awayTeamName} @ ${homeTeamName}`);
+          oddsData = matchingGame;
+        } else {
+          console.log(`[Combined MLB Service] No odds data found for ${awayTeamName} @ ${homeTeamName}`);
+        }
+      } catch (oddsError) {
+        console.error(`[Combined MLB Service] Error getting odds data:`, oddsError.message);
+      }
+      
+      // 7. Combine and structure all the data
       const combinedData = {
         game: {
           homeTeam: homeTeamName,
@@ -108,7 +131,8 @@ Format your response in clean JSON format with these exact keys: playoffStatus, 
           away: startingPitchers?.away || null
         },
         teamStats: teamComparisonStats,
-        gameContext: gameContext
+        gameContext: gameContext,
+        odds: oddsData
       };
       
       return combinedData;
