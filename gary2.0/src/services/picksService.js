@@ -85,43 +85,106 @@ const picksService = {
               let pitcherData = '';
               if (sportName === 'MLB') {
                 try {
-                  console.log('Fetching MLB comprehensive stats with Ball Don\'t Lie as primary source...');
+                  console.log('Fetching MLB pitcher data from MLB Stats API and team stats from Ball Don\'t Lie...');
                   
                   // Initialize pitcher objects for both teams
                   let homePitcher = null;
                   let awayPitcher = null;
                   let dataSource = null;
                   
-                  // Import ballDontLieService dynamically to avoid circular imports
+                  // Import services dynamically to avoid circular imports
+                  const { mlbStatsApiService } = await import('./mlbStatsApiService.js');
                   const { ballDontLieService } = await import('./ballDontLieService.js');
                   
-                  // PRIORITY 1: Try Ball Don't Lie first (most reliable for MLB)
-                  console.log('PRIORITY 1: Trying Ball Don\'t Lie for MLB pitcher data...');
+                  // PRIORITY 1: First get team stats from Ball Don't Lie
+                  console.log('Getting comprehensive MLB team stats from Ball Don\'t Lie...');
                   try {
-                    const bdlPitcherMatchup = await ballDontLieService.getMlbPitcherMatchup(game.home_team, game.away_team);
-                    if (bdlPitcherMatchup && (bdlPitcherMatchup.home || bdlPitcherMatchup.away)) {
-                      console.log('Got pitcher data from Ball Don\'t Lie!');
-                      homePitcher = bdlPitcherMatchup.home;
-                      awayPitcher = bdlPitcherMatchup.away;
-                      dataSource = 'Ball Don\'t Lie';
-                      
-                      // Get comprehensive team stats from Ball Don't Lie
-                      console.log('Getting comprehensive MLB team stats from Ball Don\'t Lie...');
-                      const compStats = await ballDontLieService.getComprehensiveMlbGameStats(game.home_team, game.away_team);
-                      if (compStats) {
-                        // Add the comprehensive stats to the statsContext for Gary Engine
-                        statsContext.homeTeam = { ...statsContext.homeTeam, ...compStats.homeTeam };
-                        statsContext.awayTeam = { ...statsContext.awayTeam, ...compStats.awayTeam };
-                        console.log('Added comprehensive team stats from Ball Don\'t Lie');
-                      }
+                    const compStats = await ballDontLieService.getComprehensiveMlbGameStats(game.home_team, game.away_team);
+                    if (compStats) {
+                      // Add the comprehensive stats to the statsContext for Gary Engine
+                      statsContext.homeTeam = { ...statsContext.homeTeam, ...compStats.homeTeam };
+                      statsContext.awayTeam = { ...statsContext.awayTeam, ...compStats.awayTeam };
+                      console.log('Added comprehensive team stats from Ball Don\'t Lie');
                     }
                   } catch (bdlError) {
-                    console.error('Error fetching pitcher data from Ball Don\'t Lie:', bdlError.message);
+                    console.error('Error fetching team stats from Ball Don\'t Lie:', bdlError.message);
                   }
                   
-                  // PRIORITY 2: Try API-Sports if Ball Don't Lie failed
+                  // PRIORITY 2: Get pitcher data from MLB Stats API
+                  console.log('Getting pitcher data from MLB Stats API...');
+                  try {
+                    // Get today's games to find the game we're analyzing
+                    const todaysGames = await mlbStatsApiService.getTodaysGames();
+                    let targetGame = null;
+                    
+                    // Find the game that matches our home and away teams
+                    for (const g of todaysGames) {
+                      if ((g.homeTeam.toLowerCase().includes(game.home_team.toLowerCase()) || 
+                          game.home_team.toLowerCase().includes(g.homeTeam.toLowerCase())) && 
+                          (g.awayTeam.toLowerCase().includes(game.away_team.toLowerCase()) || 
+                          game.away_team.toLowerCase().includes(g.awayTeam.toLowerCase()))) {
+                        targetGame = g;
+                        break;
+                      }
+                    }
+                    
+                    if (targetGame) {
+                      console.log(`Found matching game: ${targetGame.homeTeam} vs ${targetGame.awayTeam} (ID: ${targetGame.gameId})`);
+                      
+                      // Get starting pitchers for the game
+                      const startingPitchers = await mlbStatsApiService.getStartingPitchers(targetGame.gameId);
+                      
+                      // Get season stats for each starting pitcher
+                      let homePitcherStats = null;
+                      let awayPitcherStats = null;
+                      
+                      if (startingPitchers.homeStarter?.id) {
+                        homePitcherStats = await mlbStatsApiService.getPitcherSeasonStats(startingPitchers.homeStarter.id);
+                      }
+                      
+                      if (startingPitchers.awayStarter?.id) {
+                        awayPitcherStats = await mlbStatsApiService.getPitcherSeasonStats(startingPitchers.awayStarter.id);
+                      }
+                      
+                      // Format pitcher stats for our existing structure
+                      if (homePitcherStats) {
+                        homePitcher = {
+                          name: startingPitchers.homeStarter.name,
+                          stats: {
+                            ERA: homePitcherStats.era || 'N/A',
+                            WHIP: homePitcherStats.whip || 'N/A',
+                            record: `${homePitcherStats.wins}-${homePitcherStats.losses}`,
+                            IP: homePitcherStats.inningsPitched || 'N/A',
+                            strikeouts: homePitcherStats.strikeouts || 'N/A',
+                            BB: homePitcherStats.walks || 'N/A'
+                          }
+                        };
+                      }
+                      
+                      if (awayPitcherStats) {
+                        awayPitcher = {
+                          name: startingPitchers.awayStarter.name,
+                          stats: {
+                            ERA: awayPitcherStats.era || 'N/A',
+                            WHIP: awayPitcherStats.whip || 'N/A',
+                            record: `${awayPitcherStats.wins}-${awayPitcherStats.losses}`,
+                            IP: awayPitcherStats.inningsPitched || 'N/A',
+                            strikeouts: awayPitcherStats.strikeouts || 'N/A',
+                            BB: awayPitcherStats.walks || 'N/A'
+                          }
+                        };
+                      }
+                      
+                      dataSource = 'MLB Stats API';
+                      console.log('Got pitcher data from MLB Stats API!');
+                    }
+                  } catch (mlbApiError) {
+                    console.error('Error fetching pitcher data from MLB Stats API:', mlbApiError.message);
+                  }
+                  
+                  // PRIORITY 3: Try API-Sports if MLB Stats API failed
                   if (!dataSource) {
-                    console.log('PRIORITY 2: Ball Don\'t Lie failed, trying API-Sports...');
+                    console.log('PRIORITY 3: MLB Stats API failed for pitcher data, trying API-Sports...');
                     const apiSportsPitchers = await apiSportsService.getMlbStartingPitchers(game.home_team, game.away_team);
                   
                     if (apiSportsPitchers && (apiSportsPitchers.home || apiSportsPitchers.away)) {
@@ -133,9 +196,9 @@ const picksService = {
                     }
                   }
                   
-                  // PRIORITY 3: Try SportsDB if others failed
+                  // PRIORITY 4: Try SportsDB as a fallback
                   if (!dataSource) {
-                    console.log('PRIORITY 3: API-Sports failed, trying SportsDB...');
+                    console.log('PRIORITY 4: API-Sports failed, trying SportsDB as final fallback...');
                     const sportsDBPitchers = await sportsDataService.getMlbStartingPitchers(game.home_team, game.away_team);
                     
                     if (sportsDBPitchers && (sportsDBPitchers.home || sportsDBPitchers.away)) {
