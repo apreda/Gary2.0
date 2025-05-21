@@ -1,10 +1,13 @@
 /**
  * Combined MLB Service
- * This service combines data from both Ball Don't Lie API and MLB Stats API
- * to provide the most comprehensive and accurate data for generating picks
+ * This service combines data from all three data sources:
+ * 1. Ball Don't Lie API for team stats (PRIORITY 1)
+ * 2. MLB Stats API for pitcher data (PRIORITY 2)
+ * 3. Perplexity for game context, storylines, and other relevant data
  */
 import { ballDontLieService } from './ballDontLieService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
+import { perplexityService } from './perplexityService.js';
 
 const combinedMlbService = {
   /**
@@ -50,7 +53,46 @@ const combinedMlbService = {
       // 4. Get accurate starting pitcher data from MLB Stats API
       const startingPitchers = await mlbStatsApiService.getStartingPitchersEnhanced(targetGame.gamePk);
       
-      // 5. Combine and structure all the data
+      // 5. Get rich game context from Perplexity
+      let gameContext = null;
+      try {
+        console.log(`[Combined MLB Service] Getting game context from Perplexity for ${awayTeamName} @ ${homeTeamName}`);
+        const contextQuery = `Provide a concise summary of the upcoming MLB game between ${homeTeamName} and ${awayTeamName} with the following information in JSON format:
+1. Playoff status (is this a playoff game, and if so what's the current series score)
+2. Team storylines and recent news
+3. Injury report for both teams
+4. Key matchup insights
+5. Betting trends and relevant statistics
+6. Weather conditions for the game if outdoors
+
+Format your response in clean JSON format with these exact keys: playoffStatus, homeTeamStorylines, awayTeamStorylines, injuryReport, keyMatchups, bettingTrends, weatherConditions.`;
+        
+        const gameContextResult = await perplexityService.search(contextQuery);
+        
+        if (gameContextResult && gameContextResult.success && gameContextResult.data) {
+          // Try to extract JSON from the response
+          const text = gameContextResult.data;
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          
+          if (jsonMatch) {
+            try {
+              gameContext = JSON.parse(jsonMatch[0]);
+              console.log(`[Combined MLB Service] Successfully retrieved game context from Perplexity`);
+            } catch (e) {
+              console.error(`[Combined MLB Service] Error parsing game context JSON:`, e.message);
+            }
+          } else {
+            // No JSON found, use the raw text
+            gameContext = { rawContext: text };
+          }
+        } else {
+          console.log(`[Combined MLB Service] No game context available from Perplexity`);
+        }
+      } catch (perplexityError) {
+        console.error(`[Combined MLB Service] Error getting game context from Perplexity:`, perplexityError.message);
+      }
+      
+      // 6. Combine and structure all the data
       const combinedData = {
         game: {
           homeTeam: homeTeamName,
@@ -65,7 +107,8 @@ const combinedMlbService = {
           home: startingPitchers?.home || null,
           away: startingPitchers?.away || null
         },
-        teamStats: teamComparisonStats
+        teamStats: teamComparisonStats,
+        gameContext: gameContext
       };
       
       return combinedData;
