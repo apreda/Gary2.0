@@ -9,8 +9,8 @@ import { mlbStatsApiService } from './mlbStatsApiService.enhanced2.js';
 import { openaiService } from './openaiService.js';
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
 
-// Import Supabase directly
-import supabaseClient from '../supabaseClient.js';
+// Import Supabase named export
+import { supabase as supabaseClient } from '../supabaseClient.js';
 
 // Helper function to find player ranking in leaderboard
 function findPlayerRanking(leaders, playerId) {
