@@ -12,30 +12,11 @@ import { ballDontLieService } from './ballDontLieService.js';
 import configLoader from './configLoader.js';
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
 
-// Import Supabase client dynamically (for browser compatibility)
-let supabaseClient;
-try {
-  // This dynamic import pattern helps with Vite bundling
-  const supabaseModule = await import('../supabaseClient.js');
-  supabaseClient = supabaseModule.default;
-} catch (error) {
-  console.error('Error loading Supabase client:', error);
-  // Provide a mock implementation for environments where Supabase is not available
-  supabaseClient = {
-    auth: {
-      getSession: async () => ({ data: {}, error: null }),
-      signInAnonymously: async () => ({ data: {}, error: null })
-    },
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          order: () => Promise.resolve({ data: [], error: null })
-        })
-      }),
-      insert: () => Promise.resolve({ data: [], error: null })
-    })
-  };
-}
+// Import Supabase client directly
+import supabaseClientModule from '../supabaseClient.js';
+
+// Use the imported client
+const supabaseClient = supabaseClientModule;
 
 // Helper function to find player ranking in leaderboard
 function findPlayerRanking(leaders, playerId) {
