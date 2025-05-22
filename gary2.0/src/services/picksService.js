@@ -49,39 +49,99 @@ async function storeDailyPicksInDatabase(picks) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
     return { success: false, message: 'No picks provided' };
 
+  console.log(`Initial picks array has ${picks.length} items`);
+
   // EST date for today in YYYY-MM-DD
   const now = new Date();
   const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
   const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
   const [month, day, year] = estDate.split('/');
   const currentDateString = `${year}-${month}-${day}`;
+  
+  console.log(`Storing picks for date: ${currentDateString}`);
 
   // Check if picks already exist
   const picksExist = await checkForExistingPicks(currentDateString);
-  if (picksExist)
+  if (picksExist) {
+    console.log(`Picks for ${currentDateString} already exist in database, skipping insertion`);
     return { success: true, count: 0, message: 'Picks already exist for today' };
+  }
 
-  // Filter by confidence
-  const validPicks = picks.filter(pick => {
-    const confidence = (typeof pick.confidence === 'number')
-      ? pick.confidence
-      : (pick.rawAnalysis?.confidence ? parseFloat(pick.rawAnalysis.confidence) : 0);
-    return confidence >= 0.75;
-  });
+  // Filter by confidence and prepare picks for storage
+  const validPicks = picks
+    .filter(pick => {
+      // Extract confidence from pick or rawAnalysis
+      const confidence = typeof pick.confidence === 'number' 
+        ? pick.confidence 
+        : (pick.rawAnalysis?.confidence ? parseFloat(pick.rawAnalysis.confidence) : 0);
+      
+      const isValid = confidence >= 0.75;
+      console.log(`Pick for ${pick.homeTeam || pick.game || 'unknown game'} confidence: ${confidence}, valid: ${isValid}`);
+      return isValid;
+    })
+    .map(pick => {
+      // Ensure all picks have required fields for display
+      if (!pick.type && pick.rawAnalysis?.type) pick.type = pick.rawAnalysis.type;
+      if (!pick.pick && pick.rawAnalysis?.pick) pick.pick = pick.rawAnalysis.pick;
+      if (!pick.confidence && pick.rawAnalysis?.confidence) pick.confidence = pick.rawAnalysis.confidence;
+      if (!pick.rationale && pick.rawAnalysis?.rationale) pick.rationale = pick.rawAnalysis.rationale;
+      
+      return pick;
+    });
 
-  // Prepare and insert
+  console.log(`After filtering, storing ${validPicks.length} valid picks at 0.75 confidence threshold`);
+
+  // Skip if there are no valid picks
+  if (validPicks.length === 0) {
+    console.warn('No valid picks with sufficient confidence to store');
+    return { success: false, message: 'No valid picks to store' };
+  }
+
+  // Create data structure for Supabase
   const pickData = {
     date: currentDateString,
     picks: validPicks
   };
 
-  await ensureValidSupabaseSession();
-  const { error } = await supabase
-    .from('daily_picks')
-    .insert(pickData);
-  if (error) throw new Error(error.message);
+  console.log('Storing picks in Supabase daily_picks table');
 
-  return { success: true, count: validPicks.length };
+  // Ensure there's a valid Supabase session before database operation
+  await ensureValidSupabaseSession();
+
+  try {
+    // First try direct insert
+    const { error } = await supabase
+      .from('daily_picks')
+      .insert(pickData);
+
+    if (error) {
+      console.error('Error inserting picks into daily_picks table:', error);
+
+      // Try an alternative approach with an explicit JSON string
+      console.log('Trying alternative approach with explicit JSON string...');
+      const { error: altError } = await supabase
+        .from('daily_picks')
+        .insert({
+          date: currentDateString,
+          picks: JSON.stringify(validPicks),
+          sport: validPicks[0]?.sport || 'MLB'
+        });
+
+      if (altError) {
+        console.error('Alternative approach also failed:', altError);
+        throw new Error(`Failed to store picks: ${altError.message}`);
+      }
+
+      console.log('Successfully stored picks using alternative approach');
+      return { success: true, count: validPicks.length, method: 'alternative' };
+    }
+
+    console.log(`Successfully stored ${validPicks.length} picks in database`);
+    return { success: true, count: validPicks.length };
+  } catch (error) {
+    console.error('Error storing picks:', error);
+    throw new Error(`Failed to store picks: ${error.message}`);
+  }
 }
 
 // NBA Stats Report Generator
