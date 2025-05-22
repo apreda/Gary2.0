@@ -247,9 +247,28 @@ You must return a properly formatted JSON object with the following structure:
       statsSection += gameData.enhancedStats;
       statsSection += '\n\n';
     }
+    
+    // 3. Handle MLB specific pitchers data from MLB Stats API
+    if (gameData?.pitchers) {
+      statsSection += 'STARTING PITCHER MATCHUP:\n';
       
-    // 3. If we have pitcher data (critical for MLB), add it prominently
-    if (gameData?.pitcherData) {
+      const homePitcher = gameData.pitchers.home;
+      const awayPitcher = gameData.pitchers.away;
+      
+      if (homePitcher) {
+        const homeStats = homePitcher.seasonStats || {};
+        statsSection += `HOME: ${homePitcher.fullName} - ERA: ${homeStats.era || 'N/A'}, Record: ${homeStats.wins || 0}-${homeStats.losses || 0}, WHIP: ${homeStats.whip || 'N/A'}, SO: ${homeStats.strikeOuts || 0}\n`;
+      }
+      
+      if (awayPitcher) {
+        const awayStats = awayPitcher.seasonStats || {};
+        statsSection += `AWAY: ${awayPitcher.fullName} - ERA: ${awayStats.era || 'N/A'}, Record: ${awayStats.wins || 0}-${awayStats.losses || 0}, WHIP: ${awayStats.whip || 'N/A'}, SO: ${awayStats.strikeOuts || 0}\n`;
+      }
+      
+      statsSection += '\n';
+    }
+    // Fallback to the older pitcherData format if available
+    else if (gameData?.pitcherData) {
       statsSection += 'STARTING PITCHER MATCHUP:\n';
         
       if (typeof gameData.pitcherData === 'string') {
@@ -282,25 +301,141 @@ You must return a properly formatted JSON object with the following structure:
     }
       
     // 4. Include MLB-specific note if this is MLB data
-    if (gameData?.sport === 'MLB' || gameData?.league === 'MLB') {
+    if (gameData?.sport === 'MLB' || gameData?.league === 'MLB' || gameData?.sport === 'baseball_mlb') {
       statsSection += '**NOTE: All MLB data is from the current 2025 season**\n\n';
     }
       
-    // 5. Include any team stats we have
-    if (gameData?.teamStats && typeof gameData.teamStats === 'object') {
+    // 5. Process structured team stats from Ball Don't Lie API
+    if (gameData?.teamStats) {
+      statsSection += 'TEAM STATISTICS AND STANDINGS:\n';
+      
+      const homeTeam = gameData.teamStats.homeTeam;
+      const awayTeam = gameData.teamStats.awayTeam;
+      
+      if (homeTeam) {
+        statsSection += `HOME TEAM (${gameData.homeTeam}):\n`;
+        statsSection += `Record: ${homeTeam.record || 'N/A'}, Last 10: ${homeTeam.lastTenGames || 'N/A'}, Home: ${homeTeam.homeRecord || 'N/A'}\n`;
+        
+        // Add batting stats if available
+        if (homeTeam.stats) {
+          statsSection += 'Batting: ';
+          const battingStats = homeTeam.stats.batting || {};
+          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}\n`;
+        }
+        
+        // Add pitching stats if available
+        if (homeTeam.stats && homeTeam.stats.pitching) {
+          statsSection += 'Pitching: ';
+          const pitchingStats = homeTeam.stats.pitching || {};
+          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}\n`;
+        }
+      }
+      
+      if (awayTeam) {
+        statsSection += `AWAY TEAM (${gameData.awayTeam}):\n`;
+        statsSection += `Record: ${awayTeam.record || 'N/A'}, Last 10: ${awayTeam.lastTenGames || 'N/A'}, Away: ${awayTeam.awayRecord || 'N/A'}\n`;
+        
+        // Add batting stats if available
+        if (awayTeam.stats) {
+          statsSection += 'Batting: ';
+          const battingStats = awayTeam.stats.batting || {};
+          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}\n`;
+        }
+        
+        // Add pitching stats if available
+        if (awayTeam.stats && awayTeam.stats.pitching) {
+          statsSection += 'Pitching: ';
+          const pitchingStats = awayTeam.stats.pitching || {};
+          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}\n`;
+        }
+      }
+      
+      statsSection += '\n';
+    }
+    // Fallback for old format team stats
+    else if (gameData?.teamStatsOld && typeof gameData.teamStatsOld === 'object') {
       statsSection += 'TEAM STATISTICS SUMMARY:\n';
       try {
-        statsSection += JSON.stringify(gameData.teamStats, null, 2);
+        statsSection += JSON.stringify(gameData.teamStatsOld, null, 2);
       } catch (e) {
         statsSection += 'Team stats available but in non-JSON format';
       }
       statsSection += '\n\n';
-    } else if (typeof gameData?.teamStats === 'string') {
-      statsSection += gameData.teamStats;
-      statsSection += '\n\n';
     }
       
-    // 6. Include all collected stats if we have them
+    // 5.5 Include top hitter stats for both teams if available
+    if (gameData?.hitterStats) {
+      statsSection += 'TOP HITTERS STATS:\n';
+      
+      // Format home team hitters
+      if (gameData.hitterStats.home && gameData.hitterStats.home.length > 0) {
+        statsSection += `${gameData.homeTeam} TOP HITTERS:\n`;
+        
+        // Sort by batting average and get top 5 hitters
+        const topHomeHitters = gameData.hitterStats.home
+          .sort((a, b) => parseFloat(b.stats.avg.replace('.', '')) - parseFloat(a.stats.avg.replace('.', '')))
+          .slice(0, 5);
+        
+        topHomeHitters.forEach(hitter => {
+          statsSection += `${hitter.name} (${hitter.position}): AVG: ${hitter.stats.avg}, H: ${hitter.stats.hits}, HR: ${hitter.stats.homeRuns}, RBI: ${hitter.stats.rbi}, AB: ${hitter.stats.atBats}\n`;
+        });
+        
+        statsSection += '\n';
+      }
+      
+      // Format away team hitters
+      if (gameData.hitterStats.away && gameData.hitterStats.away.length > 0) {
+        statsSection += `${gameData.awayTeam} TOP HITTERS:\n`;
+        
+        // Sort by batting average and get top 5 hitters
+        const topAwayHitters = gameData.hitterStats.away
+          .sort((a, b) => parseFloat(b.stats.avg.replace('.', '')) - parseFloat(a.stats.avg.replace('.', '')))
+          .slice(0, 5);
+        
+        topAwayHitters.forEach(hitter => {
+          statsSection += `${hitter.name} (${hitter.position}): AVG: ${hitter.stats.avg}, H: ${hitter.stats.hits}, HR: ${hitter.stats.homeRuns}, RBI: ${hitter.stats.rbi}, AB: ${hitter.stats.atBats}\n`;
+        });
+        
+        statsSection += '\n';
+      }
+    }
+    
+    // 6. Include game context from Perplexity if available
+    if (gameData?.gameContext) {
+      statsSection += 'GAME CONTEXT AND STORYLINES:\n';
+      
+      if (gameData.gameContext.playoffStatus) {
+        statsSection += `Playoff Status: ${gameData.gameContext.playoffStatus}\n`;
+      }
+      
+      if (gameData.gameContext.homeTeamStorylines) {
+        statsSection += `${gameData.homeTeam} Storylines: ${gameData.gameContext.homeTeamStorylines}\n`;
+      }
+      
+      if (gameData.gameContext.awayTeamStorylines) {
+        statsSection += `${gameData.awayTeam} Storylines: ${gameData.gameContext.awayTeamStorylines}\n`;
+      }
+      
+      if (gameData.gameContext.injuryReport) {
+        statsSection += `Injuries: ${gameData.gameContext.injuryReport}\n`;
+      }
+      
+      if (gameData.gameContext.keyMatchups) {
+        statsSection += `Key Matchups: ${gameData.gameContext.keyMatchups}\n`;
+      }
+      
+      if (gameData.gameContext.bettingTrends) {
+        statsSection += `Betting Trends: ${gameData.gameContext.bettingTrends}\n`;
+      }
+      
+      if (gameData.gameContext.weatherConditions) {
+        statsSection += `Weather: ${gameData.gameContext.weatherConditions}\n`;
+      }
+      
+      statsSection += '\n';
+    }
+    
+    // 7. Include all collected stats if we have them
     if (gameData?.allCollectedStats && gameData.allCollectedStats.sources?.length > 0) {
       statsSection += 'COLLECTED STATS FROM MULTIPLE SOURCES:\n';
       statsSection += `${gameData.allCollectedStats.sources.length} data sources available\n`;
