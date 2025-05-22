@@ -7,6 +7,7 @@ import { propOddsService } from './propOddsService.js';
 import { oddsService } from './oddsService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.js';
 import { openaiService } from './openaiService.js';
+// Using MLB Stats API exclusively for prop picks - no need for sportsDbApiService or perplexityService
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
 
 // Import Supabase named export
@@ -28,7 +29,7 @@ const USE_FILE_STORAGE = false; // Set to false for browser compatibility
 
 /**
  * Fetch active players for a team with their current season stats
- * Uses MLB Stats API for MLB players and SportsDB for other leagues
+ * Uses MLB Stats API for MLB players
  */
 async function fetchActivePlayers(teamName, league) {
   try {
@@ -48,6 +49,37 @@ async function fetchActivePlayers(teamName, league) {
           teamGameId = game.gameId;
           break;
         }
+      }
+      
+      if (teamGameId) {
+        // Get hitter stats for this game
+        const hitterStats = await mlbStatsApiService.getHitterStats(teamGameId);
+        console.log(`Got stats for ${teamName} from MLB Stats API`);
+        
+        // Format the players
+        const isHomeTeam = todaysGames.find(g => g.gameId === teamGameId)?.homeTeam.includes(teamName);
+        const players = isHomeTeam ? hitterStats.home : hitterStats.away;
+        
+        console.log(`Got ${players.length} players from MLB Stats API for ${teamName}`);
+        return players.map(p => ({
+          idPlayer: p.id,
+          strPlayer: p.name,
+          strPosition: p.position,
+          strTeam: p.team,
+          stats: p.stats
+        }));
+      }
+      // If no game found, return empty array
+      return [];
+    } else {
+      console.log(`Only MLB is supported for prop picks. Skipping ${league} team ${teamName}`);
+      return [];
+    }
+  } catch (error) {
+    console.error(`Error fetching players for ${teamName} (${league}):`, error);
+    return [];
+  }
+}
       }
       
       if (!teamGameId) {
@@ -286,142 +318,32 @@ const propPicksService = {
                   time: game.commence_time ? new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'TBD'
                 };
                 
-                // Fetch player data for MLB teams from TheSportsDB
+                // For MLB games, use MLB Stats API exclusively for all player data
                 try {
-                  console.log(`Fetching team and player data for ${sportName} using TheSportsDB API...`);
-                  
-                  // Look up teams based on sport
-                  let homeTeamData = null;
-                  let awayTeamData = null;
-                  let homeTeamPlayers = [];
-                  let awayTeamPlayers = [];
-                  
-                  // Only handling MLB for props as configured
-                  console.log(`Using TheSportsDB API for MLB teams and players`);
-                  
-                  // Look up MLB teams using TheSportsDB
-                  const homeTeamSportsDb = await sportsDbApiService.lookupTeam(
-                    game.home_team, 
-                    sportsDbApiService.leagueIds.MLB
-                  );
-                  
-                  const awayTeamSportsDb = await sportsDbApiService.lookupTeam(
-                    game.away_team, 
-                    sportsDbApiService.leagueIds.MLB
-                  );
-                  
-                  // Set team data from SportsDB results
-                  if (homeTeamSportsDb) {
-                    homeTeamData = {
-                      id: homeTeamSportsDb.idTeam,
-                      name: homeTeamSportsDb.strTeam,
-                      full_name: homeTeamSportsDb.strTeam,
-                      city: homeTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || homeTeamSportsDb.strTeam
-                    };
+                  if (sportName === 'MLB') {
+                    console.log(`Fetching MLB team and player data using MLB Stats API exclusively...`);
                     
-                    // Get current MLB players for this team
-                    const sportsDbHomePlayers = await sportsDbApiService.getTeamPlayers(homeTeamData.id);
+                    // MLB Stats API provides all the data we need for MLB prop bets
+                    // We'll use the MLB Stats API functions added earlier
+                    console.log(`Using MLB Stats API for ${game.home_team} vs ${game.away_team}`);
                     
-                    // Convert SportsDB player format to match our expected format
-                    homeTeamPlayers = sportsDbHomePlayers.map(player => ({
-                      id: player.idPlayer,
-                      first_name: player.strPlayer.split(' ')[0],
-                      last_name: player.strPlayer.split(' ').slice(1).join(' '),
-                      position: player.strPosition,
-                      height_feet: null,
-                      height_inches: null,
-                      weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
-                      team: {
-                        id: homeTeamData.id,
-                        name: homeTeamData.name,
-                        full_name: homeTeamData.full_name,
-                        city: homeTeamData.city
-                      },
-                      seasons: [],
-                      is_pitcher: player.strPosition === 'Pitcher' || 
-                                player.strPosition === 'Starting Pitcher' || 
-                                player.strPosition === 'Relief Pitcher'
-                    }));
-                    console.log(`Found ${homeTeamPlayers.length} current MLB players for ${homeTeamData.full_name}`);
+                    // The gameData object already has the home and away team names
+                    // which is all we need for the formatMLBPlayerStats function
+                    // We'll let the generatePropBets function handle the MLB Stats API calls
                   } else {
-                    console.warn(`Could not find MLB team data for ${game.home_team}`);
+                    // Skip non-MLB games for prop picks
+                    console.log(`Skipping ${sportName} game - only MLB is supported for prop picks`);
+                    continue;
                   }
-                  
-                  if (awayTeamSportsDb) {
-                    awayTeamData = {
-                      id: awayTeamSportsDb.idTeam,
-                      name: awayTeamSportsDb.strTeam,
-                      full_name: awayTeamSportsDb.strTeam,
-                      city: awayTeamSportsDb.strTeam.split(' ').slice(0, -1).join(' ') || awayTeamSportsDb.strTeam
-                    };
-                    
-                    // Get current MLB players for this team
-                    const sportsDbAwayPlayers = await sportsDbApiService.getTeamPlayers(awayTeamData.id);
-                    
-                    // Convert SportsDB player format to match our expected format
-                    awayTeamPlayers = sportsDbAwayPlayers.map(player => ({
-                      id: player.idPlayer,
-                      first_name: player.strPlayer.split(' ')[0],
-                      last_name: player.strPlayer.split(' ').slice(1).join(' '),
-                      position: player.strPosition,
-                      height_feet: null,
-                      height_inches: null,
-                      weight_pounds: player.strWeight ? parseInt(player.strWeight) : null,
-                      team: {
-                        id: awayTeamData.id,
-                        name: awayTeamData.name,
-                        full_name: awayTeamData.full_name,
-                        city: awayTeamData.city
-                      },
-                      // Add MLB-specific fields
-                      is_pitcher: player.strPosition === 'Pitcher' || 
-                                player.strPosition === 'Starting Pitcher' || 
-                                player.strPosition === 'Relief Pitcher'
-                    }));
-                    console.log(`Found ${awayTeamPlayers.length} current MLB players for ${awayTeamData.full_name}`);
-                  } else {
-                    console.warn(`Could not find MLB team data for ${game.away_team}`);
-                  }
-                  
-                  
-                  // Add player stats to the game data
-                  gameData.playerStats = {
-                    homeTeam: {
-                      id: homeTeamData?.id || null,
-                      name: homeTeamData?.full_name || game.home_team,
-                      players: homeTeamPlayers
-                    },
-                    awayTeam: {
-                      id: awayTeamData?.id || null,
-                      name: awayTeamData?.full_name || game.away_team,
-                      players: awayTeamPlayers
-                    }
-                  };
-                  
                 } catch (statsError) {
-                  console.error(`Error fetching player stats: ${statsError.message}`);
-                  // Proceed without player stats if there's an error
+                  console.error(`Error setting up game data: ${statsError.message}`);
+                  // Skip this game if there's an error
+                  continue;
                 }
                 
-                // Get player-specific data based on the league - using Ball Don't Lie for MLB
-                try {
-                  // Get team rosters first from SportsDB (only for player identification)
-                  console.log('🔍 Fetching team rosters from SportsDB API...');
-                  const teamRostersData = await sportsDbApiService.getPlayerStatsForProps(
-                    gameData.homeTeam,
-                    gameData.awayTeam,
-                    gameData.league
-                  );
-                  
-                  if (teamRostersData && !teamRostersData.error) {
-                    console.log('✅ Successfully fetched team rosters from SportsDB API');
-                    console.log(`📊 Found ${teamRostersData.homeTeam.players.length + teamRostersData.awayTeam.players.length} total players`);
-                    
-                    // Store basic roster data (we'll enrich it with stats)
-                    gameData.teamRosters = teamRostersData;
-                    
-                    // If this is MLB, fetch detailed stats from Ball Don't Lie API
-                    if (gameData.league === 'MLB') {
+                // For MLB, we'll let the generatePropBets function handle all player data
+                // using the mlbStatsApiService functions we added
+                // No need to fetch any data here - keeping it clean and simple
                       console.log('🏆 Using Ball Don\'t Lie API for detailed MLB player statistics (GOAT plan)...');
                       
                       // Step 1: Get full list of players for both teams
@@ -552,18 +474,11 @@ const propPicksService = {
                   }
                 } catch (error) {
                   console.error(`❌ Error fetching verified player data: ${error.message}`);
-                  // Fall back to Perplexity for data if we can't get verified stats
-                  try {
-                    console.log('Falling back to Perplexity for contextual data...');
-                    const perplexityData = await perplexityService.getPlayerPropInsights(gameData);
-                    
-                    gameData.perplexityStats = { 
-                      player_insights: perplexityData.player_insights || 'No verified player data available',
-                      meta: { 
-                        source: 'Perplexity (fallback)', 
-                        insight_weight: '10%',  // Lower weight for unverified data
-                        verified: false 
-                      }
+                  
+                  // No fallback to Perplexity - we're using MLB Stats API exclusively for prop picks
+                  console.log('MLB Stats API is the only data source for prop picks - no fallbacks used');
+                }
+
                     };
                   } catch (perplexityError) {
                     console.error(`❌ Perplexity fallback also failed: ${perplexityError.message}`);
