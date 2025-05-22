@@ -474,9 +474,9 @@ REASONING: ..."
       }
       
       // 2. Format the props for the prompt
-      const formattedProps = playerProps.map(prop => {
-        return `${prop.playerName} ${prop.type} ${prop.stat} ${prop.line} (${prop.over_odds})`;
-      }).join('\n');
+      const formattedProps = playerProps.map((prop) => 
+        `${prop.playerName} ${prop.type} ${prop.stat} ${prop.line} (${prop.over_odds})`
+      ).join('\n');
       
       // 3. Get player stats from MLB Stats API
       console.log('Getting player stats from MLB Stats API...');
@@ -505,7 +505,7 @@ REASONING: ..."
       });
       
       // Filter by odds quality (prefer +EV bets)
-      const validOdds = valid.filter(p => {
+      const validOdds = valid.filter((p) => {
         // Extract the odds from the pick string
         const oddsMatch = p.pick.match(/\(([+-]\d+)\)/);
         if (oddsMatch && oddsMatch[1]) {
@@ -520,7 +520,7 @@ REASONING: ..."
       });
       
       // Further filter by high confidence threshold - reduced to 0.7 for prop picks
-      const highConf = validOdds.filter(p => p.confidence >= 0.7);
+      const highConf = validOdds.filter((p) => p.confidence >= 0.7);
       
       // Sort by confidence (highest first) and take only the top 10
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
