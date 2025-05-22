@@ -271,17 +271,46 @@ const combinedMlbService = {
         const gameContextResult = await perplexityService.search(contextQuery);
         if (gameContextResult?.success && gameContextResult?.data) {
           try {
+            // More robust JSON extraction
             const jsonMatch = gameContextResult.data.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-              let jsonStr = jsonMatch[0].replace(/,\s*([\]\}])/g, '$1');
-              gameContext = JSON.parse(jsonStr);
-              console.log(`[Combined MLB Service] Successfully parsed game context from Perplexity`);
+              // Try multiple JSON cleanup approaches
+              try {
+                // Approach 1: Basic cleanup (removing trailing commas)
+                let jsonStr = jsonMatch[0].replace(/,\s*([\]\}])/g, '$1');
+                gameContext = JSON.parse(jsonStr);
+                console.log(`[Combined MLB Service] Successfully parsed game context from Perplexity (approach 1)`);
+              } catch (error1) {
+                try {
+                  // Approach 2: More aggressive cleanup for malformed JSON
+                  // Replace all types of quotes with standard double quotes
+                  let jsonStr = jsonMatch[0]
+                    .replace(/[\u2018\u2019]/g, "'")
+                    .replace(/[\u201C\u201D]/g, '"')
+                    // Fix missing quotes around property names
+                    .replace(/(\{|,)\s*([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+                    // Fix dangling commas
+                    .replace(/,\s*([\]\}])/g, '$1');
+                  
+                  gameContext = JSON.parse(jsonStr);
+                  console.log(`[Combined MLB Service] Successfully parsed game context from Perplexity (approach 2)`);
+                } catch (error2) {
+                  // Last resort - use a safer parser like json5 or fallback to regex extraction
+                  throw error2; // Will be caught by outer catch
+                }
+              }
+            } else {
+              // No JSON-like structure found
+              throw new Error('No JSON structure detected in response');
             }
           } catch (parseError) {
             console.error(`[Combined MLB Service] Error parsing context: ${parseError.message}`);
-            // fallback to raw text
-            gameContext = { generalContext: gameContextResult.data };
-            console.log(`[Combined MLB Service] Using raw text for game context`);
+            // Create a structured fallback from the raw text
+            gameContext = { 
+              gamePreview: gameContextResult.data.substring(0, 500) + '...', // Truncate long text
+              generalContext: 'Game context could not be parsed into structured format.'
+            };
+            console.log(`[Combined MLB Service] Using formatted raw text for game context`);
           }
         }
       } catch (contextError) {
