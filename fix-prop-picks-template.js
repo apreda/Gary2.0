@@ -1,4 +1,12 @@
-import axios from 'axios';
+const fs = require('fs');
+const path = require('path');
+
+const filePath = path.join('gary2.0/src/services/propPicksService.js');
+const backupPath = filePath + '.backup2';
+fs.copyFileSync(filePath, backupPath);
+
+// Create a clean template version of the file
+const templateContent = `import axios from 'axios';
 import { propOddsService } from './propOddsService.js';
 import { oddsService } from './oddsService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.js';
@@ -18,7 +26,7 @@ const propPicksService = {
    */
   formatMLBPlayerStats: async (homeTeam, awayTeam) => {
     try {
-      console.log(`Formatting comprehensive MLB player stats for ${homeTeam} vs ${awayTeam}`);
+      console.log(\`Formatting comprehensive MLB player stats for \${homeTeam} vs \${awayTeam}\`);
       
       // Get today's date
       const today = new Date().toISOString().slice(0, 10);
@@ -42,7 +50,7 @@ const propPicksService = {
       }
       
       if (!targetGame) {
-        console.log(`No game found for ${homeTeam} vs ${awayTeam}`);
+        console.log(\`No game found for \${homeTeam} vs \${awayTeam}\`);
         return '';
       }
       
@@ -56,7 +64,7 @@ const propPicksService = {
       try {
         startingPitchers = await mlbStatsApiService.getStartingPitchersEnhanced(gameId);
       } catch (error) {
-        console.log(`Error getting starting pitchers: ${error.message}`);
+        console.log(\`Error getting starting pitchers: \${error.message}\`);
       }
       
       // Get team rosters with stats
@@ -72,7 +80,7 @@ const propPicksService = {
           }
         }
       } catch (error) {
-        console.log(`Error getting enhanced home roster: ${error.message}`);
+        console.log(\`Error getting enhanced home roster: \${error.message}\`);
       }
       
       try {
@@ -83,7 +91,7 @@ const propPicksService = {
           }
         }
       } catch (error) {
-        console.log(`Error getting enhanced away roster: ${error.message}`);
+        console.log(\`Error getting enhanced away roster: \${error.message}\`);
       }
       
       // Get league leaders for context
@@ -101,7 +109,7 @@ const propPicksService = {
           strikeoutLeaders = leagueLeadersData.strikeouts || [];
         }
       } catch (error) {
-        console.log(`Error getting league leaders: ${error.message}`);
+        console.log(\`Error getting league leaders: \${error.message}\`);
       }
       
       // Helper function to find player ranking in league leaders
@@ -114,84 +122,84 @@ const propPicksService = {
       let statsText = '';
       
       // SECTION 1: Starting Pitchers
-      statsText += 'STARTING PITCHERS:\n';
+      statsText += 'STARTING PITCHERS:\\n';
       
       if (startingPitchers?.homeStarter) {
         const hp = startingPitchers.homeStarter;
         const hpStats = hp.seasonStats || {};
-        statsText += `${homeTeam} - ${hp?.fullName || 'Unknown Pitcher'}: ERA ${hpStats.era || 'N/A'}, ` +
-                   `${hpStats.wins || 0}W-${hpStats.losses || 0}L, ` +
-                   `${hpStats.inningsPitched || '0.0'} IP, ` +
-                   `${hpStats.strikeouts || 0} K, ` +
-                   `WHIP ${hpStats.whip || 'N/A'}, ` +
-                   `BAA ${hpStats.battingAvgAgainst || '.000'}\n`;
+        statsText += \`\${homeTeam} - \${hp?.fullName || 'Unknown Pitcher'}: ERA \${hpStats.era || 'N/A'}, \` +
+                   \`\${hpStats.wins || 0}W-\${hpStats.losses || 0}L, \` +
+                   \`\${hpStats.inningsPitched || '0.0'} IP, \` +
+                   \`\${hpStats.strikeouts || 0} K, \` +
+                   \`WHIP \${hpStats.whip || 'N/A'}, \` +
+                   \`BAA \${hpStats.battingAvgAgainst || '.000'}\\n\`;
         
         // Add league ranking for ERA and strikeouts if available
         if (eraLeaders.length > 0 || strikeoutLeaders.length > 0) {
-          statsText += `RANKINGS: `;
+          statsText += \`RANKINGS: \`;
           
           const eraRank = findPlayerRanking(eraLeaders, hp.id);
           if (eraRank) {
-            statsText += `ERA #${eraRank.rank} in MLB (${eraRank.value}), `;
+            statsText += \`ERA #\${eraRank.rank} in MLB (\${eraRank.value}), \`;
           }
           
           const soRank = findPlayerRanking(strikeoutLeaders, hp.id);
           if (soRank) {
-            statsText += `K #${soRank.rank} in MLB (${soRank.value}), `;
+            statsText += \`K #\${soRank.rank} in MLB (\${soRank.value}), \`;
           }
           
-          statsText += '\n';
+          statsText += '\\n';
         }
       } else {
-        statsText += `${homeTeam} - Starting pitcher not announced\n`;
+        statsText += \`\${homeTeam} - Starting pitcher not announced\\n\`;
       }
       
       if (startingPitchers?.awayStarter) {
         const ap = startingPitchers.awayStarter;
         const apStats = ap.seasonStats || {};
-        statsText += `${awayTeam} - ${ap?.fullName || 'Unknown Pitcher'}: ERA ${apStats.era || 'N/A'}, ` +
-                   `${apStats.wins || 0}W-${apStats.losses || 0}L, ` +
-                   `${apStats.inningsPitched || '0.0'} IP, ` +
-                   `${apStats.strikeouts || 0} K, ` +
-                   `WHIP ${apStats.whip || 'N/A'}, ` +
-                   `BAA ${apStats.battingAvgAgainst || '.000'}\n`;
+        statsText += \`\${awayTeam} - \${ap?.fullName || 'Unknown Pitcher'}: ERA \${apStats.era || 'N/A'}, \` +
+                   \`\${apStats.wins || 0}W-\${apStats.losses || 0}L, \` +
+                   \`\${apStats.inningsPitched || '0.0'} IP, \` +
+                   \`\${apStats.strikeouts || 0} K, \` +
+                   \`WHIP \${apStats.whip || 'N/A'}, \` +
+                   \`BAA \${apStats.battingAvgAgainst || '.000'}\\n\`;
         
         // Add league ranking for ERA and strikeouts
         if (eraLeaders.length > 0 || strikeoutLeaders.length > 0) {
-          statsText += `RANKINGS: `;
+          statsText += \`RANKINGS: \`;
           
           const eraRank = findPlayerRanking(eraLeaders, ap.id);
           if (eraRank) {
-            statsText += `ERA #${eraRank.rank} in MLB (${eraRank.value}), `;
+            statsText += \`ERA #\${eraRank.rank} in MLB (\${eraRank.value}), \`;
           }
           
           const soRank = findPlayerRanking(strikeoutLeaders, ap.id);
           if (soRank) {
-            statsText += `K #${soRank.rank} in MLB (${soRank.value}), `;
+            statsText += \`K #\${soRank.rank} in MLB (\${soRank.value}), \`;
           }
           
-          statsText += '\n';
+          statsText += '\\n';
         }
       } else {
-        statsText += `${awayTeam} - Starting pitcher not announced\n`;
+        statsText += \`\${awayTeam} - Starting pitcher not announced\\n\`;
       }
       
       // SECTION 2: Team Hitters
-      statsText += `\n${homeTeam} HITTERS:\n`;
+      statsText += \`\\n\${homeTeam} HITTERS:\\n\`;
       
       // Use enhanced roster data if available, otherwise fall back to basic hitter stats
       if (homeRoster.length > 0) {
         for (const hitter of homeRoster) {
           const s = hitter.stats;
-          statsText += `${hitter?.fullName || 'Unknown Player'} (${hitter?.position || 'N/A'}): ` +
-                     `AVG ${s.avg || '.000'}, ` +
-                     `${s.hits || 0} H, ` +
-                     `${s.homeRuns || 0} HR, ` +
-                     `${s.rbi || 0} RBI, ` +
-                     `${s.runs || 0} R, ` +
-                     `${s.strikeouts || 0} K, ` +
-                     `${s.walks || 0} BB, ` +
-                     `OPS ${s.ops || '.000'}\n`;
+          statsText += \`\${hitter?.fullName || 'Unknown Player'} (\${hitter?.position || 'N/A'}): \` +
+                     \`AVG \${s.avg || '.000'}, \` +
+                     \`\${s.hits || 0} H, \` +
+                     \`\${s.homeRuns || 0} HR, \` +
+                     \`\${s.rbi || 0} RBI, \` +
+                     \`\${s.runs || 0} R, \` +
+                     \`\${s.strikeouts || 0} K, \` +
+                     \`\${s.walks || 0} BB, \` +
+                     \`OPS \${s.ops || '.000'}\\n\`;
           
           // Add league rankings if available
           if (homeRunLeaders.length > 0 || battingAvgLeaders.length > 0) {
@@ -199,38 +207,38 @@ const propPicksService = {
             const avgRank = findPlayerRanking(battingAvgLeaders, hitter.id);
             
             if (hrRank || avgRank) {
-              statsText += `RANKINGS: `;
+              statsText += \`RANKINGS: \`;
               
               if (hrRank) {
-                statsText += `HR #${hrRank.rank} in MLB (${hrRank.value}), `;
+                statsText += \`HR #\${hrRank.rank} in MLB (\${hrRank.value}), \`;
               }
               
               if (avgRank) {
-                statsText += `AVG #${avgRank.rank} in MLB (${avgRank.value}), `;
+                statsText += \`AVG #\${avgRank.rank} in MLB (\${avgRank.value}), \`;
               }
               
-              statsText += '\n';
+              statsText += '\\n';
             }
           }
         }
       } else {
-        statsText += `No detailed stats available for ${homeTeam} hitters\n`;
+        statsText += \`No detailed stats available for \${homeTeam} hitters\\n\`;
       }
       
-      statsText += `\n${awayTeam} HITTERS:\n`;
+      statsText += \`\\n\${awayTeam} HITTERS:\\n\`;
       
       if (awayRoster.length > 0) {
         for (const hitter of awayRoster) {
           const s = hitter.stats;
-          statsText += `${hitter?.fullName || 'Unknown Player'} (${hitter?.position || 'N/A'}): ` +
-                     `AVG ${s.avg || '.000'}, ` +
-                     `${s.hits || 0} H, ` +
-                     `${s.homeRuns || 0} HR, ` +
-                     `${s.rbi || 0} RBI, ` +
-                     `${s.runs || 0} R, ` +
-                     `${s.strikeouts || 0} K, ` +
-                     `${s.walks || 0} BB, ` +
-                     `OPS ${s.ops || '.000'}\n`;
+          statsText += \`\${hitter?.fullName || 'Unknown Player'} (\${hitter?.position || 'N/A'}): \` +
+                     \`AVG \${s.avg || '.000'}, \` +
+                     \`\${s.hits || 0} H, \` +
+                     \`\${s.homeRuns || 0} HR, \` +
+                     \`\${s.rbi || 0} RBI, \` +
+                     \`\${s.runs || 0} R, \` +
+                     \`\${s.strikeouts || 0} K, \` +
+                     \`\${s.walks || 0} BB, \` +
+                     \`OPS \${s.ops || '.000'}\\n\`;
           
           // Add league rankings if available
           if (homeRunLeaders.length > 0 || battingAvgLeaders.length > 0) {
@@ -238,61 +246,61 @@ const propPicksService = {
             const avgRank = findPlayerRanking(battingAvgLeaders, hitter.id);
             
             if (hrRank || avgRank) {
-              statsText += `RANKINGS: `;
+              statsText += \`RANKINGS: \`;
               
               if (hrRank) {
-                statsText += `HR #${hrRank.rank} in MLB (${hrRank.value}), `;
+                statsText += \`HR #\${hrRank.rank} in MLB (\${hrRank.value}), \`;
               }
               
               if (avgRank) {
-                statsText += `AVG #${avgRank.rank} in MLB (${avgRank.value}), `;
+                statsText += \`AVG #\${avgRank.rank} in MLB (\${avgRank.value}), \`;
               }
               
-              statsText += '\n';
+              statsText += '\\n';
             }
           }
         }
       } else {
-        statsText += `No detailed stats available for ${awayTeam} hitters\n`;
+        statsText += \`No detailed stats available for \${awayTeam} hitters\\n\`;
       }
       
       // SECTION 3: League Leaders
-      statsText += '\nMVP CANDIDATES & LEAGUE LEADERS:\n';
+      statsText += '\\nMVP CANDIDATES & LEAGUE LEADERS:\\n';
       
       if (homeRunLeaders.length > 0) {
         statsText += 'HOME RUNS: ';
         for (let i = 0; i < Math.min(homeRunLeaders.length, 5); i++) {
           const leader = homeRunLeaders[i];
-          statsText += `${i+1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += \`\${i+1}. \${leader?.person?.fullName || 'Unknown Player'} (\${leader?.value || 'N/A'}), \`;
         }
-        statsText += '\n';
+        statsText += '\\n';
       }
       
       if (battingAvgLeaders.length > 0) {
         statsText += 'BATTING AVG: ';
         for (let i = 0; i < Math.min(battingAvgLeaders.length, 5); i++) {
           const leader = battingAvgLeaders[i];
-          statsText += `${i+1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += \`\${i+1}. \${leader?.person?.fullName || 'Unknown Player'} (\${leader?.value || 'N/A'}), \`;
         }
-        statsText += '\n';
+        statsText += '\\n';
       }
       
       if (eraLeaders.length > 0) {
         statsText += 'ERA: ';
         for (let i = 0; i < Math.min(eraLeaders.length, 5); i++) {
           const leader = eraLeaders[i];
-          statsText += `${i+1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += \`\${i+1}. \${leader?.person?.fullName || 'Unknown Player'} (\${leader?.value || 'N/A'}), \`;
         }
-        statsText += '\n';
+        statsText += '\\n';
       }
       
       if (strikeoutLeaders.length > 0) {
         statsText += 'STRIKEOUTS: ';
         for (let i = 0; i < Math.min(strikeoutLeaders.length, 5); i++) {
           const leader = strikeoutLeaders[i];
-          statsText += `${i+1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += \`\${i+1}. \${leader?.person?.fullName || 'Unknown Player'} (\${leader?.value || 'N/A'}), \`;
         }
-        statsText += '\n';
+        statsText += '\\n';
       }
       
       return statsText;
@@ -306,15 +314,15 @@ const propPicksService = {
    * Create prompt for the OpenAI API to generate prop picks
    */
   createPropPicksPrompt: (props, playerStats) => {
-    const prompt = `You are Gary, an expert sports analyst specialized in player prop betting.
+    const prompt = \`You are Gary, an expert sports analyst specialized in player prop betting.
 
 Your job is to analyze player props for today's games and identify value bets based on the provided player statistics and prop odds.
 
 Here are the available props for today:
-${props}
+\${props}
 
 Here are the player statistics to consider in your analysis:
-${playerStats}
+\${playerStats}
 
 For each prop, analyze the player's performance metrics, recent form, matchup advantages, and betting odds to determine if there's value.
 
@@ -336,7 +344,7 @@ Your confidence score should be based primarily on:
 - Size of the edge you've identified (20% weight)
 
 Respond with ONLY the JSON array of your best prop picks.
-`;
+\`;
 
     return prompt;
   },
@@ -350,7 +358,7 @@ Respond with ONLY the JSON array of your best prop picks.
       try {
         const parsed = JSON.parse(response);
         if (Array.isArray(parsed)) {
-          console.log(`Successfully parsed JSON response with ${parsed.length} picks`);
+          console.log(\`Successfully parsed JSON response with \${parsed.length} picks\`);
           return parsed;
         }
       } catch (jsonError) {
@@ -359,11 +367,11 @@ Respond with ONLY the JSON array of your best prop picks.
       }
       
       // Try to extract JSON from the response
-      const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+      const jsonMatch = response.match(/\\[\\s*\\{[\\s\\S]*?\\}\\s*\\]/g);
       if (jsonMatch && jsonMatch[0]) {
         try {
           const extracted = JSON.parse(jsonMatch[0]);
-          console.log(`Successfully extracted JSON with ${extracted.length} picks`);
+          console.log(\`Successfully extracted JSON with \${extracted.length} picks\`);
           return extracted;
         } catch (extractError) {
           console.error('Error parsing extracted JSON:', extractError);
@@ -371,20 +379,18 @@ Respond with ONLY the JSON array of your best prop picks.
       }
       
       // If we couldn't extract JSON, try to parse the formatted text response
-      // Example format: "PICK: Aaron Judge OVER Home Runs 0.5 (+160)
-CONFIDENCE: 0.85
-REASONING: ..."
+      // Example format: "PICK: Aaron Judge OVER Home Runs 0.5 (+160)\nCONFIDENCE: 0.85\nREASONING: ..."
       console.log('Attempting to parse formatted text response');
       const picks = [];
       const sections = response.split(/PICK:|Pick:/gi).filter(Boolean);
       
       for (const section of sections) {
         try {
-          const confidenceMatch = section.match(/CONFIDENCE:? (0\.\d+)/i) || section.match(/Confidence:? (0\.\d+)/i);
+          const confidenceMatch = section.match(/CONFIDENCE:? (0\\.\\d+)/i) || section.match(/Confidence:? (0\\.\\d+)/i);
           const reasoningMatch = section.match(/REASONING:? (.+?)(?=PICK:|Pick:|$)/is) || section.match(/Reasoning:? (.+?)(?=PICK:|Pick:|$)/is);
           
           if (confidenceMatch) {
-            const pickText = section.split(/\n/)[0].trim();
+            const pickText = section.split(/\\n/)[0].trim();
             const confidence = parseFloat(confidenceMatch[1]);
             const reasoning = reasoningMatch ? reasoningMatch[1].trim() : 'No reasoning provided';
             
@@ -400,7 +406,7 @@ REASONING: ..."
       }
       
       if (picks.length > 0) {
-        console.log(`Successfully parsed ${picks.length} picks from formatted text`);
+        console.log(\`Successfully parsed \${picks.length} picks from formatted text\`);
         return picks;
       }
       
@@ -449,10 +455,10 @@ REASONING: ..."
         return entry;
       });
       
-      console.log(`Found ${data.length} entries for ${dateString}, filtered to 70%+ confidence threshold`);
+      console.log(\`Found \${data.length} entries for \${dateString}, filtered to 70%+ confidence threshold\`);
       return processedEntries;
     } catch (error) {
-      console.error(`Error fetching for ${dateString}:`, error);
+      console.error(\`Error fetching for \${dateString}:\`, error);
       throw error;
     }
   },
@@ -466,7 +472,7 @@ REASONING: ..."
       
       // 1. Get available props from the propOddsService
       const playerProps = await propOddsService.getPlayerProps(gameData.sport, gameData.homeTeam, gameData.awayTeam);
-      console.log(`Found ${playerProps.length} prop options for ${gameData.homeTeam} vs ${gameData.awayTeam}`);
+      console.log(\`Found \${playerProps.length} prop options for \${gameData.homeTeam} vs \${gameData.awayTeam}\`);
       
       if (playerProps.length === 0) {
         console.log('No props available, skipping analysis');
@@ -475,8 +481,8 @@ REASONING: ..."
       
       // 2. Format the props for the prompt
       const formattedProps = playerProps.map(prop => {
-        return `${prop.playerName} ${prop.type} ${prop.stat} ${prop.line} (${prop.over_odds})`;
-      }).join('\n');
+        return \`\${prop.playerName} \${prop.type} \${prop.stat} \${prop.line} (\${prop.over_odds})\`;
+      }).join('\\n');
       
       // 3. Get player stats from MLB Stats API
       console.log('Getting player stats from MLB Stats API...');
@@ -492,14 +498,14 @@ REASONING: ..."
       
       // 6. Parse the response to extract the picks
       const picks = propPicksService.parseOpenAIResponse(response);
-      console.log(`Parsed ${picks.length} prop picks from OpenAI response`);
+      console.log(\`Parsed \${picks.length} prop picks from OpenAI response\`);
       
       // 7. Validate and filter the picks
       // Filter out picks with invalid format
       const valid = picks.filter(p => {
         const hasRequiredFields = p.pick && p.confidence && p.reasoning;
         if (!hasRequiredFields) {
-          console.log(`Filtering out prop pick with missing fields: ${JSON.stringify(p)}`);
+          console.log(\`Filtering out prop pick with missing fields: \${JSON.stringify(p)}\`);
         }
         return hasRequiredFields;
       });
@@ -507,12 +513,12 @@ REASONING: ..."
       // Filter by odds quality (prefer +EV bets)
       const validOdds = valid.filter(p => {
         // Extract the odds from the pick string
-        const oddsMatch = p.pick.match(/\(([+-]\d+)\)/);
+        const oddsMatch = p.pick.match(/\\(([+-]\\d+)\\)/);
         if (oddsMatch && oddsMatch[1]) {
           const odds = parseInt(oddsMatch[1]);
           const oddsOK = odds > -150;
           if (!oddsOK) {
-            console.log(`Filtering out prop pick with poor odds: ${p.pick} (${odds} is worse than -150)`);
+            console.log(\`Filtering out prop pick with poor odds: \${p.pick} (\${odds} is worse than -150)\`);
           }
           return oddsOK;
         }
@@ -527,7 +533,7 @@ REASONING: ..."
       const topTenPicks = sortedByConfidence.slice(0, 10);
       
       console.log(
-        `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}, Top 10: ${topTenPicks.length}`
+        \`Original: \${playerProps.length}, Valid: \${valid.length}, HighConf: \${highConf.length}, Top 10: \${topTenPicks.length}\`
       );
       
       return topTenPicks;
@@ -539,3 +545,10 @@ REASONING: ..."
 };
 
 export { propPicksService };
+`;
+
+// Write the template to a new file
+fs.writeFileSync(filePath + '.fixed', templateContent);
+console.log('Created fixed version of propPicksService.js at ' + filePath + '.fixed');
+console.log('Original file is backed up at ' + backupPath);
+console.log('You can use this fixed version to replace the original if needed');
