@@ -585,7 +585,7 @@ const propPicksService = {
         return entry;
       });
       
-      console.log(`Found ${data.length} entries for ${dateString}, filtered to 85%+ confidence threshold`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered to 70%+ confidence threshold`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
@@ -728,7 +728,7 @@ const propPicksService = {
       if (startingPitchers?.homeStarter) {
         const hp = startingPitchers.homeStarter;
         const hpStats = hp.seasonStats || {};
-        statsText += `${homeTeam} - ${hp.fullName}: ERA ${hpStats.era || 'N/A'}, ` +
+        statsText += `${homeTeam} - ${hp?.fullName || 'Unknown Pitcher'}: ERA ${hpStats.era || 'N/A'}, ` +
                    `${hpStats.wins || 0}W-${hpStats.losses || 0}L, ` +
                    `${hpStats.inningsPitched || '0.0'} IP, ` +
                    `${hpStats.strikeouts || 0} K, ` +
@@ -759,7 +759,7 @@ const propPicksService = {
       if (startingPitchers?.awayStarter) {
         const ap = startingPitchers.awayStarter;
         const apStats = ap.seasonStats || {};
-        statsText += `${awayTeam} - ${ap.fullName}: ERA ${apStats.era || 'N/A'}, ` +
+        statsText += `${awayTeam} - ${ap?.fullName || 'Unknown Pitcher'}: ERA ${apStats.era || 'N/A'}, ` +
                    `${apStats.wins || 0}W-${apStats.losses || 0}L, ` +
                    `${apStats.inningsPitched || '0.0'} IP, ` +
                    `${apStats.strikeouts || 0} K, ` +
@@ -794,7 +794,7 @@ const propPicksService = {
       if (homeRoster.length > 0) {
         for (const hitter of homeRoster) {
           const s = hitter.stats;
-          statsText += `${hitter.fullName} (${hitter.position}): ` +
+          statsText += `${hitter?.fullName || "Unknown Player"} (${hitter.position}): ` +
                      `AVG ${s.avg || '.000'}, ` +
                      `${s.hits || 0} H, ` +
                      `${s.homeRuns || 0} HR, ` +
@@ -848,7 +848,7 @@ const propPicksService = {
       if (awayRoster.length > 0) {
         for (const hitter of awayRoster) {
           const s = hitter.stats;
-          statsText += `${hitter.fullName} (${hitter.position}): ` +
+          statsText += `${hitter?.fullName || "Unknown Player"} (${hitter.position}): ` +
                      `AVG ${s.avg || '.000'}, ` +
                      `${s.hits || 0} H, ` +
                      `${s.homeRuns || 0} HR, ` +
@@ -903,7 +903,7 @@ const propPicksService = {
           statsText += `HOME RUNS: `;
           for (let i = 0; i < Math.min(3, homeRunLeaders.length); i++) {
             const leader = homeRunLeaders[i];
-            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+            statsText += `${i+1}. ${leader?.person?.fullName || "Unknown Player"} (${leader.value}), `;
           }
           statsText = statsText.replace(/, $/, '');
           statsText += '\n';
@@ -913,7 +913,7 @@ const propPicksService = {
           statsText += `BATTING AVG: `;
           for (let i = 0; i < Math.min(3, battingAvgLeaders.length); i++) {
             const leader = battingAvgLeaders[i];
-            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+            statsText += `${i+1}. ${leader?.person?.fullName || "Unknown Player"} (${leader.value}), `;
           }
           statsText = statsText.replace(/, $/, '');
           statsText += '\n';
@@ -923,7 +923,7 @@ const propPicksService = {
           statsText += `ERA: `;
           for (let i = 0; i < Math.min(3, eraLeaders.length); i++) {
             const leader = eraLeaders[i];
-            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+            statsText += `${i+1}. ${leader?.person?.fullName || "Unknown Player"} (${leader.value}), `;
           }
           statsText = statsText.replace(/, $/, '');
           statsText += '\n';
@@ -933,7 +933,7 @@ const propPicksService = {
           statsText += `STRIKEOUTS: `;
           for (let i = 0; i < Math.min(3, strikeoutLeaders.length); i++) {
             const leader = strikeoutLeaders[i];
-            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+            statsText += `${i+1}. ${leader?.person?.fullName || "Unknown Player"} (${leader.value}), `;
           }
           statsText = statsText.replace(/, $/, '');
           statsText += '\n';
