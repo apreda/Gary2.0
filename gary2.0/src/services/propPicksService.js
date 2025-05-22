@@ -509,6 +509,34 @@ Respond with ONLY the JSON array of your best prop picks.
       console.error('Error generating prop picks:', error);
       return [];
     }
+  },
+  
+  /**
+   * Get today's prop picks from the database
+   * This function is used by the GaryProps component
+   */
+  getTodayPropPicks: async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      console.log(`Fetching prop picks for today: ${today}`);
+      
+      // Query the prop_picks table for today's date
+      const { data, error } = await supabase
+        .from('prop_picks')
+        .select('*')
+        .eq('date', today);
+      
+      if (error) {
+        console.error('Error fetching today\'s prop picks:', error);
+        throw error;
+      }
+      
+      console.log(`Found ${data?.length || 0} prop pick records for today`);
+      return data || [];
+    } catch (error) {
+      console.error('Error in getTodayPropPicks:', error);
+      return [];
+    }
   }
 };
 
