@@ -90,12 +90,21 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       awayTeam: gameData?.awayTeam || '',
       sport: gameData?.league || gameData?.sport || '',
       odds: gameData?.odds || null,
+      // Ensure we pass the comprehensive team stats
       teamStats: gameData?.teamStats || null,
+      pitchers: gameData?.pitchers || null,
+      hitterStats: gameData?.hitterStats || null, // Include top batters for both teams
+      gameContext: gameData?.gameContext || null,
       lineMovement: gameData?.lineMovement || null,
       // Add game time data - important for OpenAI to include in response
       gameTime: gameData?.gameTime || gameData?.time || 'TBD',
       time: gameData?.gameTime || gameData?.time || 'TBD'
     };
+    
+    // Log the availability of team stats for debugging
+    console.log(`Team Stats Available: ${!!gameData?.teamStats}`);
+    console.log(`Pitcher Data Available: ${!!gameData?.pitchers}`);
+    console.log(`Game Context Available: ${!!gameData?.gameContext}`);
     
     console.log('Formatted game data:', JSON.stringify(formattedData, null, 2));
     

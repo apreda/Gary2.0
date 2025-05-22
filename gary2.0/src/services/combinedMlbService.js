@@ -54,7 +54,17 @@ const combinedMlbService = {
       // 4. Get accurate starting pitcher data from MLB Stats API
       const startingPitchers = await mlbStatsApiService.getStartingPitchersEnhanced(targetGame.gamePk);
       
-      // 5. Get rich game context from Perplexity
+      // 4.5 Get top hitter stats for both teams
+    let hitterStats = null;
+    try {
+      console.log(`[Combined MLB Service] Getting hitter stats for game ${targetGame.gamePk}`);
+      hitterStats = await mlbStatsApiService.getHitterStats(targetGame.gamePk);
+      console.log(`[Combined MLB Service] Retrieved hitter stats - Home: ${hitterStats.home.length} players, Away: ${hitterStats.away.length} players`);
+    } catch (hitterStatsError) {
+      console.error(`[Combined MLB Service] Error getting hitter stats:`, hitterStatsError.message);
+    }
+    
+    // 5. Get rich game context from Perplexity
       let gameContext = null;
       try {
         console.log(`[Combined MLB Service] Getting game context from Perplexity for ${awayTeamName} @ ${homeTeamName}`);
@@ -81,10 +91,21 @@ Format your response in clean JSON format with these exact keys: playoffStatus, 
               console.log(`[Combined MLB Service] Successfully retrieved game context from Perplexity`);
             } catch (e) {
               console.error(`[Combined MLB Service] Error parsing game context JSON:`, e.message);
+              // Even if JSON parsing fails, extract useful information from the text
+              gameContext = { 
+                rawContext: text,
+                homeTeamStorylines: text.includes(homeTeamName) ? text.split(homeTeamName)[1]?.split('\n')[0] || 'No specific storylines available' : 'No specific storylines available',
+                awayTeamStorylines: text.includes(awayTeamName) ? text.split(awayTeamName)[1]?.split('\n')[0] || 'No specific storylines available' : 'No specific storylines available',
+                injuryReport: text.includes('injury') || text.includes('injured') ? text.match(/\b\w+\b is \b\w+\b with \b\w+\b/g) || 'No specific injuries reported' : 'No specific injuries reported',
+                weatherConditions: text.includes('weather') ? text.match(/weather[^\n]*?(?=\n|$)/i)?.[0] || 'Weather data unavailable' : 'Weather data unavailable'
+              };
             }
           } else {
             // No JSON found, use the raw text
-            gameContext = { rawContext: text };
+            gameContext = { 
+              rawContext: text,
+              generalContext: text.replace(/\{|\}/g, '').substring(0, 300) + '...'
+            };
           }
         } else {
           console.log(`[Combined MLB Service] No game context available from Perplexity`);
@@ -126,13 +147,14 @@ Format your response in clean JSON format with these exact keys: playoffStatus, 
           status: targetGame.status.detailedState,
           gamePk: targetGame.gamePk
         },
-        pitchers: {
-          home: startingPitchers?.home || null,
-          away: startingPitchers?.away || null
-        },
+        homeTeam: homeTeamName,
+        awayTeam: awayTeamName,
         teamStats: teamComparisonStats,
+        pitchers: startingPitchers,
+        hitterStats: hitterStats, // Include the top batters for both teams
         gameContext: gameContext,
-        odds: oddsData
+        odds: oddsData,
+        dateString: date
       };
       
       return combinedData;
