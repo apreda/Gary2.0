@@ -6,6 +6,8 @@ import axios from 'axios';
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { propOddsService } from './propOddsService.js';
 import { oddsService } from './oddsService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced2.js';
@@ -25,9 +27,25 @@ import configLoader from './configLoader.js';
 import supabaseClient from '../supabaseClient.js';
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
 
-// Constants
-const STORAGE_DIR = path.join(__dirname, '../../cache');
-const PROP_PICKS_FILE = path.join(STORAGE_DIR, 'prop-picks.json');
+// Constants for file storage (browser-compatible)
+// Note: In browser environments, we'll use in-memory storage instead of file system
+let STORAGE_DIR = '';
+let PROP_PICKS_FILE = '';
+
+// Only set these paths in Node.js environment (not in browser)
+if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+  // Get current file path and directory in ES modules
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    
+    STORAGE_DIR = path.join(__dirname, '../../cache');
+    PROP_PICKS_FILE = path.join(STORAGE_DIR, 'prop-picks.json');
+    console.log(`File storage paths set: ${PROP_PICKS_FILE}`);
+  } catch (error) {
+    console.error('Error setting file paths:', error);
+  }
+}
 
 /**
  * Fetch active players for a team with their current season stats
