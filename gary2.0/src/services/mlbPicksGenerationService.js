@@ -314,7 +314,7 @@ const mlbPicksGenerationService = {
           prop: 'hits',
           line: 1.5,
           bet: 'over',
-          analysis: `Facing vulnerable pitcher with ${game.pitchers.home.seasonStats.era.toFixed(2)} ERA at ${game.venue}.`,
+          analysis: `Facing vulnerable pitcher with ${parseFloat(game.pitchers.home.seasonStats.era).toFixed(2)} ERA at ${game.venue}.`,
           matchup: game.matchup,
           gameId: game.gameId,
           playerId: null, // Would be actual player ID
@@ -329,7 +329,7 @@ const mlbPicksGenerationService = {
           prop: 'total_bases',
           line: 1.5,
           bet: 'over',
-          analysis: `Facing vulnerable pitcher with ${game.pitchers.away.seasonStats.era.toFixed(2)} ERA at home in ${game.venue}.`,
+          analysis: `Facing vulnerable pitcher with ${parseFloat(game.pitchers.away.seasonStats.era).toFixed(2)} ERA at home in ${game.venue}.`,
           matchup: game.matchup,
           gameId: game.gameId,
           playerId: null, // Would be actual player ID
