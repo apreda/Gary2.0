@@ -7,6 +7,35 @@ import OpenAI from 'openai';
 import { propOddsService } from './propOddsService.js';
 import { oddsService } from './oddsService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced2.js';
+import { openaiService } from './openaiService.js';
+import { ballDontLieService } from './ballDontLieService.js';
+import configLoader from './configLoader.js';
+import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
+
+// Import Supabase client dynamically (for browser compatibility)
+let supabaseClient;
+try {
+  // This dynamic import pattern helps with Vite bundling
+  const supabaseModule = await import('../supabaseClient.js');
+  supabaseClient = supabaseModule.default;
+} catch (error) {
+  console.error('Error loading Supabase client:', error);
+  // Provide a mock implementation for environments where Supabase is not available
+  supabaseClient = {
+    auth: {
+      getSession: async () => ({ data: {}, error: null }),
+      signInAnonymously: async () => ({ data: {}, error: null })
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          order: () => Promise.resolve({ data: [], error: null })
+        })
+      }),
+      insert: () => Promise.resolve({ data: [], error: null })
+    })
+  };
+}
 
 // Helper function to find player ranking in leaderboard
 function findPlayerRanking(leaders, playerId) {
@@ -17,11 +46,6 @@ function findPlayerRanking(leaders, playerId) {
   }
   return 0; // Not found in leaders
 }
-import { openaiService } from './openaiService.js';
-import { ballDontLieService } from './ballDontLieService.js';
-import configLoader from './configLoader.js';
-import supabaseClient from '../supabaseClient.js';
-import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
 
 // In-memory storage for browser environments
 // We don't need actual file paths for browser usage as we'll use Supabase instead
