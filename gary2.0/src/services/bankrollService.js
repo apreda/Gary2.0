@@ -47,24 +47,24 @@ const bankrollService = {
     // Base range varies more widely based on confidence
     let minPercentage, maxPercentage;
     
-    if (confidence >= 80) {
-      // Very high confidence (80-100%) = 4-8% of bankroll
+    if (confidence >= 85) {
+      // Very high confidence (85-100%) = 4-8% of bankroll
       minPercentage = 0.04;
       maxPercentage = 0.08;
-    } else if (confidence >= 70) {
-      // High confidence (70-79%) = 3-6% of bankroll
+    } else if (confidence >= 75) {
+      // High confidence (75-84%) = 3-6% of bankroll - baseline confidence threshold
       minPercentage = 0.03;
       maxPercentage = 0.06;
-    } else if (confidence >= 60) {
-      // Medium-high confidence (60-69%) = 2-4% of bankroll
+    } else if (confidence >= 65) {
+      // Medium-high confidence (65-74%) = 2-4% of bankroll
       minPercentage = 0.02;
       maxPercentage = 0.04;
-    } else if (confidence >= 50) {
-      // Medium confidence (50-59%) = 1-2.5% of bankroll
+    } else if (confidence >= 55) {
+      // Medium confidence (55-64%) = 1-2.5% of bankroll
       minPercentage = 0.01;
       maxPercentage = 0.025;
     } else {
-      // Lower confidence (below 50%) = 0.5-1.5% of bankroll
+      // Lower confidence (below 55%) = 0.5-1.5% of bankroll
       minPercentage = 0.005;
       maxPercentage = 0.015;
     }

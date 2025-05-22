@@ -114,7 +114,7 @@ function formatPicksForNotification(picks) {
     content += `🏆 ${sport.toUpperCase()}\n`;
     
     sportPicks.forEach((pick, index) => {
-      const emoji = pick.confidence > 70 ? '🔥' : pick.confidence > 50 ? '💪' : '📊';
+      const emoji = pick.confidence >= 75 ? '🔥' : pick.confidence >= 55 ? '💪' : '📊';
       const vs = `${pick.away_team} @ ${pick.home_team}`;
       const pickType = pick.pick_type === 'moneyline' 
         ? 'ML' 
