@@ -532,7 +532,19 @@ Respond with ONLY the JSON array of your best prop picks.
       }
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
-      return data || [];
+      
+      // Filter the picks by confidence threshold (0.75)
+      const filteredData = data.map(record => {
+        if (record.picks && Array.isArray(record.picks)) {
+          // Filter each record's picks to only include those with confidence >= 0.75
+          record.picks = record.picks.filter(pick => pick.confidence >= 0.75);
+        }
+        return record;
+      });
+      
+      console.log(`After filtering for confidence >= 0.75, ${filteredData.length} records remain`);
+      
+      return filteredData || [];
     } catch (error) {
       console.error('Error in getTodayPropPicks:', error);
       return [];
