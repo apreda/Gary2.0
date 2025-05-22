@@ -250,14 +250,14 @@ function parseOpenAIResponse(response) {
  */
 async function ensureValidSupabaseSession() {
   try {
-    const { error } = await supabase.auth.getSession();
+    const { error } = await supabaseClient.auth.getSession();
     if (error) {
       console.warn('No session, signing in anonymously');
-      await supabase.auth.signInAnonymously();
+      await supabaseClient.auth.signInAnonymously();
     }
   } catch (error) {
     console.error('Session error, fallback', error);
-    await supabase.auth.signInAnonymously();
+    await supabaseClient.auth.signInAnonymously();
   }
 }
 
@@ -704,7 +704,7 @@ const propPicksService = {
     try {
       console.log(`Fetching prop picks for date: ${dateString}`);
       await ensureValidSupabaseSession();
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('prop_picks')
         .select('*')
         .eq('date', dateString)
@@ -755,7 +755,7 @@ const propPicksService = {
       await ensureValidSupabaseSession();
       const date = new Date().toISOString().split('T')[0];
       const payload = { date, picks: propPicks, created_at: new Date().toISOString() };
-      const { data, error } = await supabase.from('prop_picks').insert([payload]);
+      const { data, error } = await supabaseClient.from('prop_picks').insert([payload]);
       if (error) throw error;
       console.log('Stored prop picks successfully');
       return data;
