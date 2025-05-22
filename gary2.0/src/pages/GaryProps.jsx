@@ -228,7 +228,13 @@ export default function GaryProps() {
                                   </div>
                                   <div style={{ padding: '0.4rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}>
                                     <p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600 }}>Odds</p>
-                                    <p style={{ fontSize: '0.85rem', fontWeight: 700 }}>{pick.odds ? pick.odds : 'N/A'}</p>
+                                    <p style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                                      {pick.odds ? (
+                                        typeof pick.odds === 'number' ?
+                                          (pick.odds > 0 ? `+${pick.odds}` : pick.odds) :
+                                          (parseInt(pick.odds) > 0 && !pick.odds.startsWith('+') ? `+${pick.odds}` : pick.odds)
+                                      ) : 'N/A'}
+                                    </p>
                                   </div>
                                 </div>
                               </div>
