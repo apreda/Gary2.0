@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { oddsService } from './oddsService.js';
-import { ballDontLieService } from './ballDontLieService';
+import { ballDontLieService } from './ballDontLieService.js';
 
 /**
  * Service for fetching and processing sports data from TheSportsDB API and Ball Don't Lie API
