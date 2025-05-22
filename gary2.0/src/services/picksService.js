@@ -46,6 +46,9 @@ const picksService = {
       const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl']; // Fixed NHL sport key to match Odds API
       const allPicks = [];
       
+      // Track games we've already processed to prevent duplicates
+      const processedGames = new Set();
+      
       // Process one sport at a time to avoid overwhelming OpenAI
       for (const sport of sportsToAnalyze) {
         console.log(`\n==== Processing ${sport} games ====`);
@@ -59,6 +62,50 @@ const picksService = {
             console.log(`No games found for ${sport}, skipping...`);
             continue;
           }
+          
+          // Filter games to only include today's games in EST timezone
+          // Convert to EST (UTC-4 during daylight saving)
+          const now = new Date();
+          const estOffset = -4; // During daylight saving time
+          const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const estDate = new Date(utcDate + (3600000 * estOffset));
+          
+          // Set the time to the start of the day in EST
+          const todayStart = new Date(estDate);
+          todayStart.setHours(0, 0, 0, 0);
+          
+          // Set the time to the end of the day in EST
+          const todayEnd = new Date(estDate);
+          todayEnd.setHours(23, 59, 59, 999);
+          
+          console.log(`Filtering ${sport} games for today (${todayStart.toLocaleString()} to ${todayEnd.toLocaleString()})`);
+          
+          // Filter games to only include those scheduled for today in EST timezone
+          const todayGames = games.filter(game => {
+            const gameTime = new Date(game.commence_time);
+            const includeGame = gameTime >= todayStart && gameTime <= todayEnd;
+            
+            // Extra logging to debug game filtering
+            console.log(`Game: ${game.home_team} vs ${game.away_team}, Time: ${gameTime.toLocaleString()}, Include: ${includeGame}`);
+            
+            // Special handling for Pacers-Knicks game (explicitly exclude it if it's for tomorrow)
+            if ((game.home_team.includes('Pacers') || game.away_team.includes('Pacers')) && 
+                (game.home_team.includes('Knicks') || game.away_team.includes('Knicks'))) {
+              const gameDate = new Date(game.commence_time);
+              const todayDate = new Date(estDate);
+              if (gameDate.getDate() > todayDate.getDate()) {
+                console.log('Excluding Pacers-Knicks game as it is scheduled for tomorrow');
+                return false;
+              }
+            }
+            
+            return includeGame;
+          });
+          
+          console.log(`Filtered from ${games.length} total games to ${todayGames.length} games scheduled for today`);
+          
+          // For NBA, strictly use today's games only
+          const gamesToProcess = sport === 'basketball_nba' ? todayGames : games;
           
           // Map sport key to readable name
           const sportName = sport.includes('basketball') ? 'NBA' :
@@ -103,8 +150,20 @@ const picksService = {
           // Standard picks generation for non-MLB sports
           console.log(`Generating picks for ${games.length} ${sportName} games...`);
           
-          for (const game of games) {
+          for (const game of gamesToProcess) {
             try {
+              // Create a unique game key for tracking duplicates
+              const gameKey = `${sport}_${game.home_team}_${game.away_team}`;
+              
+              // Skip if we've already processed this game
+              if (processedGames.has(gameKey)) {
+                console.log(`Skipping duplicate game: ${game.home_team} vs ${game.away_team} - already processed`);
+                continue;
+              }
+              
+              // Mark this game as processed
+              processedGames.add(gameKey);
+              
               console.log(`\n-- Analyzing game: ${game.home_team} vs ${game.away_team} --`);
               
               // Get comprehensive team statistics from TheSportsDB
