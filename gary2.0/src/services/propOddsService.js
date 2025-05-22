@@ -4,8 +4,8 @@
  * This is separate from the main oddsService to avoid affecting the regular picks system
  */
 import axios from 'axios';
-import { configLoader } from './configLoader';
-import { oddsService } from './oddsService';
+import { configLoader } from './configLoader.js';
+import { oddsService } from './oddsService.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
@@ -186,11 +186,38 @@ export const propOddsService = {
                   .replace('batter_', '')
                   .replace('pitcher_', '');
                 
+                // Debug log for problematic markets
+                if (['batter_strikeouts', 'pitcher_outs', 'pitcher_record_a_win'].includes(market)) {
+                  console.log(`Processing problematic market: ${market}`);
+                  console.log(`Found ${bkMarket.outcomes.length} outcomes for ${market}`);
+                  console.log('Sample outcome:', bkMarket.outcomes[0]);
+                }
+                
                 // Process each outcome for this market
                 for (const outcome of bkMarket.outcomes) {
-                  // Normalize extreme odds values (sometimes The Odds API returns unusual values)
-                  let overOdds = outcome.name === 'Over' ? outcome.price : null;
-                  let underOdds = outcome.name === 'Under' ? outcome.price : null;
+                  // Check if this is a Yes/No prop like pitcher_record_a_win or batter_first_home_run
+                  const isYesNoProp = ['Yes', 'No'].includes(outcome.name);
+                  
+                  // For Yes/No props, treat Yes like Over and No like Under
+                  let overOdds = null;
+                  let underOdds = null;
+                  let lineValue = outcome.point;
+                  
+                  if (isYesNoProp) {
+                    // For Yes/No props, set the line to 0.5 for consistency with over/under
+                    // This way we can use the same filtering and display logic
+                    lineValue = 0.5;
+                    
+                    if (outcome.name === 'Yes') {
+                      overOdds = outcome.price;
+                    } else if (outcome.name === 'No') {
+                      underOdds = outcome.price;
+                    }
+                  } else {
+                    // For regular Over/Under props
+                    overOdds = outcome.name === 'Over' ? outcome.price : null;
+                    underOdds = outcome.name === 'Under' ? outcome.price : null;
+                  }
                   
                   // Use the real odds values as provided by the odds API
                   // No capping of extreme odds values
@@ -199,7 +226,7 @@ export const propOddsService = {
                     player: outcome.description, // Player name
                     team: outcome.team || (outcome.name?.includes(game.home_team) ? game.home_team : game.away_team),
                     prop_type: propType,
-                    line: outcome.point,
+                    line: lineValue,
                     over_odds: overOdds,
                     under_odds: underOdds
                   });
@@ -545,17 +572,47 @@ export const propOddsService = {
   standardizePropType: (propType, sport) => {
     const type = propType.toLowerCase();
     
+    // MLB standardization based on official Odds API documentation
     if (sport === 'mlb' || sport === 'baseball_mlb') {
-      // MLB prop standardization
-      if (type.includes('hit')) return 'hits';
-      if (type.includes('home') && type.includes('run')) return 'home_runs';
+      // Official market mapping using exact API keys
+      const marketMap = {
+        'batter_home_runs': 'home_runs',
+        'batter_first_home_run': 'first_home_run',
+        'batter_hits': 'hits',
+        'batter_total_bases': 'total_bases',
+        'batter_rbis': 'rbis',
+        'batter_runs_scored': 'runs',
+        'batter_hits_runs_rbis': 'hits_runs_rbis',
+        'batter_singles': 'singles',
+        'batter_doubles': 'doubles',
+        'batter_triples': 'triples',
+        'batter_walks': 'walks',
+        'batter_strikeouts': 'strikeouts',  // Problematic market #1
+        'batter_stolen_bases': 'stolen_bases',
+        'pitcher_strikeouts': 'strikeouts',
+        'pitcher_record_a_win': 'win',      // Problematic market #2
+        'pitcher_hits_allowed': 'hits_allowed',
+        'pitcher_walks': 'walks',
+        'pitcher_earned_runs': 'earned_runs',
+        'pitcher_outs': 'outs'              // Problematic market #3
+      };
+      
+      // Return the standardized market name if it exists in our map
+      if (marketMap[type]) {
+        return marketMap[type];
+      }
+      
+      // Fallback to pattern matching for compatibility with other data sources
+      if (type.includes('hit') && !type.includes('hits_allowed')) return 'hits';
+      if (type.includes('home') && type.includes('run') && !type.includes('first')) return 'home_runs';
       if (type.includes('total') && type.includes('base')) return 'total_bases';
       if (type.includes('strike') || type.includes('k')) return 'strikeouts';
-      if (type.includes('rbi') || type.includes('run') && type.includes('batted')) return 'rbis';
+      if (type.includes('rbi')) return 'rbis';
+      if (type.includes('run') && !type.includes('home') && !type.includes('earned')) return 'runs';
       if (type.includes('walk')) return 'walks';
-      if (type.includes('inning') || type.includes('ip')) return 'innings_pitched';
-    } else if (sport === 'nba' || sport === 'basketball_nba') {
-      // NBA prop standardization
+    } 
+    // NBA standardization
+    else if (sport === 'nba' || sport === 'basketball_nba') {
       if (type.includes('point')) return 'points';
       if (type.includes('rebound')) return 'rebounds';
       if (type.includes('assist')) return 'assists';
@@ -564,7 +621,11 @@ export const propOddsService = {
       if (type.includes('steal')) return 'steals';
     }
     
-    // Return as-is if no standardization matches
+    // Return the market name without prefixes if no standardization matches
+    if (type.startsWith('batter_') || type.startsWith('pitcher_')) {
+      return type.replace('batter_', '').replace('pitcher_', '');
+    }
+    
     return type;
   },
   
