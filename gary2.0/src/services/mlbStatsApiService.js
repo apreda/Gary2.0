@@ -787,6 +787,282 @@ getHitterStats: async (gamePk) => {
     console.error(`[MLB API] Error getting hitter stats for game ${gamePk}:`, error.message);
     return { home: [], away: [] };
   }
+},
+
+/**
+ * Gets starting pitchers with enhanced stats for a specific game
+ * @param {number} gamePk - The MLB game ID
+ * @returns {Promise<Object>} - Object containing home and away starting pitchers with detailed stats
+ */
+getStartingPitchersEnhanced: async (gamePk) => {
+  try {
+    console.log(`[MLB API] Getting enhanced starting pitchers for game ${gamePk}`);
+    
+    // First get the basic starting pitchers info
+    const basicPitchers = await mlbStatsApiService.getStartingPitchers(gamePk);
+    if (!basicPitchers || (!basicPitchers.homeStarter && !basicPitchers.awayStarter)) {
+      console.log(`[MLB API] No starting pitchers found for game ${gamePk}`);
+      return { homeStarter: null, awayStarter: null };
+    }
+    
+    // Function to enhance pitcher data with detailed stats
+    const enhancePitcher = async (pitcher) => {
+      if (!pitcher || !pitcher.id) return null;
+      
+      try {
+        // Get season stats
+        const seasonStats = await mlbStatsApiService.getPitcherSeasonStats(pitcher.id);
+        
+        // Get advanced stats for the pitcher
+        const advancedResponse = await axios.get(`${MLB_API_BASE_URL}/people/${pitcher.id}/stats`, {
+          params: {
+            stats: 'statSplits',
+            sportId: 1,
+            season: new Date().getFullYear(),
+            group: 'pitching',
+            gameType: 'R'
+          }
+        });
+        
+        // Extract advanced metrics if available
+        let advancedStats = {};
+        if (advancedResponse.data && advancedResponse.data.stats && advancedResponse.data.stats.length > 0) {
+          const advData = advancedResponse.data.stats[0].splits?.[0]?.stat || {};
+          advancedStats = {
+            k9: advData.strikeoutsPer9Inn || '0.00',
+            bb9: advData.walksPer9Inn || '0.00',
+            hr9: advData.homeRunsPer9 || '0.00',
+            fip: advData.fip || '0.00',
+            groundOutToAirOut: advData.groundOutToAirOutRatio || '0.00',
+            strikeoutWalkRatio: advData.strikeoutWalkRatio || '0.00',
+            hitsPer9Inn: advData.hitsPer9Inn || '0.00'
+          };
+        }
+        
+        // Get matchup data if available
+        const opposingTeamId = pitcher.opposingTeam?.id;
+        let teamMatchupStats = {};
+        
+        if (opposingTeamId) {
+          try {
+            // Try to get the pitcher's stats against this team
+            const teamSplitResponse = await axios.get(`${MLB_API_BASE_URL}/people/${pitcher.id}/stats`, {
+              params: {
+                stats: 'vsTeam',
+                opposingTeamId: opposingTeamId,
+                season: new Date().getFullYear(),
+                group: 'pitching',
+                sportId: 1
+              }
+            });
+            
+            if (teamSplitResponse.data && teamSplitResponse.data.stats && teamSplitResponse.data.stats.length > 0) {
+              const splitData = teamSplitResponse.data.stats[0].splits?.[0]?.stat || {};
+              teamMatchupStats = {
+                gamesVsTeam: splitData.gamesPlayed || 0,
+                eraVsTeam: splitData.era || '0.00',
+                whipVsTeam: splitData.whip || '0.00',
+                strikeoutsVsTeam: splitData.strikeOuts || 0,
+                inningsPitchedVsTeam: splitData.inningsPitched || '0.0',
+                battingAvgAgainstVsTeam: splitData.avg || '.000'
+              };
+            }
+          } catch (teamSplitError) {
+            console.log(`[MLB API] Error getting team matchup stats for pitcher ${pitcher.id} vs team ${opposingTeamId}:`, teamSplitError.message);
+          }
+        }
+        
+        // Combine all stats into enhanced pitcher object
+        return {
+          ...pitcher,
+          seasonStats,
+          advancedStats,
+          teamMatchupStats
+        };
+      } catch (enhanceError) {
+        console.error(`[MLB API] Error enhancing pitcher data for ${pitcher.id}:`, enhanceError.message);
+        return pitcher; // Return basic pitcher data if enhancement fails
+      }
+    };
+    
+    // Enhance both pitchers in parallel
+    const [enhancedHomeStarter, enhancedAwayStarter] = await Promise.all([
+      enhancePitcher(basicPitchers.homeStarter),
+      enhancePitcher(basicPitchers.awayStarter)
+    ]);
+    
+    return {
+      homeStarter: enhancedHomeStarter,
+      awayStarter: enhancedAwayStarter
+    };
+  } catch (error) {
+    console.error(`[MLB API] Error getting enhanced starting pitchers for game ${gamePk}:`, error.message);
+    // Fall back to basic starting pitchers
+    return mlbStatsApiService.getStartingPitchers(gamePk);
+  }
+},
+
+/**
+ * Gets team roster with comprehensive stats
+ * @param {number} teamId - The MLB team ID
+ * @returns {Promise<Object>} - Object containing hitters and pitchers with stats
+ */
+getTeamRosterWithStats: async (teamId) => {
+  try {
+    console.log(`[MLB API] Getting roster with stats for team ${teamId}`);
+    
+    // Get the team roster
+    const rosterResponse = await axios.get(`${MLB_API_BASE_URL}/teams/${teamId}/roster`, {
+      params: {
+        season: new Date().getFullYear(),
+        rosterType: 'active'
+      }
+    });
+    
+    if (!rosterResponse.data || !rosterResponse.data.roster) {
+      console.log(`[MLB API] No roster data found for team ${teamId}`);
+      return { hitters: [], pitchers: [] };
+    }
+    
+    // Extract player IDs
+    const roster = rosterResponse.data.roster;
+    
+    // Split into pitchers and hitters
+    const pitchers = roster.filter(p => p.position.code === '1');
+    const hitters = roster.filter(p => p.position.code !== '1');
+    
+    // Function to get player season stats
+    const getPlayerStats = async (player, statGroup) => {
+      if (!player || !player.person || !player.person.id) return null;
+      
+      try {
+        const statsResponse = await axios.get(`${MLB_API_BASE_URL}/people/${player.person.id}/stats`, {
+          params: {
+            stats: 'season',
+            group: statGroup,
+            season: new Date().getFullYear(),
+            sportId: 1
+          }
+        });
+        
+        if (statsResponse.data && statsResponse.data.stats && statsResponse.data.stats.length > 0) {
+          const stats = statsResponse.data.stats[0].splits?.[0]?.stat || {};
+          
+          return {
+            id: player.person.id,
+            name: player.person.fullName,
+            position: player.position.abbreviation,
+            stats: statGroup === 'hitting' ? {
+              // Hitter stats
+              avg: stats.avg || '.000',
+              hits: stats.hits || 0,
+              homeRuns: stats.homeRuns || 0,
+              rbi: stats.rbi || 0,
+              runs: stats.runs || 0,
+              obp: stats.obp || '.000',
+              slg: stats.slg || '.000',
+              ops: stats.ops || '.000',
+              stolenBases: stats.stolenBases || 0,
+              doubles: stats.doubles || 0,
+              triples: stats.triples || 0,
+              strikeouts: stats.strikeOuts || 0,
+              walks: stats.baseOnBalls || 0,
+              gamesPlayed: stats.gamesPlayed || 0,
+              atBats: stats.atBats || 0,
+              plateAppearances: stats.plateAppearances || 0
+            } : {
+              // Pitcher stats
+              era: stats.era || '0.00',
+              wins: stats.wins || 0,
+              losses: stats.losses || 0,
+              inningsPitched: stats.inningsPitched || '0.0',
+              strikeouts: stats.strikeOuts || 0,
+              whip: stats.whip || '0.00',
+              walks: stats.baseOnBalls || 0,
+              hits: stats.hits || 0,
+              homeRuns: stats.homeRuns || 0,
+              gamesStarted: stats.gamesStarted || 0,
+              gamesPitched: stats.gamesPitched || 0,
+              saves: stats.saves || 0,
+              battingAvgAgainst: stats.avg || '.000'
+            }
+          };
+        }
+        
+        return {
+          id: player.person.id,
+          name: player.person.fullName,
+          position: player.position.abbreviation,
+          stats: {}
+        };
+      } catch (statsError) {
+        console.log(`[MLB API] Error getting stats for player ${player.person.id}:`, statsError.message);
+        return {
+          id: player.person.id,
+          name: player.person.fullName,
+          position: player.position.abbreviation,
+          stats: {}
+        };
+      }
+    };
+    
+    // Get stats for the first 9 hitters (likely starters) to avoid too many API calls
+    const topHitters = hitters.slice(0, 9);
+    const hitterPromises = topHitters.map(p => getPlayerStats(p, 'hitting'));
+    const hitterStats = await Promise.all(hitterPromises);
+    
+    // Get stats for the starting pitchers and closers (likely top 5)
+    const topPitchers = pitchers.slice(0, 5);
+    const pitcherPromises = topPitchers.map(p => getPlayerStats(p, 'pitching'));
+    const pitcherStats = await Promise.all(pitcherPromises);
+    
+    return {
+      hitters: hitterStats.filter(p => p !== null),
+      pitchers: pitcherStats.filter(p => p !== null)
+    };
+  } catch (error) {
+    console.error(`[MLB API] Error getting team roster with stats for team ${teamId}:`, error.message);
+    return { hitters: [], pitchers: [] };
+  }
+},
+
+/**
+ * Gets league leaders for a specific stat category
+ * @param {string} statType - The stat to get leaders for (e.g., 'homeRuns', 'battingAverage')
+ * @param {string} group - The stat group ('hitting' or 'pitching')
+ * @param {number} limit - Number of leaders to return
+ * @returns {Promise<Array>} - Array of leaders with stats
+ */
+getLeagueLeaders: async (statType, group, limit = 10) => {
+  try {
+    console.log(`[MLB API] Getting league leaders for ${statType} in ${group}`);
+    
+    const response = await axios.get(`${MLB_API_BASE_URL}/stats/leaders`, {
+      params: {
+        leaderCategories: statType,
+        season: new Date().getFullYear(),
+        sportId: 1,
+        statGroup: group,
+        limit: limit
+      }
+    });
+    
+    if (response.data && response.data.leagueLeaders && response.data.leagueLeaders.length > 0) {
+      return response.data.leagueLeaders[0].leaders.map(leader => ({
+        rank: leader.rank,
+        playerId: leader.person.id,
+        name: leader.person.fullName,
+        value: leader.value,
+        team: leader.team ? leader.team.name : 'N/A',
+        teamId: leader.team ? leader.team.id : 0
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error(`[MLB API] Error getting league leaders for ${statType}:`, error.message);
+    return [];
+  }
 }
 };
 
