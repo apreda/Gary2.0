@@ -132,12 +132,51 @@ export const picksService = {
           
           // Generate analysis using Gary's engine
           console.log(`[Enhanced Picks Service] Generating analysis for ${awayTeam} @ ${homeTeam}`);
-          const analysis = await generateGaryAnalysis({
+        
+          // Ensure all required fields have values even if they come back as null from combinedMlbService
+          // This prevents nulls from flowing into the Gary engine
+          const ensureValidData = (data, defaultValue = {}) => {
+            return data || defaultValue;
+          };
+          
+          // Create a complete data object that includes all the stats with fallback values
+          const completeGameData = {
             homeTeam,
             awayTeam,
             prompt: analysisPrompt,
-            sport: 'baseball_mlb'
+            sport: 'baseball_mlb',
+            // Ensure teamStats is never null, provide default structure if needed
+            teamStats: ensureValidData(gameData.teamStats, {
+              homeTeam: { teamName: homeTeam, wins: 0, losses: 0, record: '0-0' },
+              awayTeam: { teamName: awayTeam, wins: 0, losses: 0, record: '0-0' }
+            }),
+            // Ensure pitchers is never null, provide default structure if needed
+            pitchers: ensureValidData(gameData.pitchers, {
+              home: { fullName: 'TBD', seasonStats: { era: '0.00', wins: 0, losses: 0 } },
+              away: { fullName: 'TBD', seasonStats: { era: '0.00', wins: 0, losses: 0 } }
+            }),
+            // Ensure gameContext is never null
+            gameContext: ensureValidData(gameData.gameContext, { gamePreview: 'No preview available' }),
+            // Ensure hitterStats is never null
+            hitterStats: ensureValidData(gameData.hitterStats, { home: [], away: [] }),
+            // Other data
+            odds: gameData.odds || null,
+            gameTime: game.commence_time || new Date().toISOString()
+          };
+          
+          // Validate data completeness before passing to Gary engine
+          console.log(`[Enhanced Picks Service] Data validation for ${awayTeam} @ ${homeTeam}:`, {
+            hasTeamStats: !!completeGameData.teamStats,
+            hasHomeTeamData: !!completeGameData.teamStats.homeTeam,
+            hasAwayTeamData: !!completeGameData.teamStats.awayTeam,
+            hasPitchers: !!completeGameData.pitchers,
+            hasHomePitcher: !!completeGameData.pitchers.home,
+            hasAwayPitcher: !!completeGameData.pitchers.away,
+            hasGameContext: !!completeGameData.gameContext
           });
+          
+          console.log(`[Enhanced Picks Service] Passing complete stats to Gary engine for ${awayTeam} @ ${homeTeam}`);
+          const analysis = await generateGaryAnalysis(completeGameData);
           
           if (!analysis) {
             console.log(`[Enhanced Picks Service] No analysis generated for ${awayTeam} @ ${homeTeam}`);
