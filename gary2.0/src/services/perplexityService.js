@@ -185,11 +185,17 @@ export const perplexityService = {
         const homeTeamName = game.home_team?.display_name || game.home_team || '';
         const awayTeamName = game.away_team?.display_name || game.away_team || '';
         
+        // Ensure all variables are strings before calling toLowerCase
+        const safeHomeTeamName = typeof homeTeamName === 'string' ? homeTeamName : String(homeTeamName || '');
+        const safeAwayTeamName = typeof awayTeamName === 'string' ? awayTeamName : String(awayTeamName || '');
+        const safeHomeTeam = typeof homeTeam === 'string' ? homeTeam : String(homeTeam || '');
+        const safeAwayTeam = typeof awayTeam === 'string' ? awayTeam : String(awayTeam || '');
+        
         return (
-          (homeTeamName.toLowerCase().includes(homeTeam.toLowerCase()) || 
-           homeTeam.toLowerCase().includes(homeTeamName.toLowerCase())) && 
-          (awayTeamName.toLowerCase().includes(awayTeam.toLowerCase()) || 
-           awayTeam.toLowerCase().includes(awayTeamName.toLowerCase()))
+          (safeHomeTeamName.toLowerCase().includes(safeHomeTeam.toLowerCase()) || 
+           safeHomeTeam.toLowerCase().includes(safeHomeTeamName.toLowerCase())) && 
+          (safeAwayTeamName.toLowerCase().includes(safeAwayTeam.toLowerCase()) || 
+           safeAwayTeam.toLowerCase().includes(safeAwayTeamName.toLowerCase()))
         );
       });
       
