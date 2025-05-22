@@ -54,40 +54,54 @@ export const propOddsService = {
    * Filter out player props with odds of -150 or worse
    * @private
    * @param {Array} props - Array of player prop data
-   * @returns {Array} - Filtered props with odds better than -150
+   * @returns {Array} - Filtered props with odds better than -150, split into separate over/under entries
    */
   filterPropsByOddsValue: (props) => {
     if (!props || !Array.isArray(props)) {
       return [];
     }
     
-    const filteredProps = props.filter(prop => {
-      // Only keep props where either the over or under odds are better than -150
-      // (less negative than -150 or positive)
-      const overOddsOK = prop.over_odds > -150; // True if over odds are better than -150
-      const underOddsOK = prop.under_odds > -150; // True if under odds are better than -150
-      
-      // Keep the prop if at least one side has acceptable odds
-      return overOddsOK || underOddsOK;
-    });
+    const originalCount = props.length;
+    let splitProps = [];
     
-    console.log(`Filtered props by odds value: ${props.length} → ${filteredProps.length} (removing odds of -150 or worse)`);
-    
-    // If we filtered out props, log which ones were removed
-    if (filteredProps.length < props.length) {
-      const removedProps = props.filter(prop => {
-        const overOddsOK = prop.over_odds > -150;
-        const underOddsOK = prop.under_odds > -150;
-        return !(overOddsOK || underOddsOK);
-      });
+    // Process each prop to split into separate over/under entries and filter by odds
+    for (const prop of props) {
+      // Only include the OVER side if odds are better than -150
+      if (prop.over_odds !== null && prop.over_odds > -150) {
+        splitProps.push({
+          player: prop.player,
+          team: prop.team,
+          prop_type: prop.prop_type,
+          line: prop.line,
+          side: 'OVER',  // Add explicit side for clarity
+          odds: prop.over_odds,
+          over_odds: prop.over_odds,
+          under_odds: null  // Not relevant for this entry
+        });
+      } else if (prop.over_odds !== null) {
+        console.log(`Filtering out OVER side for ${prop.player} ${prop.prop_type} ${prop.line} (odds: ${prop.over_odds} is worse than -150)`);
+      }
       
-      console.log('Removed props with poor odds values:');
-      removedProps.forEach(prop => {
-        console.log(`  - ${prop.player}: ${prop.prop_type} ${prop.line} (O:${prop.over_odds}/U:${prop.under_odds})`);
-      });
+      // Only include the UNDER side if odds are better than -150
+      if (prop.under_odds !== null && prop.under_odds > -150) {
+        splitProps.push({
+          player: prop.player,
+          team: prop.team,
+          prop_type: prop.prop_type,
+          line: prop.line,
+          side: 'UNDER',  // Add explicit side for clarity
+          odds: prop.under_odds,
+          over_odds: null,  // Not relevant for this entry
+          under_odds: prop.under_odds
+        });
+      } else if (prop.under_odds !== null) {
+        console.log(`Filtering out UNDER side for ${prop.player} ${prop.prop_type} ${prop.line} (odds: ${prop.under_odds} is worse than -150)`);
+      }
     }
     
-    return filteredProps;
+    console.log(`Filtered props by odds value: ${originalCount} original props → ${splitProps.length} valid sides (removing odds of -150 or worse)`);
+    
+    return splitProps;
   },
   /**
    * Get player prop odds for a specific game

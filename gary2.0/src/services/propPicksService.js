@@ -116,10 +116,17 @@ function findBestMatch(playerName, teamPlayers) {
  * Creates a prompt for generating prop picks
  */
 function createPropPicksPrompt(gameData, playerStatsText, propOddsData) {
-  // Format the odds data
-  const oddsText = propOddsData.map(prop => 
-    `${prop.player}: ${prop.prop_type} ${prop.line} (O:${prop.over_odds}/U:${prop.under_odds})`
-  ).join('\n');
+  // Format the odds data - now each prop has a specific side (OVER or UNDER)
+  const oddsText = propOddsData.map(prop => {
+    if (prop.side === 'OVER') {
+      return `${prop.player}: ${prop.prop_type} ${prop.line} ${prop.side} (${prop.odds})`;
+    } else if (prop.side === 'UNDER') {
+      return `${prop.player}: ${prop.prop_type} ${prop.line} ${prop.side} (${prop.odds})`;
+    } else {
+      // Fallback for any props without the new structure
+      return `${prop.player}: ${prop.prop_type} ${prop.line} (O:${prop.over_odds}/U:${prop.under_odds})`;
+    }
+  }).join('\n');
   
   return `Analyze the upcoming ${gameData.league} game: ${gameData.matchup}\n\n` +
          `TEAMS:\n${gameData.homeTeam} vs ${gameData.awayTeam}\n\n` +
@@ -721,8 +728,28 @@ const propPicksService = {
         console.log('No valid prop picks found');
         return [];
       }
+      
+      // Filter by confidence
       const valid = playerProps.filter(p => p.confidence >= 0.51);
-      const highConf = valid.filter(p => p.confidence >= 0.85);
+      
+      // Filter by odds value - removing any with odds worse than -150
+      const validOdds = valid.filter(p => {
+        // Extract odds from the pick format, e.g. "Gunnar Henderson OVER Hits 0.5 -265"
+        const oddsMatch = p.pick?.match(/([+-]\d+)\s*$/);
+        if (oddsMatch) {
+          const odds = parseInt(oddsMatch[1]);
+          // Only keep picks with odds better than -150
+          const oddsOK = odds > -150;
+          if (!oddsOK) {
+            console.log(`Filtering out prop pick with poor odds: ${p.pick} (${odds} is worse than -150)`);
+          }
+          return oddsOK;
+        }
+        return true; // Keep picks where we can't determine odds
+      });
+      
+      // Further filter by high confidence threshold
+      const highConf = validOdds.filter(p => p.confidence >= 0.85);
       
       // Sort by confidence (highest first) and take only the top 10
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
