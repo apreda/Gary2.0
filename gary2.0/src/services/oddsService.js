@@ -452,8 +452,65 @@ export const oddsService = {
       if (response.data) {
         const games = response.data;
         
+        // Get current date in EST timezone
+        const now = new Date();
+        // Convert to EST (UTC-4 during daylight saving, UTC-5 standard time)
+        const estOffset = -4; // During daylight saving time
+        const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const estDate = new Date(utcDate + (3600000 * estOffset));
+        
+        // Set the time to the start of the day in EST
+        const todayStart = new Date(estDate);
+        todayStart.setHours(0, 0, 0, 0);
+        
+        // Set the time to the end of the day in EST
+        const todayEnd = new Date(estDate);
+        todayEnd.setHours(23, 59, 59, 999);
+        
+        console.log(`Filtering games for today (${todayStart.toISOString()} to ${todayEnd.toISOString()})`);
+        
+        // Filter games to only include those scheduled for today in EST timezone
+        const todayGames = games.filter(game => {
+          const gameTime = new Date(game.commence_time);
+          const includeGame = gameTime >= todayStart && gameTime <= todayEnd;
+          
+          // Extra logging to debug game filtering
+          console.log(`Game: ${game.home_team} vs ${game.away_team}, Time: ${gameTime.toISOString()}, Include: ${includeGame}`);
+          
+          // Special handling for Pacers-Knicks game (explicitly exclude it if it's for tomorrow)
+          if ((game.home_team.includes('Pacers') || game.away_team.includes('Pacers')) && 
+              (game.home_team.includes('Knicks') || game.away_team.includes('Knicks'))) {
+            const gameDate = new Date(game.commence_time);
+            const todayDate = new Date(estDate);
+            if (gameDate.getDate() > todayDate.getDate()) {
+              console.log('Excluding Pacers-Knicks game as it is scheduled for tomorrow');
+              return false;
+            }
+          }
+          
+          return includeGame;
+        });
+        
+        console.log(`Filtered from ${games.length} total games to ${todayGames.length} games scheduled for today`);
+        
+        // Remove any duplicate games (same home and away teams)
+        const uniqueGames = [];
+        const gameMap = new Map();
+        
+        todayGames.forEach(game => {
+          const gameKey = `${game.home_team}-${game.away_team}`;
+          if (!gameMap.has(gameKey)) {
+            gameMap.set(gameKey, true);
+            uniqueGames.push(game);
+          } else {
+            console.log(`Removing duplicate game: ${game.home_team} vs ${game.away_team}`);
+          }
+        });
+        
+        console.log(`Removed duplicates: ${todayGames.length} → ${uniqueGames.length} unique games`);
+        
         // Process games to add bet analysis
-        const processedGames = games.map(game => {
+        const processedGames = uniqueGames.map(game => {
           // Find the best betting opportunity for this game
           const bestOpportunity = analyzeBettingMarkets(game);
           
