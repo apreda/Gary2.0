@@ -417,9 +417,9 @@ Respond with ONLY the JSON array of your best prop picks.
       // Process existing entries to include high confidence picks
       const processedEntries = data.map(entry => {
         if (entry.picks && Array.isArray(entry.picks) && entry.picks.length > 0) {
-          // Filter for high confidence picks (70% or higher)
+          // Filter for high confidence picks (75% or higher)
           const originalCount = entry.picks.length;
-          const highConfidencePicks = entry.picks.filter(pick => pick.confidence >= 0.7);
+          const highConfidencePicks = entry.picks.filter(pick => pick.confidence >= 0.75);
 
           return {
             ...entry,
@@ -493,8 +493,8 @@ Respond with ONLY the JSON array of your best prop picks.
         return true; // Keep picks where we can't determine odds
       });
 
-      // Further filter by high confidence threshold - reduced to 0.7 for prop picks
-      const highConf = validOdds.filter(p => p.confidence >= 0.7);
+      // Further filter by high confidence threshold - standard 0.75 confidence threshold
+      const highConf = validOdds.filter(p => p.confidence >= 0.75);
 
       // Sort by confidence (highest first) and take only the top 10
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
