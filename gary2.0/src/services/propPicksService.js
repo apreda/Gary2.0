@@ -2,34 +2,98 @@
  * Player Prop Picks Service
  * Handles generating and retrieving player prop picks
  */
-import { oddsService } from './oddsService';
-import { propOddsService } from './propOddsService';
-import { supabase } from '../supabaseClient.js';
+import axios from 'axios';
+import OpenAI from 'openai';
+import fs from 'fs';
+import path from 'path';
+import { propOddsService } from './propOddsService.js';
+import { oddsService } from './oddsService.js';
+import { mlbStatsApiService } from './mlbStatsApiService.enhanced2.js';
+
+// Helper function to find player ranking in leaderboard
+function findPlayerRanking(leaders, playerId) {
+  for (let i = 0; i < leaders.length; i++) {
+    if (leaders[i].person && leaders[i].person.id === playerId) {
+      return i + 1; // Return 1-based rank
+    }
+  }
+  return 0; // Not found in leaders
+}
 import { openaiService } from './openaiService.js';
-import { perplexityService } from './perplexityService';
-import { sportsDbApiService } from './sportsDbApiService';
-import { ballDontLieService } from './ballDontLieService';
+import { ballDontLieService } from './ballDontLieService.js';
+import configLoader from './configLoader.js';
+import supabaseClient from '../supabaseClient.js';
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
+
+// Constants
+const STORAGE_DIR = path.join(__dirname, '../../cache');
+const PROP_PICKS_FILE = path.join(STORAGE_DIR, 'prop-picks.json');
 
 /**
  * Fetch active players for a team with their current season stats
- * Uses TheSportsDB for current rosters across all sports
+ * Uses MLB Stats API for MLB players and SportsDB for other leagues
  */
 async function fetchActivePlayers(teamName, league) {
   try {
     console.log(`Fetching active ${league} players for ${teamName}...`);
-    let leagueId;
-    switch (league) {
-      case 'NBA': leagueId = sportsDbApiService.leagueIds.NBA; break;
-      case 'MLB': leagueId = sportsDbApiService.leagueIds.MLB; break;
-      case 'NHL': leagueId = sportsDbApiService.leagueIds.NHL; break;
-      default: throw new Error(`Unsupported league: ${league}`);
+    
+    if (league === 'MLB') {
+      // Use MLB Stats API for MLB players
+      console.log(`Using MLB Stats API to fetch ${teamName} roster`);
+      
+      // Get today's games to find the game for this team
+      const todaysGames = await mlbStatsApiService.getTodaysGames();
+      let teamGameId = null;
+      
+      // Find the game ID for this team
+      for (const game of todaysGames) {
+        if (game.homeTeam.includes(teamName) || game.awayTeam.includes(teamName)) {
+          teamGameId = game.gameId;
+          break;
+        }
+      }
+      
+      if (!teamGameId) {
+        console.log(`No game found today for ${teamName}, fetching most recent roster data`);
+        // If no game today, we can try to get team roster directly
+        // This would require implementing a getTeamRoster function in mlbStatsApiService
+        // For now, return an empty array
+        return [];
+      }
+      
+      // Get hitter stats for the game
+      const hitterStats = await mlbStatsApiService.getHitterStats(teamGameId);
+      
+      // Process home or away hitters based on team name
+      let players = [];
+      if (hitterStats.home.length > 0 && hitterStats.home[0].team.includes(teamName)) {
+        players = hitterStats.home;
+      } else if (hitterStats.away.length > 0 && hitterStats.away[0].team.includes(teamName)) {
+        players = hitterStats.away;
+      }
+      
+      console.log(`Got ${players.length} players from MLB Stats API for ${teamName}`);
+      return players.map(p => ({
+        idPlayer: p.id,
+        strPlayer: p.name,
+        strPosition: p.position,
+        strTeam: p.team,
+        stats: p.stats
+      }));
+    } else {
+      // For non-MLB leagues, continue using SportsDB API
+      let leagueId;
+      switch (league) {
+        case 'NBA': leagueId = sportsDbApiService.leagueIds.NBA; break;
+        case 'NHL': leagueId = sportsDbApiService.leagueIds.NHL; break;
+        default: throw new Error(`Unsupported league: ${league}`);
+      }
+      const team = await sportsDbApiService.lookupTeam(teamName, leagueId);
+      if (!team?.idTeam) return [];
+      const roster = await sportsDbApiService.getTeamPlayers(team.idTeam);
+      console.log(`Got ${roster.length} players from TheSportsDB for ${teamName}`);
+      return roster;
     }
-    const team = await sportsDbApiService.lookupTeam(teamName, leagueId);
-    if (!team?.idTeam) return [];
-    const roster = await sportsDbApiService.getTeamPlayers(team.idTeam);
-    console.log(`Got ${roster.length} players from TheSportsDB for ${teamName}`);
-    return roster;
   } catch (error) {
     console.error(`Error fetching players for ${teamName} (${league}):`, error);
     return [];
@@ -113,40 +177,55 @@ function findBestMatch(playerName, teamPlayers) {
 }
 
 /**
- * Creates a prompt for generating prop picks
+ * Create a prompt for OpenAI to generate prop picks with enhanced MLB stats
+ * @param {Array} props - Array of available props
+ * @param {string} playerStats - Formatted player statistics text
+ * @returns {string} - The prompt for OpenAI
  */
-function createPropPicksPrompt(gameData, playerStatsText, propOddsData) {
-  // Format the odds data - now each prop has a specific side (OVER or UNDER)
-  const oddsText = propOddsData.map(prop => {
-    if (prop.side === 'OVER') {
-      return `${prop.player}: ${prop.prop_type} ${prop.line} ${prop.side} (${prop.odds})`;
-    } else if (prop.side === 'UNDER') {
-      return `${prop.player}: ${prop.prop_type} ${prop.line} ${prop.side} (${prop.odds})`;
-    } else {
-      // Fallback for any props without the new structure
-      return `${prop.player}: ${prop.prop_type} ${prop.line} (O:${prop.over_odds}/U:${prop.under_odds})`;
-    }
+function createPropPicksPrompt(props, playerStats) {
+  // Format the props into a clear text format
+  const propsText = props.map(prop => {
+    const formattedOutcomes = prop.outcomes.map(outcome => {
+      return `${outcome.name}: ${outcome.price}`;
+    }).join(', ');
+    
+    return `${prop.playerName} ${prop.propType}: ${prop.point} | ${formattedOutcomes}`;
   }).join('\n');
   
-  return `Analyze the upcoming ${gameData.league} game: ${gameData.matchup}\n\n` +
-         `TEAMS:\n${gameData.homeTeam} vs ${gameData.awayTeam}\n\n` +
-         `PLAYER STATISTICS:\n${playerStatsText}\n\n` +
-         `AVAILABLE PROPS:\n${oddsText}\n\n` +
-         `Generate high-confidence prop picks based on the stats and trends. For each pick, include:\n` +
-         `1. Player name and team\n` +
-         `2. Prop type and line\n` +
-         `3. Your pick (over or under)\n` +
-         `4. Confidence level (0.7-1.0 scale)\n` +
-         `5. American odds value\n` +
-         `6. EV (Expected Value) as a percentage return on $100 bet\n` +
-         `7. Detailed rationale supporting the pick\n\n` +
-         `IMPORTANT: Calculate EV (Expected Value) for each pick using this formula:\n` +
-         `1. Convert American odds to decimal odds (d)\n` +
-         `   - For positive odds: d = (odds/100) + 1\n` +
-         `   - For negative odds: d = (100/abs(odds)) + 1\n` +
-         `2. Estimate the true probability (p) of the pick winning based on your analysis\n` +
-         `3. Calculate EV: p*(d-1)*100 - (1-p)*100\n` +
-         `4. Express EV as a whole number (e.g., 22 for 22% return on $100)`;
+  // Build the complete prompt with enhanced guidance
+  const prompt = `You are Gary, an expert sports analyst specialized in player prop betting.
+  
+I will provide you with player props and comprehensive statistics. Your task is to identify the most valuable bets based on the statistics.
+  
+COMPREHENSIVE PLAYER STATISTICS:
+${playerStats}
+  
+AVAILABLE PROPS:
+${propsText}
+  
+Analyze each player prop and select the BEST 3 bets that offer the most value based on the statistics provided. Pay special attention to:
+
+1. Player performance relative to league leaders (rankings are provided)
+2. Starting pitcher matchups and their statistics
+3. Recent player performance trends
+4. Value opportunities where the odds are better than -150
+  
+Prioritize bets with a combination of winning probability (50%), potential ROI (30%), and edge size (20%). Look for undervalued props, especially those with positive odds.
+  
+For each bet you recommend:
+1. State the player name, prop type, and your pick (over/under)
+2. Explain your reasoning with specific statistical evidence
+3. Assign a confidence score (0.5-1.0) where higher means more confident
+  
+Respond in this exact format for EACH pick:
+  
+PICK: [Player Name] [Prop Type] [Over/Under] [Line] ([American Odds])
+CONFIDENCE: [Score between 0.5-1.0]
+REASONING: [Your detailed analysis using specific stats and league context]
+
+Make exactly 3 picks, ordered from highest to lowest confidence.`;
+  
+  return prompt;
 }
 
 /**
@@ -689,7 +768,352 @@ const propPicksService = {
   },
 
   /**
-   * Generate prop bet recommendations
+   * Format player statistics from MLB Stats API data with comprehensive information
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {Promise<string>} - Formatted player statistics text
+   */
+  formatMLBPlayerStats: async (homeTeam, awayTeam) => {
+    try {
+      console.log(`Formatting comprehensive MLB player stats for ${homeTeam} vs ${awayTeam}`);
+      
+      // Get today's date
+      const today = new Date().toISOString().slice(0, 10);
+      
+      // Get today's games
+      const games = await mlbStatsApiService.getGamesByDate(today);
+      if (!games || games.length === 0) {
+        console.log('No MLB games found for today');
+        return '';
+      }
+      
+      // Find the game for these teams
+      let targetGame = null;
+      for (const game of games) {
+        const homeMatches = game.teams?.home?.team?.name?.includes(homeTeam);
+        const awayMatches = game.teams?.away?.team?.name?.includes(awayTeam);
+        if (homeMatches && awayMatches) {
+          targetGame = game;
+          break;
+        }
+      }
+      
+      if (!targetGame) {
+        console.log(`No game found for ${homeTeam} vs ${awayTeam}`);
+        return '';
+      }
+      
+      // Get enhanced data using our MLB Stats API service
+      console.log(`Getting comprehensive stats for game ${targetGame.gamePk}`);
+      
+      // 1. Get starting pitchers with enhanced stats
+      let startingPitchers;
+      try {
+        startingPitchers = await mlbStatsApiService.getStartingPitchersEnhanced(targetGame.gamePk);
+      } catch (error) {
+        console.error('Error getting enhanced starting pitchers, falling back to regular method:', error);
+        startingPitchers = await mlbStatsApiService.getStartingPitchers(targetGame.gamePk);
+      }
+      
+      // 2. Get team roster stats
+      const homeTeamId = targetGame.teams?.home?.team?.id;
+      const awayTeamId = targetGame.teams?.away?.team?.id;
+      
+      let homeRoster = [];
+      let awayRoster = [];
+      
+      if (homeTeamId) {
+        try {
+          // Try to get enhanced roster data if available
+          if (typeof mlbStatsApiService.getTeamRosterWithStats === 'function') {
+            const rosterData = await mlbStatsApiService.getTeamRosterWithStats(homeTeamId);
+            if (rosterData && rosterData.hitters) {
+              homeRoster = rosterData.hitters;
+            }
+          }
+        } catch (error) {
+          console.log(`Error getting enhanced home roster: ${error.message}`);
+        }
+      }
+      
+      if (awayTeamId) {
+        try {
+          // Try to get enhanced roster data if available
+          if (typeof mlbStatsApiService.getTeamRosterWithStats === 'function') {
+            const rosterData = await mlbStatsApiService.getTeamRosterWithStats(awayTeamId);
+            if (rosterData && rosterData.hitters) {
+              awayRoster = rosterData.hitters;
+            }
+          }
+        } catch (error) {
+          console.log(`Error getting enhanced away roster: ${error.message}`);
+        }
+      }
+      
+      // 3. Get league leaders data
+      let homeRunLeaders = [];
+      let battingAvgLeaders = [];
+      let eraLeaders = [];
+      let strikeoutLeaders = [];
+      
+      try {
+        // Try to get league leaders if the enhanced function is available
+        if (typeof mlbStatsApiService.getLeagueLeaders === 'function') {
+          homeRunLeaders = await mlbStatsApiService.getLeagueLeaders('homeRuns', 'hitting', 10);
+          battingAvgLeaders = await mlbStatsApiService.getLeagueLeaders('battingAverage', 'hitting', 10);
+          eraLeaders = await mlbStatsApiService.getLeagueLeaders('earnedRunAverage', 'pitching', 10);
+          strikeoutLeaders = await mlbStatsApiService.getLeagueLeaders('strikeouts', 'pitching', 10);
+        }
+      } catch (error) {
+        console.log(`Error getting league leaders: ${error.message}`);
+      }
+      
+      // 4. Fallback to basic hitter stats if enhanced data not available
+      let hitterStats = { home: [], away: [] };
+      if (homeRoster.length === 0 || awayRoster.length === 0) {
+        hitterStats = await mlbStatsApiService.getHitterStats(targetGame.gamePk);
+      }
+      
+      // Format all the data into a comprehensive stats text
+      let statsText = '';
+      
+      // SECTION 1: Starting Pitchers
+      statsText += 'STARTING PITCHERS:\n';
+      
+      if (startingPitchers?.homeStarter) {
+        const hp = startingPitchers.homeStarter;
+        const hpStats = hp.seasonStats || {};
+        statsText += `${homeTeam} - ${hp.fullName}: ERA ${hpStats.era || 'N/A'}, ` +
+                   `${hpStats.wins || 0}W-${hpStats.losses || 0}L, ` +
+                   `${hpStats.inningsPitched || '0.0'} IP, ` +
+                   `${hpStats.strikeouts || 0} K, ` +
+                   `WHIP ${hpStats.whip || 'N/A'}, ` +
+                   `BAA ${hpStats.battingAvgAgainst || '.000'}\n`;
+        
+        // Add league ranking for ERA and strikeouts if available
+        if (eraLeaders.length > 0 || strikeoutLeaders.length > 0) {
+          statsText += `RANKINGS: `;
+          
+          // Check ERA ranking
+          const eraRank = findPlayerRanking(eraLeaders, hp.id);
+          if (eraRank > 0) {
+            statsText += `ERA #${eraRank} in MLB, `;
+          }
+          
+          // Check strikeout ranking
+          const soRank = findPlayerRanking(strikeoutLeaders, hp.id);
+          if (soRank > 0) {
+            statsText += `Strikeouts #${soRank} in MLB, `;
+          }
+          
+          statsText = statsText.replace(/, $/, '');
+          statsText += '\n';
+        }
+      }
+      
+      if (startingPitchers?.awayStarter) {
+        const ap = startingPitchers.awayStarter;
+        const apStats = ap.seasonStats || {};
+        statsText += `${awayTeam} - ${ap.fullName}: ERA ${apStats.era || 'N/A'}, ` +
+                   `${apStats.wins || 0}W-${apStats.losses || 0}L, ` +
+                   `${apStats.inningsPitched || '0.0'} IP, ` +
+                   `${apStats.strikeouts || 0} K, ` +
+                   `WHIP ${apStats.whip || 'N/A'}, ` +
+                   `BAA ${apStats.battingAvgAgainst || '.000'}\n`;
+        
+        // Add league ranking for ERA and strikeouts if available
+        if (eraLeaders.length > 0 || strikeoutLeaders.length > 0) {
+          statsText += `RANKINGS: `;
+          
+          // Check ERA ranking
+          const eraRank = findPlayerRanking(eraLeaders, ap.id);
+          if (eraRank > 0) {
+            statsText += `ERA #${eraRank} in MLB, `;
+          }
+          
+          // Check strikeout ranking
+          const soRank = findPlayerRanking(strikeoutLeaders, ap.id);
+          if (soRank > 0) {
+            statsText += `Strikeouts #${soRank} in MLB, `;
+          }
+          
+          statsText = statsText.replace(/, $/, '');
+          statsText += '\n';
+        }
+      }
+      
+      // SECTION 2: Home Team Hitters
+      statsText += `\n${homeTeam} HITTERS:\n`;
+      
+      // Use enhanced roster data if available, otherwise fall back to basic hitter stats
+      if (homeRoster.length > 0) {
+        for (const hitter of homeRoster) {
+          const s = hitter.stats;
+          statsText += `${hitter.fullName} (${hitter.position}): ` +
+                     `AVG ${s.avg || '.000'}, ` +
+                     `${s.hits || 0} H, ` +
+                     `${s.homeRuns || 0} HR, ` +
+                     `${s.rbi || 0} RBI, ` +
+                     `${s.runs || 0} R, ` +
+                     `${s.strikeouts || 0} K, ` +
+                     `${s.walks || 0} BB, ` +
+                     `OPS ${s.ops || '.000'}\n`;
+          
+          // Add league rankings if available
+          if (homeRunLeaders.length > 0 || battingAvgLeaders.length > 0) {
+            const hrRank = findPlayerRanking(homeRunLeaders, hitter.id);
+            const avgRank = findPlayerRanking(battingAvgLeaders, hitter.id);
+            
+            if (hrRank > 0 || avgRank > 0) {
+              statsText += `  RANKINGS: `;
+              
+              if (hrRank > 0) {
+                statsText += `HR #${hrRank} in MLB, `;
+              }
+              
+              if (avgRank > 0) {
+                statsText += `AVG #${avgRank} in MLB, `;
+              }
+              
+              statsText = statsText.replace(/, $/, '');
+              statsText += '\n';
+            }
+          }
+        }
+      } else if (hitterStats?.home?.length > 0) {
+        for (const hitter of hitterStats.home) {
+          const s = hitter.stats;
+          statsText += `${hitter.name} (${hitter.position}): ` +
+                     `AVG ${s.avg || '.000'}, ` +
+                     `${s.hits || 0} H, ` +
+                     `${s.homeRuns || 0} HR, ` +
+                     `${s.rbi || 0} RBI, ` +
+                     `${s.runs || 0} R, ` +
+                     `${s.strikeouts || 0} K, ` +
+                     `${s.walks || 0} BB\n`;
+        }
+      } else {
+        statsText += 'No hitter data available\n';
+      }
+      
+      // SECTION 3: Away Team Hitters
+      statsText += `\n${awayTeam} HITTERS:\n`;
+      
+      // Use enhanced roster data if available, otherwise fall back to basic hitter stats
+      if (awayRoster.length > 0) {
+        for (const hitter of awayRoster) {
+          const s = hitter.stats;
+          statsText += `${hitter.fullName} (${hitter.position}): ` +
+                     `AVG ${s.avg || '.000'}, ` +
+                     `${s.hits || 0} H, ` +
+                     `${s.homeRuns || 0} HR, ` +
+                     `${s.rbi || 0} RBI, ` +
+                     `${s.runs || 0} R, ` +
+                     `${s.strikeouts || 0} K, ` +
+                     `${s.walks || 0} BB, ` +
+                     `OPS ${s.ops || '.000'}\n`;
+          
+          // Add league rankings if available
+          if (homeRunLeaders.length > 0 || battingAvgLeaders.length > 0) {
+            const hrRank = findPlayerRanking(homeRunLeaders, hitter.id);
+            const avgRank = findPlayerRanking(battingAvgLeaders, hitter.id);
+            
+            if (hrRank > 0 || avgRank > 0) {
+              statsText += `  RANKINGS: `;
+              
+              if (hrRank > 0) {
+                statsText += `HR #${hrRank} in MLB, `;
+              }
+              
+              if (avgRank > 0) {
+                statsText += `AVG #${avgRank} in MLB, `;
+              }
+              
+              statsText = statsText.replace(/, $/, '');
+              statsText += '\n';
+            }
+          }
+        }
+      } else if (hitterStats?.away?.length > 0) {
+        for (const hitter of hitterStats.away) {
+          const s = hitter.stats;
+          statsText += `${hitter.name} (${hitter.position}): ` +
+                     `AVG ${s.avg || '.000'}, ` +
+                     `${s.hits || 0} H, ` +
+                     `${s.homeRuns || 0} HR, ` +
+                     `${s.rbi || 0} RBI, ` +
+                     `${s.runs || 0} R, ` +
+                     `${s.strikeouts || 0} K, ` +
+                     `${s.walks || 0} BB\n`;
+        }
+      } else {
+        statsText += 'No hitter data available\n';
+      }
+      
+      // SECTION 4: League Leaders Summary
+      if (homeRunLeaders.length > 0 || battingAvgLeaders.length > 0 || eraLeaders.length > 0 || strikeoutLeaders.length > 0) {
+        statsText += `\nLEAGUE LEADERS:\n`;
+        
+        if (homeRunLeaders.length > 0) {
+          statsText += `HOME RUNS: `;
+          for (let i = 0; i < Math.min(3, homeRunLeaders.length); i++) {
+            const leader = homeRunLeaders[i];
+            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+          }
+          statsText = statsText.replace(/, $/, '');
+          statsText += '\n';
+        }
+        
+        if (battingAvgLeaders.length > 0) {
+          statsText += `BATTING AVG: `;
+          for (let i = 0; i < Math.min(3, battingAvgLeaders.length); i++) {
+            const leader = battingAvgLeaders[i];
+            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+          }
+          statsText = statsText.replace(/, $/, '');
+          statsText += '\n';
+        }
+        
+        if (eraLeaders.length > 0) {
+          statsText += `ERA: `;
+          for (let i = 0; i < Math.min(3, eraLeaders.length); i++) {
+            const leader = eraLeaders[i];
+            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+          }
+          statsText = statsText.replace(/, $/, '');
+          statsText += '\n';
+        }
+        
+        if (strikeoutLeaders.length > 0) {
+          statsText += `STRIKEOUTS: `;
+          for (let i = 0; i < Math.min(3, strikeoutLeaders.length); i++) {
+            const leader = strikeoutLeaders[i];
+            statsText += `${i+1}. ${leader.person.fullName} (${leader.value}), `;
+          }
+          statsText = statsText.replace(/, $/, '');
+          statsText += '\n';
+        }
+      }
+      
+      return statsText;
+    } catch (error) {
+      console.error('Error formatting MLB player stats:', error);
+      return 'Error retrieving MLB player statistics';
+    }
+  },
+  
+  // Helper function to find player ranking in leaderboard
+  findPlayerRanking(leaders, playerId) {
+    for (let i = 0; i < leaders.length; i++) {
+      if (leaders[i].person && leaders[i].person.id === playerId) {
+        return i + 1; // Return 1-based rank
+      }
+    }
+    return 0; // Not found in leaders
+  },
+
+  /**
+   * Generate prop bet recommendations with enhanced MLB stats
    */
   generatePropBets: async (gameData) => {
     try {
@@ -697,11 +1121,29 @@ const propPicksService = {
       
       // Format player statistics text
       let playerStatsText = 'No player statistics available';
-      if (gameData.perplexityStats && gameData.perplexityStats.player_insights) {
+      
+      // For MLB games, use enhanced MLB Stats API data
+      if (gameData.league === 'MLB') {
+        try {
+          console.log('Using enhanced MLB Stats API for comprehensive player statistics');
+          const mlbStats = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
+          if (mlbStats) {
+            console.log('Successfully retrieved enhanced MLB stats with league rankings');
+            playerStatsText = mlbStats;
+          }
+        } catch (err) {
+          console.error('Error getting enhanced MLB Stats API data, falling back to existing stats:', err);
+        }
+      }
+      
+      // Fall back to existing stats if MLB Stats API data not available or for other leagues
+      if (playerStatsText === 'No player statistics available' && gameData.perplexityStats && gameData.perplexityStats.player_insights) {
+        console.log('Falling back to Perplexity stats');
         playerStatsText = gameData.perplexityStats.player_insights;
       }
       
       // Get prop odds data for the matchup
+      console.log(`Getting prop odds for ${gameData.homeTeam} vs ${gameData.awayTeam}`);
       const propOddsData = await propOddsService.getPlayerPropOdds(
         gameData.sportKey,
         gameData.homeTeam,
@@ -712,10 +1154,27 @@ const propPicksService = {
         throw new Error('No prop odds data available for this matchup');
       }
       
-      // Create prompt for OpenAI
-      const prompt = createPropPicksPrompt(gameData, playerStatsText, propOddsData);
+      console.log(`Found ${propOddsData.length} prop markets for this matchup`);
+      
+      // Format the props into a structured format for the OpenAI prompt
+      const formattedProps = propOddsData.map(prop => {
+        return {
+          playerName: prop.player,
+          propType: prop.prop_type,
+          point: prop.line,
+          outcomes: [
+            { name: 'OVER', price: prop.over_odds },
+            { name: 'UNDER', price: prop.under_odds }
+          ]
+        };
+      });
+      
+      // Create prompt for OpenAI using the enhanced prompt format
+      console.log('Creating enhanced prop picks prompt with comprehensive stats');
+      const prompt = propPicksService.createPropPicksPrompt(formattedProps, playerStatsText);
       
       // Call OpenAI to generate picks
+      console.log('Calling OpenAI to generate prop picks');
       const response = await openaiService.generatePropPicks(prompt);
       
       // Parse the response and validate
@@ -748,8 +1207,8 @@ const propPicksService = {
         return true; // Keep picks where we can't determine odds
       });
       
-      // Further filter by high confidence threshold
-      const highConf = validOdds.filter(p => p.confidence >= 0.85);
+      // Further filter by high confidence threshold - reduced to 0.7 for prop picks
+      const highConf = validOdds.filter(p => p.confidence >= 0.7);
       
       // Sort by confidence (highest first) and take only the top 10
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
