@@ -430,7 +430,7 @@ Respond with ONLY the JSON array of your best prop picks.
         return entry;
       });
 
-      console.log(`Found ${data.length} entries for ${dateString}, filtered to 70%+ confidence threshold`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered to 75%+ confidence threshold`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
