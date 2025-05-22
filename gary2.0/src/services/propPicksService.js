@@ -5,7 +5,7 @@
 import axios from 'axios';
 import { propOddsService } from './propOddsService.js';
 import { oddsService } from './oddsService.js';
-import { mlbStatsApiService } from './mlbStatsApiService.enhanced2.js';
+import { mlbStatsApiService } from './mlbStatsApiService.js';
 import { openaiService } from './openaiService.js';
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
 
@@ -174,61 +174,95 @@ function findBestMatch(playerName, teamPlayers) {
 }
 
 /**
- * Create a prompt for OpenAI to generate prop picks with enhanced MLB stats
- * @param {Array} props - Array of available props
- * @param {string} playerStats - Formatted player statistics text
- * @returns {string} - The prompt for OpenAI
+ * Parses OpenAI response into structured prop picks
  */
-function createPropPicksPrompt(props, playerStats) {
-  // Format the props into a clear text format
-  const propsText = props.map(prop => {
-    const formattedOutcomes = prop.outcomes.map(outcome => {
-      return `${outcome.name}: ${outcome.price}`;
-    }).join(', ');
+function parseOpenAIResponse(response) {
+  try {
+    if (!response) {
+      console.error('Empty response from OpenAI');
+      return [];
+    }
     
-    return `${prop.playerName} ${prop.propType}: ${prop.point} | ${formattedOutcomes}`;
-  }).join('\n');
-  
-  // Build the complete prompt with enhanced guidance
-  const prompt = `You are Gary, an expert sports analyst specialized in player prop betting.
-
-I will provide you with player props and comprehensive MLB statistics. Your task is to identify the most valuable player prop bets based on detailed statistical analysis.
-
-COMPREHENSIVE PLAYER STATISTICS:
-${playerStats}
-
-AVAILABLE PROPS:
-${propsText}
-
-Analyze each player prop and select the BEST 3-5 bets that offer the most value based on the statistics provided. Pay special attention to:
-
-1. Player performance relative to league leaders (rankings are provided)
-2. Starting pitcher matchups and their statistics (K/9, BB/9, HR/9, ERA, WHIP)
-3. Recent player performance trends and statistical indicators
-4. Batter vs. pitcher historical matchups when available
-5. Value opportunities where the odds are +EV or better than -150
-
-When determining value, use this scoring formula:
-- Winning probability: 50% of your decision weight
-- Return on investment (ROI): 30% of your decision weight
-- Edge size (difference between your projected line and the actual line): 20% of your decision weight
-
-SPECIFICALLY PRIORITIZE undervalued props with positive odds (+100 or better) that have good winning probability. Look for situations where the line appears to be set incorrectly based on the player's actual performance metrics.
-
-For each bet you recommend:
-1. State the player name, prop type, your pick (over/under), the line, and the American odds
-2. Explain your reasoning with specific statistical evidence from the data provided
-3. Assign a confidence score (0.5-1.0) based SOLELY on your statistical analysis
-
-Respond in this exact format for EACH pick:
-
-PICK: [Player Name] [Prop Type] [Over/Under] [Line] ([American Odds])
-CONFIDENCE: [Score between 0.5-1.0]
-REASONING: [Your detailed analysis using specific stats and league context]
-
-Make 3-5 picks, ordered from highest to lowest confidence. If you find fewer than 3 picks with strong statistical backing, only provide those that meet your criteria for value.`;
-  
-  return prompt;
+    console.log('Parsing OpenAI response...');
+    
+    // First try to parse as direct JSON
+    try {
+      const parsedJson = JSON.parse(response);
+      if (Array.isArray(parsedJson)) {
+        console.log(`Successfully parsed direct JSON response with ${parsedJson.length} picks`);
+        return parsedJson;
+      }
+    } catch (jsonError) {
+      // Not direct JSON, continue with regex extraction
+      console.log('Response is not direct JSON, trying to extract JSON blocks');
+    }
+    
+    // Try to extract JSON from the response
+    const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+    if (jsonMatch && jsonMatch[0]) {
+      try {
+        const extracted = JSON.parse(jsonMatch[0]);
+        console.log(`Successfully extracted JSON with ${extracted.length} picks`);
+        return extracted;
+      } catch (extractError) {
+        console.error('Error parsing extracted JSON:', extractError);
+      }
+    }
+    
+    // If we couldn't extract JSON, try to parse the formatted text response
+    // Example format: "PICK: Aaron Judge OVER Home Runs 0.5 (+160)\nCONFIDENCE: 0.85\nREASONING: ..."
+    console.log('Attempting to parse formatted text response');
+    const picks = [];
+    const pickBlocks = response.split(/PICK:/gi).filter(block => block.trim());
+    
+    for (const block of pickBlocks) {
+      try {
+        // Extract the pick details
+        const pickMatch = block.match(/([^\n]+)/); // First line after PICK:
+        const confidenceMatch = block.match(/CONFIDENCE:\s*([0-9]\.[0-9]+)/i);
+        const reasoningMatch = block.match(/REASONING:\s*([\s\S]+?)(?=PICK:|$)/i);
+        
+        if (pickMatch && confidenceMatch) {
+          const pickText = pickMatch[1].trim();
+          // Parse player name, prop type, over/under, line, and odds
+          const pickParts = pickText.match(/([\w\s.'-]+)\s+(\w+\s+\w+)\s+(OVER|UNDER)\s+([\d.]+)\s*([+-]\d+)?/i);
+          
+          if (pickParts) {
+            const playerName = pickParts[1].trim();
+            const propType = pickParts[2].trim();
+            const bet = pickParts[3].toLowerCase();
+            const line = parseFloat(pickParts[4]);
+            const odds = pickParts[5] ? parseInt(pickParts[5]) : 0;
+            
+            picks.push({
+              player: playerName,
+              prop: `${propType} ${line}`,
+              line: line,
+              bet: bet,
+              odds: odds,
+              confidence: parseFloat(confidenceMatch[1]),
+              pick: pickText, // Store the full pick text for reference
+              rationale: reasoningMatch ? reasoningMatch[1].trim() : ''
+            });
+          }
+        }
+      } catch (blockError) {
+        console.error('Error parsing pick block:', blockError);
+      }
+    }
+    
+    if (picks.length > 0) {
+      console.log(`Successfully parsed ${picks.length} formatted text picks`);
+      return picks;
+    }
+    
+    // If no valid data found in any format, return empty array
+    console.warn('Could not parse OpenAI response in any expected format');
+    return [];
+  } catch (error) {
+    console.error('Error parsing OpenAI response:', error);
+    return [];
+  }
 }
 
 /**
@@ -1187,7 +1221,162 @@ const propPicksService = {
     }
     return 0; // Not found in leaders
   },
+  
+  /**
+   * Parses OpenAI response into structured prop picks
+   * @param {string} response - Response from OpenAI
+   * @returns {Array} - Array of parsed prop picks
+   */
+  parseOpenAIResponse(response) {
+    try {
+      if (!response) {
+        console.error('Empty response from OpenAI');
+        return [];
+      }
+      
+      console.log('Parsing OpenAI response...');
+      
+      // First try to parse as direct JSON
+      try {
+        const parsedJson = JSON.parse(response);
+        if (Array.isArray(parsedJson)) {
+          console.log(`Successfully parsed direct JSON response with ${parsedJson.length} picks`);
+          return parsedJson;
+        }
+      } catch (jsonError) {
+        // Not direct JSON, continue with regex extraction
+        console.log('Response is not direct JSON, trying to extract JSON blocks');
+      }
+      
+      // Try to extract JSON from the response
+      const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+      if (jsonMatch && jsonMatch[0]) {
+        try {
+          const extracted = JSON.parse(jsonMatch[0]);
+          console.log(`Successfully extracted JSON with ${extracted.length} picks`);
+          return extracted;
+        } catch (extractError) {
+          console.error('Error parsing extracted JSON:', extractError);
+        }
+      }
+      
+      // If we couldn't extract JSON, try to parse the formatted text response
+      // Example format: "PICK: Aaron Judge OVER Home Runs 0.5 (+160)\nCONFIDENCE: 0.85\nREASONING: ..."
+      console.log('Attempting to parse formatted text response');
+      const picks = [];
+      const pickBlocks = response.split(/PICK:/gi).filter(block => block.trim());
+      
+      for (const block of pickBlocks) {
+        try {
+          // Extract the pick details
+          const pickMatch = block.match(/([^\n]+)/); // First line after PICK:
+          const confidenceMatch = block.match(/CONFIDENCE:\s*([0-9]\.[0-9]+)/i);
+          const reasoningMatch = block.match(/REASONING:\s*([\s\S]+?)(?=PICK:|$)/i);
+          
+          if (pickMatch && confidenceMatch) {
+            const pickText = pickMatch[1].trim();
+            // Parse player name, prop type, over/under, line, and odds
+            const pickParts = pickText.match(/([\w\s.'-]+)\s+(\w+\s+\w+)\s+(OVER|UNDER)\s+([\d.]+)\s*([+-]\d+)?/i);
+            
+            if (pickParts) {
+              const playerName = pickParts[1].trim();
+              const propType = pickParts[2].trim();
+              const bet = pickParts[3].toLowerCase();
+              const line = parseFloat(pickParts[4]);
+              const odds = pickParts[5] ? parseInt(pickParts[5]) : 0;
+              
+              picks.push({
+                player: playerName,
+                prop: `${propType} ${line}`,
+                line: line,
+                bet: bet,
+                odds: odds,
+                confidence: parseFloat(confidenceMatch[1]),
+                pick: pickText, // Store the full pick text for reference
+                rationale: reasoningMatch ? reasoningMatch[1].trim() : ''
+              });
+            }
+          }
+        } catch (blockError) {
+          console.error('Error parsing pick block:', blockError);
+        }
+      }
+      
+      if (picks.length > 0) {
+        console.log(`Successfully parsed ${picks.length} formatted text picks`);
+        return picks;
+      }
+      
+      // If no valid data found in any format, return empty array
+      console.warn('Could not parse OpenAI response in any expected format');
+      return [];
+    } catch (error) {
+      console.error('Error parsing OpenAI response:', error);
+      return [];
+    }
+  },
 
+  /**
+   * Generate prop bet recommendations with enhanced MLB stats
+   */
+  /**
+   * Create a prompt for OpenAI to generate prop picks with enhanced MLB stats
+   * @param {Array} props - Array of available props
+   * @param {string} playerStats - Formatted player statistics text
+   * @returns {string} - The prompt for OpenAI
+   */
+  createPropPicksPrompt: (props, playerStats) => {
+    // Format the props into a clear text format
+    const propsText = props.map(prop => {
+      const formattedOutcomes = prop.outcomes.map(outcome => {
+        return `${outcome.name}: ${outcome.price}`;
+      }).join(', ');
+      
+      return `${prop.playerName} ${prop.propType}: ${prop.point} | ${formattedOutcomes}`;
+    }).join('\n');
+    
+    // Build the complete prompt with enhanced guidance
+    const prompt = `You are Gary, an expert sports analyst specialized in player prop betting.
+
+I will provide you with player props and comprehensive MLB statistics. Your task is to identify the most valuable player prop bets based on detailed statistical analysis.
+
+COMPREHENSIVE PLAYER STATISTICS:
+${playerStats}
+
+AVAILABLE PROPS:
+${propsText}
+
+Analyze each player prop and select the BEST 3-5 bets that offer the most value based on the statistics provided. Pay special attention to:
+
+1. Player performance relative to league leaders (rankings are provided)
+2. Starting pitcher matchups and their statistics (K/9, BB/9, HR/9, ERA, WHIP)
+3. Recent player performance trends and statistical indicators
+4. Batter vs. pitcher historical matchups when available
+5. Value opportunities where the odds are +EV or better than -150
+
+When determining value, use this scoring formula:
+- Winning probability: 50% of your decision weight
+- Return on investment (ROI): 30% of your decision weight
+- Edge size (difference between your projected line and the actual line): 20% of your decision weight
+
+SPECIFICALLY PRIORITIZE undervalued props with positive odds (+100 or better) that have good winning probability. Look for situations where the line appears to be set incorrectly based on the player's actual performance metrics.
+
+For each bet you recommend:
+1. State the player name, prop type, your pick (over/under), the line, and the American odds
+2. Explain your reasoning with specific statistical evidence from the data provided
+3. Assign a confidence score (0.5-1.0) based SOLELY on your statistical analysis
+
+Respond in this exact format for EACH pick:
+
+PICK: [Player Name] [Prop Type] [Over/Under] [Line] ([American Odds])
+CONFIDENCE: [Score between 0.5-1.0]
+REASONING: [Your detailed analysis using specific stats and league context]
+
+Make 3-5 picks, ordered from highest to lowest confidence. If you find fewer than 3 picks with strong statistical backing, only provide those that meet your criteria for value.`;
+    
+    return prompt;
+  },
+  
   /**
    * Generate prop bet recommendations with enhanced MLB stats
    */
@@ -1254,7 +1443,7 @@ const propPicksService = {
       const response = await openaiService.generatePropPicks(prompt);
       
       // Parse the response and validate
-      const playerProps = parseOpenAIResponse(response);
+      const playerProps = propPicksService.parseOpenAIResponse(response);
       
       // Log and filter by confidence
       if (playerProps?.length) {
