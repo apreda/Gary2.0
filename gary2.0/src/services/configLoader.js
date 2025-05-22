@@ -1,15 +1,33 @@
 import axios from 'axios';
 
 /**
+ * Helper function to safely get environment variables from either Node.js or Vite
+ */
+function getEnvVar(key, defaultValue = '') {
+  // Check if we're in a Node.js environment first
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key] || defaultValue;
+  }
+
+  // Then check for Vite environment
+  try {
+    return import.meta.env[key] || defaultValue;
+  } catch (e) {
+    console.log(`Unable to access ${key} from import.meta.env, using default value`);
+    return defaultValue;
+  }
+}
+
+/**
  * Config loading service to ensure API keys are available in all environments
  */
 export const configLoader = {
   // Variables to hold API credentials
-  odds_api_key: import.meta.env.VITE_ODDS_API_KEY || '',
-  openai_api_key: import.meta.env.VITE_OPENAI_API_KEY || '',
-  openai_base_url: import.meta.env.VITE_OPENAI_BASE_URL || 'https://api.openai.com/v1',
-  perplexity_api_key: import.meta.env.VITE_PERPLEXITY_API_KEY || '',
-  sports_db_api_key: import.meta.env.VITE_SPORTS_DB_API_KEY || '3', // Default to free tier
+  odds_api_key: getEnvVar('VITE_ODDS_API_KEY', ''),
+  openai_api_key: getEnvVar('VITE_OPENAI_API_KEY', ''),
+  openai_base_url: getEnvVar('VITE_OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+  perplexity_api_key: getEnvVar('VITE_PERPLEXITY_API_KEY', ''),
+  sports_db_api_key: getEnvVar('VITE_SPORTS_DB_API_KEY', '3'), // Default to free tier
   loaded: false,
 
   /**
@@ -21,17 +39,17 @@ export const configLoader = {
       return;
     }
 
-    // If we already have the keys from Vite, just use those
+    // If we already have the keys from environment variables, just use those
     // Check for the OpenAI API key as the primary provider
-    if (import.meta.env.VITE_ODDS_API_KEY && import.meta.env.VITE_OPENAI_API_KEY) {
-      
-      this.odds_api_key = import.meta.env.VITE_ODDS_API_KEY;
-      this.openai_api_key = import.meta.env.VITE_OPENAI_API_KEY;
-      this.openai_base_url = import.meta.env.VITE_OPENAI_BASE_URL || 'https://api.openai.com/v1';
-      this.perplexity_api_key = import.meta.env.VITE_PERPLEXITY_API_KEY || '';
-      this.sports_db_api_key = import.meta.env.VITE_SPORTS_DB_API_KEY || '3'; // Default to free tier
-      
-      // No legacy providers needed
+    const oddsApiKey = getEnvVar('VITE_ODDS_API_KEY');
+    const openaiApiKey = getEnvVar('VITE_OPENAI_API_KEY');
+    
+    if (oddsApiKey && openaiApiKey) {
+      this.odds_api_key = oddsApiKey;
+      this.openai_api_key = openaiApiKey;
+      this.openai_base_url = getEnvVar('VITE_OPENAI_BASE_URL', 'https://api.openai.com/v1');
+      this.perplexity_api_key = getEnvVar('VITE_PERPLEXITY_API_KEY', '');
+      this.sports_db_api_key = getEnvVar('VITE_SPORTS_DB_API_KEY', '3'); // Default to free tier
       
       this.loaded = true;
       console.log('Using environment variables for API keys');

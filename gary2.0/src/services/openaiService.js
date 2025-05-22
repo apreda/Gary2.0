@@ -5,8 +5,8 @@
  * Deployment: 2025-05-19
  */
 import axios from 'axios';
-import { apiCache } from '../utils/apiCache';
-import { requestQueue } from '../utils/requestQueue';
+import { apiCache } from '../utils/apiCache.js';
+import { requestQueue } from '../utils/requestQueue.js';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
