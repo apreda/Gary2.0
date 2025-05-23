@@ -7,6 +7,7 @@ import { oddsService } from './oddsService.js';
 import { supabase } from '../supabaseClient.js';
 import { sportsDataService } from './sportsDataService.js';
 import { apiSportsService } from './apiSportsService.js';
+import { ballDontLieService } from './ballDontLieService.js';
 import { picksService as enhancedPicksService } from './picksService.enhanced.js';
 import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 
@@ -215,7 +216,19 @@ async function generateDailyPicks() {
           try {
             const homeTeamStats = await sportsDataService.getTeamStats(game.home_team, 'NBA');
             const awayTeamStats = await sportsDataService.getTeamStats(game.away_team, 'NBA');
-            const nbaStatsReport = await generateNbaStatsReport(game.home_team, game.away_team);
+            
+            // Get NBA playoff stats for these teams
+            const playoffStatsReport = await ballDontLieService.generateNbaPlayoffReport(
+              game.home_team, 
+              game.away_team, 
+              new Date().getFullYear()
+            );
+            
+            // Still get regular stats as fallback
+            const regularStatsReport = await generateNbaStatsReport(game.home_team, game.away_team);
+            
+            // Combine both reports, prioritizing playoff data
+            const nbaStatsReport = playoffStatsReport + '\n\n' + regularStatsReport;
 
             const gameObj = {
               id: gameId,
@@ -225,6 +238,7 @@ async function generateDailyPicks() {
               homeTeamStats,
               awayTeamStats,
               statsReport: nbaStatsReport,
+              isPlayoffGame: true, // Mark this as a playoff game
               odds: game.bookmakers?.[0]?.markets || [],
               gameTime: game.commence_time
             };

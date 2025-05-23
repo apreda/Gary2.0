@@ -1082,66 +1082,211 @@ const ballDontLieService = {
   },
 
   /**
-   * Generate a comprehensive player stats report for OpenAI
-   * @param {Array<number>} playerIds - Array of player IDs
-   * @param {string} sport - Sport type (NBA or MLB)
-   * @param {number} season - Season year
-   * @returns {Promise<string>} - Formatted statistics report
+   * Get NBA playoff stats for current season
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Array>} - Array of playoff games with stats
    */
-  async generatePlayerStatsReport(playerIds, sport = 'NBA', season = new Date().getFullYear()) {
-    if (!playerIds?.length) return '';
-    
-    if (sport === 'MLB') {
-      return this.generateMlbStatsReport(playerIds, season);
-    } else {
-      // Existing NBA stats implementation
-      try {
-        // Get both season averages and recent game stats for NBA
-        const [seasonAverages, recentGameStats] = await Promise.all([
-          this.getPlayerAverages(playerIds, season),
-          this.getPlayerRecentGameStats(playerIds, season)
-        ]);
+  async getNbaPlayoffGames(season = new Date().getFullYear()) {
+    try {
+      const cacheKey = `nba_playoff_games_${season}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching NBA playoff games for ${season} season from BallDontLie`);
+        const client = initApi();
+        const response = await client.nba.getGames({ 
+          seasons: [season],
+          postseason: true,
+          per_page: 100 // Max allowed
+        });
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching NBA playoff games:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA playoff series data for a specific matchup
+   * @param {string} teamA - First team name or abbreviation
+   * @param {string} teamB - Second team name or abbreviation
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Object>} - Playoff series data
+   */
+  async getNbaPlayoffSeries(teamA, teamB, season = new Date().getFullYear()) {
+    try {
+      const cacheKey = `nba_playoff_series_${teamA}_${teamB}_${season}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        // Get all playoff games for the season
+        const playoffGames = await this.getNbaPlayoffGames(season);
         
-        // Generate the report
-        let report = 'NBA Player Statistics Report\n\n';
+        // Find team IDs for both teams
+        const teamAData = await this.getTeamByName(teamA);
+        const teamBData = await this.getTeamByName(teamB);
         
-        for (const playerId of playerIds) {
-          const seasonData = seasonAverages[playerId];
-          const recentData = recentGameStats[playerId];
-          
-          if (!seasonData && !recentData) continue;
-          
-          const player = seasonData?.player || recentData?.player;
-          if (!player) continue;
-          
-          report += `Player: ${player.first_name} ${player.last_name} (${player.team?.abbreviation || 'N/A'})\n`;
-          
-          if (seasonData) {
-            report += `\nSeason Averages (${season}):\n`;
-            // Add season stats to report
-            report += `PPG: ${seasonData.pts.toFixed(1)} | RPG: ${seasonData.reb.toFixed(1)} | APG: ${seasonData.ast.toFixed(1)}\n`;
-            report += `FG%: ${(seasonData.fg_pct * 100).toFixed(1)} | 3P%: ${(seasonData.fg3_pct * 100).toFixed(1)} | FT%: ${(seasonData.ft_pct * 100).toFixed(1)}\n`;
-          }
-          
-          if (recentData?.length) {
-            report += '\nRecent Games:\n';
-            recentData.slice(0, 3).forEach(game => {
-              const date = new Date(game.game.date).toLocaleDateString();
-              const opponent = game.game.home_team.id === player.team.id ? 
-                game.game.visitor_team.abbreviation : game.game.home_team.abbreviation;
-              report += `vs ${opponent} (${date}): ${game.pts}pts, ${game.reb}reb, ${game.ast}ast, ${game.stl}stl, ${game.blk}blk\n`;
-            });
-          }
-          
-          report += '\n' + '-'.repeat(50) + '\n\n';
+        if (!teamAData || !teamBData) {
+          console.error('Could not find team data for', teamA, 'or', teamB);
+          return { seriesFound: false };
         }
         
-        return report;
+        // Find all games between these two teams
+        const seriesGames = playoffGames.filter(game => 
+          (game.home_team.id === teamAData.id && game.visitor_team.id === teamBData.id) || 
+          (game.home_team.id === teamBData.id && game.visitor_team.id === teamAData.id)
+        );
         
-      } catch (error) {
-        console.error('Error generating player stats report:', error);
-        return 'Error generating player statistics report.';
+        if (seriesGames.length === 0) {
+          return { seriesFound: false };
+        }
+        
+        // Sort games by date
+        seriesGames.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        // Calculate series score
+        let teamAWins = 0;
+        let teamBWins = 0;
+        
+        seriesGames.forEach(game => {
+          if (game.status === 'Final') {
+            if (game.home_team.id === teamAData.id) {
+              if (game.home_team_score > game.visitor_team_score) teamAWins++;
+              else teamBWins++;
+            } else {
+              if (game.visitor_team_score > game.home_team_score) teamAWins++;
+              else teamBWins++;
+            }
+          }
+        });
+        
+        return {
+          seriesFound: true,
+          teamA: teamAData,
+          teamB: teamBData,
+          teamAWins,
+          teamBWins,
+          games: seriesGames,
+          seriesStatus: `${teamAData.name} ${teamAWins} - ${teamBWins} ${teamBData.name}`
+        };
+      });
+    } catch (error) {
+      console.error('Error fetching NBA playoff series data:', error);
+      return { seriesFound: false };
+    }
+  },
+
+  /**
+   * Get NBA playoff player stats
+   * @param {number} gameId - The playoff game ID
+   * @returns {Promise<Array>} - Array of player stats for the game
+   */
+  async getNbaPlayoffGameStats(gameId) {
+    try {
+      const cacheKey = `nba_playoff_game_stats_${gameId}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching NBA playoff game stats for game ID ${gameId}`);
+        const client = initApi();
+        const response = await client.nba.getStats({
+          game_ids: [gameId],
+          per_page: 100 // Max allowed
+        });
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching NBA playoff game stats:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Generate comprehensive NBA playoff stats report for a matchup
+   * This creates a detailed report of the playoff series and player stats
+   * @param {string} homeTeam - Home team name or abbreviation
+   * @param {string} awayTeam - Away team name or abbreviation
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<string>} - Detailed playoff series and stats report
+   */
+  async generateNbaPlayoffReport(homeTeam, awayTeam, season = new Date().getFullYear()) {
+    try {
+      // Get playoff series data
+      const seriesData = await this.getNbaPlayoffSeries(homeTeam, awayTeam, season);
+      
+      if (!seriesData.seriesFound) {
+        return `No playoff series found between ${homeTeam} and ${awayTeam} for the ${season} season.`;
       }
+      
+      // Generate report header
+      let report = `# NBA PLAYOFF SERIES REPORT: ${seriesData.teamA.full_name} vs ${seriesData.teamB.full_name}\n\n`;
+      report += `## Current Series Status: ${seriesData.seriesStatus}\n\n`;
+      
+      // Get player stats from the most recent games (up to 3)
+      const recentGames = seriesData.games.filter(game => game.status === 'Final').slice(-3);
+      
+      for (const game of recentGames) {
+        const gameStats = await this.getNbaPlayoffGameStats(game.id);
+        const gameDate = new Date(game.date).toLocaleDateString();
+        
+        report += `### Game on ${gameDate}: ${game.visitor_team.name} ${game.visitor_team_score} @ ${game.home_team.name} ${game.home_team_score}\n\n`;
+        
+        // Group stats by team
+        const homeTeamStats = gameStats.filter(stat => stat.team.id === game.home_team.id)
+          .sort((a, b) => b.pts - a.pts); // Sort by points scored
+          
+        const awayTeamStats = gameStats.filter(stat => stat.team.id === game.visitor_team.id)
+          .sort((a, b) => b.pts - a.pts); // Sort by points scored
+        
+        // Report away team top performers
+        report += `#### ${game.visitor_team.full_name} Top Performers:\n`;
+        awayTeamStats.slice(0, 3).forEach(stat => {
+          report += `- ${stat.player.first_name} ${stat.player.last_name}: ${stat.pts} PTS, ${stat.reb} REB, ${stat.ast} AST, ${stat.stl} STL, ${stat.blk} BLK\n`;
+        });
+        
+        // Report home team top performers
+        report += `\n#### ${game.home_team.full_name} Top Performers:\n`;
+        homeTeamStats.slice(0, 3).forEach(stat => {
+          report += `- ${stat.player.first_name} ${stat.player.last_name}: ${stat.pts} PTS, ${stat.reb} REB, ${stat.ast} AST, ${stat.stl} STL, ${stat.blk} BLK\n`;
+        });
+        
+        report += '\n'; // Add spacing between games
+      }
+      
+      // Add series trends and analysis
+      report += `## Series Trends and Analysis\n\n`;
+      
+      // Home court advantage analysis
+      const homeWins = seriesData.games.filter(game => 
+        game.status === 'Final' && 
+        ((game.home_team.id === seriesData.teamA.id && game.home_team_score > game.visitor_team_score) ||
+         (game.home_team.id === seriesData.teamB.id && game.home_team_score > game.visitor_team_score))
+      ).length;
+      
+      const totalCompletedGames = seriesData.games.filter(game => game.status === 'Final').length;
+      const homeWinPercentage = totalCompletedGames > 0 ? (homeWins / totalCompletedGames * 100).toFixed(1) : 0;
+      
+      report += `- Home Court Advantage: ${homeWins} of ${totalCompletedGames} games won by home team (${homeWinPercentage}%)\n`;
+      
+      // Calculate average point differential
+      let teamAPointDiff = 0;
+      let gamesWithScores = 0;
+      
+      seriesData.games.forEach(game => {
+        if (game.status === 'Final') {
+          gamesWithScores++;
+          if (game.home_team.id === seriesData.teamA.id) {
+            teamAPointDiff += (game.home_team_score - game.visitor_team_score);
+          } else {
+            teamAPointDiff += (game.visitor_team_score - game.home_team_score);
+          }
+        }
+      });
+      
+      const avgPointDiff = gamesWithScores > 0 ? (teamAPointDiff / gamesWithScores).toFixed(1) : 0;
+      const teamWithAdvantage = avgPointDiff > 0 ? seriesData.teamA.name : (avgPointDiff < 0 ? seriesData.teamB.name : 'Neither team');
+      
+      report += `- Average Point Differential: ${Math.abs(avgPointDiff)} points in favor of ${teamWithAdvantage}\n`;
+      
+      return report;
+    } catch (error) {
+      console.error('Error generating NBA playoff report:', error);
+      return `Error generating NBA playoff report: ${error.message}`;
     }
   }
 };
