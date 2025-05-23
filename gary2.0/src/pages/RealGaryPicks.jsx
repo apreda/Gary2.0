@@ -221,8 +221,47 @@ function RealGaryPicks() {
             console.log('Time field variations:', {
               'pick.time': pick.time,
               'pick.gameTime': pick.gameTime,
-              'time direct': typeof pick === 'object' && 'time' in pick ? pick.time : 'not found'
+              'time direct': typeof pick === 'object' && 'time' in pick ? pick.time : 'not found',
+              'nested time': pick.rawAnalysis?.rawOpenAIOutput?.time
             });
+            
+            // Helper function to extract odds from analysis prompt
+            const extractOddsFromAnalysis = (pick) => {
+              try {
+                if (pick.rawAnalysis?.rawOpenAIOutput) {
+                  // First try to get directly from OpenAI output
+                  if (pick.rawAnalysis.rawOpenAIOutput.odds) {
+                    return pick.rawAnalysis.rawOpenAIOutput.odds;
+                  }
+                }
+                
+                // If we have an analysis prompt, try to extract from there
+                if (pick.analysisPrompt) {
+                  const teamName = pick.pick?.split(' ').slice(0, -1).join(' '); // Remove 'ML' or other suffix
+                  if (teamName) {
+                    // Look for patterns like "Current moneyline odds: Boston Red Sox (-120), Baltimore Orioles (102)"
+                    const oddsLineMatch = pick.analysisPrompt.match(/Current moneyline odds:([^\n]+)/);
+                    if (oddsLineMatch && oddsLineMatch[1]) {
+                      const oddsLine = oddsLineMatch[1];
+                      
+                      // Find team name and extract odds in parentheses
+                      const teamRegex = new RegExp(`${teamName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(([-+]?\\d+)\\)`);
+                      const match = oddsLine.match(teamRegex);
+                      
+                      if (match && match[1]) {
+                        return match[1];
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Error extracting odds:', error);
+              }
+              return '';
+            };
+            
+            // Extract odds from the pick
+            const oddsValue = extractOddsFromAnalysis(pick);
             
             // Create a pick object with BOTH original OpenAI fields AND mapped fields
             // Parse and extract the necessary fields for our card implementation
@@ -243,8 +282,13 @@ function RealGaryPicks() {
               game: pick.game || '',
               league: pick.league || '',
               confidence: pick.confidence || 0,
-              // Extract time field from pick structure with fallback
-              time: pick.time || (pick.details && pick.details.time) || '7:10 PM EST',
+              // Extract time field from the correct nested path in the pick structure
+              time: (pick.rawAnalysis?.rawOpenAIOutput?.time) || 
+                    pick.time || 
+                    pick.gameTime || 
+                    '',
+              // Use the extracted odds value
+              odds: oddsValue || pick.odds || '',
               
               // CRITICAL: Include homeTeam and awayTeam fields for display
               homeTeam: pick.homeTeam || '',
@@ -827,9 +871,13 @@ function RealGaryPicks() {
                                               lineHeight: 1.1,
                                               color: '#bfa142', /* Keeping gold color for the actual pick */
                                               wordBreak: 'break-word',
-                                              marginBottom: '0.75rem'
+                                              maxHeight: '4.5rem',
+                                              overflow: 'hidden',
+                                              display: '-webkit-box',
+                                              WebkitLineClamp: 2,
+                                              WebkitBoxOrient: 'vertical'
                                             }}>
-                                              {pick.pick || 'MISSING PICK'}
+                                              {pick.shortPick}{pick.odds ? ` (${pick.odds})` : ''}
                                             </div>
                                             
                                             {/* Add a preview of the rationale on front card */}
