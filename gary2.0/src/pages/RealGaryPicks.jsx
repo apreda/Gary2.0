@@ -209,8 +209,14 @@ function RealGaryPicks() {
             return true;
           })
           .map(pick => {
-            console.log('Processing valid pick from Supabase:', pick);
+            console.log('Processing valid pick from Supabase:', JSON.stringify(pick, null, 2));
             console.log('Game time from database:', pick.time);
+            // Log all possible time field variations
+            console.log('Time field variations:', {
+              'pick.time': pick.time,
+              'pick.gameTime': pick.gameTime,
+              'time direct': typeof pick === 'object' && 'time' in pick ? pick.time : 'not found'
+            });
             
             // Create a pick object with BOTH original OpenAI fields AND mapped fields
             // Parse and extract the necessary fields for our card implementation
