@@ -326,12 +326,14 @@ ${playerStats}
 
 For each prop, analyze the player's performance metrics, recent form, matchup advantages, and betting odds to determine if there's value.
 
-Give me your TOP picks only, focusing on value bets with favorable odds (prefer +100 or better when possible).
+Give me your TOP 5 picks only, focusing on value bets with favorable odds (prefer +100 or better when possible).
 
 For each pick, provide:
 1. The player name and exact prop as listed
 2. A confidence score between 0-1 (where 1 is highest confidence)
 3. A brief reasoning (2-3 sentences maximum)
+
+IMPORTANT: Assign high confidence scores (0.8-1.0) to your strongest picks where the statistical edge is clear and significant. Use moderate confidence (0.6-0.79) for solid picks with good value but some uncertainty. Only use lower confidence (below 0.6) for speculative picks. Do not artificially limit your confidence scores - if a pick deserves a 0.9 or higher based on your analysis, assign it accordingly.
 
 Format your response as a JSON array with these fields:
 - pick: The exact player prop selection (PLAYER NAME + OVER/UNDER + STAT + LINE + ODDS)
