@@ -127,13 +127,33 @@ export const propOddsService = {
       const games = await oddsService.getUpcomingGames(sport);
       console.log(`Found ${games.length} upcoming ${sport} games.`);
       
-      const game = games.find(g => 
+      // Normalize team names for more flexible matching
+      const normalizeTeamName = (name) => name.toLowerCase().replace(/\s+/g, '');
+      const normalizedHomeTeam = normalizeTeamName(homeTeam);
+      const normalizedAwayTeam = normalizeTeamName(awayTeam);
+      
+      // Try exact match first
+      let game = games.find(g => 
         (g.home_team === homeTeam && g.away_team === awayTeam) || 
         (g.home_team === awayTeam && g.away_team === homeTeam)
       );
       
+      // If exact match fails, try normalized match
+      if (!game) {
+        game = games.find(g => {
+          const normalizedGameHome = normalizeTeamName(g.home_team);
+          const normalizedGameAway = normalizeTeamName(g.away_team);
+          
+          return (normalizedGameHome === normalizedHomeTeam && normalizedGameAway === normalizedAwayTeam) ||
+                 (normalizedGameHome === normalizedAwayTeam && normalizedGameAway === normalizedHomeTeam);
+        });
+      }
+      
+      // Log all available games if we can't find a match
       if (!game) {
         console.error(`❌ No game found matching ${homeTeam} vs ${awayTeam} for ${sport} today.`);
+        console.log('Available games:');
+        games.forEach(g => console.log(`- ${g.home_team} vs ${g.away_team}`));
         throw new Error(`No game found for ${homeTeam} vs ${awayTeam} in today's schedule.`);
       }
       
