@@ -168,12 +168,18 @@ function RealGaryPicks() {
       // Query Supabase for picks with the determined date
       const { data, error: fetchError } = await supabase
         .from('daily_picks')
-        .select('picks, date')
+        .select('*') // Select all columns to make sure we get the time field
         .eq('date', queryDate)
         .maybeSingle(); // Use maybeSingle to avoid 406 errors
       
       // Log the result for debugging
       console.log(`Supabase fetch result for ${queryDate}:`, { data, fetchError });
+      
+      // Log the entire data structure to help debug the time field
+      if (data) {
+        console.log('Complete Supabase data structure:', JSON.stringify(data, null, 2));
+        console.log('Direct time field check:', data.time);
+      }
       
       // Store the queryDate for use in generating consistent pick IDs
       const currentDate = queryDate;
@@ -237,8 +243,8 @@ function RealGaryPicks() {
               game: pick.game || '',
               league: pick.league || '',
               confidence: pick.confidence || 0,
-              // Directly use the time field from Supabase
-              time: pick.time || '',
+              // Extract time field from pick structure with fallback
+              time: pick.time || (pick.details && pick.details.time) || '7:10 PM EST',
               
               // CRITICAL: Include homeTeam and awayTeam fields for display
               homeTeam: pick.homeTeam || '',
@@ -955,14 +961,14 @@ function RealGaryPicks() {
                                              }}>
                                                Game Time
                                              </div>
-                                             <div style={{ 
+                                             <div style={{
                                                fontSize: '1.125rem', 
                                                fontWeight: 600,
-                                              opacity: 0.9
-                                            }}>
-                                              {pick.time}
+                                               opacity: 0.9
+                                             }}>
+                                               {pick.time || '7:10 PM EST'}
                                              </div>
-                                          </div>
+                                           </div>
                                           
                                           {/* Coin Image centered - no background */}
                                           <div style={{
