@@ -446,7 +446,7 @@ Respond with ONLY the JSON array of your best prop picks.
       console.log('Generating prop picks for game:', gameData.homeTeam, 'vs', gameData.awayTeam);
 
       // 1. Get available props from the propOddsService
-      const playerProps = await propOddsService.getPlayerProps(gameData.sport, gameData.homeTeam, gameData.awayTeam);
+      const playerProps = await propOddsService.getPlayerPropOdds(gameData.sport, gameData.homeTeam, gameData.awayTeam);
       console.log(`Found ${playerProps.length} prop options for ${gameData.homeTeam} vs ${gameData.awayTeam}`);
 
       if (playerProps.length === 0) {
