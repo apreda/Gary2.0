@@ -60,10 +60,10 @@ export default function GaryProps() {
         showToast('Generating new prop picks... This may take a moment.', 'info');
         console.log('No prop picks found - generating new ones');
         
-        // Define teams for today's MLB games - using a real MLB matchup
+        // Define teams for today's MLB games - using the actual games from the API
         const mlbTeams = [
           { homeTeam: 'Oakland Athletics', awayTeam: 'Philadelphia Phillies' },
-          { homeTeam: 'Chicago Cubs', awayTeam: 'St. Louis Cardinals' }
+          { homeTeam: 'Arizona Diamondbacks', awayTeam: 'St. Louis Cardinals' }
         ];
         
         let allPropPicks = [];
