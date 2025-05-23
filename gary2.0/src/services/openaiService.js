@@ -132,6 +132,37 @@ const openaiServiceInstance = {
    * @param {object} options - Additional options for the analysis
    * @returns {Promise<string>} - Gary's detailed analysis
    */
+  // Helper function to format game time in a readable format
+  formatGameTime: function(timeString) {
+    if (!timeString) return null;
+    
+    try {
+      // Check if it's already in the desired format
+      if (/^\d{1,2}:\d{2} [AP]M EST$/.test(timeString)) {
+        return timeString;
+      }
+      
+      // Parse the ISO timestamp or other time format
+      const date = new Date(timeString);
+      if (isNaN(date.getTime())) {
+        return timeString; // Return original if parsing fails
+      }
+      
+      // Format as '10:00 PM EST'
+      const options = { 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        hour12: true, 
+        timeZone: 'America/New_York' 
+      };
+      const timeFormatted = new Intl.DateTimeFormat('en-US', options).format(date);
+      return `${timeFormatted} EST`;
+    } catch (error) {
+      console.error('Error formatting game time:', error);
+      return timeString; // Return original on error
+    }
+  },
+  
   generateGaryAnalysis: async function(gameData, newsData, options = {}) {
     try {
       // For better debugging, log what we're doing
@@ -455,7 +486,7 @@ You must return a properly formatted JSON object with the following structure:
 TEAM DESIGNATIONS (DO NOT CHANGE THESE):
 - HOME TEAM: ${gameData?.homeTeam || 'Not specified'}
 - AWAY TEAM: ${gameData?.awayTeam || 'Not specified'}
-- GAME TIME: ${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}
+- GAME TIME: ${this.formatGameTime(gameData?.gameTime || gameData?.time || gameData?.datetime) || 'TBD'}
 
 ${gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No odds data available'}
 
@@ -466,12 +497,12 @@ ${statsSection}
 
 EXTREMELY IMPORTANT - ABOUT THE GAME TIME: 
 1. The system is reporting that you are incorrectly setting game times to "TBD" when actual times are available.
-2. The "time" field in your JSON response MUST use the EXACT game time provided here: "${gameData?.gameTime || gameData?.time || gameData?.datetime || 'TBD'}"
+2. The "time" field in your JSON response MUST use the EXACT game time provided here: "${this.formatGameTime(gameData?.gameTime || gameData?.time || gameData?.datetime) || 'TBD'}"
 3. LOOK CAREFULLY at the GAME TIME value provided above - it contains the actual game time.
 4. DO NOT default to "TBD" unless absolutely no time was provided.
 5. Copy the time EXACTLY as given - do not modify, reformat, or guess.
 
-Example: If provided with game time "7:30 PM ET", your JSON must include "time": "7:30 PM ET" - not "TBD".
+Example: If provided with game time "7:30 PM EST", your JSON must include "time": "7:30 PM EST" - not "TBD".
 
 This is CRITICALLY important for our system's integrity.
 
