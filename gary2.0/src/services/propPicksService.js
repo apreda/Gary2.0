@@ -30,12 +30,38 @@ const propPicksService = {
         return '';
       }
 
-      // Find the game for these teams
+      // Find the game for these teams with more flexible matching
       let targetGame = null;
+      
+      // Normalize team names for better matching
+      const normalizeTeamName = (name) => name.toLowerCase().replace(/\s+/g, '');
+      const normalizedHomeTeam = normalizeTeamName(homeTeam);
+      const normalizedAwayTeam = normalizeTeamName(awayTeam);
+      
+      // Log available games for debugging
+      console.log('Available MLB games for today:');
+      games.forEach(game => {
+        console.log(`- ${game.teams?.home?.team?.name} vs ${game.teams?.away?.team?.name}`);
+      });
+      
       for (const game of games) {
-        const homeMatches = game.teams?.home?.team?.name?.includes(homeTeam);
-        const awayMatches = game.teams?.away?.team?.name?.includes(awayTeam);
-        if (homeMatches && awayMatches) {
+        // Get API team names
+        const apiHomeTeam = game.teams?.home?.team?.name || '';
+        const apiAwayTeam = game.teams?.away?.team?.name || '';
+        
+        // Try exact matches first
+        if ((apiHomeTeam.includes(homeTeam) && apiAwayTeam.includes(awayTeam)) ||
+            (apiHomeTeam.includes(awayTeam) && apiAwayTeam.includes(homeTeam))) {
+          targetGame = game;
+          break;
+        }
+        
+        // Try normalized matches
+        const normalizedApiHomeTeam = normalizeTeamName(apiHomeTeam);
+        const normalizedApiAwayTeam = normalizeTeamName(apiAwayTeam);
+        
+        if ((normalizedApiHomeTeam.includes(normalizedHomeTeam) && normalizedApiAwayTeam.includes(normalizedAwayTeam)) ||
+            (normalizedApiHomeTeam.includes(normalizedAwayTeam) && normalizedApiAwayTeam.includes(normalizedHomeTeam))) {
           targetGame = game;
           break;
         }
