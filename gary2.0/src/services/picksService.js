@@ -67,55 +67,30 @@ async function storeDailyPicksInDatabase(picks) {
     return { success: true, count: 0, message: 'Picks already exist for today' };
   }
 
-  // Filter by confidence and prepare picks for storage
-  const validPicks = picks
-    .filter(pick => {
-      // Extract confidence from pick or rawAnalysis
-      let confidence = 0;
-      
-      if (typeof pick.confidence === 'number') {
-        confidence = pick.confidence;
-      } else if (pick.rawAnalysis?.confidence) {
-        confidence = parseFloat(pick.rawAnalysis.confidence);
-      } else if (pick.rawAnalysis?.rawOpenAIOutput?.confidence) {
-        confidence = parseFloat(pick.rawAnalysis.rawOpenAIOutput.confidence);
-      } else if (typeof pick.rawAnalysis === 'object' && pick.rawAnalysis !== null) {
-        // Log the structure of rawAnalysis for debugging
-        console.log('Raw analysis structure:', JSON.stringify(Object.keys(pick.rawAnalysis)));
-        
-        if (typeof pick.rawAnalysis.rawOpenAIOutput === 'string') {
-          // Try to parse the string as JSON
-          try {
-            const parsedRaw = JSON.parse(pick.rawAnalysis.rawOpenAIOutput);
-            if (parsedRaw.confidence) {
-              confidence = parseFloat(parsedRaw.confidence);
-            }
-          } catch (e) {
-            console.log('Could not parse rawOpenAIOutput as JSON', e);
-          }
-        }
-      }
-      
-      const isValid = confidence >= 0.75;
-      console.log(`Pick for ${pick.homeTeam || pick.game || 'unknown game'} confidence: ${confidence}, valid: ${isValid}`);
-      return isValid;
-    })
-    .map(pick => {
-      // Ensure all picks have required fields for display
-      if (!pick.type && pick.rawAnalysis?.type) pick.type = pick.rawAnalysis.type;
-      if (!pick.pick && pick.rawAnalysis?.pick) pick.pick = pick.rawAnalysis.pick;
-      if (!pick.confidence && pick.rawAnalysis?.confidence) pick.confidence = pick.rawAnalysis.confidence;
-      if (!pick.rationale && pick.rawAnalysis?.rationale) pick.rationale = pick.rawAnalysis.rationale;
-      
-      return pick;
-    });
+  // No confidence filtering - just store all picks that come in
+  // This assumes the picks are already filtered by the enhanced picks service
+  const validPicks = picks.map(pick => {
+    // Ensure all required fields exist for display
+    if (!pick.type && pick.rawAnalysis?.type) pick.type = pick.rawAnalysis.type;
+    if (!pick.pick && pick.rawAnalysis?.pick) pick.pick = pick.rawAnalysis.pick;
+    if (!pick.confidence && pick.rawAnalysis?.confidence) pick.confidence = pick.rawAnalysis.confidence;
+    if (!pick.rationale && pick.rawAnalysis?.rationale) pick.rationale = pick.rawAnalysis.rationale;
+    
+    // For enhanced picks that use analysis instead of rawAnalysis
+    if (!pick.type && pick.analysis?.rawOpenAIOutput?.type) pick.type = pick.analysis.rawOpenAIOutput.type;
+    if (!pick.pick && pick.analysis?.rawOpenAIOutput?.pick) pick.pick = pick.analysis.rawOpenAIOutput.pick;
+    if (!pick.confidence && pick.analysis?.rawOpenAIOutput?.confidence) pick.confidence = pick.analysis.rawOpenAIOutput.confidence;
+    if (!pick.rationale && pick.analysis?.rawOpenAIOutput?.rationale) pick.rationale = pick.analysis.rawOpenAIOutput.rationale;
+    
+    return pick;
+  });
 
-  console.log(`After filtering, storing ${validPicks.length} valid picks at 0.75 confidence threshold`);
+  console.log(`Storing all ${validPicks.length} picks directly without confidence filtering`);
 
-  // Skip if there are no valid picks
+  // Skip if there are no valid picks (should never happen if picks array had items)
   if (validPicks.length === 0) {
-    console.warn('No valid picks with sufficient confidence to store');
-    return { success: false, message: 'No valid picks to store' };
+    console.warn('No picks to store after field mapping');
+    return { success: false, message: 'No picks to store' };
   }
 
   // Create data structure for Supabase
