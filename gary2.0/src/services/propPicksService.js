@@ -443,14 +443,13 @@ Respond with ONLY the JSON array of your best prop picks.
       // Process existing entries to include high confidence picks
       const processedEntries = data.map(entry => {
         if (entry.picks && Array.isArray(entry.picks) && entry.picks.length > 0) {
-          // Filter for high confidence picks (75% or higher)
-          const originalCount = entry.picks.length;
-          const highConfidencePicks = entry.picks.filter(pick => pick.confidence >= 0.75);
+          // Filter for confident picks (0.65 or higher)
+          const confidencePicks = entry.picks.filter(pick => pick.confidence >= 0.65);
 
           return {
             ...entry,
-            picks: highConfidencePicks,
-            originalPickCount: originalCount
+            picks: confidencePicks,
+            originalPickCount: entry.picks.length
           };
         }
         return entry;
@@ -519,8 +518,8 @@ Respond with ONLY the JSON array of your best prop picks.
         return true; // Keep picks where we can't determine odds
       });
 
-      // Further filter by high confidence threshold - standard 0.75 confidence threshold
-      const highConf = validOdds.filter(p => p.confidence >= 0.75);
+      // Further filter by high confidence threshold - reduced from 0.75 to 0.65 confidence threshold
+      const highConf = validOdds.filter(p => p.confidence >= 0.65);
 
       // Sort by confidence (highest first) and take only the top 10
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
@@ -559,16 +558,16 @@ Respond with ONLY the JSON array of your best prop picks.
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Filter the picks by confidence threshold (0.75)
+      // Filter the picks by confidence threshold (0.65)
       const filteredData = data.map(record => {
         if (record.picks && Array.isArray(record.picks)) {
-          // Filter each record's picks to only include those with confidence >= 0.75
-          record.picks = record.picks.filter(pick => pick.confidence >= 0.75);
+          // Filter each record's picks to only include those with confidence >= 0.65
+          record.picks = record.picks.filter(pick => pick.confidence >= 0.65);
         }
         return record;
       });
       
-      console.log(`After filtering for confidence >= 0.75, ${filteredData.length} records remain`);
+      console.log(`After filtering for confidence >= 0.65, ${filteredData.length} records remain`);
       
       return filteredData || [];
     } catch (error) {
