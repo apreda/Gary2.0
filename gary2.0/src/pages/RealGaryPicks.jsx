@@ -904,7 +904,21 @@ function RealGaryPicks() {
                                               WebkitLineClamp: 2,
                                               WebkitBoxOrient: 'vertical'
                                             }}>
-                                              {pick.shortPick}{pick.odds ? ` (${pick.odds})` : ''}
+                                              {pick.shortPick}{pick.odds ? (() => {
+                                                // Format odds correctly based on whether it's positive or negative
+                                                const oddsValue = pick.odds.trim();
+                                                if (oddsValue.startsWith('-')) {
+                                                  // Negative odds already have the - sign
+                                                  return ` ${oddsValue}`;
+                                                } else if (oddsValue.startsWith('+')) {
+                                                  // Positive odds that already have the + sign
+                                                  return ` ${oddsValue}`;
+                                                } else {
+                                                  // Positive odds without the + sign - add it
+                                                  const numericValue = parseInt(oddsValue, 10);
+                                                  return numericValue > 0 ? ` +${oddsValue}` : ` ${oddsValue}`;
+                                                }
+                                              })() : ''}
                                             </div>
                                             
                                             {/* Add a preview of the rationale on front card */}
