@@ -68,22 +68,54 @@ async function storeDailyPicksInDatabase(picks) {
     return { success: true, count: 0, message: 'Picks already exist for today' };
   }
 
-  // No confidence filtering - just store all picks that come in
-  // This assumes the picks are already filtered by the enhanced picks service
+  // Simplify pick structure to only include essential fields from OpenAI output
   const validPicks = picks.map(pick => {
-    // Ensure all required fields exist for display
-    if (!pick.type && pick.rawAnalysis?.type) pick.type = pick.rawAnalysis.type;
-    if (!pick.pick && pick.rawAnalysis?.pick) pick.pick = pick.rawAnalysis.pick;
-    if (!pick.confidence && pick.rawAnalysis?.confidence) pick.confidence = pick.rawAnalysis.confidence;
-    if (!pick.rationale && pick.rawAnalysis?.rationale) pick.rationale = pick.rawAnalysis.rationale;
+    // Extract the OpenAI output fields which contain the essential pick data
+    let openAIOutput = null;
     
-    // For enhanced picks that use analysis instead of rawAnalysis
-    if (!pick.type && pick.analysis?.rawOpenAIOutput?.type) pick.type = pick.analysis.rawOpenAIOutput.type;
-    if (!pick.pick && pick.analysis?.rawOpenAIOutput?.pick) pick.pick = pick.analysis.rawOpenAIOutput.pick;
-    if (!pick.confidence && pick.analysis?.rawOpenAIOutput?.confidence) pick.confidence = pick.analysis.rawOpenAIOutput.confidence;
-    if (!pick.rationale && pick.analysis?.rawOpenAIOutput?.rationale) pick.rationale = pick.analysis.rawOpenAIOutput.rationale;
+    // First try to get the data from the standardized paths
+    if (pick.rawAnalysis?.rawOpenAIOutput) {
+      openAIOutput = pick.rawAnalysis.rawOpenAIOutput;
+    } else if (pick.analysis?.rawOpenAIOutput) {
+      openAIOutput = pick.analysis.rawOpenAIOutput;
+    }
     
-    return pick;
+    // If we found the OpenAI output, return just those fields
+    if (openAIOutput) {
+      return {
+        pick: openAIOutput.pick || pick.pick,
+        time: openAIOutput.time || pick.time,
+        type: openAIOutput.type || pick.type,
+        league: openAIOutput.league || pick.league,
+        revenge: openAIOutput.revenge || false,
+        awayTeam: openAIOutput.awayTeam || pick.awayTeam,
+        homeTeam: openAIOutput.homeTeam || pick.homeTeam,
+        momentum: openAIOutput.momentum || 0,
+        rationale: openAIOutput.rationale || pick.rationale,
+        trapAlert: openAIOutput.trapAlert || false,
+        confidence: openAIOutput.confidence || pick.confidence,
+        superstition: openAIOutput.superstition || false,
+        // Include sport for filtering
+        sport: pick.sport
+      };
+    }
+    
+    // Fallback to original fields if we can't find the OpenAI output
+    return {
+      pick: pick.pick,
+      time: pick.time,
+      type: pick.type || 'moneyline',
+      league: pick.league || 'NBA',
+      revenge: false,
+      awayTeam: pick.awayTeam,
+      homeTeam: pick.homeTeam,
+      momentum: 0,
+      rationale: pick.rationale,
+      trapAlert: false,
+      confidence: pick.confidence || 0,
+      superstition: false,
+      sport: pick.sport
+    };
   });
 
   console.log(`Storing all ${validPicks.length} picks directly without confidence filtering`);
