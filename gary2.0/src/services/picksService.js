@@ -186,17 +186,25 @@ async function generateDailyPicks() {
       // --- NBA ---
       } else if (sport === 'basketball_nba') {
         const games = await oddsService.getUpcomingGames(sport);
-        // Filter for today's games in EST
-        const now = new Date();
-        const estOffset = -4;
-        const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const estDate = new Date(utcDate + (3600000 * estOffset));
-        const todayStart = new Date(estDate); todayStart.setHours(0,0,0,0);
-        const todayEnd = new Date(estDate); todayEnd.setHours(23,59,59,999);
-
+        // Get today's date in EST time zone format (YYYY-MM-DD)
+        const today = new Date();
+        const estOptions = { timeZone: 'America/New_York' };
+        const estDateString = today.toLocaleDateString('en-US', estOptions);
+        const [month, day, year] = estDateString.split('/');
+        const estFormattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        
+        console.log(`NBA filtering: Today in EST is ${estFormattedDate}`);
+        
+        // Filter games by checking if they occur on the same day in EST
         const todayGames = games.filter(game => {
-          const gameTime = new Date(game.commence_time);
-          return gameTime >= todayStart && gameTime <= todayEnd;
+          const gameDate = new Date(game.commence_time);
+          const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
+          const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
+          const gameFormattedDate = `${gameYear}-${gameMonth.padStart(2, '0')}-${gameDay.padStart(2, '0')}`;
+          
+          console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Date: ${gameFormattedDate}, Include: ${gameFormattedDate === estFormattedDate}`);
+          
+          return gameFormattedDate === estFormattedDate;
         });
 
         for (const game of todayGames) {
@@ -240,16 +248,25 @@ async function generateDailyPicks() {
       // --- NHL ---
       } else if (sport === 'icehockey_nhl') {
         const games = await oddsService.getUpcomingGames(sport);
-        const now = new Date();
-        const estOffset = -4;
-        const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const estDate = new Date(utcDate + (3600000 * estOffset));
-        const todayStart = new Date(estDate); todayStart.setHours(0,0,0,0);
-        const todayEnd = new Date(estDate); todayEnd.setHours(23,59,59,999);
-
+        // Get today's date in EST time zone format (YYYY-MM-DD)
+        const today = new Date();
+        const estOptions = { timeZone: 'America/New_York' };
+        const estDateString = today.toLocaleDateString('en-US', estOptions);
+        const [month, day, year] = estDateString.split('/');
+        const estFormattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        
+        console.log(`NHL filtering: Today in EST is ${estFormattedDate}`);
+        
+        // Filter games by checking if they occur on the same day in EST
         const todayGames = games.filter(game => {
-          const gameTime = new Date(game.commence_time);
-          return gameTime >= todayStart && gameTime <= todayEnd;
+          const gameDate = new Date(game.commence_time);
+          const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
+          const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
+          const gameFormattedDate = `${gameYear}-${gameMonth.padStart(2, '0')}-${gameDay.padStart(2, '0')}`;
+          
+          console.log(`NHL Game: ${game.away_team} @ ${game.home_team}, Date: ${gameFormattedDate}, Include: ${gameFormattedDate === estFormattedDate}`);
+          
+          return gameFormattedDate === estFormattedDate;
         });
 
         for (const game of todayGames) {
