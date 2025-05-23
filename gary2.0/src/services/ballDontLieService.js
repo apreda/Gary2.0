@@ -1107,8 +1107,8 @@ const ballDontLieService = {
 
   /**
    * Get NBA playoff series data for a specific matchup
-   * @param {string} teamA - First team name or abbreviation
-   * @param {string} teamB - Second team name or abbreviation
+   * @param {number|string} teamA - First team ID or team name/abbreviation
+   * @param {number|string} teamB - Second team ID or team name/abbreviation
    * @param {number} season - Season year (defaults to current year)
    * @returns {Promise<Object>} - Playoff series data
    */
@@ -1119,9 +1119,42 @@ const ballDontLieService = {
         // Get all playoff games for the season
         const playoffGames = await this.getNbaPlayoffGames(season);
         
-        // Find team IDs for both teams
-        const teamAData = await this.getTeamByName(teamA);
-        const teamBData = await this.getTeamByName(teamB);
+        // Handle both team IDs and team names
+        let teamAData, teamBData;
+        
+        // Check if teamA is a number (ID) or string (name)
+        if (typeof teamA === 'number' || !isNaN(parseInt(teamA))) {
+          // It's a team ID, try to find the team in the playoff games
+          const teamAId = parseInt(teamA);
+          const teamAGame = playoffGames.find(game => 
+            game.home_team.id === teamAId || game.visitor_team.id === teamAId
+          );
+          
+          if (teamAGame) {
+            teamAData = teamAGame.home_team.id === teamAId ? 
+              teamAGame.home_team : teamAGame.visitor_team;
+          }
+        } else {
+          // It's a team name, use getTeamByName
+          teamAData = await this.getTeamByName(teamA);
+        }
+        
+        // Same for teamB
+        if (typeof teamB === 'number' || !isNaN(parseInt(teamB))) {
+          // It's a team ID, try to find the team in the playoff games
+          const teamBId = parseInt(teamB);
+          const teamBGame = playoffGames.find(game => 
+            game.home_team.id === teamBId || game.visitor_team.id === teamBId
+          );
+          
+          if (teamBGame) {
+            teamBData = teamBGame.home_team.id === teamBId ? 
+              teamBGame.home_team : teamBGame.visitor_team;
+          }
+        } else {
+          // It's a team name, use getTeamByName
+          teamBData = await this.getTeamByName(teamB);
+        }
         
         if (!teamAData || !teamBData) {
           console.error('Could not find team data for', teamA, 'or', teamB);
