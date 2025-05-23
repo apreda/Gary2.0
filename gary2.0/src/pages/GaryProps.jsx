@@ -44,6 +44,7 @@ export default function GaryProps() {
       let processedPicks = [];
 
       if (Array.isArray(data) && data.length > 0) {
+        console.log(`Found ${data.length} existing prop pick records`);
         data.forEach(record => {
           if (Array.isArray(record.picks)) {
             const picksWithIds = record.picks.map((pick, idx) => ({
@@ -57,10 +58,51 @@ export default function GaryProps() {
         });
       } else {
         showToast('Generating new prop picks... This may take a moment.', 'info');
-        // Generate and store prop picks in one operation to avoid duplicates
-        const newPicks = await propPicksService.generateDailyPropPicks();
-        if (Array.isArray(newPicks) && newPicks.length > 0) {
-          // Fetch the freshly stored picks - generateDailyPropPicks already handles storage
+        console.log('No prop picks found - generating new ones');
+        
+        // Define teams for today's MLB games - using a real MLB matchup
+        const mlbTeams = [
+          { homeTeam: 'Oakland Athletics', awayTeam: 'Philadelphia Phillies' },
+          { homeTeam: 'Chicago Cubs', awayTeam: 'St. Louis Cardinals' }
+        ];
+        
+        let allPropPicks = [];
+        
+        // Generate prop picks for each game
+        for (const game of mlbTeams) {
+          console.log(`Generating props for ${game.awayTeam} @ ${game.homeTeam}`);
+          const gamePropPicks = await propPicksService.generatePropBets({
+            sport: 'baseball_mlb',
+            homeTeam: game.homeTeam,
+            awayTeam: game.awayTeam
+          });
+          
+          if (Array.isArray(gamePropPicks) && gamePropPicks.length > 0) {
+            console.log(`Generated ${gamePropPicks.length} prop picks for ${game.awayTeam} @ ${game.homeTeam}`);
+            allPropPicks.push(...gamePropPicks);
+          }
+        }
+        
+        if (allPropPicks.length > 0) {
+          console.log(`Generated ${allPropPicks.length} total prop picks, storing in database`);
+          
+          // Store the generated picks in Supabase
+          const { data: insertData, error: insertError } = await supabase
+            .from('prop_picks')
+            .insert({
+              date: today,
+              picks: allPropPicks,
+              sport: 'MLB'
+            });
+          
+          if (insertError) {
+            console.error('Error storing prop picks:', insertError);
+            throw insertError;
+          }
+          
+          console.log('Successfully stored new prop picks in database');
+          
+          // Fetch the freshly stored picks
           const freshData = await propPicksService.getTodayPropPicks();
           freshData.forEach(record => {
             if (Array.isArray(record.picks)) {
@@ -73,15 +115,17 @@ export default function GaryProps() {
               processedPicks.push(...picksWithIds);
             }
           });
+          
           showToast(`Generated ${processedPicks.length} new prop picks!`, 'success');
         } else {
+          console.log('No prop picks could be generated');
           showToast('No prop picks available for today', 'warning');
         }
       }
 
       setPicks(processedPicks);
     } catch (err) {
-      console.error(err);
+      console.error('Error in loadPicks:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
