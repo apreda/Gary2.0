@@ -210,6 +210,7 @@ function RealGaryPicks() {
           })
           .map(pick => {
             console.log('Processing valid pick from Supabase:', pick);
+            console.log('Game time from database:', pick.time);
             
             // Create a pick object with BOTH original OpenAI fields AND mapped fields
             // Parse and extract the necessary fields for our card implementation
@@ -230,6 +231,7 @@ function RealGaryPicks() {
               game: pick.game || '',
               league: pick.league || '',
               confidence: pick.confidence || 0,
+              // Directly use the time field from Supabase
               time: pick.time || '',
               
               // CRITICAL: Include homeTeam and awayTeam fields for display
@@ -952,12 +954,8 @@ function RealGaryPicks() {
                                                fontWeight: 600,
                                               opacity: 0.9
                                             }}>
-                                              {pick.time ? 
-                                                (function() {
-                                                  let time = pick.time.includes('ET') ? pick.time : `${pick.time} ET`;
-                                                  return time.replace(/:([0-9])\s/, ':0$1 ');
-                                                })() : '10:10 PM ET'}
-                                            </div>
+                                              {pick.time}
+                                             </div>
                                           </div>
                                           
                                           {/* Coin Image centered - no background */}
