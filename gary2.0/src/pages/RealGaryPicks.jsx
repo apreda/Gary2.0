@@ -283,10 +283,37 @@ function RealGaryPicks() {
               league: pick.league || '',
               confidence: pick.confidence || 0,
               // Extract time field from the correct nested path in the pick structure
-              time: (pick.rawAnalysis?.rawOpenAIOutput?.time) || 
-                    pick.time || 
-                    pick.gameTime || 
-                    '',
+              time: function() {
+                // First try to get the formatted time from rawAnalysis
+                if (pick.rawAnalysis?.rawOpenAIOutput?.time) {
+                  return pick.rawAnalysis.rawOpenAIOutput.time;
+                }
+                
+                // Then try the time field directly
+                if (pick.time) {
+                  return pick.time;
+                }
+                
+                // Finally try to format gameTime from ISO format
+                if (pick.gameTime) {
+                  try {
+                    const gameDate = new Date(pick.gameTime);
+                    // Format as 1:36 PM EST
+                    return gameDate.toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZone: 'America/New_York',
+                      hour12: true
+                    }) + ' EST';
+                  } catch (e) {
+                    console.error('Error formatting gameTime:', e);
+                    return pick.gameTime;
+                  }
+                }
+                
+                // Default
+                return '';  
+              }(),
               // Use the extracted odds value
               odds: oddsValue || pick.odds || '',
               
