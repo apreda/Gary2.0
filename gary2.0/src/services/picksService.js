@@ -71,9 +71,30 @@ async function storeDailyPicksInDatabase(picks) {
   const validPicks = picks
     .filter(pick => {
       // Extract confidence from pick or rawAnalysis
-      const confidence = typeof pick.confidence === 'number' 
-        ? pick.confidence 
-        : (pick.rawAnalysis?.confidence ? parseFloat(pick.rawAnalysis.confidence) : 0);
+      let confidence = 0;
+      
+      if (typeof pick.confidence === 'number') {
+        confidence = pick.confidence;
+      } else if (pick.rawAnalysis?.confidence) {
+        confidence = parseFloat(pick.rawAnalysis.confidence);
+      } else if (pick.rawAnalysis?.rawOpenAIOutput?.confidence) {
+        confidence = parseFloat(pick.rawAnalysis.rawOpenAIOutput.confidence);
+      } else if (typeof pick.rawAnalysis === 'object' && pick.rawAnalysis !== null) {
+        // Log the structure of rawAnalysis for debugging
+        console.log('Raw analysis structure:', JSON.stringify(Object.keys(pick.rawAnalysis)));
+        
+        if (typeof pick.rawAnalysis.rawOpenAIOutput === 'string') {
+          // Try to parse the string as JSON
+          try {
+            const parsedRaw = JSON.parse(pick.rawAnalysis.rawOpenAIOutput);
+            if (parsedRaw.confidence) {
+              confidence = parseFloat(parsedRaw.confidence);
+            }
+          } catch (e) {
+            console.log('Could not parse rawOpenAIOutput as JSON', e);
+          }
+        }
+      }
       
       const isValid = confidence >= 0.75;
       console.log(`Pick for ${pick.homeTeam || pick.game || 'unknown game'} confidence: ${confidence}, valid: ${isValid}`);
