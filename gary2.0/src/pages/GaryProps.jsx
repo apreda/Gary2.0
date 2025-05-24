@@ -48,68 +48,31 @@ export default function GaryProps() {
         data.forEach(record => {
           if (Array.isArray(record.picks)) {
             const picksWithIds = record.picks.map((pick, idx) => {
-              // Parse the pick string to extract components
-              // Example: "Jeffrey Springs OVER strikeouts 4.5 +105" or "Jeffrey Springs OVER strikeouts 4.5 (+105)"
-              let pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+\(([+-]\d+)\)$/);
-              
-              // If first pattern doesn't match, try without parentheses
-              if (!pickMatch) {
-                pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
-              }
-              
-              // If still no match, try a more flexible pattern
-              if (!pickMatch) {
-                // Handle cases where there might be extra spaces or different formatting
-                pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+).*?([+-]\d+)/);
-              }
+              // All fields should already be in the pick object from the database
+              // No need to parse anything
               
               let parsedPick = {
-                ...pick,
+                ...pick, // Spread all fields from the database
                 id: `${record.id}-${idx}`,
                 date: record.date,
                 created_at: record.created_at,
-                league: pick.sport || 'MLB', // Use sport from pick if available
-                team: pick.team || 'MLB', // Use team from enhanced data if available
-                rationale: pick.reasoning || pick.rationale || 'Analysis not available', // Map reasoning to rationale
-                ev: pick.ev || null, // Use EV from enhanced data if available
-                time: pick.time || 'TBD' // Use time from enhanced data if available
+                // Use existing fields or provide defaults
+                player: pick.player || 'Unknown Player',
+                team: pick.team || 'MLB',
+                prop: pick.prop || 'unknown',
+                line: pick.line || '',
+                bet: pick.bet || 'over',
+                odds: pick.odds || 'N/A',
+                confidence: pick.confidence || 0.75,
+                ev: pick.ev || null,
+                rationale: pick.rationale || pick.reasoning || 'Analysis not available',
+                league: pick.sport || 'MLB',
+                time: pick.time || 'TBD'
               };
               
-              if (pickMatch) {
-                parsedPick.player = pickMatch[1].trim();
-                parsedPick.bet = pickMatch[2].toLowerCase(); // 'over' or 'under'
-                parsedPick.prop = pickMatch[3].trim().replace(/\s+/g, '_'); // Convert to snake_case
-                parsedPick.line = pickMatch[4];
-                parsedPick.odds = pickMatch[5];
-                
-                // Ensure odds have proper formatting
-                if (parsedPick.odds && !parsedPick.odds.startsWith('+') && !parsedPick.odds.startsWith('-')) {
-                  parsedPick.odds = '+' + parsedPick.odds;
-                }
-                
-                // If team wasn't in enhanced data, keep the parsed team
-                if (!pick.team) {
-                  parsedPick.team = 'MLB'; // Default for now
-                }
-              } else {
-                // Fallback parsing if regex doesn't match
-                console.warn('Could not parse pick:', pick.pick);
-                
-                // Try to at least extract player name and over/under
-                const simpleMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)/i);
-                if (simpleMatch) {
-                  parsedPick.player = simpleMatch[1].trim();
-                  parsedPick.bet = simpleMatch[2].toLowerCase();
-                  parsedPick.prop = 'prop'; // Generic prop type
-                  parsedPick.odds = 'N/A';
-                  parsedPick.line = '';
-                } else {
-                  parsedPick.player = 'Unknown Player';
-                  parsedPick.bet = 'over';
-                  parsedPick.prop = 'unknown';
-                  parsedPick.odds = 'N/A';
-                  parsedPick.line = '';
-                }
+              // Ensure odds formatting
+              if (typeof parsedPick.odds === 'number') {
+                parsedPick.odds = parsedPick.odds > 0 ? `+${parsedPick.odds}` : `${parsedPick.odds}`;
               }
               
               return parsedPick;
@@ -167,68 +130,31 @@ export default function GaryProps() {
           freshData.forEach(record => {
             if (Array.isArray(record.picks)) {
               const picksWithIds = record.picks.map((pick, idx) => {
-                // Parse the pick string to extract components
-                // Example: "Jeffrey Springs OVER strikeouts 4.5 +105" or "Jeffrey Springs OVER strikeouts 4.5 (+105)"
-                let pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+\(([+-]\d+)\)$/);
-                
-                // If first pattern doesn't match, try without parentheses
-                if (!pickMatch) {
-                  pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
-                }
-                
-                // If still no match, try a more flexible pattern
-                if (!pickMatch) {
-                  // Handle cases where there might be extra spaces or different formatting
-                  pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+).*?([+-]\d+)/);
-                }
+                // All fields should already be in the pick object from the database
+                // No need to parse anything
                 
                 let parsedPick = {
-                  ...pick,
+                  ...pick, // Spread all fields from the database
                   id: `${record.id}-${idx}`,
                   date: record.date,
                   created_at: record.created_at,
-                  league: pick.sport || 'MLB', // Use sport from pick if available
-                  team: pick.team || 'MLB', // Use team from enhanced data if available
-                  rationale: pick.reasoning || pick.rationale || 'Analysis not available', // Map reasoning to rationale
-                  ev: pick.ev || null, // Use EV from enhanced data if available
-                  time: pick.time || 'TBD' // Use time from enhanced data if available
+                  // Use existing fields or provide defaults
+                  player: pick.player || 'Unknown Player',
+                  team: pick.team || 'MLB',
+                  prop: pick.prop || 'unknown',
+                  line: pick.line || '',
+                  bet: pick.bet || 'over',
+                  odds: pick.odds || 'N/A',
+                  confidence: pick.confidence || 0.75,
+                  ev: pick.ev || null,
+                  rationale: pick.rationale || pick.reasoning || 'Analysis not available',
+                  league: pick.sport || 'MLB',
+                  time: pick.time || 'TBD'
                 };
                 
-                if (pickMatch) {
-                  parsedPick.player = pickMatch[1].trim();
-                  parsedPick.bet = pickMatch[2].toLowerCase(); // 'over' or 'under'
-                  parsedPick.prop = pickMatch[3].trim().replace(/\s+/g, '_'); // Convert to snake_case
-                  parsedPick.line = pickMatch[4];
-                  parsedPick.odds = pickMatch[5];
-                  
-                  // Ensure odds have proper formatting
-                  if (parsedPick.odds && !parsedPick.odds.startsWith('+') && !parsedPick.odds.startsWith('-')) {
-                    parsedPick.odds = '+' + parsedPick.odds;
-                  }
-                  
-                  // If team wasn't in enhanced data, keep the parsed team
-                  if (!pick.team) {
-                    parsedPick.team = 'MLB'; // Default for now
-                  }
-                } else {
-                  // Fallback parsing if regex doesn't match
-                  console.warn('Could not parse pick:', pick.pick);
-                  
-                  // Try to at least extract player name and over/under
-                  const simpleMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)/i);
-                  if (simpleMatch) {
-                    parsedPick.player = simpleMatch[1].trim();
-                    parsedPick.bet = simpleMatch[2].toLowerCase();
-                    parsedPick.prop = 'prop'; // Generic prop type
-                    parsedPick.odds = 'N/A';
-                    parsedPick.line = '';
-                  } else {
-                    parsedPick.player = 'Unknown Player';
-                    parsedPick.bet = 'over';
-                    parsedPick.prop = 'unknown';
-                    parsedPick.odds = 'N/A';
-                    parsedPick.line = '';
-                  }
+                // Ensure odds formatting
+                if (typeof parsedPick.odds === 'number') {
+                  parsedPick.odds = parsedPick.odds > 0 ? `+${parsedPick.odds}` : `${parsedPick.odds}`;
                 }
                 
                 return parsedPick;
@@ -270,7 +196,12 @@ export default function GaryProps() {
   // Format prop_type from snake_case to Title Case with spaces
   const formatPropType = (propType) => {
     if (!propType) return '';
-    return propType
+    // Handle formats like "hits 0.5" or "strikeouts 5.5"
+    // Extract just the prop type without the line value
+    const propOnly = propType.replace(/\s+[\d.]+$/, '');
+    
+    // Handle snake_case conversion
+    return propOnly
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');

@@ -372,39 +372,25 @@ Respond with ONLY the JSON array of your best prop picks.
         }
       }
       
-      // If we successfully parsed JSON, transform it to expected format
+      // If we successfully parsed JSON, return it with all fields intact
       if (Array.isArray(parsed)) {
         return parsed.map(item => {
-          // Handle new format from OpenAI that includes player, prop, bet, odds separately
-          if (item.player && item.prop && item.bet && item.odds !== undefined) {
-            // Construct the pick string from components
-            // Format: "Player Name OVER/UNDER prop_type line odds"
-            const betType = item.bet.toUpperCase();
-            const propType = item.prop.replace(/\s+\d+\.?\d*$/, ''); // Remove line from prop if included
-            const line = item.line || item.prop.match(/\d+\.?\d*$/)?.[0] || '';
-            const odds = typeof item.odds === 'number' ? 
-              (item.odds > 0 ? `+${item.odds}` : `${item.odds}`) : 
-              item.odds;
+          // Ensure all fields are present and properly formatted
+          return {
+            player: item.player || 'Unknown Player',
+            team: item.team || 'MLB',
+            prop: item.prop || 'unknown',
+            line: item.line || '',
+            bet: (item.bet || 'over').toLowerCase(),
+            odds: item.odds || 100,
+            confidence: item.confidence || 0.75,
+            ev: item.ev || null,
+            rationale: item.rationale || item.reasoning || 'Analysis based on recent performance and matchup data.',
             
-            return {
-              pick: `${item.player} ${betType} ${propType} ${line} ${odds}`.trim(),
-              confidence: item.confidence || 0.75,
-              reasoning: item.rationale || item.reasoning || 'Analysis based on recent performance and matchup data.',
-              team: item.team || 'MLB',
-              ev: item.ev || null
-            };
-          }
-          // Handle old format where everything is in the "pick" field
-          else if (item.pick) {
-            return {
-              pick: item.pick,
-              confidence: item.confidence || 0.75,
-              reasoning: item.reasoning || item.rationale || 'Analysis based on recent performance and matchup data.'
-            };
-          }
-          // Fallback
-          return null;
-        }).filter(Boolean);
+            // Also create the pick string for any legacy code that might need it
+            pick: `${item.player} ${(item.bet || 'OVER').toUpperCase()} ${item.prop} ${item.odds}`
+          };
+        }).filter(item => item.player && item.prop); // Filter out any invalid entries
       }
 
       // If all else fails, return empty array
@@ -531,34 +517,26 @@ Respond with ONLY the JSON array of your best prop picks.
 
       // Enhance picks with team info, EV calculation, and time
       const enhancedPicks = topTenPicks.map(pick => {
-        // Extract player name from the pick - everything before OVER/UNDER
-        const playerMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)/i);
-        const playerName = playerMatch ? playerMatch[1].trim() : '';
-        
-        // Get team from our player-team map
-        const team = playerTeamMap[playerName] || 'MLB';
-        
-        // Extract odds for EV calculation
-        const oddsMatch = pick.pick.match(/\(([+-]\d+)\)/);
-        const odds = oddsMatch ? parseInt(oddsMatch[1]) : 100;
-        
-        // Calculate Expected Value (EV)
-        // EV = (Probability of Winning * Profit) - (Probability of Losing * Loss)
-        const decimalOdds = odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1;
-        const impliedProbability = 1 / decimalOdds;
-        const winProbability = pick.confidence; // Use confidence as our estimated win probability
-        const profit = odds > 0 ? odds : (100 / Math.abs(odds)) * 100;
-        const ev = (winProbability * profit) - ((1 - winProbability) * 100);
-        
-        // Get game time (default to 7:00 PM if not provided)
-        const gameTime = gameData.time || gameData.gameTime || '7:00 PM EST';
-        
+        // The pick already has all the fields we need from OpenAI
+        // Just ensure we have all the required fields
         return {
-          ...pick,
-          team: team,
-          ev: ev,
-          time: gameTime,
-          sport: 'MLB' // Default to MLB for now
+          // Core fields from OpenAI
+          player: pick.player || 'Unknown Player',
+          team: pick.team || playerTeamMap[pick.player] || 'MLB',
+          prop: pick.prop || 'unknown',
+          line: pick.line || '',
+          bet: pick.bet || 'over',
+          odds: pick.odds || 100,
+          confidence: pick.confidence || 0.75,
+          ev: pick.ev || null,
+          rationale: pick.rationale || pick.reasoning || 'Analysis not available',
+          
+          // Additional fields
+          sport: 'MLB', // Default to MLB for now
+          time: gameData.time || gameData.gameTime || '7:00 PM EST',
+          
+          // Keep the original pick string for backwards compatibility
+          pick: pick.pick || `${pick.player} ${(pick.bet || 'OVER').toUpperCase()} ${pick.prop} ${pick.odds}`
         };
       });
 
