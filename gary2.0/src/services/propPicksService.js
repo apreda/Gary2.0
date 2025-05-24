@@ -14,6 +14,38 @@ import { supabase } from '../supabaseClient.js';
  */
 const propPicksService = {
   /**
+   * Helper function to format game time in a readable format
+   */
+  formatGameTime: function(timeString) {
+    if (!timeString) return '7:00 PM EST';
+    
+    try {
+      // Check if it's already in the desired format
+      if (/^\d{1,2}:\d{2} [AP]M EST$/.test(timeString)) {
+        return timeString;
+      }
+      
+      // Parse the ISO timestamp
+      const date = new Date(timeString);
+      if (isNaN(date.getTime())) {
+        return '7:00 PM EST'; // Default fallback
+      }
+      
+      // Format as '7:00 PM EST'
+      const options = { 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        hour12: true, 
+        timeZone: 'America/New_York' 
+      };
+      const timeFormatted = new Intl.DateTimeFormat('en-US', options).format(date);
+      return `${timeFormatted} EST`;
+    } catch (error) {
+      console.error('Error formatting game time:', error);
+      return '7:00 PM EST'; // Default fallback
+    }
+  },
+  /**
    * Format MLB player stats from MLB Stats API
    */
   formatMLBPlayerStats: async (homeTeam, awayTeam) => {
@@ -665,7 +697,7 @@ Respond with ONLY a JSON array of your best prop picks.
           
           // Additional fields
           sport: 'MLB', // Default to MLB for now
-          time: gameData.time || gameData.gameTime || '7:00 PM EST',
+          time: propPicksService.formatGameTime(gameData.time || gameData.gameTime || gameData.commence_time),
           
           // Keep the original pick string for backwards compatibility
           pick: pick.pick || `${pick.player} ${(pick.bet || 'OVER').toUpperCase()} ${pick.prop} ${pick.odds}`
