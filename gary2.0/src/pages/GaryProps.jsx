@@ -47,12 +47,42 @@ export default function GaryProps() {
         console.log(`Found ${data.length} existing prop pick records`);
         data.forEach(record => {
           if (Array.isArray(record.picks)) {
-            const picksWithIds = record.picks.map((pick, idx) => ({
-              ...pick,
-              id: `${record.id}-${idx}`,
-              date: record.date,
-              created_at: record.created_at
-            }));
+            const picksWithIds = record.picks.map((pick, idx) => {
+              // Parse the pick string to extract components
+              // Example: "Jeffrey Springs OVER strikeouts 4.5 +105"
+              const pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
+              
+              let parsedPick = {
+                ...pick,
+                id: `${record.id}-${idx}`,
+                date: record.date,
+                created_at: record.created_at,
+                league: 'MLB', // Default to MLB
+                team: 'TBD', // Will be updated when we have team info
+                rationale: pick.reasoning || pick.rationale || 'Analysis not available' // Map reasoning to rationale
+              };
+              
+              if (pickMatch) {
+                parsedPick.player = pickMatch[1].trim();
+                parsedPick.bet = pickMatch[2].toLowerCase(); // 'over' or 'under'
+                parsedPick.prop = pickMatch[3].trim().replace(/\s+/g, '_'); // Convert to snake_case
+                parsedPick.line = pickMatch[4];
+                parsedPick.odds = pickMatch[5];
+                
+                // Extract team from player/context if possible
+                // For now, we'll need to enhance this with actual team mapping
+                parsedPick.team = 'See matchup details';
+              } else {
+                // Fallback parsing if regex doesn't match
+                console.warn('Could not parse pick:', pick.pick);
+                parsedPick.player = 'Unknown Player';
+                parsedPick.bet = 'over';
+                parsedPick.prop = 'unknown';
+                parsedPick.odds = 'N/A';
+              }
+              
+              return parsedPick;
+            });
             processedPicks.push(...picksWithIds);
           }
         });
@@ -105,12 +135,38 @@ export default function GaryProps() {
           const freshData = await propPicksService.getTodayPropPicks();
           freshData.forEach(record => {
             if (Array.isArray(record.picks)) {
-              const picksWithIds = record.picks.map((pick, idx) => ({
-                ...pick,
-                id: `${record.id}-${idx}`,
-                date: record.date,
-                created_at: record.created_at
-              }));
+              const picksWithIds = record.picks.map((pick, idx) => {
+                // Parse the pick string to extract components
+                // Example: "Jeffrey Springs OVER strikeouts 4.5 +105"
+                const pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
+                
+                let parsedPick = {
+                  ...pick,
+                  id: `${record.id}-${idx}`,
+                  date: record.date,
+                  created_at: record.created_at,
+                  league: 'MLB', // Default to MLB
+                  team: 'See matchup details', // Will be updated when we have team info
+                  rationale: pick.reasoning || pick.rationale || 'Analysis not available' // Map reasoning to rationale
+                };
+                
+                if (pickMatch) {
+                  parsedPick.player = pickMatch[1].trim();
+                  parsedPick.bet = pickMatch[2].toLowerCase(); // 'over' or 'under'
+                  parsedPick.prop = pickMatch[3].trim().replace(/\s+/g, '_'); // Convert to snake_case
+                  parsedPick.line = pickMatch[4];
+                  parsedPick.odds = pickMatch[5];
+                } else {
+                  // Fallback parsing if regex doesn't match
+                  console.warn('Could not parse pick:', pick.pick);
+                  parsedPick.player = 'Unknown Player';
+                  parsedPick.bet = 'over';
+                  parsedPick.prop = 'unknown';
+                  parsedPick.odds = 'N/A';
+                }
+                
+                return parsedPick;
+              });
               processedPicks.push(...picksWithIds);
             }
           });
@@ -131,7 +187,13 @@ export default function GaryProps() {
     }
   };
 
-  const cardStyle = { width: '320px', height: '500px', margin: '0 auto 2rem', position: 'relative' };
+  const cardStyle = { 
+    width: '100%', 
+    maxWidth: '320px', 
+    height: '500px', 
+    margin: '0 auto 2rem', 
+    position: 'relative' 
+  };
   // Prop card flipping disabled as requested
   const toggleCardFlip = (id, e) => {
     e?.stopPropagation();
@@ -149,7 +211,7 @@ export default function GaryProps() {
   };
 
   return (
-    <div className="min-h-screen relative pt-20" style={{ overflowX: 'auto' }}> {/* Added pt-20 for top padding + overflow-x auto for mobile scrolling */}
+    <div className="min-h-screen relative pt-20 px-2 sm:px-4" style={{ overflowX: 'hidden' }}> {/* Added responsive padding and changed overflow */}
       {/* Background */}
       <div className="fixed inset-0 z-0" style={{ backgroundImage: `url(${BG2})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3, filter: 'blur(1px)' }} />
 
@@ -211,7 +273,7 @@ export default function GaryProps() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 px-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-5 px-2 sm:px-4">
                 {picks.map(pick => {
                   const flipped = !!flippedCards[pick.id];
                   return (
@@ -233,7 +295,7 @@ export default function GaryProps() {
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142'}}>
                                   {pick.player && pick.bet && pick.prop ? 
-                                    `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)}` : 
+                                    `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)} ${pick.line || ''}`.trim() : 
                                     '(No pick available)'}
                                 </div>
                               </div>
@@ -243,16 +305,20 @@ export default function GaryProps() {
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
                                 <div style={{ fontSize: '0.85rem', lineHeight: 1.4, minHeight: '120px', maxHeight: '210px', overflow: 'auto', opacity: 0.9, padding: '0.25rem 0.5rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px', marginBottom: '0' }}>
                                   {pick.rationale ? (
-                                    <ul style={{ listStyleType: 'none', margin: 0, padding: 0 }}>
-                                      {pick.rationale.split('. ')
-                                        .filter(point => point.trim().length > 0)
-                                        .map((point, idx) => (
-                                          <li key={idx} style={{ display: 'flex', marginBottom: '8px', alignItems: 'flex-start' }}>
-                                            <span style={{ color: '#bfa142', marginRight: '6px', fontWeight: 'bold', fontSize: '0.9rem' }}>•</span>
-                                            <span>{point.endsWith('.') ? point : `${point}.`}</span>
-                                          </li>
-                                        ))}
-                                    </ul>
+                                    pick.rationale.includes('•') || pick.rationale.includes('. ') ? (
+                                      <ul style={{ listStyleType: 'none', margin: 0, padding: 0 }}>
+                                        {pick.rationale.split(/[.•]/)
+                                          .filter(point => point.trim().length > 0)
+                                          .map((point, idx) => (
+                                            <li key={idx} style={{ display: 'flex', marginBottom: '8px', alignItems: 'flex-start' }}>
+                                              <span style={{ color: '#bfa142', marginRight: '6px', fontWeight: 'bold', fontSize: '0.9rem' }}>•</span>
+                                              <span>{point.trim()}{!point.trim().endsWith('.') ? '.' : ''}</span>
+                                            </li>
+                                          ))}
+                                      </ul>
+                                    ) : (
+                                      <div style={{ padding: '0.25rem 0' }}>{pick.rationale}</div>
+                                    )
                                   ) : 'Analysis not available at this time.'}
                                 </div>
                               </div>
