@@ -584,7 +584,7 @@ For each recommended prop bet, you must provide:
 - Prop type (points, rebounds, assists, etc.)
 - Recommendation (over or under)
 - Confidence level (0.1-1.0 scale)
-- Rationale as ONE continuous paragraph with NO bullet points or line breaks
+- Rationale with bullet points, where each bullet point is a complete sentence
 - EV+ calculation (expected value per $100 bet)
 
 To calculate EV+:
@@ -597,11 +597,15 @@ To calculate EV+:
 NEVER EVER mention missing or limited stats in your rationale. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
 
 CRITICAL RATIONALE FORMATTING:
-- Write the rationale as ONE CONTINUOUS PARAGRAPH without any bullet points
-- DO NOT use bullet points (•, -, *, etc.) anywhere in the rationale
-- DO NOT add line breaks or newlines within the rationale  
-- Write it as a single flowing paragraph that reads naturally from start to finish
-- Example: "Jung leads the Rangers with 7 HR and has a .288 average with an .812 OPS, showing strong power and overall consistency. He faces Bryse Wilson, who has a 6.00 ERA, 1.79 WHIP, and allows a .331 BAA, making him a highly favorable matchup for right-handed power hitters. Jung's underlying metrics and recent form suggest a true HR probability near 16%, and at +510, the payout far exceeds the risk, creating a strong value edge."
+- Write the rationale using bullet points
+- Each bullet point MUST be a complete sentence - do not cut off mid-thought
+- Use 3-4 bullet points total
+- Each bullet point should contain a complete thought/analysis point
+- Format example:
+  "• Jung leads the Rangers with 7 HR and has a .288 average with an .812 OPS, showing strong power and overall consistency.
+   • He faces Bryse Wilson, who has a 6.00 ERA, 1.79 WHIP, and allows a .331 BAA, making him a highly favorable matchup for right-handed power hitters.
+   • Jung's underlying metrics and recent form suggest a true HR probability near 16%.
+   • At +510, the payout far exceeds the risk, creating a strong value edge of approximately 12.5% expected value."
 
 Response format (valid JSON):
 \`\`\`json
@@ -615,7 +619,7 @@ Response format (valid JSON):
     "odds": -110,
     "confidence": 0.85,
     "ev": 12.5,
-    "rationale": "A single continuous paragraph (3-4 sentences) with key stats and reasoning. NO BULLET POINTS or line breaks - write as one flowing paragraph."
+    "rationale": "• First complete sentence with key stat or insight. • Second complete sentence with matchup analysis. • Third complete sentence with value or trend. • Optional fourth sentence with conclusion."
   },
   {...}
 ]
