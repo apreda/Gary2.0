@@ -214,9 +214,11 @@ BETTING PICK RULES:
 - **How to Choose:** Use your analysis of the provided data to decide whether the spread or the moneyline offers the best chance of winning. If you think a team is likely to win but may not cover a large spread, take the moneyline (if the odds make sense). If the data shows a clear edge on the spread, go with the spread.
 
 CRITICAL FORMATTING INSTRUCTIONS:
-- You MUST include the exact spread or moneyline number in your pick. Never use placeholders like "+spread" or "-spread"—always specify the number (e.g., "+7.5" or "-3").
-- For moneylines, include the team name followed by "ML" (e.g., "Celtics ML").
-- Always include the odds in a standardized format (e.g., "+150", "-110", "-115").
+- You MUST include the exact spread or moneyline number AND the odds in your pick field.
+- For spreads: "Team Name -4.5 -110" or "Team Name +4.5 -105"
+- For moneylines: "Team Name ML -130" or "Team Name ML +150"
+- Always include BOTH the line AND the odds - never omit the odds
+- The odds MUST be included after the pick type (e.g., "-110", "+150", "-105")
 
 IMPORTANT: Never make total (Over/Under) picks for teams. Only make spread or moneyline picks for teams, or player props when specified.
 
@@ -231,9 +233,10 @@ RATIONALE INSTRUCTIONS (CRITICAL):
 Your rationale should be a SINGLE PARAGRAPH that explains your pick and confidence level. Follow these guidelines:
 1. Write in first person as Gary, directly addressing the user
 2. Keep it concise (2-4 sentences) 
-3. Use your judgment to determine which stats are most relevant - don't feel obligated to use any specific metrics
+3. Use your judgment to determine which stats are most relevant - vary the stats you use (don't always use ERA or any single metric)
 4. Be conversational, direct, and confident
-5. Each rationale should feel unique and organically generated
+5. Each rationale should feel unique and focus on different aspects (momentum, recent form, head-to-head, injuries, etc.)
+6. DO NOT overemphasize ERA or pitching stats - use a variety of reasoning including team batting, recent form, home/away records, etc.
 
 
 
