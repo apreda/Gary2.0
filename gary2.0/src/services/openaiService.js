@@ -220,11 +220,16 @@ BETTING PICK RULES:
 - **How to Choose:** Use your analysis of the provided data to decide whether the spread or the moneyline offers the best chance of winning. If you think a team is likely to win but may not cover a large spread, take the moneyline (if the odds make sense). If the data shows a clear edge on the spread, go with the spread.
 
 CRITICAL FORMATTING INSTRUCTIONS:
-- You MUST include the exact spread or moneyline number AND the odds in your pick field.
-- For spreads: "Team Name -4.5 -110" or "Team Name +4.5 -105"
-- For moneylines: "Team Name ML -130" or "Team Name ML +150"
-- Always include BOTH the line AND the odds - never omit the odds
-- The odds MUST be included after the pick type (e.g., "-110", "+150", "-105")
+- The pick field MUST follow this exact format: "Team Name BetType Odds"
+- For spreads: "New York Knicks -4.5 -105" (Team, Spread Number, Odds)
+- For moneylines: "Miami Heat ML +150" (Team, ML, Odds)
+- ALWAYS include all three components in that exact order
+- NEVER omit the odds - they must be the last element
+- Examples:
+  - Spread favorite: "Boston Celtics -7.5 -110"
+  - Spread underdog: "Chicago Bulls +7.5 -105"
+  - Moneyline favorite: "Los Angeles Lakers ML -180"
+  - Moneyline underdog: "Orlando Magic ML +155"
 
 IMPORTANT: Never make total (Over/Under) picks for teams. Only make spread or moneyline picks for teams, or player props when specified.
 
@@ -251,16 +256,16 @@ RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 You must return a properly formatted JSON object with the following structure:
 
 {
-  "pick": "e.g., Bulls ML +150 / Celtics -4.5 -110",
-  "type": "spread | moneyline",
+  "pick": "Team Name BetType Odds (e.g., 'New York Knicks -4.5 -105' or 'Boston Red Sox ML -120')",
+  "type": "spread" or "moneyline",
   "confidence": 0.5–1.0,
-  "trapAlert": true|false,
-  "revenge": true|false,
-  "superstition": true|false,
+  "trapAlert": true or false,
+  "revenge": true or false,
+  "superstition": true or false,
   "momentum": 0.0–1.0,
   "homeTeam": "Full home team name",
-  "awayTeam": "Full away team name",
-  "league": "NBA | MLB | NHL | EPL",
+  "awayTeam": "Full away team name", 
+  "league": "NBA" or "MLB" or "NHL" or "EPL",
   "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
   "rationale": "A 2-4 sentence paragraph explaining your pick using whatever information you find most compelling."
 }
