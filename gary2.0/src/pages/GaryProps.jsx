@@ -88,7 +88,7 @@ export default function GaryProps() {
         const { oddsService } = await import('../services/oddsService');
         
         // Get all MLB games for today
-        const allGames = await oddsService.getTodaysGames('baseball_mlb');
+        const allGames = await oddsService.getUpcomingGames('baseball_mlb');
         console.log(`Found ${allGames.length} MLB games for today`);
         
         // Convert games to the format we need
