@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { propOddsService } from './propOddsService.js';
 import { oddsService } from './oddsService.js';
-import { mlbStatsApiService } from './mlbStatsApiService.js';
+import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 import { openaiService } from './openaiService.js';
 // Using MLB Stats API exclusively for prop picks - no need for sportsDbApiService or perplexityService
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
