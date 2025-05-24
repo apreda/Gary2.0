@@ -480,6 +480,14 @@ Respond with ONLY the JSON array of your best prop picks.
         return [];
       }
 
+      // Create a map of player to team from the prop data
+      const playerTeamMap = {};
+      playerProps.forEach(prop => {
+        if (prop.player && prop.team) {
+          playerTeamMap[prop.player] = prop.team;
+        }
+      });
+
       // 2. Format props and stats
       const formattedProps = playerProps.map(p => `${p.player} ${p.type} ${p.stat} ${p.line} (${p.odds})`).join('\n');
       const playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
@@ -527,11 +535,44 @@ Respond with ONLY the JSON array of your best prop picks.
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
       const topTenPicks = sortedByConfidence.slice(0, 10);
 
+      // Enhance picks with team info, EV calculation, and time
+      const enhancedPicks = topTenPicks.map(pick => {
+        // Extract player name from the pick - everything before OVER/UNDER
+        const playerMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)/i);
+        const playerName = playerMatch ? playerMatch[1].trim() : '';
+        
+        // Get team from our player-team map
+        const team = playerTeamMap[playerName] || 'MLB';
+        
+        // Extract odds for EV calculation
+        const oddsMatch = pick.pick.match(/\(([+-]\d+)\)/);
+        const odds = oddsMatch ? parseInt(oddsMatch[1]) : 100;
+        
+        // Calculate Expected Value (EV)
+        // EV = (Probability of Winning * Profit) - (Probability of Losing * Loss)
+        const decimalOdds = odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1;
+        const impliedProbability = 1 / decimalOdds;
+        const winProbability = pick.confidence; // Use confidence as our estimated win probability
+        const profit = odds > 0 ? odds : (100 / Math.abs(odds)) * 100;
+        const ev = (winProbability * profit) - ((1 - winProbability) * 100);
+        
+        // Get game time (default to 7:00 PM if not provided)
+        const gameTime = gameData.time || gameData.gameTime || '7:00 PM EST';
+        
+        return {
+          ...pick,
+          team: team,
+          ev: ev,
+          time: gameTime,
+          sport: 'MLB' // Default to MLB for now
+        };
+      });
+
       console.log(
-        `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}, Top 10: ${topTenPicks.length}`
+        `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}, Top 10: ${enhancedPicks.length}`
       );
 
-      return topTenPicks;
+      return enhancedPicks;
     } catch (error) {
       console.error('Error generating prop picks:', error);
       return [];
