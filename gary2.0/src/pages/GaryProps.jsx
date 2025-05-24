@@ -91,8 +91,7 @@ export default function GaryProps() {
             .from('prop_picks')
             .insert({
               date: today,
-              picks: allPropPicks,
-              sport: 'MLB'
+              picks: allPropPicks
             });
           
           if (insertError) {
