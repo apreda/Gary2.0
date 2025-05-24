@@ -328,24 +328,14 @@ For each prop, analyze the player's performance metrics, recent form, matchup ad
 
 Give me your TOP 5 picks only, focusing on value bets with favorable odds (prefer +100 or better when possible).
 
-For each pick, provide:
-1. The player name and exact prop as listed
-2. A confidence score between 0-1 (where 1 is highest confidence)
-3. A brief reasoning (2-3 sentences maximum)
-
 IMPORTANT: Assign high confidence scores (0.8-1.0) to your strongest picks where the statistical edge is clear and significant. Use moderate confidence (0.6-0.79) for solid picks with good value but some uncertainty. Only use lower confidence (below 0.6) for speculative picks. Do not artificially limit your confidence scores - if a pick deserves a 0.9 or higher based on your analysis, assign it accordingly.
-
-Format your response as a JSON array with these fields:
-- pick: The exact player prop selection (PLAYER NAME + OVER/UNDER + STAT + LINE + ODDS)
-- confidence: Your confidence score (0-1)
-- reasoning: Brief explanation for the pick
 
 Your confidence score should be based primarily on:
 - Winning probability (50% weight)
 - Return on investment potential (30% weight)
 - Size of the edge you've identified (20% weight)
 
-Respond with ONLY the JSON array of your best prop picks.
+Respond with ONLY a JSON array of your best prop picks.
 `;
   },
 
@@ -375,22 +365,74 @@ Respond with ONLY the JSON array of your best prop picks.
       // If we successfully parsed JSON, return it with all fields intact
       if (Array.isArray(parsed)) {
         return parsed.map(item => {
-          // Ensure all fields are present and properly formatted
-          return {
-            player: item.player || 'Unknown Player',
-            team: item.team || 'MLB',
-            prop: item.prop || 'unknown',
-            line: item.line || '',
-            bet: (item.bet || 'over').toLowerCase(),
-            odds: item.odds || 100,
-            confidence: item.confidence || 0.75,
-            ev: item.ev || null,
-            rationale: item.rationale || item.reasoning || 'Analysis based on recent performance and matchup data.',
+          // Check if we have structured data with all fields
+          if (item.player && item.prop && item.bet && item.odds !== undefined) {
+            // New format with separate fields
+            return {
+              player: item.player || 'Unknown Player',
+              team: item.team || 'MLB',
+              prop: item.prop || 'unknown',
+              line: item.line || '',
+              bet: (item.bet || 'over').toLowerCase(),
+              odds: item.odds || 100,
+              confidence: item.confidence || 0.75,
+              ev: item.ev || null,
+              rationale: item.rationale || item.reasoning || 'Analysis based on recent performance and matchup data.',
+              pick: `${item.player} ${(item.bet || 'OVER').toUpperCase()} ${item.prop} ${item.odds}`
+            };
+          } else if (item.pick) {
+            // Old format where everything is in the "pick" field - need to parse it
+            // Example: "Ketel Marte OVER hits 0.5 (plus170)" or "Ketel Marte OVER hits 0.5 +170"
             
-            // Also create the pick string for any legacy code that might need it
-            pick: `${item.player} ${(item.bet || 'OVER').toUpperCase()} ${item.prop} ${item.odds}`
-          };
-        }).filter(item => item.player && item.prop); // Filter out any invalid entries
+            // Remove parentheses if present
+            const cleanPick = item.pick.replace(/[()]/g, '');
+            
+            // Try to parse the pick string
+            // Pattern: Player Name OVER/UNDER prop_type line odds
+            const pickMatch = cleanPick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s*(?:plus)?([+-]?\d+)$/i);
+            
+            if (pickMatch) {
+              const [_, playerName, betType, propType, line, odds] = pickMatch;
+              
+              // Clean up odds - remove "plus" prefix if present
+              let cleanOdds = odds.replace(/^plus/i, '');
+              if (cleanOdds && !cleanOdds.startsWith('+') && !cleanOdds.startsWith('-')) {
+                cleanOdds = '+' + cleanOdds;
+              }
+              
+              return {
+                player: playerName.trim(),
+                team: 'MLB', // Default, will be enhanced later
+                prop: `${propType.trim()} ${line}`,
+                line: parseFloat(line),
+                bet: betType.toLowerCase(),
+                odds: parseInt(cleanOdds) || 100,
+                confidence: item.confidence || 0.75,
+                ev: null, // Will be calculated later
+                rationale: item.reasoning || item.rationale || 'Analysis based on recent performance and matchup data.',
+                pick: item.pick
+              };
+            } else {
+              // If we can't parse it, log the issue and return minimal data
+              console.warn('Could not parse pick string:', item.pick);
+              return {
+                player: 'Unknown Player',
+                team: 'MLB',
+                prop: 'unknown',
+                line: '',
+                bet: 'over',
+                odds: 100,
+                confidence: item.confidence || 0.75,
+                ev: null,
+                rationale: item.reasoning || item.rationale || 'Analysis not available',
+                pick: item.pick || 'Invalid pick format'
+              };
+            }
+          }
+          
+          // Fallback for any other format
+          return null;
+        }).filter(item => item && item.player !== 'Unknown Player'); // Filter out invalid entries
       }
 
       // If all else fails, return empty array
@@ -469,7 +511,17 @@ Respond with ONLY the JSON array of your best prop picks.
       });
 
       // 2. Format props and stats
-      const formattedProps = playerProps.map(p => `${p.player} ${p.type} ${p.stat} ${p.line} (${p.odds})`).join('\n');
+      const formattedProps = playerProps.map(p => {
+        // Format each prop with both over and under options if available
+        const props = [];
+        if (p.over_odds) {
+          props.push(`${p.player} (${p.team}) OVER ${p.prop_type} ${p.line} (${p.over_odds})`);
+        }
+        if (p.under_odds) {
+          props.push(`${p.player} (${p.team}) UNDER ${p.prop_type} ${p.line} (${p.under_odds})`);
+        }
+        return props;
+      }).flat().join('\n');
       const playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
 
       // 3. Create the prompt for OpenAI
@@ -486,7 +538,7 @@ Respond with ONLY the JSON array of your best prop picks.
       // 6. Validate and filter the picks
       // Filter out picks with invalid format
       const valid = picks.filter(p => {
-        const hasRequiredFields = p.pick && p.confidence && p.reasoning;
+        const hasRequiredFields = p.player && p.confidence && (p.rationale || p.reasoning);
         if (!hasRequiredFields) {
           console.log(`Filtering out prop pick with missing fields: ${JSON.stringify(p)}`);
         }
@@ -495,17 +547,13 @@ Respond with ONLY the JSON array of your best prop picks.
 
       // Filter by odds quality (prefer +EV bets)
       const validOdds = valid.filter(p => {
-        // Extract the odds from the pick string
-        const oddsMatch = p.pick.match(/\(([+-]\d+)\)/);
-        if (oddsMatch && oddsMatch[1]) {
-          const odds = parseInt(oddsMatch[1]);
-          const oddsOK = odds > -150;
-          if (!oddsOK) {
-            console.log(`Filtering out prop pick with poor odds: ${p.pick} (${odds} is worse than -150)`);
-          }
-          return oddsOK;
+        // Use the odds field directly if it exists, otherwise parse from pick string
+        const odds = p.odds || 100;
+        const oddsOK = odds > -150;
+        if (!oddsOK) {
+          console.log(`Filtering out prop pick with poor odds: ${p.player} ${p.prop} (${odds} is worse than -150)`);
         }
-        return true; // Keep picks where we can't determine odds
+        return oddsOK;
       });
 
       // Further filter by high confidence threshold - standard 0.75 confidence threshold
