@@ -513,21 +513,38 @@ Respond with ONLY a JSON array of your best prop picks.
       // Filter to most common prop types and limit total number
       const priorityPropTypes = ['hits', 'strikeouts', 'home_runs', 'rbi', 'runs_scored', 'stolen_bases', 'total_bases'];
       let filteredProps = playerProps.filter(p => {
+        // Filter out props with odds worse than -150
+        const overOdds = p.over_odds || 0;
+        const underOdds = p.under_odds || 0;
+        
+        // Check if either over or under odds are acceptable (better than -150)
+        const hasAcceptableOdds = (overOdds > -150) || (underOdds > -150);
+        
+        if (!hasAcceptableOdds) {
+          return false; // Skip props where both sides are worse than -150
+        }
+        
         // Check if prop type contains any of our priority types
         const propTypeLower = (p.prop_type || '').toLowerCase();
         return priorityPropTypes.some(type => propTypeLower.includes(type));
       });
 
-      // If we still have too many, limit to 50 props max
-      if (filteredProps.length > 50) {
-        console.log(`Limiting props from ${filteredProps.length} to 50 to avoid rate limits`);
+      // If we still have too many, limit to 150 props max
+      if (filteredProps.length > 150) {
+        console.log(`Limiting props from ${filteredProps.length} to 150 to avoid rate limits`);
         // Sort by line value to get a good mix of over/under opportunities
-        filteredProps = filteredProps.sort((a, b) => (a.line || 0) - (b.line || 0)).slice(0, 50);
+        filteredProps = filteredProps.sort((a, b) => (a.line || 0) - (b.line || 0)).slice(0, 150);
       }
 
-      // If no filtered props, take first 30 of any type
+      // If no filtered props, take first 100 of any type (still filtering by odds)
       if (filteredProps.length === 0 && playerProps.length > 0) {
-        filteredProps = playerProps.slice(0, 30);
+        filteredProps = playerProps
+          .filter(p => {
+            const overOdds = p.over_odds || 0;
+            const underOdds = p.under_odds || 0;
+            return (overOdds > -150) || (underOdds > -150);
+          })
+          .slice(0, 100);
       }
 
       console.log(`Using ${filteredProps.length} filtered props for analysis`);
