@@ -1,73 +1,85 @@
 /* 
  * Mobile View Enhancements
- * Only applies to mobile devices - no impact on desktop
+ * Shows desktop layout on mobile devices without black boxes
  */
 
 @media only screen and (max-width: 768px) {
-  /* Fix content cut-off issue by scaling down the page on mobile */
-  html {
-    /* Use zoom to scale down the entire page so it fits on mobile screens */
-    zoom: 0.65 !important;
-    -moz-transform: scale(0.65) !important;
-    -moz-transform-origin: 0 0 !important;
-    -o-transform: scale(0.65) !important;
-    -o-transform-origin: 0 0 !important;
-    -webkit-transform: scale(0.65) !important;
-    -webkit-transform-origin: 0 0 !important;
-    transform: scale(0.65) !important;
-    transform-origin: 0 0 !important;
-  }
-  
-  body {
-    overflow-x: auto !important;
-    max-width: 100% !important;
-    width: 100% !important;
+  /* Reset any previous transforms and ensure full viewport coverage */
+  html, body {
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: visible !important;
+    background-color: #000000 !important; /* Match the app background */
   }
   
-  /* Target the App root container to ensure full width */
+  /* Apply zoom to show more content - 70% gives good balance */
+  html {
+    zoom: 0.7 !important;
+    -moz-transform: scale(0.7) !important;
+    -moz-transform-origin: top left !important;
+    transform: scale(0.7) !important;
+    transform-origin: top left !important;
+  }
+  
+  /* For browsers that support zoom but not transform */
+  @supports not (zoom: 1) {
+    html {
+      transform: scale(0.7) !important;
+      transform-origin: top left !important;
+      width: 142.86% !important; /* 100 / 0.7 to compensate for scale */
+    }
+  }
+  
+  /* Ensure root element fills the screen */
   #root {
     width: 100% !important;
-    max-width: 100% !important;
-    min-width: 100% !important;
-    overflow-x: hidden !important;
+    min-height: 100vh !important;
     margin: 0 !important;
     padding: 0 !important;
+    background-color: #000000 !important;
+    position: relative !important;
   }
   
-  /* Fix the main app div that's creating the black rectangle */
+  /* Make sure all containers use full width */
   #root > div {
     width: 100% !important;
-    max-width: 100% !important;
-    min-width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    min-height: 100vh !important;
+    background-color: inherit !important;
   }
   
-  /* Ensure the main content area uses full width */
-  #root > div > div:nth-child(2) {
-    width: 100% !important;
-    max-width: 100% !important;
-    left: 0 !important;
-    right: 0 !important;
-    margin: 0 !important;
-    padding: 0 1rem !important;
+  /* Specifically target the main app container */
+  .App, .app-container, [class*="app"] {
+    background-color: #000000 !important;
+    min-height: 100vh !important;
   }
-
-  /* Reset any container constraints that might be limiting horizontal scroll */
+  
+  /* Fix any elements that might create gaps */
+  div[style*="background-image"] {
+    background-size: cover !important;
+    background-position: center !important;
+  }
+  
+  /* Ensure no horizontal scrollbars while allowing vertical scroll */
+  body {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Override any container width restrictions */
   .container,
   .container-fluid,
-  [class^="container-"],
-  main,
-  section,
-  .row,
-  .col,
-  [class^="col-"],
-  div[style*="overflow-x: hidden"],
-  div[style*="overflow: hidden"] {
-    overflow-x: visible !important;
+  [class*="container"],
+  .max-w-screen-xl,
+  .max-w-screen-lg {
     max-width: 100% !important;
-    width: 100% !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  
+  /* Fix potential viewport issues */
+  .min-h-screen {
+    min-height: 100vh !important;
   }
 }
