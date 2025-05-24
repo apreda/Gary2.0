@@ -4,23 +4,26 @@
  */
 
 @media only screen and (max-width: 768px) {
-  /* Fix black rectangle issue by ensuring content uses full width */
-  html, body {
+  /* Fix content cut-off issue by scaling down the page on mobile */
+  html {
+    /* Use zoom to scale down the entire page so it fits on mobile screens */
+    zoom: 0.65 !important;
+    -moz-transform: scale(0.65) !important;
+    -moz-transform-origin: 0 0 !important;
+    -o-transform: scale(0.65) !important;
+    -o-transform-origin: 0 0 !important;
+    -webkit-transform: scale(0.65) !important;
+    -webkit-transform-origin: 0 0 !important;
+    transform: scale(0.65) !important;
+    transform-origin: 0 0 !important;
+  }
+  
+  body {
     overflow-x: auto !important;
     max-width: 100% !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
-    /* Removed zoom and transform that was scaling down the page */
-    /* zoom: 0.85 !important; */
-    /* -moz-transform: scale(0.85) !important; */
-    /* -moz-transform-origin: 0 0 !important; */
-    /* -o-transform: scale(0.85) !important; */
-    /* -o-transform-origin: 0 0 !important; */
-    /* -webkit-transform: scale(0.85) !important; */
-    /* -webkit-transform-origin: 0 0 !important; */
-    /* transform: scale(0.85) !important; */
-    /* transform-origin: 0 0 !important; */
   }
   
   /* Target the App root container to ensure full width */
