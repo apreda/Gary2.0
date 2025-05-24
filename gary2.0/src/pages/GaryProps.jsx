@@ -49,8 +49,19 @@ export default function GaryProps() {
           if (Array.isArray(record.picks)) {
             const picksWithIds = record.picks.map((pick, idx) => {
               // Parse the pick string to extract components
-              // Example: "Jeffrey Springs OVER strikeouts 4.5 +105"
-              const pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
+              // Example: "Jeffrey Springs OVER strikeouts 4.5 +105" or "Jeffrey Springs OVER strikeouts 4.5 (+105)"
+              let pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+\(([+-]\d+)\)$/);
+              
+              // If first pattern doesn't match, try without parentheses
+              if (!pickMatch) {
+                pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
+              }
+              
+              // If still no match, try a more flexible pattern
+              if (!pickMatch) {
+                // Handle cases where there might be extra spaces or different formatting
+                pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+).*?([+-]\d+)/);
+              }
               
               let parsedPick = {
                 ...pick,
@@ -71,6 +82,11 @@ export default function GaryProps() {
                 parsedPick.line = pickMatch[4];
                 parsedPick.odds = pickMatch[5];
                 
+                // Ensure odds have proper formatting
+                if (parsedPick.odds && !parsedPick.odds.startsWith('+') && !parsedPick.odds.startsWith('-')) {
+                  parsedPick.odds = '+' + parsedPick.odds;
+                }
+                
                 // If team wasn't in enhanced data, keep the parsed team
                 if (!pick.team) {
                   parsedPick.team = 'MLB'; // Default for now
@@ -78,10 +94,22 @@ export default function GaryProps() {
               } else {
                 // Fallback parsing if regex doesn't match
                 console.warn('Could not parse pick:', pick.pick);
-                parsedPick.player = 'Unknown Player';
-                parsedPick.bet = 'over';
-                parsedPick.prop = 'unknown';
-                parsedPick.odds = 'N/A';
+                
+                // Try to at least extract player name and over/under
+                const simpleMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)/i);
+                if (simpleMatch) {
+                  parsedPick.player = simpleMatch[1].trim();
+                  parsedPick.bet = simpleMatch[2].toLowerCase();
+                  parsedPick.prop = 'prop'; // Generic prop type
+                  parsedPick.odds = 'N/A';
+                  parsedPick.line = '';
+                } else {
+                  parsedPick.player = 'Unknown Player';
+                  parsedPick.bet = 'over';
+                  parsedPick.prop = 'unknown';
+                  parsedPick.odds = 'N/A';
+                  parsedPick.line = '';
+                }
               }
               
               return parsedPick;
@@ -140,8 +168,19 @@ export default function GaryProps() {
             if (Array.isArray(record.picks)) {
               const picksWithIds = record.picks.map((pick, idx) => {
                 // Parse the pick string to extract components
-                // Example: "Jeffrey Springs OVER strikeouts 4.5 +105"
-                const pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
+                // Example: "Jeffrey Springs OVER strikeouts 4.5 +105" or "Jeffrey Springs OVER strikeouts 4.5 (+105)"
+                let pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+\(([+-]\d+)\)$/);
+                
+                // If first pattern doesn't match, try without parentheses
+                if (!pickMatch) {
+                  pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+)\s+([+-]\d+)$/);
+                }
+                
+                // If still no match, try a more flexible pattern
+                if (!pickMatch) {
+                  // Handle cases where there might be extra spaces or different formatting
+                  pickMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)\s+(.+?)\s+([\d.]+).*?([+-]\d+)/);
+                }
                 
                 let parsedPick = {
                   ...pick,
@@ -161,13 +200,35 @@ export default function GaryProps() {
                   parsedPick.prop = pickMatch[3].trim().replace(/\s+/g, '_'); // Convert to snake_case
                   parsedPick.line = pickMatch[4];
                   parsedPick.odds = pickMatch[5];
+                  
+                  // Ensure odds have proper formatting
+                  if (parsedPick.odds && !parsedPick.odds.startsWith('+') && !parsedPick.odds.startsWith('-')) {
+                    parsedPick.odds = '+' + parsedPick.odds;
+                  }
+                  
+                  // If team wasn't in enhanced data, keep the parsed team
+                  if (!pick.team) {
+                    parsedPick.team = 'MLB'; // Default for now
+                  }
                 } else {
                   // Fallback parsing if regex doesn't match
                   console.warn('Could not parse pick:', pick.pick);
-                  parsedPick.player = 'Unknown Player';
-                  parsedPick.bet = 'over';
-                  parsedPick.prop = 'unknown';
-                  parsedPick.odds = 'N/A';
+                  
+                  // Try to at least extract player name and over/under
+                  const simpleMatch = pick.pick.match(/^(.+?)\s+(OVER|UNDER)/i);
+                  if (simpleMatch) {
+                    parsedPick.player = simpleMatch[1].trim();
+                    parsedPick.bet = simpleMatch[2].toLowerCase();
+                    parsedPick.prop = 'prop'; // Generic prop type
+                    parsedPick.odds = 'N/A';
+                    parsedPick.line = '';
+                  } else {
+                    parsedPick.player = 'Unknown Player';
+                    parsedPick.bet = 'over';
+                    parsedPick.prop = 'unknown';
+                    parsedPick.odds = 'N/A';
+                    parsedPick.line = '';
+                  }
                 }
                 
                 return parsedPick;
