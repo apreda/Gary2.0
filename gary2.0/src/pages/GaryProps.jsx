@@ -57,9 +57,11 @@ export default function GaryProps() {
                 id: `${record.id}-${idx}`,
                 date: record.date,
                 created_at: record.created_at,
-                league: 'MLB', // Default to MLB
-                team: 'TBD', // Will be updated when we have team info
-                rationale: pick.reasoning || pick.rationale || 'Analysis not available' // Map reasoning to rationale
+                league: pick.sport || 'MLB', // Use sport from pick if available
+                team: pick.team || 'MLB', // Use team from enhanced data if available
+                rationale: pick.reasoning || pick.rationale || 'Analysis not available', // Map reasoning to rationale
+                ev: pick.ev || null, // Use EV from enhanced data if available
+                time: pick.time || 'TBD' // Use time from enhanced data if available
               };
               
               if (pickMatch) {
@@ -69,9 +71,10 @@ export default function GaryProps() {
                 parsedPick.line = pickMatch[4];
                 parsedPick.odds = pickMatch[5];
                 
-                // Extract team from player/context if possible
-                // For now, we'll need to enhance this with actual team mapping
-                parsedPick.team = 'See matchup details';
+                // If team wasn't in enhanced data, keep the parsed team
+                if (!pick.team) {
+                  parsedPick.team = 'MLB'; // Default for now
+                }
               } else {
                 // Fallback parsing if regex doesn't match
                 console.warn('Could not parse pick:', pick.pick);
@@ -145,9 +148,11 @@ export default function GaryProps() {
                   id: `${record.id}-${idx}`,
                   date: record.date,
                   created_at: record.created_at,
-                  league: 'MLB', // Default to MLB
-                  team: 'See matchup details', // Will be updated when we have team info
-                  rationale: pick.reasoning || pick.rationale || 'Analysis not available' // Map reasoning to rationale
+                  league: pick.sport || 'MLB', // Use sport from pick if available
+                  team: pick.team || 'MLB', // Use team from enhanced data if available
+                  rationale: pick.reasoning || pick.rationale || 'Analysis not available', // Map reasoning to rationale
+                  ev: pick.ev || null, // Use EV from enhanced data if available
+                  time: pick.time || 'TBD' // Use time from enhanced data if available
                 };
                 
                 if (pickMatch) {
@@ -287,7 +292,8 @@ export default function GaryProps() {
                               {/* Top Section - Header Info */}
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                                 <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>League</div><div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.league || 'MLB'}</div></div>
-                                <div style={{ width: '65%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.team || 'TBD'}</div></div>
+                                <div style={{ width: '35%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.team || 'TBD'}</div></div>
+                                <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time</div><div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{pick.time || 'TBD'}</div></div>
                               </div>
                               
                               {/* Gary's Pick Section */}
