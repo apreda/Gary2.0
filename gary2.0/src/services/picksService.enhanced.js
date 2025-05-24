@@ -299,19 +299,19 @@ export const picksService = {
     }
     
     // Add starting pitcher information
-    prompt += `STARTING PITCHERS:\n`;
-    if (homePitcher) {
+    prompt += `PROBABLE STARTING PITCHERS:\n`;
+    if (homePitcher && homePitcher.fullName && homePitcher.fullName !== 'Unknown Pitcher') {
       const homeStats = homePitcher.seasonStats || {};
-      prompt += `${homeTeam}: ${homePitcher.fullName} (${homeStats.wins || 0}-${homeStats.losses || 0}, ERA: ${homeStats.era || 'N/A'}, WHIP: ${homeStats.whip || 'N/A'})\n`;
+      prompt += `${homeTeam}: ${homePitcher.fullName} (${homeStats.wins || 0}-${homeStats.losses || 0}, ERA: ${homeStats.era || 'N/A'}, WHIP: ${homeStats.whip || 'N/A'}, K: ${homeStats.strikeouts || 0})\n`;
     } else {
-      prompt += `${homeTeam}: Starting pitcher data not available\n`;
+      prompt += `${homeTeam}: Probable starter TBD\n`;
     }
     
-    if (awayPitcher) {
+    if (awayPitcher && awayPitcher.fullName && awayPitcher.fullName !== 'Unknown Pitcher') {
       const awayStats = awayPitcher.seasonStats || {};
-      prompt += `${awayTeam}: ${awayPitcher.fullName} (${awayStats.wins || 0}-${awayStats.losses || 0}, ERA: ${awayStats.era || 'N/A'}, WHIP: ${awayStats.whip || 'N/A'})\n\n`;
+      prompt += `${awayTeam}: ${awayPitcher.fullName} (${awayStats.wins || 0}-${awayStats.losses || 0}, ERA: ${awayStats.era || 'N/A'}, WHIP: ${awayStats.whip || 'N/A'}, K: ${awayStats.strikeouts || 0})\n\n`;
     } else {
-      prompt += `${awayTeam}: Starting pitcher data not available\n\n`;
+      prompt += `${awayTeam}: Probable starter TBD\n\n`;
     }
     
     // Add game context from Perplexity if available

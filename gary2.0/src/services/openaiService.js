@@ -196,6 +196,12 @@ Your job is to pick the bet most likely to win using the data provided—your go
 YOUR MOST CRITICAL RULE:
 You must only use the statistics and information explicitly provided in the input data. Do not invent, fabricate, or guess any statistical information.
 
+PITCHER DATA RULE:
+- ONLY mention pitcher names that are explicitly provided in the data
+- If a pitcher is listed as "TBD" or "Probable starter TBD", do NOT make up a pitcher name
+- If no pitcher data is provided, do NOT reference any pitcher by name
+- You can discuss pitching matchups generally without naming specific pitchers if none are provided
+
 DATA ACCURACY & ANALYSIS RULES:
 YOUR ANALYSIS MUST INCLUDE ACTUAL STATISTICS FROM THE INPUT DATA:
 - Use the statistics provided in the input to form your analysis and justify your pick.
@@ -284,19 +290,23 @@ You must return a properly formatted JSON object with the following structure:
     
     // 3. Handle MLB specific pitchers data from MLB Stats API
     if (gameData?.pitchers) {
-      statsSection += 'STARTING PITCHER MATCHUP:\n';
+      statsSection += 'PROBABLE STARTING PITCHERS:\n';
       
       const homePitcher = gameData.pitchers.home;
       const awayPitcher = gameData.pitchers.away;
       
-      if (homePitcher) {
+      if (homePitcher && homePitcher.fullName && homePitcher.fullName !== 'Unknown Pitcher') {
         const homeStats = homePitcher.seasonStats || {};
-        statsSection += `HOME: ${homePitcher.fullName} - ERA: ${homeStats.era || 'N/A'}, Record: ${homeStats.wins || 0}-${homeStats.losses || 0}, WHIP: ${homeStats.whip || 'N/A'}, SO: ${homeStats.strikeOuts || 0}\n`;
+        statsSection += `HOME: ${homePitcher.fullName} - ERA: ${homeStats.era || 'N/A'}, Record: ${homeStats.wins || 0}-${homeStats.losses || 0}, WHIP: ${homeStats.whip || 'N/A'}, SO: ${homeStats.strikeOuts || homeStats.strikeouts || 0}\n`;
+      } else {
+        statsSection += `HOME: Probable starter TBD\n`;
       }
       
-      if (awayPitcher) {
+      if (awayPitcher && awayPitcher.fullName && awayPitcher.fullName !== 'Unknown Pitcher') {
         const awayStats = awayPitcher.seasonStats || {};
-        statsSection += `AWAY: ${awayPitcher.fullName} - ERA: ${awayStats.era || 'N/A'}, Record: ${awayStats.wins || 0}-${awayStats.losses || 0}, WHIP: ${awayStats.whip || 'N/A'}, SO: ${awayStats.strikeOuts || 0}\n`;
+        statsSection += `AWAY: ${awayPitcher.fullName} - ERA: ${awayStats.era || 'N/A'}, Record: ${awayStats.wins || 0}-${awayStats.losses || 0}, WHIP: ${awayStats.whip || 'N/A'}, SO: ${awayStats.strikeOuts || awayStats.strikeouts || 0}\n`;
+      } else {
+        statsSection += `AWAY: Probable starter TBD\n`;
       }
       
       statsSection += '\n';

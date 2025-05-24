@@ -22,7 +22,71 @@ const mlbStatsApiService = {
     try {
       console.log(`[MLB API] Getting enhanced starting pitchers data for game ${gamePk}`);
       
-      // Use the schedule API with hydration to get probable pitchers
+      // First, try to get the game data directly
+      const gameResponse = await axios.get(`${MLB_API_BASE_URL}/game/${gamePk}/feed/live`);
+      
+      if (gameResponse.data && gameResponse.data.gameData) {
+        const gameData = gameResponse.data.gameData;
+        
+        // Check for probable pitchers in gameData
+        let homeProbablePitcher = gameData.probablePitchers?.home;
+        let awayProbablePitcher = gameData.probablePitchers?.away;
+        
+        // If not found there, try the teams structure
+        if (!homeProbablePitcher && gameData.teams?.home?.probablePitcher) {
+          homeProbablePitcher = gameData.teams.home.probablePitcher;
+        }
+        if (!awayProbablePitcher && gameData.teams?.away?.probablePitcher) {
+          awayProbablePitcher = gameData.teams.away.probablePitcher;
+        }
+        
+        // If we found probable pitchers, use them
+        if (homeProbablePitcher || awayProbablePitcher) {
+          console.log(`[MLB API] Found probable pitchers from game feed`);
+          console.log(`[MLB API] Home: ${homeProbablePitcher?.fullName || 'TBD'}, Away: ${awayProbablePitcher?.fullName || 'TBD'}`);
+          
+          // Process pitchers (continue with existing logic below)
+          let homeStarter = null;
+          if (homeProbablePitcher) {
+            const stats = await originalService.getPitcherSeasonStats(homeProbablePitcher.id);
+            homeStarter = {
+              id: homeProbablePitcher.id,
+              fullName: homeProbablePitcher.fullName,
+              firstName: homeProbablePitcher.firstName || '',
+              lastName: homeProbablePitcher.lastName || '',
+              number: homeProbablePitcher.jerseyNumber || '',
+              team: gameData.teams?.home?.name || '',
+              stats: {},
+              seasonStats: stats
+            };
+          }
+          
+          let awayStarter = null;
+          if (awayProbablePitcher) {
+            const stats = await originalService.getPitcherSeasonStats(awayProbablePitcher.id);
+            awayStarter = {
+              id: awayProbablePitcher.id,
+              fullName: awayProbablePitcher.fullName,
+              firstName: awayProbablePitcher.firstName || '',
+              lastName: awayProbablePitcher.lastName || '',
+              number: awayProbablePitcher.jerseyNumber || '',
+              team: gameData.teams?.away?.name || '',
+              stats: {},
+              seasonStats: stats
+            };
+          }
+          
+          return {
+            home: homeStarter,
+            away: awayStarter,
+            homeStarter,
+            awayStarter
+          };
+        }
+      }
+      
+      // If game feed didn't work, try schedule API as fallback
+      console.log(`[MLB API] No probable pitchers in game feed, trying schedule API`);
       const response = await axios.get(`${MLB_API_BASE_URL}/schedule`, {
         params: {
           sportId: 1,
@@ -32,17 +96,18 @@ const mlbStatsApiService = {
       });
       
       if (!response.data || !response.data.dates || !response.data.dates[0] || !response.data.dates[0].games || !response.data.dates[0].games[0]) {
-        console.log(`[MLB API] No game data found for game ${gamePk}`);
-        return null;
+        console.log(`[MLB API] No game data found for game ${gamePk} in schedule API`);
+        // Don't fall back to boxscore for future games
+        return { home: null, away: null, homeStarter: null, awayStarter: null };
       }
       
       const game = response.data.dates[0].games[0];
       
       // Check if probable pitchers exist in the data
       if (!game.teams || (!game.teams.home.probablePitcher && !game.teams.away.probablePitcher)) {
-        console.log(`[MLB API] No probable pitchers listed for game ${gamePk}, falling back to original method`);
-        // Fall back to original method if no probable pitchers listed
-        return originalService.getStartingPitchers(gamePk);
+        console.log(`[MLB API] No probable pitchers listed for game ${gamePk}`);
+        // Don't fall back to boxscore for future games
+        return { home: null, away: null, homeStarter: null, awayStarter: null };
       }
       
       // Process home starter
@@ -95,9 +160,8 @@ const mlbStatsApiService = {
       };
     } catch (error) {
       console.error(`[MLB API] Error getting enhanced starting pitchers for game ${gamePk}:`, error.message);
-      console.log('[MLB API] Falling back to original getStartingPitchers method');
-      // Fall back to original method in case of error
-      return originalService.getStartingPitchers(gamePk);
+      // Don't fall back to boxscore - return null pitchers for future games
+      return { home: null, away: null, homeStarter: null, awayStarter: null };
     }
   },
   
@@ -129,6 +193,12 @@ const mlbStatsApiService = {
       
       // For each game, add the starting pitcher information directly
       for (const game of games) {
+        // Log what we found for debugging
+        const homeProbable = game.teams?.home?.probablePitcher?.fullName || 'TBD';
+        const awayProbable = game.teams?.away?.probablePitcher?.fullName || 'TBD';
+        console.log(`[MLB API] Game ${game.gamePk}: ${game.teams.away.team.name} @ ${game.teams.home.team.name}`);
+        console.log(`[MLB API] Probable pitchers: Away: ${awayProbable}, Home: ${homeProbable}`);
+        
         game.enhancedData = {
           homeProbablePitcher: game.teams.home.probablePitcher || null,
           awayProbablePitcher: game.teams.away.probablePitcher || null
@@ -140,6 +210,13 @@ const mlbStatsApiService = {
       console.error(`[MLB API] Error getting games with starting pitchers for ${date}:`, error.message);
       return [];
     }
+  },
+  
+  /**
+   * Override the original service's getStartingPitchers to use enhanced version
+   */
+  getStartingPitchers: async (gamePk) => {
+    return mlbStatsApiService.getStartingPitchersEnhanced(gamePk);
   }
 };
 
