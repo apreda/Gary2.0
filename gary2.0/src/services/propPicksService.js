@@ -559,12 +559,12 @@ Respond with ONLY a JSON array of your best prop picks.
       // Further filter by high confidence threshold - standard 0.75 confidence threshold
       const highConf = validOdds.filter(p => p.confidence >= 0.75);
 
-      // Sort by confidence (highest first) and take only the top 10
+      // Sort by confidence (highest first) and take only the top 5 per game
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
-      const topTenPicks = sortedByConfidence.slice(0, 10);
+      const topFivePicks = sortedByConfidence.slice(0, 5);
 
       // Enhance picks with team info, EV calculation, and time
-      const enhancedPicks = topTenPicks.map(pick => {
+      const enhancedPicks = topFivePicks.map(pick => {
         // The pick already has all the fields we need from OpenAI
         // Just ensure we have all the required fields
         return {
@@ -589,7 +589,7 @@ Respond with ONLY a JSON array of your best prop picks.
       });
 
       console.log(
-        `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}, Top 10: ${enhancedPicks.length}`
+        `Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}, Top 5: ${enhancedPicks.length}`
       );
 
       return enhancedPicks;
