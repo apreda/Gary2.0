@@ -11,16 +11,16 @@
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
-    /* Apply a slight zoom out effect to fit more content */
-    zoom: 0.85 !important;
-    -moz-transform: scale(0.85) !important;
-    -moz-transform-origin: 0 0 !important;
-    -o-transform: scale(0.85) !important;
-    -o-transform-origin: 0 0 !important;
-    -webkit-transform: scale(0.85) !important;
-    -webkit-transform-origin: 0 0 !important;
-    transform: scale(0.85) !important;
-    transform-origin: 0 0 !important;
+    /* Removed zoom and transform that was scaling down the page */
+    /* zoom: 0.85 !important; */
+    /* -moz-transform: scale(0.85) !important; */
+    /* -moz-transform-origin: 0 0 !important; */
+    /* -o-transform: scale(0.85) !important; */
+    /* -o-transform-origin: 0 0 !important; */
+    /* -webkit-transform: scale(0.85) !important; */
+    /* -webkit-transform-origin: 0 0 !important; */
+    /* transform: scale(0.85) !important; */
+    /* transform-origin: 0 0 !important; */
   }
   
   /* Target the App root container to ensure full width */
