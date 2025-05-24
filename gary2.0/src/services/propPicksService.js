@@ -119,11 +119,18 @@ const propPicksService = {
 
       try {
         if (typeof mlbStatsApiService.getLeagueLeaders === 'function') {
-          const leagueLeadersData = await mlbStatsApiService.getLeagueLeaders();
-          homeRunLeaders = leagueLeadersData.homeRuns || [];
-          battingAvgLeaders = leagueLeadersData.battingAvg || [];
-          eraLeaders = leagueLeadersData.era || [];
-          strikeoutLeaders = leagueLeadersData.strikeouts || [];
+          // Get league leaders for specific stat categories
+          const [hrLeaders, avgLeaders, eraLeadersData, soLeaders] = await Promise.all([
+            mlbStatsApiService.getLeagueLeaders('homeRuns', 'hitting', 10).catch(() => []),
+            mlbStatsApiService.getLeagueLeaders('battingAverage', 'hitting', 10).catch(() => []),
+            mlbStatsApiService.getLeagueLeaders('earnedRunAverage', 'pitching', 10).catch(() => []),
+            mlbStatsApiService.getLeagueLeaders('strikeouts', 'pitching', 10).catch(() => [])
+          ]);
+          
+          homeRunLeaders = hrLeaders || [];
+          battingAvgLeaders = avgLeaders || [];
+          eraLeaders = eraLeadersData || [];
+          strikeoutLeaders = soLeaders || [];
         }
       } catch (error) {
         console.log(`Error getting league leaders: ${error.message}`);
@@ -131,8 +138,8 @@ const propPicksService = {
 
       // Helper function to find player ranking in league leaders
       function findPlayerRanking(leaders, playerId) {
-        const index = leaders.findIndex(leader => leader.person?.id === playerId);
-        return index !== -1 ? { rank: index + 1, value: leaders[index].value } : null;
+        const leader = leaders.find(l => l.playerId === playerId);
+        return leader ? { rank: leader.rank, value: leader.value } : null;
       }
 
       // Format all the data into a comprehensive stats text
@@ -199,7 +206,7 @@ const propPicksService = {
       if (homeRoster.length > 0) {
         for (const hitter of homeRoster) {
           const s = hitter.stats;
-          statsText += `${hitter?.fullName || 'Unknown Player'} (${hitter?.position || 'N/A'}): ` +
+          statsText += `${hitter?.name || 'Unknown Player'} (${hitter?.position || 'N/A'}): ` +
             `AVG ${s.avg || '.000'}, ` +
             `${s.hits || 0} H, ` +
             `${s.homeRuns || 0} HR, ` +
@@ -234,7 +241,7 @@ const propPicksService = {
       if (awayRoster.length > 0) {
         for (const hitter of awayRoster) {
           const s = hitter.stats;
-          statsText += `${hitter?.fullName || 'Unknown Player'} (${hitter?.position || 'N/A'}): ` +
+          statsText += `${hitter?.name || 'Unknown Player'} (${hitter?.position || 'N/A'}): ` +
             `AVG ${s.avg || '.000'}, ` +
             `${s.hits || 0} H, ` +
             `${s.homeRuns || 0} HR, ` +
@@ -271,7 +278,7 @@ const propPicksService = {
         statsText += 'HOME RUNS: ';
         for (let i = 0; i < Math.min(homeRunLeaders.length, 5); i++) {
           const leader = homeRunLeaders[i];
-          statsText += `${i + 1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += `${i + 1}. ${leader?.name || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
         }
         statsText += '\n';
       }
@@ -280,7 +287,7 @@ const propPicksService = {
         statsText += 'BATTING AVG: ';
         for (let i = 0; i < Math.min(battingAvgLeaders.length, 5); i++) {
           const leader = battingAvgLeaders[i];
-          statsText += `${i + 1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += `${i + 1}. ${leader?.name || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
         }
         statsText += '\n';
       }
@@ -289,7 +296,7 @@ const propPicksService = {
         statsText += 'ERA: ';
         for (let i = 0; i < Math.min(eraLeaders.length, 5); i++) {
           const leader = eraLeaders[i];
-          statsText += `${i + 1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += `${i + 1}. ${leader?.name || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
         }
         statsText += '\n';
       }
@@ -298,7 +305,7 @@ const propPicksService = {
         statsText += 'STRIKEOUTS: ';
         for (let i = 0; i < Math.min(strikeoutLeaders.length, 5); i++) {
           const leader = strikeoutLeaders[i];
-          statsText += `${i + 1}. ${leader?.person?.fullName || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
+          statsText += `${i + 1}. ${leader?.name || 'Unknown Player'} (${leader?.value || 'N/A'}), `;
         }
         statsText += '\n';
       }
@@ -502,16 +509,39 @@ Respond with ONLY a JSON array of your best prop picks.
         return [];
       }
 
+      // CRITICAL: Limit the number of props to prevent rate limiting
+      // Filter to most common prop types and limit total number
+      const priorityPropTypes = ['hits', 'strikeouts', 'home_runs', 'rbi', 'runs_scored', 'stolen_bases', 'total_bases'];
+      let filteredProps = playerProps.filter(p => {
+        // Check if prop type contains any of our priority types
+        const propTypeLower = (p.prop_type || '').toLowerCase();
+        return priorityPropTypes.some(type => propTypeLower.includes(type));
+      });
+
+      // If we still have too many, limit to 50 props max
+      if (filteredProps.length > 50) {
+        console.log(`Limiting props from ${filteredProps.length} to 50 to avoid rate limits`);
+        // Sort by line value to get a good mix of over/under opportunities
+        filteredProps = filteredProps.sort((a, b) => (a.line || 0) - (b.line || 0)).slice(0, 50);
+      }
+
+      // If no filtered props, take first 30 of any type
+      if (filteredProps.length === 0 && playerProps.length > 0) {
+        filteredProps = playerProps.slice(0, 30);
+      }
+
+      console.log(`Using ${filteredProps.length} filtered props for analysis`);
+
       // Create a map of player to team from the prop data
       const playerTeamMap = {};
-      playerProps.forEach(prop => {
+      filteredProps.forEach(prop => {
         if (prop.player && prop.team) {
           playerTeamMap[prop.player] = prop.team;
         }
       });
 
       // 2. Format props and stats
-      const formattedProps = playerProps.map(p => {
+      const formattedProps = filteredProps.map(p => {
         // Format each prop with both over and under options if available
         const props = [];
         if (p.over_odds) {
@@ -522,14 +552,51 @@ Respond with ONLY a JSON array of your best prop picks.
         }
         return props;
       }).flat().join('\n');
-      const playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
+      
+      // Get player stats but with error handling
+      let playerStatsText = '';
+      try {
+        playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
+        // Limit stats text to prevent token overflow
+        if (playerStatsText.length > 5000) {
+          playerStatsText = playerStatsText.substring(0, 5000) + '\n... (stats truncated for brevity)';
+        }
+      } catch (statsError) {
+        console.error('Error getting player stats:', statsError);
+        playerStatsText = 'Player statistics temporarily unavailable.';
+      }
 
       // 3. Create the prompt for OpenAI
       const prompt = propPicksService.createPropPicksPrompt(formattedProps, playerStatsText);
 
-      // 4. Call the OpenAI API
+      // 4. Call the OpenAI API with retry logic for rate limits
       console.log('Calling OpenAI to generate prop picks...');
-      const response = await openaiService.generatePropPicks(prompt);
+      let response;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          response = await openaiService.generatePropPicks(prompt);
+          break; // Success, exit loop
+        } catch (error) {
+          if (error.message && error.message.includes('429') && retryCount < maxRetries - 1) {
+            // Rate limit error - wait and retry
+            const waitTime = Math.min(20000, (retryCount + 1) * 10000); // 10s, 20s, 20s
+            console.log(`Rate limit hit, waiting ${waitTime/1000}s before retry ${retryCount + 1}/${maxRetries}`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            retryCount++;
+          } else {
+            // Other error or final retry failed
+            throw error;
+          }
+        }
+      }
+
+      if (!response) {
+        console.error('Failed to get response from OpenAI after retries');
+        return [];
+      }
 
       // 5. Parse the response to extract the picks
       const picks = propPicksService.parseOpenAIResponse(response);
