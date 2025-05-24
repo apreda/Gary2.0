@@ -357,10 +357,23 @@ export const picksService = {
     }
     
     // Add instructions for generating the analysis
-    prompt += `Based on the above information, provide a detailed analysis of this matchup. Then, recommend the best moneyline and/or spread bet for this game. Provide a confidence score between 0.0-1.0 for each recommendation.\n\n`;
-    prompt += `Your analysis should cover team form, pitching matchup (particularly emphasize pitcher ERA when available), head-to-head history, betting trends, and any other relevant factors.\n\n`;
-    prompt += `IMPORTANT: Focus ONLY on moneyline and spread bets. DO NOT recommend totals or player props.\n\n`;
-    prompt += `Return a JSON object with the following structure: { "analysis": "Your detailed analysis here", "recommendations": [{ "type": "moneyline", "team": "Team name", "odds": "Current odds", "confidence": 0.XX }, { "type": "spread", "team": "Team name", "line": "Current spread", "confidence": 0.XX }] }`;
+    prompt += `Based on the above information, analyze this game and make your best pick. Remember, you are Gary the grizzled betting expert.\n\n`;
+    prompt += `CRITICAL: You must return ONLY a single JSON object in the exact format specified. Do not return an analysis object with recommendations array. Return the pick directly.\n\n`;
+    prompt += `The JSON must include ALL these fields exactly:\n`;
+    prompt += `{\n`;
+    prompt += `  "pick": "Team Name +/- spread number and odds OR Team Name ML odds",\n`;
+    prompt += `  "time": "${game.commence_time ? new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' EST' : 'TBD'}",\n`;
+    prompt += `  "type": "spread" or "moneyline",\n`;
+    prompt += `  "league": "MLB",\n`;
+    prompt += `  "revenge": false,\n`;
+    prompt += `  "awayTeam": "${awayTeam}",\n`;
+    prompt += `  "homeTeam": "${homeTeam}",\n`;
+    prompt += `  "momentum": 0.0-1.0,\n`;
+    prompt += `  "rationale": "Your 2-4 sentence Gary-style explanation",\n`;
+    prompt += `  "trapAlert": false,\n`;
+    prompt += `  "confidence": 0.5-1.0,\n`;
+    prompt += `  "superstition": false\n`;
+    prompt += `}`;
     
     return prompt;
   }
