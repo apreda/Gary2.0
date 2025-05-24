@@ -355,62 +355,56 @@ Respond with ONLY the JSON array of your best prop picks.
   parseOpenAIResponse: (response) => {
     try {
       // First, try direct JSON parsing
+      let parsed = null;
+      
       try {
-        const parsed = JSON.parse(response);
+        parsed = JSON.parse(response);
         if (Array.isArray(parsed)) {
           console.log(`Successfully parsed JSON response with ${parsed.length} picks`);
-          return parsed;
         }
       } catch (jsonError) {
-        // Not direct JSON, continue with regex extraction
+        // Not direct JSON, try to extract JSON array
         console.log('Response is not direct JSON, trying to extract JSON blocks');
-      }
-
-      // Try to extract JSON from the response
-      const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
-      if (jsonMatch && jsonMatch[0]) {
-        try {
-          const extracted = JSON.parse(jsonMatch[0]);
-          console.log(`Successfully extracted JSON with ${extracted.length} picks`);
-          return extracted;
-        } catch (extractError) {
-          console.error('Error parsing extracted JSON:', extractError);
+        const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+        if (jsonMatch && jsonMatch[0]) {
+          parsed = JSON.parse(jsonMatch[0]);
+          console.log(`Successfully extracted JSON with ${parsed.length} picks`);
         }
       }
-
-      // If we couldn't extract JSON, try to parse the formatted text response
-      // Example format: 
-      // "PICK: Aaron Judge OVER Home Runs 0.5 (+160)
-      // CONFIDENCE: 0.85
-      // REASONING: ..."
-      console.log('Attempting to parse formatted text response');
-      const picks = [];
-      const sections = response.split(/PICK:|Pick:/gi).filter(Boolean);
-
-      for (const section of sections) {
-        try {
-          const confidenceMatch = section.match(/CONFIDENCE:? (0\.\d+)/i) || section.match(/Confidence:? (0\.\d+)/i);
-          const reasoningMatch = section.match(/REASONING:? (.+?)(?=PICK:|Pick:|$)/is) || section.match(/Reasoning:? (.+?)(?=PICK:|Pick:|$)/is);
-
-          if (confidenceMatch) {
-            const pickText = section.split(/\n/)[0].trim();
-            const confidence = parseFloat(confidenceMatch[1]);
-            const reasoning = reasoningMatch ? reasoningMatch[1].trim() : 'No reasoning provided';
-
-            picks.push({
-              pick: pickText,
-              confidence,
-              reasoning
-            });
+      
+      // If we successfully parsed JSON, transform it to expected format
+      if (Array.isArray(parsed)) {
+        return parsed.map(item => {
+          // Handle new format from OpenAI that includes player, prop, bet, odds separately
+          if (item.player && item.prop && item.bet && item.odds !== undefined) {
+            // Construct the pick string from components
+            // Format: "Player Name OVER/UNDER prop_type line odds"
+            const betType = item.bet.toUpperCase();
+            const propType = item.prop.replace(/\s+\d+\.?\d*$/, ''); // Remove line from prop if included
+            const line = item.line || item.prop.match(/\d+\.?\d*$/)?.[0] || '';
+            const odds = typeof item.odds === 'number' ? 
+              (item.odds > 0 ? `+${item.odds}` : `${item.odds}`) : 
+              item.odds;
+            
+            return {
+              pick: `${item.player} ${betType} ${propType} ${line} ${odds}`.trim(),
+              confidence: item.confidence || 0.75,
+              reasoning: item.rationale || item.reasoning || 'Analysis based on recent performance and matchup data.',
+              team: item.team || 'MLB',
+              ev: item.ev || null
+            };
           }
-        } catch (sectionError) {
-          console.error('Error parsing section:', sectionError);
-        }
-      }
-
-      if (picks.length > 0) {
-        console.log(`Successfully parsed ${picks.length} picks from formatted text`);
-        return picks;
+          // Handle old format where everything is in the "pick" field
+          else if (item.pick) {
+            return {
+              pick: item.pick,
+              confidence: item.confidence || 0.75,
+              reasoning: item.reasoning || item.rationale || 'Analysis based on recent performance and matchup data.'
+            };
+          }
+          // Fallback
+          return null;
+        }).filter(Boolean);
       }
 
       // If all else fails, return empty array
