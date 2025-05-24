@@ -84,21 +84,34 @@ export default function GaryProps() {
         showToast('Generating new prop picks... This may take a moment.', 'info');
         console.log('No prop picks found - generating new ones');
         
-        // Define teams for today's MLB games - using the actual games from the API
-        const mlbTeams = [
-          { homeTeam: 'Oakland Athletics', awayTeam: 'Philadelphia Phillies' },
-          { homeTeam: 'Arizona Diamondbacks', awayTeam: 'St. Louis Cardinals' }
-        ];
+        // Import oddsService to get all games
+        const { oddsService } = await import('../services/oddsService');
+        
+        // Get all MLB games for today
+        const allGames = await oddsService.getTodaysGames('baseball_mlb');
+        console.log(`Found ${allGames.length} MLB games for today`);
+        
+        // Convert games to the format we need
+        const mlbTeams = allGames.map(game => ({
+          homeTeam: game.home_team,
+          awayTeam: game.away_team,
+          gameTime: game.commence_time
+        }));
+        
+        // Limit to first 8 games to avoid overwhelming the system
+        const gamesToProcess = mlbTeams.slice(0, 8);
+        console.log(`Processing ${gamesToProcess.length} games for prop picks`);
         
         let allPropPicks = [];
         
         // Generate prop picks for each game
-        for (const game of mlbTeams) {
+        for (const game of gamesToProcess) {
           console.log(`Generating props for ${game.awayTeam} @ ${game.homeTeam}`);
           const gamePropPicks = await propPicksService.generatePropBets({
             sport: 'baseball_mlb',
             homeTeam: game.homeTeam,
-            awayTeam: game.awayTeam
+            awayTeam: game.awayTeam,
+            time: game.gameTime
           });
           
           if (Array.isArray(gamePropPicks) && gamePropPicks.length > 0) {
@@ -110,12 +123,33 @@ export default function GaryProps() {
         if (allPropPicks.length > 0) {
           console.log(`Generated ${allPropPicks.length} total prop picks, storing in database`);
           
+          // Sort all picks by confidence first, then by EV
+          const sortedPicks = allPropPicks.sort((a, b) => {
+            // Primary sort by confidence
+            if (b.confidence !== a.confidence) {
+              return b.confidence - a.confidence;
+            }
+            // Secondary sort by EV if confidence is equal
+            return (b.ev || 0) - (a.ev || 0);
+          });
+          
+          // Take top 20 picks across all games
+          const topPicks = sortedPicks.slice(0, 20);
+          console.log(`Selected top ${topPicks.length} picks from ${allPropPicks.length} total picks`);
+          
+          // Log team diversity
+          const teamCounts = {};
+          topPicks.forEach(pick => {
+            teamCounts[pick.team] = (teamCounts[pick.team] || 0) + 1;
+          });
+          console.log('Team distribution in top picks:', teamCounts);
+          
           // Store the generated picks in Supabase
           const { data: insertData, error: insertError } = await supabase
             .from('prop_picks')
             .insert({
               date: today,
-              picks: allPropPicks
+              picks: topPicks
             });
           
           if (insertError) {
