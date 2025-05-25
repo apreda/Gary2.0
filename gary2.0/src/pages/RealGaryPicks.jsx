@@ -758,17 +758,18 @@ function RealGaryPicks() {
                       
                       {/* Card Stack - Wider index card format (20% larger) */}
                       <div className="relative" style={{ 
-                        width: isMobile ? '100%' : '634px', 
-                        height: isMobile ? '280px' : '422px', 
+                        width: isMobile ? '90%' : '634px', 
+                        height: isMobile ? '200px' : '422px', 
                         marginLeft: isMobile ? '0' : '48px',
-                        maxWidth: isMobile ? '400px' : 'none'
+                        maxWidth: isMobile ? '500px' : 'none',
+                        margin: isMobile ? '0 auto' : '0 0 0 48px'
                       }}>
                         {picks.map((pick, index) => {
                           // Calculate position in stack relative to current index
                           const position = (index - currentIndex + picks.length) % picks.length;
                           const isCurrentCard = index === currentIndex;
                           
-                          // Style based on position in stack
+                          // Style based on position in stack - simplified for mobile
                           const cardStyle = {
                             zIndex: picks.length - position,
                             transform: position === 0 
@@ -780,8 +781,12 @@ function RealGaryPicks() {
                                   : `translateX(${isMobile ? '15px' : '30px'}) scale(0.85) translateY(${isMobile ? '15px' : '30px'})`,
                             opacity: position <= 2 ? 1 - (position * 0.15) : 0,
                             pointerEvents: isCurrentCard ? 'auto' : 'none',
-                            /* Box shadow removed */
-                            transition: animating ? 'all 0.5s ease-in-out' : 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out'
+                            transition: animating ? 'all 0.5s ease-in-out' : 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+                            width: '100%',
+                            height: '100%',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0
                           };
                           
                           // Get the flipped state for this card
@@ -800,12 +805,12 @@ function RealGaryPicks() {
                           return (
                             <div 
                               key={pick.id} 
-                              className="absolute top-0 left-0 pick-card-container"
+                              className="pick-card-container"
                               style={cardStyle}
                             >
                               {/* Card container with flip effect */}
                               <div 
-                                className={isMobile ? "w-full h-full relative cursor-pointer" : "w-[576px] h-[384px] relative cursor-pointer"} 
+                                className="w-full h-full relative cursor-pointer"
                                 style={{
                                   perspective: '1000px',
                                 }}
@@ -847,415 +852,545 @@ function RealGaryPicks() {
                                     transition: 'transform 0.6s',
                                     transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
                                   }}>
-                                      {/* FRONT OF CARD - Modern Dark UI Design */}
-                                      <div style={{
-                                        position: 'absolute',
-                                        width: '100%',
-                                        height: '100%',
-                                        backfaceVisibility: 'hidden',
-                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                        borderRadius: isMobile ? '12px' : '16px',
-                                        fontFamily: 'Inter, system-ui, sans-serif',
-                                        overflow: 'hidden',
-                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                        color: '#ffffff',
-                                      }}>
-                                        {/* Left side content */}
+                                      {/* FRONT OF CARD - Mobile Simplified Design */}
+                                      {isMobile ? (
                                         <div style={{
-                                           position: 'absolute',
-                                           left: 0,
-                                           top: 0,
-                                           bottom: 0,
-                                           width: isMobile ? '65%' : '70%',
-                                          padding: isMobile ? '1rem' : '1.5rem',
+                                          position: 'absolute',
+                                          width: '100%',
+                                          height: '100%',
+                                          backfaceVisibility: 'hidden',
+                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                          borderRadius: '12px',
+                                          fontFamily: 'Inter, system-ui, sans-serif',
+                                          overflow: 'hidden',
+                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                          color: '#ffffff',
                                           display: 'flex',
                                           flexDirection: 'column',
-                                          justifyContent: 'space-between',
-                                          overflow: 'hidden',
+                                          justifyContent: 'center',
+                                          alignItems: 'center',
+                                          padding: '1.5rem',
+                                          textAlign: 'center'
                                         }}>
-                                          {/* League and Matchup in horizontal layout */}
-                                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                                            {/* League */}
-                                            <div>
-                                              <div style={{ 
-                                                fontSize: isMobile ? '0.65rem' : '0.75rem', 
-                                                opacity: 0.6, 
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.05em', 
-                                                marginBottom: '0.25rem'
-                                              }}>
-                                                League
-                                              </div>
-                                              <div style={{ 
-                                                fontSize: isMobile ? '1rem' : '1.25rem', 
-                                                fontWeight: 600, 
-                                                letterSpacing: '0.02em',
-                                                opacity: 0.95
-                                              }}>
-                                                {pick.league || 'MLB'}
-                                              </div>
-                                            </div>
-                                            
-                                            {/* Matchup */}
-                                            <div style={{ marginLeft: isMobile ? '10px' : '20px' }}>
-                                              <div style={{ 
-                                                fontSize: isMobile ? '0.65rem' : '0.75rem', 
-                                                opacity: 0.6, 
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.05em', 
-                                                marginBottom: '0.25rem'
-                                              }}>
-                                                Matchup
-                                              </div>
-                                              <div style={{ 
-                                                fontSize: isMobile ? '0.9rem' : '1.25rem', 
-                                                fontWeight: 600,
-                                                opacity: 0.9
-                                              }}>
-                                                {(pick.homeTeam && pick.awayTeam) ? 
-                                                  `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
-                                                  (pick.game ? pick.game : 'TBD')}
-                                              </div>
-                                            </div>
-                                          </div>
-                                          
-                                          {/* The main pick display */}
-                                          <div style={{ marginBottom: isMobile ? '0.5rem' : '1rem' }}>
-                                            <div style={{ 
-                                              fontSize: isMobile ? '0.65rem' : '0.75rem', 
-                                              opacity: 0.6, 
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em', 
-                                              marginBottom: isMobile ? '0.25rem' : '0.5rem'
-                                            }}>
-                                              Gary's Pick
-                                            </div>
-                                            <div style={{ 
-                                              fontSize: isMobile ? '1.5rem' : '2rem', 
-                                              fontWeight: 700, 
-                                              lineHeight: 1.1,
-                                              color: '#bfa142', /* Keeping gold color for the actual pick */
-                                              wordBreak: 'break-word',
-                                              maxHeight: isMobile ? '3rem' : '4.5rem',
-                                              overflow: 'hidden',
-                                              display: '-webkit-box',
-                                              WebkitLineClamp: 2,
-                                              WebkitBoxOrient: 'vertical'
-                                            }}>
-                                              {pick.shortPick}{pick.odds ? (() => {
-                                                // Format odds correctly based on whether it's positive or negative
-                                                const oddsValue = pick.odds.trim();
-                                                if (oddsValue.startsWith('-')) {
-                                                  // Negative odds already have the - sign
-                                                  return ` ${oddsValue}`;
-                                                } else if (oddsValue.startsWith('+')) {
-                                                  // Positive odds that already have the + sign
-                                                  return ` ${oddsValue}`;
-                                                } else {
-                                                  // Positive odds without the + sign - add it
-                                                  const numericValue = parseInt(oddsValue, 10);
-                                                  return numericValue > 0 ? ` +${oddsValue}` : ` ${oddsValue}`;
-                                                }
-                                              })() : ''}
-                                            </div>
-                                            
-                                            {/* Add a preview of the rationale on front card - hide on mobile */}
-                                            {!isMobile && (
-                                              <div style={{
-                                                fontSize: '0.85rem',
-                                                opacity: 0.8,
-                                                overflow: 'hidden',
-                                                display: '-webkit-box',
-                                                WebkitLineClamp: 3,
-                                                WebkitBoxOrient: 'vertical',
-                                                textOverflow: 'ellipsis',
-                                                marginBottom: '0.5rem'
-                                              }}>
-                                                {pick.rationale ? pick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
-                                              </div>
-                                            )}
-                                          </div>
-                                          
-                                          {/* Bet or Fade Buttons */}
-                                          <div>
-                                            <div style={{ 
-                                              fontSize: isMobile ? '0.65rem' : '0.75rem', 
-                                              opacity: 0.6, 
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em', 
-                                              marginBottom: isMobile ? '0.25rem' : '0.5rem'
-                                            }}>
-                                              Take Your Pick
-                                            </div>
-                                            <div style={{
-                                              display: 'flex',
-                                              gap: isMobile ? '0.5rem' : '0.75rem',
-                                              width: '100%',
-                                            }}>
-                                              <button 
-                                                style={{
-                                                  background: userDecisions[pick.id] === 'bet' 
-                                                    ? 'rgba(191, 161, 66, 0.5)'
-                                                    : 'rgba(191, 161, 66, 0.15)',
-                                                  color: userDecisions[pick.id] === 'bet' 
-                                                    ? '#ffdf7e'
-                                                    : '#bfa142',
-                                                  fontWeight: '600',
-                                                  padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
-                                                  borderRadius: '8px',
-                                                  border: '1px solid rgba(191, 161, 66, 0.3)',
-                                                  cursor: userDecisions[pick.id] ? 'default' : 'pointer',
-                                                  flex: 1,
-                                                  fontSize: isMobile ? '0.7rem' : '0.8rem',
-                                                  letterSpacing: '0.05em',
-                                                  textTransform: 'uppercase',
-                                                  transition: 'all 0.2s ease',
-                                                  opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'bet' ? 0.5 : 1
-                                                }}
-                                                 onClick={(e) => {
-                                                  e.stopPropagation(); // Prevent card flip
-                                                  // Disable the button if either processing or already decided
-                                                  if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
-                                                    handleDecisionMade('bet', pick);
-                                                  }
-                                                }}
-                                              >
-                                                Bet
-                                              </button>
-                                              <button 
-                                                style={{
-                                                  background: userDecisions[pick.id] === 'fade' 
-                                                    ? 'rgba(255, 255, 255, 0.2)'
-                                                    : 'rgba(255, 255, 255, 0.05)',
-                                                  color: userDecisions[pick.id] === 'fade' 
-                                                    ? 'rgba(255, 255, 255, 1)'
-                                                    : 'rgba(255, 255, 255, 0.8)',
-                                                  fontWeight: '600',
-                                                  padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
-                                                  borderRadius: '8px',
-                                                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                  cursor: userDecisions[pick.id] ? 'default' : 'pointer',
-                                                  flex: 1,
-                                                  fontSize: isMobile ? '0.7rem' : '0.8rem',
-                                                  letterSpacing: '0.05em',
-                                                  textTransform: 'uppercase',
-                                                  transition: 'all 0.2s ease',
-                                                  opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'fade' ? 0.5 : 1
-                                                }}
-                                                 onClick={(e) => {
-                                                  e.stopPropagation(); // Prevent card flip
-                                                  // Disable the button if either processing or already decided
-                                                  if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
-                                                    handleDecisionMade('fade', pick);
-                                                  }
-                                                }}
-                                              >
-                                                Fade
-                                              </button>
-                                            </div>
-                                          </div>
-                                        </div>
-                                        
-                                        {/* Right side content - prominently elevated appearance */}
-                                        <div style={{
-                                            position: 'absolute',
-                                            right: 0,
-                                            top: 0,  /* Aligned to card edge */
-                                            bottom: 0, /* Aligned to card edge */
-                                            width: isMobile ? '35%' : '30%',
-                                            borderLeft: '2.25px solid #bfa142', /* Gold border */
-                                            padding: isMobile ? '0.75rem 0.5rem' : '1.5rem 1rem',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
-                                            boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
-                                            borderRadius: isMobile ? '0 12px 12px 0' : '0 16px 16px 0', /* Rounded on right side only */
-                                            clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
-                                            zIndex: 2, /* Ensure it appears above other content */
-                                            transform: 'translateZ(10px)', /* 3D effect */
-                                          }}>
-                                           {/* Game time section */}
-                                           <div style={{ 
-                                             textAlign: 'center',
-                                             marginBottom: isMobile ? '0.5rem' : '1rem'
-                                           }}>
-                                             <div style={{ 
-                                               fontSize: isMobile ? '0.65rem' : '0.75rem', 
-                                               opacity: 0.6, 
-                                               textTransform: 'uppercase',
-                                               letterSpacing: '0.05em', 
-                                               marginBottom: '0.25rem'
-                                             }}>
-                                               Game Time
-                                             </div>
-                                             <div style={{
-                                               fontSize: isMobile ? '0.9rem' : '1.125rem', 
-                                               fontWeight: 600,
-                                               opacity: 0.9
-                                             }}>
-                                               {pick.time || '7:10 PM EST'}
-                                             </div>
-                                           </div>
-                                          
-                                          {/* Coin Image centered - no background - HIDE ON MOBILE */}
-                                          {!isMobile && (
-                                            <div style={{
-                                              display: 'flex',
-                                              justifyContent: 'center',
-                                              marginTop: 'auto',
-                                              marginBottom: 'auto',
-                                              background: 'transparent'
-                                            }}>
-                                              <img 
-                                                src="/coin2.png" 
-                                                alt="Coin Image"
-                                                style={{
-                                                  width: 143, /* 10% bigger than previous 130px */
-                                                  height: 143, /* 10% bigger than previous 130px */
-                                                  objectFit: 'contain',
-                                                  opacity: 1,
-                                                  background: 'transparent'
-                                                }}
-                                              />
-                                            </div>
-                                          )}
-                                          
-                                          {/* Confidence score with visual indicator */}
+                                          {/* Gary's Pick - Large and Centered */}
                                           <div style={{ 
-                                            textAlign: 'center',
-                                            marginTop: isMobile ? '0.5rem' : '1rem',
-                                            width: '100%'
+                                            fontSize: '1.75rem', 
+                                            fontWeight: 700, 
+                                            lineHeight: 1.2,
+                                            color: '#bfa142',
+                                            marginBottom: '1.5rem',
+                                            wordBreak: 'break-word'
+                                          }}>
+                                            {pick.pick || pick.shortPick}
+                                          </div>
+                                          
+                                          {/* Confidence Score */}
+                                          <div style={{
+                                            background: 'rgba(191, 161, 66, 0.15)',
+                                            padding: '0.75rem 1.5rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid rgba(191, 161, 66, 0.3)'
                                           }}>
                                             <div style={{ 
-                                              fontSize: isMobile ? '0.65rem' : '0.75rem', 
-                                              opacity: 0.6, 
+                                              fontSize: '0.7rem', 
+                                              opacity: 0.7, 
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.05em', 
                                               marginBottom: '0.25rem'
                                             }}>
                                               Confidence
                                             </div>
-                                            
-                                            {/* Confidence score display */}
                                             <div style={{
-                                              fontSize: isMobile ? '1rem' : '1.2rem',
+                                              fontSize: '1.5rem',
                                               fontWeight: 700,
-                                              opacity: 0.95,
-                                              color: '#bfa142', /* Gold for confidence */
-                                              marginBottom: isMobile ? '0.25rem' : '0.5rem'
+                                              color: '#bfa142'
                                             }}>
                                               {typeof pick.confidence === 'number' ? 
                                                 Math.round(pick.confidence * 100) + '%' : 
                                                 (pick.confidence || '75%')}
                                             </div>
+                                          </div>
+                                          
+                                          {/* Tap to flip indicator */}
+                                          <div style={{
+                                            position: 'absolute',
+                                            bottom: '1rem',
+                                            fontSize: '0.75rem',
+                                            opacity: 0.5,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em'
+                                          }}>
+                                            Tap for Analysis
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        // Desktop front card design (unchanged)
+                                        <div style={{
+                                          position: 'absolute',
+                                          width: '100%',
+                                          height: '100%',
+                                          backfaceVisibility: 'hidden',
+                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                          borderRadius: '16px',
+                                          fontFamily: 'Inter, system-ui, sans-serif',
+                                          overflow: 'hidden',
+                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                          color: '#ffffff',
+                                        }}>
+                                          {/* Left side content */}
+                                          <div style={{
+                                             position: 'absolute',
+                                             left: 0,
+                                             top: 0,
+                                             bottom: 0,
+                                             width: '70%',
+                                            padding: '1.5rem',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            justifyContent: 'space-between',
+                                            overflow: 'hidden',
+                                          }}>
+                                            {/* League and Matchup in horizontal layout */}
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                                              {/* League */}
+                                              <div>
+                                                <div style={{ 
+                                                  fontSize: '0.75rem', 
+                                                  opacity: 0.6, 
+                                                  textTransform: 'uppercase',
+                                                  letterSpacing: '0.05em', 
+                                                  marginBottom: '0.25rem'
+                                                }}>
+                                                  League
+                                                </div>
+                                                <div style={{ 
+                                                  fontSize: '1.25rem', 
+                                                  fontWeight: 600, 
+                                                  letterSpacing: '0.02em',
+                                                  opacity: 0.95
+                                                }}>
+                                                  {pick.league || 'MLB'}
+                                                </div>
+                                              </div>
+                                              
+                                              {/* Matchup */}
+                                              <div style={{ marginLeft: '20px' }}>
+                                                <div style={{ 
+                                                  fontSize: '0.75rem', 
+                                                  opacity: 0.6, 
+                                                  textTransform: 'uppercase',
+                                                  letterSpacing: '0.05em', 
+                                                  marginBottom: '0.25rem'
+                                                }}>
+                                                  Matchup
+                                                </div>
+                                                <div style={{ 
+                                                  fontSize: '1.25rem', 
+                                                  fontWeight: 600,
+                                                  opacity: 0.9
+                                                }}>
+                                                  {(pick.homeTeam && pick.awayTeam) ? 
+                                                    `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
+                                                    (pick.game ? pick.game : 'TBD')}
+                                                </div>
+                                              </div>
+                                            </div>
                                             
-                                            {/* Click to flip instruction with subtle design */}
-                                            <button style={{
-                                              marginTop: isMobile ? '0.5rem' : '1rem',
-                                              fontSize: isMobile ? '0.65rem' : '0.75rem',
-                                              padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
-                                              background: 'rgba(191, 161, 66, 0.15)',
-                                              color: '#bfa142',
-                                              border: 'none',
-                                              borderRadius: '4px',
-                                              cursor: 'pointer',
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em',
-                                              fontWeight: 500,
-                                              transition: 'all 0.2s ease'
+                                            {/* The main pick display */}
+                                            <div style={{ marginBottom: '1rem' }}>
+                                              <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.5rem'
+                                              }}>
+                                                Gary's Pick
+                                              </div>
+                                              <div style={{ 
+                                                fontSize: '2rem', 
+                                                fontWeight: 700, 
+                                                lineHeight: 1.1,
+                                                color: '#bfa142', /* Keeping gold color for the actual pick */
+                                                wordBreak: 'break-word',
+                                                maxHeight: '4.5rem',
+                                                overflow: 'hidden',
+                                                display: '-webkit-box',
+                                                WebkitLineClamp: 2,
+                                                WebkitBoxOrient: 'vertical'
+                                              }}>
+                                                {pick.shortPick}{pick.odds ? (() => {
+                                                  // Format odds correctly based on whether it's positive or negative
+                                                  const oddsValue = pick.odds.trim();
+                                                  if (oddsValue.startsWith('-')) {
+                                                    // Negative odds already have the - sign
+                                                    return ` ${oddsValue}`;
+                                                  } else if (oddsValue.startsWith('+')) {
+                                                    // Positive odds that already have the + sign
+                                                    return ` ${oddsValue}`;
+                                                  } else {
+                                                    // Positive odds without the + sign - add it
+                                                    const numericValue = parseInt(oddsValue, 10);
+                                                    return numericValue > 0 ? ` +${oddsValue}` : ` ${oddsValue}`;
+                                                  }
+                                                })() : ''}
+                                              </div>
+                                              
+                                              {/* Add a preview of the rationale on front card - hide on mobile */}
+                                              {!isMobile && (
+                                                <div style={{
+                                                  fontSize: '0.85rem',
+                                                  opacity: 0.8,
+                                                  overflow: 'hidden',
+                                                  display: '-webkit-box',
+                                                  WebkitLineClamp: 3,
+                                                  WebkitBoxOrient: 'vertical',
+                                                  textOverflow: 'ellipsis',
+                                                  marginBottom: '0.5rem'
+                                                }}>
+                                                    {pick.rationale ? pick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
+                                                </div>
+                                              )}
+                                            </div>
+                                            
+                                            {/* Bet or Fade Buttons */}
+                                            <div>
+                                              <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.5rem'
+                                              }}>
+                                                Take Your Pick
+                                              </div>
+                                              <div style={{
+                                                display: 'flex',
+                                                gap: '0.75rem',
+                                                width: '100%',
+                                              }}>
+                                                <button 
+                                                  style={{
+                                                    background: userDecisions[pick.id] === 'bet' 
+                                                      ? 'rgba(191, 161, 66, 0.5)'
+                                                      : 'rgba(191, 161, 66, 0.15)',
+                                                    color: userDecisions[pick.id] === 'bet' 
+                                                      ? '#ffdf7e'
+                                                      : '#bfa142',
+                                                    fontWeight: '600',
+                                                    padding: '0.5rem 1rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid rgba(191, 161, 66, 0.3)',
+                                                    cursor: userDecisions[pick.id] ? 'default' : 'pointer',
+                                                    flex: 1,
+                                                    fontSize: '0.8rem',
+                                                    letterSpacing: '0.05em',
+                                                    textTransform: 'uppercase',
+                                                    transition: 'all 0.2s ease',
+                                                    opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'bet' ? 0.5 : 1
+                                                  }}
+                                                   onClick={(e) => {
+                                                    e.stopPropagation(); // Prevent card flip
+                                                    // Disable the button if either processing or already decided
+                                                    if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
+                                                      handleDecisionMade('bet', pick);
+                                                    }
+                                                  }}
+                                                >
+                                                  Bet
+                                                </button>
+                                                <button 
+                                                  style={{
+                                                    background: userDecisions[pick.id] === 'fade' 
+                                                      ? 'rgba(255, 255, 255, 0.2)'
+                                                      : 'rgba(255, 255, 255, 0.05)',
+                                                    color: userDecisions[pick.id] === 'fade' 
+                                                      ? 'rgba(255, 255, 255, 1)'
+                                                      : 'rgba(255, 255, 255, 0.8)',
+                                                    fontWeight: '600',
+                                                    padding: '0.5rem 1rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                    cursor: userDecisions[pick.id] ? 'default' : 'pointer',
+                                                    flex: 1,
+                                                    fontSize: '0.8rem',
+                                                    letterSpacing: '0.05em',
+                                                    textTransform: 'uppercase',
+                                                    transition: 'all 0.2s ease',
+                                                    opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'fade' ? 0.5 : 1
+                                                  }}
+                                                   onClick={(e) => {
+                                                    e.stopPropagation(); // Prevent card flip
+                                                    // Disable the button if either processing or already decided
+                                                    if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
+                                                      handleDecisionMade('fade', pick);
+                                                    }
+                                                  }}
+                                                >
+                                                  Fade
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Right side content - prominently elevated appearance */}
+                                          <div style={{
+                                              position: 'absolute',
+                                              right: 0,
+                                              top: 0,  /* Aligned to card edge */
+                                              bottom: 0, /* Aligned to card edge */
+                                              width: '30%',
+                                              borderLeft: '2.25px solid #bfa142', /* Gold border */
+                                              padding: '1.5rem',
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              justifyContent: 'space-between',
+                                              alignItems: 'center',
+                                              background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
+                                              boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
+                                              borderRadius: '0 16px 16px 0', /* Rounded on right side only */
+                                              clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
+                                              zIndex: 2, /* Ensure it appears above other content */
+                                              transform: 'translateZ(10px)', /* 3D effect */
                                             }}>
-                                              View Analysis
-                                            </button>
+                                             {/* Game time section */}
+                                             <div style={{ 
+                                               textAlign: 'center',
+                                               marginBottom: '1rem'
+                                             }}>
+                                               <div style={{ 
+                                                 fontSize: '0.75rem', 
+                                                 opacity: 0.6, 
+                                                 textTransform: 'uppercase',
+                                                 letterSpacing: '0.05em', 
+                                                 marginBottom: '0.25rem'
+                                               }}>
+                                                 Game Time
+                                               </div>
+                                               <div style={{
+                                                 fontSize: '1.125rem', 
+                                                 fontWeight: 600,
+                                                 opacity: 0.9
+                                               }}>
+                                                 {pick.time || '7:10 PM EST'}
+                                               </div>
+                                             </div>
+                                            
+                                            {/* Coin Image centered - no background - HIDE ON MOBILE */}
+                                            {!isMobile && (
+                                              <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                marginTop: 'auto',
+                                                marginBottom: 'auto',
+                                                background: 'transparent'
+                                              }}>
+                                                <img 
+                                                  src="/coin2.png" 
+                                                  alt="Coin Image"
+                                                  style={{
+                                                    width: 143, /* 10% bigger than previous 130px */
+                                                    height: 143, /* 10% bigger than previous 130px */
+                                                    objectFit: 'contain',
+                                                    opacity: 1,
+                                                    background: 'transparent'
+                                                  }}
+                                                />
+                                              </div>
+                                            )}
+                                            
+                                            {/* Confidence score with visual indicator */}
+                                            <div style={{ 
+                                              textAlign: 'center',
+                                              marginTop: '1rem',
+                                              width: '100%'
+                                            }}>
+                                              <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.25rem'
+                                              }}>
+                                                Confidence
+                                              </div>
+                                              
+                                              {/* Confidence score display */}
+                                              <div style={{
+                                                fontSize: '1.2rem',
+                                                fontWeight: 700,
+                                                opacity: 0.95,
+                                                color: '#bfa142', /* Gold for confidence */
+                                                marginBottom: '0.5rem'
+                                              }}>
+                                                {typeof pick.confidence === 'number' ? 
+                                                  Math.round(pick.confidence * 100) + '%' : 
+                                                  (pick.confidence || '75%')}
+                                              </div>
+                                              
+                                              {/* Click to flip instruction with subtle design */}
+                                              <button style={{
+                                                marginTop: '1rem',
+                                                fontSize: '0.75rem',
+                                                padding: '0.5rem 1rem',
+                                                background: 'rgba(191, 161, 66, 0.15)',
+                                                color: '#bfa142',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em',
+                                                fontWeight: 500,
+                                                transition: 'all 0.2s ease'
+                                              }}>
+                                                View Analysis
+                                              </button>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Subtle gradient overlay for depth */}
+                                          <div style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
+                                            opacity: 0.5,
+                                            pointerEvents: 'none'
+                                          }}></div>
+                                        </div>
+                                      )}
+                                      
+                                      {/* BACK OF CARD - ANALYSIS */}
+                                      {isMobile ? (
+                                        // Mobile simplified back card - only analysis
+                                        <div style={{
+                                          position: 'absolute',
+                                          width: '100%',
+                                          height: '100%',
+                                          backfaceVisibility: 'hidden',
+                                          transform: 'rotateY(180deg)',
+                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                          borderRadius: '12px',
+                                          fontFamily: 'Inter, system-ui, sans-serif',
+                                          overflow: 'hidden',
+                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                          color: '#ffffff',
+                                          padding: '1.25rem',
+                                          display: 'flex',
+                                          flexDirection: 'column'
+                                        }}>
+                                          {/* Analysis Header */}
+                                          <div style={{ 
+                                            fontSize: '0.85rem', 
+                                            opacity: 0.7, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.75rem',
+                                            textAlign: 'center'
+                                          }}>
+                                            Analysis
+                                          </div>
+                                          
+                                          {/* Scrollable Analysis Content */}
+                                          <div style={{ 
+                                            flex: 1,
+                                            overflowY: 'auto',
+                                            fontSize: '0.95rem',
+                                            lineHeight: '1.6',
+                                            color: '#fff',
+                                            opacity: 0.9
+                                          }}>
+                                            {pick.rationale || 'Analysis not available.'}
+                                          </div>
+                                          
+                                          {/* Tap to flip back indicator */}
+                                          <div style={{
+                                            fontSize: '0.75rem',
+                                            opacity: 0.5,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            textAlign: 'center',
+                                            marginTop: '0.75rem'
+                                          }}>
+                                            Tap to Flip Back
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        // Desktop back card design (unchanged)
+                                        <div style={{
+                                          position: 'absolute',
+                                          width: '100%',
+                                          height: '100%',
+                                          backfaceVisibility: 'hidden',
+                                          transform: 'rotateY(180deg)',
+                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                          borderRadius: '16px',
+                                          fontFamily: 'Inter, system-ui, sans-serif',
+                                          overflow: 'hidden',
+                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                          color: '#ffffff',
+                                          padding: '1.5rem',
+                                        }}>
+                                        {/* Card Header - Pick */}
+                                        <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
+                                          {/* Pick Banner */}
+                                          <div style={{ 
+                                            backgroundColor: 'rgba(191, 161, 66, 0.15)',
+                                            color: '#bfa142',
+                                            fontWeight: 'bold',
+                                            fontSize: '1.25rem',
+                                            padding: '0.8rem 1rem',
+                                            textAlign: 'center',
+                                            letterSpacing: '0.05rem',
+                                            textTransform: 'uppercase',
+                                            borderRadius: '8px',
+                                          }}>
+                                            {pick.pick || 'GARY\'S PICK'}
                                           </div>
                                         </div>
                                         
-                                        {/* Subtle gradient overlay for depth */}
-                                        <div style={{
-                                          position: 'absolute',
-                                          inset: 0,
-                                          background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
-                                          opacity: 0.5,
-                                          pointerEvents: 'none'
-                                        }}></div>
-                                      </div>
-                                      
-                                      {/* BACK OF CARD - ANALYSIS */}
-                                      <div style={{
-                                        position: 'absolute',
-                                        width: '100%',
-                                        height: '100%',
-                                        backfaceVisibility: 'hidden',
-                                        transform: 'rotateY(180deg)',
-                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                        borderRadius: isMobile ? '12px' : '16px',
-                                        fontFamily: 'Inter, system-ui, sans-serif',
-                                        overflow: 'hidden',
-                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                        color: '#ffffff',
-                                        padding: isMobile ? '1rem' : '1.5rem',
-                                      }}>
-                                      {/* Card Header - Pick */}
-                                      <div style={{ position: 'relative', width: '100%', marginBottom: isMobile ? '1rem' : '1.5rem' }}>
-                                        {/* Pick Banner */}
+                                        {/* Rationale Section - Further Expanded */}
+                                         <div style={{ 
+                                           flex: '1', 
+                                           display: 'flex', 
+                                           flexDirection: 'column',
+                                           overflowY: 'auto',
+                                           height: 'calc(100% - 80px)', /* Further increased to fill space where yellow bar was */
+                                           marginBottom: '0', /* Removed margin to expand all the way */
+                                       }}>
+                                        {/* Main Analysis */}
                                         <div style={{ 
-                                          backgroundColor: 'rgba(191, 161, 66, 0.15)',
-                                          color: '#bfa142',
-                                          fontWeight: 'bold',
-                                          fontSize: isMobile ? '1rem' : '1.25rem',
-                                          padding: isMobile ? '0.6rem 0.8rem' : '0.8rem 1rem',
-                                          textAlign: 'center',
-                                          letterSpacing: '0.05rem',
-                                          textTransform: 'uppercase',
-                                          borderRadius: '8px',
+                                          backgroundColor: 'rgba(0, 0, 0, 0.2)', 
+                                          padding: '1.75rem', 
+                                          borderRadius: '0.75rem',
+                                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                                          fontSize: '1.1rem',  /* Increased font size */
+                                          lineHeight: '1.7',   /* Increased line height */
+                                          color: '#fff',
+                                          width: '100%',
+                                          height: '100%',     /* Take all available height */
+                                          overflowY: 'auto',
                                         }}>
-                                          {pick.pick || 'GARY\'S PICK'}
+                                          {/* Rationale Heading */}
+                                          <div style={{ 
+                                            fontSize: '0.8rem', 
+                                            opacity: 0.6, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.75rem'
+                                          }}>
+                                            Rationale
+                                          </div>
+                                          
+                                          {/* Display the rationale */}
+                                          <p style={{ margin: 0, fontWeight: 400, opacity: 0.9 }}>
+                                            {pick.rationale || 'Analysis not available.'}
+                                          </p>
                                         </div>
                                       </div>
                                       
-                                      {/* Rationale Section - Further Expanded */}
-                                       <div style={{ 
-                                         flex: '1', 
-                                         display: 'flex', 
-                                         flexDirection: 'column',
-                                         overflowY: 'auto',
-                                         height: isMobile ? 'calc(100% - 60px)' : 'calc(100% - 80px)', /* Further increased to fill space where yellow bar was */
-                                         marginBottom: '0', /* Removed margin to expand all the way */
-                                     }}>
-                                      {/* Main Analysis */}
-                                      <div style={{ 
-                                        backgroundColor: 'rgba(0, 0, 0, 0.2)', 
-                                        padding: isMobile ? '1rem' : '1.75rem', 
-                                        borderRadius: '0.75rem',
-                                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                                        fontSize: isMobile ? '0.9rem' : '1.1rem',  /* Increased font size */
-                                        lineHeight: '1.7',   /* Increased line height */
-                                        color: '#fff',
-                                        width: '100%',
-                                        height: '100%',     /* Take all available height */
-                                        overflowY: 'auto',
-                                      }}>
-                                        {/* Rationale Heading */}
-                                        <div style={{ 
-                                          fontSize: isMobile ? '0.7rem' : '0.8rem', 
-                                          opacity: 0.6, 
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.05em', 
-                                          marginBottom: isMobile ? '0.5rem' : '0.75rem'
-                                        }}>
-                                          Rationale
-                                        </div>
-                                        
-                                        {/* Display the rationale */}
-                                        <p style={{ margin: 0, fontWeight: 400, opacity: 0.9 }}>
-                                          {pick.rationale || 'Analysis not available.'}
-                                        </p>
-                                      </div>
+                                      {/* Removed Bet or Fade Buttons - now on front of card */}
                                     </div>
-                                    
-                                    {/* Removed Bet or Fade Buttons - now on front of card */}
-                                  </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
