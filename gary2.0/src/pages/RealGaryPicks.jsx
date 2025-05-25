@@ -71,12 +71,6 @@ function RealGaryPicks() {
     setUserDecisions(decisionsMap);
   };
   
-  // Single debug logging effect that executes when subscription status changes
-  useEffect(() => {
-    if (user) {
-    }
-  }, [user, userPlan, planLoading, subscriptionStatus]);
-
   // Load picks from Supabase
   useEffect(() => {
     if (!planLoading && subscriptionStatus === 'active') {
@@ -91,17 +85,9 @@ function RealGaryPicks() {
     }
   }, [picks, user]);
   
-  // Removed unused state variables for bet tracking
-
   // Toast notification system
   const showToast = useToast();
   
-  // Debug logs for troubleshooting
-  useEffect(() => {
-  }, [picks, loading, error]);
-
-  // Using hardcoded performance values
-
   // Load picks from Supabase using appropriate date based on time
   const loadPicks = async () => {
     setLoading(true);
