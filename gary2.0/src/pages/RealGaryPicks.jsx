@@ -682,8 +682,7 @@ function RealGaryPicks() {
             </div>
           </div>
         ) : (
-          <>
-          {loading ? (
+          loading ? (
             <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
               <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
                 <h3 className="font-bold text-black">LOADING...</h3>
@@ -1431,11 +1430,7 @@ function RealGaryPicks() {
                 )}
               </div>
             )}
-            
-            {/* Disclaimer removed */}
-            </>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
