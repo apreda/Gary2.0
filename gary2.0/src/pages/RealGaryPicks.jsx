@@ -1,27 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-// Removed unused import: useUserStats, useLocation
 import { useUserPlan } from "../contexts/UserPlanContext";
 import BG2 from '/BG2.png'; // Import the background image directly
 import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
-import gary1 from '../assets/images/gary1.svg';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/PickCardGlow.css'; // Import the glow effect CSS
 import '../styles/DisableCardGlow.css'; // Override to disable the glow effect
 import '../styles/MobileScrollFix.css'; // Fix for mobile horizontal scrolling
 
-// Only import assets we actually need for the modern dark UI design
-import GaryEmblem from '../assets/images/Garyemblem.png';
 
 // Import services
 import { picksService } from '../services/picksService';
 import { betTrackingService } from '../services/betTrackingService';
-import { picksPersistenceService } from '../services/picksPersistenceService';
 import { userStatsService } from '../services/userStatsService';
 import { garyPhrases } from '../utils/garyPhrases';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
-import { resultsCheckerService } from '../services/resultsCheckerService';
 
 // Custom hook to detect mobile
 const useIsMobile = () => {
@@ -58,7 +52,6 @@ function RealGaryPicks() {
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
-  const [activeTab, setActiveTab] = useState('today');
   
   // Function to check if user has already made decisions on any picks
   const checkUserDecisions = async () => {
@@ -292,11 +285,7 @@ function RealGaryPicks() {
               pick: pick.pick || '',          // Original OpenAI field for the bet
               rationale: pick.rationale || '', // Original OpenAI field for analysis
               
-              // Map and normalize data fields for consistent display
-              shortPick: pick.pick || '',     // For front of card 
-              description: pick.rationale || '', // For back of card
-              
-              // Essential metadata
+                            // Essential metadata
               game: pick.game || '',
               league: pick.league || '',
               confidence: pick.confidence || 0,
@@ -707,7 +696,7 @@ function RealGaryPicks() {
             null
           ) : (
             <div>
-              {activeTab === 'today' && (
+              
                 <div className="mb-12">
                   {/* NEW LAYOUT: Directly on page in a horizontal row format */}
                   <div className="pt-12 px-4">
@@ -717,10 +706,6 @@ function RealGaryPicks() {
                     <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto hidden sm:block">
                       Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
                     </p>
-                    
-                    {/* Banner removed as requested */}
-                    
-                    {/* See Past Picks button moved to appear after pagination */}
                     
                     {/* Card Stack Interface */}
                     <div className="flex justify-center items-center relative py-4 pt-2">
@@ -759,7 +744,6 @@ function RealGaryPicks() {
                       <div className="relative" style={{ 
                         width: isMobile ? '90%' : '634px', 
                         height: isMobile ? '200px' : '422px', 
-                        marginLeft: isMobile ? '0' : '48px',
                         maxWidth: isMobile ? '500px' : 'none',
                         margin: isMobile ? '0 auto' : '0 0 0 48px'
                       }}>
@@ -884,7 +868,7 @@ function RealGaryPicks() {
                                             WebkitLineClamp: 2,
                                             WebkitBoxOrient: 'vertical'
                                           }}>
-                                            {pick.pick || pick.shortPick}
+                                            {pick.pick}
                                           </div>
                                           
                                           {/* Confidence Score */}
@@ -1022,7 +1006,7 @@ function RealGaryPicks() {
                                                 WebkitLineClamp: 2,
                                                 WebkitBoxOrient: 'vertical'
                                               }}>
-                                                {pick.pick || pick.shortPick}
+                                                {pick.pick}
                                               </div>
                                               
                                               {/* Add a preview of the rationale on front card - hide on mobile */}
@@ -1404,22 +1388,7 @@ function RealGaryPicks() {
                     </div>
                   </div>
                 )}
-                {/* Parlay card removed - no longer used */}
-                {activeTab === 'history' && (
-                  <div className="mx-auto max-w-4xl mb-12" style={{ backgroundColor: '#121212', border: '3px solid #d4af37', borderRadius: '8px', overflow: 'hidden' }}>
-                    <div style={{ backgroundColor: '#d4af37', padding: '8px', textAlign: 'center' }}>
-                      <h2 className="text-xl font-bold text-black">YOUR BETTING HISTORY</h2>
-                    </div>
-                    {user ? (
-                      <div className="p-4" style={{ backgroundColor: '#f5f5dc' }}>
-                        <BetCard reloadKey={reloadKey} />
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <p className="mb-4" style={{ color: '#ffc107' }}>LOGIN TO VIEW YOUR BETTING HISTORY</p>
-                        <button 
-                          onClick={() => navigate('/login')} 
-                          className="px-4 py-2 font-bold uppercase rounded"
+                                          className="px-4 py-2 font-bold uppercase rounded"
                           style={{ backgroundColor: '#ffc107', color: 'black', border: '2px solid black' }}
                         >
                           LOGIN NOW
