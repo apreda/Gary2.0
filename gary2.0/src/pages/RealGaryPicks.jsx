@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useUserPlan } from "../contexts/UserPlanContext";
-import BG2 from '/BG2.png'; // Import the background image directly
+import BG2 from '/BG2.png';
 import { useToast } from '../components/ui/ToastProvider';
 import { useAuth } from '../contexts/AuthContext';
-import '../styles/PickCardGlow.css'; // Import the glow effect CSS
-import '../styles/DisableCardGlow.css'; // Override to disable the glow effect
-import '../styles/MobileScrollFix.css'; // Fix for mobile horizontal scrolling
-
-
-// Import services
+import '../styles/PickCardGlow.css';
+import '../styles/DisableCardGlow.css';
+import '../styles/MobileScrollFix.css';
 import { picksService } from '../services/picksService';
 import { betTrackingService } from '../services/betTrackingService';
 import { userStatsService } from '../services/userStatsService';
@@ -20,18 +17,18 @@ import { getEasternDate, getYesterdayDate, formatGameTime } from '../utils/dateU
 // Custom hook to detect mobile
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
-  
+
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-  
+
   return isMobile;
 };
 
@@ -40,141 +37,103 @@ function RealGaryPicks() {
   const [reloadKey, setReloadKey] = useState(0);
   const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
-  
-  // State for cards loaded from the database
+
   const [picks, setPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userDecisions, setUserDecisions] = useState({});
-  // State to track which picks are being processed to prevent double-clicking
   const [processingDecisions, setProcessingDecisions] = useState({});
-  // State to track which cards are flipped
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
-  
-  // Function to check if user has already made decisions on any picks
+
   const checkUserDecisions = async () => {
     if (!user) return;
-    
+
     const userId = user.id;
     const decisionsMap = {};
-    
-    // Check each pick for existing user decisions
+
     for (const pick of picks) {
       const { hasMade, decision } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
       if (hasMade) {
         decisionsMap[pick.id] = decision;
       }
     }
-    
+
     setUserDecisions(decisionsMap);
   };
-  
-  // Load picks from Supabase
+
   useEffect(() => {
     if (!planLoading && subscriptionStatus === 'active') {
       loadPicks();
     }
   }, [planLoading, subscriptionStatus]);
-  
-  // Check for existing user decisions when picks load
+
   useEffect(() => {
     if (picks.length > 0 && user) {
       checkUserDecisions();
     }
   }, [picks, user]);
-  
-  // Toast notification system
+
   const showToast = useToast();
-  
-  // Load picks from Supabase using appropriate date based on time
+
   const loadPicks = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Use Eastern Time consistently for all date operations
       const eastern = getEasternDate();
       let queryDate = eastern.dateString;
 
-      // Before 10am EST, always use yesterday's picks if available
       if (eastern.easternHour < 10) {
         const yesterdayString = getYesterdayDate(eastern.year, eastern.month, eastern.day);
-        
-        // Check if yesterday's picks exist
+
         const { data: yesterdayData, error: yesterdayError } = await supabase
           .from("daily_picks")
           .select("picks, date")
           .eq("date", yesterdayString)
           .maybeSingle();
-          
+
         if (!yesterdayError && yesterdayData && yesterdayData.picks) {
           queryDate = yesterdayString;
         }
       }
-      
-      // Query Supabase for picks with the determined date
+
       const { data, error: fetchError } = await supabase
         .from('daily_picks')
-        .select('*') // Select all columns to make sure we get the time field
+        .select('*')
         .eq('date', queryDate)
-        .maybeSingle(); // Use maybeSingle to avoid 406 errors
-      
-      // Store the queryDate for use in generating consistent pick IDs
+        .maybeSingle();
+
       const currentDate = queryDate;
 
-      // Parse picks column if it's a string
       let picksArray = [];
       if (data && data.picks) {
         picksArray = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
-        
-        // The picks now use the OpenAI output format directly
-        // Each pick should have: pick, type, confidence, rationale fields
+
         picksArray = picksArray
-          // Filter out any emergency picks or invalid picks
           .filter(pick => {
-            // Skip any picks with emergency in the ID
-            if (pick.id && pick.id.includes('emergency')) {
-              return false;
-            }
-            
-            // Skip any picks without a proper pick field (OpenAI format)
-            if (!pick.pick || pick.pick === '') {
-              return false;
-            }
-            
-            // Skip any picks without a rationale (OpenAI format)
-            if (!pick.rationale || pick.rationale === '') {
-              return false;
-            }
-            
+            if (pick.id && pick.id.includes('emergency')) return false;
+            if (!pick.pick || pick.pick === '') return false;
+            if (!pick.rationale || pick.rationale === '') return false;
             return true;
           })
           .map(pick => {
-            // Helper function to extract odds from analysis prompt
             const extractOddsFromAnalysis = (pick) => {
               try {
                 if (pick.rawAnalysis?.rawOpenAIOutput) {
-                  // First try to get directly from OpenAI output
                   if (pick.rawAnalysis.rawOpenAIOutput.odds) {
                     return pick.rawAnalysis.rawOpenAIOutput.odds;
                   }
                 }
-                
-                // If we have an analysis prompt, try to extract from there
                 if (pick.analysisPrompt) {
-                  const teamName = pick.pick?.split(' ').slice(0, -1).join(' '); // Remove 'ML' or other suffix
+                  const teamName = pick.pick?.split(' ').slice(0, -1).join(' ');
                   if (teamName) {
-                    // Look for patterns like "Current moneyline odds: Boston Red Sox (-120), Baltimore Orioles (102)"
                     const oddsLineMatch = pick.analysisPrompt.match(/Current moneyline odds:([^\n]+)/);
                     if (oddsLineMatch && oddsLineMatch[1]) {
                       const oddsLine = oddsLineMatch[1];
-                      
-                      // Find team name and extract odds in parentheses
                       const teamRegex = new RegExp(`${teamName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(([-+]?\\d+)\\)`);
                       const match = oddsLine.match(teamRegex);
-                      
                       if (match && match[1]) {
                         return match[1];
                       }
@@ -186,95 +145,59 @@ function RealGaryPicks() {
               }
               return '';
             };
-            
-            // Extract odds from the pick
+
             const oddsValue = extractOddsFromAnalysis(pick);
-            
-            // Create a pick object with BOTH original OpenAI fields AND mapped fields
-            // Parse and extract the necessary fields for our card implementation
+
             const simplePick = {
-              // Use a consistent ID based on the pick content and date instead of random numbers
-              // This ensures the same pick gets the same ID across page refreshes
               id: pick.id || `pick-${currentDate}-${pick.league}-${pick.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
-              
-              // Include original OpenAI format fields
-              pick: pick.pick || '',          // Original OpenAI field for the bet
-              rationale: pick.rationale || '', // Original OpenAI field for analysis
-              
-              // Essential metadata
+              pick: pick.pick || '',
+              rationale: pick.rationale || '',
               game: pick.game || '',
               league: pick.league || '',
               confidence: pick.confidence || 0,
-              // Extract time field from the correct nested path in the pick structure
-              time: function() {
-                // First try to get the formatted time from rawAnalysis
+              time: function () {
                 if (pick.rawAnalysis?.rawOpenAIOutput?.time) {
                   return pick.rawAnalysis.rawOpenAIOutput.time;
                 }
-                
-                // Then try the time field directly
                 if (pick.time) {
                   return pick.time;
                 }
-                
-                // Finally try to format gameTime from ISO format
                 if (pick.gameTime) {
                   return formatGameTime(pick.gameTime);
                 }
-                
-                // Default
-                return '';  
+                return '';
               }(),
-              // Use the extracted odds value
               odds: oddsValue || pick.odds || '',
-              
-              // CRITICAL: Include homeTeam and awayTeam fields for display
               homeTeam: pick.homeTeam || '',
               awayTeam: pick.awayTeam || '',
-              
-              // Additional OpenAI output fields
               type: pick.type || 'Moneyline',
               trapAlert: pick.trapAlert || false,
               revenge: pick.revenge || false,
               momentum: pick.momentum || 0
             };
-            
+
             return simplePick;
-        });
+          });
       }
 
-      // Check if we have picks for today - either from database error or empty array
       if (fetchError || !picksArray.length) {
         const today = new Date().toISOString().split('T')[0];
-        
+
         try {
-          // Show loading state during generation
           setLoading(true);
-          
-          // Delete any old picks for today (cleanup)
+
           await supabase
             .from('daily_picks')
             .delete()
             .eq('date', today);
-            
-          // Since we don't have picks, generate some
+
           const generatedPicks = await picksService.generateDailyPicks();
-          
-          // The generateDailyPicks returns an array of picks
-          // It also automatically stores them in Supabase now
+
           if (generatedPicks && Array.isArray(generatedPicks) && generatedPicks.length > 0) {
-            // Use the EXACT OpenAI output format without any transformation
-            // This preserves the exact structure needed for our card implementation
             setPicks(generatedPicks.map(pick => {
-              // Extract the raw OpenAI response data
               const rawOutput = pick.rawAnalysis || pick;
-              
-              // Add a minimal required ID field for React keys
               return {
-                // Generate a consistent ID based on pick content and today's date
                 id: pick.id || `pick-${today}-${rawOutput.league}-${rawOutput.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
-                
-                // Directly use all OpenAI output fields exactly as received
                 pick: rawOutput.pick,
                 type: rawOutput.type || 'moneyline',
                 confidence: rawOutput.confidence,
@@ -282,37 +205,30 @@ function RealGaryPicks() {
                 trapAlert: rawOutput.trapAlert || false,
                 revenge: rawOutput.revenge || false,
                 momentum: rawOutput.momentum || 0,
-                
-                // CRITICAL: Use OpenAI league and time formats directly
-                // This ensures fields like league="MLB" (not "baseball_mlb") 
-                // and time="10:05 PM ET" are preserved exactly
                 homeTeam: rawOutput.homeTeam || pick.home_team || '',
                 awayTeam: rawOutput.awayTeam || pick.away_team || '',
                 league: rawOutput.league || pick.league || '',
                 time: rawOutput.time || pick.time || ''
               };
             }));
-            setLoading(false); // We have picks now
-            return; // Exit early since we already have the picks
+            setLoading(false);
+            return;
           }
-          
-          // Fallback path - try to reload from database if generation returned nothing
+
           const { data: freshData } = await supabase
             .from('daily_picks')
             .select('picks, date')
             .eq('date', today)
             .maybeSingle();
-            
-            if (freshData && freshData.picks) {
-            // Process picks again
-            picksArray = typeof freshData.picks === 'string' ? 
+
+          if (freshData && freshData.picks) {
+            picksArray = typeof freshData.picks === 'string' ?
               JSON.parse(freshData.picks) : freshData.picks;
-              
-            // Apply the same filtering to remove any emergency picks
+
             picksArray = picksArray.filter(pick => {
-              return pick.id && !pick.id.includes('emergency') && 
-                    pick.pick && pick.pick !== '' &&
-                    pick.rationale && pick.rationale !== '';
+              return pick.id && !pick.id.includes('emergency') &&
+                pick.pick && pick.pick !== '' &&
+                pick.rationale && pick.rationale !== '';
             });
           }
         } catch (genError) {
@@ -320,7 +236,6 @@ function RealGaryPicks() {
           setError('Failed to generate picks. Please try again later.');
         }
       } else {
-        // We have picks from the database
         setPicks(picksArray);
       }
     } catch (err) {
@@ -333,42 +248,29 @@ function RealGaryPicks() {
 
   useEffect(() => {
     loadPicks();
+    // eslint-disable-next-line
   }, []);
 
-  // Get visible picks based on user plan
   const visiblePicks = picks.slice(0, userPlan === 'premium' ? picks.length : 1);
-  const pageTitle = visiblePicks.length
-    ? `Gary's ${[...new Set(visiblePicks.map(function(p) { return p.league; }))].join(', ')} Picks`
-    : "Gary's Picks";
 
-  /**
-   * Handler called when a user makes a bet/fade decision in PickCard.
-   * Records the decision, displays a toast notification, and updates user stats.
-   */
   const handleDecisionMade = async (decision, pick) => {
-    
-    // Prevent multiple clicks on the same pick
     if (processingDecisions[pick.id] || userDecisions[pick.id]) {
       showToast('You already made a decision for this pick', 'warning', 3000, false);
       return;
     }
-    
-    // Mark this pick as being processed
+
     setProcessingDecisions(prev => ({
       ...prev,
       [pick.id]: true
     }));
-    
+
     try {
-      // Make sure user is logged in
       if (!user) {
-        // Create or ensure anonymous session
         await ensureAnonymousSession();
       }
-      
-      // Get current user ID
+
       const userId = user?.id || (await supabase.auth.getUser()).data.user?.id;
-      
+
       if (!userId) {
         console.error('User ID not available for tracking bet/fade decision');
         showToast('Sign in to track your picks!', 'error', 3000, false);
@@ -378,8 +280,7 @@ function RealGaryPicks() {
         }));
         return;
       }
-      
-      // Check if user already made a decision on this pick
+
       const { hasMade } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
       if (hasMade) {
         showToast('You already placed a bet on this pick!', 'warning', 3000, false);
@@ -389,39 +290,29 @@ function RealGaryPicks() {
         }));
         return;
       }
-      
-      // Display appropriate Gary toast message based on decision
+
       const toastMessage = decision === 'bet'
         ? garyPhrases.getRandom('betPhrases')
         : garyPhrases.getRandom('fadePhrases');
-        
+
       showToast(toastMessage, decision === 'bet' ? 'success' : 'info', 4000, true);
-      
-      // Track user decision in Supabase
+
       await userStatsService.recordDecision(userId, decision, pick);
-      
-      // Update user-pick tracking
+
       await betTrackingService.saveBetDecision(pick.id, decision, userId);
-      
-      // Update local state to reflect the decision
+
       setUserDecisions(prev => ({
         ...prev,
         [pick.id]: decision
       }));
-      
-      // Reload picks if necessary
+
       loadPicks();
-      
-      // Increment reloadKey to force BetCard to reload
-      setReloadKey(prev => {
-        const newKey = prev + 1;
-        return newKey;
-      });
+
+      setReloadKey(prev => prev + 1);
     } catch (error) {
       console.error('Error handling bet/fade decision:', error);
       showToast('Something went wrong. Please try again.', 'error', 3000, false);
     } finally {
-      // Regardless of outcome, mark this pick as no longer being processed
       setProcessingDecisions(prev => ({
         ...prev,
         [pick.id]: false
@@ -429,24 +320,20 @@ function RealGaryPicks() {
     }
   };
 
-  // Functions to navigate between picks
   const nextPick = () => {
     if (animating || picks.length <= 1) return;
-    
+
     setAnimating(true);
-    // Move current card to the back of the stack
     const newIndex = (currentIndex + 1) % picks.length;
-    
-    // Reset the flipped state when changing cards
+
     setFlippedCards(prev => {
-      const newState = {...prev};
+      const newState = { ...prev };
       Object.keys(newState).forEach(key => {
         newState[key] = false;
       });
       return newState;
     });
-    
-    // After animation completes
+
     setTimeout(() => {
       setCurrentIndex(newIndex);
       setAnimating(false);
@@ -455,33 +342,29 @@ function RealGaryPicks() {
 
   const prevPick = () => {
     if (animating || picks.length <= 1) return;
-    
+
     setAnimating(true);
-    // Move to previous card
     const newIndex = (currentIndex - 1 + picks.length) % picks.length;
-    
-    // Reset the flipped state when changing cards
+
     setFlippedCards(prev => {
-      const newState = {...prev};
+      const newState = { ...prev };
       Object.keys(newState).forEach(key => {
         newState[key] = false;
       });
       return newState;
     });
-    
-    // After animation completes
+
     setTimeout(() => {
       setCurrentIndex(newIndex);
       setAnimating(false);
     }, 500);
   };
 
-  // Check user decisions on mount
   useEffect(() => {
     checkUserDecisions();
+    // eslint-disable-next-line
   }, [user]);
-  
-  // Add picks-page class to body for mobile-specific zoom
+
   useEffect(() => {
     document.body.classList.add('picks-page');
     return () => {
@@ -505,7 +388,7 @@ function RealGaryPicks() {
           pointerEvents: 'none',
           background: `#121212 url(${BG2}) no-repeat center center`,
           backgroundSize: 'cover',
-          opacity: 0.15, /* Background at 15% opacity */
+          opacity: 0.15,
           overflow: 'hidden',
         }}
       >
@@ -550,6 +433,7 @@ function RealGaryPicks() {
           zIndex: 2,
         }} />
       </div>
+
       {/* Main content, zIndex: 2 */}
       <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
         {/* Show loading screen while plan status is being checked */}
@@ -589,488 +473,250 @@ function RealGaryPicks() {
             null
           ) : (
             <div>
-              
-                <div className="mb-12">
-                  {/* NEW LAYOUT: Directly on page in a horizontal row format */}
-                  <div className="pt-12 px-4">
-                    <h1 className="text-4xl font-bold text-center mb-2" style={{ color: '#b8953f' }}>
-                      TODAY'S PICKS
-                    </h1>
-                    <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto hidden sm:block">
-                      Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
-                    </p>
+              <div className="mb-12">
+                {/* NEW LAYOUT: Directly on page in a horizontal row format */}
+                <div className="pt-12 px-4">
+                  <h1 className="text-4xl font-bold text-center mb-2" style={{ color: '#b8953f' }}>
+                    TODAY'S PICKS
+                  </h1>
+                  <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto hidden sm:block">
+                    Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
+                  </p>
+                  
+                  {/* Card Stack Interface */}
+                  <div className="flex justify-center items-center relative py-4 pt-2">
+                    {/* Left navigation arrow - positioned outside the card, no circle */}
+                    <button 
+                      className={`absolute ${isMobile ? 'left-[-30px]' : 'left-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
+                      onClick={prevPick}
+                      disabled={animating || picks.length <= 1}
+                      style={{ transform: 'translateY(-50%)', top: '50%' }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 18l-6-6 6-6" />
+                      </svg>
+                    </button>
                     
-                    {/* Card Stack Interface */}
-                    <div className="flex justify-center items-center relative py-4 pt-2">
-                      {/* Left navigation arrow - positioned outside the card, no circle */}
-                      <button 
-                        className={`absolute ${isMobile ? 'left-[-30px]' : 'left-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
-                        onClick={prevPick}
-                        disabled={animating || picks.length <= 1}
-                        style={{ transform: 'translateY(-50%)', top: '50%' }}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M15 18l-6-6 6-6" />
-                        </svg>
-                      </button>
-                      
-                      {/* Right navigation arrow - positioned outside the card, no circle */}
-                      <button 
-                        className={`absolute ${isMobile ? 'right-[-30px]' : 'right-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
-                        onClick={nextPick}
-                        disabled={animating || picks.length <= 1}
-                        style={{ transform: 'translateY(-50%)', top: '50%' }}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M9 18l6-6-6-6" />
-                        </svg>
-                      </button>
-                      
-                      {/* Card counter - repositioned below the card */}
-                      <div className="absolute bottom-[-50px] left-0 right-0 text-center z-50">
-                        <span className="px-4 py-2 bg-transparent text-lg text-[#d4af37] font-medium">
-                          {picks.length > 0 ? `${currentIndex + 1} / ${picks.length}` : '0/0'}
-                        </span>
-                      </div>
-                      
-                      {/* Card Stack - Wider index card format (20% larger) */}
-                      <div className="relative" style={{ 
-                        width: isMobile ? '90%' : '634px', 
-                        height: isMobile ? '200px' : '422px', 
-                        maxWidth: isMobile ? '500px' : 'none',
-                        margin: isMobile ? '0 auto' : '0 0 0 48px'
-                      }}>
-                        {picks.map((pick, index) => {
-                          // Calculate position in stack relative to current index
-                          const position = (index - currentIndex + picks.length) % picks.length;
-                          const isCurrentCard = index === currentIndex;
-                          
-                          // Style based on position in stack - simplified for mobile
-                          const cardStyle = {
-                            zIndex: picks.length - position,
-                            transform: position === 0 
-                              ? 'translateX(0) scale(1)' 
-                              : position === 1 
-                                ? `translateX(${isMobile ? '5px' : '10px'}) scale(0.95) translateY(${isMobile ? '5px' : '10px'})` 
-                                : position === 2 
-                                  ? `translateX(${isMobile ? '10px' : '20px'}) scale(0.9) translateY(${isMobile ? '10px' : '20px'})` 
-                                  : `translateX(${isMobile ? '15px' : '30px'}) scale(0.85) translateY(${isMobile ? '15px' : '30px'})`,
-                            opacity: position <= 2 ? 1 - (position * 0.15) : 0,
-                            pointerEvents: isCurrentCard ? 'auto' : 'none',
-                            transition: animating ? 'all 0.5s ease-in-out' : 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
-                            width: '100%',
-                            height: '100%',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0
-                          };
-                          
-                          // Get the flipped state for this card
-                          const isFlipped = flippedCards[pick.id] || false;
-                          
-                          // Function to toggle the flipped state for this specific card
-                          const toggleFlip = (e) => {
-                            if (animating) return;
-                            e.stopPropagation();
-                            setFlippedCards(prev => ({
-                              ...prev,
-                              [pick.id]: !prev[pick.id]
-                            }));
-                          };
-                          
-                          return (
+                    {/* Right navigation arrow - positioned outside the card, no circle */}
+                    <button 
+                      className={`absolute ${isMobile ? 'right-[-30px]' : 'right-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
+                      onClick={nextPick}
+                      disabled={animating || picks.length <= 1}
+                      style={{ transform: 'translateY(-50%)', top: '50%' }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </button>
+                    
+                    {/* Card counter - repositioned below the card */}
+                    <div className="absolute bottom-[-50px] left-0 right-0 text-center z-50">
+                      <span className="px-4 py-2 bg-transparent text-lg text-[#d4af37] font-medium">
+                        {picks.length > 0 ? `${currentIndex + 1} / ${picks.length}` : '0/0'}
+                      </span>
+                    </div>
+                    
+                    {/* Card Stack - Wider index card format (20% larger) */}
+                    <div className="relative" style={{ 
+                      width: isMobile ? '90%' : '634px', 
+                      height: isMobile ? '200px' : '422px', 
+                      maxWidth: isMobile ? '500px' : 'none',
+                      margin: isMobile ? '0 auto' : '0 0 0 48px'
+                    }}>
+                      {picks.map((pick, index) => {
+                        // Calculate position in stack relative to current index
+                        const position = (index - currentIndex + picks.length) % picks.length;
+                        const isCurrentCard = index === currentIndex;
+                        
+                        // Style based on position in stack - simplified for mobile
+                        const cardStyle = {
+                          zIndex: picks.length - position,
+                          transform: position === 0 
+                            ? 'translateX(0) scale(1)' 
+                            : position === 1 
+                              ? `translateX(${isMobile ? '5px' : '10px'}) scale(0.95) translateY(${isMobile ? '5px' : '10px'})` 
+                              : position === 2 
+                                ? `translateX(${isMobile ? '10px' : '20px'}) scale(0.9) translateY(${isMobile ? '10px' : '20px'})` 
+                                : `translateX(${isMobile ? '15px' : '30px'}) scale(0.85) translateY(${isMobile ? '15px' : '30px'})`,
+                          opacity: position <= 2 ? 1 - (position * 0.15) : 0,
+                          pointerEvents: isCurrentCard ? 'auto' : 'none',
+                          transition: animating ? 'all 0.5s ease-in-out' : 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+                          width: '100%',
+                          height: '100%',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0
+                        };
+                        
+                        // Get the flipped state for this card
+                        const isFlipped = flippedCards[pick.id] || false;
+                        
+                        // Function to toggle the flipped state for this specific card
+                        const toggleFlip = (e) => {
+                          if (animating) return;
+                          e.stopPropagation();
+                          setFlippedCards(prev => ({
+                            ...prev,
+                            [pick.id]: !prev[pick.id]
+                          }));
+                        };
+                        
+                        return (
+                          <div 
+                            key={pick.id} 
+                            className="pick-card-container"
+                            style={cardStyle}
+                          >
+                            {/* Card container with flip effect */}
                             <div 
-                              key={pick.id} 
-                              className="pick-card-container"
-                              style={cardStyle}
+                              className="w-full h-full relative cursor-pointer"
+                              style={{
+                                perspective: '1000px',
+                              }}
+                              onClick={!planLoading && subscriptionStatus === 'active' ? toggleFlip : null}
                             >
-                              {/* Card container with flip effect */}
-                              <div 
-                                className="w-full h-full relative cursor-pointer"
-                                style={{
-                                  perspective: '1000px',
-                                }}
-                                onClick={!planLoading && subscriptionStatus === 'active' ? toggleFlip : null}
-                              >
-                                {/* Blur overlay for users without active subscription - only show when loading is complete */}
-                                {!planLoading && subscriptionStatus !== 'active' && (
-                                  <div 
-                                    className="absolute inset-0 z-50 flex flex-col items-center justify-center" 
-                                    style={{
-                                      background: 'rgba(0, 0, 0, 0.7)',
-                                      backdropFilter: 'blur(15px)',
-                                      borderRadius: '16px',
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="text-center px-6">
-                                      <div className="mb-4">
-                                        <img src="/coin2.png" alt="Gary A.I." className="w-[106px] h-[106px] mx-auto" />
-                                      </div>
-                                      <h3 className="text-[#b8953f] text-2xl font-bold mb-3">Unlock Premium Picks</h3>
-                                      <p className="text-white mb-6 max-w-sm">Upgrade to Pro to see all of Gary's premium picks with detailed analysis and reasoning.</p>
-                                      <a 
-                                        href={user ? "https://buy.stripe.com/dR603v2UndMebrq144" : "https://www.betwithgary.ai/signin"}
-                                        className="block py-4 px-8 bg-[#b8953f] hover:bg-[#c5a030] text-black font-medium rounded-lg transition-colors focus:ring-2 focus:ring-[#b8953f]/50 focus:outline-none w-64 mx-auto text-center"
-                                      >
-                                        Upgrade to Pro — $29/month
-                                      </a>
-                                      <p className="mt-4 text-gray-400 text-sm">Cancel anytime</p>
-                                    </div>
-                                  </div>
-                                )}
+                              {/* Blur overlay for users without active subscription - only show when loading is complete */}
+                              {!planLoading && subscriptionStatus !== 'active' && (
                                 <div 
+                                  className="absolute inset-0 z-50 flex flex-col items-center justify-center" 
                                   style={{
-                                    position: 'relative',
-                                    width: '100%',
-                                    height: '100%',
-                                    transformStyle: 'preserve-3d',
-                                    transition: 'transform 0.6s',
-                                    transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-                                  }}>
-                                      {/* FRONT OF CARD - Mobile Simplified Design */}
-                                      {isMobile ? (
-                                        <div style={{
-                                          position: 'absolute',
-                                          width: '100%',
-                                          height: '100%',
-                                          backfaceVisibility: 'hidden',
-                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                          borderRadius: '12px',
-                                          fontFamily: 'Inter, system-ui, sans-serif',
+                                    background: 'rgba(0, 0, 0, 0.7)',
+                                    backdropFilter: 'blur(15px)',
+                                    borderRadius: '16px',
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="text-center px-6">
+                                    <div className="mb-4">
+                                      <img src="/coin2.png" alt="Gary A.I." className="w-[106px] h-[106px] mx-auto" />
+                                    </div>
+                                    <h3 className="text-[#b8953f] text-2xl font-bold mb-3">Unlock Premium Picks</h3>
+                                    <p className="text-white mb-6 max-w-sm">Upgrade to Pro to see all of Gary's premium picks with detailed analysis and reasoning.</p>
+                                    <a 
+                                      href={user ? "https://buy.stripe.com/dR603v2UndMebrq144" : "https://www.betwithgary.ai/signin"}
+                                      className="block py-4 px-8 bg-[#b8953f] hover:bg-[#c5a030] text-black font-medium rounded-lg transition-colors focus:ring-2 focus:ring-[#b8953f]/50 focus:outline-none w-64 mx-auto text-center"
+                                    >
+                                      Upgrade to Pro — $29/month
+                                    </a>
+                                    <p className="mt-4 text-gray-400 text-sm">Cancel anytime</p>
+                                  </div>
+                                </div>
+                              )}
+                              <div 
+                                style={{
+                                  position: 'relative',
+                                  width: '100%',
+                                  height: '100%',
+                                  transformStyle: 'preserve-3d',
+                                  transition: 'transform 0.6s',
+                                  transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                                }}>
+                                    {/* FRONT OF CARD - Mobile Simplified Design */}
+                                    {isMobile ? (
+                                      <div style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%',
+                                        backfaceVisibility: 'hidden',
+                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                        borderRadius: '12px',
+                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                        color: '#ffffff',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        padding: '1.5rem',
+                                        textAlign: 'center'
+                                      }}>
+                                        {/* Gary's Pick - Large and Centered */}
+                                        <div style={{ 
+                                          fontSize: isMobile ? '1.75rem' : '2rem', 
+                                          fontWeight: 700, 
+                                          lineHeight: 1.1,
+                                          color: '#bfa142',
+                                          wordBreak: 'break-word',
+                                          maxHeight: isMobile ? '3rem' : '4.5rem',
                                           overflow: 'hidden',
-                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                          color: '#ffffff',
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          justifyContent: 'center',
-                                          alignItems: 'center',
-                                          padding: '1.5rem',
-                                          textAlign: 'center'
+                                          display: '-webkit-box',
+                                          WebkitLineClamp: 2,
+                                          WebkitBoxOrient: 'vertical'
                                         }}>
-                                          {/* Gary's Pick - Large and Centered */}
+                                          {pick.pick}
+                                        </div>
+                                        
+                                        {/* Confidence Score */}
+                                        <div style={{
+                                          background: 'rgba(191, 161, 66, 0.15)',
+                                          padding: '0.75rem 1.5rem',
+                                          borderRadius: '8px',
+                                          border: '1px solid rgba(191, 161, 66, 0.3)'
+                                        }}>
                                           <div style={{ 
-                                            fontSize: isMobile ? '1.75rem' : '2rem', 
-                                            fontWeight: 700, 
-                                            lineHeight: 1.1,
-                                            color: '#bfa142', /* Keeping gold color for the actual pick */
-                                            wordBreak: 'break-word',
-                                            maxHeight: isMobile ? '3rem' : '4.5rem',
-                                            overflow: 'hidden',
-                                            display: '-webkit-box',
-                                            WebkitLineClamp: 2,
-                                            WebkitBoxOrient: 'vertical'
-                                          }}>
-                                            {pick.pick}
-                                          </div>
-                                          
-                                          {/* Confidence Score */}
-                                          <div style={{
-                                            background: 'rgba(191, 161, 66, 0.15)',
-                                            padding: '0.75rem 1.5rem',
-                                            borderRadius: '8px',
-                                            border: '1px solid rgba(191, 161, 66, 0.3)'
-                                          }}>
-                                            <div style={{ 
-                                              fontSize: '0.7rem', 
-                                              opacity: 0.7, 
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em', 
-                                              marginBottom: '0.25rem'
-                                            }}>
-                                              Confidence
-                                            </div>
-                                            <div style={{
-                                              fontSize: '1.5rem',
-                                              fontWeight: 700,
-                                              color: '#bfa142'
-                                            }}>
-                                              {typeof pick.confidence === 'number' ? 
-                                                Math.round(pick.confidence * 100) + '%' : 
-                                                (pick.confidence || '75%')}
-                                            </div>
-                                          </div>
-                                          
-                                          {/* Tap to flip indicator */}
-                                          <div style={{
-                                            position: 'absolute',
-                                            bottom: '1rem',
-                                            fontSize: '0.75rem',
-                                            opacity: 0.5,
+                                            fontSize: '0.7rem', 
+                                            opacity: 0.7, 
                                             textTransform: 'uppercase',
-                                            letterSpacing: '0.05em'
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.25rem'
                                           }}>
-                                            Tap for Analysis
+                                            Confidence
+                                          </div>
+                                          <div style={{
+                                            fontSize: '1.5rem',
+                                            fontWeight: 700,
+                                            color: '#bfa142'
+                                          }}>
+                                            {typeof pick.confidence === 'number' ? 
+                                              Math.round(pick.confidence * 100) + '%' : 
+                                              (pick.confidence || '75%')}
                                           </div>
                                         </div>
-                                      ) : (
-                                        // Desktop front card design (unchanged)
+                                        
+                                        {/* Tap to flip indicator */}
                                         <div style={{
                                           position: 'absolute',
-                                          width: '100%',
-                                          height: '100%',
-                                          backfaceVisibility: 'hidden',
-                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                          borderRadius: '16px',
-                                          fontFamily: 'Inter, system-ui, sans-serif',
-                                          overflow: 'hidden',
-                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                          color: '#ffffff',
+                                          bottom: '1rem',
+                                          fontSize: '0.75rem',
+                                          opacity: 0.5,
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em'
                                         }}>
-                                          {/* Left side content */}
-                                          <div style={{
-                                             position: 'absolute',
-                                             left: 0,
-                                             top: 0,
-                                             bottom: 0,
-                                             width: '70%',
-                                            padding: '1.5rem',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            justifyContent: 'space-between',
-                                            overflow: 'hidden',
-                                          }}>
-                                            {/* League and Matchup in horizontal layout */}
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                                              {/* League */}
-                                              <div>
-                                                <div style={{ 
-                                                  fontSize: '0.75rem', 
-                                                  opacity: 0.6, 
-                                                  textTransform: 'uppercase',
-                                                  letterSpacing: '0.05em', 
-                                                  marginBottom: '0.25rem'
-                                                }}>
-                                                  League
-                                                </div>
-                                                <div style={{ 
-                                                  fontSize: '1.25rem', 
-                                                  fontWeight: 600, 
-                                                  letterSpacing: '0.02em',
-                                                  opacity: 0.95
-                                                }}>
-                                                  {pick.league || 'MLB'}
-                                                </div>
-                                              </div>
-                                              
-                                              {/* Matchup */}
-                                              <div style={{ marginLeft: '20px' }}>
-                                                <div style={{ 
-                                                  fontSize: '0.75rem', 
-                                                  opacity: 0.6, 
-                                                  textTransform: 'uppercase',
-                                                  letterSpacing: '0.05em', 
-                                                  marginBottom: '0.25rem'
-                                                }}>
-                                                  Matchup
-                                                </div>
-                                                <div style={{ 
-                                                  fontSize: '1.25rem', 
-                                                  fontWeight: 600,
-                                                  opacity: 0.9
-                                                }}>
-                                                  {(pick.homeTeam && pick.awayTeam) ? 
-                                                    `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
-                                                    (pick.game ? pick.game : 'TBD')}
-                                                </div>
-                                              </div>
-                                            </div>
-                                            
-                                            {/* The main pick display */}
-                                            <div style={{ marginBottom: '1rem' }}>
-                                              <div style={{ 
-                                                fontSize: '0.75rem', 
-                                                opacity: 0.6, 
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.05em', 
-                                                marginBottom: '0.5rem'
-                                              }}>
-                                                Gary's Pick
-                                              </div>
-                                              <div style={{ 
-                                                fontSize: isMobile ? '1.75rem' : '2rem', 
-                                                fontWeight: 700, 
-                                                lineHeight: 1.1,
-                                                color: '#bfa142', /* Keeping gold color for the actual pick */
-                                                wordBreak: 'break-word',
-                                                maxHeight: isMobile ? '3rem' : '4.5rem',
-                                                overflow: 'hidden',
-                                                display: '-webkit-box',
-                                                WebkitLineClamp: 2,
-                                                WebkitBoxOrient: 'vertical'
-                                              }}>
-                                                {pick.pick}
-                                              </div>
-                                              
-                                              {/* Add a preview of the rationale on front card - hide on mobile */}
-                                              {!isMobile && (
-                                                <div style={{
-                                                  fontSize: '0.85rem',
-                                                  opacity: 0.8,
-                                                  overflow: 'hidden',
-                                                  display: '-webkit-box',
-                                                  WebkitLineClamp: 3,
-                                                  WebkitBoxOrient: 'vertical',
-                                                  textOverflow: 'ellipsis',
-                                                  marginBottom: '0.5rem'
-                                                }}>
-                                                    {pick.rationale ? pick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
-                                                </div>
-                                              )}
-                                            </div>
-                                            
-                                            {/* Bet or Fade Buttons */}
+                                          Tap for Analysis
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      // Desktop front card design
+                                      <div style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%',
+                                        backfaceVisibility: 'hidden',
+                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                        borderRadius: '16px',
+                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                        color: '#ffffff',
+                                      }}>
+                                        {/* Left side content */}
+                                        <div style={{
+                                           position: 'absolute',
+                                           left: 0,
+                                           top: 0,
+                                           bottom: 0,
+                                           width: '70%',
+                                          padding: '1.5rem',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          justifyContent: 'space-between',
+                                          overflow: 'hidden',
+                                        }}>
+                                          {/* League and Matchup in horizontal layout */}
+                                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                                            {/* League */}
                                             <div>
-                                              <div style={{ 
-                                                fontSize: '0.75rem', 
-                                                opacity: 0.6, 
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.05em', 
-                                                marginBottom: '0.5rem'
-                                              }}>
-                                                Take Your Pick
-                                              </div>
-                                              <div style={{
-                                                display: 'flex',
-                                                gap: '0.75rem',
-                                                width: '100%',
-                                              }}>
-                                                <button 
-                                                  style={{
-                                                    background: userDecisions[pick.id] === 'bet' 
-                                                      ? 'rgba(191, 161, 66, 0.5)'
-                                                      : 'rgba(191, 161, 66, 0.15)',
-                                                    color: userDecisions[pick.id] === 'bet' 
-                                                      ? '#ffdf7e'
-                                                      : '#bfa142',
-                                                    fontWeight: '600',
-                                                    padding: '0.5rem 1rem',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid rgba(191, 161, 66, 0.3)',
-                                                    cursor: userDecisions[pick.id] ? 'default' : 'pointer',
-                                                    flex: 1,
-                                                    fontSize: '0.8rem',
-                                                    letterSpacing: '0.05em',
-                                                    textTransform: 'uppercase',
-                                                    transition: 'all 0.2s ease',
-                                                    opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'bet' ? 0.5 : 1
-                                                  }}
-                                                   onClick={(e) => {
-                                                    e.stopPropagation(); // Prevent card flip
-                                                    // Disable the button if either processing or already decided
-                                                    if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
-                                                      handleDecisionMade('bet', pick);
-                                                    }
-                                                  }}
-                                                >
-                                                  Bet
-                                                </button>
-                                                <button 
-                                                  style={{
-                                                    background: userDecisions[pick.id] === 'fade' 
-                                                      ? 'rgba(255, 255, 255, 0.2)'
-                                                      : 'rgba(255, 255, 255, 0.05)',
-                                                    color: userDecisions[pick.id] === 'fade' 
-                                                      ? 'rgba(255, 255, 255, 1)'
-                                                      : 'rgba(255, 255, 255, 0.8)',
-                                                    fontWeight: '600',
-                                                    padding: '0.5rem 1rem',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                    cursor: userDecisions[pick.id] ? 'default' : 'pointer',
-                                                    flex: 1,
-                                                    fontSize: '0.8rem',
-                                                    letterSpacing: '0.05em',
-                                                    textTransform: 'uppercase',
-                                                    transition: 'all 0.2s ease',
-                                                    opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'fade' ? 0.5 : 1
-                                                  }}
-                                                   onClick={(e) => {
-                                                    e.stopPropagation(); // Prevent card flip
-                                                    // Disable the button if either processing or already decided
-                                                    if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
-                                                      handleDecisionMade('fade', pick);
-                                                    }
-                                                  }}
-                                                >
-                                                  Fade
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          
-                                          {/* Right side content - prominently elevated appearance */}
-                                          <div style={{
-                                              position: 'absolute',
-                                              right: 0,
-                                              top: 0,  /* Aligned to card edge */
-                                              bottom: 0, /* Aligned to card edge */
-                                              width: '30%',
-                                              borderLeft: '2.25px solid #bfa142', /* Gold border */
-                                              padding: '1.5rem',
-                                              display: 'flex',
-                                              flexDirection: 'column',
-                                              justifyContent: 'space-between',
-                                              alignItems: 'center',
-                                              background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
-                                              boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
-                                              borderRadius: '0 16px 16px 0', /* Rounded on right side only */
-                                              clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
-                                              zIndex: 2, /* Ensure it appears above other content */
-                                              transform: 'translateZ(10px)', /* 3D effect */
-                                            }}>
-                                             {/* Game time section */}
-                                             <div style={{ 
-                                               textAlign: 'center',
-                                               marginBottom: '1rem'
-                                             }}>
-                                               <div style={{ 
-                                                 fontSize: '0.75rem', 
-                                                 opacity: 0.6, 
-                                                 textTransform: 'uppercase',
-                                                 letterSpacing: '0.05em', 
-                                                 marginBottom: '0.25rem'
-                                               }}>
-                                                 Game Time
-                                               </div>
-                                               <div style={{
-                                                 fontSize: '1.125rem', 
-                                                 fontWeight: 600,
-                                                 opacity: 0.9
-                                               }}>
-                                                 {pick.time || '7:10 PM EST'}
-                                               </div>
-                                             </div>
-                                            
-                                            {/* Coin Image centered - no background - HIDE ON MOBILE */}
-                                            {!isMobile && (
-                                              <div style={{
-                                                display: 'flex',
-                                                justifyContent: 'center',
-                                                marginTop: 'auto',
-                                                marginBottom: 'auto',
-                                                background: 'transparent'
-                                              }}>
-                                                <img 
-                                                  src="/coin2.png" 
-                                                  alt="Coin Image"
-                                                  style={{
-                                                    width: 143, /* 10% bigger than previous 130px */
-                                                    height: 143, /* 10% bigger than previous 130px */
-                                                    objectFit: 'contain',
-                                                    opacity: 1,
-                                                    background: 'transparent'
-                                                  }}
-                                                />
-                                              </div>
-                                            )}
-                                            
-                                            {/* Confidence score with visual indicator */}
-                                            <div style={{ 
-                                              textAlign: 'center',
-                                              marginTop: '1rem',
-                                              width: '100%'
-                                            }}>
                                               <div style={{ 
                                                 fontSize: '0.75rem', 
                                                 opacity: 0.6, 
@@ -1078,215 +724,448 @@ function RealGaryPicks() {
                                                 letterSpacing: '0.05em', 
                                                 marginBottom: '0.25rem'
                                               }}>
-                                                Confidence
+                                                League
                                               </div>
-                                              
-                                              {/* Confidence score display */}
-                                              <div style={{
-                                                fontSize: '1.2rem',
-                                                fontWeight: 700,
-                                                opacity: 0.95,
-                                                color: '#bfa142', /* Gold for confidence */
-                                                marginBottom: '0.5rem'
+                                              <div style={{ 
+                                                fontSize: '1.25rem', 
+                                                fontWeight: 600, 
+                                                letterSpacing: '0.02em',
+                                                opacity: 0.95
                                               }}>
-                                                {typeof pick.confidence === 'number' ? 
-                                                  Math.round(pick.confidence * 100) + '%' : 
-                                                  (pick.confidence || '75%')}
+                                                {pick.league || 'MLB'}
                                               </div>
-                                              
-                                              {/* Click to flip instruction with subtle design */}
-                                              <button style={{
-                                                marginTop: '1rem',
-                                                fontSize: '0.75rem',
-                                                padding: '0.5rem 1rem',
-                                                background: 'rgba(191, 161, 66, 0.15)',
-                                                color: '#bfa142',
-                                                border: 'none',
-                                                borderRadius: '4px',
-                                                cursor: 'pointer',
+                                            </div>
+                                            
+                                            {/* Matchup */}
+                                            <div style={{ marginLeft: '20px' }}>
+                                              <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                opacity: 0.6, 
                                                 textTransform: 'uppercase',
-                                                letterSpacing: '0.05em',
-                                                fontWeight: 500,
-                                                transition: 'all 0.2s ease'
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.25rem'
                                               }}>
-                                                View Analysis
-                                              </button>
+                                                Matchup
+                                              </div>
+                                              <div style={{ 
+                                                fontSize: '1.25rem', 
+                                                fontWeight: 600,
+                                                opacity: 0.9
+                                              }}>
+                                                {(pick.homeTeam && pick.awayTeam) ? 
+                                                  `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
+                                                  (pick.game ? pick.game : 'TBD')}
+                                              </div>
                                             </div>
                                           </div>
                                           
-                                          {/* Subtle gradient overlay for depth */}
-                                          <div style={{
-                                            position: 'absolute',
-                                            inset: 0,
-                                            background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
-                                            opacity: 0.5,
-                                            pointerEvents: 'none'
-                                          }}></div>
-                                        </div>
-                                      )}
-                                      
-                                      {/* BACK OF CARD - ANALYSIS */}
-                                      {isMobile ? (
-                                        // Mobile simplified back card - only analysis
-                                        <div style={{
-                                          position: 'absolute',
-                                          width: '100%',
-                                          height: '100%',
-                                          backfaceVisibility: 'hidden',
-                                          transform: 'rotateY(180deg)',
-                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                          borderRadius: '12px',
-                                          fontFamily: 'Inter, system-ui, sans-serif',
-                                          overflow: 'hidden',
-                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                          color: '#ffffff',
-                                          padding: '1.25rem',
-                                          display: 'flex',
-                                          flexDirection: 'column'
-                                        }}>
-                                          {/* Analysis Header */}
-                                          <div style={{ 
-                                            fontSize: '0.85rem', 
-                                            opacity: 0.7, 
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em', 
-                                            marginBottom: '0.75rem',
-                                            textAlign: 'center'
-                                          }}>
-                                            Analysis
+                                          {/* The main pick display */}
+                                          <div style={{ marginBottom: '1rem' }}>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.5rem'
+                                            }}>
+                                              Gary's Pick
+                                            </div>
+                                            <div style={{ 
+                                              fontSize: isMobile ? '1.75rem' : '2rem', 
+                                              fontWeight: 700, 
+                                              lineHeight: 1.1,
+                                              color: '#bfa142',
+                                              wordBreak: 'break-word',
+                                              maxHeight: isMobile ? '3rem' : '4.5rem',
+                                              overflow: 'hidden',
+                                              display: '-webkit-box',
+                                              WebkitLineClamp: 2,
+                                              WebkitBoxOrient: 'vertical'
+                                            }}>
+                                              {pick.pick}
+                                            </div>
+                                            
+                                            {/* Add a preview of the rationale on front card - hide on mobile */}
+                                            {!isMobile && (
+                                              <div style={{
+                                                fontSize: '0.85rem',
+                                                opacity: 0.8,
+                                                overflow: 'hidden',
+                                                display: '-webkit-box',
+                                                WebkitLineClamp: 3,
+                                                WebkitBoxOrient: 'vertical',
+                                                textOverflow: 'ellipsis',
+                                                marginBottom: '0.5rem'
+                                              }}>
+                                                  {pick.rationale ? pick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
+                                              </div>
+                                            )}
                                           </div>
                                           
-                                          {/* Scrollable Analysis Content */}
-                                          <div style={{ 
-                                            flex: 1,
-                                            overflowY: 'auto',
-                                            fontSize: '0.95rem',
-                                            lineHeight: '1.6',
-                                            color: '#fff',
-                                            opacity: 0.9
-                                          }}>
-                                            {pick.rationale || 'Analysis not available.'}
-                                          </div>
-                                          
-                                          {/* Tap to flip back indicator */}
-                                          <div style={{
-                                            fontSize: '0.75rem',
-                                            opacity: 0.5,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em',
-                                            textAlign: 'center',
-                                            marginTop: '0.75rem'
-                                          }}>
-                                            Tap to Flip Back
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        // Desktop back card design (unchanged)
-                                        <div style={{
-                                          position: 'absolute',
-                                          width: '100%',
-                                          height: '100%',
-                                          backfaceVisibility: 'hidden',
-                                          transform: 'rotateY(180deg)',
-                                          background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                          borderRadius: '16px',
-                                          fontFamily: 'Inter, system-ui, sans-serif',
-                                          overflow: 'hidden',
-                                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                          color: '#ffffff',
-                                          padding: '1.5rem',
-                                        }}>
-                                        {/* Card Header - Pick */}
-                                        <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
-                                          {/* Pick Banner */}
-                                          <div style={{ 
-                                            backgroundColor: 'rgba(191, 161, 66, 0.15)',
-                                            color: '#bfa142',
-                                            fontWeight: 'bold',
-                                            fontSize: '1.25rem',
-                                            padding: '0.8rem 1rem',
-                                            textAlign: 'center',
-                                            letterSpacing: '0.05rem',
-                                            textTransform: 'uppercase',
-                                            borderRadius: '8px',
-                                          }}>
-                                            {pick.pick || 'GARY\'S PICK'}
+                                          {/* Bet or Fade Buttons */}
+                                          <div>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.5rem'
+                                            }}>
+                                              Take Your Pick
+                                            </div>
+                                            <div style={{
+                                              display: 'flex',
+                                              gap: '0.75rem',
+                                              width: '100%',
+                                            }}>
+                                              <button 
+                                                style={{
+                                                  background: userDecisions[pick.id] === 'bet' 
+                                                    ? 'rgba(191, 161, 66, 0.5)'
+                                                    : 'rgba(191, 161, 66, 0.15)',
+                                                  color: userDecisions[pick.id] === 'bet' 
+                                                    ? '#ffdf7e'
+                                                    : '#bfa142',
+                                                  fontWeight: '600',
+                                                  padding: '0.5rem 1rem',
+                                                  borderRadius: '8px',
+                                                  border: '1px solid rgba(191, 161, 66, 0.3)',
+                                                  cursor: userDecisions[pick.id] ? 'default' : 'pointer',
+                                                  flex: 1,
+                                                  fontSize: '0.8rem',
+                                                  letterSpacing: '0.05em',
+                                                  textTransform: 'uppercase',
+                                                  transition: 'all 0.2s ease',
+                                                  opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'bet' ? 0.5 : 1
+                                                }}
+                                                 onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
+                                                    handleDecisionMade('bet', pick);
+                                                  }
+                                                }}
+                                              >
+                                                Bet
+                                              </button>
+                                              <button 
+                                                style={{
+                                                  background: userDecisions[pick.id] === 'fade' 
+                                                    ? 'rgba(255, 255, 255, 0.2)'
+                                                    : 'rgba(255, 255, 255, 0.05)',
+                                                  color: userDecisions[pick.id] === 'fade' 
+                                                    ? 'rgba(255, 255, 255, 1)'
+                                                    : 'rgba(255, 255, 255, 0.8)',
+                                                  fontWeight: '600',
+                                                  padding: '0.5rem 1rem',
+                                                  borderRadius: '8px',
+                                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                  cursor: userDecisions[pick.id] ? 'default' : 'pointer',
+                                                  flex: 1,
+                                                  fontSize: '0.8rem',
+                                                  letterSpacing: '0.05em',
+                                                  textTransform: 'uppercase',
+                                                  transition: 'all 0.2s ease',
+                                                  opacity: userDecisions[pick.id] && userDecisions[pick.id] !== 'fade' ? 0.5 : 1
+                                                }}
+                                                 onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (!processingDecisions[pick.id] && !userDecisions[pick.id]) {
+                                                    handleDecisionMade('fade', pick);
+                                                  }
+                                                }}
+                                              >
+                                                Fade
+                                              </button>
+                                            </div>
                                           </div>
                                         </div>
                                         
-                                        {/* Rationale Section - Further Expanded */}
-                                         <div style={{ 
-                                           flex: '1', 
-                                           display: 'flex', 
-                                           flexDirection: 'column',
-                                           overflowY: 'auto',
-                                           height: 'calc(100% - 80px)', /* Further increased to fill space where yellow bar was */
-                                           marginBottom: '0', /* Removed margin to expand all the way */
-                                       }}>
-                                        {/* Main Analysis */}
-                                        <div style={{ 
-                                          backgroundColor: 'rgba(0, 0, 0, 0.2)', 
-                                          padding: '1.75rem', 
-                                          borderRadius: '0.75rem',
-                                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                                          fontSize: '1.1rem',  /* Increased font size */
-                                          lineHeight: '1.7',   /* Increased line height */
-                                          color: '#fff',
-                                          width: '100%',
-                                          height: '100%',     /* Take all available height */
-                                          overflowY: 'auto',
-                                        }}>
-                                          {/* Rationale Heading */}
-                                          <div style={{ 
-                                            fontSize: '0.8rem', 
-                                            opacity: 0.6, 
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em', 
-                                            marginBottom: '0.75rem'
+                                        {/* Right side content - prominently elevated appearance */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            right: 0,
+                                            top: 0,
+                                            bottom: 0,
+                                            width: '30%',
+                                            borderLeft: '2.25px solid #bfa142',
+                                            padding: '1.5rem',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)',
+                                            boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)',
+                                            borderRadius: '0 16px 16px 0',
+                                            clipPath: 'inset(0px 0px 0px -20px)',
+                                            zIndex: 2,
+                                            transform: 'translateZ(10px)',
                                           }}>
-                                            Rationale
-                                          </div>
+                                           {/* Game time section */}
+                                           <div style={{ 
+                                             textAlign: 'center',
+                                             marginBottom: '1rem'
+                                           }}>
+                                             <div style={{ 
+                                               fontSize: '0.75rem', 
+                                               opacity: 0.6, 
+                                               textTransform: 'uppercase',
+                                               letterSpacing: '0.05em', 
+                                               marginBottom: '0.25rem'
+                                             }}>
+                                               Game Time
+                                             </div>
+                                             <div style={{
+                                               fontSize: '1.125rem', 
+                                               fontWeight: 600,
+                                               opacity: 0.9
+                                             }}>
+                                               {pick.time || '7:10 PM EST'}
+                                             </div>
+                                           </div>
                                           
-                                          {/* Display the rationale */}
-                                          <p style={{ margin: 0, fontWeight: 400, opacity: 0.9 }}>
-                                            {pick.rationale || 'Analysis not available.'}
-                                          </p>
+                                          {/* Coin Image centered - no background - HIDE ON MOBILE */}
+                                          {!isMobile && (
+                                            <div style={{
+                                              display: 'flex',
+                                              justifyContent: 'center',
+                                              marginTop: 'auto',
+                                              marginBottom: 'auto',
+                                              background: 'transparent'
+                                            }}>
+                                              <img 
+                                                src="/coin2.png" 
+                                                alt="Coin Image"
+                                                style={{
+                                                  width: 143,
+                                                  height: 143,
+                                                  objectFit: 'contain',
+                                                  opacity: 1,
+                                                  background: 'transparent'
+                                                }}
+                                              />
+                                            </div>
+                                          )}
+                                          
+                                          {/* Confidence score with visual indicator */}
+                                          <div style={{ 
+                                            textAlign: 'center',
+                                            marginTop: '1rem',
+                                            width: '100%'
+                                          }}>
+                                            <div style={{ 
+                                              fontSize: '0.75rem', 
+                                              opacity: 0.6, 
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em', 
+                                              marginBottom: '0.25rem'
+                                            }}>
+                                              Confidence
+                                            </div>
+                                            
+                                            {/* Confidence score display */}
+                                            <div style={{
+                                              fontSize: '1.2rem',
+                                              fontWeight: 700,
+                                              opacity: 0.95,
+                                              color: '#bfa142',
+                                              marginBottom: '0.5rem'
+                                            }}>
+                                              {typeof pick.confidence === 'number' ? 
+                                                Math.round(pick.confidence * 100) + '%' : 
+                                                (pick.confidence || '75%')}
+                                            </div>
+                                            
+                                            {/* Click to flip instruction with subtle design */}
+                                            <button style={{
+                                              marginTop: '1rem',
+                                              fontSize: '0.75rem',
+                                              padding: '0.5rem 1rem',
+                                              background: 'rgba(191, 161, 66, 0.15)',
+                                              color: '#bfa142',
+                                              border: 'none',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em',
+                                              fontWeight: 500,
+                                              transition: 'all 0.2s ease'
+                                            }}>
+                                              View Analysis
+                                            </button>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Subtle gradient overlay for depth */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          inset: 0,
+                                          background: 'radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 140%)',
+                                          opacity: 0.5,
+                                          pointerEvents: 'none'
+                                        }}></div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* BACK OF CARD - ANALYSIS */}
+                                    {isMobile ? (
+                                      // Mobile simplified back card - only analysis
+                                      <div style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%',
+                                        backfaceVisibility: 'hidden',
+                                        transform: 'rotateY(180deg)',
+                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                        borderRadius: '12px',
+                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                        color: '#ffffff',
+                                        padding: '1.25rem',
+                                        display: 'flex',
+                                        flexDirection: 'column'
+                                      }}>
+                                        {/* Analysis Header */}
+                                        <div style={{ 
+                                          fontSize: '0.85rem', 
+                                          opacity: 0.7, 
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em', 
+                                          marginBottom: '0.75rem',
+                                          textAlign: 'center'
+                                        }}>
+                                          Analysis
+                                        </div>
+                                        
+                                        {/* Scrollable Analysis Content */}
+                                        <div style={{ 
+                                          flex: 1,
+                                          overflowY: 'auto',
+                                          fontSize: '0.95rem',
+                                          lineHeight: '1.6',
+                                          color: '#fff',
+                                          opacity: 0.9
+                                        }}>
+                                          {pick.rationale || 'Analysis not available.'}
+                                        </div>
+                                        
+                                        {/* Tap to flip back indicator */}
+                                        <div style={{
+                                          fontSize: '0.75rem',
+                                          opacity: 0.5,
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em',
+                                          textAlign: 'center',
+                                          marginTop: '0.75rem'
+                                        }}>
+                                          Tap to Flip Back
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      // Desktop back card design
+                                      <div style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%',
+                                        backfaceVisibility: 'hidden',
+                                        transform: 'rotateY(180deg)',
+                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                        borderRadius: '16px',
+                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                        color: '#ffffff',
+                                        padding: '1.5rem',
+                                      }}>
+                                      {/* Card Header - Pick */}
+                                      <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
+                                        {/* Pick Banner */}
+                                        <div style={{ 
+                                          backgroundColor: 'rgba(191, 161, 66, 0.15)',
+                                          color: '#bfa142',
+                                          fontWeight: 'bold',
+                                          fontSize: '1.25rem',
+                                          padding: '0.8rem 1rem',
+                                          textAlign: 'center',
+                                          letterSpacing: '0.05rem',
+                                          textTransform: 'uppercase',
+                                          borderRadius: '8px',
+                                        }}>
+                                          {pick.pick || 'GARY\'S PICK'}
                                         </div>
                                       </div>
                                       
-                                      {/* Removed Bet or Fade Buttons - now on front of card */}
+                                      {/* Rationale Section - Further Expanded */}
+                                       <div style={{ 
+                                         flex: '1', 
+                                         display: 'flex', 
+                                         flexDirection: 'column',
+                                         overflowY: 'auto',
+                                         height: 'calc(100% - 80px)',
+                                         marginBottom: '0',
+                                     }}>
+                                      {/* Main Analysis */}
+                                      <div style={{ 
+                                        backgroundColor: 'rgba(0, 0, 0, 0.2)', 
+                                        padding: '1.75rem', 
+                                        borderRadius: '0.75rem',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        fontSize: '1.1rem',
+                                        lineHeight: '1.7',
+                                        color: '#fff',
+                                        width: '100%',
+                                        height: '100%',
+                                        overflowY: 'auto',
+                                      }}>
+                                        {/* Rationale Heading */}
+                                        <div style={{ 
+                                          fontSize: '0.8rem', 
+                                          opacity: 0.6, 
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em', 
+                                          marginBottom: '0.75rem'
+                                        }}>
+                                          Rationale
+                                        </div>
+                                        
+                                        {/* Display the rationale */}
+                                        <p style={{ margin: 0, fontWeight: 400, opacity: 0.9 }}>
+                                          {pick.rationale || 'Analysis not available.'}
+                                        </p>
+                                      </div>
                                     </div>
-                                  )}
-                                </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    
-                    {/* See Past Picks Button - Repositioned after pagination counter */}
-                    <div className="flex justify-center mt-16 mb-12">
-                      <Link
-                        to="/billfold"
-                        className="px-6 py-3 rounded-lg text-black font-bold transition-all duration-300"
-                        style={{
-                          background: 'linear-gradient(135deg, #B8953F 0%, #D4AF37 100%)',
-                          boxShadow: '0 4px 15px rgba(184, 149, 63, 0.3)',
-                          border: '2px solid #1a1a1a'
-                        }}
-                      >
-                        See Past Picks
-                      </Link>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                })}
+                  
+                  {/* See Past Picks Button - Repositioned after pagination counter */}
+                  <div className="flex justify-center mt-16 mb-12">
+                    <Link
+                      to="/billfold"
+                      className="px-6 py-3 rounded-lg text-black font-bold transition-all duration-300"
+                      style={{
+                        background: 'linear-gradient(135deg, #B8953F 0%, #D4AF37 100%)',
+                        boxShadow: '0 4px 15px rgba(184, 149, 63, 0.3)',
+                        border: '2px solid #1a1a1a'
+                      }}
+                    >
+                      See Past Picks
+                    </Link>
+                  </div>
+                </div>
               </div>
-            })}
-        })}
+            </div>
+          )
+        )}
       </div>
     </div>
   );
 }
 
-export default RealGaryPicks;
+export default RealGaryPicks; 
