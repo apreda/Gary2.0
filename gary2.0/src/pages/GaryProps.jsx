@@ -339,14 +339,28 @@ export default function GaryProps() {
                                   {pick.rationale ? (
                                     pick.rationale.includes('•') || pick.rationale.includes('. ') ? (
                                       <ul style={{ listStyleType: 'none', margin: 0, padding: 0 }}>
-                                        {pick.rationale.split(/[.•]/)
+                                        {pick.rationale
+                                          // Split on bullet points or periods followed by space (not decimal points)
+                                          .split(/[•]|\.\s+/)
                                           .filter(point => point.trim().length > 0)
-                                          .map((point, idx) => (
-                                            <li key={idx} style={{ display: 'flex', marginBottom: '8px', alignItems: 'flex-start' }}>
-                                              <span style={{ color: '#bfa142', marginRight: '6px', fontWeight: 'bold', fontSize: '0.9rem' }}>•</span>
-                                              <span>{point.trim()}{!point.trim().endsWith('.') ? '.' : ''}</span>
-                                            </li>
-                                          ))}
+                                          .map((point, idx) => {
+                                            // Clean up the point and ensure it ends with a period
+                                            let cleanPoint = point.trim();
+                                            // Remove any leading period that might be left from splitting
+                                            if (cleanPoint.startsWith('.')) {
+                                              cleanPoint = cleanPoint.substring(1).trim();
+                                            }
+                                            // Add period if missing
+                                            if (!cleanPoint.endsWith('.') && !cleanPoint.endsWith('!') && !cleanPoint.endsWith('?')) {
+                                              cleanPoint += '.';
+                                            }
+                                            return (
+                                              <li key={idx} style={{ display: 'flex', marginBottom: '8px', alignItems: 'flex-start' }}>
+                                                <span style={{ color: '#bfa142', marginRight: '6px', fontWeight: 'bold', fontSize: '0.9rem' }}>•</span>
+                                                <span>{cleanPoint}</span>
+                                              </li>
+                                            );
+                                          })}
                                       </ul>
                                     ) : (
                                       <div style={{ padding: '0.25rem 0' }}>{pick.rationale}</div>
