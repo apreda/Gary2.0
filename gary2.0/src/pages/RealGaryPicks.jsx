@@ -576,6 +576,19 @@ function RealGaryPicks() {
     }, 500);
   };
 
+  // Check user decisions on mount
+  useEffect(() => {
+    checkUserDecisions();
+  }, [user]);
+  
+  // Add picks-page class to body for mobile-specific zoom
+  useEffect(() => {
+    document.body.classList.add('picks-page');
+    return () => {
+      document.body.classList.remove('picks-page');
+    };
+  }, []);
+
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
       {/* BG2.png background with 15% opacity */}
@@ -682,7 +695,7 @@ function RealGaryPicks() {
                     <h1 className="text-4xl font-bold text-center mb-2" style={{ color: '#b8953f' }}>
                       TODAY'S PICKS
                     </h1>
-                    <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto">
+                    <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto hidden sm:block">
                       Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
                     </p>
                     
