@@ -206,9 +206,6 @@ DATA ACCURACY & ANALYSIS RULES:
 YOUR ANALYSIS MUST INCLUDE ACTUAL STATISTICS FROM THE INPUT DATA:
 - Use the statistics provided in the input to form your analysis and justify your pick.
 - Focus on the data points that you believe are most relevant to the outcome.
-- Incorporate both team and individual player statistics when making your case.
-
-Use the stats in a way that feels natural and adds weight to your argument.
 
 NEVER EVER mention missing or limited stats in your analysis. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
 
@@ -257,6 +254,7 @@ You must return a properly formatted JSON object with the following structure:
 
 {
   "pick": "Team Name BetType Odds (e.g., 'New York Knicks -4.5 -105' or 'Boston Red Sox ML -120')",
+  "odds": "The specific odds for your pick (e.g., '-105' or '+150')",
   "type": "spread" or "moneyline",
   "confidence": 0.5–1.0,
   "trapAlert": true or false,
@@ -269,6 +267,8 @@ You must return a properly formatted JSON object with the following structure:
   "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
   "rationale": "A 2-4 sentence paragraph explaining your pick using whatever information you find most compelling."
 }
+
+REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-NEGOTIABLE. If you fail to include odds, the system will reject your pick.
 `
     };
     

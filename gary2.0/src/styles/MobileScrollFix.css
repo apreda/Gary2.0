@@ -11,8 +11,22 @@
     text-size-adjust: none !important;
   }
   
-  /* Removed special zoom for picks page - now using compact card mode instead */
-  /* The compact card mode should fit properly without additional zoom */
+  /* Special case for picks page - use normal zoom since we have mobile-optimized cards */
+  html:has(body.picks-page) {
+    zoom: 1 !important; /* No zoom - cards are already optimized for mobile */
+  }
+  
+  /* Fallback approach using adjacent selector if :has() not supported */
+  body.picks-page {
+    zoom: 2.22 !important; /* 1 / 0.45 = 2.22 to compensate for the 0.45 base zoom */
+    transform-origin: top left !important;
+  }
+  
+  /* Alternative: Apply zoom directly to picks page container */
+  body.picks-page #root {
+    zoom: 2.22 !important; /* 1 / 0.45 = 2.22 to compensate */
+    transform-origin: top left !important;
+  }
   
   /* Ensure body takes full space */
   body {

@@ -874,12 +874,16 @@ function RealGaryPicks() {
                                         }}>
                                           {/* Gary's Pick - Large and Centered */}
                                           <div style={{ 
-                                            fontSize: '1.75rem', 
+                                            fontSize: isMobile ? '1.75rem' : '2rem', 
                                             fontWeight: 700, 
-                                            lineHeight: 1.2,
-                                            color: '#bfa142',
-                                            marginBottom: '1.5rem',
-                                            wordBreak: 'break-word'
+                                            lineHeight: 1.1,
+                                            color: '#bfa142', /* Keeping gold color for the actual pick */
+                                            wordBreak: 'break-word',
+                                            maxHeight: isMobile ? '3rem' : '4.5rem',
+                                            overflow: 'hidden',
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical'
                                           }}>
                                             {pick.pick || pick.shortPick}
                                           </div>
@@ -1008,32 +1012,18 @@ function RealGaryPicks() {
                                                 Gary's Pick
                                               </div>
                                               <div style={{ 
-                                                fontSize: '2rem', 
+                                                fontSize: isMobile ? '1.75rem' : '2rem', 
                                                 fontWeight: 700, 
                                                 lineHeight: 1.1,
                                                 color: '#bfa142', /* Keeping gold color for the actual pick */
                                                 wordBreak: 'break-word',
-                                                maxHeight: '4.5rem',
+                                                maxHeight: isMobile ? '3rem' : '4.5rem',
                                                 overflow: 'hidden',
                                                 display: '-webkit-box',
                                                 WebkitLineClamp: 2,
                                                 WebkitBoxOrient: 'vertical'
                                               }}>
-                                                {pick.shortPick}{pick.odds ? (() => {
-                                                  // Format odds correctly based on whether it's positive or negative
-                                                  const oddsValue = pick.odds.trim();
-                                                  if (oddsValue.startsWith('-')) {
-                                                    // Negative odds already have the - sign
-                                                    return ` ${oddsValue}`;
-                                                  } else if (oddsValue.startsWith('+')) {
-                                                    // Positive odds that already have the + sign
-                                                    return ` ${oddsValue}`;
-                                                  } else {
-                                                    // Positive odds without the + sign - add it
-                                                    const numericValue = parseInt(oddsValue, 10);
-                                                    return numericValue > 0 ? ` +${oddsValue}` : ` ${oddsValue}`;
-                                                  }
-                                                })() : ''}
+                                                {pick.pick || pick.shortPick}
                                               </div>
                                               
                                               {/* Add a preview of the rationale on front card - hide on mobile */}
@@ -1414,38 +1404,38 @@ function RealGaryPicks() {
                       </Link>
                     </div>
                   </div>
-                </div>
-              )}
-              {/* Parlay card removed - no longer used */}
-              {activeTab === 'history' && (
-                <div className="mx-auto max-w-4xl mb-12" style={{ backgroundColor: '#121212', border: '3px solid #d4af37', borderRadius: '8px', overflow: 'hidden' }}>
-                  <div style={{ backgroundColor: '#d4af37', padding: '8px', textAlign: 'center' }}>
-                    <h2 className="text-xl font-bold text-black">YOUR BETTING HISTORY</h2>
+                )}
+                {/* Parlay card removed - no longer used */}
+                {activeTab === 'history' && (
+                  <div className="mx-auto max-w-4xl mb-12" style={{ backgroundColor: '#121212', border: '3px solid #d4af37', borderRadius: '8px', overflow: 'hidden' }}>
+                    <div style={{ backgroundColor: '#d4af37', padding: '8px', textAlign: 'center' }}>
+                      <h2 className="text-xl font-bold text-black">YOUR BETTING HISTORY</h2>
+                    </div>
+                    {user ? (
+                      <div className="p-4" style={{ backgroundColor: '#f5f5dc' }}>
+                        <BetCard reloadKey={reloadKey} />
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="mb-4" style={{ color: '#ffc107' }}>LOGIN TO VIEW YOUR BETTING HISTORY</p>
+                        <button 
+                          onClick={() => navigate('/login')} 
+                          className="px-4 py-2 font-bold uppercase rounded"
+                          style={{ backgroundColor: '#ffc107', color: 'black', border: '2px solid black' }}
+                        >
+                          LOGIN NOW
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {user ? (
-                    <div className="p-4" style={{ backgroundColor: '#f5f5dc' }}>
-                      <BetCard reloadKey={reloadKey} />
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="mb-4" style={{ color: '#ffc107' }}>LOGIN TO VIEW YOUR BETTING HISTORY</p>
-                      <button 
-                        onClick={() => navigate('/login')} 
-                        className="px-4 py-2 font-bold uppercase rounded"
-                        style={{ backgroundColor: '#ffc107', color: 'black', border: '2px solid black' }}
-                      >
-                        LOGIN NOW
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
+            
+            {/* Disclaimer removed */}
+            </>
           )}
-          
-          {/* Disclaimer removed */}
-          </>
-        )}
+        </div>
       </div>
     </div>
   );
