@@ -23,6 +23,24 @@ import { garyPhrases } from '../utils/garyPhrases';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 import { resultsCheckerService } from '../services/resultsCheckerService';
 
+// Custom hook to detect mobile
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  return isMobile;
+};
+
 function RealGaryPicks() {
   const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
@@ -589,6 +607,8 @@ function RealGaryPicks() {
     };
   }, []);
 
+  const isMobile = useIsMobile();
+
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
       {/* BG2.png background with 15% opacity */}
@@ -707,24 +727,24 @@ function RealGaryPicks() {
                     <div className="flex justify-center items-center relative py-4 pt-2">
                       {/* Left navigation arrow - positioned outside the card, no circle */}
                       <button 
-                        className="absolute left-[-60px] z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent"
+                        className={`absolute ${isMobile ? 'left-[-30px]' : 'left-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
                         onClick={prevPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M15 18l-6-6 6-6" />
                         </svg>
                       </button>
                       
                       {/* Right navigation arrow - positioned outside the card, no circle */}
                       <button 
-                        className="absolute right-[-60px] z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent"
+                        className={`absolute ${isMobile ? 'right-[-30px]' : 'right-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
                         onClick={nextPick}
                         disabled={animating || picks.length <= 1}
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M9 18l6-6-6-6" />
                         </svg>
                       </button>
@@ -737,7 +757,12 @@ function RealGaryPicks() {
                       </div>
                       
                       {/* Card Stack - Wider index card format (20% larger) */}
-                      <div className="relative" style={{ width: '634px', height: '422px', marginLeft: '48px' }}>
+                      <div className="relative" style={{ 
+                        width: isMobile ? '100%' : '634px', 
+                        height: isMobile ? '280px' : '422px', 
+                        marginLeft: isMobile ? '0' : '48px',
+                        maxWidth: isMobile ? '400px' : 'none'
+                      }}>
                         {picks.map((pick, index) => {
                           // Calculate position in stack relative to current index
                           const position = (index - currentIndex + picks.length) % picks.length;
@@ -749,10 +774,10 @@ function RealGaryPicks() {
                             transform: position === 0 
                               ? 'translateX(0) scale(1)' 
                               : position === 1 
-                                ? 'translateX(10px) scale(0.95) translateY(10px)' 
+                                ? `translateX(${isMobile ? '5px' : '10px'}) scale(0.95) translateY(${isMobile ? '5px' : '10px'})` 
                                 : position === 2 
-                                  ? 'translateX(20px) scale(0.9) translateY(20px)' 
-                                  : 'translateX(30px) scale(0.85) translateY(30px)',
+                                  ? `translateX(${isMobile ? '10px' : '20px'}) scale(0.9) translateY(${isMobile ? '10px' : '20px'})` 
+                                  : `translateX(${isMobile ? '15px' : '30px'}) scale(0.85) translateY(${isMobile ? '15px' : '30px'})`,
                             opacity: position <= 2 ? 1 - (position * 0.15) : 0,
                             pointerEvents: isCurrentCard ? 'auto' : 'none',
                             /* Box shadow removed */
@@ -780,7 +805,7 @@ function RealGaryPicks() {
                             >
                               {/* Card container with flip effect */}
                               <div 
-                                className="w-[576px] h-[384px] relative cursor-pointer" 
+                                className={isMobile ? "w-full h-full relative cursor-pointer" : "w-[576px] h-[384px] relative cursor-pointer"} 
                                 style={{
                                   perspective: '1000px',
                                 }}
@@ -829,7 +854,7 @@ function RealGaryPicks() {
                                         height: '100%',
                                         backfaceVisibility: 'hidden',
                                         background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                        borderRadius: '16px',
+                                        borderRadius: isMobile ? '12px' : '16px',
                                         fontFamily: 'Inter, system-ui, sans-serif',
                                         overflow: 'hidden',
                                         boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
@@ -841,8 +866,8 @@ function RealGaryPicks() {
                                            left: 0,
                                            top: 0,
                                            bottom: 0,
-                                           width: '70%',
-                                          padding: '1.5rem',
+                                           width: isMobile ? '65%' : '70%',
+                                          padding: isMobile ? '1rem' : '1.5rem',
                                           display: 'flex',
                                           flexDirection: 'column',
                                           justifyContent: 'space-between',
@@ -853,7 +878,7 @@ function RealGaryPicks() {
                                             {/* League */}
                                             <div>
                                               <div style={{ 
-                                                fontSize: '0.75rem', 
+                                                fontSize: isMobile ? '0.65rem' : '0.75rem', 
                                                 opacity: 0.6, 
                                                 textTransform: 'uppercase',
                                                 letterSpacing: '0.05em', 
@@ -862,7 +887,7 @@ function RealGaryPicks() {
                                                 League
                                               </div>
                                               <div style={{ 
-                                                fontSize: '1.25rem', 
+                                                fontSize: isMobile ? '1rem' : '1.25rem', 
                                                 fontWeight: 600, 
                                                 letterSpacing: '0.02em',
                                                 opacity: 0.95
@@ -872,9 +897,9 @@ function RealGaryPicks() {
                                             </div>
                                             
                                             {/* Matchup */}
-                                            <div style={{ marginLeft: '20px' }}>
+                                            <div style={{ marginLeft: isMobile ? '10px' : '20px' }}>
                                               <div style={{ 
-                                                fontSize: '0.75rem', 
+                                                fontSize: isMobile ? '0.65rem' : '0.75rem', 
                                                 opacity: 0.6, 
                                                 textTransform: 'uppercase',
                                                 letterSpacing: '0.05em', 
@@ -883,7 +908,7 @@ function RealGaryPicks() {
                                                 Matchup
                                               </div>
                                               <div style={{ 
-                                                fontSize: '1.25rem', 
+                                                fontSize: isMobile ? '0.9rem' : '1.25rem', 
                                                 fontWeight: 600,
                                                 opacity: 0.9
                                               }}>
@@ -895,23 +920,23 @@ function RealGaryPicks() {
                                           </div>
                                           
                                           {/* The main pick display */}
-                                          <div style={{ marginBottom: '1rem' }}>
+                                          <div style={{ marginBottom: isMobile ? '0.5rem' : '1rem' }}>
                                             <div style={{ 
-                                              fontSize: '0.75rem', 
+                                              fontSize: isMobile ? '0.65rem' : '0.75rem', 
                                               opacity: 0.6, 
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.05em', 
-                                              marginBottom: '0.5rem'
+                                              marginBottom: isMobile ? '0.25rem' : '0.5rem'
                                             }}>
                                               Gary's Pick
                                             </div>
                                             <div style={{ 
-                                              fontSize: '2rem', 
+                                              fontSize: isMobile ? '1.5rem' : '2rem', 
                                               fontWeight: 700, 
                                               lineHeight: 1.1,
                                               color: '#bfa142', /* Keeping gold color for the actual pick */
                                               wordBreak: 'break-word',
-                                              maxHeight: '4.5rem',
+                                              maxHeight: isMobile ? '3rem' : '4.5rem',
                                               overflow: 'hidden',
                                               display: '-webkit-box',
                                               WebkitLineClamp: 2,
@@ -934,35 +959,37 @@ function RealGaryPicks() {
                                               })() : ''}
                                             </div>
                                             
-                                            {/* Add a preview of the rationale on front card */}
-                                            <div style={{
-                                              fontSize: '0.85rem',
-                                              opacity: 0.8,
-                                              overflow: 'hidden',
-                                              display: '-webkit-box',
-                                              WebkitLineClamp: 3,
-                                              WebkitBoxOrient: 'vertical',
-                                              textOverflow: 'ellipsis',
-                                              marginBottom: '0.5rem'
-                                            }}>
-                                              {pick.rationale ? pick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
-                                            </div>
+                                            {/* Add a preview of the rationale on front card - hide on mobile */}
+                                            {!isMobile && (
+                                              <div style={{
+                                                fontSize: '0.85rem',
+                                                opacity: 0.8,
+                                                overflow: 'hidden',
+                                                display: '-webkit-box',
+                                                WebkitLineClamp: 3,
+                                                WebkitBoxOrient: 'vertical',
+                                                textOverflow: 'ellipsis',
+                                                marginBottom: '0.5rem'
+                                              }}>
+                                                {pick.rationale ? pick.rationale.substring(0, 120) + '...' : 'Click for analysis'}
+                                              </div>
+                                            )}
                                           </div>
                                           
                                           {/* Bet or Fade Buttons */}
                                           <div>
                                             <div style={{ 
-                                              fontSize: '0.75rem', 
+                                              fontSize: isMobile ? '0.65rem' : '0.75rem', 
                                               opacity: 0.6, 
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.05em', 
-                                              marginBottom: '0.5rem'
+                                              marginBottom: isMobile ? '0.25rem' : '0.5rem'
                                             }}>
                                               Take Your Pick
                                             </div>
                                             <div style={{
                                               display: 'flex',
-                                              gap: '0.75rem',
+                                              gap: isMobile ? '0.5rem' : '0.75rem',
                                               width: '100%',
                                             }}>
                                               <button 
@@ -974,12 +1001,12 @@ function RealGaryPicks() {
                                                     ? '#ffdf7e'
                                                     : '#bfa142',
                                                   fontWeight: '600',
-                                                  padding: '0.5rem 1rem',
+                                                  padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
                                                   borderRadius: '8px',
                                                   border: '1px solid rgba(191, 161, 66, 0.3)',
                                                   cursor: userDecisions[pick.id] ? 'default' : 'pointer',
                                                   flex: 1,
-                                                  fontSize: '0.8rem',
+                                                  fontSize: isMobile ? '0.7rem' : '0.8rem',
                                                   letterSpacing: '0.05em',
                                                   textTransform: 'uppercase',
                                                   transition: 'all 0.2s ease',
@@ -1004,12 +1031,12 @@ function RealGaryPicks() {
                                                     ? 'rgba(255, 255, 255, 1)'
                                                     : 'rgba(255, 255, 255, 0.8)',
                                                   fontWeight: '600',
-                                                  padding: '0.5rem 1rem',
+                                                  padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
                                                   borderRadius: '8px',
                                                   border: '1px solid rgba(255, 255, 255, 0.1)',
                                                   cursor: userDecisions[pick.id] ? 'default' : 'pointer',
                                                   flex: 1,
-                                                  fontSize: '0.8rem',
+                                                  fontSize: isMobile ? '0.7rem' : '0.8rem',
                                                   letterSpacing: '0.05em',
                                                   textTransform: 'uppercase',
                                                   transition: 'all 0.2s ease',
@@ -1035,16 +1062,16 @@ function RealGaryPicks() {
                                             right: 0,
                                             top: 0,  /* Aligned to card edge */
                                             bottom: 0, /* Aligned to card edge */
-                                            width: '30%',
+                                            width: isMobile ? '35%' : '30%',
                                             borderLeft: '2.25px solid #bfa142', /* Gold border */
-                                            padding: '1.5rem 1rem',
+                                            padding: isMobile ? '0.75rem 0.5rem' : '1.5rem 1rem',
                                             display: 'flex',
                                             flexDirection: 'column',
                                             justifyContent: 'space-between',
                                             alignItems: 'center',
                                             background: 'linear-gradient(135deg, rgba(55, 55, 58, 1) 0%, rgba(40, 40, 42, 0.95) 100%)', /* Much darker and more distinct */
                                             boxShadow: '-10px 0 15px rgba(0, 0, 0, 0.4)', /* Interior shadow only */
-                                            borderRadius: '0 16px 16px 0', /* Rounded on right side only */
+                                            borderRadius: isMobile ? '0 12px 12px 0' : '0 16px 16px 0', /* Rounded on right side only */
                                             clipPath: 'inset(0px 0px 0px -20px)', /* Clip shadow to prevent overflow */
                                             zIndex: 2, /* Ensure it appears above other content */
                                             transform: 'translateZ(10px)', /* 3D effect */
@@ -1052,10 +1079,10 @@ function RealGaryPicks() {
                                            {/* Game time section */}
                                            <div style={{ 
                                              textAlign: 'center',
-                                             marginBottom: '1rem'
+                                             marginBottom: isMobile ? '0.5rem' : '1rem'
                                            }}>
                                              <div style={{ 
-                                               fontSize: '0.75rem', 
+                                               fontSize: isMobile ? '0.65rem' : '0.75rem', 
                                                opacity: 0.6, 
                                                textTransform: 'uppercase',
                                                letterSpacing: '0.05em', 
@@ -1064,7 +1091,7 @@ function RealGaryPicks() {
                                                Game Time
                                              </div>
                                              <div style={{
-                                               fontSize: '1.125rem', 
+                                               fontSize: isMobile ? '0.9rem' : '1.125rem', 
                                                fontWeight: 600,
                                                opacity: 0.9
                                              }}>
@@ -1072,35 +1099,37 @@ function RealGaryPicks() {
                                              </div>
                                            </div>
                                           
-                                          {/* Coin Image centered - no background */}
-                                          <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'center',
-                                            marginTop: 'auto',
-                                            marginBottom: 'auto',
-                                            background: 'transparent'
-                                          }}>
-                                            <img 
-                                              src="/coin2.png" 
-                                              alt="Coin Image"
-                                              style={{
-                                                width: 143, /* 10% bigger than previous 130px */
-                                                height: 143, /* 10% bigger than previous 130px */
-                                                objectFit: 'contain',
-                                                opacity: 1,
-                                                background: 'transparent'
-                                              }}
-                                            />
-                                          </div>
+                                          {/* Coin Image centered - no background - HIDE ON MOBILE */}
+                                          {!isMobile && (
+                                            <div style={{
+                                              display: 'flex',
+                                              justifyContent: 'center',
+                                              marginTop: 'auto',
+                                              marginBottom: 'auto',
+                                              background: 'transparent'
+                                            }}>
+                                              <img 
+                                                src="/coin2.png" 
+                                                alt="Coin Image"
+                                                style={{
+                                                  width: 143, /* 10% bigger than previous 130px */
+                                                  height: 143, /* 10% bigger than previous 130px */
+                                                  objectFit: 'contain',
+                                                  opacity: 1,
+                                                  background: 'transparent'
+                                                }}
+                                              />
+                                            </div>
+                                          )}
                                           
                                           {/* Confidence score with visual indicator */}
                                           <div style={{ 
                                             textAlign: 'center',
-                                            marginTop: '1rem',
+                                            marginTop: isMobile ? '0.5rem' : '1rem',
                                             width: '100%'
                                           }}>
                                             <div style={{ 
-                                              fontSize: '0.75rem', 
+                                              fontSize: isMobile ? '0.65rem' : '0.75rem', 
                                               opacity: 0.6, 
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.05em', 
@@ -1111,11 +1140,11 @@ function RealGaryPicks() {
                                             
                                             {/* Confidence score display */}
                                             <div style={{
-                                              fontSize: '1.2rem',
+                                              fontSize: isMobile ? '1rem' : '1.2rem',
                                               fontWeight: 700,
                                               opacity: 0.95,
                                               color: '#bfa142', /* Gold for confidence */
-                                              marginBottom: '0.5rem'
+                                              marginBottom: isMobile ? '0.25rem' : '0.5rem'
                                             }}>
                                               {typeof pick.confidence === 'number' ? 
                                                 Math.round(pick.confidence * 100) + '%' : 
@@ -1124,9 +1153,9 @@ function RealGaryPicks() {
                                             
                                             {/* Click to flip instruction with subtle design */}
                                             <button style={{
-                                              marginTop: '1rem',
-                                              fontSize: '0.75rem',
-                                              padding: '0.5rem 1rem',
+                                              marginTop: isMobile ? '0.5rem' : '1rem',
+                                              fontSize: isMobile ? '0.65rem' : '0.75rem',
+                                              padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
                                               background: 'rgba(191, 161, 66, 0.15)',
                                               color: '#bfa142',
                                               border: 'none',
@@ -1160,22 +1189,22 @@ function RealGaryPicks() {
                                         backfaceVisibility: 'hidden',
                                         transform: 'rotateY(180deg)',
                                         background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                        borderRadius: '16px',
+                                        borderRadius: isMobile ? '12px' : '16px',
                                         fontFamily: 'Inter, system-ui, sans-serif',
                                         overflow: 'hidden',
                                         boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
                                         color: '#ffffff',
-                                        padding: '1.5rem',
+                                        padding: isMobile ? '1rem' : '1.5rem',
                                       }}>
                                       {/* Card Header - Pick */}
-                                      <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
+                                      <div style={{ position: 'relative', width: '100%', marginBottom: isMobile ? '1rem' : '1.5rem' }}>
                                         {/* Pick Banner */}
                                         <div style={{ 
                                           backgroundColor: 'rgba(191, 161, 66, 0.15)',
                                           color: '#bfa142',
                                           fontWeight: 'bold',
-                                          fontSize: '1.25rem',
-                                          padding: '0.8rem 1rem',
+                                          fontSize: isMobile ? '1rem' : '1.25rem',
+                                          padding: isMobile ? '0.6rem 0.8rem' : '0.8rem 1rem',
                                           textAlign: 'center',
                                           letterSpacing: '0.05rem',
                                           textTransform: 'uppercase',
@@ -1191,16 +1220,16 @@ function RealGaryPicks() {
                                          display: 'flex', 
                                          flexDirection: 'column',
                                          overflowY: 'auto',
-                                         height: 'calc(100% - 80px)', /* Further increased to fill space where yellow bar was */
+                                         height: isMobile ? 'calc(100% - 60px)' : 'calc(100% - 80px)', /* Further increased to fill space where yellow bar was */
                                          marginBottom: '0', /* Removed margin to expand all the way */
                                      }}>
                                       {/* Main Analysis */}
                                       <div style={{ 
                                         backgroundColor: 'rgba(0, 0, 0, 0.2)', 
-                                        padding: '1.75rem', 
+                                        padding: isMobile ? '1rem' : '1.75rem', 
                                         borderRadius: '0.75rem',
                                         border: '1px solid rgba(255, 255, 255, 0.1)',
-                                        fontSize: '1.1rem',  /* Increased font size */
+                                        fontSize: isMobile ? '0.9rem' : '1.1rem',  /* Increased font size */
                                         lineHeight: '1.7',   /* Increased line height */
                                         color: '#fff',
                                         width: '100%',
@@ -1209,11 +1238,11 @@ function RealGaryPicks() {
                                       }}>
                                         {/* Rationale Heading */}
                                         <div style={{ 
-                                          fontSize: '0.8rem', 
+                                          fontSize: isMobile ? '0.7rem' : '0.8rem', 
                                           opacity: 0.6, 
                                           textTransform: 'uppercase',
                                           letterSpacing: '0.05em', 
-                                          marginBottom: '0.75rem'
+                                          marginBottom: isMobile ? '0.5rem' : '0.75rem'
                                         }}>
                                           Rationale
                                         </div>

@@ -11,36 +11,8 @@
     text-size-adjust: none !important;
   }
   
-  /* Specific zoom for picks page to make cards more readable */
-  html:has(body.picks-page) {
-    zoom: 0.50 !important;
-  }
-  
-  /* Fallback approach using adjacent selector if :has() not supported */
-  body.picks-page + html {
-    zoom: 0.50 !important;
-  }
-  
-  /* Alternative: Apply zoom directly to picks page container */
-  body.picks-page #root {
-    zoom: 1.11 !important; /* 0.50 / 0.45 = 1.11 to compensate */
-    transform-origin: top left !important;
-  }
-  
-  /* Fallback for browsers that don't support zoom */
-  @supports not (zoom: 1) {
-    html {
-      transform: scale(0.45) !important;
-      transform-origin: top left !important;
-      width: 222.22% !important; /* 100 / 0.45 */
-      height: 222.22% !important;
-    }
-    
-    body.picks-page #root {
-      transform: scale(1.11) !important; /* 0.50 / 0.45 */
-      transform-origin: top left !important;
-    }
-  }
+  /* Removed special zoom for picks page - now using compact card mode instead */
+  /* The compact card mode should fit properly without additional zoom */
   
   /* Ensure body takes full space */
   body {
