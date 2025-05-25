@@ -1280,10 +1280,10 @@ function RealGaryPicks() {
                       </Link>
                     </div>
                   </div>
-                )}
+                })}
               </div>
-            )}
-        )}
+            })}
+        })}
       </div>
     </div>
   );
