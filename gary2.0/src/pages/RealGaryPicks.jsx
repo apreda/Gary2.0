@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useUserPlan } from "../contexts/UserPlanContext";
 import BG2 from '/BG2.png'; // Import the background image directly
-import { BetCard } from './BetCard';
 import { useToast } from '../components/ui/ToastProvider';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/PickCardGlow.css'; // Import the glow effect CSS
@@ -37,7 +36,6 @@ const useIsMobile = () => {
 
 function RealGaryPicks() {
   const { user } = useAuth();
-  const [reloadKey, setReloadKey] = useState(0);
   const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
   
@@ -103,12 +101,6 @@ function RealGaryPicks() {
   // Toast notification system
   const showToast = useToast();
   
-  // Debug logs for troubleshooting
-  useEffect(() => {
-    console.log('[RealGaryPicks] picks:', picks);
-    console.log('[RealGaryPicks] loading:', loading);
-    console.log('[RealGaryPicks] error:', error);
-  }, [picks, loading, error]);
 
   // Using hardcoded performance values
 
@@ -188,8 +180,6 @@ function RealGaryPicks() {
       
       // Log the entire data structure to help debug the time field
       if (data) {
-        console.log('Complete Supabase data structure:', JSON.stringify(data, null, 2));
-        console.log('Direct time field check:', data.time);
       }
       
       // Store the queryDate for use in generating consistent pick IDs
@@ -226,7 +216,6 @@ function RealGaryPicks() {
             return true;
           })
           .map(pick => {
-            console.log('Processing valid pick from Supabase:', JSON.stringify(pick, null, 2));
             console.log('Game time from database:', pick.time);
             // Log all possible time field variations
             console.log('Time field variations:', {
@@ -335,7 +324,6 @@ function RealGaryPicks() {
               momentum: pick.momentum || 0
             };
             
-            console.log('Valid pick ready for rendering:', simplePick);
             return simplePick;
         });
       }
@@ -518,12 +506,6 @@ function RealGaryPicks() {
       // Reload picks if necessary
       loadPicks();
       
-      // Increment reloadKey to force BetCard to reload
-      setReloadKey(prev => {
-        const newKey = prev + 1;
-        console.log('[RealGaryPicks] reloadKey incremented', newKey);
-        return newKey;
-      });
     } catch (error) {
       console.error('Error handling bet/fade decision:', error);
       showToast('Something went wrong. Please try again.', 'error', 3000, false);
