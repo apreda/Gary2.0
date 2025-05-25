@@ -1,85 +1,131 @@
 /* 
  * Mobile View Enhancements
- * Shows desktop layout on mobile devices without black boxes
+ * Forces content to fill entire mobile screen
  */
 
 @media only screen and (max-width: 768px) {
-  /* Reset any previous transforms and ensure full viewport coverage */
+  /* Force full viewport width on all elements */
+  *, *::before, *::after {
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  /* Reset html and body */
   html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
+    width: 100vw !important;
     height: 100% !important;
-    overflow: visible !important;
-    background-color: #000000 !important; /* Match the app background */
-  }
-  
-  /* Apply zoom to show more content - 70% gives good balance */
-  html {
-    zoom: 0.7 !important;
-    -moz-transform: scale(0.7) !important;
-    -moz-transform-origin: top left !important;
-    transform: scale(0.7) !important;
-    transform-origin: top left !important;
-  }
-  
-  /* For browsers that support zoom but not transform */
-  @supports not (zoom: 1) {
-    html {
-      transform: scale(0.7) !important;
-      transform-origin: top left !important;
-      width: 142.86% !important; /* 100 / 0.7 to compensate for scale */
-    }
-  }
-  
-  /* Ensure root element fills the screen */
-  #root {
-    width: 100% !important;
-    min-height: 100vh !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
     background-color: #000000 !important;
     position: relative !important;
   }
   
-  /* Make sure all containers use full width */
-  #root > div {
-    width: 100% !important;
-    min-height: 100vh !important;
-    background-color: inherit !important;
-  }
-  
-  /* Specifically target the main app container */
-  .App, .app-container, [class*="app"] {
-    background-color: #000000 !important;
-    min-height: 100vh !important;
-  }
-  
-  /* Fix any elements that might create gaps */
-  div[style*="background-image"] {
-    background-size: cover !important;
-    background-position: center !important;
-  }
-  
-  /* Ensure no horizontal scrollbars while allowing vertical scroll */
-  body {
+  /* Root must fill viewport */
+  #root {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
+    background-color: #000000 !important;
   }
   
-  /* Override any container width restrictions */
-  .container,
-  .container-fluid,
-  [class*="container"],
-  .max-w-screen-xl,
-  .max-w-screen-lg {
-    max-width: 100% !important;
-    padding-left: 0.5rem !important;
-    padding-right: 0.5rem !important;
-  }
-  
-  /* Fix potential viewport issues */
-  .min-h-screen {
+  /* Direct children of root */
+  #root > div {
+    position: relative !important;
+    width: 100vw !important;
     min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+  
+  /* Override ALL container classes */
+  div[class*="container"],
+  div[class*="max-w-"],
+  div[class*="mx-auto"],
+  .container,
+  .container-fluid {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin: 0 !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    left: 0 !important;
+    right: 0 !important;
+    position: relative !important;
+  }
+  
+  /* Specific overrides for common Tailwind classes */
+  .mx-auto {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  .max-w-screen-xl,
+  .max-w-screen-lg,
+  .max-w-screen-md,
+  .max-w-screen-sm,
+  .max-w-7xl,
+  .max-w-6xl,
+  .max-w-5xl,
+  .max-w-4xl,
+  .max-w-3xl,
+  .max-w-2xl,
+  .max-w-xl,
+  .max-w-lg {
+    max-width: 100vw !important;
+    width: 100vw !important;
+  }
+  
+  /* Fix main content area */
+  main, section, article {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin: 0 !important;
+  }
+  
+  /* Ensure backgrounds fill screen */
+  .fixed,
+  [style*="background"],
+  div[style*="background-image"] {
+    width: 100vw !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+  
+  /* Scale down font sizes for mobile */
+  body {
+    font-size: 14px !important;
+  }
+  
+  h1 { font-size: 1.5rem !important; }
+  h2 { font-size: 1.25rem !important; }
+  h3 { font-size: 1.1rem !important; }
+  
+  /* Adjust padding */
+  .px-4 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+  .p-4 { padding: 0.5rem !important; }
+  .p-6 { padding: 0.75rem !important; }
+  .p-8 { padding: 1rem !important; }
+  
+  /* Fix any absolutely positioned elements */
+  .absolute {
+    max-width: 100vw !important;
+  }
+  
+  /* Ensure no horizontal scroll */
+  * {
+    max-width: 100vw !important;
   }
 }
