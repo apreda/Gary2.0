@@ -278,7 +278,7 @@ const optimizedPicksService = {
           const gamePicks = (await Promise.all(pickPromises)).filter(pick => pick !== null);
           
           // Filter based on confidence level
-          const confidenceThreshold = 0.75; // Standardized 0.75 threshold for all sports
+          const confidenceThreshold = 0.7; // Standardized 0.7 threshold for all sports
           const confidencePicks = gamePicks.filter(pick => 
             pick && pick.confidence >= confidenceThreshold
           );

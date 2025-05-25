@@ -414,7 +414,7 @@ Respond with ONLY a JSON array of your best prop picks.
               line: item.line || '',
               bet: (item.bet || 'over').toLowerCase(),
               odds: item.odds || 100,
-              confidence: item.confidence || 0.75,
+              confidence: item.confidence || 0.7,
               ev: item.ev || null,
               rationale: item.rationale || item.reasoning || 'Analysis based on recent performance and matchup data.',
               pick: `${item.player} ${(item.bet || 'OVER').toUpperCase()} ${item.prop} ${item.odds}`
@@ -446,7 +446,7 @@ Respond with ONLY a JSON array of your best prop picks.
                 line: parseFloat(line),
                 bet: betType.toLowerCase(),
                 odds: parseInt(cleanOdds) || 100,
-                confidence: item.confidence || 0.75,
+                confidence: item.confidence || 0.7,
                 ev: null, // Will be calculated later
                 rationale: item.reasoning || item.rationale || 'Analysis based on recent performance and matchup data.',
                 pick: item.pick
@@ -461,7 +461,7 @@ Respond with ONLY a JSON array of your best prop picks.
                 line: '',
                 bet: 'over',
                 odds: 100,
-                confidence: item.confidence || 0.75,
+                confidence: item.confidence || 0.7,
                 ev: null,
                 rationale: item.reasoning || item.rationale || 'Analysis not available',
                 pick: item.pick || 'Invalid pick format'
@@ -506,8 +506,8 @@ Respond with ONLY a JSON array of your best prop picks.
       // Process existing entries to include high confidence picks
       const processedEntries = data.map(entry => {
         if (entry.picks && Array.isArray(entry.picks) && entry.picks.length > 0) {
-          // Filter for confident picks (0.65 or higher)
-          const confidencePicks = entry.picks.filter(pick => pick.confidence >= 0.65);
+          // Filter for confident picks (0.7 or higher)
+          const confidencePicks = entry.picks.filter(pick => pick.confidence >= 0.7);
 
           return {
             ...entry,
@@ -518,7 +518,7 @@ Respond with ONLY a JSON array of your best prop picks.
         return entry;
       });
 
-      console.log(`Found ${data.length} entries for ${dateString}, filtered to 75%+ confidence threshold`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered to 70%+ confidence threshold`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
@@ -672,8 +672,8 @@ Respond with ONLY a JSON array of your best prop picks.
         return oddsOK;
       });
 
-      // Further filter by high confidence threshold - standard 0.75 confidence threshold
-      const highConf = validOdds.filter(p => p.confidence >= 0.75);
+      // Further filter by high confidence threshold - standard 0.7 confidence threshold
+      const highConf = validOdds.filter(p => p.confidence >= 0.7);
 
       // Sort by confidence (highest first) and take only the top 5 per game
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
@@ -691,7 +691,7 @@ Respond with ONLY a JSON array of your best prop picks.
           line: pick.line || '',
           bet: pick.bet || 'over',
           odds: pick.odds || 100,
-          confidence: pick.confidence || 0.75,
+          confidence: pick.confidence || 0.7,
           ev: pick.ev || null,
           rationale: pick.rationale || pick.reasoning || 'Analysis not available',
           
@@ -737,16 +737,14 @@ Respond with ONLY a JSON array of your best prop picks.
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Filter the picks by confidence threshold (0.75)
+      // Filter the picks by confidence threshold (0.7)
       const filteredData = data.map(record => {
-        if (record.picks && Array.isArray(record.picks)) {
-          // Filter each record's picks to only include those with confidence >= 0.75
-          record.picks = record.picks.filter(pick => pick.confidence >= 0.75);
-        }
+        // Filter each record's picks to only include those with confidence >= 0.7
+        record.picks = record.picks.filter(pick => pick.confidence >= 0.7);
         return record;
-      });
+      }).filter(record => record.picks.length > 0);
       
-      console.log(`After filtering for confidence >= 0.75, ${filteredData.length} records remain`);
+      console.log(`After filtering for confidence >= 0.7, ${filteredData.length} records remain`);
       
       return filteredData || [];
     } catch (error) {
