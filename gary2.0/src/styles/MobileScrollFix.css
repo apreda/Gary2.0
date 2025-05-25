@@ -4,11 +4,27 @@
  */
 
 @media only screen and (max-width: 768px) {
-  /* Apply zoom to fit desktop content on mobile */
+  /* Default zoom for all pages */
   html {
     zoom: 0.45 !important;
     -webkit-text-size-adjust: none !important;
     text-size-adjust: none !important;
+  }
+  
+  /* Specific zoom for picks page to make cards more readable */
+  html:has(body.picks-page) {
+    zoom: 0.65 !important;
+  }
+  
+  /* Fallback approach using adjacent selector if :has() not supported */
+  body.picks-page + html {
+    zoom: 0.65 !important;
+  }
+  
+  /* Alternative: Apply zoom directly to picks page container */
+  body.picks-page #root {
+    zoom: 1.44 !important; /* 0.65 / 0.45 = 1.44 to compensate */
+    transform-origin: top left !important;
   }
   
   /* Fallback for browsers that don't support zoom */
@@ -18,6 +34,11 @@
       transform-origin: top left !important;
       width: 222.22% !important; /* 100 / 0.45 */
       height: 222.22% !important;
+    }
+    
+    body.picks-page #root {
+      transform: scale(1.44) !important; /* 0.65 / 0.45 */
+      transform-origin: top left !important;
     }
   }
   
