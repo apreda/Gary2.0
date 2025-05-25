@@ -116,9 +116,13 @@ async function storeDailyPicksInDatabase(picks) {
       superstition: false,
       sport: pick.sport
     };
+  }).filter(pick => {
+    // Filter out picks with confidence below 0.75
+    const confidence = typeof pick.confidence === 'number' ? pick.confidence : 0;
+    return confidence >= 0.75;
   });
 
-  console.log(`Storing all ${validPicks.length} picks directly without confidence filtering`);
+  console.log(`After confidence filtering (>= 0.75), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // Skip if there are no valid picks (should never happen if picks array had items)
   if (validPicks.length === 0) {
