@@ -240,6 +240,13 @@ export default function GaryProps() {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
+  
+  // Get team nickname (last word of team name)
+  const getTeamNickname = (fullTeamName) => {
+    if (!fullTeamName) return 'TBD';
+    const words = fullTeamName.trim().split(' ');
+    return words[words.length - 1];
+  };
 
   return (
     <div className="min-h-screen relative pt-20 px-2 sm:px-4" style={{ overflowX: 'hidden' }}> {/* Added responsive padding and changed overflow */}
@@ -318,7 +325,7 @@ export default function GaryProps() {
                               {/* Top Section - Header Info - Fixed Height */}
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', height: '40px' }}>
                                 <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>League</div><div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.league || 'MLB'}</div></div>
-                                <div style={{ width: '35%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.team || 'TBD'}</div></div>
+                                <div style={{ width: '35%', position: 'relative' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{getTeamNickname(pick.team)}</div></div>
                                 <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time</div><div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{pick.time || 'TBD'}</div></div>
                               </div>
                               
