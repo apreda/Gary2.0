@@ -13,17 +13,17 @@
   
   /* Specific zoom for picks page to make cards more readable */
   html:has(body.picks-page) {
-    zoom: 0.65 !important;
+    zoom: 0.50 !important;
   }
   
   /* Fallback approach using adjacent selector if :has() not supported */
   body.picks-page + html {
-    zoom: 0.65 !important;
+    zoom: 0.50 !important;
   }
   
   /* Alternative: Apply zoom directly to picks page container */
   body.picks-page #root {
-    zoom: 1.44 !important; /* 0.65 / 0.45 = 1.44 to compensate */
+    zoom: 1.11 !important; /* 0.50 / 0.45 = 1.11 to compensate */
     transform-origin: top left !important;
   }
   
@@ -37,7 +37,7 @@
     }
     
     body.picks-page #root {
-      transform: scale(1.44) !important; /* 0.65 / 0.45 */
+      transform: scale(1.11) !important; /* 0.50 / 0.45 */
       transform-origin: top left !important;
     }
   }
