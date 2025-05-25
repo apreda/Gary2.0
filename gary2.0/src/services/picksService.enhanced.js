@@ -359,9 +359,14 @@ export const picksService = {
     // Add instructions for generating the analysis
     prompt += `Based on the above information, analyze this game and make your best pick. Remember, you are Gary the grizzled betting expert.\n\n`;
     prompt += `CRITICAL: You must return ONLY a single JSON object in the exact format specified. Do not return an analysis object with recommendations array. Return the pick directly.\n\n`;
+    prompt += `IMPORTANT: The "pick" field MUST ALWAYS include the odds. Never omit the odds. Examples:\n`;
+    prompt += `- For moneyline: "Boston Red Sox ML -120" or "Yankees ML +145"\n`;
+    prompt += `- For spread: "Yankees -1.5 -110" or "Red Sox +1.5 -105"\n`;
+    prompt += `NEVER write just "Boston Red Sox ML" without the odds!\n\n`;
     prompt += `The JSON must include ALL these fields exactly:\n`;
     prompt += `{\n`;
-    prompt += `  "pick": "MUST include team, line/ML, AND odds (e.g., 'Boston Red Sox ML -120' or 'Yankees -1.5 -105')",\n`;
+    prompt += `  "pick": "MUST include team name, bet type (ML or spread), AND odds (e.g., 'Boston Red Sox ML -120' or 'Yankees -1.5 -105')",\n`;
+    prompt += `  "odds": "${oddsString ? 'Include the specific odds for your pick here (e.g., "-120" or "+145")' : 'Not available'}",\n`;
     prompt += `  "time": "${game.commence_time ? new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' EST' : 'TBD'}",\n`;
     prompt += `  "type": "spread" or "moneyline",\n`;
     prompt += `  "league": "MLB",\n`;
@@ -373,7 +378,8 @@ export const picksService = {
     prompt += `  "trapAlert": false,\n`;
     prompt += `  "confidence": 0.5-1.0,\n`;
     prompt += `  "superstition": false\n`;
-    prompt += `}`;
+    prompt += `}\n\n`;
+    prompt += `Remember: ALWAYS include the odds in the pick field! This is mandatory.`;
     
     return prompt;
   }
