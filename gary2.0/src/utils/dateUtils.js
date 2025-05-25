@@ -132,3 +132,104 @@ export function formatShortDate(date) {
     minute: undefined
   });
 }
+
+/**
+ * Date utility functions for handling Eastern Time conversions
+ * and date formatting across the application
+ */
+
+/**
+ * Get the current date in Eastern Time zone
+ * @returns {object} Object containing formatted date string and hour
+ */
+export const getEasternDate = () => {
+  const now = new Date();
+  
+  // Convert to Eastern Time zone properly
+  const easternTimeOptions = { timeZone: "America/New_York" };
+  const easternDateString = now.toLocaleDateString('en-US', easternTimeOptions);
+  const easternTimeString = now.toLocaleTimeString('en-US', easternTimeOptions);
+  
+  // Parse the date and time components
+  const [month, day, year] = easternDateString.split('/');
+  const [time, period] = easternTimeString.match(/([\d:]+)\s(AM|PM)/).slice(1);
+  const [hours, minutes] = time.split(':');
+  
+  // Calculate the 24-hour format hour
+  let easternHour = parseInt(hours);
+  if (period === 'PM' && hours !== '12') {
+    easternHour += 12;
+  } else if (period === 'AM' && hours === '12') {
+    easternHour = 0;
+  }
+  
+  // Format the date string properly (YYYY-MM-DD)
+  const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  
+  // Format full time for logging
+  const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
+  
+  return {
+    dateString,
+    easternHour,
+    fullTimeString: fullEasternTimeString,
+    month: parseInt(month),
+    day: parseInt(day),
+    year: parseInt(year)
+  };
+};
+
+/**
+ * Get yesterday's date from a given date object
+ * @param {number} year - Year
+ * @param {number} month - Month (1-12)
+ * @param {number} day - Day
+ * @returns {string} Yesterday's date in YYYY-MM-DD format
+ */
+export const getYesterdayDate = (year, month, day) => {
+  const yesterdayDate = new Date(year, month - 1, day);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  
+  const yesterdayYear = yesterdayDate.getFullYear();
+  const yesterdayMonth = (yesterdayDate.getMonth() + 1).toString().padStart(2, '0');
+  const yesterdayDay = yesterdayDate.getDate().toString().padStart(2, '0');
+  
+  return `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
+};
+
+/**
+ * Format a game time string to a readable format
+ * @param {string} timeString - ISO timestamp or time string
+ * @returns {string} Formatted time string (e.g., "7:10 PM EST")
+ */
+export const formatGameTime = (timeString) => {
+  if (!timeString) return '';
+  
+  try {
+    const gameDate = new Date(timeString);
+    // Format as 1:36 PM EST
+    return gameDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/New_York',
+      hour12: true
+    }) + ' EST';
+  } catch (e) {
+    return timeString; // Return original if parsing fails
+  }
+};
+
+/**
+ * Determine which date to use for loading picks based on current Eastern time
+ * @returns {string} The date to query for picks in YYYY-MM-DD format
+ */
+export const getPicksQueryDate = () => {
+  const eastern = getEasternDate();
+  
+  // Before 10am EST, use yesterday's date
+  if (eastern.easternHour < 10) {
+    return getYesterdayDate(eastern.year, eastern.month, eastern.day);
+  }
+  
+  return eastern.dateString;
+};
