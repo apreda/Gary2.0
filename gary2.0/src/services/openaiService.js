@@ -222,11 +222,25 @@ CRITICAL FORMATTING INSTRUCTIONS:
 - For moneylines: "Miami Heat ML +150" (Team, ML, Odds)
 - ALWAYS include all three components in that exact order
 - NEVER omit the odds - they must be the last element
+- The odds MUST be extracted from the provided odds data
+- If no odds data is available, use reasonable defaults: -110 for spreads, -120 for favorites, +110 for underdogs
 - Examples:
   - Spread favorite: "Boston Celtics -7.5 -110"
   - Spread underdog: "Chicago Bulls +7.5 -105"
   - Moneyline favorite: "Los Angeles Lakers ML -180"
   - Moneyline underdog: "Orlando Magic ML +155"
+
+ODDS EXTRACTION RULES:
+1. ALWAYS extract odds from the provided odds data in the prompt
+2. Look for moneyline odds (h2h market) and spread odds (spreads market)
+3. If you choose a spread bet, use the spread odds for that team
+4. If you choose a moneyline bet, use the moneyline odds for that team
+5. If odds data is missing or unclear, use these defaults:
+   - Spread bets: -110 (standard)
+   - Moneyline favorites: -150 to -200 range
+   - Moneyline underdogs: +130 to +180 range
+6. The "odds" field in your JSON response should contain ONLY the odds number (e.g., "-110", "+150")
+7. But the "pick" field must include the full format with odds at the end
 
 IMPORTANT: Never make total (Over/Under) picks for teams. Only make spread or moneyline picks for teams, or player props when specified.
 
@@ -507,7 +521,7 @@ TEAM DESIGNATIONS (DO NOT CHANGE THESE):
 - AWAY TEAM: ${gameData?.awayTeam || 'Not specified'}
 - GAME TIME: ${this.formatGameTime(gameData?.gameTime || gameData?.time || gameData?.datetime) || 'TBD'}
 
-${gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No odds data available'}
+${gameData?.oddsText || (gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No odds data available')}
 
 ${gameData?.lineMovement ? `Line Movement: ${JSON.stringify(gameData.lineMovement, null, 2)}` : 'No line movement data available'}
 
@@ -522,6 +536,13 @@ EXTREMELY IMPORTANT - ABOUT THE GAME TIME:
 5. Copy the time EXACTLY as given - do not modify, reformat, or guess.
 
 Example: If provided with game time "7:30 PM EST", your JSON must include "time": "7:30 PM EST" - not "TBD".
+
+EXTREMELY IMPORTANT - ABOUT ODDS:
+1. You MUST extract odds from the betting odds data provided above.
+2. The "pick" field MUST include the odds at the end (e.g., "Lakers ML -150" or "Celtics -7.5 -110").
+3. The "odds" field should contain just the odds number (e.g., "-150" or "-110").
+4. If no odds are provided, use standard defaults: -110 for spreads, -150 for moneyline favorites, +130 for underdogs.
+5. NEVER leave odds blank or use "TBD" for odds.
 
 This is CRITICALLY important for our system's integrity.
 

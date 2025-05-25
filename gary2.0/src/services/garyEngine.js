@@ -89,6 +89,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       homeTeam: gameData?.homeTeam || '',
       awayTeam: gameData?.awayTeam || '',
       sport: gameData?.league || gameData?.sport || '',
+      league: gameData?.league || gameData?.sport || '',
       odds: gameData?.odds || null,
       // Ensure we pass the comprehensive team stats
       teamStats: gameData?.teamStats || null,
@@ -100,6 +101,37 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       gameTime: gameData?.gameTime || gameData?.time || 'TBD',
       time: gameData?.gameTime || gameData?.time || 'TBD'
     };
+    
+    // Format odds data for better OpenAI understanding
+    if (formattedData.odds && formattedData.odds.markets) {
+      console.log('Formatting odds data for OpenAI...');
+      let oddsText = `\nCURRENT BETTING ODDS:\n`;
+      
+      formattedData.odds.markets.forEach(market => {
+        if (market.key === 'h2h') {
+          oddsText += `Moneyline odds:\n`;
+          market.outcomes.forEach(outcome => {
+            oddsText += `  ${outcome.name}: ${outcome.price}\n`;
+          });
+        } else if (market.key === 'spreads') {
+          oddsText += `Point spread odds:\n`;
+          market.outcomes.forEach(outcome => {
+            oddsText += `  ${outcome.name} ${outcome.point}: ${outcome.price}\n`;
+          });
+        } else if (market.key === 'totals') {
+          oddsText += `Total (Over/Under) odds:\n`;
+          market.outcomes.forEach(outcome => {
+            oddsText += `  ${outcome.name} ${outcome.point}: ${outcome.price}\n`;
+          });
+        }
+      });
+      
+      formattedData.oddsText = oddsText;
+      console.log('Formatted odds text:', oddsText);
+    } else {
+      console.log('No odds data available for formatting');
+      formattedData.oddsText = '\nNo current betting odds available.\n';
+    }
     
     // Log the availability of team stats for debugging
     console.log(`Team Stats Available: ${!!gameData?.teamStats}`);

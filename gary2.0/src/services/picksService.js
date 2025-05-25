@@ -252,7 +252,10 @@ async function generateDailyPicks() {
 
       // --- NBA ---
       } else if (sport === 'basketball_nba') {
+        console.log(`Processing NBA games for ${sport}`);
         const games = await oddsService.getUpcomingGames(sport);
+        console.log(`Found ${games.length} NBA games from odds service`);
+        
         // Get today's date in EST time zone format (YYYY-MM-DD)
         const today = new Date();
         const estOptions = { timeZone: 'America/New_York' };
@@ -262,17 +265,28 @@ async function generateDailyPicks() {
         
         console.log(`NBA filtering: Today in EST is ${estFormattedDate}`);
         
-        // Filter games by checking if they occur on the same day in EST
+        // Be more flexible with date filtering - include games from today and tomorrow
         const todayGames = games.filter(game => {
           const gameDate = new Date(game.commence_time);
           const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
           const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
           const gameFormattedDate = `${gameYear}-${gameMonth.padStart(2, '0')}-${gameDay.padStart(2, '0')}`;
           
-          console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Date: ${gameFormattedDate}, Include: ${gameFormattedDate === estFormattedDate}`);
+          // Include games from today and tomorrow
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowString = tomorrow.toLocaleDateString('en-US', estOptions);
+          const [tomorrowMonth, tomorrowDay, tomorrowYear] = tomorrowString.split('/');
+          const tomorrowFormattedDate = `${tomorrowYear}-${tomorrowMonth.padStart(2, '0')}-${tomorrowDay.padStart(2, '0')}`;
           
-          return gameFormattedDate === estFormattedDate;
+          const includeGame = gameFormattedDate === estFormattedDate || gameFormattedDate === tomorrowFormattedDate;
+          
+          console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Date: ${gameFormattedDate}, Include: ${includeGame}`);
+          
+          return includeGame;
         });
+
+        console.log(`After date filtering: ${todayGames.length} NBA games`);
 
         for (const game of todayGames) {
           const gameId = `${game.id}`;
@@ -280,6 +294,8 @@ async function generateDailyPicks() {
           processedGames.add(gameId);
 
           try {
+            console.log(`Processing NBA game: ${game.away_team} @ ${game.home_team}`);
+            
             const homeTeamStats = await sportsDataService.getTeamStats(game.home_team, 'NBA');
             const awayTeamStats = await sportsDataService.getTeamStats(game.away_team, 'NBA');
             
@@ -296,21 +312,39 @@ async function generateDailyPicks() {
             // Combine both reports, prioritizing playoff data
             const nbaStatsReport = playoffStatsReport + '\n\n' + regularStatsReport;
 
+            // Format odds data for OpenAI
+            let oddsData = null;
+            if (game.bookmakers && game.bookmakers.length > 0) {
+              const bookmaker = game.bookmakers[0];
+              oddsData = {
+                bookmaker: bookmaker.title,
+                markets: bookmaker.markets
+              };
+              console.log(`Odds data available for ${game.home_team} vs ${game.away_team}:`, JSON.stringify(oddsData, null, 2));
+            } else {
+              console.log(`No odds data available for ${game.home_team} vs ${game.away_team}`);
+            }
+
             const gameObj = {
               id: gameId,
               sport: 'nba',
+              league: 'NBA',
               homeTeam: game.home_team,
               awayTeam: game.away_team,
               homeTeamStats,
               awayTeamStats,
               statsReport: nbaStatsReport,
               isPlayoffGame: true, // Mark this as a playoff game
-              odds: game.bookmakers?.[0]?.markets || [],
-              gameTime: game.commence_time
+              odds: oddsData,
+              gameTime: game.commence_time,
+              time: game.commence_time
             };
 
+            console.log(`Making Gary pick for NBA game: ${game.away_team} @ ${game.home_team}`);
             const result = await makeGaryPick(gameObj);
+            
             if (result.success) {
+              console.log(`Successfully generated NBA pick: ${result.rawAnalysis?.rawOpenAIOutput?.pick || 'Unknown pick'}`);
               sportPicks.push({
                 ...result,
                 game: `${game.away_team} @ ${game.home_team}`,
@@ -321,8 +355,12 @@ async function generateDailyPicks() {
                 pickType: 'normal',
                 timestamp: new Date().toISOString()
               });
+            } else {
+              console.log(`Failed to generate NBA pick for ${game.away_team} @ ${game.home_team}:`, result.error);
             }
-          } catch (e) { /* Log if you want */ }
+          } catch (e) { 
+            console.error(`Error processing NBA game ${game.away_team} @ ${game.home_team}:`, e);
+          }
         }
 
       // --- NHL ---

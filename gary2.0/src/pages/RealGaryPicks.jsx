@@ -121,11 +121,32 @@ function RealGaryPicks() {
           .map(pick => {
             const extractOddsFromAnalysis = (pick) => {
               try {
-                if (pick.rawAnalysis?.rawOpenAIOutput) {
-                  if (pick.rawAnalysis.rawOpenAIOutput.odds) {
-                    return pick.rawAnalysis.rawOpenAIOutput.odds;
+                // First, try to get odds from the rawAnalysis.rawOpenAIOutput
+                if (pick.rawAnalysis?.rawOpenAIOutput?.odds) {
+                  return pick.rawAnalysis.rawOpenAIOutput.odds;
+                }
+                
+                // Second, try to get odds from the pick field itself (should be at the end)
+                if (pick.pick) {
+                  // Look for odds pattern at the end of the pick string
+                  const oddsMatch = pick.pick.match(/([-+]\d+)$/);
+                  if (oddsMatch) {
+                    return oddsMatch[1];
+                  }
+                  
+                  // Also try to extract from the middle if it's a spread pick
+                  const spreadOddsMatch = pick.pick.match(/[-+]?\d+\.?\d*\s+([-+]\d+)/);
+                  if (spreadOddsMatch) {
+                    return spreadOddsMatch[1];
                   }
                 }
+                
+                // Third, try to get from the odds field directly
+                if (pick.odds) {
+                  return pick.odds;
+                }
+                
+                // Fourth, try to extract from analysis prompt if available
                 if (pick.analysisPrompt) {
                   const teamName = pick.pick?.split(' ').slice(0, -1).join(' ');
                   if (teamName) {
@@ -140,10 +161,20 @@ function RealGaryPicks() {
                     }
                   }
                 }
+                
+                // If all else fails, return a default based on pick type
+                if (pick.type === 'spread') {
+                  return '-110';
+                } else if (pick.type === 'moneyline') {
+                  return '-150'; // Default for favorites
+                }
+                
               } catch (error) {
                 console.error('Error extracting odds:', error);
               }
-              return '';
+              
+              // Final fallback
+              return '-110';
             };
 
             const oddsValue = extractOddsFromAnalysis(pick);

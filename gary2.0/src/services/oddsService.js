@@ -447,57 +447,51 @@ export const oddsService = {
       };
       
       const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
+      console.log(`Fetching odds from: ${url} for sport: ${sport}`);
       const response = await axios.get(url, { params });
       
       if (response.data) {
         const games = response.data;
+        console.log(`Raw API response: Found ${games.length} total games for ${sport}`);
         
-        // Get current date in EST timezone
+        // Get current date in EST timezone - be more flexible with time ranges
         const now = new Date();
-        // Convert to EST (UTC-4 during daylight saving, UTC-5 standard time)
-        const estOffset = -4; // During daylight saving time
+        const estOffset = -5; // EST is UTC-5 (adjust for daylight saving if needed)
         const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
         const estDate = new Date(utcDate + (3600000 * estOffset));
         
-        // Set the time to the start of the day in EST
-        const todayStart = new Date(estDate);
-        todayStart.setHours(0, 0, 0, 0);
+        // Expand the time window to include games from yesterday evening to tomorrow morning
+        const windowStart = new Date(estDate);
+        windowStart.setDate(windowStart.getDate() - 1);
+        windowStart.setHours(18, 0, 0, 0); // Start from 6 PM yesterday
         
-        // Set the time to the end of the day in EST
-        const todayEnd = new Date(estDate);
-        todayEnd.setHours(23, 59, 59, 999);
+        const windowEnd = new Date(estDate);
+        windowEnd.setDate(windowEnd.getDate() + 1);
+        windowEnd.setHours(6, 0, 0, 0); // End at 6 AM tomorrow
         
-        console.log(`Filtering games for today (${todayStart.toISOString()} to ${todayEnd.toISOString()})`);
+        console.log(`Expanded time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
         
-        // Filter games to only include those scheduled for today in EST timezone
-        const todayGames = games.filter(game => {
+        // Filter games within the expanded window
+        const relevantGames = games.filter(game => {
           const gameTime = new Date(game.commence_time);
-          const includeGame = gameTime >= todayStart && gameTime <= todayEnd;
+          const includeGame = gameTime >= windowStart && gameTime <= windowEnd;
           
-          // Extra logging to debug game filtering
-          console.log(`Game: ${game.home_team} vs ${game.away_team}, Time: ${gameTime.toISOString()}, Include: ${includeGame}`);
-          
-          // Special handling for Pacers-Knicks game (explicitly exclude it if it's for tomorrow)
-          if ((game.home_team.includes('Pacers') || game.away_team.includes('Pacers')) && 
-              (game.home_team.includes('Knicks') || game.away_team.includes('Knicks'))) {
-            const gameDate = new Date(game.commence_time);
-            const todayDate = new Date(estDate);
-            if (gameDate.getDate() > todayDate.getDate()) {
-              console.log('Excluding Pacers-Knicks game as it is scheduled for tomorrow');
-              return false;
-            }
-          }
+          // Log every game for debugging
+          console.log(`Game: ${game.home_team} vs ${game.away_team}`);
+          console.log(`  Time: ${gameTime.toISOString()}`);
+          console.log(`  EST Time: ${gameTime.toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
+          console.log(`  Include: ${includeGame}`);
           
           return includeGame;
         });
         
-        console.log(`Filtered from ${games.length} total games to ${todayGames.length} games scheduled for today`);
+        console.log(`After time filtering: ${relevantGames.length} games from ${games.length} total`);
         
         // Remove any duplicate games (same home and away teams)
         const uniqueGames = [];
         const gameMap = new Map();
         
-        todayGames.forEach(game => {
+        relevantGames.forEach(game => {
           const gameKey = `${game.home_team}-${game.away_team}`;
           if (!gameMap.has(gameKey)) {
             gameMap.set(gameKey, true);
@@ -507,7 +501,7 @@ export const oddsService = {
           }
         });
         
-        console.log(`Removed duplicates: ${todayGames.length} → ${uniqueGames.length} unique games`);
+        console.log(`After deduplication: ${uniqueGames.length} unique games`);
         
         // Process games to add bet analysis
         const processedGames = uniqueGames.map(game => {
@@ -519,6 +513,16 @@ export const oddsService = {
             bestBet: bestOpportunity
           };
         });
+        
+        // Log final results
+        if (processedGames.length > 0) {
+          console.log(`Final games for ${sport}:`);
+          processedGames.forEach(game => {
+            console.log(`  ${game.away_team} @ ${game.home_team} at ${new Date(game.commence_time).toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
+          });
+        } else {
+          console.log(`No games found for ${sport} in the current time window`);
+        }
         
         return processedGames;
       }
