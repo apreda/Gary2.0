@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useUserPlan } from "../contexts/UserPlanContext";
 import BG2 from '/BG2.png'; // Import the background image directly
@@ -15,6 +15,7 @@ import { betTrackingService } from '../services/betTrackingService';
 import { userStatsService } from '../services/userStatsService';
 import { garyPhrases } from '../utils/garyPhrases';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
+import { getEasternDate, getYesterdayDate, formatGameTime } from '../utils/dateUtils';
 
 // Custom hook to detect mobile
 const useIsMobile = () => {
@@ -36,6 +37,7 @@ const useIsMobile = () => {
 
 function RealGaryPicks() {
   const { user } = useAuth();
+  const [reloadKey, setReloadKey] = useState(0);
   const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
   
@@ -72,13 +74,6 @@ function RealGaryPicks() {
   // Single debug logging effect that executes when subscription status changes
   useEffect(() => {
     if (user) {
-      console.log('RealGaryPicks: User subscription check', {
-        authenticated: true,
-        userId: user.id,
-        planLoading,
-        subscriptionStatus,
-        userPlan
-      });
     }
   }, [user, userPlan, planLoading, subscriptionStatus]);
 
@@ -101,6 +96,9 @@ function RealGaryPicks() {
   // Toast notification system
   const showToast = useToast();
   
+  // Debug logs for troubleshooting
+  useEffect(() => {
+  }, [picks, loading, error]);
 
   // Using hardcoded performance values
 
@@ -111,45 +109,12 @@ function RealGaryPicks() {
     
     try {
       // Use Eastern Time consistently for all date operations
-      const now = new Date();
-      
-      // Convert to Eastern Time zone properly
-      const easternTimeOptions = { timeZone: "America/New_York" };
-      const easternDateString = now.toLocaleDateString('en-US', easternTimeOptions);
-      const easternTimeString = now.toLocaleTimeString('en-US', easternTimeOptions);
-      
-      // Create a new date object with Eastern Time components
-      const [month, day, year] = easternDateString.split('/');
-      const [time, period] = easternTimeString.match(/([\d:]+)\s(AM|PM)/).slice(1);
-      const [hours, minutes] = time.split(':');
-      
-      // Format the date string properly (YYYY-MM-DD)
-      const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      const easternHour = parseInt(hours) + (period === 'PM' && hours !== '12' ? 12 : 0);
-      
-      // Format full time for logging
-      const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
-      
-      console.log(`Properly formatted Eastern date: ${dateString}, Hour: ${easternHour}`);
-      console.log(`Original time parts: M:${month} D:${day} Y:${year} H:${hours} M:${minutes} ${period}`);
-      
-      let queryDate = dateString;
-      console.log(`Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour})`);
+      const eastern = getEasternDate();
+      let queryDate = eastern.dateString;
 
-      
       // Before 10am EST, always use yesterday's picks if available
-      if (easternHour < 10) {
-        console.log("RealGaryPicks: It's before 10am Eastern Time - looking for yesterday's picks");
-        
-        // Calculate yesterday's date properly using the date parts we already have
-        const yesterdayDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        
-        // Format yesterday's date as YYYY-MM-DD
-        const yesterdayYear = yesterdayDate.getFullYear();
-        const yesterdayMonth = (yesterdayDate.getMonth() + 1).toString().padStart(2, '0');
-        const yesterdayDay = yesterdayDate.getDate().toString().padStart(2, '0');
-        const yesterdayString = `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
+      if (eastern.easternHour < 10) {
+        const yesterdayString = getYesterdayDate(eastern.year, eastern.month, eastern.day);
         
         // Check if yesterday's picks exist
         const { data: yesterdayData, error: yesterdayError } = await supabase
@@ -159,14 +124,9 @@ function RealGaryPicks() {
           .maybeSingle();
           
         if (!yesterdayError && yesterdayData && yesterdayData.picks) {
-          console.log(`RealGaryPicks: Using picks from previous day (${yesterdayString}) since it's before 10am`);
           queryDate = yesterdayString;
-        } else {
-          console.log(`RealGaryPicks: No picks found for previous day ${yesterdayString}, will try today's picks`); 
         }
       }
-      
-      console.log(`Looking for picks for date: ${queryDate}`);
       
       // Query Supabase for picks with the determined date
       const { data, error: fetchError } = await supabase
@@ -174,13 +134,6 @@ function RealGaryPicks() {
         .select('*') // Select all columns to make sure we get the time field
         .eq('date', queryDate)
         .maybeSingle(); // Use maybeSingle to avoid 406 errors
-      
-      // Log the result for debugging
-      console.log(`Supabase fetch result for ${queryDate}:`, { data, fetchError });
-      
-      // Log the entire data structure to help debug the time field
-      if (data) {
-      }
       
       // Store the queryDate for use in generating consistent pick IDs
       const currentDate = queryDate;
@@ -197,34 +150,22 @@ function RealGaryPicks() {
           .filter(pick => {
             // Skip any picks with emergency in the ID
             if (pick.id && pick.id.includes('emergency')) {
-              console.log('Skipping emergency pick:', pick.id);
               return false;
             }
             
             // Skip any picks without a proper pick field (OpenAI format)
             if (!pick.pick || pick.pick === '') {
-              console.log('Skipping pick with missing pick field:', pick.id);
               return false;
             }
             
             // Skip any picks without a rationale (OpenAI format)
             if (!pick.rationale || pick.rationale === '') {
-              console.log('Skipping pick with missing rationale field:', pick.id);
               return false;
             }
             
             return true;
           })
           .map(pick => {
-            console.log('Game time from database:', pick.time);
-            // Log all possible time field variations
-            console.log('Time field variations:', {
-              'pick.time': pick.time,
-              'pick.gameTime': pick.gameTime,
-              'time direct': typeof pick === 'object' && 'time' in pick ? pick.time : 'not found',
-              'nested time': pick.rawAnalysis?.rawOpenAIOutput?.time
-            });
-            
             // Helper function to extract odds from analysis prompt
             const extractOddsFromAnalysis = (pick) => {
               try {
@@ -274,7 +215,7 @@ function RealGaryPicks() {
               pick: pick.pick || '',          // Original OpenAI field for the bet
               rationale: pick.rationale || '', // Original OpenAI field for analysis
               
-                            // Essential metadata
+              // Essential metadata
               game: pick.game || '',
               league: pick.league || '',
               confidence: pick.confidence || 0,
@@ -292,19 +233,7 @@ function RealGaryPicks() {
                 
                 // Finally try to format gameTime from ISO format
                 if (pick.gameTime) {
-                  try {
-                    const gameDate = new Date(pick.gameTime);
-                    // Format as 1:36 PM EST
-                    return gameDate.toLocaleTimeString('en-US', {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                      timeZone: 'America/New_York',
-                      hour12: true
-                    }) + ' EST';
-                  } catch (e) {
-                    console.error('Error formatting gameTime:', e);
-                    return pick.gameTime;
-                  }
+                  return formatGameTime(pick.gameTime);
                 }
                 
                 // Default
@@ -327,33 +256,27 @@ function RealGaryPicks() {
             return simplePick;
         });
       }
-      console.log('Parsed and enhanced picksArray:', picksArray);
 
       // Check if we have picks for today - either from database error or empty array
       if (fetchError || !picksArray.length) {
         const today = new Date().toISOString().split('T')[0];
-        console.log(`No valid picks found for ${today}, attempting to generate new ones`);
         
         try {
           // Show loading state during generation
           setLoading(true);
           
           // Delete any old picks for today (cleanup)
-          console.log('Cleaning up any existing picks for today before generating new ones');
           await supabase
             .from('daily_picks')
             .delete()
             .eq('date', today);
             
           // Since we don't have picks, generate some
-          console.log('Generating new picks via picksService.generateDailyPicks()...');
           const generatedPicks = await picksService.generateDailyPicks();
           
           // The generateDailyPicks returns an array of picks
           // It also automatically stores them in Supabase now
           if (generatedPicks && Array.isArray(generatedPicks) && generatedPicks.length > 0) {
-            console.log(`Successfully generated ${generatedPicks.length} new picks!`);
-            
             // Use the EXACT OpenAI output format without any transformation
             // This preserves the exact structure needed for our card implementation
             setPicks(generatedPicks.map(pick => {
@@ -388,7 +311,6 @@ function RealGaryPicks() {
           }
           
           // Fallback path - try to reload from database if generation returned nothing
-          console.log('Checking database for picks after generation attempt...');
           const { data: freshData } = await supabase
             .from('daily_picks')
             .select('picks, date')
@@ -413,7 +335,6 @@ function RealGaryPicks() {
         }
       } else {
         // We have picks from the database
-        console.log('Using picks from database:', picksArray);
         setPicks(picksArray);
       }
     } catch (err) {
@@ -439,7 +360,6 @@ function RealGaryPicks() {
    * Records the decision, displays a toast notification, and updates user stats.
    */
   const handleDecisionMade = async (decision, pick) => {
-    console.log('[RealGaryPicks] handleDecisionMade', { decision, pick });
     
     // Prevent multiple clicks on the same pick
     if (processingDecisions[pick.id] || userDecisions[pick.id]) {
@@ -506,6 +426,11 @@ function RealGaryPicks() {
       // Reload picks if necessary
       loadPicks();
       
+      // Increment reloadKey to force BetCard to reload
+      setReloadKey(prev => {
+        const newKey = prev + 1;
+        return newKey;
+      });
     } catch (error) {
       console.error('Error handling bet/fade decision:', error);
       showToast('Something went wrong. Please try again.', 'error', 3000, false);
@@ -1368,15 +1293,6 @@ function RealGaryPicks() {
                         See Past Picks
                       </Link>
                     </div>
-                  </div>
-                )}
-                                          className="px-4 py-2 font-bold uppercase rounded"
-                          style={{ backgroundColor: '#ffc107', color: 'black', border: '2px solid black' }}
-                        >
-                          LOGIN NOW
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
