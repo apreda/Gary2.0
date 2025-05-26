@@ -344,9 +344,9 @@ export default function GaryProps() {
                               </div>
                               
                               {/* Gary's Pick Section - Fixed Height */}
-                              <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.75rem', height: '60px' }}>
-                                <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gary's Pick</div>
-                                <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                              <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.75rem', minHeight: '80px' }}>
+                                <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gary's Pick</div>
+                                <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2, color: '#bfa142', wordWrap: 'break-word', wordBreak: 'break-word'}}>
                                   {pick.player && pick.bet && pick.prop ? 
                                     `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)} ${pick.line || ''}`.trim() : 
                                     '(No pick available)'}
@@ -354,9 +354,9 @@ export default function GaryProps() {
                               </div>
                               
                               {/* Middle Content - Analysis - Fixed Height */}
-                              <div style={{ marginBottom: '0.75rem', height: '250px' }}>
+                              <div style={{ marginBottom: '0.75rem', height: '230px' }}>
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem', color: '#bfa142', fontWeight: 500 }}>Analysis</div>
-                                <div style={{ fontSize: '0.85rem', lineHeight: 1.4, height: '220px', overflow: 'auto', opacity: 0.9, padding: '0.5rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>
+                                <div style={{ fontSize: '0.85rem', lineHeight: 1.4, height: '200px', overflow: 'auto', opacity: 0.9, padding: '0.5rem', border: '1px solid rgba(191,161,66,0.15)', borderRadius: '4px' }}>
                                   {pick.rationale ? (
                                     pick.rationale.includes('•') || pick.rationale.includes('. ') ? (
                                       <ul style={{ listStyleType: 'none', margin: 0, padding: 0 }}>
