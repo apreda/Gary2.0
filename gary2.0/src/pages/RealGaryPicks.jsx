@@ -784,7 +784,7 @@ function RealGaryPicks() {
                                                 opacity: 0.9
                                               }}>
                                                 {(pick.homeTeam && pick.awayTeam) ? 
-                                                  `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
+                                                  `${pick.awayTeam} @ ${pick.homeTeam}` : 
                                                   (pick.game ? pick.game : 'TBD')}
                                               </div>
                                             </div>
