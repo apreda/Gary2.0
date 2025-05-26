@@ -173,22 +173,36 @@ const combinedMlbService = {
       // If we get here, we have a target game from MLB Stats API
       console.log(`[Combined MLB Service] Using MLB Stats API data for ${targetGame.teams.away.team.name} @ ${targetGame.teams.home.team.name}`);
 
-      // 3. Get team comparison stats from Ball Don't Lie API
-      let teamComparisonStats = {
-        homeTeam: { teamName: homeTeamName, wins: 0, losses: 0 },
-        awayTeam: { teamName: awayTeamName, wins: 0, losses: 0 }
-      };
+      // 3. Try to get team stats from various sources
+      let teamStats = null;
       
       try {
-        const ballDontLieStats = await ballDontLieService.getMlbTeamComparisonStats(homeTeamName, awayTeamName);
-        if (ballDontLieStats?.homeTeam && ballDontLieStats?.awayTeam) {
-          teamComparisonStats = ballDontLieStats;
-          console.log(`[Combined MLB Service] Successfully got team comparison stats`);
-        } else {
-          console.log(`[Combined MLB Service] Team comparison stats incomplete, using defaults`);
+        // Note: ballDontLieService is primarily for NBA, not MLB
+        // Remove the call to non-existent getMlbTeamComparisonStats
+        console.log('[Combined MLB Service] Skipping ballDontLieService for MLB stats (NBA-only service)');
+        
+        // Use team records from the game data if available
+        if (targetGame && targetGame.teams) {
+          teamStats = {
+            homeTeam: {
+              teamName: homeTeamName,
+              wins: targetGame.teams.home.leagueRecord?.wins || 0,
+              losses: targetGame.teams.home.leagueRecord?.losses || 0,
+              record: `${targetGame.teams.home.leagueRecord?.wins || 0}-${targetGame.teams.home.leagueRecord?.losses || 0}`,
+              winPercentage: targetGame.teams.home.leagueRecord?.pct || '.000'
+            },
+            awayTeam: {
+              teamName: awayTeamName,
+              wins: targetGame.teams.away.leagueRecord?.wins || 0,
+              losses: targetGame.teams.away.leagueRecord?.losses || 0,
+              record: `${targetGame.teams.away.leagueRecord?.wins || 0}-${targetGame.teams.away.leagueRecord?.losses || 0}`,
+              winPercentage: targetGame.teams.away.leagueRecord?.pct || '.000'
+            }
+          };
+          console.log('[Combined MLB Service] Using team stats from MLB game data');
         }
-      } catch (statsError) {
-        console.error(`[Combined MLB Service] Error getting team stats: ${statsError.message}`);
+      } catch (error) {
+        console.log('[Combined MLB Service] Error getting team stats:', error.message);
       }
 
       // 4. Get starting pitcher data
@@ -347,7 +361,7 @@ const combinedMlbService = {
         },
         homeTeam: homeTeamName,
         awayTeam: awayTeamName,
-        teamStats: teamComparisonStats,
+        teamStats: teamStats,
         pitchers: startingPitchers,
         hitterStats,
         gameContext,
@@ -356,8 +370,8 @@ const combinedMlbService = {
       };
 
       console.log(`[Combined MLB Service] Successfully built comprehensive data:`, {
-        hasHomeTeamStats: !!teamComparisonStats?.homeTeam,
-        hasAwayTeamStats: !!teamComparisonStats?.awayTeam,
+        hasHomeTeamStats: !!teamStats?.homeTeam,
+        hasAwayTeamStats: !!teamStats?.awayTeam,
         hasHomePitcher: !!startingPitchers?.home,
         hasAwayPitcher: !!startingPitchers?.away,
         homeHittersCount: hitterStats?.home?.length || 0,

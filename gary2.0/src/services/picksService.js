@@ -414,8 +414,8 @@ async function generateDailyPicks() {
             );
             
             // Still get regular season stats as fallback
-            const homeTeamStats = await apiSportsService.getTeamStats(game.home_team, 'NHL');
-            const awayTeamStats = await apiSportsService.getTeamStats(game.away_team, 'NHL');
+            const homeTeamStats = await sportsDataService.getTeamStats(game.home_team, 'NHL');
+            const awayTeamStats = await sportsDataService.getTeamStats(game.away_team, 'NHL');
 
             const homeStats = homeTeamStats || { name: game.home_team, wins: '?', losses: '?', points: '?' };
             const awayStats = awayTeamStats || { name: game.away_team, wins: '?', losses: '?', points: '?' };
