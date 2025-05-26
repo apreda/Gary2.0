@@ -97,6 +97,32 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       hitterStats: gameData?.hitterStats || null, // Include top batters for both teams
       gameContext: gameData?.gameContext || null,
       lineMovement: gameData?.lineMovement || null,
+      
+      // Add more structured data for varied analysis
+      recentForm: {
+        homeLast10: gameData?.homeTeamStats?.last10,
+        awayLast10: gameData?.awayTeamStats?.last10,
+        homeStreak: gameData?.homeTeamStats?.streak,
+        awayStreak: gameData?.awayTeamStats?.streak
+      },
+      
+      // Add situational data
+      situationalFactors: {
+        restDays: {
+          home: gameData?.homeRestDays,
+          away: gameData?.awayRestDays
+        },
+        travel: gameData?.travelInfo,
+        weather: gameData?.weatherConditions
+      },
+      
+      // Add betting market context
+      marketContext: {
+        lineMovement: gameData?.lineMovement,
+        publicBetting: gameData?.publicBettingPercentages,
+        sharpAction: gameData?.sharpMoneyIndicators
+      },
+      
       // Add game time data - important for OpenAI to include in response
       gameTime: gameData?.gameTime || gameData?.time || 'TBD',
       time: gameData?.gameTime || gameData?.time || 'TBD'
