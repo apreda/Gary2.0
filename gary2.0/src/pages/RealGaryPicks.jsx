@@ -123,31 +123,50 @@ function RealGaryPicks() {
               try {
                 // First, try to get odds from the rawAnalysis.rawOpenAIOutput
                 if (pick.rawAnalysis?.rawOpenAIOutput?.odds) {
-                  return pick.rawAnalysis.rawOpenAIOutput.odds;
+                  const odds = pick.rawAnalysis.rawOpenAIOutput.odds;
+                  console.log('Found odds in rawOpenAIOutput:', odds);
+                  return odds;
                 }
                 
-                // Second, try to get odds from the pick field itself (should be at the end)
+                // Second, try to extract from the pick field
                 if (pick.pick) {
-                  // Look for odds pattern at the end of the pick string
-                  const oddsMatch = pick.pick.match(/([-+]\d+)$/);
-                  if (oddsMatch) {
-                    return oddsMatch[1];
+                  // Look for odds pattern at the end of the pick string (e.g., "Team Name -1.5 -110")
+                  const endOddsMatch = pick.pick.match(/[-+]\d+(?=\s*$)/);
+                  if (endOddsMatch) {
+                    console.log('Extracted odds from end of pick string:', endOddsMatch[0]);
+                    return endOddsMatch[0];
                   }
                   
-                  // Also try to extract from the middle if it's a spread pick
-                  const spreadOddsMatch = pick.pick.match(/[-+]?\d+\.?\d*\s+([-+]\d+)/);
+                  // Look for odds in the middle of spread picks (e.g., "Team Name -1.5 (-110)")
+                  const spreadOddsMatch = pick.pick.match(/[-+]?\d+\.?\d*\s*\(?([-+]\d+)\)?/);
                   if (spreadOddsMatch) {
+                    console.log('Extracted odds from spread pick:', spreadOddsMatch[1]);
                     return spreadOddsMatch[1];
+                  }
+                  
+                  // Try to find any odds-like pattern in the pick
+                  const anyOddsMatch = pick.pick.match(/[-+]\d{2,3}(?=\D*$)/);
+                  if (anyOddsMatch) {
+                    console.log('Found odds-like pattern in pick:', anyOddsMatch[0]);
+                    return anyOddsMatch[0];
                   }
                 }
                 
                 // Third, try to get from the odds field directly
                 if (pick.odds) {
+                  console.log('Using direct odds field:', pick.odds);
                   return pick.odds;
                 }
                 
-                // Fourth, try to extract from analysis prompt if available
+                // Fourth, try to extract from rawAnalysis if available
+                if (pick.rawAnalysis?.odds) {
+                  console.log('Using odds from rawAnalysis:', pick.rawAnalysis.odds);
+                  return pick.rawAnalysis.odds;
+                }
+                
+                // Fifth, try to extract from analysis prompt if available
                 if (pick.analysisPrompt) {
+                  console.log('Attempting to extract odds from analysis prompt');
                   const teamName = pick.pick?.split(' ').slice(0, -1).join(' ');
                   if (teamName) {
                     const oddsLineMatch = pick.analysisPrompt.match(/Current moneyline odds:([^\n]+)/);
