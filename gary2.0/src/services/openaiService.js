@@ -83,12 +83,20 @@ const openaiServiceInstance = {
       try {
         // Helper function to preprocess JSON string to handle betting odds notation
         const preprocessJSON = (jsonStr) => {
-          // Replace odds values like "odds": +120 with "odds": 120 (remove the plus sign)
-          // and handle other betting odds formats
-          return jsonStr.replace(/"odds"\s*:\s*\+([0-9]+)/g, '"odds": $1')
-                      .replace(/"odds"\s*:\s*"\+([0-9]+)"/g, '"odds": "$1"')
-                      // Also handle plus signs in picks notation
-                      .replace(/("pick"\s*:\s*"[^"]*)(\+)([0-9]+)([^"]*")/g, '$1plus$3$4');
+          // First, handle the odds field with plus signs
+          let processed = jsonStr
+            // Handle "odds": +120 or "odds": "+120"
+            .replace(/"odds"\s*:\s*\+([0-9]+)/g, '"odds": $1')
+            .replace(/"odds"\s*:\s*"\+([0-9]+)"/g, '"odds": "$1"')
+            // Handle negative odds
+            .replace(/"odds"\s*:\s*"-([0-9]+)"/g, '"odds": "-$1"')
+            // Handle odds in pick field (e.g., "pick": "Team Name ML +120")
+            .replace(/("pick"\s*:\s*"[^"]*)([\s(])([+-]\d+)([)\s]?[^"]*")/g, 
+              (match, prefix, sep, odds, suffix) => `${prefix}${sep}${odds}${suffix}`);
+
+          // Log the preprocessed JSON for debugging
+          console.log('Preprocessed JSON:', processed);
+          return processed;
         };
         
         // Attempt to find and parse JSON in the response

@@ -105,7 +105,10 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     // Format odds data for better OpenAI understanding
     if (formattedData.odds && formattedData.odds.markets) {
       console.log('Formatting odds data for OpenAI...');
-      let oddsText = `\nCURRENT BETTING ODDS:\n`;
+      let oddsText = `\nCURRENT BETTING ODDS (use these exact values in your response):\n`;
+      
+      // Store odds for later use in the response
+      const oddsMap = {};
       
       // Process each market separately for clarity
       const h2hMarket = formattedData.odds.markets.find(m => m.key === 'h2h');
@@ -114,18 +117,26 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       
       // Format moneyline odds
       if (h2hMarket) {
-        oddsText += `\nMONEYLINE ODDS (for ML bets only):\n`;
+        oddsText += `\nMONEYLINE ODDS (for ML bets only - use these for moneyline picks):\n`;
         h2hMarket.outcomes.forEach(outcome => {
-          oddsText += `  ${outcome.name}: ${outcome.price > 0 ? '+' : ''}${outcome.price}\n`;
+          const oddsValue = outcome.price > 0 ? `+${outcome.price}` : `${outcome.price}`;
+          oddsText += `  ${outcome.name}: ${oddsValue}\n`;
+          // Store for later use
+          if (!oddsMap[outcome.name]) oddsMap[outcome.name] = {};
+          oddsMap[outcome.name].moneyline = oddsValue;
         });
       }
       
       // Format spread odds
       if (spreadsMarket) {
-        oddsText += `\nPOINT SPREAD ODDS (for spread bets only):\n`;
+        oddsText += `\nPOINT SPREAD ODDS (for spread bets only - use these for spread picks):\n`;
         spreadsMarket.outcomes.forEach(outcome => {
           const spreadStr = outcome.point > 0 ? `+${outcome.point}` : `${outcome.point}`;
-          oddsText += `  ${outcome.name} ${spreadStr}: ${outcome.price > 0 ? '+' : ''}${outcome.price}\n`;
+          const oddsValue = outcome.price > 0 ? `+${outcome.price}` : `${outcome.price}`;
+          oddsText += `  ${outcome.name} ${spreadStr}: ${oddsValue}\n`;
+          // Store for later use
+          if (!oddsMap[outcome.name]) oddsMap[outcome.name] = {};
+          oddsMap[outcome.name].spread = { point: spreadStr, odds: oddsValue };
         });
       }
       
@@ -137,13 +148,17 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         });
       }
       
-      oddsText += `\nIMPORTANT: Use moneyline odds ONLY for ML picks, spread odds ONLY for spread picks.\n`;
+      oddsText += `\nIMPORTANT: Use moneyline odds ONLY for ML picks, spread odds ONLY for spread picks. `;
+      oddsText += `The "odds" field in your JSON response should be the exact odds value (e.g., "-110" or "+150").\n`;
       
+      // Store the odds map for later use
+      formattedData.oddsMap = oddsMap;
       formattedData.oddsText = oddsText;
       console.log('Formatted odds text:', oddsText);
     } else {
       console.log('No odds data available for formatting');
       formattedData.oddsText = '\nNo current betting odds available.\n';
+      formattedData.oddsMap = {};
     }
     
     // Log the availability of team stats for debugging
