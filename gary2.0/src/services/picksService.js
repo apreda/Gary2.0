@@ -276,8 +276,15 @@ async function generateDailyPicks() {
         
         console.log(`NBA filtering: Today in EST is ${estFormattedDate}`);
         
-        // Be more flexible with date filtering - include games from today and tomorrow
+        // Be more flexible with date filtering - include games within next 24 hours
+        const nowTime = today.getTime();
+        const twentyFourHoursLater = nowTime + (24 * 60 * 60 * 1000);
+        
         const todayGames = games.filter(game => {
+          const gameTime = new Date(game.commence_time).getTime();
+          const isWithin24Hours = gameTime >= nowTime && gameTime <= twentyFourHoursLater;
+          
+          // Also check if it's today or tomorrow in EST
           const gameDate = new Date(game.commence_time);
           const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
           const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
@@ -290,14 +297,15 @@ async function generateDailyPicks() {
           const [tomorrowMonth, tomorrowDay, tomorrowYear] = tomorrowString.split('/');
           const tomorrowFormattedDate = `${tomorrowYear}-${tomorrowMonth.padStart(2, '0')}-${tomorrowDay.padStart(2, '0')}`;
           
-          const includeGame = gameFormattedDate === estFormattedDate || gameFormattedDate === tomorrowFormattedDate;
+          const isTodayOrTomorrow = gameFormattedDate === estFormattedDate || gameFormattedDate === tomorrowFormattedDate;
+          const includeGame = isWithin24Hours || isTodayOrTomorrow;
           
-          console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Date: ${gameFormattedDate}, Include: ${includeGame}`);
+          console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Date: ${gameFormattedDate}, Time: ${new Date(game.commence_time).toLocaleString('en-US', estOptions)}, Include: ${includeGame}`);
           
           return includeGame;
         });
 
-        console.log(`After date filtering: ${todayGames.length} NBA games`);
+        console.log(`After date filtering: ${todayGames.length} NBA games within next 24 hours or today/tomorrow`);
 
         for (const game of todayGames) {
           const gameId = `${game.id}`;
