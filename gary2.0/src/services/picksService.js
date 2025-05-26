@@ -8,6 +8,7 @@ import { supabase } from '../supabaseClient.js';
 import { sportsDataService } from './sportsDataService.js';
 import { apiSportsService } from './apiSportsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { nhlPlayoffService } from './nhlPlayoffService.js';
 import { picksService as enhancedPicksService } from './picksService.enhanced.js';
 import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 
@@ -117,12 +118,22 @@ async function storeDailyPicksInDatabase(picks) {
       sport: pick.sport
     };
   }).filter(pick => {
-    // Filter out picks with confidence below 0.7
+    // Filter out picks with confidence below 0.7 - BUT ONLY FOR MLB
+    // NBA and NHL picks are stored regardless of confidence level
     const confidence = typeof pick.confidence === 'number' ? pick.confidence : 0;
+    const sport = pick.sport || '';
+    
+    // For NBA and NHL, always include the pick regardless of confidence
+    if (sport === 'basketball_nba' || sport === 'icehockey_nhl') {
+      console.log(`Including ${sport} pick with confidence ${confidence} (no filtering for NBA/NHL)`);
+      return true;
+    }
+    
+    // For other sports (mainly MLB), apply the 0.7 confidence threshold
     return confidence >= 0.7;
   });
 
-  console.log(`After confidence filtering (>= 0.7), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After confidence filtering (>= 0.7 for MLB only, all NBA/NHL picks included), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // Skip if there are no valid picks (should never happen if picks array had items)
   if (validPicks.length === 0) {
@@ -310,7 +321,7 @@ async function generateDailyPicks() {
             const regularStatsReport = await generateNbaStatsReport(game.home_team, game.away_team);
             
             // Combine both reports, prioritizing playoff data
-            const nbaStatsReport = playoffStatsReport + '\n\n' + regularStatsReport;
+            const nbaStatsReport = '## PLAYOFF STATS (PRIORITY):\n' + playoffStatsReport + '\n\n## Regular Season Stats (Reference):\n' + regularStatsReport;
 
             // Format odds data for OpenAI
             let oddsData = null;
@@ -365,6 +376,7 @@ async function generateDailyPicks() {
 
       // --- NHL ---
       } else if (sport === 'icehockey_nhl') {
+        console.log(`Processing NHL games for ${sport}`);
         const games = await oddsService.getUpcomingGames(sport);
         // Get today's date in EST time zone format (YYYY-MM-DD)
         const today = new Date();
@@ -393,31 +405,62 @@ async function generateDailyPicks() {
           processedGames.add(gameId);
 
           try {
+            console.log(`Processing NHL game: ${game.away_team} @ ${game.home_team}`);
+            
+            // Get NHL playoff stats for these teams
+            const playoffStatsReport = await nhlPlayoffService.generateNhlPlayoffReport(
+              game.home_team,
+              game.away_team
+            );
+            
+            // Still get regular season stats as fallback
             const homeTeamStats = await apiSportsService.getTeamStats(game.home_team, 'NHL');
             const awayTeamStats = await apiSportsService.getTeamStats(game.away_team, 'NHL');
 
             const homeStats = homeTeamStats || { name: game.home_team, wins: '?', losses: '?', points: '?' };
             const awayStats = awayTeamStats || { name: game.away_team, wins: '?', losses: '?', points: '?' };
 
-            const statsReport = `
+            const regularStatsReport = `
               ${awayStats.name}: ${awayStats.wins}W-${awayStats.losses}L, ${awayStats.points || '?'} points
               ${homeStats.name}: ${homeStats.wins}W-${homeStats.losses}L, ${homeStats.points || '?'} points
             `;
+            
+            // Combine playoff and regular season reports
+            const nhlStatsReport = playoffStatsReport + '\n\n## Regular Season Stats:\n' + regularStatsReport;
+
+            // Format odds data for OpenAI
+            let oddsData = null;
+            if (game.bookmakers && game.bookmakers.length > 0) {
+              const bookmaker = game.bookmakers[0];
+              oddsData = {
+                bookmaker: bookmaker.title,
+                markets: bookmaker.markets
+              };
+              console.log(`Odds data available for ${game.home_team} vs ${game.away_team}:`, JSON.stringify(oddsData, null, 2));
+            } else {
+              console.log(`No odds data available for ${game.home_team} vs ${game.away_team}`);
+            }
 
             const gameObj = {
               id: gameId,
               sport: 'nhl',
+              league: 'NHL',
               homeTeam: game.home_team,
               awayTeam: game.away_team,
               homeTeamStats: homeStats,
               awayTeamStats: awayStats,
-              statsReport,
-              odds: game.bookmakers?.[0]?.markets || [],
-              gameTime: game.commence_time
+              statsReport: nhlStatsReport,
+              isPlayoffGame: true, // Mark this as focusing on playoff stats
+              odds: oddsData,
+              gameTime: game.commence_time,
+              time: game.commence_time
             };
 
+            console.log(`Making Gary pick for NHL game: ${game.away_team} @ ${game.home_team}`);
             const result = await makeGaryPick(gameObj);
+            
             if (result.success) {
+              console.log(`Successfully generated NHL pick: ${result.rawAnalysis?.rawOpenAIOutput?.pick || 'Unknown pick'}`);
               sportPicks.push({
                 ...result,
                 game: `${game.away_team} @ ${game.home_team}`,
@@ -428,8 +471,12 @@ async function generateDailyPicks() {
                 pickType: 'normal',
                 timestamp: new Date().toISOString()
               });
+            } else {
+              console.log(`Failed to generate NHL pick for ${game.away_team} @ ${game.home_team}:`, result.error);
             }
-          } catch (e) { /* Log if you want */ }
+          } catch (e) { 
+            console.error(`Error processing NHL game ${game.away_team} @ ${game.home_team}:`, e);
+          }
         }
       }
 
