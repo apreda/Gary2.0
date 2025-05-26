@@ -1,96 +1,83 @@
 /**
- * Test script for MLB Stats API
- * Tests various functions to ensure proper error handling and data retrieval
+ * Test MLB Stats API to verify it's working correctly
  */
-import { mlbStatsApiService } from './services/mlbStatsApiService.js';
-import { getPitcherSeasonStatsFixed } from './services/mlbStatsApiFix.js';
+import { mlbStatsApiService } from './services/mlbStatsApiService.enhanced.js';
+import { ballDontLieService } from './services/ballDontLieService.js';
+import dotenv from 'dotenv';
 
-// Helper for pretty formatting
-const prettyPrint = (obj) => JSON.stringify(obj, null, 2);
+// Load environment variables
+dotenv.config();
 
-// Get today's date in YYYY-MM-DD format
-const today = new Date().toISOString().split('T')[0];
-
-async function testMlbStatsApi() {
-  console.log('='.repeat(80));
-  console.log('MLB STATS API TEST SCRIPT');
-  console.log('='.repeat(80));
-  console.log(`Testing with date: ${today}\n`);
+async function testMLBStatsAPI() {
+  console.log('⚾ TESTING MLB STATS API ⚾');
+  console.log('---------------------------\n');
 
   try {
     // Test 1: Get today's games
-    console.log('TEST 1: Get Today\'s Games');
-    console.log('-'.repeat(50));
-    const games = await mlbStatsApiService.getTodaysGames(today);
-    console.log(`Found ${games.length} games scheduled for today`);
+    console.log('1. Testing getTodaysGames...');
+    const games = await mlbStatsApiService.getTodaysGames();
+    console.log(`Found ${games.length} games today`);
+    
     if (games.length > 0) {
-      console.log('Sample game:');
-      console.log(prettyPrint(games[0]));
+      const firstGame = games[0];
+      console.log(`First game: ${firstGame.awayTeam} @ ${firstGame.homeTeam} (ID: ${firstGame.gameId})`);
       
-      // Store first game ID for subsequent tests
-      const gameId = games[0].gameId;
+      // Test 2: Get hitter stats for the first game
+      console.log('\n2. Testing getHitterStats...');
+      const hitterStats = await mlbStatsApiService.getHitterStats(firstGame.gameId);
       
-      // Test 2: Get starting pitchers for a game
-      console.log('\nTEST 2: Get Starting Pitchers');
-      console.log('-'.repeat(50));
-      console.log(`Testing for game ID: ${gameId}`);
-      const pitchers = await mlbStatsApiService.getStartingPitchers(gameId);
-      console.log('Starting pitchers result:');
-      console.log(prettyPrint(pitchers));
+      console.log(`Home team hitters: ${hitterStats.home.length}`);
+      console.log(`Away team hitters: ${hitterStats.away.length}`);
       
-      // Test 3: Get pitcher season stats
-      if (pitchers.homeStarter?.id) {
-        console.log('\nTEST 3: Get Pitcher Season Stats');
-        console.log('-'.repeat(50));
-        console.log(`Testing for pitcher: ${pitchers.homeStarter.fullName} (ID: ${pitchers.homeStarter.id})`);
-        
-        // Compare original function with fixed function
-        console.log('ORIGINAL function:');
-        const originalStats = await mlbStatsApiService.getPitcherSeasonStats(pitchers.homeStarter.id);
-        console.log(prettyPrint(originalStats));
-        
-        console.log('\nFIXED function:');
-        const fixedStats = await getPitcherSeasonStatsFixed(pitchers.homeStarter.id);
-        console.log(prettyPrint(fixedStats));
-      }
-      
-      // Test 4: Get hitter stats for a game
-      console.log('\nTEST 4: Get Hitter Stats');
-      console.log('-'.repeat(50));
-      console.log(`Testing for game ID: ${gameId}`);
-      const hitterStats = await mlbStatsApiService.getHitterStats(gameId);
-      console.log(`Found ${hitterStats.home.length} home team hitters and ${hitterStats.away.length} away team hitters`);
+      // Check if stats are all zeros
       if (hitterStats.home.length > 0) {
-        console.log('Sample home hitter:');
-        console.log(prettyPrint(hitterStats.home[0]));
+        const firstHomeHitter = hitterStats.home[0];
+        console.log('\nFirst home hitter:', JSON.stringify(firstHomeHitter, null, 2));
+        
+        // Check if all stats are zero
+        const hasNonZeroStats = Object.values(firstHomeHitter.stats).some(stat => 
+          stat !== 0 && stat !== '0' && stat !== '.000'
+        );
+        
+        if (!hasNonZeroStats) {
+          console.log('⚠️  WARNING: All stats are zero! This might be a pre-game or the API is not returning actual stats.');
+        }
       }
+      
+      // Test 3: Get team roster with stats
+      console.log('\n3. Testing getTeamRosterWithStats...');
+      const teamId = 116; // Detroit Tigers ID
+      const rosterStats = await mlbStatsApiService.getTeamRosterWithStats(teamId);
+      
+      if (rosterStats && rosterStats.hitters.length > 0) {
+        console.log(`Found ${rosterStats.hitters.length} hitters in roster`);
+        const firstRosterHitter = rosterStats.hitters[0];
+        console.log('\nFirst roster hitter:', JSON.stringify(firstRosterHitter, null, 2));
+      }
+      
+      // Test 4: Test Ball Don't Lie as fallback
+      console.log('\n4. Testing Ball Don\'t Lie API as fallback...');
+      const mlbStats = await ballDontLieService.getComprehensiveMlbGameStats('Detroit Tigers', 'San Francisco Giants');
+      console.log('Ball Don\'t Lie response:', JSON.stringify(mlbStats, null, 2).substring(0, 500) + '...');
+      
     } else {
-      console.log('No games found for today, cannot proceed with game-specific tests');
+      console.log('No games found for today. The season might be over or no games scheduled.');
     }
     
-    // Test 5: Test comprehensive picks generation data
-    console.log('\nTEST 6: Get Picks Generation Data');
-    console.log('-'.repeat(50));
-    console.log('Using fixed getPicksGenerationData function');
-    const picksData = await mlbStatsApiService.getPicksGenerationData(today);
-    console.log(`Retrieved data with ${picksData.games.length} games and ${picksData.injuries.length} injuries`);
-    if (picksData.games.length > 0) {
-      const sampleGame = picksData.games[0];
-      console.log('Sample game with pitchers:');
-      console.log(`Matchup: ${sampleGame.matchup}`);
-      console.log(`Home pitcher: ${sampleGame.pitchers?.home?.fullName || 'Not available'}`);
-      console.log(`Away pitcher: ${sampleGame.pitchers?.away?.fullName || 'Not available'}`);
-    }
-    
-    console.log('\nALL TESTS COMPLETED SUCCESSFULLY');
   } catch (error) {
-    console.error('TEST FAILURE:', error);
-    console.error(error.stack);
+    console.error('❌ Error during testing:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
   }
 }
 
-// Run the test script
-testMlbStatsApi().catch(err => {
-  console.error('Unhandled error in test script:', err);
-  console.error(err.stack);
+// Run the test
+testMLBStatsAPI().then(() => {
+  console.log('\n✅ Test completed');
+  process.exit(0);
+}).catch(error => {
+  console.error('\n❌ Test failed:', error);
+  process.exit(1);
 });

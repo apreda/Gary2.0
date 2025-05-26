@@ -355,14 +355,14 @@ function Home() {
             overflow: 'hidden',
             boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
             color: '#ffffff',
-            padding: '1.5rem',
+            padding: '1.25rem',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            {/* Back header - more compact */}
-            <div style={{ marginBottom: '0.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#bfa142' }}>Gary's Analysis</h3>
+            {/* Back header - minimal height */}
+            <div style={{ marginBottom: '0.5rem', flex: '0 0 auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#bfa142', margin: 0 }}>Gary's Analysis</h3>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -373,9 +373,9 @@ function Home() {
                     color: '#bfa142',
                     border: 'none',
                     borderRadius: '4px',
-                    padding: '0.4rem 0.8rem',
+                    padding: '0.3rem 0.6rem',
                     cursor: 'pointer',
-                    fontSize: '0.7rem',
+                    fontSize: '0.65rem',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                     fontWeight: 500,
@@ -385,34 +385,17 @@ function Home() {
                   Back
                 </button>
               </div>
-              
-              {/* Pick summary - more compact */}
-              <div style={{ 
-                padding: '0.5rem 0.75rem', 
-                background: 'rgba(191, 161, 66, 0.1)', 
-                borderRadius: '6px',
-                border: '1px solid rgba(191, 161, 66, 0.3)',
-                marginBottom: '0.5rem'
-              }}>
-                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#bfa142' }}>
-                  {displayPick.pick || 'MISSING PICK'}
-                </div>
-                <div style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.15rem' }}>
-                  {(displayPick.homeTeam && displayPick.awayTeam) ? 
-                    `${displayPick.awayTeam} @ ${displayPick.homeTeam}` : 
-                    (displayPick.game || 'Game details unavailable')}
-                </div>
-              </div>
             </div>
             
-            {/* Full analysis - optimized for readability */}
+            {/* Full analysis - takes up 85% of remaining space */}
             <div style={{ 
-              flex: 1, 
+              flex: '1 1 85%',
               overflowY: 'auto',
-              fontSize: '0.85rem',
-              lineHeight: 1.5,
+              fontSize: '0.9rem',
+              lineHeight: 1.6,
               opacity: 0.95,
-              paddingRight: '0.5rem'
+              paddingRight: '0.5rem',
+              marginBottom: '0.5rem'
             }}>
               {displayPick.rationale ? (
                 // Check if rationale is already formatted or needs formatting
@@ -433,7 +416,7 @@ function Home() {
                         return (
                           <p key={idx} style={{ 
                             marginBottom: '0.75rem',
-                            lineHeight: 1.4
+                            lineHeight: 1.5
                           }}>
                             {cleanSentence}
                           </p>
@@ -442,7 +425,7 @@ function Home() {
                   </div>
                 ) : (
                   // Short text or single paragraph - just display as is
-                  <div style={{ lineHeight: 1.5 }}>{displayPick.rationale}</div>
+                  <div style={{ lineHeight: 1.6 }}>{displayPick.rationale}</div>
                 )
               ) : (
                 <div style={{ textAlign: 'center', opacity: 0.6, marginTop: '2rem' }}>
@@ -451,28 +434,29 @@ function Home() {
               )}
             </div>
             
-            {/* Bottom info - more compact */}
+            {/* Bottom info - minimal space */}
             <div style={{ 
-              marginTop: '0.75rem', 
-              paddingTop: '0.75rem', 
+              flex: '0 0 auto',
+              paddingTop: '0.5rem', 
               borderTop: '1px solid rgba(255,255,255,0.1)',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              fontSize: '0.75rem'
             }}>
               <div>
-                <div style={{ fontSize: '0.7rem', opacity: 0.6, marginBottom: '0.15rem' }}>Confidence</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#bfa142' }}>
+                <span style={{ opacity: 0.6 }}>Confidence: </span>
+                <span style={{ fontWeight: 700, color: '#bfa142' }}>
                   {typeof displayPick.confidence === 'number' ? 
                     Math.round(displayPick.confidence * 100) + '%' : 
                     (displayPick.confidence || '75%')}
-                </div>
+                </span>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.7rem', opacity: 0.6, marginBottom: '0.15rem' }}>Game Time</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              <div>
+                <span style={{ opacity: 0.6 }}>Time: </span>
+                <span style={{ fontWeight: 600 }}>
                   {displayPick.time || 'TBD'}
-                </div>
+                </span>
               </div>
             </div>
           </div>
