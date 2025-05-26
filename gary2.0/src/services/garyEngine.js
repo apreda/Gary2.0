@@ -20,13 +20,27 @@ export async function makeGaryPick(gameData, options = {}) {
     // Parse the analysis to get a standardized pick format
     const pick = parseGaryAnalysis(analysis);
     
+    // Extract team names from the game data
+    const extractMascot = (teamName) => {
+      if (!teamName) return '';
+      // Split by space and take the last part (mascot)
+      const parts = teamName.trim().split(' ');
+      return parts[parts.length - 1];
+    };
+
+    const homeMascot = extractMascot(gameData?.homeTeam);
+    const awayMascot = extractMascot(gameData?.awayTeam);
+    const gameTitle = gameData?.game || `${awayMascot} @ ${homeMascot}`;
+    
     return {
       success: !!pick,
       pick: pick,
       rawAnalysis: analysis,
-      game: gameData?.game || `${gameData?.homeTeam} vs ${gameData?.awayTeam}`,
+      game: gameTitle,
       sport: gameData?.sport,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      homeTeam: gameData?.homeTeam,
+      awayTeam: gameData?.awayTeam
     };
   } catch (error) {
     console.error('Error making Gary pick:', error);
