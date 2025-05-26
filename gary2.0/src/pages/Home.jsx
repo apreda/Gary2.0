@@ -13,6 +13,7 @@ function Home() {
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [winRate, setWinRate] = useState('67%');
+  const [isCardFlipped, setIsCardFlipped] = useState(false);
   
   // Simple win rate badge with no dependencies
 
@@ -37,9 +38,16 @@ function Home() {
     };
 
     return (
-      <div style={{ width: 576, height: 384, perspective: '1000px', cursor: 'pointer' }}>
+      <div style={{ width: 576, height: 384, perspective: '1000px', cursor: 'pointer' }} onClick={() => setIsCardFlipped(!isCardFlipped)}>
         {/* Card container with 3D effect */}
-        <div style={{ position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)' }}>
+        <div style={{ 
+          position: 'relative', 
+          width: '100%', 
+          height: '100%', 
+          transformStyle: 'preserve-3d', 
+          transition: 'transform 0.6s',
+          transform: isCardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+        }}>
           {/* FRONT OF CARD - Modern Dark UI Design */}
           <div style={{
             position: 'absolute',
@@ -333,6 +341,135 @@ function Home() {
               pointerEvents: 'none'
             }}></div>
           </div>
+          
+          {/* BACK OF CARD - Analysis View */}
+          <div style={{
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            backfaceVisibility: 'hidden',
+            transform: 'rotateY(180deg)',
+            background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+            borderRadius: '16px',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            overflow: 'hidden',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+            color: '#ffffff',
+            padding: '2rem',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Back header */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#bfa142' }}>Gary's Analysis</h3>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCardFlipped(false);
+                  }}
+                  style={{
+                    background: 'rgba(191, 161, 66, 0.15)',
+                    color: '#bfa142',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '0.5rem 1rem',
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    fontWeight: 500,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Back
+                </button>
+              </div>
+              
+              {/* Pick summary */}
+              <div style={{ 
+                padding: '0.75rem', 
+                background: 'rgba(191, 161, 66, 0.1)', 
+                borderRadius: '8px',
+                border: '1px solid rgba(191, 161, 66, 0.3)',
+                marginBottom: '1rem'
+              }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#bfa142' }}>
+                  {displayPick.pick || 'MISSING PICK'}
+                </div>
+                <div style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.25rem' }}>
+                  {(displayPick.homeTeam && displayPick.awayTeam) ? 
+                    `${displayPick.awayTeam} @ ${displayPick.homeTeam}` : 
+                    (displayPick.game || 'Game details unavailable')}
+                </div>
+              </div>
+            </div>
+            
+            {/* Full analysis */}
+            <div style={{ 
+              flex: 1, 
+              overflowY: 'auto',
+              fontSize: '0.95rem',
+              lineHeight: 1.6,
+              opacity: 0.9
+            }}>
+              {displayPick.rationale ? (
+                displayPick.rationale.includes('•') || displayPick.rationale.includes('. ') ? (
+                  <ul style={{ listStyleType: 'none', margin: 0, padding: 0 }}>
+                    {displayPick.rationale
+                      .split(/[•]|\.\s+/)
+                      .filter(point => point.trim().length > 0)
+                      .map((point, idx) => {
+                        let cleanPoint = point.trim();
+                        if (cleanPoint.startsWith('.')) {
+                          cleanPoint = cleanPoint.substring(1).trim();
+                        }
+                        if (!cleanPoint.endsWith('.') && !cleanPoint.endsWith('!') && !cleanPoint.endsWith('?')) {
+                          cleanPoint += '.';
+                        }
+                        return (
+                          <li key={idx} style={{ display: 'flex', marginBottom: '1rem', alignItems: 'flex-start' }}>
+                            <span style={{ color: '#bfa142', marginRight: '8px', fontWeight: 'bold', fontSize: '1.1rem' }}>•</span>
+                            <span>{cleanPoint}</span>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                ) : (
+                  <div>{displayPick.rationale}</div>
+                )
+              ) : (
+                <div style={{ textAlign: 'center', opacity: 0.6, marginTop: '2rem' }}>
+                  Analysis not available at this time.
+                </div>
+              )}
+            </div>
+            
+            {/* Bottom confidence indicator */}
+            <div style={{ 
+              marginTop: '1.5rem', 
+              paddingTop: '1rem', 
+              borderTop: '1px solid rgba(255,255,255,0.1)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.25rem' }}>Confidence Level</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#bfa142' }}>
+                  {typeof displayPick.confidence === 'number' ? 
+                    Math.round(displayPick.confidence * 100) + '%' : 
+                    (displayPick.confidence || '75%')}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.25rem' }}>Game Time</div>
+                <div style={{ fontSize: '1rem', fontWeight: 600 }}>
+                  {displayPick.time || 'TBD'}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -405,11 +542,10 @@ function Home() {
         // Format full time for logging
         const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
         
-        console.log(`Home: Properly formatted Eastern date: ${dateString}, Hour: ${easternHour}`);
-        console.log(`Home: Original time parts: M:${month} D:${day} Y:${year} H:${hours} M:${minutes} ${period}`);
+        console.log(`Home: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour})`);
         
         let queryDate = dateString;
-        console.log(`Home: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour})`);
+        console.log(`Home: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour}`);
         
         // Before 10am EST, always use yesterday's picks if available
         if (easternHour < 10) {
