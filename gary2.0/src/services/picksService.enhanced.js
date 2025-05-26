@@ -230,6 +230,8 @@ export const picksService = {
     
     // Add odds information if available from either source
     let oddsString = '';
+    let moneylineOdds = { home: null, away: null };
+    let spreadOdds = { home: null, away: null };
     
     // Try to get odds from combinedMlbService first (via gameData.odds)
     if (gameData.odds?.bookmakers?.length > 0) {
@@ -243,7 +245,11 @@ export const picksService = {
         const awayMoneyline = h2hMarket.outcomes.find(o => o.name === awayTeam || o.name.includes(awayTeam) || awayTeam.includes(o.name));
         
         if (homeMoneyline && awayMoneyline) {
-          oddsString = `Current moneyline odds: ${homeTeam} (${homeMoneyline.price}), ${awayTeam} (${awayMoneyline.price})`;
+          moneylineOdds.home = homeMoneyline.price;
+          moneylineOdds.away = awayMoneyline.price;
+          oddsString += `MONEYLINE ODDS (use these for ML bets only):\n`;
+          oddsString += `  ${homeTeam}: ${homeMoneyline.price > 0 ? '+' : ''}${homeMoneyline.price}\n`;
+          oddsString += `  ${awayTeam}: ${awayMoneyline.price > 0 ? '+' : ''}${awayMoneyline.price}\n\n`;
         }
       }
       
@@ -254,7 +260,11 @@ export const picksService = {
         const awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam || o.name.includes(awayTeam) || awayTeam.includes(o.name));
         
         if (homeSpread && awaySpread) {
-          oddsString += `\nCurrent spread: ${homeTeam} (${homeSpread.point}), ${awayTeam} (${awaySpread.point})`;
+          spreadOdds.home = { point: homeSpread.point, price: homeSpread.price };
+          spreadOdds.away = { point: awaySpread.point, price: awaySpread.price };
+          oddsString += `POINT SPREAD ODDS (use these for spread bets only):\n`;
+          oddsString += `  ${homeTeam} ${homeSpread.point > 0 ? '+' : ''}${homeSpread.point}: ${homeSpread.price > 0 ? '+' : ''}${homeSpread.price}\n`;
+          oddsString += `  ${awayTeam} ${awaySpread.point > 0 ? '+' : ''}${awaySpread.point}: ${awaySpread.price > 0 ? '+' : ''}${awaySpread.price}\n`;
         }
       }
     } 
@@ -269,16 +279,24 @@ export const picksService = {
         const awayMoneyline = h2hMarket.outcomes.find(o => o.name === awayTeam);
         
         if (homeMoneyline && awayMoneyline) {
-          oddsString = `Current moneyline odds: ${homeTeam} (${homeMoneyline.price}), ${awayTeam} (${awayMoneyline.price})`;
+          moneylineOdds.home = homeMoneyline.price;
+          moneylineOdds.away = awayMoneyline.price;
+          oddsString += `MONEYLINE ODDS (use these for ML bets only):\n`;
+          oddsString += `  ${homeTeam}: ${homeMoneyline.price > 0 ? '+' : ''}${homeMoneyline.price}\n`;
+          oddsString += `  ${awayTeam}: ${awayMoneyline.price > 0 ? '+' : ''}${awayMoneyline.price}\n\n`;
         }
+      }
+      
+      if (spreadMarket) {
+        const homeSpread = spreadMarket.outcomes.find(o => o.name === homeTeam);
+        const awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam);
         
-        if (spreadMarket) {
-          const homeSpread = spreadMarket.outcomes.find(o => o.name === homeTeam);
-          const awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam);
-          
-          if (homeSpread && awaySpread) {
-            oddsString += `\nCurrent spread: ${homeTeam} (${homeSpread.point}), ${awayTeam} (${awaySpread.point})`;
-          }
+        if (homeSpread && awaySpread) {
+          spreadOdds.home = { point: homeSpread.point, price: homeSpread.price };
+          spreadOdds.away = { point: awaySpread.point, price: awaySpread.price };
+          oddsString += `POINT SPREAD ODDS (use these for spread bets only):\n`;
+          oddsString += `  ${homeTeam} ${homeSpread.point > 0 ? '+' : ''}${homeSpread.point}: ${homeSpread.price > 0 ? '+' : ''}${homeSpread.price}\n`;
+          oddsString += `  ${awayTeam} ${awaySpread.point > 0 ? '+' : ''}${awaySpread.point}: ${awaySpread.price > 0 ? '+' : ''}${awaySpread.price}\n`;
         }
       }
     } else {
@@ -358,15 +376,34 @@ export const picksService = {
     
     // Add instructions for generating the analysis
     prompt += `Based on the above information, analyze this game and make your best pick. Remember, you are Gary the grizzled betting expert.\n\n`;
+    
+    prompt += `SPREAD VS MONEYLINE DECISION CRITERIA:\n`;
+    prompt += `1. For MLB games, the spread is always -1.5/+1.5. Consider the spread when:\n`;
+    prompt += `   - A dominant pitcher faces a weak lineup (take favorite -1.5)\n`;
+    prompt += `   - The favorite has been winning by 2+ runs consistently\n`;
+    prompt += `   - The underdog +1.5 offers great value against an inconsistent favorite\n`;
+    prompt += `2. Consider moneyline when:\n`;
+    prompt += `   - The game is expected to be close (strong pitching matchup)\n`;
+    prompt += `   - The underdog has upset potential but might lose by 1 run\n`;
+    prompt += `   - The favorite's ML odds are reasonable (-150 or better)\n`;
+    prompt += `3. IMPORTANT: Aim for a balanced mix of spread and moneyline picks\n\n`;
+    
     prompt += `CRITICAL: You must return ONLY a single JSON object in the exact format specified. Do not return an analysis object with recommendations array. Return the pick directly.\n\n`;
+    
+    prompt += `ODDS USAGE RULES:\n`;
+    prompt += `1. If you pick a SPREAD bet (e.g., "Yankees -1.5"), you MUST use the spread odds from "POINT SPREAD ODDS" section\n`;
+    prompt += `2. If you pick a MONEYLINE bet (e.g., "Yankees ML"), you MUST use the moneyline odds from "MONEYLINE ODDS" section\n`;
+    prompt += `3. NEVER mix up the odds - using moneyline odds for a spread bet is WRONG\n\n`;
+    
     prompt += `IMPORTANT: The "pick" field MUST ALWAYS include the odds. Never omit the odds. Examples:\n`;
     prompt += `- For moneyline: "Boston Red Sox ML -120" or "Yankees ML +145"\n`;
     prompt += `- For spread: "Yankees -1.5 -110" or "Red Sox +1.5 -105"\n`;
     prompt += `NEVER write just "Boston Red Sox ML" without the odds!\n\n`;
+    
     prompt += `The JSON must include ALL these fields exactly:\n`;
     prompt += `{\n`;
-    prompt += `  "pick": "MUST include team name, bet type (ML or spread), AND odds (e.g., 'Boston Red Sox ML -120' or 'Yankees -1.5 -105')",\n`;
-    prompt += `  "odds": "${oddsString ? 'Include the specific odds for your pick here (e.g., "-120" or "+145")' : 'Not available'}",\n`;
+    prompt += `  "pick": "MUST include team name, bet type (ML or spread with number), AND odds (e.g., 'Boston Red Sox ML -120' or 'Yankees -1.5 -105')",\n`;
+    prompt += `  "odds": "${oddsString ? 'The specific odds number for your chosen bet type (e.g., "-110" or "+145")' : '-110'}",\n`;
     prompt += `  "time": "${game.commence_time ? new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' EST' : 'TBD'}",\n`;
     prompt += `  "type": "spread" or "moneyline",\n`;
     prompt += `  "league": "MLB",\n`;
