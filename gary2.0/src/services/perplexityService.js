@@ -97,7 +97,15 @@ export const perplexityService = {
   /**
    * Base URL for Perplexity API
    */
-  API_BASE_URL: 'https://api.perplexity.ai/chat/completions',
+  API_BASE_URL: (() => {
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined') {
+      // Use proxy endpoint in browser to avoid CORS
+      return '/api/perplexity-proxy';
+    }
+    // Use direct API in Node.js environment
+    return 'https://api.perplexity.ai/chat/completions';
+  })(),
   
   /**
    * Fetches real-time information using Perplexity's search capabilities

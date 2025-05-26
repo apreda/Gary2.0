@@ -223,11 +223,37 @@ const combinedMlbService = {
         const boxHitterStats = await mlbStatsApiService.getHitterStats(targetGame.gamePk);
 
         if (boxHitterStats?.home?.length || boxHitterStats?.away?.length) {
-          hitterStats = boxHitterStats;
-          console.log(`[Combined MLB Service] Got box hitter stats: ${boxHitterStats?.home?.length || 0} home, ${boxHitterStats?.away?.length || 0} away`);
-        } else {
-          // Fall back to roster stats
-          console.log(`[Combined MLB Service] No box hitter stats, falling back to roster stats`);
+          // Check if stats are all zeros (pre-game or API issue)
+          const hasValidHomeStats = boxHitterStats.home.some(player => 
+            Object.values(player.stats).some(stat => stat !== 0 && stat !== '0' && stat !== '.000')
+          );
+          const hasValidAwayStats = boxHitterStats.away.some(player => 
+            Object.values(player.stats).some(stat => stat !== 0 && stat !== '0' && stat !== '.000')
+          );
+          
+          if (hasValidHomeStats || hasValidAwayStats) {
+            hitterStats = boxHitterStats;
+            console.log(`[Combined MLB Service] Got valid box hitter stats: ${boxHitterStats?.home?.length || 0} home, ${boxHitterStats?.away?.length || 0} away`);
+          } else {
+            console.log(`[Combined MLB Service] Box hitter stats are all zeros, trying Ball Don't Lie API`);
+            
+            // Try Ball Don't Lie API as fallback
+            try {
+              const ballDontLieStats = await ballDontLieService.getComprehensiveMlbGameStats(homeTeamName, awayTeamName);
+              
+              if (ballDontLieStats?.hitterStats?.home?.length || ballDontLieStats?.hitterStats?.away?.length) {
+                hitterStats = ballDontLieStats.hitterStats;
+                console.log(`[Combined MLB Service] Got hitter stats from Ball Don't Lie: ${hitterStats?.home?.length || 0} home, ${hitterStats?.away?.length || 0} away`);
+              }
+            } catch (bdlError) {
+              console.log(`[Combined MLB Service] Ball Don't Lie fallback failed: ${bdlError.message}`);
+            }
+          }
+        }
+        
+        // If still no stats, fall back to roster stats
+        if (!hitterStats.home.length && !hitterStats.away.length) {
+          console.log(`[Combined MLB Service] No hitter stats from any source, falling back to roster stats`);
           try {
             const homeTeamId = targetGame.teams.home.team.id;
             const awayTeamId = targetGame.teams.away.team.id;
