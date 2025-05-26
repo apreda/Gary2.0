@@ -214,7 +214,14 @@ Never invent or infer statistics that aren't in the input. If data is limited, s
 BETTING PICK RULES:
 - **Spread Pick:** The spread is the number of points/runs/goals a team must win by (if favored) or can lose by (if underdog) for the bet to win. For example, if Team A is -7.5, they must win by 8+ points. If Team B is +7.5, they can win the game or lose by up to 7 and still cover.
 - **Moneyline Pick:** The moneyline is a straight-up bet on which team will win the game, regardless of the score margin.
-- **How to Choose:** Use your analysis of the provided data to decide whether the spread or the moneyline offers the best chance of winning. If you think a team is likely to win but may not cover a large spread, take the moneyline (if the odds make sense). If the data shows a clear edge on the spread, go with the spread.
+- **How to Choose:** Use your analysis of the provided data to decide whether the spread or the moneyline offers the best chance of winning. Consider these factors:
+  - For MLB: If a strong pitcher faces a weak lineup, consider the spread (-1.5) for better value
+  - For NBA: Large spreads (>7) often provide value on underdogs, while small spreads (<3) might favor moneyline
+  - For NHL: Low-scoring nature makes spreads (-1.5) valuable when there's a clear mismatch
+  - If the favorite has been dominant and the spread is reasonable, take the spread for better odds
+  - If the underdog has upset potential but might not cover, take their moneyline
+  - IMPORTANT: Aim for roughly 50/50 split between spread and moneyline picks across multiple games
+  - Don't default to moneyline - actively consider if the spread offers better value
 
 CRITICAL FORMATTING INSTRUCTIONS:
 - The pick field MUST follow this exact format: "Team Name BetType Odds"
@@ -233,14 +240,18 @@ CRITICAL FORMATTING INSTRUCTIONS:
 ODDS EXTRACTION RULES:
 1. ALWAYS extract odds from the provided odds data in the prompt
 2. Look for moneyline odds (h2h market) and spread odds (spreads market)
-3. If you choose a spread bet, use the spread odds for that team
-4. If you choose a moneyline bet, use the moneyline odds for that team
-5. If odds data is missing or unclear, use these defaults:
+3. CRITICAL: If you choose a spread bet, you MUST use the spread odds for that team from the spreads market
+4. CRITICAL: If you choose a moneyline bet, you MUST use the moneyline odds for that team from the h2h market
+5. The odds data will be formatted like:
+   - Moneyline odds: "Team Name: -150" (from h2h market)
+   - Point spread odds: "Team Name -1.5: -110" (from spreads market)
+6. DO NOT mix up the odds - spread bets must use spread odds, moneyline bets must use moneyline odds
+7. If odds data is missing or unclear, use these defaults:
    - Spread bets: -110 (standard)
    - Moneyline favorites: -150 to -200 range
    - Moneyline underdogs: +130 to +180 range
-6. The "odds" field in your JSON response should contain ONLY the odds number (e.g., "-110", "+150")
-7. But the "pick" field must include the full format with odds at the end
+8. The "odds" field in your JSON response should contain ONLY the odds number (e.g., "-110", "+150")
+9. But the "pick" field must include the full format with odds at the end
 
 IMPORTANT: Never make total (Over/Under) picks for teams. Only make spread or moneyline picks for teams, or player props when specified.
 

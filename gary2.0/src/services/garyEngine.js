@@ -107,24 +107,37 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       console.log('Formatting odds data for OpenAI...');
       let oddsText = `\nCURRENT BETTING ODDS:\n`;
       
-      formattedData.odds.markets.forEach(market => {
-        if (market.key === 'h2h') {
-          oddsText += `Moneyline odds:\n`;
-          market.outcomes.forEach(outcome => {
-            oddsText += `  ${outcome.name}: ${outcome.price}\n`;
-          });
-        } else if (market.key === 'spreads') {
-          oddsText += `Point spread odds:\n`;
-          market.outcomes.forEach(outcome => {
-            oddsText += `  ${outcome.name} ${outcome.point}: ${outcome.price}\n`;
-          });
-        } else if (market.key === 'totals') {
-          oddsText += `Total (Over/Under) odds:\n`;
-          market.outcomes.forEach(outcome => {
-            oddsText += `  ${outcome.name} ${outcome.point}: ${outcome.price}\n`;
-          });
-        }
-      });
+      // Process each market separately for clarity
+      const h2hMarket = formattedData.odds.markets.find(m => m.key === 'h2h');
+      const spreadsMarket = formattedData.odds.markets.find(m => m.key === 'spreads');
+      const totalsMarket = formattedData.odds.markets.find(m => m.key === 'totals');
+      
+      // Format moneyline odds
+      if (h2hMarket) {
+        oddsText += `\nMONEYLINE ODDS (for ML bets only):\n`;
+        h2hMarket.outcomes.forEach(outcome => {
+          oddsText += `  ${outcome.name}: ${outcome.price > 0 ? '+' : ''}${outcome.price}\n`;
+        });
+      }
+      
+      // Format spread odds
+      if (spreadsMarket) {
+        oddsText += `\nPOINT SPREAD ODDS (for spread bets only):\n`;
+        spreadsMarket.outcomes.forEach(outcome => {
+          const spreadStr = outcome.point > 0 ? `+${outcome.point}` : `${outcome.point}`;
+          oddsText += `  ${outcome.name} ${spreadStr}: ${outcome.price > 0 ? '+' : ''}${outcome.price}\n`;
+        });
+      }
+      
+      // Format totals (for reference only, not for team picks)
+      if (totalsMarket) {
+        oddsText += `\nTOTAL (Over/Under) ODDS (reference only - do not pick totals):\n`;
+        totalsMarket.outcomes.forEach(outcome => {
+          oddsText += `  ${outcome.name} ${outcome.point}: ${outcome.price > 0 ? '+' : ''}${outcome.price}\n`;
+        });
+      }
+      
+      oddsText += `\nIMPORTANT: Use moneyline odds ONLY for ML picks, spread odds ONLY for spread picks.\n`;
       
       formattedData.oddsText = oddsText;
       console.log('Formatted odds text:', oddsText);
