@@ -23,9 +23,38 @@ export async function makeGaryPick(gameData, options = {}) {
     // Extract team names from the game data
     const extractMascot = (teamName) => {
       if (!teamName) return '';
-      // Split by space and take the last part (mascot)
-      const parts = teamName.trim().split(' ');
-      return parts[parts.length - 1];
+      
+      // Common city names that should be removed
+      const cityNames = [
+        'New York', 'Los Angeles', 'San Francisco', 'San Diego', 'Kansas City',
+        'Tampa Bay', 'St. Louis', 'Las Vegas', 'Golden State', 'Oklahoma City',
+        'Chicago', 'Boston', 'Philadelphia', 'Detroit', 'Cleveland', 'Milwaukee',
+        'Minnesota', 'Houston', 'Dallas', 'Denver', 'Phoenix', 'Portland',
+        'Sacramento', 'Utah', 'Memphis', 'New Orleans', 'Miami', 'Orlando',
+        'Atlanta', 'Charlotte', 'Washington', 'Brooklyn', 'Indiana', 'Toronto',
+        'Montreal', 'Vancouver', 'Calgary', 'Edmonton', 'Winnipeg', 'Ottawa',
+        'Pittsburgh', 'Buffalo', 'Nashville', 'Carolina', 'Florida', 'Colorado',
+        'Arizona', 'Seattle', 'San Jose', 'Anaheim', 'Columbus', 'New Jersey'
+      ];
+      
+      const trimmedName = teamName.trim();
+      
+      // Check if the team name starts with any city name
+      for (const city of cityNames) {
+        if (trimmedName.startsWith(city + ' ')) {
+          // Return everything after the city name
+          return trimmedName.substring(city.length + 1);
+        }
+      }
+      
+      // If no city match found, split by space and take everything except the first word
+      const parts = trimmedName.split(' ');
+      if (parts.length > 1) {
+        return parts.slice(1).join(' ');
+      }
+      
+      // If only one word, return it as is
+      return trimmedName;
     };
 
     const homeMascot = extractMascot(gameData?.homeTeam);
