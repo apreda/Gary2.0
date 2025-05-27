@@ -75,7 +75,7 @@ function Home() {
               justifyContent: 'space-between',
               overflow: 'hidden',
             }}>
-              {/* League and Matchup in horizontal layout */}
+              {/* League, Odds, and Matchup in horizontal layout */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 {/* League */}
                 <div>
@@ -95,6 +95,37 @@ function Home() {
                     opacity: 0.95
                   }}>
                     {displayPick.league || 'MLB'}
+                  </div>
+                </div>
+                
+                {/* Odds - New section in the middle */}
+                <div style={{ marginLeft: '20px' }}>
+                  <div style={{ 
+                    fontSize: '0.75rem', 
+                    opacity: 0.6, 
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em', 
+                    marginBottom: '0.25rem'
+                  }}>
+                    Odds
+                  </div>
+                  <div style={{ 
+                    fontSize: '1.25rem', 
+                    fontWeight: 600,
+                    opacity: 0.9,
+                    padding: '0.25rem 0.5rem',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '4px',
+                    background: 'rgba(255, 255, 255, 0.05)'
+                  }}>
+                    {(() => {
+                      // Extract odds from the pick string
+                      if (displayPick.pick) {
+                        const oddsMatch = displayPick.pick.match(/([-+]\d+)$/);
+                        return oddsMatch ? oddsMatch[1] : '-110';
+                      }
+                      return displayPick.odds || '-110';
+                    })()}
                   </div>
                 </div>
                 
@@ -138,9 +169,15 @@ function Home() {
                   lineHeight: 1.1,
                   color: '#bfa142', /* Keeping gold color for the actual pick */
                   wordBreak: 'break-word',
-                  marginBottom: '0.75rem'
+                  marginBottom: '1.25rem'
                 }}>
-                  {displayPick.pick || 'MISSING PICK'}
+                  {(() => {
+                    // Remove odds from the end of the pick string
+                    if (displayPick.pick) {
+                      return displayPick.pick.replace(/([-+]\d+)$/, '').trim();
+                    }
+                    return 'MISSING PICK';
+                  })()}
                 </div>
                 
                 {/* Enhanced preview with key stats bullet points */}
@@ -148,6 +185,7 @@ function Home() {
                   fontSize: '0.8rem',
                   opacity: 0.85,
                   marginBottom: '0.5rem',
+                  marginTop: '0.75rem',
                   lineHeight: 1.4
                 }}>
                   {displayPick.rationale ? 
