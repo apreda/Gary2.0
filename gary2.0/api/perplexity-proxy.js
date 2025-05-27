@@ -3,14 +3,17 @@
  * Handles CORS and API key management for Perplexity requests
  */
 
-// Define supported models
+// Define supported models (updated for 2025)
 const SUPPORTED_MODELS = [
+  'llama-3.1-sonar-small-128k-online',
+  'llama-3.1-sonar-large-128k-online',
+  'llama-3.1-sonar-huge-128k-online',
+  'llama-3-sonar-online',
+  'llama-3-70b-online',
   'pplx-7b-online',
   'pplx-70b-online',
   'mixtral-8x7b-instruct',
-  'mistral-7b-instruct',
-  'llama-3-sonar-online', 
-  'llama-3-70b-online'
+  'mistral-7b-instruct'
 ];
 
 /**
@@ -50,7 +53,7 @@ export default async function handler(req, res) {
     }
     
     // Select and validate model
-    const selectedModel = model || 'pplx-7b-online';
+    const selectedModel = model || 'llama-3.1-sonar-small-128k-online';
     if (!SUPPORTED_MODELS.includes(selectedModel)) {
       console.log(`[PERPLEXITY PROXY] Invalid model requested: ${selectedModel}`);
       return res.status(400).json({

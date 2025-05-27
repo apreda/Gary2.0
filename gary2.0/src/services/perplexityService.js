@@ -21,7 +21,7 @@ export const perplexityService = {
       
       // Default options with correct model name from Perplexity documentation
       const defaultOptions = {
-        model: 'sonar',
+        model: 'llama-3.1-sonar-small-128k-online',
         temperature: 0.3,
         maxTokens: 500
       };
