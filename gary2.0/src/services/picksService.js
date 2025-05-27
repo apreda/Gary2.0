@@ -439,18 +439,56 @@ async function generateDailyPicks() {
               console.log(`Could not get NBA team info: ${statsError.message}`);
             }
             
-            // Get NBA playoff stats for these teams
-            const playoffStatsReport = await ballDontLieService.generateNbaPlayoffReport(
-              game.home_team, 
-              game.away_team, 
-              new Date().getFullYear()
-            );
+            // Get comprehensive NBA playoff stats for these teams
+            const [playoffStatsReport, playoffPlayerStats] = await Promise.all([
+              ballDontLieService.generateNbaPlayoffReport(
+                game.home_team, 
+                game.away_team, 
+                new Date().getFullYear()
+              ),
+              ballDontLieService.getNbaPlayoffPlayerStats(
+                game.home_team,
+                game.away_team,
+                new Date().getFullYear()
+              )
+            ]);
+            
+            // Build detailed player stats report
+            let playerStatsReport = '\n## DETAILED PLAYOFF PLAYER STATS:\n\n';
+            
+            if (playoffPlayerStats.home.length > 0) {
+              playerStatsReport += `### ${game.home_team} Key Playoff Performers:\n`;
+              playoffPlayerStats.home.slice(0, 5).forEach(player => {
+                playerStatsReport += `- **${player.player.first_name} ${player.player.last_name}**: ${player.avgPts} PPG, ${player.avgReb} RPG, ${player.avgAst} APG, ${player.fgPct}% FG, ${player.fg3Pct}% 3PT (${player.games} playoff games)\n`;
+              });
+              playerStatsReport += '\n';
+            }
+            
+            if (playoffPlayerStats.away.length > 0) {
+              playerStatsReport += `### ${game.away_team} Key Playoff Performers:\n`;
+              playoffPlayerStats.away.slice(0, 5).forEach(player => {
+                playerStatsReport += `- **${player.player.first_name} ${player.player.last_name}**: ${player.avgPts} PPG, ${player.avgReb} RPG, ${player.avgAst} APG, ${player.fgPct}% FG, ${player.fg3Pct}% 3PT (${player.games} playoff games)\n`;
+              });
+              playerStatsReport += '\n';
+            }
+            
+            // Add team comparison based on playoff stats
+            if (playoffPlayerStats.home.length > 0 && playoffPlayerStats.away.length > 0) {
+              const homeAvgPts = playoffPlayerStats.home.reduce((sum, p) => sum + parseFloat(p.avgPts), 0) / Math.min(5, playoffPlayerStats.home.length);
+              const awayAvgPts = playoffPlayerStats.away.reduce((sum, p) => sum + parseFloat(p.avgPts), 0) / Math.min(5, playoffPlayerStats.away.length);
+              const homeAvgFg = playoffPlayerStats.home.reduce((sum, p) => sum + parseFloat(p.fgPct), 0) / Math.min(5, playoffPlayerStats.home.length);
+              const awayAvgFg = playoffPlayerStats.away.reduce((sum, p) => sum + parseFloat(p.fgPct), 0) / Math.min(5, playoffPlayerStats.away.length);
+              
+              playerStatsReport += `### Playoff Performance Comparison:\n`;
+              playerStatsReport += `- **Scoring**: ${game.home_team} top 5 avg ${homeAvgPts.toFixed(1)} PPG vs ${game.away_team} top 5 avg ${awayAvgPts.toFixed(1)} PPG\n`;
+              playerStatsReport += `- **Shooting**: ${game.home_team} top 5 avg ${homeAvgFg.toFixed(1)}% FG vs ${game.away_team} top 5 avg ${awayAvgFg.toFixed(1)}% FG\n\n`;
+            }
             
             // Still get regular stats as fallback
             const regularStatsReport = await generateNbaStatsReport(game.home_team, game.away_team);
             
-            // Combine both reports, prioritizing playoff data
-            const nbaStatsReport = '## PLAYOFF STATS (PRIORITY):\n' + playoffStatsReport + '\n\n## Regular Season Stats (Reference):\n' + regularStatsReport;
+            // Combine all reports, prioritizing playoff data
+            const nbaStatsReport = '## PLAYOFF STATS (PRIORITY):\n' + playoffStatsReport + playerStatsReport + '\n## Regular Season Stats (Reference):\n' + regularStatsReport;
 
             // Format odds data for OpenAI
             let oddsData = null;
@@ -474,6 +512,7 @@ async function generateDailyPicks() {
               homeTeamStats,
               awayTeamStats,
               statsReport: nbaStatsReport,
+              playoffPlayerStats, // Add detailed playoff player stats
               isPlayoffGame: true, // Mark this as a playoff game
               odds: oddsData,
               gameTime: game.commence_time,
