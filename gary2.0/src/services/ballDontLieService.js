@@ -350,6 +350,8 @@ const ballDontLieService = {
     const currentMonth = new Date().getMonth() + 1;
     const actualSeason = currentMonth <= 6 ? season - 1 : season;
     
+    console.log(`🏀 [SEASON DEBUG] Input season: ${season}, Current month: ${currentMonth}, Calculated actualSeason: ${actualSeason}`);
+    
     try {
       const cacheKey = `active_playoff_teams_${actualSeason}`;
       return getCachedOrFetch(cacheKey, async () => {
@@ -372,11 +374,13 @@ const ballDontLieService = {
         });
         
         const recentGames = response.data || [];
+        console.log(`🏀 Found ${recentGames.length} recent playoff games since ${startDate}`);
         
         // If no recent games, fall back to all playoff games
         if (recentGames.length === 0) {
-          console.log('No recent playoff games found, falling back to all playoff games');
-          const allPlayoffGames = await this.getNbaPlayoffGames(season);
+          console.log(`🏀 No recent playoff games found, falling back to all playoff games for ${actualSeason} season`);
+          const allPlayoffGames = await this.getNbaPlayoffGames(actualSeason);
+          console.log(`🏀 Fallback found ${allPlayoffGames.length} total playoff games for ${actualSeason} season`);
           // Group by series and find series with incomplete records (not finished)
           const seriesMap = new Map();
           
@@ -595,6 +599,21 @@ const ballDontLieService = {
       console.log(`[Ball Don't Lie] ${homeTeam} (ID: ${homeTeamData.id}): Found ${homeTeamGames.length} playoff games`);
       console.log(`[Ball Don't Lie] ${awayTeam} (ID: ${awayTeamData.id}): Found ${awayTeamGames.length} playoff games`);
       
+      // Debug: Log sample games for each team
+      if (homeTeamGames.length > 0) {
+        console.log(`[Ball Don't Lie] Sample ${homeTeam} games:`);
+        homeTeamGames.slice(0, 2).forEach(game => {
+          console.log(`  - ${game.visitor_team.name} @ ${game.home_team.name} (${game.date})`);
+        });
+      }
+      
+      if (awayTeamGames.length > 0) {
+        console.log(`[Ball Don't Lie] Sample ${awayTeam} games:`);
+        awayTeamGames.slice(0, 2).forEach(game => {
+          console.log(`  - ${game.visitor_team.name} @ ${game.home_team.name} (${game.date})`);
+        });
+      }
+      
       // If no games found for a team, try alternative team name matching
       let finalHomeTeamGames = homeTeamGames;
       let finalAwayTeamGames = awayTeamGames;
@@ -665,8 +684,12 @@ const ballDontLieService = {
         
         for (const game of games) {
           try {
+            console.log(`[Ball Don't Lie] Getting stats for game ${game.id}: ${game.visitor_team.name} @ ${game.home_team.name}`);
             const gameStats = await this.getNbaPlayoffGameStats(game.id);
+            console.log(`[Ball Don't Lie] Game ${game.id}: Found ${gameStats.length} total player stats`);
+            
             const teamStats = gameStats.filter(stat => stat.team.id === teamId);
+            console.log(`[Ball Don't Lie] Game ${game.id}: Found ${teamStats.length} stats for team ${teamId}`);
             
             teamStats.forEach(stat => {
               const playerId = stat.player.id;
@@ -731,8 +754,19 @@ const ballDontLieService = {
         }
         
         // Calculate averages and advanced metrics
-        return Array.from(playerStatsMap.values())
-          .filter(player => player.games >= 2) // Only players with at least 2 games
+        const allPlayers = Array.from(playerStatsMap.values());
+        console.log(`[Ball Don't Lie] Team ${teamId}: Found ${allPlayers.length} players before filtering`);
+        
+        // Log player game counts for debugging
+        allPlayers.forEach(player => {
+          console.log(`  - ${player.player.first_name} ${player.player.last_name}: ${player.games} games`);
+        });
+        
+        // Use more lenient filtering - require at least 1 game instead of 2
+        const filteredPlayers = allPlayers.filter(player => player.games >= 1);
+        console.log(`[Ball Don't Lie] Team ${teamId}: ${filteredPlayers.length} players after filtering (>=1 game)`);
+        
+        return filteredPlayers
           .map(player => {
             const games = player.games;
             
