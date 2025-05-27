@@ -17,6 +17,7 @@ let isCurrentlyGeneratingPicks = false;
 let isProcessingNHL = false;
 let isProcessingNBA = false;
 let isProcessingMLB = false;
+let isStoringPicks = false;
 let lastGenerationTime = 0;
 const GENERATION_COOLDOWN = 30 * 1000; // 30 seconds
 
@@ -27,33 +28,43 @@ const apiCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Process a game only once with locking mechanism
+ * Process a game only once with enhanced locking mechanism
  * @param {string} gameId - Unique game identifier
  * @param {Function} processingFunction - Function to process the game
  * @returns {Promise} - Processing result or null if already processed
  */
 const processGameOnce = async (gameId, processingFunction) => {
-  const lockKey = `${gameId}-${Date.now()}`;
+  // Create a unique session key to prevent cross-session duplicates
+  const sessionKey = `${gameId}-${new Date().toISOString().split('T')[0]}`;
   
-  if (processedGames.has(gameId)) {
-    console.log(`🔄 Game ${gameId} already processed, skipping...`);
+  if (processedGames.has(sessionKey)) {
+    console.log(`🔄 Game ${gameId} already processed today, skipping...`);
     return null;
   }
   
-  if (processingLocks.has(gameId)) {
+  if (processingLocks.has(sessionKey)) {
     console.log(`🔄 Game ${gameId} currently being processed, waiting...`);
-    return processingLocks.get(gameId);
+    return processingLocks.get(sessionKey);
   }
   
-  const processingPromise = processingFunction(gameId);
-  processingLocks.set(gameId, processingPromise);
+  const processingPromise = (async () => {
+    console.log(`🎯 Processing game ${gameId} for the first time today`);
+    const result = await processingFunction();
+    return result;
+  })();
+  
+  processingLocks.set(sessionKey, processingPromise);
   
   try {
     const result = await processingPromise;
-    processedGames.add(gameId);
+    processedGames.add(sessionKey);
+    console.log(`✅ Successfully processed game ${gameId}`);
     return result;
+  } catch (error) {
+    console.error(`❌ Error processing game ${gameId}:`, error);
+    throw error;
   } finally {
-    processingLocks.delete(gameId);
+    processingLocks.delete(sessionKey);
   }
 };
 
@@ -98,16 +109,28 @@ async function ensureValidSupabaseSession() {
   }
 }
 
-// Helper: Check if picks for today exist
+// Helper: Check if picks for today exist with enhanced validation
 async function checkForExistingPicks(dateString) {
   await ensureValidSupabaseSession();
   const { data, error } = await supabase
     .from('daily_picks')
-    .select('id')
+    .select('id, picks')
     .eq('date', dateString)
     .limit(1);
-  if (error) return false;
-  return data && data.length > 0;
+  
+  if (error) {
+    console.error('Error checking for existing picks:', error);
+    return false;
+  }
+  
+  // Check if we have valid picks data
+  if (data && data.length > 0 && data[0].picks) {
+    const picks = Array.isArray(data[0].picks) ? data[0].picks : JSON.parse(data[0].picks || '[]');
+    console.log(`📊 Found existing picks for ${dateString}: ${picks.length} picks`);
+    return picks.length > 0;
+  }
+  
+  return false;
 }
 
 // Helper: Store picks in database
@@ -115,7 +138,14 @@ async function storeDailyPicksInDatabase(picks) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
     return { success: false, message: 'No picks provided' };
 
-  console.log(`Initial picks array has ${picks.length} items`);
+  // Prevent multiple simultaneous storage operations
+  if (isStoringPicks) {
+    console.log('🛑 Picks are already being stored, skipping duplicate storage operation');
+    return { success: false, message: 'Storage already in progress' };
+  }
+
+  isStoringPicks = true;
+  console.log(`🗄️ Starting storage operation for ${picks.length} picks`);
 
   // EST date for today in YYYY-MM-DD
   const now = new Date();
@@ -240,15 +270,18 @@ async function storeDailyPicksInDatabase(picks) {
         throw new Error(`Failed to store picks: ${altError.message}`);
       }
 
-      console.log('Successfully stored picks using alternative approach');
+      console.log('✅ Successfully stored picks using alternative approach');
       return { success: true, count: validPicks.length, method: 'alternative' };
     }
 
-    console.log(`Successfully stored ${validPicks.length} picks in database`);
+    console.log(`✅ Successfully stored ${validPicks.length} picks in database`);
     return { success: true, count: validPicks.length };
   } catch (error) {
-    console.error('Error storing picks:', error);
+    console.error('❌ Error storing picks:', error);
     throw new Error(`Failed to store picks: ${error.message}`);
+  } finally {
+    isStoringPicks = false;
+    console.log('🔓 Storage lock released');
   }
 }
 
@@ -600,7 +633,8 @@ async function generateDailyPicks() {
             
             if (result.success) {
               console.log(`Successfully generated NBA pick: ${result.rawAnalysis?.rawOpenAIOutput?.pick || 'Unknown pick'}`);
-              sportPicks.push({
+              // Return the formatted pick data instead of adding to sportPicks here
+              return {
                 ...result,
                 game: `${game.away_team} @ ${game.home_team}`,
                 sport,
@@ -609,15 +643,14 @@ async function generateDailyPicks() {
                 gameTime: game.commence_time,
                 pickType: 'normal',
                 timestamp: new Date().toISOString()
-              });
+              };
             } else {
               console.log(`Failed to generate NBA pick for ${game.away_team} @ ${game.home_team}:`, result.error);
+              return null;
             }
-            
-            return result;
           });
           
-          // Only add successful results to sportPicks
+          // Only add successful results to sportPicks (avoiding duplication)
           if (result && result.success) {
             sportPicks.push(result);
           }
@@ -759,7 +792,8 @@ async function generateDailyPicks() {
             
             if (result.success) {
               console.log(`Successfully generated NHL pick: ${result.rawAnalysis?.rawOpenAIOutput?.pick || 'Unknown pick'}`);
-              sportPicks.push({
+              // Return the formatted pick data instead of adding to sportPicks here
+              return {
                 ...result,
                 game: `${game.away_team} @ ${game.home_team}`,
                 sport,
@@ -768,15 +802,14 @@ async function generateDailyPicks() {
                 gameTime: game.commence_time,
                 pickType: 'normal',
                 timestamp: new Date().toISOString()
-              });
+              };
             } else {
               console.log(`Failed to generate NHL pick for ${game.away_team} @ ${game.home_team}:`, result.error);
+              return null;
             }
-            
-            return result;
           });
           
-          // Only add successful results to sportPicks
+          // Only add successful results to sportPicks (avoiding duplication)
           if (result && result.success) {
             sportPicks.push(result);
           }
@@ -803,6 +836,8 @@ async function generateDailyPicks() {
     isProcessingMLB = false;
     isProcessingNBA = false;
     isProcessingNHL = false;
+    isStoringPicks = false;
+    console.log('🔓 All processing locks released');
   }
 }
 
