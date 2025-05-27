@@ -394,6 +394,130 @@ const ballDontLieService = {
   },
 
   /**
+   * Get detailed playoff stats for key players on both teams
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Object>} - Object with home and away team player stats
+   */
+  async getNbaPlayoffPlayerStats(homeTeam, awayTeam, season = new Date().getFullYear()) {
+    try {
+      console.log(`[Ball Don't Lie] Getting playoff player stats for ${awayTeam} @ ${homeTeam}`);
+      
+      // Get team data
+      const homeTeamData = await this.getTeamByName(homeTeam);
+      const awayTeamData = await this.getTeamByName(awayTeam);
+      
+      if (!homeTeamData || !awayTeamData) {
+        console.log(`[Ball Don't Lie] Could not find team data for ${homeTeam} or ${awayTeam}`);
+        return { home: [], away: [] };
+      }
+      
+      // Get recent playoff games for both teams
+      const playoffGames = await this.getNbaPlayoffGames(season);
+      
+      // Filter games for each team
+      const homeTeamGames = playoffGames.filter(game => 
+        game.home_team.id === homeTeamData.id || game.visitor_team.id === homeTeamData.id
+      ).slice(-5); // Last 5 playoff games
+      
+      const awayTeamGames = playoffGames.filter(game => 
+        game.home_team.id === awayTeamData.id || game.visitor_team.id === awayTeamData.id
+      ).slice(-5); // Last 5 playoff games
+      
+      // Get player stats from recent games
+      const getTeamPlayerStats = async (games, teamId) => {
+        const playerStatsMap = new Map();
+        
+        for (const game of games) {
+          try {
+            const gameStats = await this.getNbaPlayoffGameStats(game.id);
+            const teamStats = gameStats.filter(stat => stat.team.id === teamId);
+            
+            teamStats.forEach(stat => {
+              const playerId = stat.player.id;
+              if (!playerStatsMap.has(playerId)) {
+                playerStatsMap.set(playerId, {
+                  player: stat.player,
+                  games: 0,
+                  totalPts: 0,
+                  totalReb: 0,
+                  totalAst: 0,
+                  totalStl: 0,
+                  totalBlk: 0,
+                  totalMin: 0,
+                  totalFgm: 0,
+                  totalFga: 0,
+                  total3pm: 0,
+                  total3pa: 0,
+                  totalFtm: 0,
+                  totalFta: 0,
+                  totalTurnover: 0
+                });
+              }
+              
+              const playerData = playerStatsMap.get(playerId);
+              playerData.games += 1;
+              playerData.totalPts += stat.pts || 0;
+              playerData.totalReb += stat.reb || 0;
+              playerData.totalAst += stat.ast || 0;
+              playerData.totalStl += stat.stl || 0;
+              playerData.totalBlk += stat.blk || 0;
+              playerData.totalMin += stat.min ? parseInt(stat.min.split(':')[0]) : 0;
+              playerData.totalFgm += stat.fgm || 0;
+              playerData.totalFga += stat.fga || 0;
+              playerData.total3pm += stat.fg3m || 0;
+              playerData.total3pa += stat.fg3a || 0;
+              playerData.totalFtm += stat.ftm || 0;
+              playerData.totalFta += stat.fta || 0;
+              playerData.totalTurnover += stat.turnover || 0;
+            });
+          } catch (error) {
+            console.error(`[Ball Don't Lie] Error getting stats for game ${game.id}:`, error.message);
+          }
+        }
+        
+        // Calculate averages and return top performers
+        return Array.from(playerStatsMap.values())
+          .filter(player => player.games >= 2) // Only players with at least 2 games
+          .map(player => ({
+            player: player.player,
+            games: player.games,
+            avgPts: (player.totalPts / player.games).toFixed(1),
+            avgReb: (player.totalReb / player.games).toFixed(1),
+            avgAst: (player.totalAst / player.games).toFixed(1),
+            avgStl: (player.totalStl / player.games).toFixed(1),
+            avgBlk: (player.totalBlk / player.games).toFixed(1),
+            avgMin: (player.totalMin / player.games).toFixed(1),
+            fgPct: player.totalFga > 0 ? ((player.totalFgm / player.totalFga) * 100).toFixed(1) : '0.0',
+            fg3Pct: player.total3pa > 0 ? ((player.total3pm / player.total3pa) * 100).toFixed(1) : '0.0',
+            ftPct: player.totalFta > 0 ? ((player.totalFtm / player.totalFta) * 100).toFixed(1) : '0.0',
+            avgTurnover: (player.totalTurnover / player.games).toFixed(1)
+          }))
+          .sort((a, b) => parseFloat(b.avgPts) - parseFloat(a.avgPts)) // Sort by points
+          .slice(0, 8); // Top 8 players
+      };
+      
+      const [homePlayerStats, awayPlayerStats] = await Promise.all([
+        getTeamPlayerStats(homeTeamGames, homeTeamData.id),
+        getTeamPlayerStats(awayTeamGames, awayTeamData.id)
+      ]);
+      
+      console.log(`[Ball Don't Lie] Found playoff stats for ${homePlayerStats.length} ${homeTeam} players and ${awayPlayerStats.length} ${awayTeam} players`);
+      
+      return {
+        home: homePlayerStats,
+        away: awayPlayerStats,
+        homeTeam: homeTeamData,
+        awayTeam: awayTeamData
+      };
+    } catch (error) {
+      console.error(`[Ball Don't Lie] Error getting NBA playoff player stats:`, error);
+      return { home: [], away: [] };
+    }
+  },
+
+  /**
    * Generate a comprehensive NBA playoff report for a specific matchup
    * Focuses only on active playoff teams and their players
    * @param {number} season - Season year (defaults to current year)
