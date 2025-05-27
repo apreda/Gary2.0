@@ -430,26 +430,29 @@ const ballDontLieService = {
       console.log(`[Ball Don't Lie] ${awayTeam} (ID: ${awayTeamData.id}): Found ${awayTeamGames.length} playoff games`);
       
       // If no games found for a team, try alternative team name matching
+      let finalHomeTeamGames = homeTeamGames;
+      let finalAwayTeamGames = awayTeamGames;
+      
       if (homeTeamGames.length === 0) {
         console.log(`[Ball Don't Lie] No playoff games found for ${homeTeam}, trying alternative matching...`);
-        const alternativeHomeGames = playoffGames.filter(game => 
+        finalHomeTeamGames = playoffGames.filter(game => 
           game.home_team.name.toLowerCase().includes(homeTeam.toLowerCase()) ||
           game.visitor_team.name.toLowerCase().includes(homeTeam.toLowerCase()) ||
           homeTeam.toLowerCase().includes(game.home_team.name.toLowerCase()) ||
           homeTeam.toLowerCase().includes(game.visitor_team.name.toLowerCase())
         ).slice(-5);
-        console.log(`[Ball Don't Lie] Alternative matching found ${alternativeHomeGames.length} games for ${homeTeam}`);
+        console.log(`[Ball Don't Lie] Alternative matching found ${finalHomeTeamGames.length} games for ${homeTeam}`);
       }
       
       if (awayTeamGames.length === 0) {
         console.log(`[Ball Don't Lie] No playoff games found for ${awayTeam}, trying alternative matching...`);
-        const alternativeAwayGames = playoffGames.filter(game => 
+        finalAwayTeamGames = playoffGames.filter(game => 
           game.home_team.name.toLowerCase().includes(awayTeam.toLowerCase()) ||
           game.visitor_team.name.toLowerCase().includes(awayTeam.toLowerCase()) ||
           awayTeam.toLowerCase().includes(game.home_team.name.toLowerCase()) ||
           awayTeam.toLowerCase().includes(game.visitor_team.name.toLowerCase())
         ).slice(-5);
-        console.log(`[Ball Don't Lie] Alternative matching found ${alternativeAwayGames.length} games for ${awayTeam}`);
+        console.log(`[Ball Don't Lie] Alternative matching found ${finalAwayTeamGames.length} games for ${awayTeam}`);
       }
       
       // Get player stats from recent games
@@ -603,8 +606,8 @@ const ballDontLieService = {
       };
       
       const [homePlayerStats, awayPlayerStats] = await Promise.all([
-        getTeamPlayerStats(homeTeamGames, homeTeamData.id),
-        getTeamPlayerStats(awayTeamGames, awayTeamData.id)
+        getTeamPlayerStats(finalHomeTeamGames, homeTeamData.id),
+        getTeamPlayerStats(finalAwayTeamGames, awayTeamData.id)
       ]);
       
       console.log(`[Ball Don't Lie] Found playoff stats for ${homePlayerStats.length} ${homeTeam} players and ${awayPlayerStats.length} ${awayTeam} players`);
