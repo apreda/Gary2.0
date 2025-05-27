@@ -249,26 +249,7 @@ async function storeDailyPicksInDatabase(picks) {
   }
 }
 
-// NBA Stats Report Generator
-async function generateNbaStatsReport(homeTeam, awayTeam) {
-  try {
-    // Use Ball Don't Lie API to get team records
-    const games = await ballDontLieService.getNbaGamesByDate(new Date().toISOString().split('T')[0]);
-    
-    // Try to find team records from recent games
-    let homeStats = { wins: '?', losses: '?', winPercentage: '?.???' };
-    let awayStats = { wins: '?', losses: '?', winPercentage: '?.???' };
-    
-    // This is a simplified approach - in reality, you'd need to calculate W-L records
-    // from game results, but for now we'll just return a basic format
-    return `
-      ${awayTeam}: ${awayStats.wins}-${awayStats.losses} (${awayStats.winPercentage})
-      ${homeTeam}: ${homeStats.wins}-${homeStats.losses} (${homeStats.winPercentage})
-    `;
-  } catch {
-    return `${awayTeam} vs ${homeTeam} - Stats unavailable`;
-  }
-}
+// Note: Regular season stats removed - playoffs only for NBA and NHL
 
 // The core pick generator function
 async function generateDailyPicks() {
@@ -439,8 +420,8 @@ async function generateDailyPicks() {
               console.log(`Could not get NBA team info: ${statsError.message}`);
             }
             
-            // Get comprehensive NBA playoff stats for these teams
-            const [playoffStatsReport, playoffPlayerStats] = await Promise.all([
+            // Get comprehensive NBA playoff stats and series information
+            const [playoffStatsReport, playoffPlayerStats, seriesData] = await Promise.all([
               ballDontLieService.generateNbaPlayoffReport(
                 game.home_team, 
                 game.away_team, 
@@ -450,8 +431,52 @@ async function generateDailyPicks() {
                 game.home_team,
                 game.away_team,
                 new Date().getFullYear()
+              ),
+              ballDontLieService.getNbaPlayoffSeries(
+                new Date().getFullYear(),
+                game.home_team,
+                game.away_team
               )
             ]);
+            
+            // Build series context with game number
+            let seriesContext = '\n## CURRENT SERIES STATUS:\n\n';
+            if (seriesData.seriesFound) {
+              const completedGames = seriesData.games.filter(g => g.status === 'Final').length;
+              const upcomingGameNumber = completedGames + 1;
+              
+              seriesContext += `**SERIES**: ${seriesData.teamA.name} vs ${seriesData.teamB.name}\n`;
+              seriesContext += `**CURRENT RECORD**: ${seriesData.seriesStatus}\n`;
+              seriesContext += `**UPCOMING GAME**: Game ${upcomingGameNumber} of the series\n`;
+              seriesContext += `**GAMES PLAYED**: ${completedGames} games completed\n`;
+              
+              // Add momentum and recent game context
+              if (completedGames > 0) {
+                const lastGame = seriesData.games
+                  .filter(g => g.status === 'Final')
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                
+                if (lastGame) {
+                  const lastWinner = lastGame.home_team_score > lastGame.visitor_team_score 
+                    ? lastGame.home_team.name 
+                    : lastGame.visitor_team.name;
+                  seriesContext += `**LAST GAME WINNER**: ${lastWinner} (${lastGame.home_team.name} ${lastGame.home_team_score} - ${lastGame.visitor_team_score} ${lastGame.visitor_team.name})\n`;
+                }
+              }
+              
+              // Add series pressure context
+              if (seriesData.teamAWins === 3 || seriesData.teamBWins === 3) {
+                const teamWithAdvantage = seriesData.teamAWins === 3 ? seriesData.teamA.name : seriesData.teamB.name;
+                const teamFacingElimination = seriesData.teamAWins === 3 ? seriesData.teamB.name : seriesData.teamA.name;
+                seriesContext += `**ELIMINATION GAME**: ${teamWithAdvantage} can close out the series. ${teamFacingElimination} facing elimination.\n`;
+              } else if (upcomingGameNumber === 7) {
+                seriesContext += `**GAME 7**: Winner-take-all elimination game!\n`;
+              }
+              
+              seriesContext += '\n';
+            } else {
+              seriesContext += `No existing series data found between ${game.home_team} and ${game.away_team}. This may be the start of a new series.\n\n`;
+            }
             
             // Build detailed player stats report
             let playerStatsReport = '\n## DETAILED PLAYOFF PLAYER STATS:\n\n';
@@ -459,36 +484,57 @@ async function generateDailyPicks() {
             if (playoffPlayerStats.home.length > 0) {
               playerStatsReport += `### ${game.home_team} Key Playoff Performers:\n`;
               playoffPlayerStats.home.slice(0, 5).forEach(player => {
-                playerStatsReport += `- **${player.player.first_name} ${player.player.last_name}**: ${player.avgPts} PPG, ${player.avgReb} RPG, ${player.avgAst} APG, ${player.fgPct}% FG, ${player.fg3Pct}% 3PT (${player.games} playoff games)\n`;
+                playerStatsReport += `- **${player.player.first_name} ${player.player.last_name}**: ${player.avgPts} PPG, ${player.avgReb} RPG, ${player.avgAst} APG\n`;
+                playerStatsReport += `  📊 Shooting: ${player.fgPct}% FG, ${player.fg3Pct}% 3PT, ${player.ftPct}% FT, ${player.trueShooting}% TS\n`;
+                playerStatsReport += `  ⚡ Impact: ${player.avgPlusMinus} +/-, ${player.per} PER, ${player.usageRate}% USG\n`;
+                playerStatsReport += `  🛡️ Defense: ${player.avgStl} STL, ${player.avgBlk} BLK, ${player.avgPf} PF\n`;
+                playerStatsReport += `  🎯 Efficiency: ${player.astToTov} AST/TOV, ${player.effectiveFgPct}% eFG (${player.games} games)\n\n`;
               });
-              playerStatsReport += '\n';
             }
             
             if (playoffPlayerStats.away.length > 0) {
               playerStatsReport += `### ${game.away_team} Key Playoff Performers:\n`;
               playoffPlayerStats.away.slice(0, 5).forEach(player => {
-                playerStatsReport += `- **${player.player.first_name} ${player.player.last_name}**: ${player.avgPts} PPG, ${player.avgReb} RPG, ${player.avgAst} APG, ${player.fgPct}% FG, ${player.fg3Pct}% 3PT (${player.games} playoff games)\n`;
+                playerStatsReport += `- **${player.player.first_name} ${player.player.last_name}**: ${player.avgPts} PPG, ${player.avgReb} RPG, ${player.avgAst} APG\n`;
+                playerStatsReport += `  📊 Shooting: ${player.fgPct}% FG, ${player.fg3Pct}% 3PT, ${player.ftPct}% FT, ${player.trueShooting}% TS\n`;
+                playerStatsReport += `  ⚡ Impact: ${player.avgPlusMinus} +/-, ${player.per} PER, ${player.usageRate}% USG\n`;
+                playerStatsReport += `  🛡️ Defense: ${player.avgStl} STL, ${player.avgBlk} BLK, ${player.avgPf} PF\n`;
+                playerStatsReport += `  🎯 Efficiency: ${player.astToTov} AST/TOV, ${player.effectiveFgPct}% eFG (${player.games} games)\n\n`;
               });
-              playerStatsReport += '\n';
             }
             
-            // Add team comparison based on playoff stats
+            // Add comprehensive team comparison based on playoff stats
             if (playoffPlayerStats.home.length > 0 && playoffPlayerStats.away.length > 0) {
-              const homeAvgPts = playoffPlayerStats.home.reduce((sum, p) => sum + parseFloat(p.avgPts), 0) / Math.min(5, playoffPlayerStats.home.length);
-              const awayAvgPts = playoffPlayerStats.away.reduce((sum, p) => sum + parseFloat(p.avgPts), 0) / Math.min(5, playoffPlayerStats.away.length);
-              const homeAvgFg = playoffPlayerStats.home.reduce((sum, p) => sum + parseFloat(p.fgPct), 0) / Math.min(5, playoffPlayerStats.home.length);
-              const awayAvgFg = playoffPlayerStats.away.reduce((sum, p) => sum + parseFloat(p.fgPct), 0) / Math.min(5, playoffPlayerStats.away.length);
+              const homeTop5 = playoffPlayerStats.home.slice(0, 5);
+              const awayTop5 = playoffPlayerStats.away.slice(0, 5);
               
-              playerStatsReport += `### Playoff Performance Comparison:\n`;
-              playerStatsReport += `- **Scoring**: ${game.home_team} top 5 avg ${homeAvgPts.toFixed(1)} PPG vs ${game.away_team} top 5 avg ${awayAvgPts.toFixed(1)} PPG\n`;
-              playerStatsReport += `- **Shooting**: ${game.home_team} top 5 avg ${homeAvgFg.toFixed(1)}% FG vs ${game.away_team} top 5 avg ${awayAvgFg.toFixed(1)}% FG\n\n`;
+              // Calculate team averages for top 5 players
+              const homeAvgPts = homeTop5.reduce((sum, p) => sum + parseFloat(p.avgPts), 0) / homeTop5.length;
+              const awayAvgPts = awayTop5.reduce((sum, p) => sum + parseFloat(p.avgPts), 0) / awayTop5.length;
+              const homeAvgPlusMinus = homeTop5.reduce((sum, p) => sum + parseFloat(p.avgPlusMinus), 0) / homeTop5.length;
+              const awayAvgPlusMinus = awayTop5.reduce((sum, p) => sum + parseFloat(p.avgPlusMinus), 0) / awayTop5.length;
+              const homeAvgTS = homeTop5.reduce((sum, p) => sum + parseFloat(p.trueShooting), 0) / homeTop5.length;
+              const awayAvgTS = awayTop5.reduce((sum, p) => sum + parseFloat(p.trueShooting), 0) / awayTop5.length;
+              const homeAvgPER = homeTop5.reduce((sum, p) => sum + parseFloat(p.per), 0) / homeTop5.length;
+              const awayAvgPER = awayTop5.reduce((sum, p) => sum + parseFloat(p.per), 0) / awayTop5.length;
+              const homeAvgUsage = homeTop5.reduce((sum, p) => sum + parseFloat(p.usageRate), 0) / homeTop5.length;
+              const awayAvgUsage = awayTop5.reduce((sum, p) => sum + parseFloat(p.usageRate), 0) / awayTop5.length;
+              
+              playerStatsReport += `### 🔥 PLAYOFF TEAM COMPARISON (Top 5 Players):\n`;
+              playerStatsReport += `**Scoring Power**: ${game.home_team} ${homeAvgPts.toFixed(1)} PPG vs ${game.away_team} ${awayAvgPts.toFixed(1)} PPG\n`;
+              playerStatsReport += `**Impact (Plus/Minus)**: ${game.home_team} ${homeAvgPlusMinus.toFixed(1)} vs ${game.away_team} ${awayAvgPlusMinus.toFixed(1)} ⭐\n`;
+              playerStatsReport += `**Shooting Efficiency (TS%)**: ${game.home_team} ${homeAvgTS.toFixed(1)}% vs ${game.away_team} ${awayAvgTS.toFixed(1)}%\n`;
+              playerStatsReport += `**Overall Efficiency (PER)**: ${game.home_team} ${homeAvgPER.toFixed(1)} vs ${game.away_team} ${awayAvgPER.toFixed(1)}\n`;
+              playerStatsReport += `**Usage Rate**: ${game.home_team} ${homeAvgUsage.toFixed(1)}% vs ${game.away_team} ${awayAvgUsage.toFixed(1)}%\n\n`;
+              
+              // Add momentum indicators
+              const homeMomentum = homeAvgPlusMinus > awayAvgPlusMinus ? '📈 MOMENTUM' : '📉 STRUGGLING';
+              const awayMomentum = awayAvgPlusMinus > homeAvgPlusMinus ? '📈 MOMENTUM' : '📉 STRUGGLING';
+              playerStatsReport += `**Playoff Momentum**: ${game.home_team} ${homeMomentum} | ${game.away_team} ${awayMomentum}\n\n`;
             }
             
-            // Still get regular stats as fallback
-            const regularStatsReport = await generateNbaStatsReport(game.home_team, game.away_team);
-            
-            // Combine all reports, prioritizing playoff data
-            const nbaStatsReport = '## PLAYOFF STATS (PRIORITY):\n' + playoffStatsReport + playerStatsReport + '\n## Regular Season Stats (Reference):\n' + regularStatsReport;
+            // PLAYOFFS ONLY - No regular season stats
+            const nbaStatsReport = seriesContext + playoffStatsReport + playerStatsReport;
 
             // Format odds data for OpenAI
             let oddsData = null;
@@ -513,6 +559,7 @@ async function generateDailyPicks() {
               awayTeamStats,
               statsReport: nbaStatsReport,
               playoffPlayerStats, // Add detailed playoff player stats
+              seriesData, // Add complete series information
               isPlayoffGame: true, // Mark this as a playoff game
               odds: oddsData,
               gameTime: game.commence_time,
@@ -580,55 +627,46 @@ async function generateDailyPicks() {
           try {
             console.log(`Processing NHL game: ${game.away_team} @ ${game.home_team}`);
             
-            // Get NHL playoff stats for these teams
+            // Get NHL playoff stats for these teams - PLAYOFFS ONLY
             const playoffStatsReport = await nhlPlayoffService.generateNhlPlayoffReport(
               game.home_team,
               game.away_team
             );
             
-            // Get basic team info from playoff service
-            let homeStats = { name: game.home_team, wins: '?', losses: '?', points: '?' };
-            let awayStats = { name: game.away_team, wins: '?', losses: '?', points: '?' };
+            // Get basic team info from playoff service for context only
+            let homeStats = { name: game.home_team, conference: '?', division: '?' };
+            let awayStats = { name: game.away_team, conference: '?', division: '?' };
             
             try {
-              // Try to get team info from playoff service
+              // Try to get basic team info from playoff service
               const [homePlayoffStats, awayPlayoffStats] = await Promise.all([
                 nhlPlayoffService.getTeamPlayoffStats(game.home_team),
                 nhlPlayoffService.getTeamPlayoffStats(game.away_team)
               ]);
               
-              // Extract basic stats if available
+              // Extract basic team info if available (conference/division for context)
               if (homePlayoffStats?.stats?.[0]?.splits?.[0]?.stat) {
-                const stat = homePlayoffStats.stats[0].splits[0].stat;
                 homeStats = {
                   name: game.home_team,
-                  wins: stat.wins || '?',
-                  losses: stat.losses || '?',
-                  points: stat.points || '?'
+                  conference: homePlayoffStats.conference || '?',
+                  division: homePlayoffStats.division || '?'
                 };
               }
               
               if (awayPlayoffStats?.stats?.[0]?.splits?.[0]?.stat) {
-                const stat = awayPlayoffStats.stats[0].splits[0].stat;
                 awayStats = {
                   name: game.away_team,
-                  wins: stat.wins || '?',
-                  losses: stat.losses || '?',
-                  points: stat.points || '?'
+                  conference: awayPlayoffStats.conference || '?',
+                  division: awayPlayoffStats.division || '?'
                 };
               }
             } catch (statsError) {
-              console.log(`Could not get NHL playoff stats: ${statsError.message}`);
+              console.log(`Could not get NHL team info: ${statsError.message}`);
               // Continue with default stats
             }
-
-            const regularStatsReport = `
-              ${awayStats.name}: ${awayStats.wins}W-${awayStats.losses}L, ${awayStats.points || '?'} points
-              ${homeStats.name}: ${homeStats.wins}W-${homeStats.losses}L, ${homeStats.points || '?'} points
-            `;
             
-            // Combine playoff and regular season reports
-            const nhlStatsReport = playoffStatsReport + '\n\n## Regular Season Stats:\n' + regularStatsReport;
+            // PLAYOFFS ONLY - No regular season stats
+            const nhlStatsReport = playoffStatsReport;
 
             // Format odds data for OpenAI
             let oddsData = null;
@@ -705,8 +743,7 @@ const picksService = {
   storeDailyPicksInDatabase,
   checkForExistingPicks,
   ensureValidSupabaseSession,
-  _teamNameMatch,
-  generateNbaStatsReport
+  _teamNameMatch
 };
 
 export { picksService, generateDailyPicks };
