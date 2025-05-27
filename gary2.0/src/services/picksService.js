@@ -619,12 +619,12 @@ async function generateDailyPicks() {
           return gameFormattedDate === estFormattedDate;
         });
 
-        for (const game of todayGames) {
-          const gameId = `${game.id}`;
-          if (processedGames.has(gameId)) continue;
-          processedGames.add(gameId);
+        console.log(`After date filtering: ${todayGames.length} NHL games for today`);
 
-          try {
+        for (const game of todayGames) {
+          const gameId = `nhl-${game.id}`;
+          
+          const result = await processGameOnce(gameId, async () => {
             console.log(`Processing NHL game: ${game.away_team} @ ${game.home_team}`);
             
             // Get NHL playoff stats for these teams - PLAYOFFS ONLY
@@ -714,8 +714,13 @@ async function generateDailyPicks() {
             } else {
               console.log(`Failed to generate NHL pick for ${game.away_team} @ ${game.home_team}:`, result.error);
             }
-          } catch (e) { 
-            console.error(`Error processing NHL game ${game.away_team} @ ${game.home_team}:`, e);
+            
+            return result;
+          });
+          
+          // Only add successful results to sportPicks
+          if (result && result.success) {
+            sportPicks.push(result);
           }
         }
       }

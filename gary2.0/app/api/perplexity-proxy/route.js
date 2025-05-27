@@ -72,6 +72,7 @@ export async function POST(req) {
     console.log(`[PERPLEXITY PROXY] Forwarding request to Perplexity API with model: ${selectedModel}`);
     
     // Send request to Perplexity API
+    console.log('[PERPLEXITY PROXY] Making request to Perplexity API...');
     const perplexityResponse = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
       headers: {
