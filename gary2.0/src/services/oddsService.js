@@ -40,13 +40,11 @@ const PROP_MARKETS = {
 };
 
 /**
- * Service for fetching data from The Odds API
+ * Get API key from environment or config
  */
 const getApiKey = async () => {
-  // First try environment variable
   let apiKey = process.env.ODDS_API_KEY || import.meta.env.VITE_ODDS_API_KEY;
   
-  // Fallback to config loader
   if (!apiKey) {
     try {
       apiKey = await configLoader.getOddsApiKey();
@@ -64,9 +62,6 @@ const getApiKey = async () => {
 
 /**
  * Fetches completed games from The Odds API for a specific date and sport
- * @param {string} sport - Sport key (nba, nhl, mlb)
- * @param {string} date - Date in YYYY-MM-DD format
- * @returns {Promise<Array>} - Array of completed games with scores
  */
 const getCompletedGamesByDate = async (sport, date) => {
   const apiKey = await getApiKey();
@@ -74,7 +69,6 @@ const getCompletedGamesByDate = async (sport, date) => {
     throw new Error('Odds API key not configured');
   }
   
-  // Map our internal sport codes to The Odds API sport keys
   const sportKeyMap = {
     'nba': 'basketball_nba',
     'nhl': 'icehockey_nhl',
@@ -84,12 +78,10 @@ const getCompletedGamesByDate = async (sport, date) => {
   const sportKey = sportKeyMap[sport.toLowerCase()] || sport;
   
   try {
-    // Format date for API (The Odds API uses ISO format with timezone)
     const apiDate = new Date(date);
     apiDate.setUTCHours(0, 0, 0, 0);
     const commenceDateFrom = apiDate.toISOString();
     
-    // Set end date to the next day
     const endDate = new Date(apiDate);
     endDate.setDate(endDate.getDate() + 1);
     const commenceDateTo = endDate.toISOString();
@@ -106,7 +98,6 @@ const getCompletedGamesByDate = async (sport, date) => {
     const response = await axios.get(url, { params });
     
     if (response.data && Array.isArray(response.data)) {
-      // Filter for completed games only and map to our format
       return response.data
         .filter(game => game.completed || game.completed_at)
         .map(game => ({
@@ -177,7 +168,7 @@ const analyzeTotalsMarket = (bookmakers) => {
     totalsMarket.outcomes.forEach(outcome => {
       opportunities.push({
         type: 'total',
-        position: outcome.name, // over or under
+        position: outcome.name,
         point: outcome.point,
         price: outcome.price,
         bookmaker: bookmaker.key
@@ -232,14 +223,11 @@ const findBestOpportunity = (markets) => {
 };
 
 const calculateExpectedValue = (opportunity) => {
-  // Simplified EV calculation
-  // In a real-world scenario, you would use your own model to estimate win probability
-  const winProb = 0.5; // Assuming 50% win probability for simplicity
+  const winProb = 0.5;
   return (opportunity.price * winProb) - (1 - winProb);
 };
 
 const calculateROI = (opportunity) => {
-  // Converting American odds to decimal
   let decimalOdds = opportunity.price;
   if (decimalOdds < 0) {
     decimalOdds = (100 / Math.abs(decimalOdds)) + 1;
@@ -249,7 +237,6 @@ const calculateROI = (opportunity) => {
   return ((decimalOdds - 1) * 100).toFixed(2) + '%';
 };
 
-// Process market data from bookmakers to extract player props
 const processMarketData = (bookmakers, marketKey, game) => {
   const playerProps = [];
   
@@ -260,13 +247,11 @@ const processMarketData = (bookmakers, marketKey, game) => {
     for (const outcome of market.outcomes) {
       if (!outcome.description) continue;
       
-      // Get player name, team, line, and over/under direction
       try {
         const player = outcome.description;
         const team = determinePlayerTeam(player, game);
         const point = outcome.point || null;
         
-        // Extract over/under odds
         if (outcome.name.toLowerCase() === 'over') {
           playerProps.push({
             player,
@@ -294,7 +279,6 @@ const processMarketData = (bookmakers, marketKey, game) => {
     }
   }
   
-  // Simple team determination (can be enhanced for better accuracy)
   function determinePlayerTeam(playerName, game) {
     if (!game) return 'unknown';
     return game.home_team || game.homeTeam || 'unknown';
@@ -303,9 +287,7 @@ const processMarketData = (bookmakers, marketKey, game) => {
   return playerProps;
 };
 
-// Helper function to deduplicate requests
 const dedupeRequest = async (key, fn) => {
-  // If request is already in flight, return its promise
   if (inFlightRequests.has(key)) {
     console.log(`[OddsService] Deduplicating request: ${key}`);
     return inFlightRequests.get(key);
@@ -321,11 +303,84 @@ const dedupeRequest = async (key, fn) => {
   }
 };
 
+const analyzeLineMovement = (historicalData) => {
+  const bookmakerData = historicalData.bookmakerData;
+  
+  if (Object.keys(bookmakerData).length < 2) {
+    return {
+      market: historicalData.title,
+      bookmakers: Object.keys(bookmakerData),
+      discrepancy: 0,
+      bestOption: null,
+      analysis: 'Not enough bookmakers for comparison'
+    };
+  }
+  
+  const oddsToProb = (americanOdds) => {
+    if (americanOdds > 0) {
+      return 100 / (americanOdds + 100);
+    } else {
+      return Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
+    }
+  };
+  
+  const outcomes = {};
+  
+  for (const bookmaker in bookmakerData) {
+    const bookmakerOdds = bookmakerData[bookmaker];
+    
+    bookmakerOdds.forEach(outcome => {
+      const key = `${outcome.name}_${outcome.point || ''}`;
+      
+      if (!outcomes[key]) {
+        outcomes[key] = {
+          name: outcome.name,
+          point: outcome.point,
+          min: { price: Infinity, bookmaker: '' },
+          max: { price: -Infinity, bookmaker: '' }
+        };
+      }
+      
+      if (outcome.price < outcomes[key].min.price) {
+        outcomes[key].min = { price: outcome.price, bookmaker };
+      }
+      
+      if (outcome.price > outcomes[key].max.price) {
+        outcomes[key].max = { price: outcome.price, bookmaker };
+      }
+    });
+  }
+  
+  let maxDiscrepancy = 0;
+  let bestOption = null;
+  
+  for (const key in outcomes) {
+    const outcome = outcomes[key];
+    const minProb = oddsToProb(outcome.min.price);
+    const maxProb = oddsToProb(outcome.max.price);
+    const discrepancy = Math.abs(minProb - maxProb);
+    
+    if (discrepancy > maxDiscrepancy) {
+      maxDiscrepancy = discrepancy;
+      bestOption = {
+        name: outcome.name,
+        point: outcome.point,
+        price: outcome.max.price,
+        bookmaker: outcome.max.bookmaker
+      };
+    }
+  }
+  
+  return {
+    market: historicalData.title,
+    bookmakers: Object.keys(bookmakerData),
+    discrepancy: maxDiscrepancy,
+    bestOption,
+    analysis: maxDiscrepancy > 0.1 ? 'Significant line movement detected' : 'No significant line movement'
+  };
+};
+
 export const oddsService = {
-  /**
-   * Get list of available sports 
-   * @returns {Promise<Array>} - List of sports
-   */
   getSports: async () => {
     try {
       const apiKey = await getApiKey();
@@ -334,12 +389,12 @@ export const oddsService = {
       }
       
       const url = `${ODDS_API_BASE_URL}/sports`;
-      const response = await axios.get(url, { 
+      const response = (await axios.get(url, { 
         params: { 
           apiKey,
           all: true
         } 
-      });
+      }));
       
       if (response.data) {
         return response.data.map(sport => ({
@@ -359,11 +414,6 @@ export const oddsService = {
     }
   },
   
-  /**
-   * Get odds for a specific sport
-   * @param {string} sport - Sport key
-   * @returns {Promise<Array>} - Odds data
-   */
   getOdds: async (sport) => {
     try {
       const apiKey = await getApiKey();
@@ -391,11 +441,6 @@ export const oddsService = {
     }
   },
   
-  /**
-   * Get odds for multiple sports
-   * @param {Array<string>} sports - Array of sport keys
-   * @returns {Promise<Object>} - Object with sports as keys and odds data as values
-   */
   getBatchOdds: async (sports) => {
     try {
       if (!Array.isArray(sports) || sports.length === 0) {
@@ -407,7 +452,6 @@ export const oddsService = {
         throw new Error('Odds API key not configured');
       }
       
-      // Create a promise for each sport
       const promises = sports.map(sport => 
         axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, { 
           params: { 
@@ -423,10 +467,8 @@ export const oddsService = {
         })
       );
       
-      // Wait for all promises to resolve
       const results = await Promise.all(promises);
       
-      // Convert results to object
       return results.reduce((acc, { sport, data }) => {
         acc[sport] = data;
         return acc;
@@ -437,13 +479,6 @@ export const oddsService = {
     }
   },
 
-  /**
-   * Get odds for a specific game by ID
-   * @param {string} gameId - The game ID to get odds for
-   * @param {Object} options - Additional options
-   * @param {boolean} options.useCache - Whether to use cached data (default: true)
-   * @returns {Promise<Object>} - Game odds data
-   */
   getGameOdds: async (gameId, { useCache = true } = {}) => {
     try {
       const apiKey = await getApiKey();
@@ -477,20 +512,8 @@ export const oddsService = {
     }
   },
 
-  /**
-   * Fetches completed games from The Odds API for a specific date and sport
-   * @param {string} sport - Sport key (nba, nhl, mlb)
-   * @param {string} date - Date in YYYY-MM-DD format
-   * @returns {Promise<Array>} - Array of completed games with scores
-   */
   getCompletedGamesByDate,
   
-  /**
-   * Get upcoming games with comprehensive odds data
-   * @param {string} sport - Sport key
-   * @param {Object} options - Request options
-   * @returns {Promise<Object>} Upcoming games with odds that happen on the current day (EST timezone)
-   */
   getUpcomingGames: async (sport = 'upcoming', options = {}) => {
     const cacheKey = `upcoming-games:${sport}:${JSON.stringify(options)}`;
     
@@ -517,29 +540,25 @@ export const oddsService = {
         const games = response.data;
         console.log(`Raw API response: Found ${games.length} total games for ${sport}`);
         
-        // Get current date in EST timezone - be more flexible with time ranges
         const now = new Date();
-        const estOffset = -5; // EST is UTC-5 (adjust for daylight saving if needed)
+        const estOffset = -5;
         const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
         const estDate = new Date(utcDate + (3600000 * estOffset));
         
-        // Expand the time window to include games from yesterday evening to tomorrow morning
         const windowStart = new Date(estDate);
         windowStart.setDate(windowStart.getDate() - 1);
-        windowStart.setHours(18, 0, 0, 0); // Start from 6 PM yesterday
+        windowStart.setHours(18, 0, 0, 0);
         
         const windowEnd = new Date(estDate);
         windowEnd.setDate(windowEnd.getDate() + 1);
-        windowEnd.setHours(6, 0, 0, 0); // End at 6 AM tomorrow
+        windowEnd.setHours(6, 0, 0, 0);
         
         console.log(`Expanded time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
         
-        // Filter games within the expanded window
         const relevantGames = games.filter(game => {
           const gameTime = new Date(game.commence_time);
           const includeGame = gameTime >= windowStart && gameTime <= windowEnd;
           
-          // Log every game for debugging
           console.log(`Game: ${game.home_team} vs ${game.away_team}`);
           console.log(`  Time: ${gameTime.toISOString()}`);
           console.log(`  EST Time: ${gameTime.toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
@@ -550,7 +569,6 @@ export const oddsService = {
         
         console.log(`After time filtering: ${relevantGames.length} games from ${games.length} total`);
         
-        // Remove any duplicate games (same home and away teams)
         const uniqueGames = [];
         const gameMap = new Map();
         
@@ -566,9 +584,7 @@ export const oddsService = {
         
         console.log(`After deduplication: ${uniqueGames.length} unique games`);
         
-        // Process games to add bet analysis
         const processedGames = uniqueGames.map(game => {
-          // Find the best betting opportunity for this game
           const bestOpportunity = analyzeBettingMarkets(game);
           
           return {
@@ -577,7 +593,6 @@ export const oddsService = {
           };
         });
         
-        // Log final results
         if (processedGames.length > 0) {
           console.log(`Final games for ${sport}:`);
           processedGames.forEach(game => {
@@ -591,16 +606,9 @@ export const oddsService = {
       }
       
       return [];
-    } catch (error) {
-      console.error(`Error fetching upcoming games for ${sport}:`, error);
-      return [];
     });
   },
   
-  /**
-   * Get all available sports
-   * @returns {Promise<Array>} List of available sports
-   */
   getAllSports: async () => {
     try {
       const apiKey = await getApiKey();
@@ -623,20 +631,13 @@ export const oddsService = {
     }
   },
   
-  /**
-   * Get line movement data for a specific event using only current odds data
-   * @param {string} sport - Sport key (e.g., 'basketball_nba')
-   * @param {string} eventId - Event ID
-   * @returns {Promise<Object>} Line movement analysis
-   */
-  getLineMovement: async function(sport, eventId) {
+  getLineMovement: async (sport, eventId) => {
     try {
       const apiKey = await getApiKey();
       if (!apiKey) {
         throw new Error('Odds API key not configured');
       }
       
-      // Get current odds for the event
       const url = `${ODDS_API_BASE_URL}/sports/${sport}/events/${eventId}/odds`;
       const response = await axios.get(url, { 
         params: { 
@@ -656,7 +657,6 @@ export const oddsService = {
       
       const game = response.data;
       
-      // Extract bookmakers we want to analyze
       const bookmakers = [
         'fanduel',
         'draftkings',
@@ -666,12 +666,10 @@ export const oddsService = {
         'superbook'
       ];
       
-      // Filter to only include the bookmakers we care about
       const filteredBookmakers = game.bookmakers.filter(b => 
         bookmakers.includes(b.key.toLowerCase())
       );
       
-      // If we don't have enough bookmakers, return an error
       if (filteredBookmakers.length < 2) {
         return {
           success: false,
@@ -679,7 +677,6 @@ export const oddsService = {
         };
       }
       
-      // For each market, compare the lines and odds across different bookmakers
       const markets = {
         moneyline: {
           key: 'h2h',
@@ -698,21 +695,17 @@ export const oddsService = {
         }
       };
       
-      // Collect data from each bookmaker for each market
       filteredBookmakers.forEach(bookmaker => {
         const bookmakerName = bookmaker.title;
         
-        // Process each market type
         for (const marketType in markets) {
           const market = bookmaker.markets.find(m => m.key === markets[marketType].key);
           if (!market) continue;
           
-          // Add the bookmaker to the market data if not already there
           if (!markets[marketType].bookmakerData[bookmakerName]) {
             markets[marketType].bookmakerData[bookmakerName] = [];
           }
           
-          // Add the outcomes to the bookmaker's data for this market
           markets[marketType].bookmakerData[bookmakerName] = market.outcomes.map(outcome => ({
             name: outcome.name,
             price: outcome.price,
@@ -721,7 +714,6 @@ export const oddsService = {
         }
       });
       
-      // Calculate line movement statistics
       const analysisResults = {
         event: {
           id: game.id,
@@ -736,13 +728,10 @@ export const oddsService = {
         recommendedBets: []
       };
       
-      // Generate betting recommendations based on the analysis
-      // A simple heuristic might be to bet on discrepancies greater than a certain threshold
-      // Note: this is a very simple approach and should be improved with more sophisticated models
       for (const marketType in markets) {
         const analysis = analysisResults[marketType];
         
-        if (analysis.discrepancy > 0.15) { // 15% or more difference in implied probability
+        if (analysis.discrepancy > 0.15) {
           analysisResults.recommendedBets.push({
             market: marketType,
             recommendation: `Consider ${analysis.bestOption.name} ${marketType === 'spreads' ? analysis.bestOption.point : ''} @ ${analysis.bestOption.price} with ${analysis.bestOption.bookmaker}`,
@@ -762,120 +751,23 @@ export const oddsService = {
     }
   },
   
-  /**
-   * Analyze line movement from historical data
-   * @param {Object} historicalData - Historical odds data
-   * @returns {Object} Line movement analysis
-   */
-  analyzeLineMovement: function(historicalData) {
-    const marketKey = historicalData.key;
-    const bookmakerData = historicalData.bookmakerData;
-    
-    // If we don't have enough data, return minimal analysis
-    if (Object.keys(bookmakerData).length < 2) {
-      return {
-        market: historicalData.title,
-        bookmakers: Object.keys(bookmakerData),
-        discrepancy: 0,
-        bestOption: null,
-        analysis: 'Not enough bookmakers for comparison'
-      };
-    }
-    
-    // Function to convert american odds to implied probability
-    const oddsToProb = (americanOdds) => {
-      if (americanOdds > 0) {
-        return 100 / (americanOdds + 100);
-      } else {
-        return Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
-      }
-    };
-    
-    // Find min and max odds for each outcome
-    const outcomes = {};
-    
-    // Collect all outcomes from all bookmakers
-    for (const bookmaker in bookmakerData) {
-      const bookmakerOdds = bookmakerData[bookmaker];
-      
-      bookmakerOdds.forEach(outcome => {
-        const key = `${outcome.name}_${outcome.point || ''}`;
-        
-        if (!outcomes[key]) {
-          outcomes[key] = {
-            name: outcome.name,
-            point: outcome.point,
-            min: { price: Infinity, bookmaker: '' },
-            max: { price: -Infinity, bookmaker: '' }
-          };
-        }
-        
-        // Track min and max
-        if (outcome.price < outcomes[key].min.price) {
-          outcomes[key].min = { price: outcome.price, bookmaker };
-        }
-        
-        if (outcome.price > outcomes[key].max.price) {
-          outcomes[key].max = { price: outcome.price, bookmaker };
-        }
-      });
-    }
-    
-    // Calculate the discrepancy and find the best value
-    let maxDiscrepancy = 0;
-    let bestOption = null;
-    
-    for (const key in outcomes) {
-      const outcome = outcomes[key];
-      const minProb = oddsToProb(outcome.min.price);
-      const maxProb = oddsToProb(outcome.max.price);
-      const discrepancy = Math.abs(minProb - maxProb);
-      
-      if (discrepancy > maxDiscrepancy) {
-        maxDiscrepancy = discrepancy;
-        bestOption = {
-          name: outcome.name,
-          point: outcome.point,
-          price: outcome.max.price, // Best odds for the bettor
-          bookmaker: outcome.max.bookmaker
-        };
-      }
-    }
-    
-    return {
-      market: historicalData.title,
-      bookmakers: Object.keys(bookmakerData),
-      discrepancy: maxDiscrepancy,
-      bestOption,
-      analysis: maxDiscrepancy > 0.1 ? 'Significant line movement detected' : 'No significant line movement'
-    };
-  },
+  analyzeLineMovement,
   
-  /**
-   * Get player prop odds for a specific game
-   * @param {string} sport - Sport key (e.g., 'basketball_nba')
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @returns {Promise<Array>} - Array of player prop odds
-   */
-  getPlayerPropOdds: async function(sport, homeTeam, awayTeam) {
+  getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
     try {
       const apiKey = await getApiKey();
       if (!apiKey) {
         throw new Error('Odds API key not configured');
       }
       
-      // Get upcoming games to find the game ID
       const upcomingGames = await oddsService.getUpcomingGames(sport);
       
-      // Find the game that matches the team names
       const game = upcomingGames.find(game => {
         const gameHomeTeam = game.home_team.toLowerCase();
         const gameAwayTeam = game.away_team.toLowerCase();
         const searchHomeTeam = homeTeam.toLowerCase();
         const searchAwayTeam = awayTeam.toLowerCase();
         
-        // Check if the team names contain each other (bidirectional inclusion)
         return (
           (gameHomeTeam.includes(searchHomeTeam) || searchHomeTeam.includes(gameHomeTeam)) &&
           (gameAwayTeam.includes(searchAwayTeam) || searchAwayTeam.includes(gameAwayTeam))
@@ -889,15 +781,12 @@ export const oddsService = {
       
       console.log(`Found matching game with ID: ${game.id}`);
       
-      // Get the appropriate prop markets for this sport from our constants
       const marketsList = sport in PROP_MARKETS ? 
         PROP_MARKETS[sport] : 
-        ['player_points']; // Default to player_points if sport not defined
+        ['player_points'];
       
       console.log(`Will fetch individual prop markets for ${sport}: ${marketsList.join(', ')}`);
       
-      // Fetch each market type individually to avoid 422 errors
-      // This works better with the API's structure
       const allPlayerProps = [];
       
       for (const market of marketsList) {
@@ -908,26 +797,21 @@ export const oddsService = {
             params: {
               apiKey,
               regions: 'us',
-              markets: market, // Just one market at a time
+              markets: market,
               oddsFormat: 'american',
               dateFormat: 'iso'
             }
           });
           
-          // If we got valid data, process it
           if (propResponse.data && 
               propResponse.data.bookmakers && 
               propResponse.data.bookmakers.length > 0) {
                 
-            // Process each bookmaker's data for this market
             const bookmakers = propResponse.data.bookmakers;
-            
-            // Extract props data for this market and add to our collection
             const marketProps = processMarketData(bookmakers, market, game);
             allPlayerProps.push(...marketProps);
           }
         } catch (err) {
-          // Handle 404 error for this specific market (just continue to next market)
           if (err.response && err.response.status === 404) {
             console.warn(`No data available for ${market} in game ${game.id}, continuing to next market`);
             continue;
@@ -940,13 +824,11 @@ export const oddsService = {
         }
       }
       
-      // If we didn't find any props after trying all markets
       if (allPlayerProps.length === 0) {
         console.warn('No player prop data found from The Odds API after trying all markets');
         return [];
       }
       
-      // Group over/under odds together for the same player and prop type
       const groupedProps = {};
       for (const prop of allPlayerProps) {
         const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
@@ -969,7 +851,6 @@ export const oddsService = {
         }
       }
       
-      // Convert back to array
       const result = Object.values(groupedProps);
       console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
       
