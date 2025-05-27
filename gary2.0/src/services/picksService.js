@@ -634,42 +634,68 @@ async function generateDailyPicks() {
           const result = await processGameOnce(gameId, async () => {
             console.log(`Processing NHL game: ${game.away_team} @ ${game.home_team}`);
             
-            // Get NHL playoff stats for these teams - PLAYOFFS ONLY
-            const playoffStatsReport = await nhlPlayoffService.generateNhlPlayoffReport(
+            // Get comprehensive NHL playoff analysis using Ball Don't Lie API (2025 playoffs only)
+            const playoffAnalysis = await ballDontLieService.getComprehensiveNhlPlayoffAnalysis(
               game.home_team,
               game.away_team
             );
             
-            // Get basic team info from playoff service for context only
+            // Generate playoff stats report from Ball Don't Lie data
+            let playoffStatsReport = `# NHL PLAYOFF REPORT: ${game.away_team} @ ${game.home_team}\n\n`;
+            
+            if (playoffAnalysis) {
+              // Add series information if available
+              if (playoffAnalysis.series?.seriesFound) {
+                playoffStatsReport += `## Series Status: ${playoffAnalysis.series.seriesStatus}\n\n`;
+              }
+              
+              // Add home team playoff stats
+              if (playoffAnalysis.homeTeam?.stats?.length > 0) {
+                playoffStatsReport += `## ${game.home_team} Top Playoff Performers:\n`;
+                playoffAnalysis.homeTeam.stats.slice(0, 3).forEach(player => {
+                  playoffStatsReport += `- ${player.player.first_name} ${player.player.last_name}: ${player.avgGoals}G, ${player.avgAssists}A, ${player.avgPoints}P per game (${player.games} games)\n`;
+                  playoffStatsReport += `  +/- ${player.avgPlusMinus}, ${player.shootingPct}% shooting, ${player.avgTimeOnIce} min TOI\n`;
+                });
+                playoffStatsReport += '\n';
+              }
+              
+              // Add away team playoff stats
+              if (playoffAnalysis.awayTeam?.stats?.length > 0) {
+                playoffStatsReport += `## ${game.away_team} Top Playoff Performers:\n`;
+                playoffAnalysis.awayTeam.stats.slice(0, 3).forEach(player => {
+                  playoffStatsReport += `- ${player.player.first_name} ${player.player.last_name}: ${player.avgGoals}G, ${player.avgAssists}A, ${player.avgPoints}P per game (${player.games} games)\n`;
+                  playoffStatsReport += `  +/- ${player.avgPlusMinus}, ${player.shootingPct}% shooting, ${player.avgTimeOnIce} min TOI\n`;
+                });
+                playoffStatsReport += '\n';
+              }
+              
+              // Add playoff context
+              playoffStatsReport += `## 2025 Playoff Context:\n`;
+              playoffStatsReport += `- Season: ${playoffAnalysis.season} (2024-25 NHL season)\n`;
+              playoffStatsReport += `- Active playoff teams: ${playoffAnalysis.activePlayoffTeams?.length || 0}\n`;
+              playoffStatsReport += `- Data source: Ball Don't Lie API (playoff games only)\n\n`;
+            } else {
+              playoffStatsReport += `Unable to retrieve comprehensive playoff data for this matchup.\n\n`;
+            }
+            
+            // Get basic team info for context
             let homeStats = { name: game.home_team, conference: '?', division: '?' };
             let awayStats = { name: game.away_team, conference: '?', division: '?' };
             
-            try {
-              // Try to get basic team info from playoff service
-              const [homePlayoffStats, awayPlayoffStats] = await Promise.all([
-                nhlPlayoffService.getTeamPlayoffStats(game.home_team),
-                nhlPlayoffService.getTeamPlayoffStats(game.away_team)
-              ]);
-              
-              // Extract basic team info if available (conference/division for context)
-              if (homePlayoffStats?.stats?.[0]?.splits?.[0]?.stat) {
-                homeStats = {
-                  name: game.home_team,
-                  conference: homePlayoffStats.conference || '?',
-                  division: homePlayoffStats.division || '?'
-                };
-              }
-              
-              if (awayPlayoffStats?.stats?.[0]?.splits?.[0]?.stat) {
-                awayStats = {
-                  name: game.away_team,
-                  conference: awayPlayoffStats.conference || '?',
-                  division: awayPlayoffStats.division || '?'
-                };
-              }
-            } catch (statsError) {
-              console.log(`Could not get NHL team info: ${statsError.message}`);
-              // Continue with default stats
+            if (playoffAnalysis?.homeTeam?.teamData) {
+              homeStats = {
+                name: playoffAnalysis.homeTeam.teamData.full_name || game.home_team,
+                conference: playoffAnalysis.homeTeam.teamData.conference || '?',
+                division: playoffAnalysis.homeTeam.teamData.division || '?'
+              };
+            }
+            
+            if (playoffAnalysis?.awayTeam?.teamData) {
+              awayStats = {
+                name: playoffAnalysis.awayTeam.teamData.full_name || game.away_team,
+                conference: playoffAnalysis.awayTeam.teamData.conference || '?',
+                division: playoffAnalysis.awayTeam.teamData.division || '?'
+              };
             }
             
             // PLAYOFFS ONLY - No regular season stats
