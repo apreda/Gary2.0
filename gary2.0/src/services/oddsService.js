@@ -6,8 +6,10 @@ import { configLoader } from './configLoader.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
-// Track in-flight requests to prevent duplicates
+// Track in-flight requests to prevent duplicates and cache API responses
 const inFlightRequests = new Map();
+const oddsCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Player prop markets by sport
 const PROP_MARKETS = {
@@ -303,6 +305,41 @@ const dedupeRequest = async (key, fn) => {
   }
 };
 
+/**
+ * Get odds with caching to prevent redundant API calls
+ */
+const getCachedOdds = async (sport) => {
+  const cacheKey = `odds_${sport}`;
+  const cached = oddsCache.get(cacheKey);
+  
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    console.log(`[Odds Service] Using cached odds for ${sport}`);
+    return cached.data;
+  }
+  
+  console.log(`[Odds Service] Fetching fresh odds for ${sport}`);
+  const apiKey = await getApiKey();
+  if (!apiKey) {
+    throw new Error('Odds API key not configured');
+  }
+  
+  const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
+  const response = await axios.get(url, {
+    params: {
+      apiKey,
+      regions: 'us',
+      markets: 'h2h,spreads,totals',
+      oddsFormat: 'american',
+      bookmakers: 'fanduel,draftkings,betmgm,caesars,pointsbetus,superbook'
+    }
+  });
+  
+  const data = response.data || [];
+  oddsCache.set(cacheKey, { data, timestamp: Date.now() });
+  
+  return data;
+};
+
 const analyzeLineMovement = (historicalData) => {
   const bookmakerData = historicalData.bookmakerData;
   
@@ -532,12 +569,10 @@ export const oddsService = {
         sport: sport
       };
       
-      const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
-      console.log(`Fetching odds from: ${url} for sport: ${sport}`);
-      const response = await axios.get(url, { params });
+      // Use cached odds to prevent redundant API calls
+      const games = await getCachedOdds(sport);
       
-      if (response.data) {
-        const games = response.data;
+      if (games && games.length > 0) {
         console.log(`Raw API response: Found ${games.length} total games for ${sport}`);
         
         const now = new Date();
@@ -558,16 +593,10 @@ export const oddsService = {
         const relevantGames = games.filter(game => {
           const gameTime = new Date(game.commence_time);
           const includeGame = gameTime >= windowStart && gameTime <= windowEnd;
-          
-          console.log(`Game: ${game.home_team} vs ${game.away_team}`);
-          console.log(`  Time: ${gameTime.toISOString()}`);
-          console.log(`  EST Time: ${gameTime.toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
-          console.log(`  Include: ${includeGame}`);
-          
           return includeGame;
         });
         
-        console.log(`After time filtering: ${relevantGames.length} games from ${games.length} total`);
+        console.log(`[Odds Service] ${sport}: Found ${games.length} total games, filtered to ${relevantGames.length} for today`);
         
         const uniqueGames = [];
         const gameMap = new Map();
@@ -577,12 +606,12 @@ export const oddsService = {
           if (!gameMap.has(gameKey)) {
             gameMap.set(gameKey, true);
             uniqueGames.push(game);
-          } else {
-            console.log(`Removing duplicate game: ${game.home_team} vs ${game.away_team}`);
           }
         });
         
-        console.log(`After deduplication: ${uniqueGames.length} unique games`);
+        if (relevantGames.length !== uniqueGames.length) {
+          console.log(`[Odds Service] ${sport}: Removed ${relevantGames.length - uniqueGames.length} duplicate games`);
+        }
         
         const processedGames = uniqueGames.map(game => {
           const bestOpportunity = analyzeBettingMarkets(game);
@@ -593,14 +622,7 @@ export const oddsService = {
           };
         });
         
-        if (processedGames.length > 0) {
-          console.log(`Final games for ${sport}:`);
-          processedGames.forEach(game => {
-            console.log(`  ${game.away_team} @ ${game.home_team} at ${new Date(game.commence_time).toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
-          });
-        } else {
-          console.log(`No games found for ${sport} in the current time window`);
-        }
+        console.log(`[Odds Service] ${sport}: Final result - ${processedGames.length} games ready for analysis`);
         
         return processedGames;
       }
