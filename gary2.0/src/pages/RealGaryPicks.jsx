@@ -13,7 +13,7 @@ import { userStatsService } from '../services/userStatsService';
 import { garyPhrases } from '../utils/garyPhrases';
 import { supabase, ensureAnonymousSession } from '../supabaseClient';
 import { getEasternDate, getYesterdayDate, formatGameTime } from '../utils/dateUtils';
-import { extractKeyPoints } from '../utils/analysisPreview';
+
 
 // Custom hook to detect mobile
 const useIsMobile = () => {
@@ -890,44 +890,12 @@ function RealGaryPicks() {
                                                 marginBottom: '0.5rem',
                                                 lineHeight: 1.4
                                               }}>
-                                                {pick.rationale ? (() => {
-                                                  const keyPoints = extractKeyPoints(pick.rationale);
-                                                  
-                                                  return keyPoints.length > 0 ? (
-                                                    <div>
-                                                      {keyPoints.map((point, idx) => (
-                                                        <div key={idx} style={{
-                                                          display: 'flex',
-                                                          alignItems: 'flex-start',
-                                                          marginBottom: '0.3rem',
-                                                          fontSize: '0.75rem'
-                                                        }}>
-                                                          <span style={{ 
-                                                            marginRight: '0.4rem',
-                                                            fontSize: '0.7rem',
-                                                            opacity: 0.6
-                                                          }}>
-                                                            •
-                                                          </span>
-                                                          <span style={{ 
-                                                            opacity: 0.9,
-                                                            lineHeight: 1.3
-                                                          }}>
-                                                            {point}
-                                                          </span>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  ) : (
-                                                    <div style={{ opacity: 0.7, fontStyle: 'italic' }}>
-                                                      Tap for detailed analysis
-                                                    </div>
-                                                  );
-                                                })() : (
-                                                  <div style={{ opacity: 0.7, fontStyle: 'italic' }}>
-                                                    Tap for analysis
-                                                  </div>
-                                                )}
+                                                {pick.rationale ? 
+                                                  pick.rationale.length > 240 ? 
+                                                    pick.rationale.substring(0, 240) + '...' : 
+                                                    pick.rationale
+                                                  : 'Tap for detailed analysis'
+                                                }
                                               </div>
                                             )}
                                           </div>

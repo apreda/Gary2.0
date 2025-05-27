@@ -1,6 +1,6 @@
 import { BalldontlieAPI } from '@balldontlie/sdk';
 
-// Set cache TTL (5 minutes default)
+// Set cache TTL (5 minutes for playoff data)
 const TTL_MINUTES = 5;
 const cacheMap = new Map();
 
@@ -59,6 +59,14 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
  * Service for Ball Don't Lie API interactions
  */
 const ballDontLieService = {
+  /**
+   * Clear all cached data (useful for debugging or forcing fresh data)
+   */
+  clearCache() {
+    console.log('🗑️ Clearing all Ball Don\'t Lie API cache');
+    cacheMap.clear();
+  },
+
   /**
    * Initialize the service
    */
@@ -174,20 +182,28 @@ const ballDontLieService = {
     // For 2025 playoffs, we need season=2024
     // If we're in early months (Jan-June), we're in the second half of the season
     const currentMonth = new Date().getMonth() + 1; // 1-12
-    const actualSeason = currentMonth <= 6 ? season - 1 : season; // If Jan-June, use previous year
+    const currentYear = new Date().getFullYear();
+    
+    // CRITICAL FIX: For January 2025, we want 2024 season (2024-25 NBA season)
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    
+    console.log(`🏀 [SEASON DEBUG] Current date: ${new Date().toISOString()}, Month: ${currentMonth}, Year: ${currentYear}, Using season: ${actualSeason}`);
     
     try {
       const cacheKey = `nba_playoff_games_${actualSeason}`;
       return getCachedOrFetch(cacheKey, async () => {
         console.log(`🏀 Fetching NBA playoff games for ${actualSeason} season (${actualSeason}-${actualSeason + 1}) from Ball Don't Lie API`);
+        console.log(`🏀 API Request params: { postseason: true, seasons: [${actualSeason}], per_page: 100 }`);
         const client = initApi();
         
         // CRITICAL FIX: Pass the seasons parameter to get only the specific season's playoffs
         const response = await client.nba.getGames({ 
-          postseason: true,
+          postseason: true, // Get playoff games only
           seasons: [actualSeason], // This was missing - now we get only 2024 season playoffs for 2025
           per_page: 100 // Max allowed
         });
+        
+        console.log(`🏀 API Response: Found ${response.data?.length || 0} games in response`);
         
         const games = response.data || [];
         console.log(`🏀 Found ${games.length} playoff games for ${actualSeason} season`);
@@ -348,7 +364,8 @@ const ballDontLieService = {
    */
   async getActivePlayoffTeams(season = new Date().getFullYear()) {
     const currentMonth = new Date().getMonth() + 1;
-    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    const currentYear = new Date().getFullYear();
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
     
     console.log(`🏀 [SEASON DEBUG] Input season: ${season}, Current month: ${currentMonth}, Calculated actualSeason: ${actualSeason}`);
     
@@ -367,7 +384,7 @@ const ballDontLieService = {
         
         // Get recent playoff games with correct season
         const response = await client.nba.getGames({ 
-          postseason: true,
+          postseason: true, // Get playoff games only
           seasons: [actualSeason], // Add season filter
           start_date: startDate,
           per_page: 100
@@ -455,7 +472,8 @@ const ballDontLieService = {
    */
   async getNbaPlayoffSeries(season = new Date().getFullYear(), teamA, teamB) {
     const currentMonth = new Date().getMonth() + 1;
-    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    const currentYear = new Date().getFullYear();
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
     
     try {
       const cacheKey = `nba_playoff_series_${actualSeason}_${teamA}_${teamB}`;
@@ -548,6 +566,7 @@ const ballDontLieService = {
         const client = initApi();
         const response = await client.nba.getStats({
           game_ids: [gameId],
+          postseason: true, // CRITICAL: Ensure we get playoff stats only
           per_page: 50 // Get all players from the game
         });
         return response.data || [];
@@ -559,15 +578,16 @@ const ballDontLieService = {
   },
 
   /**
-   * Get detailed playoff stats for key players on both teams
+   * Get detailed playoff stats for key players on both teams (May 2025 = NBA Playoffs Active)
    * @param {string} homeTeam - Home team name
    * @param {string} awayTeam - Away team name
    * @param {number} season - Season year (defaults to current year)
-   * @returns {Promise<Object>} - Object with home and away team player stats
+   * @returns {Promise<Object>} - Object with home and away team playoff player stats
    */
   async getNbaPlayoffPlayerStats(homeTeam, awayTeam, season = new Date().getFullYear()) {
     const currentMonth = new Date().getMonth() + 1;
-    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    const currentYear = new Date().getFullYear();
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
     
     try {
       console.log(`🏀 [Ball Don't Lie] Getting playoff player stats for ${awayTeam} @ ${homeTeam} (${actualSeason} season)`);
@@ -583,8 +603,17 @@ const ballDontLieService = {
       
       console.log(`🏀 [Ball Don't Lie] Found teams: ${homeTeamData.full_name} (ID: ${homeTeamData.id}) vs ${awayTeamData.full_name} (ID: ${awayTeamData.id})`);
       
-      // Get recent playoff games for both teams
-      const playoffGames = await this.getNbaPlayoffGames(actualSeason);
+      // CRITICAL FIX: It's May 2025, so we're in NBA playoffs - get current playoff games
+      console.log(`🏀 [Ball Don't Lie] Getting current playoff games for ${actualSeason} season (May 2025 - playoffs are active)`);
+      
+      const client = initApi();
+      const response = await client.nba.getGames({
+        seasons: [actualSeason],
+        postseason: true, // CRITICAL: Get playoff games only
+        per_page: 100
+      });
+      
+      const playoffGames = response.data || [];
       console.log(`🏀 [Ball Don't Lie] Found ${playoffGames.length} total playoff games for ${actualSeason} season`);
       
       // Filter games for each team
@@ -678,7 +707,7 @@ const ballDontLieService = {
         console.log(`[Ball Don't Lie] Alternative matching found ${finalAwayTeamGames.length} games for ${awayTeam}`);
       }
       
-      // Get player stats from recent games
+      // Get player stats from playoff games
       const getTeamPlayerStats = async (games, teamId) => {
         const playerStatsMap = new Map();
         

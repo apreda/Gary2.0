@@ -95,64 +95,21 @@ export const extractKeyPoints = (text) => {
 };
 
 /**
- * Render key points as JSX elements with consistent styling
+ * Format key points as HTML string for rendering
  * @param {Array} keyPoints - Array of key points from extractKeyPoints
- * @param {Object} customStyles - Optional custom styles to override defaults
- * @returns {JSX.Element} - Rendered bullet points
+ * @returns {string} - HTML string with bullet points
  */
-export const renderKeyPoints = (keyPoints, customStyles = {}) => {
+export const formatKeyPointsAsHTML = (keyPoints) => {
   if (!keyPoints || keyPoints.length === 0) {
-    return (
-      <div style={{ 
-        opacity: 0.7, 
-        fontStyle: 'italic',
-        ...customStyles.fallback 
-      }}>
-        Tap for detailed analysis
-      </div>
-    );
+    return '<div style="opacity: 0.7; font-style: italic;">Tap for detailed analysis</div>';
   }
   
-  const defaultStyles = {
-    container: {
-      fontSize: '0.75rem',
-      lineHeight: 1.3,
-    },
-    bulletPoint: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      marginBottom: '0.3rem',
-    },
-    bullet: {
-      marginRight: '0.4rem',
-      fontSize: '0.7rem',
-      opacity: 0.6,
-    },
-    text: {
-      opacity: 0.9,
-      lineHeight: 1.3,
-    }
-  };
+  const bulletPoints = keyPoints.map(point => 
+    `<div style="display: flex; align-items: flex-start; margin-bottom: 0.3rem;">
+      <span style="margin-right: 0.4rem; font-size: 0.7rem; opacity: 0.6;">•</span>
+      <span style="opacity: 0.9; line-height: 1.3;">${point}</span>
+    </div>`
+  ).join('');
   
-  const styles = {
-    container: { ...defaultStyles.container, ...customStyles.container },
-    bulletPoint: { ...defaultStyles.bulletPoint, ...customStyles.bulletPoint },
-    bullet: { ...defaultStyles.bullet, ...customStyles.bullet },
-    text: { ...defaultStyles.text, ...customStyles.text },
-  };
-  
-  return (
-    <div style={styles.container}>
-      {keyPoints.map((point, idx) => (
-        <div key={idx} style={styles.bulletPoint}>
-          <span style={styles.bullet}>
-            •
-          </span>
-          <span style={styles.text}>
-            {point}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+  return `<div style="font-size: 0.75rem; line-height: 1.3;">${bulletPoints}</div>`;
 }; 
