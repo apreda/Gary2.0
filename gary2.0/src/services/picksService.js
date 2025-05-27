@@ -435,25 +435,25 @@ async function generateDailyPicks() {
             
             console.log(`Processing NBA game: ${game.away_team} @ ${game.home_team}`);
             
+            // Get team objects first for all subsequent operations
+            const nbaTeams = await cachedApiCall(
+              'nba-teams', 
+              () => ballDontLieService.getNbaTeams()
+            );
+            const homeTeam = nbaTeams.find(t => 
+              t.full_name.toLowerCase().includes(game.home_team.toLowerCase()) ||
+              game.home_team.toLowerCase().includes(t.full_name.toLowerCase())
+            );
+            const awayTeam = nbaTeams.find(t => 
+              t.full_name.toLowerCase().includes(game.away_team.toLowerCase()) ||
+              game.away_team.toLowerCase().includes(t.full_name.toLowerCase())
+            );
+            
             // Use Ball Don't Lie API for NBA team stats with caching
             let homeTeamStats = null;
             let awayTeamStats = null;
             
             try {
-              // Ball Don't Lie API has NBA team stats
-              const nbaTeams = await cachedApiCall(
-                'nba-teams', 
-                () => ballDontLieService.getNbaTeams()
-              );
-              const homeTeam = nbaTeams.find(t => 
-                t.full_name.toLowerCase().includes(game.home_team.toLowerCase()) ||
-                game.home_team.toLowerCase().includes(t.full_name.toLowerCase())
-              );
-              const awayTeam = nbaTeams.find(t => 
-                t.full_name.toLowerCase().includes(game.away_team.toLowerCase()) ||
-                game.away_team.toLowerCase().includes(t.full_name.toLowerCase())
-              );
-              
               if (homeTeam) {
                 homeTeamStats = {
                   name: homeTeam.full_name,
@@ -607,6 +607,7 @@ async function generateDailyPicks() {
             const hasTeamStats = teamStats && teamStats.length > 0;
             
             if (hasTeamStats) {
+              // Use the team objects that were found earlier in the NBA processing section
               const homeTeamStat = teamStats.find(ts => homeTeam && ts.teamId === homeTeam.id);
               const awayTeamStat = teamStats.find(ts => awayTeam && ts.teamId === awayTeam.id);
               
