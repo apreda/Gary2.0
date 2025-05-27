@@ -10,6 +10,63 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { nhlPlayoffService } from './nhlPlayoffService.js';
 import { picksService as enhancedPicksService } from './picksService.enhanced.js';
 import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
+import { openaiService } from './openaiService.js';
+
+// Add deduplication and processing locks to prevent repetitive processing
+const processedGames = new Set();
+const processingLocks = new Map();
+const apiCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Process a game only once with locking mechanism
+ * @param {string} gameId - Unique game identifier
+ * @param {Function} processingFunction - Function to process the game
+ * @returns {Promise} - Processing result or null if already processed
+ */
+const processGameOnce = async (gameId, processingFunction) => {
+  const lockKey = `${gameId}-${Date.now()}`;
+  
+  if (processedGames.has(gameId)) {
+    console.log(`🔄 Game ${gameId} already processed, skipping...`);
+    return null;
+  }
+  
+  if (processingLocks.has(gameId)) {
+    console.log(`🔄 Game ${gameId} currently being processed, waiting...`);
+    return processingLocks.get(gameId);
+  }
+  
+  const processingPromise = processingFunction(gameId);
+  processingLocks.set(gameId, processingPromise);
+  
+  try {
+    const result = await processingPromise;
+    processedGames.add(gameId);
+    return result;
+  } finally {
+    processingLocks.delete(gameId);
+  }
+};
+
+/**
+ * Cached API call to prevent duplicate requests
+ * @param {string} key - Cache key
+ * @param {Function} apiFunction - Function to call API
+ * @returns {Promise} - Cached or fresh API result
+ */
+const cachedApiCall = async (key, apiFunction) => {
+  const cached = apiCache.get(key);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    console.log(`🔄 Using cached data for ${key}`);
+    return cached.data;
+  }
+
+  console.log(`🔄 Making fresh API call for ${key}`);
+  const data = await apiFunction();
+  apiCache.set(key, { data, timestamp: Date.now() });
+  return data;
+};
 
 // Helper: Checks if team names match (handles small variations)
 function _teamNameMatch(team1, team2) {
@@ -213,7 +270,6 @@ async function generateDailyPicks() {
   try {
     const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl'];
     let allPicks = [];
-    const processedGames = new Set();
 
     for (const sport of sportsToAnalyze) {
       let sportPicks = [];
@@ -314,20 +370,24 @@ async function generateDailyPicks() {
         console.log(`After date filtering: ${todayGames.length} NBA games within next 24 hours or today/tomorrow`);
 
         for (const game of todayGames) {
-          const gameId = `${game.id}`;
-          if (processedGames.has(gameId)) continue;
-          processedGames.add(gameId);
-
-          try {
+          const gameId = `nba-${game.id}`;
+          
+          const result = await processGameOnce(gameId, async () => {
+            console.log(`🔄 PICK GENERATION STARTED: ${new Date().toISOString()}`);
+            console.trace('Pick generation call stack');
+            
             console.log(`Processing NBA game: ${game.away_team} @ ${game.home_team}`);
             
-            // Use Ball Don't Lie API for NBA team stats
+            // Use Ball Don't Lie API for NBA team stats with caching
             let homeTeamStats = null;
             let awayTeamStats = null;
             
             try {
               // Ball Don't Lie API has NBA team stats
-              const nbaTeams = await ballDontLieService.getNbaTeams();
+              const nbaTeams = await cachedApiCall(
+                'nba-teams', 
+                () => ballDontLieService.getNbaTeams()
+              );
               const homeTeam = nbaTeams.find(t => 
                 t.full_name.toLowerCase().includes(game.home_team.toLowerCase()) ||
                 game.home_team.toLowerCase().includes(t.full_name.toLowerCase())
@@ -417,8 +477,13 @@ async function generateDailyPicks() {
             } else {
               console.log(`Failed to generate NBA pick for ${game.away_team} @ ${game.home_team}:`, result.error);
             }
-          } catch (e) { 
-            console.error(`Error processing NBA game ${game.away_team} @ ${game.home_team}:`, e);
+            
+            return result;
+          });
+          
+          // Only add successful results to sportPicks
+          if (result && result.success) {
+            sportPicks.push(result);
           }
         }
 
