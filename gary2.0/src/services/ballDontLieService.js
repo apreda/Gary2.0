@@ -170,17 +170,21 @@ const ballDontLieService = {
    * @returns {Promise<Array>} - Array of playoff games with stats
    */
   async getNbaPlayoffGames(season = new Date().getFullYear()) {
-    try {
-      const cacheKey = `nba_playoff_games_${season}`;
-      return getCachedOrFetch(cacheKey, async () => {
-        console.log(`Fetching NBA playoff games for ${season} season from BallDontLie`);
-        const client = initApi();
-        const response = await client.nba.getGames({ 
-          postseason: true,
-          per_page: 100 // Max allowed
+    // NBA seasons span two years (e.g., 2024-25 season)
+    // If we're in early months, we might need the previous year
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    const actualSeason = currentMonth <= 6 ? season - 1 : season; // If Jan-June, use previous year
+          try {
+        const cacheKey = `nba_playoff_games_${actualSeason}`;
+        return getCachedOrFetch(cacheKey, async () => {
+          console.log(`Fetching NBA playoff games for ${actualSeason} season from BallDontLie (current year: ${season})`);
+          const client = initApi();
+          const response = await client.nba.getGames({ 
+            postseason: true,
+            per_page: 100 // Max allowed
+          });
+          return response.data || [];
         });
-        return response.data || [];
-      });
     } catch (error) {
       console.error('Error fetching NBA playoff games:', error);
       return [];
@@ -435,23 +439,61 @@ const ballDontLieService = {
       
       if (homeTeamGames.length === 0) {
         console.log(`[Ball Don't Lie] No playoff games found for ${homeTeam}, trying alternative matching...`);
-        finalHomeTeamGames = playoffGames.filter(game => 
-          game.home_team.name.toLowerCase().includes(homeTeam.toLowerCase()) ||
-          game.visitor_team.name.toLowerCase().includes(homeTeam.toLowerCase()) ||
-          homeTeam.toLowerCase().includes(game.home_team.name.toLowerCase()) ||
-          homeTeam.toLowerCase().includes(game.visitor_team.name.toLowerCase())
-        ).slice(-5);
+        
+        // Enhanced matching with multiple strategies
+        finalHomeTeamGames = playoffGames.filter(game => {
+          const homeGameTeam = game.home_team.name.toLowerCase();
+          const awayGameTeam = game.visitor_team.name.toLowerCase();
+          const searchTeam = homeTeam.toLowerCase();
+          
+          // Strategy 1: Direct name matching
+          if (homeGameTeam.includes(searchTeam) || awayGameTeam.includes(searchTeam)) return true;
+          if (searchTeam.includes(homeGameTeam) || searchTeam.includes(awayGameTeam)) return true;
+          
+          // Strategy 2: City/team name extraction (e.g., "Indiana Pacers" -> "pacers", "indiana")
+          const searchWords = searchTeam.split(' ');
+          const homeWords = homeGameTeam.split(' ');
+          const awayWords = awayGameTeam.split(' ');
+          
+          for (const word of searchWords) {
+            if (word.length > 3) { // Only check meaningful words
+              if (homeWords.some(w => w.includes(word)) || awayWords.some(w => w.includes(word))) return true;
+              if (homeWords.some(w => word.includes(w)) || awayWords.some(w => word.includes(w))) return true;
+            }
+          }
+          
+          return false;
+        }).slice(-5);
         console.log(`[Ball Don't Lie] Alternative matching found ${finalHomeTeamGames.length} games for ${homeTeam}`);
       }
       
       if (awayTeamGames.length === 0) {
         console.log(`[Ball Don't Lie] No playoff games found for ${awayTeam}, trying alternative matching...`);
-        finalAwayTeamGames = playoffGames.filter(game => 
-          game.home_team.name.toLowerCase().includes(awayTeam.toLowerCase()) ||
-          game.visitor_team.name.toLowerCase().includes(awayTeam.toLowerCase()) ||
-          awayTeam.toLowerCase().includes(game.home_team.name.toLowerCase()) ||
-          awayTeam.toLowerCase().includes(game.visitor_team.name.toLowerCase())
-        ).slice(-5);
+        
+        // Enhanced matching with multiple strategies
+        finalAwayTeamGames = playoffGames.filter(game => {
+          const homeGameTeam = game.home_team.name.toLowerCase();
+          const awayGameTeam = game.visitor_team.name.toLowerCase();
+          const searchTeam = awayTeam.toLowerCase();
+          
+          // Strategy 1: Direct name matching
+          if (homeGameTeam.includes(searchTeam) || awayGameTeam.includes(searchTeam)) return true;
+          if (searchTeam.includes(homeGameTeam) || searchTeam.includes(awayGameTeam)) return true;
+          
+          // Strategy 2: City/team name extraction (e.g., "Indiana Pacers" -> "pacers", "indiana")
+          const searchWords = searchTeam.split(' ');
+          const homeWords = homeGameTeam.split(' ');
+          const awayWords = awayGameTeam.split(' ');
+          
+          for (const word of searchWords) {
+            if (word.length > 3) { // Only check meaningful words
+              if (homeWords.some(w => w.includes(word)) || awayWords.some(w => w.includes(word))) return true;
+              if (homeWords.some(w => word.includes(w)) || awayWords.some(w => word.includes(w))) return true;
+            }
+          }
+          
+          return false;
+        }).slice(-5);
         console.log(`[Ball Don't Lie] Alternative matching found ${finalAwayTeamGames.length} games for ${awayTeam}`);
       }
       
