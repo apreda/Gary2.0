@@ -171,22 +171,172 @@ const ballDontLieService = {
    */
   async getNbaPlayoffGames(season = new Date().getFullYear()) {
     // NBA seasons span two years (e.g., 2024-25 season)
-    // If we're in early months, we might need the previous year
+    // For 2025 playoffs, we need season=2024
+    // If we're in early months (Jan-June), we're in the second half of the season
     const currentMonth = new Date().getMonth() + 1; // 1-12
     const actualSeason = currentMonth <= 6 ? season - 1 : season; // If Jan-June, use previous year
-          try {
-        const cacheKey = `nba_playoff_games_${actualSeason}`;
-        return getCachedOrFetch(cacheKey, async () => {
-          console.log(`Fetching NBA playoff games for ${actualSeason} season from BallDontLie (current year: ${season})`);
-          const client = initApi();
-          const response = await client.nba.getGames({ 
-            postseason: true,
-            per_page: 100 // Max allowed
-          });
-          return response.data || [];
+    
+    try {
+      const cacheKey = `nba_playoff_games_${actualSeason}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏀 Fetching NBA playoff games for ${actualSeason} season (${actualSeason}-${actualSeason + 1}) from Ball Don't Lie API`);
+        const client = initApi();
+        
+        // CRITICAL FIX: Pass the seasons parameter to get only the specific season's playoffs
+        const response = await client.nba.getGames({ 
+          postseason: true,
+          seasons: [actualSeason], // This was missing - now we get only 2024 season playoffs for 2025
+          per_page: 100 // Max allowed
         });
+        
+        const games = response.data || [];
+        console.log(`🏀 Found ${games.length} playoff games for ${actualSeason} season`);
+        
+        // Log sample games for verification
+        if (games.length > 0) {
+          console.log(`🏀 Sample playoff games:`);
+          games.slice(0, 3).forEach(game => {
+            console.log(`   - ${game.visitor_team.name} @ ${game.home_team.name} (${game.date})`);
+          });
+        }
+        
+        return games;
+      });
     } catch (error) {
       console.error('Error fetching NBA playoff games:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA season averages for playoff teams (2025 playoffs = 2024 season)
+   * @param {number} season - Season year (defaults to current year)
+   * @param {Array} teamIds - Array of team IDs to get averages for
+   * @returns {Promise<Object>} - Season averages by team
+   */
+  async getNbaSeasonAverages(season = new Date().getFullYear(), teamIds = []) {
+    const currentMonth = new Date().getMonth() + 1;
+    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    
+    try {
+      const cacheKey = `nba_season_averages_${actualSeason}_${teamIds.join('_')}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏀 Fetching NBA season averages for ${actualSeason} season`);
+        const client = initApi();
+        
+        // Get general base stats for the season
+        const response = await client.nba.getSeasonAverages('general', {
+          season: actualSeason,
+          season_type: 'playoffs', // Focus on playoff averages
+          type: 'base'
+        });
+        
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching NBA season averages:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA player injuries for current playoff teams
+   * @param {Array} teamIds - Array of team IDs to check for injuries
+   * @returns {Promise<Array>} - Array of player injury data
+   */
+  async getNbaPlayerInjuries(teamIds = []) {
+    try {
+      const cacheKey = `nba_player_injuries_${teamIds.join('_')}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏀 Fetching NBA player injuries for teams: ${teamIds.join(', ')}`);
+        const client = initApi();
+        
+        const response = await client.nba.getPlayerInjuries({
+          team_ids: teamIds,
+          per_page: 100
+        });
+        
+        const injuries = response.data || [];
+        console.log(`🏀 Found ${injuries.length} player injuries`);
+        
+        return injuries;
+      }, 15); // Cache for 15 minutes since injury status changes frequently
+    } catch (error) {
+      console.error('Error fetching NBA player injuries:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get advanced stats for playoff games
+   * @param {Array} gameIds - Array of game IDs to get advanced stats for
+   * @returns {Promise<Array>} - Array of advanced stats
+   */
+  async getNbaAdvancedStats(gameIds = []) {
+    try {
+      const cacheKey = `nba_advanced_stats_${gameIds.join('_')}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏀 Fetching NBA advanced stats for ${gameIds.length} games`);
+        const client = initApi();
+        
+        const response = await client.nba.getAdvancedStats({
+          game_ids: gameIds,
+          per_page: 100
+        });
+        
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching NBA advanced stats:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get live box scores for current NBA games
+   * @returns {Promise<Array>} - Array of live box scores
+   */
+  async getNbaLiveBoxScores() {
+    try {
+      console.log(`🏀 Fetching NBA live box scores`);
+      const client = initApi();
+      
+      // Live data shouldn't be cached
+      const response = await client.nba.getLiveBoxScores();
+      
+      const boxScores = response.data || [];
+      console.log(`🏀 Found ${boxScores.length} live games`);
+      
+      return boxScores;
+    } catch (error) {
+      console.error('Error fetching NBA live box scores:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA team standings for current season
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Array>} - Array of team standings
+   */
+  async getNbaStandings(season = new Date().getFullYear()) {
+    const currentMonth = new Date().getMonth() + 1;
+    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    
+    try {
+      const cacheKey = `nba_standings_${actualSeason}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏀 Fetching NBA standings for ${actualSeason} season`);
+        const client = initApi();
+        
+        const response = await client.nba.getStandings({
+          season: actualSeason
+        });
+        
+        return response.data || [];
+      }, 60); // Cache for 60 minutes
+    } catch (error) {
+      console.error('Error fetching NBA standings:', error);
       return [];
     }
   },
@@ -197,8 +347,11 @@ const ballDontLieService = {
    * @returns {Promise<Array>} - Array of team objects still in the playoffs
    */
   async getActivePlayoffTeams(season = new Date().getFullYear()) {
+    const currentMonth = new Date().getMonth() + 1;
+    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    
     try {
-      const cacheKey = `active_playoff_teams_${season}`;
+      const cacheKey = `active_playoff_teams_${actualSeason}`;
       return getCachedOrFetch(cacheKey, async () => {
         // Get all recent playoff games (last 7 days)
         const now = new Date();
@@ -207,12 +360,13 @@ const ballDontLieService = {
         
         const startDate = lastWeek.toISOString().split('T')[0]; // Format as YYYY-MM-DD
         
-        console.log(`Finding active playoff teams since ${startDate}`);
+        console.log(`🏀 Finding active playoff teams for ${actualSeason} season since ${startDate}`);
         const client = initApi();
         
-        // Get recent playoff games
+        // Get recent playoff games with correct season
         const response = await client.nba.getGames({ 
           postseason: true,
+          seasons: [actualSeason], // Add season filter
           start_date: startDate,
           per_page: 100
         });
@@ -296,11 +450,14 @@ const ballDontLieService = {
    * @returns {Promise<Object>} - Series data including games and series status
    */
   async getNbaPlayoffSeries(season = new Date().getFullYear(), teamA, teamB) {
+    const currentMonth = new Date().getMonth() + 1;
+    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    
     try {
-      const cacheKey = `nba_playoff_series_${season}_${teamA}_${teamB}`;
+      const cacheKey = `nba_playoff_series_${actualSeason}_${teamA}_${teamB}`;
       return getCachedOrFetch(cacheKey, async () => {
         // Get all playoff games for the season
-        const playoffGames = await this.getNbaPlayoffGames(season);
+        const playoffGames = await this.getNbaPlayoffGames(actualSeason);
         
         // Get team data for both teams
         const teamAData = await this.getTeamByName(teamA);
@@ -405,21 +562,26 @@ const ballDontLieService = {
    * @returns {Promise<Object>} - Object with home and away team player stats
    */
   async getNbaPlayoffPlayerStats(homeTeam, awayTeam, season = new Date().getFullYear()) {
+    const currentMonth = new Date().getMonth() + 1;
+    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    
     try {
-      console.log(`[Ball Don't Lie] Getting playoff player stats for ${awayTeam} @ ${homeTeam}`);
+      console.log(`🏀 [Ball Don't Lie] Getting playoff player stats for ${awayTeam} @ ${homeTeam} (${actualSeason} season)`);
       
       // Get team data
       const homeTeamData = await this.getTeamByName(homeTeam);
       const awayTeamData = await this.getTeamByName(awayTeam);
       
       if (!homeTeamData || !awayTeamData) {
-        console.log(`[Ball Don't Lie] Could not find team data for ${homeTeam} or ${awayTeam}`);
+        console.log(`🏀 [Ball Don't Lie] Could not find team data for ${homeTeam} or ${awayTeam}`);
         return { home: [], away: [] };
       }
       
+      console.log(`🏀 [Ball Don't Lie] Found teams: ${homeTeamData.full_name} (ID: ${homeTeamData.id}) vs ${awayTeamData.full_name} (ID: ${awayTeamData.id})`);
+      
       // Get recent playoff games for both teams
-      const playoffGames = await this.getNbaPlayoffGames(season);
-      console.log(`[Ball Don't Lie] Found ${playoffGames.length} total playoff games for ${season}`);
+      const playoffGames = await this.getNbaPlayoffGames(actualSeason);
+      console.log(`🏀 [Ball Don't Lie] Found ${playoffGames.length} total playoff games for ${actualSeason} season`);
       
       // Filter games for each team
       const homeTeamGames = playoffGames.filter(game => 
@@ -647,18 +809,43 @@ const ballDontLieService = {
           .slice(0, 8); // Top 8 players
       };
       
-      const [homePlayerStats, awayPlayerStats] = await Promise.all([
+      const [homePlayerStats, awayPlayerStats, injuries] = await Promise.all([
         getTeamPlayerStats(finalHomeTeamGames, homeTeamData.id),
-        getTeamPlayerStats(finalAwayTeamGames, awayTeamData.id)
+        getTeamPlayerStats(finalAwayTeamGames, awayTeamData.id),
+        this.getNbaPlayerInjuries([homeTeamData.id, awayTeamData.id])
       ]);
       
-      console.log(`[Ball Don't Lie] Found playoff stats for ${homePlayerStats.length} ${homeTeam} players and ${awayPlayerStats.length} ${awayTeam} players`);
+      // Add injury status to player stats
+      const addInjuryStatus = (playerStats, teamId) => {
+        return playerStats.map(player => {
+          const injury = injuries.find(inj => 
+            inj.player.id === player.player.id && 
+            inj.player.team_id === teamId
+          );
+          
+          return {
+            ...player,
+            injuryStatus: injury ? {
+              status: injury.status,
+              description: injury.description,
+              returnDate: injury.return_date
+            } : null
+          };
+        });
+      };
+      
+      const homeStatsWithInjuries = addInjuryStatus(homePlayerStats, homeTeamData.id);
+      const awayStatsWithInjuries = addInjuryStatus(awayPlayerStats, awayTeamData.id);
+      
+      console.log(`🏀 [Ball Don't Lie] Found playoff stats for ${homePlayerStats.length} ${homeTeam} players and ${awayPlayerStats.length} ${awayTeam} players`);
+      console.log(`🏀 [Ball Don't Lie] Found ${injuries.length} injury reports for both teams`);
       
       return {
-        home: homePlayerStats,
-        away: awayPlayerStats,
+        home: homeStatsWithInjuries,
+        away: awayStatsWithInjuries,
         homeTeam: homeTeamData,
-        awayTeam: awayTeamData
+        awayTeam: awayTeamData,
+        injuries: injuries
       };
     } catch (error) {
       console.error(`[Ball Don't Lie] Error getting NBA playoff player stats:`, error);
@@ -675,9 +862,14 @@ const ballDontLieService = {
    * @returns {Promise<string>} - Detailed playoff report
    */
   async generateNbaPlayoffReport(season = new Date().getFullYear(), teamA, teamB) {
+    const currentMonth = new Date().getMonth() + 1;
+    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    
     try {
+      console.log(`🏀 [Ball Don't Lie] Generating NBA playoff report for ${actualSeason} season`);
+      
       // Check if we have active playoff teams
-      const activeTeams = await this.getActivePlayoffTeams(season);
+      const activeTeams = await this.getActivePlayoffTeams(actualSeason);
       const activeTeamIds = activeTeams.map(team => team.id);
       
       // If no active teams were provided, use the first active matchup
@@ -701,17 +893,17 @@ const ballDontLieService = {
       }
       
       // Get series data
-      const seriesData = await this.getNbaPlayoffSeries(season, teamA, teamB);
+      const seriesData = await this.getNbaPlayoffSeries(actualSeason, teamA, teamB);
       
       if (!seriesData.seriesFound) {
         // If no series found between selected teams, try to find any active series
         if (activeTeams.length >= 2) {
-          const activeSeriesData = await this.getNbaPlayoffSeries(season, activeTeams[0].id, activeTeams[1].id);
+          const activeSeriesData = await this.getNbaPlayoffSeries(actualSeason, activeTeams[0].id, activeTeams[1].id);
           if (activeSeriesData.seriesFound) {
-            return this.generateNbaPlayoffReport(season, activeTeams[0].id, activeTeams[1].id);
+            return this.generateNbaPlayoffReport(actualSeason, activeTeams[0].id, activeTeams[1].id);
           }
         }
-        return `No playoff series found between the selected teams for the ${season} season.`;
+        return `No playoff series found between the selected teams for the ${actualSeason} season (${actualSeason}-${actualSeason + 1}).`;
       }
       
       // Generate report header

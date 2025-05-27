@@ -421,19 +421,26 @@ async function generateDailyPicks() {
             }
             
             // Get comprehensive NBA playoff stats and series information
+            // For 2025 playoffs, we need to use 2024 as the season parameter
+            const currentYear = new Date().getFullYear();
+            const currentMonth = new Date().getMonth() + 1;
+            const playoffSeason = currentMonth <= 6 ? currentYear - 1 : currentYear; // 2024 for 2025 playoffs
+            
+            console.log(`🏀 Using season ${playoffSeason} for ${currentYear} playoffs (month: ${currentMonth})`);
+            
             const [playoffStatsReport, playoffPlayerStats, seriesData] = await Promise.all([
               ballDontLieService.generateNbaPlayoffReport(
-                new Date().getFullYear(),
+                playoffSeason,
                 game.home_team, 
                 game.away_team
               ),
               ballDontLieService.getNbaPlayoffPlayerStats(
                 game.home_team,
                 game.away_team,
-                new Date().getFullYear()
+                playoffSeason
               ),
               ballDontLieService.getNbaPlayoffSeries(
-                new Date().getFullYear(),
+                playoffSeason,
                 game.home_team,
                 game.away_team
               )
