@@ -145,6 +145,7 @@ export const picksService = {
             awayTeam,
             prompt: analysisPrompt,
             sport: 'baseball_mlb',
+            league: 'MLB',
             // Ensure teamStats is never null, provide default structure if needed
             teamStats: ensureValidData(gameData.teamStats, {
               homeTeam: { teamName: homeTeam, wins: 0, losses: 0, record: '0-0' },
@@ -159,10 +160,24 @@ export const picksService = {
             gameContext: ensureValidData(gameData.gameContext, { gamePreview: 'No preview available' }),
             // Ensure hitterStats is never null
             hitterStats: ensureValidData(gameData.hitterStats, { home: [], away: [] }),
-            // Other data
-            odds: gameData.odds || null,
-            gameTime: game.commence_time || new Date().toISOString()
+            // Structure odds data properly for Gary engine
+            odds: gameData.odds ? {
+              bookmakers: gameData.odds.bookmakers || [],
+              markets: gameData.odds.bookmakers?.[0]?.markets || []
+            } : null,
+            gameTime: game.commence_time || new Date().toISOString(),
+            time: game.commence_time || new Date().toISOString()
           };
+          
+          // Add debug logging for odds data structure
+          console.log(`[Enhanced Picks Service] Odds data structure for ${awayTeam} @ ${homeTeam}:`, {
+            hasOdds: !!completeGameData.odds,
+            hasBookmakers: !!(completeGameData.odds?.bookmakers?.length > 0),
+            bookmakerCount: completeGameData.odds?.bookmakers?.length || 0,
+            hasMarkets: !!(completeGameData.odds?.markets?.length > 0),
+            marketCount: completeGameData.odds?.markets?.length || 0,
+            marketTypes: completeGameData.odds?.markets?.map(m => m.key) || []
+          });
           
           // Validate data completeness before passing to Gary engine
           console.log(`[Enhanced Picks Service] Data validation for ${awayTeam} @ ${homeTeam}:`, {
@@ -236,35 +251,86 @@ export const picksService = {
     // Try to get odds from combinedMlbService first (via gameData.odds)
     if (gameData.odds?.bookmakers?.length > 0) {
       console.log(`[Enhanced Picks Service] Using odds data from combinedMlbService`);
+      console.log(`[Enhanced Picks Service] Available bookmakers:`, gameData.odds.bookmakers.map(b => b.title));
+      
       const bookmaker = gameData.odds.bookmakers[0];
+      console.log(`[Enhanced Picks Service] Using bookmaker: ${bookmaker.title}`);
+      console.log(`[Enhanced Picks Service] Available markets:`, bookmaker.markets?.map(m => m.key) || []);
+      
+      // Improved team name matching for odds
+      const normalizeTeamForOdds = (name) => {
+        return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      };
+      
+      const homeTeamNorm = normalizeTeamForOdds(homeTeam);
+      const awayTeamNorm = normalizeTeamForOdds(awayTeam);
       
       // Get moneyline odds
       const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
       if (h2hMarket) {
-        const homeMoneyline = h2hMarket.outcomes.find(o => o.name === homeTeam || o.name.includes(homeTeam) || homeTeam.includes(o.name));
-        const awayMoneyline = h2hMarket.outcomes.find(o => o.name === awayTeam || o.name.includes(awayTeam) || awayTeam.includes(o.name));
+        console.log(`[Enhanced Picks Service] Found h2h market with ${h2hMarket.outcomes?.length || 0} outcomes`);
+        console.log(`[Enhanced Picks Service] Outcome teams:`, h2hMarket.outcomes?.map(o => o.name) || []);
+        
+        // Try multiple matching strategies
+        let homeMoneyline = h2hMarket.outcomes.find(o => o.name === homeTeam);
+        let awayMoneyline = h2hMarket.outcomes.find(o => o.name === awayTeam);
+        
+        if (!homeMoneyline || !awayMoneyline) {
+          // Try contains matching
+          homeMoneyline = h2hMarket.outcomes.find(o => 
+            o.name.includes(homeTeam) || homeTeam.includes(o.name) ||
+            normalizeTeamForOdds(o.name).includes(homeTeamNorm) || homeTeamNorm.includes(normalizeTeamForOdds(o.name))
+          );
+          awayMoneyline = h2hMarket.outcomes.find(o => 
+            o.name.includes(awayTeam) || awayTeam.includes(o.name) ||
+            normalizeTeamForOdds(o.name).includes(awayTeamNorm) || awayTeamNorm.includes(normalizeTeamForOdds(o.name))
+          );
+        }
         
         if (homeMoneyline && awayMoneyline) {
           moneylineOdds.home = homeMoneyline.price;
           moneylineOdds.away = awayMoneyline.price;
-          oddsString += `MONEYLINE ODDS (use these for ML bets only):\n`;
+          oddsString += `CURRENT MONEYLINE ODDS (use these exact odds for ML bets):\n`;
           oddsString += `  ${homeTeam}: ${homeMoneyline.price > 0 ? '+' : ''}${homeMoneyline.price}\n`;
           oddsString += `  ${awayTeam}: ${awayMoneyline.price > 0 ? '+' : ''}${awayMoneyline.price}\n\n`;
+          console.log(`[Enhanced Picks Service] Found moneyline odds: ${homeTeam} ${homeMoneyline.price}, ${awayTeam} ${awayMoneyline.price}`);
+        } else {
+          console.log(`[Enhanced Picks Service] Could not match teams for moneyline odds`);
+          console.log(`[Enhanced Picks Service] Looking for: ${homeTeam} (${homeTeamNorm}) and ${awayTeam} (${awayTeamNorm})`);
+          console.log(`[Enhanced Picks Service] Available: ${h2hMarket.outcomes?.map(o => `${o.name} (${normalizeTeamForOdds(o.name)})`).join(', ')}`);
         }
       }
       
       // Get spread odds
       const spreadMarket = bookmaker.markets?.find(m => m.key === 'spreads');
       if (spreadMarket) {
-        const homeSpread = spreadMarket.outcomes.find(o => o.name === homeTeam || o.name.includes(homeTeam) || homeTeam.includes(o.name));
-        const awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam || o.name.includes(awayTeam) || awayTeam.includes(o.name));
+        console.log(`[Enhanced Picks Service] Found spreads market with ${spreadMarket.outcomes?.length || 0} outcomes`);
+        
+        // Try multiple matching strategies for spreads
+        let homeSpread = spreadMarket.outcomes.find(o => o.name === homeTeam);
+        let awaySpread = spreadMarket.outcomes.find(o => o.name === awayTeam);
+        
+        if (!homeSpread || !awaySpread) {
+          // Try contains matching
+          homeSpread = spreadMarket.outcomes.find(o => 
+            o.name.includes(homeTeam) || homeTeam.includes(o.name) ||
+            normalizeTeamForOdds(o.name).includes(homeTeamNorm) || homeTeamNorm.includes(normalizeTeamForOdds(o.name))
+          );
+          awaySpread = spreadMarket.outcomes.find(o => 
+            o.name.includes(awayTeam) || awayTeam.includes(o.name) ||
+            normalizeTeamForOdds(o.name).includes(awayTeamNorm) || awayTeamNorm.includes(normalizeTeamForOdds(o.name))
+          );
+        }
         
         if (homeSpread && awaySpread) {
           spreadOdds.home = { point: homeSpread.point, price: homeSpread.price };
           spreadOdds.away = { point: awaySpread.point, price: awaySpread.price };
-          oddsString += `POINT SPREAD ODDS (use these for spread bets only):\n`;
+          oddsString += `CURRENT SPREAD ODDS (use these exact odds for spread bets):\n`;
           oddsString += `  ${homeTeam} ${homeSpread.point > 0 ? '+' : ''}${homeSpread.point}: ${homeSpread.price > 0 ? '+' : ''}${homeSpread.price}\n`;
-          oddsString += `  ${awayTeam} ${awaySpread.point > 0 ? '+' : ''}${awaySpread.point}: ${awaySpread.price > 0 ? '+' : ''}${awaySpread.price}\n`;
+          oddsString += `  ${awayTeam} ${awaySpread.point > 0 ? '+' : ''}${awaySpread.point}: ${awaySpread.price > 0 ? '+' : ''}${awaySpread.price}\n\n`;
+          console.log(`[Enhanced Picks Service] Found spread odds: ${homeTeam} ${homeSpread.point} (${homeSpread.price}), ${awayTeam} ${awaySpread.point} (${awaySpread.price})`);
+        } else {
+          console.log(`[Enhanced Picks Service] Could not match teams for spread odds`);
         }
       }
     } 

@@ -146,6 +146,25 @@ const ballDontLieService = {
   },
   
   /**
+   * Get all NBA teams
+   * @returns {Promise<Array>} - Array of NBA team objects
+   */
+  async getNbaTeams() {
+    try {
+      const cacheKey = 'nba_teams';
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log('Fetching NBA teams from BallDontLie API');
+        const client = initApi();
+        const response = await client.nba.getTeams();
+        return response.data || [];
+      }, 60); // Cache for 60 minutes since teams don't change often
+    } catch (error) {
+      console.error('Error fetching NBA teams:', error);
+      return [];
+    }
+  },
+
+  /**
    * Get NBA playoff stats for current season
    * @param {number} season - Season year (defaults to current year)
    * @returns {Promise<Array>} - Array of playoff games with stats
@@ -157,7 +176,6 @@ const ballDontLieService = {
         console.log(`Fetching NBA playoff games for ${season} season from BallDontLie`);
         const client = initApi();
         const response = await client.nba.getGames({ 
-          seasons: [season],
           postseason: true,
           per_page: 100 // Max allowed
         });
@@ -190,7 +208,6 @@ const ballDontLieService = {
         
         // Get recent playoff games
         const response = await client.nba.getGames({ 
-          seasons: [season],
           postseason: true,
           start_date: startDate,
           per_page: 100

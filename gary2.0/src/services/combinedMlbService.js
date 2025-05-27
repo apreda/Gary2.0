@@ -251,23 +251,24 @@ const combinedMlbService = {
           }
         }
         
-        // If still no stats, fall back to roster stats
+        // If still no stats, fall back to roster stats (but only get top hitters, not all pitchers)
         if (!hitterStats.home.length && !hitterStats.away.length) {
-          console.log(`[Combined MLB Service] No hitter stats from any source, falling back to roster stats`);
+          console.log(`[Combined MLB Service] No hitter stats from any source, falling back to top hitters only`);
           try {
             const homeTeamId = targetGame.teams.home.team.id;
             const awayTeamId = targetGame.teams.away.team.id;
-            const homeRoster = await mlbStatsApiService.getTeamRosterWithStats(homeTeamId);
-            const awayRoster = await mlbStatsApiService.getTeamRosterWithStats(awayTeamId);
+            
+            // Only get top hitters, not the full roster with all pitchers
+            const homeRoster = await mlbStatsApiService.getTopHitters(homeTeamId, 5);
+            const awayRoster = await mlbStatsApiService.getTopHitters(awayTeamId, 5);
 
             const formatRosterStats = (roster, teamName) => {
-              if (!roster?.hitters) return [];
-              return roster.hitters
+              if (!Array.isArray(roster)) return [];
+              return roster
                 .sort((a, b) => parseFloat(b.stats?.avg || 0) - parseFloat(a.stats?.avg || 0))
-                .slice(0, 5)
                 .map(player => ({
                   id: player.id || 0,
-                  name: player.name || 'Unknown Player',
+                  name: player.fullName || 'Unknown Player',
                   position: player.position || '',
                   team: teamName,
                   stats: {
@@ -357,18 +358,78 @@ const combinedMlbService = {
         console.error(`[Combined MLB Service] Error getting game context: ${contextError.message}`);
       }
 
-      // 7. Get odds data
+      // 7. Get odds data with improved team name matching
       let oddsData = null;
       try {
         const mlbGames = await oddsService.getUpcomingGames('baseball_mlb');
         if (Array.isArray(mlbGames) && mlbGames.length > 0) {
-          const matchingGame = mlbGames.find(game =>
-            (game.home_team?.includes(homeTeamName) || homeTeamName.includes(game.home_team)) &&
-            (game.away_team?.includes(awayTeamName) || awayTeamName.includes(game.away_team))
+          console.log(`[Combined MLB Service] Looking for odds for ${awayTeamName} @ ${homeTeamName}`);
+          console.log(`[Combined MLB Service] Available games:`, mlbGames.map(g => `${g.away_team} @ ${g.home_team}`));
+          
+          // Improved team name matching with multiple strategies
+          const normalizeTeamName = (name) => {
+            return name.toLowerCase()
+              .replace(/\s+/g, '')
+              .replace(/^(the)/i, '')
+              .replace(/(s|es)$/i, '')
+              .replace(/[^a-z0-9]/g, '');
+          };
+          
+          const normalizedHomeTeam = normalizeTeamName(homeTeamName);
+          const normalizedAwayTeam = normalizeTeamName(awayTeamName);
+          
+          let matchingGame = null;
+          
+          // Strategy 1: Exact match
+          matchingGame = mlbGames.find(game =>
+            game.home_team === homeTeamName && game.away_team === awayTeamName
           );
+          
+          if (!matchingGame) {
+            // Strategy 2: Contains match
+            matchingGame = mlbGames.find(game =>
+              (game.home_team?.includes(homeTeamName) || homeTeamName.includes(game.home_team)) &&
+              (game.away_team?.includes(awayTeamName) || awayTeamName.includes(game.away_team))
+            );
+          }
+          
+          if (!matchingGame) {
+            // Strategy 3: Normalized match
+            matchingGame = mlbGames.find(game => {
+              const gameHomeNorm = normalizeTeamName(game.home_team);
+              const gameAwayNorm = normalizeTeamName(game.away_team);
+              return gameHomeNorm === normalizedHomeTeam && gameAwayNorm === normalizedAwayTeam;
+            });
+          }
+          
+          if (!matchingGame) {
+            // Strategy 4: Partial normalized match
+            matchingGame = mlbGames.find(game => {
+              const gameHomeNorm = normalizeTeamName(game.home_team);
+              const gameAwayNorm = normalizeTeamName(game.away_team);
+              return (gameHomeNorm.includes(normalizedHomeTeam) || normalizedHomeTeam.includes(gameHomeNorm)) &&
+                     (gameAwayNorm.includes(normalizedAwayTeam) || normalizedAwayTeam.includes(gameAwayNorm));
+            });
+          }
+          
           if (matchingGame) {
-            oddsData = await oddsService.getGameOdds(matchingGame.id);
-            console.log(`[Combined MLB Service] Got odds data for game ID ${matchingGame.id}`);
+            console.log(`[Combined MLB Service] Found matching game: ${matchingGame.away_team} @ ${matchingGame.home_team} (ID: ${matchingGame.id})`);
+            
+            // Return the full game object with bookmakers data instead of calling getGameOdds
+            // This preserves all the odds data that's already available
+            oddsData = {
+              id: matchingGame.id,
+              bookmakers: matchingGame.bookmakers || [],
+              commence_time: matchingGame.commence_time
+            };
+            
+            console.log(`[Combined MLB Service] Odds data structure:`, {
+              hasBookmakers: !!(oddsData.bookmakers && oddsData.bookmakers.length > 0),
+              bookmakerCount: oddsData.bookmakers?.length || 0,
+              firstBookmaker: oddsData.bookmakers?.[0]?.title || 'None'
+            });
+          } else {
+            console.log(`[Combined MLB Service] No matching game found for ${awayTeamName} @ ${homeTeamName}`);
           }
         }
       } catch (oddsError) {

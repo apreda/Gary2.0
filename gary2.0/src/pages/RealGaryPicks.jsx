@@ -64,9 +64,23 @@ function RealGaryPicks() {
   };
 
   useEffect(() => {
-    if (!planLoading && subscriptionStatus === 'active') {
-      loadPicks();
-    }
+    const controller = new AbortController();
+    
+    const loadData = async () => {
+      if (controller.signal.aborted || planLoading || subscriptionStatus !== 'active') return;
+      
+      try {
+        await loadPicks();
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('Error loading picks:', error);
+        }
+      }
+    };
+    
+    loadData();
+    
+    return () => controller.abort();
   }, [planLoading, subscriptionStatus]);
 
   useEffect(() => {
