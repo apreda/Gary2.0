@@ -1081,6 +1081,707 @@ const ballDontLieService = {
       console.error('Error generating NBA playoff report:', error);
       return `Error generating NBA playoff report: ${error.message}`;
     }
+  },
+
+  // ==================== NHL PLAYOFF STATS METHODS ====================
+  
+  /**
+   * Get NHL teams
+   * @returns {Promise<Array>} - Array of NHL team objects
+   */
+  async getNhlTeams() {
+    try {
+      const cacheKey = 'nhl_teams';
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log('Fetching NHL teams from BallDontLie API');
+        const client = initApi();
+        const response = await client.nhl.getTeams();
+        return response.data || [];
+      }, 60); // Cache for 60 minutes since teams don't change often
+    } catch (error) {
+      console.error('Error fetching NHL teams:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get NHL team details by name, abbreviation, or ID
+   * @param {string|number} nameOrId - Team name, abbreviation, or ID
+   * @returns {Promise<Object>} - Team details or null if not found
+   */
+  async getNhlTeamByName(nameOrId) {
+    try {
+      // Convert input to string for consistency
+      const nameOrIdStr = String(nameOrId).toLowerCase();
+      const idNum = typeof nameOrId === 'number' ? nameOrId : (!isNaN(Number(nameOrIdStr)) ? Number(nameOrIdStr) : null);
+      
+      // Use different cache keys based on input type
+      const cacheKey = idNum !== null ? `nhl_team_by_id_${idNum}` : `nhl_team_by_name_${nameOrIdStr}`;
+      
+      return getCachedOrFetch(cacheKey, async () => {
+        // Always get full teams list - the API doesn't have a getTeamById method
+        const client = initApi();
+        const response = await client.nhl.getTeams();
+        const teams = response.data || [];
+        
+        // If we have a numeric ID, search by ID first
+        if (idNum !== null) {
+          const teamById = teams.find(team => team.id === idNum);
+          if (teamById) return teamById;
+        }
+        
+        // If no numeric ID or team not found by ID, try string matching
+        if (typeof nameOrId === 'string' || !idNum) {
+          // Try to find by exact name or abbreviation
+          const team = teams.find(
+            team => 
+              team.name.toLowerCase() === nameOrIdStr || 
+              team.full_name.toLowerCase() === nameOrIdStr ||
+              team.abbreviation.toLowerCase() === nameOrIdStr
+          );
+          
+          if (team) return team;
+          
+          // Try to find by partial name match
+          const partialMatch = teams.find(
+            team => 
+              team.name.toLowerCase().includes(nameOrIdStr) || 
+              team.full_name.toLowerCase().includes(nameOrIdStr) ||
+              team.abbreviation.toLowerCase().includes(nameOrIdStr)
+          );
+          
+          if (partialMatch) return partialMatch;
+        }
+        
+        // If no match found, return null
+        return null;
+      });
+    } catch (error) {
+      console.error(`Error getting NHL team by name/id ${nameOrId}:`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Get NHL playoff games for current season (2025 playoffs = 2024 season)
+   * @param {number} season - Season year (defaults to current year)
+   * @param {boolean} todayOnly - If true, only return today's games
+   * @returns {Promise<Array>} - Array of playoff games
+   */
+  async getNhlPlayoffGames(season = new Date().getFullYear(), todayOnly = false) {
+    // NHL seasons span two years (e.g., 2024-25 season)
+    // For May 2025, we want the 2024 season (2024-25 NHL season)
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    
+    try {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const cacheKey = todayOnly ? `nhl_playoff_games_today_${actualSeason}_${today}` : `nhl_playoff_games_${actualSeason}`;
+      
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏒 [Ball Don't Lie] Fetching NHL playoff games for ${actualSeason} season (May 2025 - playoffs active)`);
+        
+        const client = initApi();
+        const apiParams = {
+          seasons: [actualSeason],
+          postseason: true, // CRITICAL: Only playoff games for 2025 playoffs
+          per_page: 100
+        };
+        
+        // Add date filter if requesting today's games only
+        if (todayOnly) {
+          apiParams.dates = [today];
+          console.log(`🏒 [Ball Don't Lie] Filtering for today's games only: ${today}`);
+        }
+        
+        console.log(`🏒 [Ball Don't Lie] API request params:`, apiParams);
+        
+        const response = await client.nhl.getGames(apiParams);
+        const games = response.data || [];
+        
+        console.log(`🏒 [Ball Don't Lie] Found ${games.length} ${todayOnly ? 'today\'s' : 'total'} playoff games for ${actualSeason} season`);
+        
+        // Debug: Log sample games
+        if (games.length > 0) {
+          console.log(`🏒 [Ball Don't Lie] Sample NHL playoff games:`);
+          games.slice(0, 3).forEach(game => {
+            console.log(`  - ${game.visitor_team.name} @ ${game.home_team.name} (${game.date})`);
+          });
+        }
+        
+        return games;
+      }, 1); // Short cache for testing
+    } catch (error) {
+      console.error('Error fetching NHL playoff games:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get today's NHL playoff games only
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Array>} - Array of today's playoff games
+   */
+  async getTodaysNhlPlayoffGames(season = new Date().getFullYear()) {
+    return this.getNhlPlayoffGames(season, true);
+  },
+
+  /**
+   * Get active NHL playoff teams for 2025 playoffs
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Array>} - Array of team IDs that are in the playoffs
+   */
+  async getActiveNhlPlayoffTeams(season = new Date().getFullYear()) {
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    
+    try {
+      const cacheKey = `nhl_active_playoff_teams_${actualSeason}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏒 [Ball Don't Lie] Getting active NHL playoff teams for ${actualSeason} season`);
+        
+        const playoffGames = await this.getNhlPlayoffGames(actualSeason);
+        const activeTeams = new Set();
+        
+        playoffGames.forEach(game => {
+          activeTeams.add(game.home_team.id);
+          activeTeams.add(game.visitor_team.id);
+        });
+        
+        const teamIds = Array.from(activeTeams);
+        console.log(`🏒 [Ball Don't Lie] Found ${teamIds.length} active playoff teams`);
+        
+        return teamIds;
+      });
+    } catch (error) {
+      console.error('Error getting active NHL playoff teams:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get NHL playoff series data for a specific matchup
+   * @param {number} season - Season year (defaults to current year)
+   * @param {number|string} teamA - First team ID or team name/abbreviation
+   * @param {number|string} teamB - Second team ID or team name/abbreviation
+   * @returns {Promise<Object>} - Series data including games and series status
+   */
+  async getNhlPlayoffSeries(season = new Date().getFullYear(), teamA, teamB) {
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    
+    try {
+      const cacheKey = `nhl_playoff_series_${actualSeason}_${teamA}_${teamB}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        // Get all playoff games for the season
+        const playoffGames = await this.getNhlPlayoffGames(actualSeason);
+        
+        // Get team data for both teams
+        const teamAData = await this.getNhlTeamByName(teamA);
+        const teamBData = await this.getNhlTeamByName(teamB);
+        
+        if (!teamAData || !teamBData) {
+          return {
+            seriesFound: false,
+            message: 'One or both teams not found'
+          };
+        }
+        
+        // Find games between these two teams
+        const seriesGames = playoffGames.filter(game => 
+          (game.home_team.id === teamAData.id && game.visitor_team.id === teamBData.id) ||
+          (game.home_team.id === teamBData.id && game.visitor_team.id === teamAData.id)
+        );
+        
+        if (seriesGames.length === 0) {
+          return {
+            seriesFound: false,
+            message: 'No playoff games found between these teams'
+          };
+        }
+        
+        // Count wins for each team
+        let teamAWins = 0;
+        let teamBWins = 0;
+        
+        seriesGames.forEach(game => {
+          if (game.status !== 'Final') return; // Only count completed games
+          
+          const teamAIsHome = game.home_team.id === teamAData.id;
+          const homeTeamWon = game.home_team_score > game.visitor_team_score;
+          
+          if ((teamAIsHome && homeTeamWon) || (!teamAIsHome && !homeTeamWon)) {
+            teamAWins++;
+          } else {
+            teamBWins++;
+          }
+        });
+        
+        // Determine series status
+        let seriesStatus = '';
+        if (teamAWins >= 4) {
+          seriesStatus = `${teamAData.name} won the series 4-${teamBWins}`;
+        } else if (teamBWins >= 4) {
+          seriesStatus = `${teamBData.name} won the series 4-${teamAWins}`;
+        } else {
+          seriesStatus = `${teamAData.name} ${teamAWins} - ${teamBWins} ${teamBData.name}`;
+        }
+        
+        // Sort games by date
+        const sortedGames = [...seriesGames].sort((a, b) => 
+          new Date(a.date) - new Date(b.date)
+        );
+        
+        return {
+          seriesFound: true,
+          teamA: teamAData,
+          teamB: teamBData,
+          teamAWins,
+          teamBWins,
+          seriesStatus,
+          games: sortedGames
+        };
+      });
+    } catch (error) {
+      console.error('Error getting NHL playoff series:', error);
+      return { seriesFound: false, message: error.message };
+    }
+  },
+
+  /**
+   * Get detailed stats for players in a specific NHL playoff game
+   * @param {number} gameId - Game ID
+   * @returns {Promise<Array>} - Array of player stats for the game
+   */
+  async getNhlPlayoffGameStats(gameId) {
+    try {
+      const cacheKey = `nhl_playoff_game_stats_${gameId}`;
+      return getCachedOrFetch(cacheKey, async () => {
+        console.log(`Fetching NHL playoff game stats for game ID ${gameId}`);
+        const client = initApi();
+        const response = await client.nhl.getStats({
+          game_ids: [gameId],
+          postseason: true, // CRITICAL: Ensure we get playoff stats only
+          per_page: 50 // Get all players from the game
+        });
+        return response.data || [];
+      });
+    } catch (error) {
+      console.error('Error fetching NHL playoff game stats:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get detailed playoff stats for key players on both teams (May 2025 = NHL Playoffs Active)
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Object>} - Object with home and away team playoff player stats
+   */
+  async getNhlPlayoffPlayerStats(homeTeam, awayTeam, season = new Date().getFullYear()) {
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    
+    try {
+      console.log(`🏒 [Ball Don't Lie] Getting playoff player stats for ${awayTeam} @ ${homeTeam} (${actualSeason} season)`);
+      
+      // Get team data
+      const homeTeamData = await this.getNhlTeamByName(homeTeam);
+      const awayTeamData = await this.getNhlTeamByName(awayTeam);
+      
+      if (!homeTeamData || !awayTeamData) {
+        console.log(`🏒 [Ball Don't Lie] Could not find team data for ${homeTeam} or ${awayTeam}`);
+        return { home: [], away: [] };
+      }
+      
+      console.log(`🏒 [Ball Don't Lie] Found teams: ${homeTeamData.full_name} (ID: ${homeTeamData.id}) vs ${awayTeamData.full_name} (ID: ${awayTeamData.id})`);
+      
+      // CRITICAL FIX: It's May 2025, so we're in NHL playoffs - get current playoff games
+      console.log(`🏒 [Ball Don't Lie] Getting current playoff games for ${actualSeason} season (May 2025 - playoffs are active)`);
+      
+      const client = initApi();
+      const response = await client.nhl.getGames({
+        seasons: [actualSeason],
+        postseason: true, // CRITICAL: Get playoff games only
+        per_page: 100
+      });
+      
+      const playoffGames = response.data || [];
+      console.log(`🏒 [Ball Don't Lie] Found ${playoffGames.length} total playoff games for ${actualSeason} season`);
+      
+      // Filter games for each team
+      const homeTeamGames = playoffGames.filter(game => 
+        game.home_team.id === homeTeamData.id || game.visitor_team.id === homeTeamData.id
+      ).slice(-5); // Last 5 playoff games
+      
+      const awayTeamGames = playoffGames.filter(game => 
+        game.home_team.id === awayTeamData.id || game.visitor_team.id === awayTeamData.id
+      ).slice(-5); // Last 5 playoff games
+      
+      console.log(`[Ball Don't Lie] ${homeTeam} (ID: ${homeTeamData.id}): Found ${homeTeamGames.length} playoff games`);
+      console.log(`[Ball Don't Lie] ${awayTeam} (ID: ${awayTeamData.id}): Found ${awayTeamGames.length} playoff games`);
+      
+      // Debug: Log sample games for each team
+      if (homeTeamGames.length > 0) {
+        console.log(`[Ball Don't Lie] Sample ${homeTeam} games:`);
+        homeTeamGames.slice(0, 2).forEach(game => {
+          console.log(`  - ${game.visitor_team.name} @ ${game.home_team.name} (${game.date})`);
+        });
+      }
+      
+      if (awayTeamGames.length > 0) {
+        console.log(`[Ball Don't Lie] Sample ${awayTeam} games:`);
+        awayTeamGames.slice(0, 2).forEach(game => {
+          console.log(`  - ${game.visitor_team.name} @ ${game.home_team.name} (${game.date})`);
+        });
+      }
+      
+      // If no games found for a team, try alternative team name matching
+      let finalHomeTeamGames = homeTeamGames;
+      let finalAwayTeamGames = awayTeamGames;
+      
+      if (homeTeamGames.length === 0) {
+        console.log(`[Ball Don't Lie] No playoff games found for ${homeTeam}, trying alternative matching...`);
+        
+        // Enhanced matching with multiple strategies
+        finalHomeTeamGames = playoffGames.filter(game => {
+          const homeGameTeam = game.home_team.name.toLowerCase();
+          const awayGameTeam = game.visitor_team.name.toLowerCase();
+          const searchTeam = homeTeam.toLowerCase();
+          
+          // Strategy 1: Direct name matching
+          if (homeGameTeam.includes(searchTeam) || awayGameTeam.includes(searchTeam)) return true;
+          if (searchTeam.includes(homeGameTeam) || searchTeam.includes(awayGameTeam)) return true;
+          
+          // Strategy 2: City/team name extraction (e.g., "Edmonton Oilers" -> "oilers", "edmonton")
+          const searchWords = searchTeam.split(' ');
+          const homeWords = homeGameTeam.split(' ');
+          const awayWords = awayGameTeam.split(' ');
+          
+          for (const word of searchWords) {
+            if (word.length > 3) { // Only check meaningful words
+              if (homeWords.some(w => w.includes(word)) || awayWords.some(w => w.includes(word))) return true;
+              if (homeWords.some(w => word.includes(w)) || awayWords.some(w => word.includes(w))) return true;
+            }
+          }
+          
+          return false;
+        }).slice(-5);
+        console.log(`[Ball Don't Lie] Alternative matching found ${finalHomeTeamGames.length} games for ${homeTeam}`);
+      }
+      
+      if (awayTeamGames.length === 0) {
+        console.log(`[Ball Don't Lie] No playoff games found for ${awayTeam}, trying alternative matching...`);
+        
+        // Enhanced matching with multiple strategies
+        finalAwayTeamGames = playoffGames.filter(game => {
+          const homeGameTeam = game.home_team.name.toLowerCase();
+          const awayGameTeam = game.visitor_team.name.toLowerCase();
+          const searchTeam = awayTeam.toLowerCase();
+          
+          // Strategy 1: Direct name matching
+          if (homeGameTeam.includes(searchTeam) || awayGameTeam.includes(searchTeam)) return true;
+          if (searchTeam.includes(homeGameTeam) || searchTeam.includes(awayGameTeam)) return true;
+          
+          // Strategy 2: City/team name extraction (e.g., "Dallas Stars" -> "stars", "dallas")
+          const searchWords = searchTeam.split(' ');
+          const homeWords = homeGameTeam.split(' ');
+          const awayWords = awayGameTeam.split(' ');
+          
+          for (const word of searchWords) {
+            if (word.length > 3) { // Only check meaningful words
+              if (homeWords.some(w => w.includes(word)) || awayWords.some(w => w.includes(word))) return true;
+              if (homeWords.some(w => word.includes(w)) || awayWords.some(w => word.includes(w))) return true;
+            }
+          }
+          
+          return false;
+        }).slice(-5);
+        console.log(`[Ball Don't Lie] Alternative matching found ${finalAwayTeamGames.length} games for ${awayTeam}`);
+      }
+      
+      // Get player stats from playoff games
+      const getTeamPlayerStats = async (games, teamId) => {
+        const playerStatsMap = new Map();
+        
+        for (const game of games) {
+          try {
+            console.log(`[Ball Don't Lie] Getting stats for game ${game.id}: ${game.visitor_team.name} @ ${game.home_team.name}`);
+            const gameStats = await this.getNhlPlayoffGameStats(game.id);
+            console.log(`[Ball Don't Lie] Game ${game.id}: Found ${gameStats.length} total player stats`);
+            
+            const teamStats = gameStats.filter(stat => stat.team.id === teamId);
+            console.log(`[Ball Don't Lie] Game ${game.id}: Found ${teamStats.length} stats for team ${teamId}`);
+            
+            teamStats.forEach(stat => {
+              const playerId = stat.player.id;
+              if (!playerStatsMap.has(playerId)) {
+                playerStatsMap.set(playerId, {
+                  player: stat.player,
+                  games: 0,
+                  // Basic Stats
+                  totalGoals: 0,
+                  totalAssists: 0,
+                  totalPoints: 0,
+                  totalPlusMinus: 0,
+                  totalPenaltyMinutes: 0,
+                  totalShots: 0,
+                  totalHits: 0,
+                  totalBlocks: 0,
+                  totalFaceoffWins: 0,
+                  totalFaceoffs: 0,
+                  totalTimeOnIce: 0,
+                  // Power Play Stats
+                  totalPowerPlayGoals: 0,
+                  totalPowerPlayAssists: 0,
+                  totalPowerPlayPoints: 0,
+                  totalPowerPlayTimeOnIce: 0,
+                  // Short Handed Stats
+                  totalShortHandedGoals: 0,
+                  totalShortHandedAssists: 0,
+                  totalShortHandedPoints: 0,
+                  totalShortHandedTimeOnIce: 0,
+                  // Goalie Stats (if applicable)
+                  totalSaves: 0,
+                  totalShotsAgainst: 0,
+                  totalGoalsAgainst: 0,
+                  totalWins: 0,
+                  totalLosses: 0,
+                  totalOvertimeLosses: 0
+                });
+              }
+              
+              const playerData = playerStatsMap.get(playerId);
+              playerData.games += 1;
+              
+              // Basic Stats
+              playerData.totalGoals += stat.goals || 0;
+              playerData.totalAssists += stat.assists || 0;
+              playerData.totalPoints += stat.points || 0;
+              playerData.totalPlusMinus += stat.plus_minus || 0;
+              playerData.totalPenaltyMinutes += stat.penalty_minutes || 0;
+              playerData.totalShots += stat.shots || 0;
+              playerData.totalHits += stat.hits || 0;
+              playerData.totalBlocks += stat.blocks || 0;
+              playerData.totalFaceoffWins += stat.faceoff_wins || 0;
+              playerData.totalFaceoffs += stat.faceoffs || 0;
+              
+              // Time on ice (convert from MM:SS to minutes)
+              if (stat.time_on_ice) {
+                const [minutes, seconds] = stat.time_on_ice.split(':').map(Number);
+                playerData.totalTimeOnIce += minutes + (seconds / 60);
+              }
+              
+              // Power Play Stats
+              playerData.totalPowerPlayGoals += stat.power_play_goals || 0;
+              playerData.totalPowerPlayAssists += stat.power_play_assists || 0;
+              playerData.totalPowerPlayPoints += stat.power_play_points || 0;
+              
+              if (stat.power_play_time_on_ice) {
+                const [minutes, seconds] = stat.power_play_time_on_ice.split(':').map(Number);
+                playerData.totalPowerPlayTimeOnIce += minutes + (seconds / 60);
+              }
+              
+              // Short Handed Stats
+              playerData.totalShortHandedGoals += stat.short_handed_goals || 0;
+              playerData.totalShortHandedAssists += stat.short_handed_assists || 0;
+              playerData.totalShortHandedPoints += stat.short_handed_points || 0;
+              
+              if (stat.short_handed_time_on_ice) {
+                const [minutes, seconds] = stat.short_handed_time_on_ice.split(':').map(Number);
+                playerData.totalShortHandedTimeOnIce += minutes + (seconds / 60);
+              }
+              
+              // Goalie Stats (if applicable)
+              playerData.totalSaves += stat.saves || 0;
+              playerData.totalShotsAgainst += stat.shots_against || 0;
+              playerData.totalGoalsAgainst += stat.goals_against || 0;
+              playerData.totalWins += stat.wins || 0;
+              playerData.totalLosses += stat.losses || 0;
+              playerData.totalOvertimeLosses += stat.overtime_losses || 0;
+            });
+          } catch (error) {
+            console.error(`[Ball Don't Lie] Error getting stats for game ${game.id}:`, error.message);
+          }
+        }
+        
+        // Calculate averages and advanced metrics
+        const allPlayers = Array.from(playerStatsMap.values());
+        console.log(`[Ball Don't Lie] Team ${teamId}: Found ${allPlayers.length} players before filtering`);
+        
+        // Log player game counts for debugging
+        allPlayers.forEach(player => {
+          console.log(`  - ${player.player.first_name} ${player.player.last_name}: ${player.games} games`);
+        });
+        
+        // Use more lenient filtering - require at least 1 game instead of 2
+        const filteredPlayers = allPlayers.filter(player => player.games >= 1);
+        console.log(`[Ball Don't Lie] Team ${teamId}: ${filteredPlayers.length} players after filtering (>=1 game)`);
+        
+        return filteredPlayers
+          .map(player => {
+            const games = player.games;
+            
+            // Basic averages
+            const avgGoals = (player.totalGoals / games).toFixed(1);
+            const avgAssists = (player.totalAssists / games).toFixed(1);
+            const avgPoints = (player.totalPoints / games).toFixed(1);
+            const avgPlusMinus = (player.totalPlusMinus / games).toFixed(1);
+            const avgPenaltyMinutes = (player.totalPenaltyMinutes / games).toFixed(1);
+            const avgShots = (player.totalShots / games).toFixed(1);
+            const avgHits = (player.totalHits / games).toFixed(1);
+            const avgBlocks = (player.totalBlocks / games).toFixed(1);
+            const avgTimeOnIce = (player.totalTimeOnIce / games).toFixed(1);
+            
+            // Shooting percentage
+            const shootingPct = player.totalShots > 0 ? 
+              ((player.totalGoals / player.totalShots) * 100).toFixed(1) : '0.0';
+            
+            // Faceoff percentage
+            const faceoffPct = player.totalFaceoffs > 0 ? 
+              ((player.totalFaceoffWins / player.totalFaceoffs) * 100).toFixed(1) : '0.0';
+            
+            // Power Play averages
+            const avgPowerPlayGoals = (player.totalPowerPlayGoals / games).toFixed(1);
+            const avgPowerPlayAssists = (player.totalPowerPlayAssists / games).toFixed(1);
+            const avgPowerPlayPoints = (player.totalPowerPlayPoints / games).toFixed(1);
+            const avgPowerPlayTimeOnIce = (player.totalPowerPlayTimeOnIce / games).toFixed(1);
+            
+            // Short Handed averages
+            const avgShortHandedGoals = (player.totalShortHandedGoals / games).toFixed(1);
+            const avgShortHandedAssists = (player.totalShortHandedAssists / games).toFixed(1);
+            const avgShortHandedPoints = (player.totalShortHandedPoints / games).toFixed(1);
+            
+            // Goalie stats (if applicable)
+            const savePercentage = player.totalShotsAgainst > 0 ? 
+              ((player.totalSaves / player.totalShotsAgainst) * 100).toFixed(3) : '0.000';
+            const goalsAgainstAverage = games > 0 ? 
+              (player.totalGoalsAgainst / games).toFixed(2) : '0.00';
+            
+            return {
+              player: player.player,
+              games: games,
+              
+              // Basic Stats
+              avgGoals,
+              avgAssists,
+              avgPoints,
+              avgPlusMinus, // ⭐ KEY STAT for playoff impact
+              avgPenaltyMinutes,
+              avgShots,
+              avgHits,
+              avgBlocks,
+              avgTimeOnIce,
+              
+              // Shooting Stats
+              shootingPct,
+              faceoffPct,
+              
+              // Power Play Stats
+              avgPowerPlayGoals,
+              avgPowerPlayAssists,
+              avgPowerPlayPoints,
+              avgPowerPlayTimeOnIce,
+              
+              // Short Handed Stats
+              avgShortHandedGoals,
+              avgShortHandedAssists,
+              avgShortHandedPoints,
+              
+              // Goalie Stats (if applicable)
+              savePercentage,
+              goalsAgainstAverage,
+              wins: player.totalWins,
+              losses: player.totalLosses,
+              overtimeLosses: player.totalOvertimeLosses,
+              
+              // Additional context
+              totalFaceoffWins: player.totalFaceoffWins,
+              totalFaceoffs: player.totalFaceoffs
+            };
+          })
+          .sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints)) // Sort by points
+          .slice(0, 8); // Top 8 players
+      };
+      
+      const [homePlayerStats, awayPlayerStats] = await Promise.all([
+        getTeamPlayerStats(finalHomeTeamGames, homeTeamData.id),
+        getTeamPlayerStats(finalAwayTeamGames, awayTeamData.id)
+      ]);
+      
+      console.log(`🏒 [Ball Don't Lie] Found playoff stats for ${homePlayerStats.length} ${homeTeam} players and ${awayPlayerStats.length} ${awayTeam} players`);
+      
+      return {
+        home: homePlayerStats,
+        away: awayPlayerStats,
+        homeTeam: homeTeamData,
+        awayTeam: awayTeamData
+      };
+    } catch (error) {
+      console.error(`[Ball Don't Lie] Error getting NHL playoff player stats:`, error);
+      return { home: [], away: [] };
+    }
+  },
+
+  /**
+   * Get comprehensive NHL playoff analysis for today's game
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {Promise<Object>} - Comprehensive playoff analysis
+   */
+  async getComprehensiveNhlPlayoffAnalysis(homeTeam, awayTeam) {
+    try {
+      console.log(`🏒 [Ball Don't Lie] Getting comprehensive NHL playoff analysis for ${awayTeam} @ ${homeTeam}`);
+      
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+      
+      // Get all playoff data in parallel
+      const [
+        playerStats,
+        playoffSeries,
+        todaysGames,
+        activeTeams
+      ] = await Promise.all([
+        this.getNhlPlayoffPlayerStats(homeTeam, awayTeam, actualSeason),
+        this.getNhlPlayoffSeries(actualSeason, homeTeam, awayTeam),
+        this.getTodaysNhlPlayoffGames(actualSeason),
+        this.getActiveNhlPlayoffTeams(actualSeason)
+      ]);
+      
+      // Find today's specific game
+      const todaysGame = todaysGames.find(game => {
+        const gameHomeTeam = game.home_team.full_name.toLowerCase();
+        const gameAwayTeam = game.visitor_team.full_name.toLowerCase();
+        
+        return (gameHomeTeam.includes(homeTeam.toLowerCase()) || homeTeam.toLowerCase().includes(gameHomeTeam)) &&
+               (gameAwayTeam.includes(awayTeam.toLowerCase()) || awayTeam.toLowerCase().includes(gameAwayTeam));
+      });
+      
+      return {
+        game: todaysGame,
+        homeTeam: {
+          stats: playerStats.home,
+          teamData: playerStats.homeTeam
+        },
+        awayTeam: {
+          stats: playerStats.away,
+          teamData: playerStats.awayTeam
+        },
+        series: playoffSeries,
+        activePlayoffTeams: activeTeams,
+        season: actualSeason
+      };
+    } catch (error) {
+      console.error('Error getting comprehensive NHL playoff analysis:', error);
+      return null;
+    }
   }
 };
 
