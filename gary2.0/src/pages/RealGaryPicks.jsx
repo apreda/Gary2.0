@@ -1065,136 +1065,127 @@ function RealGaryPicks() {
                                       </div>
                                     )}
                                     
-                                    {/* BACK OF CARD - ANALYSIS */}
-                                    {isMobile ? (
-                                      // Mobile simplified back card - only analysis
-                                      <div style={{
-                                        position: 'absolute',
-                                        width: '100%',
-                                        height: '100%',
-                                        backfaceVisibility: 'hidden',
-                                        transform: 'rotateY(180deg)',
-                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                        borderRadius: '12px',
-                                        fontFamily: 'Inter, system-ui, sans-serif',
-                                        overflow: 'hidden',
-                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                        color: '#ffffff',
-                                        padding: '1.25rem',
-                                        display: 'flex',
-                                        flexDirection: 'column'
-                                      }}>
-                                        {/* Analysis Header */}
-                                        <div style={{ 
-                                          fontSize: '0.85rem', 
-                                          opacity: 0.7, 
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.05em', 
-                                          marginBottom: '0.75rem',
-                                          textAlign: 'center'
-                                        }}>
-                                          Analysis
-                                        </div>
-                                        
-                                        {/* Scrollable Analysis Content */}
-                                        <div style={{ 
-                                          flex: 1,
-                                          overflowY: 'auto',
-                                          fontSize: '0.95rem',
-                                          lineHeight: '1.6',
-                                          color: '#fff',
-                                          opacity: 0.9
-                                        }}>
-                                          {pick.rationale || 'Analysis not available.'}
-                                        </div>
-                                        
-                                        {/* Tap to flip back indicator */}
-                                        <div style={{
-                                          fontSize: '0.75rem',
-                                          opacity: 0.5,
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.05em',
-                                          textAlign: 'center',
-                                          marginTop: '0.75rem'
-                                        }}>
-                                          Tap to Flip Back
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      // Desktop back card design
-                                      <div style={{
-                                        position: 'absolute',
-                                        width: '100%',
-                                        height: '100%',
-                                        backfaceVisibility: 'hidden',
-                                        transform: 'rotateY(180deg)',
-                                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
-                                        borderRadius: '16px',
-                                        fontFamily: 'Inter, system-ui, sans-serif',
-                                        overflow: 'hidden',
-                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
-                                        color: '#ffffff',
-                                        padding: '1.5rem',
-                                      }}>
-                                      {/* Card Header - Pick */}
-                                      <div style={{ position: 'relative', width: '100%', marginBottom: '1.5rem' }}>
-                                        {/* Pick Banner */}
-                                        <div style={{ 
-                                          backgroundColor: 'rgba(191, 161, 66, 0.15)',
-                                          color: '#bfa142',
-                                          fontWeight: 'bold',
-                                          fontSize: '1.25rem',
-                                          padding: '0.8rem 1rem',
-                                          textAlign: 'center',
-                                          letterSpacing: '0.05rem',
-                                          textTransform: 'uppercase',
-                                          borderRadius: '8px',
-                                        }}>
-                                          {pick.pick || 'GARY\'S PICK'}
+                                    {/* BACK OF CARD - ANALYSIS (MATCHING FREE PICK FORMAT) */}
+                                    <div style={{
+                                      position: 'absolute',
+                                      width: '100%',
+                                      height: '100%',
+                                      backfaceVisibility: 'hidden',
+                                      transform: 'rotateY(180deg)',
+                                      background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                                      borderRadius: isMobile ? '12px' : '16px',
+                                      fontFamily: 'Inter, system-ui, sans-serif',
+                                      overflow: 'hidden',
+                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)',
+                                      color: '#ffffff',
+                                      padding: '1.25rem',
+                                      display: 'flex',
+                                      flexDirection: 'column'
+                                    }}>
+                                      {/* Back header - minimal height (MATCHING FREE PICK) */}
+                                      <div style={{ marginBottom: '0.5rem', flex: '0 0 auto' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#bfa142', margin: 0 }}>Gary's Analysis</h3>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setFlippedCards(prev => ({
+                                                ...prev,
+                                                [pick.id]: false
+                                              }));
+                                            }}
+                                            style={{
+                                              background: 'rgba(191, 161, 66, 0.15)',
+                                              color: '#bfa142',
+                                              border: 'none',
+                                              borderRadius: '4px',
+                                              padding: '0.3rem 0.6rem',
+                                              cursor: 'pointer',
+                                              fontSize: '0.65rem',
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.05em',
+                                              fontWeight: 500,
+                                              transition: 'all 0.2s ease'
+                                            }}
+                                          >
+                                            Back
+                                          </button>
                                         </div>
                                       </div>
                                       
-                                      {/* Rationale Section - Further Expanded */}
-                                       <div style={{ 
-                                         flex: '1', 
-                                         display: 'flex', 
-                                         flexDirection: 'column',
-                                         overflowY: 'auto',
-                                         height: 'calc(100% - 80px)',
-                                         marginBottom: '0',
-                                     }}>
-                                      {/* Main Analysis */}
+                                      {/* Full analysis - takes up 85% of remaining space (MATCHING FREE PICK) */}
                                       <div style={{ 
-                                        backgroundColor: 'rgba(0, 0, 0, 0.2)', 
-                                        padding: '1.75rem', 
-                                        borderRadius: '0.75rem',
-                                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                                        fontSize: '1.1rem',
-                                        lineHeight: '1.7',
-                                        color: '#fff',
-                                        width: '100%',
-                                        height: '100%',
+                                        flex: '1 1 85%',
                                         overflowY: 'auto',
+                                        fontSize: '0.9rem',
+                                        lineHeight: 1.6,
+                                        opacity: 0.95,
+                                        paddingRight: '0.5rem',
+                                        marginBottom: '0.5rem'
                                       }}>
-                                        {/* Rationale Heading */}
-                                        <div style={{ 
-                                          fontSize: '0.8rem', 
-                                          opacity: 0.6, 
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.05em', 
-                                          marginBottom: '0.75rem'
-                                        }}>
-                                          Rationale
+                                        {pick.rationale ? (
+                                          // Check if rationale is already formatted or needs formatting (MATCHING FREE PICK)
+                                          pick.rationale.includes('•') ? (
+                                            // Already has bullets, just display
+                                            <div style={{ whiteSpace: 'pre-wrap' }}>{pick.rationale}</div>
+                                          ) : pick.rationale.includes('. ') && pick.rationale.length > 150 ? (
+                                            // Long text with sentences - format into readable paragraphs
+                                            <div>
+                                              {pick.rationale
+                                                .split(/(?<=[.!?])\s+/)
+                                                .filter(sentence => sentence.trim().length > 0)
+                                                .map((sentence, idx) => {
+                                                  let cleanSentence = sentence.trim();
+                                                  if (!cleanSentence.endsWith('.') && !cleanSentence.endsWith('!') && !cleanSentence.endsWith('?')) {
+                                                    cleanSentence += '.';
+                                                  }
+                                                  return (
+                                                    <p key={idx} style={{ 
+                                                      marginBottom: '0.75rem',
+                                                      lineHeight: 1.5
+                                                    }}>
+                                                      {cleanSentence}
+                                                    </p>
+                                                  );
+                                                })}
+                                            </div>
+                                          ) : (
+                                            // Short text or single paragraph - just display as is
+                                            <div style={{ lineHeight: 1.6 }}>{pick.rationale}</div>
+                                          )
+                                        ) : (
+                                          <div style={{ textAlign: 'center', opacity: 0.6, marginTop: '2rem' }}>
+                                            Analysis not available at this time.
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Bottom info - minimal space (MATCHING FREE PICK) */}
+                                      <div style={{ 
+                                        flex: '0 0 auto',
+                                        paddingTop: '0.5rem', 
+                                        borderTop: '1px solid rgba(255,255,255,0.1)',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        fontSize: '0.75rem'
+                                      }}>
+                                        <div>
+                                          <span style={{ opacity: 0.6 }}>Confidence: </span>
+                                          <span style={{ fontWeight: 700, color: '#bfa142' }}>
+                                            {typeof pick.confidence === 'number' ? 
+                                              Math.round(pick.confidence * 100) + '%' : 
+                                              (pick.confidence || '75%')}
+                                          </span>
                                         </div>
-                                        
-                                        {/* Display the rationale */}
-                                        <p style={{ margin: 0, fontWeight: 400, opacity: 0.9 }}>
-                                          {pick.rationale || 'Analysis not available.'}
-                                        </p>
+                                        <div>
+                                          <span style={{ opacity: 0.6 }}>Time: </span>
+                                          <span style={{ fontWeight: 600 }}>
+                                            {pick.time || 'TBD'}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </div>
