@@ -100,7 +100,7 @@ export const perplexityService = {
   API_BASE_URL: (() => {
     // Check if we're in a browser environment
     if (typeof window !== 'undefined') {
-      // Use proxy endpoint in browser to avoid CORS
+      // Use the App Router proxy endpoint in browser to avoid CORS
       return '/api/perplexity-proxy';
     }
     // Use direct API in Node.js environment

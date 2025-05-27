@@ -52,15 +52,18 @@ export async function POST(req) {
       );
     }
     
-    // Get API key from environment
-    const apiKey = process.env.PERPLEXITY_API_KEY;
+    // Get API key from environment (check both variants)
+    const apiKey = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
     if (!apiKey) {
       console.error('[PERPLEXITY PROXY] Missing API key in environment');
+      console.error('[PERPLEXITY PROXY] Checked: PERPLEXITY_API_KEY and VITE_PERPLEXITY_API_KEY');
       return new Response(
         JSON.stringify({ error: 'Server configuration error: Missing API key' }),
         { status: 500, headers: corsHeaders }
       );
     }
+    
+    console.log(`[PERPLEXITY PROXY] Using API key: ${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`);
     
     // Prepare request to Perplexity API
     const requestData = {
