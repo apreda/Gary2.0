@@ -175,38 +175,49 @@ const ballDontLieService = {
   /**
    * Get NBA playoff stats for current season
    * @param {number} season - Season year (defaults to current year)
+   * @param {boolean} todayOnly - If true, only return today's games
    * @returns {Promise<Array>} - Array of playoff games with stats
    */
-  async getNbaPlayoffGames(season = new Date().getFullYear()) {
+  async getNbaPlayoffGames(season = new Date().getFullYear(), todayOnly = false) {
     // NBA seasons span two years (e.g., 2024-25 season)
     // For 2025 playoffs, we need season=2024
     // If we're in early months (Jan-June), we're in the second half of the season
     const currentMonth = new Date().getMonth() + 1; // 1-12
     const currentYear = new Date().getFullYear();
     
-    // CRITICAL FIX: For January 2025, we want 2024 season (2024-25 NBA season)
+    // CRITICAL FIX: For May 2025, we want 2024 season (2024-25 NBA season)
     const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
     
     console.log(`🏀 [SEASON DEBUG] Current date: ${new Date().toISOString()}, Month: ${currentMonth}, Year: ${currentYear}, Using season: ${actualSeason}`);
     
     try {
-      const cacheKey = `nba_playoff_games_${actualSeason}`;
+      const cacheKey = todayOnly ? `nba_playoff_games_today_${actualSeason}` : `nba_playoff_games_${actualSeason}`;
       return getCachedOrFetch(cacheKey, async () => {
-        console.log(`🏀 Fetching NBA playoff games for ${actualSeason} season (${actualSeason}-${actualSeason + 1}) from Ball Don't Lie API`);
-        console.log(`🏀 API Request params: { postseason: true, seasons: [${actualSeason}], per_page: 100 }`);
-        const client = initApi();
+        console.log(`🏀 Fetching NBA playoff games for ${actualSeason} season (${actualSeason}-${actualSeason + 1}) from Ball Don't Lie API${todayOnly ? ' - TODAY ONLY' : ''}`);
         
-        // CRITICAL FIX: Pass the seasons parameter to get only the specific season's playoffs
-        const response = await client.nba.getGames({ 
+        const client = initApi();
+        let apiParams = { 
           postseason: true, // Get playoff games only
           seasons: [actualSeason], // This was missing - now we get only 2024 season playoffs for 2025
           per_page: 100 // Max allowed
-        });
+        };
+        
+        // If we only want today's games, add date filter
+        if (todayOnly) {
+          const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+          apiParams.dates = [today];
+          console.log(`🏀 Filtering for today's games only: ${today}`);
+        }
+        
+        console.log(`🏀 API Request params:`, apiParams);
+        
+        // CRITICAL FIX: Pass the seasons parameter to get only the specific season's playoffs
+        const response = await client.nba.getGames(apiParams);
         
         console.log(`🏀 API Response: Found ${response.data?.length || 0} games in response`);
         
         const games = response.data || [];
-        console.log(`🏀 Found ${games.length} playoff games for ${actualSeason} season`);
+        console.log(`🏀 Found ${games.length} playoff games for ${actualSeason} season${todayOnly ? ' (today only)' : ''}`);
         
         // Log sample games for verification
         if (games.length > 0) {
@@ -214,6 +225,8 @@ const ballDontLieService = {
           games.slice(0, 3).forEach(game => {
             console.log(`   - ${game.visitor_team.name} @ ${game.home_team.name} (${game.date})`);
           });
+        } else if (todayOnly) {
+          console.log(`🏀 No playoff games found for today (${new Date().toISOString().split('T')[0]})`);
         }
         
         return games;
@@ -222,6 +235,15 @@ const ballDontLieService = {
       console.error('Error fetching NBA playoff games:', error);
       return [];
     }
+  },
+
+  /**
+   * Get today's NBA playoff games only
+   * @param {number} season - Season year (defaults to current year)
+   * @returns {Promise<Array>} - Array of today's playoff games
+   */
+  async getTodaysNbaPlayoffGames(season = new Date().getFullYear()) {
+    return this.getNbaPlayoffGames(season, true);
   },
 
   /**

@@ -734,7 +734,7 @@ function RealGaryPicks() {
                                           <div style={{
                                             fontSize: '1.25rem',
                                             fontWeight: 600,
-                                            color: '#ffffff'
+                                            color: '#bfa142'
                                           }}>
                                             {(() => {
                                               // Extract odds from the pick string
@@ -840,11 +840,7 @@ function RealGaryPicks() {
                                               <div style={{ 
                                                 fontSize: '1.25rem', 
                                                 fontWeight: 600,
-                                                opacity: 0.9,
-                                                padding: '0.25rem 0.5rem',
-                                                border: '1px solid rgba(255, 255, 255, 0.2)',
-                                                borderRadius: '4px',
-                                                background: 'rgba(255, 255, 255, 0.05)'
+                                                color: '#bfa142'
                                               }}>
                                                 {(() => {
                                                   // Extract odds from the pick string
