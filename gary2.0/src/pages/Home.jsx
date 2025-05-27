@@ -5,7 +5,7 @@ import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";
-import { extractKeyPoints } from '../utils/analysisPreview';
+
 
 // Using inline CSS for simplicity
 
@@ -150,44 +150,12 @@ function Home() {
                   marginBottom: '0.5rem',
                   lineHeight: 1.4
                 }}>
-                  {displayPick.rationale ? (() => {
-                    const keyPoints = extractKeyPoints(displayPick.rationale);
-                    
-                    return keyPoints.length > 0 ? (
-                      <div>
-                        {keyPoints.map((point, idx) => (
-                          <div key={idx} style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            marginBottom: '0.3rem',
-                            fontSize: '0.75rem'
-                          }}>
-                            <span style={{ 
-                              marginRight: '0.4rem',
-                              fontSize: '0.7rem',
-                              opacity: 0.6
-                            }}>
-                              •
-                            </span>
-                            <span style={{ 
-                              opacity: 0.9,
-                              lineHeight: 1.3
-                            }}>
-                              {point}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ opacity: 0.7, fontStyle: 'italic' }}>
-                        Tap for detailed analysis
-                      </div>
-                    );
-                  })() : (
-                    <div style={{ opacity: 0.7, fontStyle: 'italic' }}>
-                      Tap for analysis
-                    </div>
-                  )}
+                  {displayPick.rationale ? 
+                    displayPick.rationale.length > 240 ? 
+                      displayPick.rationale.substring(0, 240) + '...' : 
+                      displayPick.rationale
+                    : 'Tap for detailed analysis'
+                  }
                 </div>
               </div>
               
