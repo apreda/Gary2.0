@@ -14,6 +14,9 @@ import { openaiService } from './openaiService.js';
 
 // Global processing state to prevent multiple simultaneous generations
 let isCurrentlyGeneratingPicks = false;
+let isProcessingNHL = false;
+let isProcessingNBA = false;
+let isProcessingMLB = false;
 let lastGenerationTime = 0;
 const GENERATION_COOLDOWN = 30 * 1000; // 30 seconds
 
@@ -275,8 +278,24 @@ async function generateDailyPicks() {
 
     for (const sport of sportsToAnalyze) {
       let sportPicks = [];
+      
+      // Sport-specific processing locks to prevent duplication
+      if (sport === 'baseball_mlb' && isProcessingMLB) {
+        console.log('🛑 MLB picks already being processed, skipping...');
+        continue;
+      }
+      if (sport === 'basketball_nba' && isProcessingNBA) {
+        console.log('🛑 NBA picks already being processed, skipping...');
+        continue;
+      }
+      if (sport === 'icehockey_nhl' && isProcessingNHL) {
+        console.log('🛑 NHL picks already being processed, skipping...');
+        continue;
+      }
+      
       // --- MLB ---
       if (sport === 'baseball_mlb') {
+        isProcessingMLB = true;
         // Normal picks
         try {
           const normalMlbPicks = await enhancedPicksService.generateDailyPicks(sport);
@@ -324,9 +343,12 @@ async function generateDailyPicks() {
           const propPicks = await mlbPicksGenerationService.generateDailyPropPicks();
           sportPicks = [...sportPicks, ...propPicks];
         } catch (e) { /* Log if you want */ }
+        
+        isProcessingMLB = false; // Release MLB lock
 
       // --- NBA ---
       } else if (sport === 'basketball_nba') {
+        isProcessingNBA = true;
         console.log(`Processing NBA games for ${sport}`);
         const games = await oddsService.getUpcomingGames(sport);
         console.log(`Found ${games.length} NBA games from odds service`);
@@ -600,9 +622,12 @@ async function generateDailyPicks() {
             sportPicks.push(result);
           }
         }
+        
+        isProcessingNBA = false; // Release NBA lock
 
       // --- NHL ---
       } else if (sport === 'icehockey_nhl') {
+        isProcessingNHL = true;
         console.log(`Processing NHL games for ${sport}`);
         const games = await oddsService.getUpcomingGames(sport);
         // Get today's date in EST time zone format (YYYY-MM-DD)
@@ -756,6 +781,8 @@ async function generateDailyPicks() {
             sportPicks.push(result);
           }
         }
+        
+        isProcessingNHL = false; // Release NHL lock
       }
 
       // Add for this sport
@@ -772,6 +799,10 @@ async function generateDailyPicks() {
     throw error;
   } finally {
     isCurrentlyGeneratingPicks = false;
+    // Release all sport-specific locks in case of error
+    isProcessingMLB = false;
+    isProcessingNBA = false;
+    isProcessingNHL = false;
   }
 }
 

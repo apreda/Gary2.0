@@ -39,13 +39,13 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   if (cacheMap.has(key)) {
     const { data, expiry } = cacheMap.get(key);
     if (now < expiry) {
-      console.log(`Using cached data for ${key} (TTL: ${ttlMinutes} minutes)`);
+      console.log(`[Ball Don't Lie] Using cached data for ${key}`);
       return data;
     }
   }
   
   // Cache miss or expired
-  console.log(`Cache miss or expired for ${key}, fetching fresh data...`);
+  console.log(`[Ball Don't Lie] Fetching fresh data for ${key}`);
   const data = await fetchFn();
   
   // Store in cache with expiry

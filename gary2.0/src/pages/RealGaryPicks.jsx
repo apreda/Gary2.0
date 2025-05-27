@@ -803,10 +803,10 @@ function RealGaryPicks() {
                                           justifyContent: 'space-between',
                                           overflow: 'hidden',
                                         }}>
-                                          {/* League, Odds, and Matchup in horizontal layout */}
-                                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                                            {/* League */}
-                                            <div>
+                                          {/* League, Odds, and Matchup in horizontal layout - Fixed Width Columns */}
+                                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                                            {/* League - Fixed width */}
+                                            <div style={{ width: '80px', minWidth: '80px' }}>
                                               <div style={{ 
                                                 fontSize: '0.75rem', 
                                                 opacity: 0.6, 
@@ -826,8 +826,8 @@ function RealGaryPicks() {
                                               </div>
                                             </div>
                                             
-                                            {/* Odds - New section in the middle */}
-                                            <div style={{ marginLeft: '20px' }}>
+                                            {/* Odds - Fixed width */}
+                                            <div style={{ width: '80px', minWidth: '80px' }}>
                                               <div style={{ 
                                                 fontSize: '0.75rem', 
                                                 opacity: 0.6, 
@@ -853,8 +853,8 @@ function RealGaryPicks() {
                                               </div>
                                             </div>
                                             
-                                            {/* Matchup */}
-                                            <div style={{ marginLeft: '20px' }}>
+                                            {/* Matchup - Flexible width */}
+                                            <div style={{ flex: 1, minWidth: '120px' }}>
                                               <div style={{ 
                                                 fontSize: '0.75rem', 
                                                 opacity: 0.6, 
