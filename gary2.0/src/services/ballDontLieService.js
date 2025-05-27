@@ -96,12 +96,18 @@ const ballDontLieService = {
   },
   
   /**
-   * Get team details by name, abbreviation, or ID
+   * Get team by name, abbreviation, or ID
    * @param {string|number} nameOrId - Team name, abbreviation, or ID
    * @returns {Promise<Object>} - Team details or null if not found
    */
   async getTeamByName(nameOrId) {
     try {
+      // Validate input - prevent toString() errors
+      if (nameOrId == null || nameOrId === '') {
+        console.warn('getTeamByName: Invalid input provided (null/undefined/empty)');
+        return null;
+      }
+      
       // Convert input to string for consistency
       const nameOrIdStr = String(nameOrId).toLowerCase();
       const idNum = typeof nameOrId === 'number' ? nameOrId : (!isNaN(Number(nameOrIdStr)) ? Number(nameOrIdStr) : null);
@@ -1905,7 +1911,16 @@ const ballDontLieService = {
    * @private
    */
   _sumPlayerStat(playerStats, statName) {
-    return playerStats.reduce((sum, player) => sum + (player[statName] || 0), 0);
+    if (!playerStats || !Array.isArray(playerStats)) {
+      return 0;
+    }
+    return playerStats.reduce((sum, player) => {
+      if (!player || typeof player !== 'object') {
+        return sum;
+      }
+      const statValue = player[statName];
+      return sum + (typeof statValue === 'number' && !isNaN(statValue) ? statValue : 0);
+    }, 0);
   },
 
   /**
@@ -1913,11 +1928,31 @@ const ballDontLieService = {
    * @private
    */
   _avgPlayerStat(playerStats, statName) {
-    const validPlayers = playerStats.filter(p => p[statName] != null && p.games_played > 0);
+    if (!playerStats || !Array.isArray(playerStats)) {
+      return 0;
+    }
+    
+    const validPlayers = playerStats.filter(p => {
+      if (!p || typeof p !== 'object') return false;
+      const statValue = p[statName];
+      const gamesPlayed = p.games_played;
+      return statValue != null && 
+             typeof statValue === 'number' && 
+             !isNaN(statValue) &&
+             gamesPlayed != null && 
+             typeof gamesPlayed === 'number' && 
+             !isNaN(gamesPlayed) && 
+             gamesPlayed > 0;
+    });
+    
     if (validPlayers.length === 0) return 0;
     
-    const totalWeightedStat = validPlayers.reduce((sum, player) => 
-      sum + (player[statName] * player.games_played), 0);
+    const totalWeightedStat = validPlayers.reduce((sum, player) => {
+      const statValue = player[statName];
+      const gamesPlayed = player.games_played;
+      return sum + (statValue * gamesPlayed);
+    }, 0);
+    
     const totalGames = validPlayers.reduce((sum, player) => sum + player.games_played, 0);
     
     return totalGames > 0 ? totalWeightedStat / totalGames : 0;
