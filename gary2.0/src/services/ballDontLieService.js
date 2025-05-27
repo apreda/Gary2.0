@@ -1798,15 +1798,33 @@ const ballDontLieService = {
    */
   async getNBATeamStats(teamIds, season = null) {
     try {
+      // Validate input parameters
+      if (!teamIds || !Array.isArray(teamIds) || teamIds.length === 0) {
+        console.warn('getNBATeamStats: Invalid or empty teamIds array');
+        return [];
+      }
+      
       // Determine the correct season for playoffs
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
       const playoffSeason = season || (currentMonth <= 6 ? currentYear - 1 : currentYear);
       
+      // Validate season is a valid number
+      if (!playoffSeason || typeof playoffSeason !== 'number' || isNaN(playoffSeason)) {
+        console.error(`Invalid playoff season calculated: ${playoffSeason}`);
+        return [];
+      }
+      
       console.log(`🏀 Fetching NBA team stats for season ${playoffSeason}`);
       
       const teamStatsPromises = teamIds.map(async (teamId) => {
         try {
+          // Validate teamId input
+          if (teamId == null || teamId === '') {
+            console.warn('getNBATeamStats: Skipping null/undefined/empty teamId');
+            return null;
+          }
+          
           // Get team info first if we have a name instead of ID
           let actualTeamId = teamId;
           if (typeof teamId === 'string') {
@@ -1827,8 +1845,8 @@ const ballDontLieService = {
           
           // Ensure team ID is a number for the API call
           const numericTeamId = typeof actualTeamId === 'string' ? parseInt(actualTeamId, 10) : actualTeamId;
-          if (isNaN(numericTeamId)) {
-            console.warn(`Could not convert team ID to number: ${actualTeamId} for team: ${teamId}`);
+          if (isNaN(numericTeamId) || numericTeamId <= 0) {
+            console.warn(`Could not convert team ID to valid number: ${actualTeamId} for team: ${teamId}`);
             return null;
           }
           
@@ -1837,13 +1855,46 @@ const ballDontLieService = {
           return getCachedOrFetch(cacheKey, async () => {
             const client = initApi();
             
-            // Get season averages for all players on the team
-            const seasonAveragesResponse = await client.nba.getSeasonAverages({
+            // Validate client was initialized
+            if (!client || !client.nba || !client.nba.getSeasonAverages) {
+              console.error('Ball Don\'t Lie API client not properly initialized');
+              return null;
+            }
+            
+            // Prepare API parameters with validation
+            const apiParams = {
               season: playoffSeason,
               team_ids: [numericTeamId]
-            });
+            };
             
-            const playerStats = seasonAveragesResponse.data || [];
+            // Validate all parameters before API call
+            if (!apiParams.season || typeof apiParams.season !== 'number') {
+              console.error(`Invalid season parameter: ${apiParams.season}`);
+              return null;
+            }
+            
+            if (!Array.isArray(apiParams.team_ids) || apiParams.team_ids.length === 0) {
+              console.error(`Invalid team_ids parameter: ${apiParams.team_ids}`);
+              return null;
+            }
+            
+            console.log(`🏀 Making API call with params:`, apiParams);
+            
+            // Get season averages for all players on the team
+            let seasonAveragesResponse;
+            try {
+              seasonAveragesResponse = await client.nba.getSeasonAverages(apiParams);
+            } catch (apiError) {
+              console.error(`Ball Don't Lie API error for team ${numericTeamId}:`, apiError.message);
+              // If it's a toString() error, it's likely a parameter issue
+              if (apiError.message && apiError.message.includes('toString')) {
+                console.error('toString() error detected - likely invalid parameter passed to API');
+                console.error('API params that caused error:', JSON.stringify(apiParams));
+              }
+              return null;
+            }
+            
+            const playerStats = seasonAveragesResponse?.data || [];
             
             // Calculate team aggregated stats
             if (playerStats.length === 0) {
