@@ -97,18 +97,21 @@ export async function generateGaryAnalysis(gameData, options = {}) {
   }
   
   try {
-    // Format the game data for analysis
+    // Format the game data for analysis - make it sport-specific
+    const sport = gameData?.league || gameData?.sport || '';
+    const isBaseball = sport.toLowerCase().includes('mlb') || sport.toLowerCase().includes('baseball');
+    const isBasketball = sport.toLowerCase().includes('nba') || sport.toLowerCase().includes('basketball');
+    const isHockey = sport.toLowerCase().includes('nhl') || sport.toLowerCase().includes('hockey');
+    
     const formattedData = {
       game: gameData?.matchup || `${gameData?.homeTeam || ''} vs ${gameData?.awayTeam || ''}`,
       homeTeam: gameData?.homeTeam || '',
       awayTeam: gameData?.awayTeam || '',
-      sport: gameData?.league || gameData?.sport || '',
-      league: gameData?.league || gameData?.sport || '',
+      sport: sport,
+      league: sport,
       odds: gameData?.odds || null,
       // Ensure we pass the comprehensive team stats
       teamStats: gameData?.teamStats || null,
-      pitchers: gameData?.pitchers || null,
-      hitterStats: gameData?.hitterStats || null, // Include top batters for both teams
       gameContext: gameData?.gameContext || null,
       lineMovement: gameData?.lineMovement || null,
       
@@ -141,6 +144,29 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       gameTime: gameData?.gameTime || gameData?.time || 'TBD',
       time: gameData?.gameTime || gameData?.time || 'TBD'
     };
+    
+    // Add sport-specific data
+    if (isBaseball) {
+      // Baseball-specific fields
+      formattedData.pitchers = gameData?.pitchers || null;
+      formattedData.hitterStats = gameData?.hitterStats || null;
+    } else if (isBasketball) {
+      // NBA-specific fields
+      formattedData.playerStats = gameData?.playoffPlayerStats || gameData?.playerStats || null;
+      formattedData.seriesData = gameData?.seriesData || null;
+      formattedData.isPlayoffGame = gameData?.isPlayoffGame || false;
+      formattedData.homeTeamStats = gameData?.homeTeamStats || null;
+      formattedData.awayTeamStats = gameData?.awayTeamStats || null;
+      formattedData.statsReport = gameData?.statsReport || null;
+    } else if (isHockey) {
+      // NHL-specific fields
+      formattedData.playerStats = gameData?.playoffPlayerStats || gameData?.playerStats || null;
+      formattedData.seriesData = gameData?.seriesData || null;
+      formattedData.isPlayoffGame = gameData?.isPlayoffGame || false;
+      formattedData.homeTeamStats = gameData?.homeTeamStats || null;
+      formattedData.awayTeamStats = gameData?.awayTeamStats || null;
+      formattedData.statsReport = gameData?.statsReport || null;
+    }
     
     // Format odds data for better OpenAI understanding
     if (formattedData.odds && formattedData.odds.markets) {
@@ -201,10 +227,24 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       formattedData.oddsMap = {};
     }
     
-    // Log the availability of team stats for debugging
+    // Log the availability of team stats for debugging - sport-specific
     console.log(`Team Stats Available: ${!!gameData?.teamStats}`);
-    console.log(`Pitcher Data Available: ${!!gameData?.pitchers}`);
     console.log(`Game Context Available: ${!!gameData?.gameContext}`);
+    
+    if (isBaseball) {
+      console.log(`Pitcher Data Available: ${!!gameData?.pitchers}`);
+      console.log(`Hitter Stats Available: ${!!gameData?.hitterStats}`);
+    } else if (isBasketball) {
+      console.log(`NBA Player Stats Available: ${!!gameData?.playoffPlayerStats}`);
+      console.log(`NBA Series Data Available: ${!!gameData?.seriesData}`);
+      console.log(`NBA Stats Report Available: ${!!gameData?.statsReport}`);
+      console.log(`Is Playoff Game: ${!!gameData?.isPlayoffGame}`);
+    } else if (isHockey) {
+      console.log(`NHL Player Stats Available: ${!!gameData?.playoffPlayerStats}`);
+      console.log(`NHL Series Data Available: ${!!gameData?.seriesData}`);
+      console.log(`NHL Stats Report Available: ${!!gameData?.statsReport}`);
+      console.log(`Is Playoff Game: ${!!gameData?.isPlayoffGame}`);
+    }
     
     console.log('Formatted game data:', JSON.stringify(formattedData, null, 2));
     
