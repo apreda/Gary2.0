@@ -6,6 +6,9 @@ import { configLoader } from './configLoader.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
+// Track in-flight requests to prevent duplicates
+const inFlightRequests = new Map();
+
 // Player prop markets by sport
 const PROP_MARKETS = {
   basketball_nba: [
@@ -300,6 +303,24 @@ const processMarketData = (bookmakers, marketKey, game) => {
   return playerProps;
 };
 
+// Helper function to deduplicate requests
+const dedupeRequest = async (key, fn) => {
+  // If request is already in flight, return its promise
+  if (inFlightRequests.has(key)) {
+    console.log(`[OddsService] Deduplicating request: ${key}`);
+    return inFlightRequests.get(key);
+  }
+
+  try {
+    const promise = fn();
+    inFlightRequests.set(key, promise);
+    const result = await promise;
+    return result;
+  } finally {
+    inFlightRequests.delete(key);
+  }
+};
+
 export const oddsService = {
   /**
    * Get list of available sports 
@@ -417,6 +438,46 @@ export const oddsService = {
   },
 
   /**
+   * Get odds for a specific game by ID
+   * @param {string} gameId - The game ID to get odds for
+   * @param {Object} options - Additional options
+   * @param {boolean} options.useCache - Whether to use cached data (default: true)
+   * @returns {Promise<Object>} - Game odds data
+   */
+  getGameOdds: async (gameId, { useCache = true } = {}) => {
+    try {
+      const apiKey = await getApiKey();
+      if (!apiKey) {
+        throw new Error('No API key available for The Odds API');
+      }
+
+      const cacheKey = `game-odds:${gameId}`;
+      
+      return dedupeRequest(cacheKey, async () => {
+        const response = await axios.get(`${ODDS_API_BASE_URL}/sports/upcoming/events/${gameId}/odds`, {
+          params: {
+            apiKey,
+            regions: 'us',
+            markets: 'h2h,spreads,totals',
+            oddsFormat: 'american',
+            bookmakers: 'fanduel,draftkings,williamhill_us,pointsbetus'
+          },
+          timeout: 10000
+        });
+
+        if (!response.data) {
+          throw new Error('No data received from odds API');
+        }
+
+        return response.data;
+      });
+    } catch (error) {
+      console.error(`[OddsService] Error getting game odds for ${gameId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
    * Fetches completed games from The Odds API for a specific date and sport
    * @param {string} sport - Sport key (nba, nhl, mlb)
    * @param {string} date - Date in YYYY-MM-DD format
@@ -431,7 +492,9 @@ export const oddsService = {
    * @returns {Promise<Object>} Upcoming games with odds that happen on the current day (EST timezone)
    */
   getUpcomingGames: async (sport = 'upcoming', options = {}) => {
-    try {
+    const cacheKey = `upcoming-games:${sport}:${JSON.stringify(options)}`;
+    
+    return dedupeRequest(cacheKey, async () => {
       const apiKey = await getApiKey();
       if (!apiKey) {
         throw new Error('Odds API key not configured');
@@ -531,7 +594,7 @@ export const oddsService = {
     } catch (error) {
       console.error(`Error fetching upcoming games for ${sport}:`, error);
       return [];
-    }
+    });
   },
   
   /**
@@ -566,7 +629,7 @@ export const oddsService = {
    * @param {string} eventId - Event ID
    * @returns {Promise<Object>} Line movement analysis
    */
-  getLineMovement: async (sport, eventId) => {
+  getLineMovement: async function(sport, eventId) {
     try {
       const apiKey = await getApiKey();
       if (!apiKey) {
@@ -704,7 +767,7 @@ export const oddsService = {
    * @param {Object} historicalData - Historical odds data
    * @returns {Object} Line movement analysis
    */
-  analyzeLineMovement: (historicalData) => {
+  analyzeLineMovement: function(historicalData) {
     const marketKey = historicalData.key;
     const bookmakerData = historicalData.bookmakerData;
     
@@ -795,7 +858,7 @@ export const oddsService = {
    * @param {string} awayTeam - Away team name
    * @returns {Promise<Array>} - Array of player prop odds
    */
-  getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
+  getPlayerPropOdds: async function(sport, homeTeam, awayTeam) {
     try {
       const apiKey = await getApiKey();
       if (!apiKey) {

@@ -181,19 +181,14 @@ function RealGaryPicks() {
                   }
                 }
                 
-                // If all else fails, return a default based on pick type
-                if (pick.type === 'spread') {
-                  return '-110';
-                } else if (pick.type === 'moneyline') {
-                  return '-150'; // Default for favorites
-                }
+                // If we can't determine the odds, return null instead of a default
+                console.log('Could not determine odds for pick:', pick.pick);
+                return null;
                 
               } catch (error) {
                 console.error('Error extracting odds:', error);
+                return null;
               }
-              
-              // Final fallback
-              return '-110';
             };
 
             const oddsValue = extractOddsFromAnalysis(pick);

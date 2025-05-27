@@ -378,15 +378,41 @@ const sportsDataService = {
       const sortedHomeEvents = sortEventsByEST(homeTeamEvents);
       const sortedAwayEvents = sortEventsByEST(awayTeamEvents);
       
-      homeTeamStats.detailedStats = {
-        ...extractor(sortedHomeEvents, homeTeamData),
-        startingPitcherNote: league === 'MLB' ? "Starting pitcher data not available through current API" : undefined
-      };
-      
-      awayTeamStats.detailedStats = {
-        ...extractor(sortedAwayEvents, homeTeamData),
-        startingPitcherNote: league === 'MLB' ? "Starting pitcher data not available through current API" : undefined
-      };
+      // Handle NBA stats with async/await
+      if (league === 'NBA') {
+        try {
+          const [homeStats, awayStats] = await Promise.all([
+            extractor(sortedHomeEvents, homeTeamStats),
+            extractor(sortedAwayEvents, awayTeamStats)
+          ]);
+          
+          homeTeamStats.detailedStats = {
+            ...homeStats,
+            startingPitcherNote: undefined // Not applicable for NBA
+          };
+          
+          awayTeamStats.detailedStats = {
+            ...awayStats,
+            startingPitcherNote: undefined // Not applicable for NBA
+          };
+        } catch (error) {
+          console.error('Error processing NBA stats:', error);
+          // Fallback to basic stats if enhanced stats fail
+          homeTeamStats.detailedStats = this._getBasicNBAStats(sortedHomeEvents);
+          awayTeamStats.detailedStats = this._getBasicNBAStats(sortedAwayEvents);
+        }
+      } else {
+        // For other sports (MLB, NHL)
+        homeTeamStats.detailedStats = {
+          ...extractor(sortedHomeEvents, homeTeamData),
+          startingPitcherNote: league === 'MLB' ? "Starting pitcher data not available through current API" : undefined
+        };
+        
+        awayTeamStats.detailedStats = {
+          ...extractor(sortedAwayEvents, homeTeamData),
+          startingPitcherNote: league === 'MLB' ? "Starting pitcher data not available through current API" : undefined
+        };
+      }
       
     } catch (error) {
       console.error(`Error extracting ${league} stats:`, error);
@@ -396,6 +422,8 @@ const sportsDataService = {
   /**
    * Extract MLB-specific statistics
    * @private
+   * @param {Array} events - Array of game events
+   * @returns {Object} - Object containing MLB statistics
    */
   _extractMLBStats(events) {
     const runs = events.map(e => parseInt(e.intHomeScore) || 0);
@@ -973,8 +1001,65 @@ const sportsDataService = {
   /**
    * Extract NBA-specific statistics
    * @private
+   * @param {Array} events - Array of game events
+   * @param {Object} teamData - Team data object
+   * @returns {Promise<Object>} - Object containing NBA statistics
    */
-  _extractNBAStats(events) {
+  async _extractNBAStats(events, teamData) {
+    try {
+      // Get basic stats from events
+      const points = events.map(e => parseInt(e.intHomeScore) || 0);
+      const pointsAllowed = events.map(e => parseInt(e.intAwayScore) || 0);
+      
+      // Get team names from teamData or events
+      const teamName = teamData?.name || teamData?.strTeam || (events[0]?.strHomeTeam || 'Team');
+      const opponentName = events[0]?.strAwayTeam || 'Opponent';
+      
+      // Get enhanced stats if available
+      let enhancedStats = '';
+      try {
+        enhancedStats = await this.getEnhancedNBAStats(teamName, opponentName);
+      } catch (error) {
+        console.error('Error fetching enhanced NBA stats:', error);
+      }
+      
+      // Calculate basic statistics
+      const avgPoints = (points.reduce((a, b) => a + b, 0) / (points.length || 1)).toFixed(1);
+      const avgPointsAllowed = (pointsAllowed.reduce((a, b) => a + b, 0) / (pointsAllowed.length || 1)).toFixed(1);
+      const lastGameScore = events.length > 0 ? `${points[0]}-${pointsAllowed[0]}` : 'N/A';
+      const winStreak = this._calculateWinStreak(events);
+      
+      // Return both basic and enhanced stats
+      return {
+        // Basic stats
+        avgPoints,
+        avgPointsAllowed,
+        lastGameScore,
+        winStreak,
+        
+        // Enhanced stats
+        enhancedStats: enhancedStats || 'Enhanced statistics not available',
+        statsSource: enhancedStats ? "Ball Don't Lie API" : 'Basic game data',
+        lastUpdated: new Date().toISOString(),
+        
+        // Additional context
+        teamName,
+        opponentName,
+        gamesAnalyzed: points.length
+      };
+    } catch (error) {
+      console.error('Error in _extractNBAStats:', error);
+      return this._getBasicNBAStats(events);
+    }
+  },
+  
+  /**
+   * Get basic NBA stats when enhanced stats are not available
+   * @private
+   * @param {Array} events - Array of game events
+   * @returns {Object} - Basic NBA statistics
+   */
+  _getBasicNBAStats(events) {
     const points = events.map(e => parseInt(e.intHomeScore) || 0);
     const pointsAllowed = events.map(e => parseInt(e.intAwayScore) || 0);
     
@@ -982,13 +1067,17 @@ const sportsDataService = {
       avgPoints: (points.reduce((a, b) => a + b, 0) / (points.length || 1)).toFixed(1),
       avgPointsAllowed: (pointsAllowed.reduce((a, b) => a + b, 0) / (pointsAllowed.length || 1)).toFixed(1),
       lastGameScore: events.length > 0 ? `${points[0]}-${pointsAllowed[0]}` : 'N/A',
-      winStreak: this._calculateWinStreak(events)
+      winStreak: this._calculateWinStreak(events),
+      statsSource: 'Basic game data (fallback)',
+      lastUpdated: new Date().toISOString()
     };
   },
 
   /**
    * Extract NHL-specific statistics
    * @private
+   * @param {Array} events - Array of game events
+   * @returns {Object} - Object containing NHL statistics
    */
   _extractNHLStats(events) {
     const goals = events.map(e => parseInt(e.intHomeScore) || 0);
