@@ -440,6 +440,7 @@ const ballDontLieService = {
                 playerStatsMap.set(playerId, {
                   player: stat.player,
                   games: 0,
+                  // Basic Stats
                   totalPts: 0,
                   totalReb: 0,
                   totalAst: 0,
@@ -452,12 +453,24 @@ const ballDontLieService = {
                   total3pa: 0,
                   totalFtm: 0,
                   totalFta: 0,
-                  totalTurnover: 0
+                  totalTurnover: 0,
+                  // Advanced Stats
+                  totalPlusMinus: 0,
+                  totalOreb: 0,
+                  totalDreb: 0,
+                  totalPf: 0,
+                  // For calculating advanced metrics
+                  totalTeamPts: 0,
+                  totalOppPts: 0,
+                  totalTeamPoss: 0,
+                  totalOppPoss: 0
                 });
               }
               
               const playerData = playerStatsMap.get(playerId);
               playerData.games += 1;
+              
+              // Basic Stats
               playerData.totalPts += stat.pts || 0;
               playerData.totalReb += stat.reb || 0;
               playerData.totalAst += stat.ast || 0;
@@ -471,29 +484,93 @@ const ballDontLieService = {
               playerData.totalFtm += stat.ftm || 0;
               playerData.totalFta += stat.fta || 0;
               playerData.totalTurnover += stat.turnover || 0;
+              
+              // Advanced Stats (if available)
+              playerData.totalPlusMinus += stat.plus_minus || 0;
+              playerData.totalOreb += stat.oreb || 0;
+              playerData.totalDreb += stat.dreb || 0;
+              playerData.totalPf += stat.pf || 0;
             });
           } catch (error) {
             console.error(`[Ball Don't Lie] Error getting stats for game ${game.id}:`, error.message);
           }
         }
         
-        // Calculate averages and return top performers
+        // Calculate averages and advanced metrics
         return Array.from(playerStatsMap.values())
           .filter(player => player.games >= 2) // Only players with at least 2 games
-          .map(player => ({
-            player: player.player,
-            games: player.games,
-            avgPts: (player.totalPts / player.games).toFixed(1),
-            avgReb: (player.totalReb / player.games).toFixed(1),
-            avgAst: (player.totalAst / player.games).toFixed(1),
-            avgStl: (player.totalStl / player.games).toFixed(1),
-            avgBlk: (player.totalBlk / player.games).toFixed(1),
-            avgMin: (player.totalMin / player.games).toFixed(1),
-            fgPct: player.totalFga > 0 ? ((player.totalFgm / player.totalFga) * 100).toFixed(1) : '0.0',
-            fg3Pct: player.total3pa > 0 ? ((player.total3pm / player.total3pa) * 100).toFixed(1) : '0.0',
-            ftPct: player.totalFta > 0 ? ((player.totalFtm / player.totalFta) * 100).toFixed(1) : '0.0',
-            avgTurnover: (player.totalTurnover / player.games).toFixed(1)
-          }))
+          .map(player => {
+            const games = player.games;
+            
+            // Basic averages
+            const avgPts = (player.totalPts / games).toFixed(1);
+            const avgReb = (player.totalReb / games).toFixed(1);
+            const avgAst = (player.totalAst / games).toFixed(1);
+            const avgStl = (player.totalStl / games).toFixed(1);
+            const avgBlk = (player.totalBlk / games).toFixed(1);
+            const avgMin = (player.totalMin / games).toFixed(1);
+            const avgTurnover = (player.totalTurnover / games).toFixed(1);
+            const avgPlusMinus = (player.totalPlusMinus / games).toFixed(1);
+            
+            // Shooting percentages
+            const fgPct = player.totalFga > 0 ? ((player.totalFgm / player.totalFga) * 100).toFixed(1) : '0.0';
+            const fg3Pct = player.total3pa > 0 ? ((player.total3pm / player.total3pa) * 100).toFixed(1) : '0.0';
+            const ftPct = player.totalFta > 0 ? ((player.totalFtm / player.totalFta) * 100).toFixed(1) : '0.0';
+            
+            // True Shooting Percentage: TS% = PTS / (2 * (FGA + 0.44 * FTA))
+            const trueShooting = player.totalFga > 0 || player.totalFta > 0 ? 
+              ((player.totalPts / (2 * (player.totalFga + 0.44 * player.totalFta))) * 100).toFixed(1) : '0.0';
+            
+            // Effective Field Goal Percentage: eFG% = (FGM + 0.5 * 3PM) / FGA
+            const effectiveFgPct = player.totalFga > 0 ? 
+              (((player.totalFgm + 0.5 * player.total3pm) / player.totalFga) * 100).toFixed(1) : '0.0';
+            
+            // Usage Rate approximation: USG% ≈ (FGA + 0.44 * FTA + TOV) / (Team possessions while player on court)
+            // Simplified version using player's individual stats
+            const usageRate = player.totalMin > 0 ? 
+              (((player.totalFga + 0.44 * player.totalFta + player.totalTurnover) / games) * 2.4).toFixed(1) : '0.0';
+            
+            // Player Efficiency Rating (simplified): PER ≈ (PTS + REB + AST + STL + BLK - TOV - (FGA - FGM) - (FTA - FTM)) / MIN
+            const per = player.totalMin > 0 ? 
+              ((player.totalPts + player.totalReb + player.totalAst + player.totalStl + player.totalBlk - 
+                player.totalTurnover - (player.totalFga - player.totalFgm) - (player.totalFta - player.totalFtm)) / 
+                (player.totalMin / games) * 36).toFixed(1) : '0.0';
+            
+            return {
+              player: player.player,
+              games: games,
+              
+              // Basic Stats
+              avgPts,
+              avgReb,
+              avgAst,
+              avgStl,
+              avgBlk,
+              avgMin,
+              avgTurnover,
+              
+              // Shooting Stats
+              fgPct,
+              fg3Pct,
+              ftPct,
+              
+              // Advanced Stats
+              avgPlusMinus, // ⭐ KEY STAT for playoff impact
+              trueShooting,
+              effectiveFgPct,
+              usageRate,
+              per,
+              
+              // Additional context
+              avgOreb: (player.totalOreb / games).toFixed(1),
+              avgDreb: (player.totalDreb / games).toFixed(1),
+              avgPf: (player.totalPf / games).toFixed(1),
+              
+              // Efficiency ratios
+              astToTov: player.totalTurnover > 0 ? (player.totalAst / player.totalTurnover).toFixed(2) : 'N/A',
+              stlToTov: player.totalTurnover > 0 ? (player.totalStl / player.totalTurnover).toFixed(2) : 'N/A'
+            };
+          })
           .sort((a, b) => parseFloat(b.avgPts) - parseFloat(a.avgPts)) // Sort by points
           .slice(0, 8); // Top 8 players
       };
