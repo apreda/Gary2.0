@@ -423,9 +423,9 @@ async function generateDailyPicks() {
             // Get comprehensive NBA playoff stats and series information
             const [playoffStatsReport, playoffPlayerStats, seriesData] = await Promise.all([
               ballDontLieService.generateNbaPlayoffReport(
+                new Date().getFullYear(),
                 game.home_team, 
-                game.away_team, 
-                new Date().getFullYear()
+                game.away_team
               ),
               ballDontLieService.getNbaPlayoffPlayerStats(
                 game.home_team,
