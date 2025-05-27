@@ -1117,7 +1117,7 @@ function RealGaryPicks() {
                                       <div style={{ 
                                         flex: '1 1 85%',
                                         overflowY: 'auto',
-                                        fontSize: '0.9rem',
+                                        fontSize: '0.99rem',
                                         lineHeight: 1.6,
                                         opacity: 0.95,
                                         paddingRight: '0.5rem',
