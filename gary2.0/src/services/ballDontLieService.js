@@ -1819,24 +1819,37 @@ const ballDontLieService = {
             }
           }
           
+          // Validate that we have a valid team ID
+          if (!actualTeamId || (typeof actualTeamId !== 'number' && typeof actualTeamId !== 'string')) {
+            console.warn(`Invalid team ID: ${actualTeamId} for team: ${teamId}`);
+            return null;
+          }
+          
+          // Ensure team ID is a number for the API call
+          const numericTeamId = typeof actualTeamId === 'string' ? parseInt(actualTeamId, 10) : actualTeamId;
+          if (isNaN(numericTeamId)) {
+            console.warn(`Could not convert team ID to number: ${actualTeamId} for team: ${teamId}`);
+            return null;
+          }
+          
           // Get season averages for the team
-          const cacheKey = `nba_team_stats_${actualTeamId}_${playoffSeason}`;
+          const cacheKey = `nba_team_stats_${numericTeamId}_${playoffSeason}`;
           return getCachedOrFetch(cacheKey, async () => {
             const client = initApi();
             
             // Get season averages for all players on the team
             const seasonAveragesResponse = await client.nba.getSeasonAverages({
               season: playoffSeason,
-              team_ids: [actualTeamId]
+              team_ids: [numericTeamId]
             });
             
             const playerStats = seasonAveragesResponse.data || [];
             
             // Calculate team aggregated stats
             if (playerStats.length === 0) {
-              console.warn(`No player stats found for team ${actualTeamId} in season ${playoffSeason}`);
+              console.warn(`No player stats found for team ${numericTeamId} in season ${playoffSeason}`);
               return {
-                teamId: actualTeamId,
+                teamId: numericTeamId,
                 season: playoffSeason,
                 stats: {
                   wins: 0,
@@ -1860,7 +1873,7 @@ const ballDontLieService = {
             const activePlayerStats = playerStats.filter(p => (p.games_played || 0) > totalGames * 0.1); // Players who played in at least 10% of games
             
             const teamStats = {
-              teamId: actualTeamId,
+              teamId: numericTeamId,
               season: playoffSeason,
               stats: {
                 // Team record (estimated from games played)
@@ -1888,7 +1901,7 @@ const ballDontLieService = {
               }
             };
             
-            console.log(`✅ Team stats calculated for team ${actualTeamId}: ${teamStats.stats.pointsPerGame.toFixed(1)} PPG, ${teamStats.stats.reboundsPerGame.toFixed(1)} RPG`);
+            console.log(`✅ Team stats calculated for team ${numericTeamId}: ${teamStats.stats.pointsPerGame.toFixed(1)} PPG, ${teamStats.stats.reboundsPerGame.toFixed(1)} RPG`);
             return teamStats;
           });
         } catch (error) {
