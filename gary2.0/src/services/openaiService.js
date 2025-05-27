@@ -107,19 +107,13 @@ const openaiServiceInstance = {
           const preprocessed = preprocessJSON(jsonContent);
           try {
             const parsedJson = JSON.parse(preprocessed);
-            console.log('✅ Successfully parsed JSON from OpenAI response:');
-            console.log('JSON Structure:', Object.keys(parsedJson).join(', '));
-            console.log('Confidence value:', parsedJson.confidence);
-            console.log('Pick:', parsedJson.pick);
-            console.log('Type:', parsedJson.type);
+            console.log('✅ Successfully parsed JSON from OpenAI response');
           } catch (innerError) {
             console.warn('⚠️ Preprocessed JSON still failed to parse:', innerError.message);
-            console.log('Preprocessed content:', preprocessed);
             // Still return original content even if parsing fails
           }
         } else {
           console.warn('⚠️ No JSON object found in OpenAI response');
-          console.log('Raw response preview:', content.substring(0, 200) + '...');
         }
       } catch (parseError) {
         console.error('❌ Error parsing JSON from OpenAI response:', parseError.message);

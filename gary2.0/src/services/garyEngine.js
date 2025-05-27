@@ -47,7 +47,29 @@ export async function makeGaryPick(gameData, options = {}) {
         }
       }
       
-      // If no city match found, split by space and take everything except the first word
+      // Special handling for multi-word team names that don't start with a city
+      // For teams like "White Sox", "Red Sox", "Blue Jays", etc.
+      const specialTeams = {
+        'White Sox': 'White Sox',
+        'Red Sox': 'Red Sox', 
+        'Blue Jays': 'Blue Jays',
+        'Maple Leafs': 'Maple Leafs',
+        'Golden Knights': 'Golden Knights',
+        'Wild': 'Wild',
+        'Heat': 'Heat',
+        'Magic': 'Magic',
+        'Jazz': 'Jazz',
+        'Thunder': 'Thunder'
+      };
+      
+      // Check if the team name contains any special multi-word team names
+      for (const [fullName, displayName] of Object.entries(specialTeams)) {
+        if (trimmedName.includes(fullName)) {
+          return displayName;
+        }
+      }
+      
+      // If no city or special team match found, split by space and take everything except the first word
       const parts = trimmedName.split(' ');
       if (parts.length > 1) {
         return parts.slice(1).join(' ');
