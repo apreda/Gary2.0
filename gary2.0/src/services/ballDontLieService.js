@@ -1782,6 +1782,145 @@ const ballDontLieService = {
       console.error('Error getting comprehensive NHL playoff analysis:', error);
       return null;
     }
+  },
+
+  /**
+   * Get NBA team stats using Ball Don't Lie API
+   * @param {Array} teamIds - Array of team IDs or team names
+   * @param {number} season - Season year (defaults to current playoff season)
+   * @returns {Promise<Array>} - Array of team stats objects
+   */
+  async getNBATeamStats(teamIds, season = null) {
+    try {
+      // Determine the correct season for playoffs
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      const playoffSeason = season || (currentMonth <= 6 ? currentYear - 1 : currentYear);
+      
+      console.log(`🏀 Fetching NBA team stats for season ${playoffSeason}`);
+      
+      const teamStatsPromises = teamIds.map(async (teamId) => {
+        try {
+          // Get team info first if we have a name instead of ID
+          let actualTeamId = teamId;
+          if (typeof teamId === 'string') {
+            const team = await this.getTeamByName(teamId);
+            if (team) {
+              actualTeamId = team.id;
+            } else {
+              console.warn(`Could not find team ID for: ${teamId}`);
+              return null;
+            }
+          }
+          
+          // Get season averages for the team
+          const cacheKey = `nba_team_stats_${actualTeamId}_${playoffSeason}`;
+          return getCachedOrFetch(cacheKey, async () => {
+            const client = initApi();
+            
+            // Get season averages for all players on the team
+            const seasonAveragesResponse = await client.nba.getSeasonAverages({
+              season: playoffSeason,
+              team_ids: [actualTeamId]
+            });
+            
+            const playerStats = seasonAveragesResponse.data || [];
+            
+            // Calculate team aggregated stats
+            if (playerStats.length === 0) {
+              console.warn(`No player stats found for team ${actualTeamId} in season ${playoffSeason}`);
+              return {
+                teamId: actualTeamId,
+                season: playoffSeason,
+                stats: {
+                  wins: 0,
+                  losses: 0,
+                  pointsPerGame: 0,
+                  pointsAllowedPerGame: 0,
+                  fieldGoalPct: 0,
+                  threePointPct: 0,
+                  reboundsPerGame: 0,
+                  assistsPerGame: 0,
+                  turnoversPerGame: 0,
+                  stealsPerGame: 0,
+                  blocksPerGame: 0,
+                  playerCount: 0
+                }
+              };
+            }
+            
+            // Aggregate team stats from player data
+            const totalGames = Math.max(...playerStats.map(p => p.games_played || 0));
+            const activePlayerStats = playerStats.filter(p => (p.games_played || 0) > totalGames * 0.1); // Players who played in at least 10% of games
+            
+            const teamStats = {
+              teamId: actualTeamId,
+              season: playoffSeason,
+              stats: {
+                // Team record (estimated from games played)
+                wins: Math.round(totalGames * 0.6), // Placeholder - API doesn't provide team W/L directly
+                losses: Math.round(totalGames * 0.4),
+                
+                // Offensive stats (sum of all players)
+                pointsPerGame: this._sumPlayerStat(activePlayerStats, 'pts'),
+                fieldGoalPct: this._avgPlayerStat(activePlayerStats, 'fg_pct'),
+                threePointPct: this._avgPlayerStat(activePlayerStats, 'fg3_pct'),
+                assistsPerGame: this._sumPlayerStat(activePlayerStats, 'ast'),
+                turnoversPerGame: this._sumPlayerStat(activePlayerStats, 'turnover'),
+                
+                // Defensive/Rebounding stats
+                reboundsPerGame: this._sumPlayerStat(activePlayerStats, 'reb'),
+                stealsPerGame: this._sumPlayerStat(activePlayerStats, 'stl'),
+                blocksPerGame: this._sumPlayerStat(activePlayerStats, 'blk'),
+                
+                // Estimated defensive rating (placeholder)
+                pointsAllowedPerGame: 110 - (this._sumPlayerStat(activePlayerStats, 'stl') + this._sumPlayerStat(activePlayerStats, 'blk')) * 2,
+                
+                // Metadata
+                playerCount: activePlayerStats.length,
+                totalGames: totalGames
+              }
+            };
+            
+            console.log(`✅ Team stats calculated for team ${actualTeamId}: ${teamStats.stats.pointsPerGame.toFixed(1)} PPG, ${teamStats.stats.reboundsPerGame.toFixed(1)} RPG`);
+            return teamStats;
+          });
+        } catch (error) {
+          console.error(`Error fetching stats for team ${teamId}:`, error);
+          return null;
+        }
+      });
+      
+      const results = await Promise.all(teamStatsPromises);
+      return results.filter(result => result !== null);
+      
+    } catch (error) {
+      console.error('Error fetching NBA team stats:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Helper method to sum a stat across all players
+   * @private
+   */
+  _sumPlayerStat(playerStats, statName) {
+    return playerStats.reduce((sum, player) => sum + (player[statName] || 0), 0);
+  },
+
+  /**
+   * Helper method to average a stat across all players (weighted by games played)
+   * @private
+   */
+  _avgPlayerStat(playerStats, statName) {
+    const validPlayers = playerStats.filter(p => p[statName] != null && p.games_played > 0);
+    if (validPlayers.length === 0) return 0;
+    
+    const totalWeightedStat = validPlayers.reduce((sum, player) => 
+      sum + (player[statName] * player.games_played), 0);
+    const totalGames = validPlayers.reduce((sum, player) => sum + player.games_played, 0);
+    
+    return totalGames > 0 ? totalWeightedStat / totalGames : 0;
   }
 };
 

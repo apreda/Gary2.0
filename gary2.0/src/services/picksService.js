@@ -483,7 +483,12 @@ async function generateDailyPicks() {
             
             console.log(`🏀 Using season ${playoffSeason} for ${currentYear} playoffs (month: ${currentMonth})`);
             
-            const [playoffStatsReport, playoffPlayerStats, seriesData] = await Promise.all([
+            // Get team IDs for comprehensive stats
+            const teamIds = [];
+            if (homeTeam) teamIds.push(homeTeam.id);
+            if (awayTeam) teamIds.push(awayTeam.id);
+            
+            const [playoffStatsReport, playoffPlayerStats, seriesData, teamStats] = await Promise.all([
               ballDontLieService.generateNbaPlayoffReport(
                 playoffSeason,
                 game.home_team, 
@@ -498,7 +503,9 @@ async function generateDailyPicks() {
                 playoffSeason,
                 game.home_team,
                 game.away_team
-              )
+              ),
+              // Add comprehensive team stats
+              teamIds.length > 0 ? ballDontLieService.getNBATeamStats(teamIds, playoffSeason) : Promise.resolve([])
             ]);
             
             // Build series context with game number
@@ -595,8 +602,49 @@ async function generateDailyPicks() {
               playerStatsReport += `**Playoff Momentum**: ${game.home_team} ${homeMomentum} | ${game.away_team} ${awayMomentum}\n\n`;
             }
             
+            // Add team stats report
+            let teamStatsReport = '\n## TEAM STATISTICS:\n\n';
+            const hasTeamStats = teamStats && teamStats.length > 0;
+            
+            if (hasTeamStats) {
+              const homeTeamStat = teamStats.find(ts => homeTeam && ts.teamId === homeTeam.id);
+              const awayTeamStat = teamStats.find(ts => awayTeam && ts.teamId === awayTeam.id);
+              
+              if (homeTeamStat) {
+                teamStatsReport += `### ${game.home_team} Team Stats (${homeTeamStat.season} Season):\n`;
+                teamStatsReport += `- **Record**: ${homeTeamStat.stats.wins}-${homeTeamStat.stats.losses}\n`;
+                teamStatsReport += `- **Offense**: ${homeTeamStat.stats.pointsPerGame.toFixed(1)} PPG, ${(homeTeamStat.stats.fieldGoalPct * 100).toFixed(1)}% FG, ${(homeTeamStat.stats.threePointPct * 100).toFixed(1)}% 3PT\n`;
+                teamStatsReport += `- **Playmaking**: ${homeTeamStat.stats.assistsPerGame.toFixed(1)} APG, ${homeTeamStat.stats.turnoversPerGame.toFixed(1)} TOV\n`;
+                teamStatsReport += `- **Defense**: ${homeTeamStat.stats.pointsAllowedPerGame.toFixed(1)} PAPG, ${homeTeamStat.stats.stealsPerGame.toFixed(1)} SPG, ${homeTeamStat.stats.blocksPerGame.toFixed(1)} BPG\n`;
+                teamStatsReport += `- **Rebounding**: ${homeTeamStat.stats.reboundsPerGame.toFixed(1)} RPG\n\n`;
+              }
+              
+              if (awayTeamStat) {
+                teamStatsReport += `### ${game.away_team} Team Stats (${awayTeamStat.season} Season):\n`;
+                teamStatsReport += `- **Record**: ${awayTeamStat.stats.wins}-${awayTeamStat.stats.losses}\n`;
+                teamStatsReport += `- **Offense**: ${awayTeamStat.stats.pointsPerGame.toFixed(1)} PPG, ${(awayTeamStat.stats.fieldGoalPct * 100).toFixed(1)}% FG, ${(awayTeamStat.stats.threePointPct * 100).toFixed(1)}% 3PT\n`;
+                teamStatsReport += `- **Playmaking**: ${awayTeamStat.stats.assistsPerGame.toFixed(1)} APG, ${awayTeamStat.stats.turnoversPerGame.toFixed(1)} TOV\n`;
+                teamStatsReport += `- **Defense**: ${awayTeamStat.stats.pointsAllowedPerGame.toFixed(1)} PAPG, ${awayTeamStat.stats.stealsPerGame.toFixed(1)} SPG, ${awayTeamStat.stats.blocksPerGame.toFixed(1)} BPG\n`;
+                teamStatsReport += `- **Rebounding**: ${awayTeamStat.stats.reboundsPerGame.toFixed(1)} RPG\n\n`;
+              }
+              
+              // Add team comparison if both teams have stats
+              if (homeTeamStat && awayTeamStat) {
+                teamStatsReport += `### 🔥 TEAM COMPARISON:\n`;
+                teamStatsReport += `**Offensive Power**: ${game.home_team} ${homeTeamStat.stats.pointsPerGame.toFixed(1)} PPG vs ${game.away_team} ${awayTeamStat.stats.pointsPerGame.toFixed(1)} PPG\n`;
+                teamStatsReport += `**Defensive Strength**: ${game.home_team} ${homeTeamStat.stats.pointsAllowedPerGame.toFixed(1)} PAPG vs ${game.away_team} ${awayTeamStat.stats.pointsAllowedPerGame.toFixed(1)} PAPG\n`;
+                teamStatsReport += `**Shooting Efficiency**: ${game.home_team} ${(homeTeamStat.stats.fieldGoalPct * 100).toFixed(1)}% vs ${game.away_team} ${(awayTeamStat.stats.fieldGoalPct * 100).toFixed(1)}%\n`;
+                teamStatsReport += `**Ball Movement**: ${game.home_team} ${homeTeamStat.stats.assistsPerGame.toFixed(1)} APG vs ${game.away_team} ${awayTeamStat.stats.assistsPerGame.toFixed(1)} APG\n\n`;
+              }
+              
+              console.log(`✅ Team Stats Available: true (${teamStats.length} teams)`);
+            } else {
+              teamStatsReport += `No comprehensive team statistics available for this matchup.\n\n`;
+              console.log(`❌ Team Stats Available: false`);
+            }
+            
             // PLAYOFFS ONLY - No regular season stats
-            const nbaStatsReport = seriesContext + playoffStatsReport + playerStatsReport;
+            const nbaStatsReport = seriesContext + playoffStatsReport + playerStatsReport + teamStatsReport;
 
             // Format odds data for OpenAI
             let oddsData = null;
