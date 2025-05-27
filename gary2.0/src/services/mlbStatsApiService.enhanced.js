@@ -8,10 +8,121 @@ import axios from 'axios';
 
 const MLB_API_BASE_URL = 'https://statsapi.mlb.com/api/v1';
 
+/**
+ * Enhanced function to get pitcher season stats with better error handling
+ * @param {number} playerId - The MLB player ID
+ * @returns {Promise<Object>} - Pitcher's season stats
+ */
+async function getPitcherSeasonStatsEnhanced(playerId) {
+  if (!playerId) {
+    console.log(`[MLB API] Cannot get stats for pitcher: No pitcher ID provided`);
+    return {};
+  }
+  
+  try {
+    console.log(`[MLB API] Getting season stats for pitcher ${playerId}`);
+    
+    const response = await axios.get(`${MLB_API_BASE_URL}/people/${playerId}/stats`, {
+      params: {
+        stats: 'season',
+        group: 'pitching',
+        season: new Date().getFullYear(),
+        sportId: 1
+      },
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (compatible; GaryAI/1.0)'
+      },
+      timeout: 10000
+    });
+    
+    console.log(`[MLB API] Raw response for pitcher ${playerId}:`, JSON.stringify(response.data, null, 2));
+    
+    if (response.data && response.data.stats && response.data.stats.length > 0) {
+      const stats = response.data.stats[0].splits?.[0]?.stat || {};
+      
+      const processedStats = {
+        era: stats.era || 0,
+        wins: stats.wins || 0,
+        losses: stats.losses || 0,
+        inningsPitched: stats.inningsPitched || '0.0',
+        strikeouts: stats.strikeOuts || 0,
+        whip: stats.whip || 0,
+        battingAvgAgainst: stats.avg || '.000',
+        walks: stats.baseOnBalls || 0,
+        hits: stats.hits || 0,
+        homeRuns: stats.homeRuns || 0,
+        gamesStarted: stats.gamesStarted || 0,
+        saveOpportunities: stats.saveOpportunities || 0,
+        saves: stats.saves || 0,
+        year: new Date().getFullYear(),
+        gamesPitched: stats.gamesPitched || 0
+      };
+      
+      console.log(`[MLB API] Processed stats for pitcher ${playerId}:`, processedStats);
+      return processedStats;
+    }
+    
+    console.log(`[MLB API] No stats found in response for pitcher ${playerId}`);
+    return {};
+  } catch (error) {
+    console.error(`[MLB API] Error getting season stats for pitcher ${playerId}:`, error.message);
+    console.error(`[MLB API] Error details:`, error.response?.data || 'No response data');
+    
+    // Try fallback with previous year's stats
+    try {
+      console.log(`[MLB API] Trying previous year stats for pitcher ${playerId}`);
+      const fallbackResponse = await axios.get(`${MLB_API_BASE_URL}/people/${playerId}/stats`, {
+        params: {
+          stats: 'season',
+          group: 'pitching',
+          season: new Date().getFullYear() - 1,
+          sportId: 1
+        },
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; GaryAI/1.0)'
+        },
+        timeout: 5000
+      });
+      
+      if (fallbackResponse.data && fallbackResponse.data.stats && fallbackResponse.data.stats.length > 0) {
+        const stats = fallbackResponse.data.stats[0].splits?.[0]?.stat || {};
+        console.log(`[MLB API] Found previous year stats for pitcher ${playerId}`);
+        
+        return {
+          era: stats.era || 0,
+          wins: stats.wins || 0,
+          losses: stats.losses || 0,
+          inningsPitched: stats.inningsPitched || '0.0',
+          strikeouts: stats.strikeOuts || 0,
+          whip: stats.whip || 0,
+          battingAvgAgainst: stats.avg || '.000',
+          walks: stats.baseOnBalls || 0,
+          hits: stats.hits || 0,
+          homeRuns: stats.homeRuns || 0,
+          gamesStarted: stats.gamesStarted || 0,
+          saveOpportunities: stats.saveOpportunities || 0,
+          saves: stats.saves || 0,
+          year: new Date().getFullYear() - 1,
+          gamesPitched: stats.gamesPitched || 0
+        };
+      }
+    } catch (fallbackError) {
+      console.error(`[MLB API] Fallback also failed for pitcher ${playerId}:`, fallbackError.message);
+    }
+    
+    return {};
+  }
+}
+
 // Create an enhanced version of the MLB Stats API service
 const mlbStatsApiService = {
   // Include all methods from the original service
   ...originalService,
+  
+  // Override the getPitcherSeasonStats with our enhanced version
+  getPitcherSeasonStats: getPitcherSeasonStatsEnhanced,
   
   /**
    * Enhanced version of getStartingPitchers that uses the more reliable schedule API
@@ -22,87 +133,158 @@ const mlbStatsApiService = {
     try {
       console.log(`[MLB API] Getting enhanced starting pitchers data for game ${gamePk}`);
       
-      // Add CORS handling
-      const response = await axios.get(`${MLB_API_BASE_URL}/game/${gamePk}/feed/live`, {
+      // First try the schedule endpoint which includes probable pitchers
+      const initialScheduleResponse = await axios.get(`${MLB_API_BASE_URL}/schedule`, {
+        params: {
+          sportId: 1, // MLB
+          gamePk: gamePk,
+          hydrate: 'probablePitcher(note)',
+          fields: 'dates,games,teams,probablePitcher,id,fullName,firstName,lastName,jerseyNumber,name',
+          scheduleTypes: 'games'
+        },
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'Mozilla/5.0 (compatible; GaryAI/1.0)'
         },
         timeout: 10000
       }).catch(error => {
-        if (error.message.includes('CORS') || error.message.includes('Network Error')) {
-          console.log(`[MLB API] CORS/Network error for game ${gamePk}, using fallback data`);
-          return null;
-        }
-        throw error;
+        console.log(`[MLB API] Error with schedule endpoint: ${error.message}`);
+        return null;
       });
-      
-      if (!response || !response.data) {
-        console.log(`[MLB API] No data received for game ${gamePk}, using fallback`);
-        return { home: null, away: null };
-      }
-      
-      const gameData = response.data.gameData;
-      
-      // Check for probable pitchers in gameData
-      let homeProbablePitcher = gameData.probablePitchers?.home;
-      let awayProbablePitcher = gameData.probablePitchers?.away;
-      
-      // If not found there, try the teams structure
-      if (!homeProbablePitcher && gameData.teams?.home?.probablePitcher) {
-        homeProbablePitcher = gameData.teams.home.probablePitcher;
-      }
-      if (!awayProbablePitcher && gameData.teams?.away?.probablePitcher) {
-        awayProbablePitcher = gameData.teams.away.probablePitcher;
-      }
-      
-      // If we found probable pitchers, use them
-      if (homeProbablePitcher || awayProbablePitcher) {
-        console.log(`[MLB API] Found probable pitchers from game feed`);
-        console.log(`[MLB API] Home: ${homeProbablePitcher?.fullName || 'TBD'}, Away: ${awayProbablePitcher?.fullName || 'TBD'}`);
-        
-        // Process pitchers (continue with existing logic below)
+
+      // Process schedule response if successful
+      if (initialScheduleResponse?.data?.dates?.[0]?.games?.[0]) {
+        const gameData = initialScheduleResponse.data.dates[0].games[0];
         let homeStarter = null;
-        if (homeProbablePitcher) {
-          const stats = await originalService.getPitcherSeasonStats(homeProbablePitcher.id);
-          homeStarter = {
-            id: homeProbablePitcher.id,
-            fullName: homeProbablePitcher.fullName,
-            firstName: homeProbablePitcher.firstName || '',
-            lastName: homeProbablePitcher.lastName || '',
-            number: homeProbablePitcher.jerseyNumber || '',
-            team: gameData.teams?.home?.name || '',
-            stats: {},
-            seasonStats: stats
-          };
-        }
-        
         let awayStarter = null;
-        if (awayProbablePitcher) {
-          const stats = await originalService.getPitcherSeasonStats(awayProbablePitcher.id);
-          awayStarter = {
-            id: awayProbablePitcher.id,
-            fullName: awayProbablePitcher.fullName,
-            firstName: awayProbablePitcher.firstName || '',
-            lastName: awayProbablePitcher.lastName || '',
-            number: awayProbablePitcher.jerseyNumber || '',
-            team: gameData.teams?.away?.name || '',
+
+        // Process home team probable pitcher
+        if (gameData.teams?.home?.probablePitcher) {
+          const pitcher = gameData.teams.home.probablePitcher;
+          console.log(`[MLB API] Getting stats for home pitcher: ${pitcher.fullName} (ID: ${pitcher.id})`);
+          
+          const stats = await getPitcherSeasonStatsEnhanced(pitcher.id);
+          
+          homeStarter = {
+            id: pitcher.id,
+            fullName: pitcher.fullName || `${pitcher.firstName} ${pitcher.lastName}`.trim(),
+            firstName: pitcher.firstName || '',
+            lastName: pitcher.lastName || '',
+            number: pitcher.jerseyNumber || '',
+            team: gameData.teams.home.team?.name || '',
             stats: {},
-            seasonStats: stats
+            seasonStats: stats,
+            note: pitcher.note || ''
           };
         }
-        
-        return {
-          home: homeStarter,
-          away: awayStarter,
-          homeStarter,
-          awayStarter
-        };
+
+        // Process away team probable pitcher
+        if (gameData.teams?.away?.probablePitcher) {
+          const pitcher = gameData.teams.away.probablePitcher;
+          console.log(`[MLB API] Getting stats for away pitcher: ${pitcher.fullName} (ID: ${pitcher.id})`);
+          
+          const stats = await getPitcherSeasonStatsEnhanced(pitcher.id);
+          
+          awayStarter = {
+            id: pitcher.id,
+            fullName: pitcher.fullName || `${pitcher.firstName} ${pitcher.lastName}`.trim(),
+            firstName: pitcher.firstName || '',
+            lastName: pitcher.lastName || '',
+            number: pitcher.jerseyNumber || '',
+            team: gameData.teams.away.team?.name || '',
+            stats: {},
+            seasonStats: stats,
+            note: pitcher.note || ''
+          };
+        }
+
+        if (homeStarter || awayStarter) {
+          console.log(`[MLB API] Found probable pitchers from schedule endpoint`);
+          console.log(`[MLB API] Home: ${homeStarter?.fullName || 'TBD'}, Away: ${awayStarter?.fullName || 'TBD'}`);
+          
+          return {
+            home: homeStarter,
+            away: awayStarter,
+            homeStarter: homeStarter,
+            awayStarter: awayStarter
+          };
+        }
+      }
+
+      // Fallback to the live endpoint if schedule endpoint doesn't work
+      console.log(`[MLB API] Trying live endpoint as fallback for game ${gamePk}`);
+      const liveResponse = await axios.get(`${MLB_API_BASE_URL}/game/${gamePk}/feed/live`, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; GaryAI/1.0)'
+        },
+        timeout: 5000 // Shorter timeout for fallback
+      }).catch(error => {
+        console.log(`[MLB API] Live feed error: ${error.message}`);
+        return null;
+      });
+
+      if (liveResponse?.data?.gameData) {
+        const gameData = liveResponse.data.gameData;
+        let homeProbablePitcher = gameData.probablePitchers?.home || 
+                                gameData.teams?.home?.probablePitcher;
+        let awayProbablePitcher = gameData.probablePitchers?.away || 
+                                gameData.teams?.away?.probablePitcher;
+
+        if (homeProbablePitcher || awayProbablePitcher) {
+          console.log(`[MLB API] Found probable pitchers from live feed`);
+          
+          // Process pitchers
+          let homeStarter = null;
+          if (homeProbablePitcher) {
+            console.log(`[MLB API] Getting stats for home pitcher: ${homeProbablePitcher.fullName} (ID: ${homeProbablePitcher.id})`);
+            
+            const stats = await getPitcherSeasonStatsEnhanced(homeProbablePitcher.id);
+            
+            homeStarter = {
+              id: homeProbablePitcher.id,
+              fullName: homeProbablePitcher.fullName || 
+                       `${homeProbablePitcher.firstName || ''} ${homeProbablePitcher.lastName || ''}`.trim(),
+              firstName: homeProbablePitcher.firstName || '',
+              lastName: homeProbablePitcher.lastName || '',
+              number: homeProbablePitcher.jerseyNumber || '',
+              team: gameData.teams?.home?.name || '',
+              stats: {},
+              seasonStats: stats
+            };
+          }
+          
+          let awayStarter = null;
+          if (awayProbablePitcher) {
+            console.log(`[MLB API] Getting stats for away pitcher: ${awayProbablePitcher.fullName} (ID: ${awayProbablePitcher.id})`);
+            
+            const stats = await getPitcherSeasonStatsEnhanced(awayProbablePitcher.id);
+            
+            awayStarter = {
+              id: awayProbablePitcher.id,
+              fullName: awayProbablePitcher.fullName || 
+                       `${awayProbablePitcher.firstName || ''} ${awayProbablePitcher.lastName || ''}`.trim(),
+              firstName: awayProbablePitcher.firstName || '',
+              lastName: awayProbablePitcher.lastName || '',
+              number: awayProbablePitcher.jerseyNumber || '',
+              team: gameData.teams?.away?.name || '',
+              stats: {},
+              seasonStats: stats
+            };
+          }
+          
+          return {
+            home: homeStarter,
+            away: awayStarter,
+            homeStarter,
+            awayStarter
+          };
+        }
       }
       
-      // If game feed didn't work, try schedule API as fallback
-      console.log(`[MLB API] No probable pitchers in game feed, trying schedule API`);
-      const scheduleResponse = await axios.get(`${MLB_API_BASE_URL}/schedule`, {
+      // If game feed didn't work, try schedule API as fallback with different parameters
+      console.log(`[MLB API] No probable pitchers in game feed, trying schedule API with different parameters`);
+      const fallbackScheduleResponse = await axios.get(`${MLB_API_BASE_URL}/schedule`, {
         params: {
           sportId: 1,
           gamePk: gamePk,
@@ -110,18 +292,16 @@ const mlbStatsApiService = {
         }
       });
       
-      if (!scheduleResponse.data || !scheduleResponse.data.dates || !scheduleResponse.data.dates[0] || !scheduleResponse.data.dates[0].games || !scheduleResponse.data.dates[0].games[0]) {
-        console.log(`[MLB API] No game data found for game ${gamePk} in schedule API`);
-        // Don't fall back to boxscore for future games
+      if (!fallbackScheduleResponse.data || !fallbackScheduleResponse.data.dates || !fallbackScheduleResponse.data.dates[0] || !fallbackScheduleResponse.data.dates[0].games || !fallbackScheduleResponse.data.dates[0].games[0]) {
+        console.log(`[MLB API] No game data found for game ${gamePk} in fallback schedule API`);
         return { home: null, away: null, homeStarter: null, awayStarter: null };
       }
       
-      const game = scheduleResponse.data.dates[0].games[0];
+      const game = fallbackScheduleResponse.data.dates[0].games[0];
       
       // Check if probable pitchers exist in the data
       if (!game.teams || (!game.teams.home.probablePitcher && !game.teams.away.probablePitcher)) {
         console.log(`[MLB API] No probable pitchers listed for game ${gamePk}`);
-        // Don't fall back to boxscore for future games
         return { home: null, away: null, homeStarter: null, awayStarter: null };
       }
       
@@ -131,8 +311,7 @@ const mlbStatsApiService = {
         const pitcher = game.teams.home.probablePitcher;
         console.log(`[MLB API] Found home probable pitcher: ${pitcher.fullName} (${pitcher.id})`);
         
-        // Get complete stats for the pitcher
-        const stats = await originalService.getPitcherSeasonStats(pitcher.id);
+        const stats = await getPitcherSeasonStatsEnhanced(pitcher.id);
         
         homeStarter = {
           id: pitcher.id,
@@ -152,8 +331,7 @@ const mlbStatsApiService = {
         const pitcher = game.teams.away.probablePitcher;
         console.log(`[MLB API] Found away probable pitcher: ${pitcher.fullName} (${pitcher.id})`);
         
-        // Get complete stats for the pitcher
-        const stats = await originalService.getPitcherSeasonStats(pitcher.id);
+        const stats = await getPitcherSeasonStatsEnhanced(pitcher.id);
         
         awayStarter = {
           id: pitcher.id,
@@ -175,7 +353,6 @@ const mlbStatsApiService = {
       };
     } catch (error) {
       console.error(`[MLB API] Error getting enhanced starting pitchers for game ${gamePk}:`, error.message);
-      // Don't fall back to boxscore - return null pitchers for future games
       return { home: null, away: null, homeStarter: null, awayStarter: null };
     }
   },
@@ -206,7 +383,7 @@ const mlbStatsApiService = {
       const games = response.data.dates[0].games;
       console.log(`[MLB API] Found ${games.length} games for ${date} with enhanced data`);
       
-      // For each game, add the starting pitcher information directly
+      // For each game, add the starting pitcher information with stats
       for (const game of games) {
         // Log what we found for debugging
         const homeProbable = game.teams?.home?.probablePitcher?.fullName || 'TBD';
@@ -214,9 +391,33 @@ const mlbStatsApiService = {
         console.log(`[MLB API] Game ${game.gamePk}: ${game.teams.away.team.name} @ ${game.teams.home.team.name}`);
         console.log(`[MLB API] Probable pitchers: Away: ${awayProbable}, Home: ${homeProbable}`);
         
+        // Get enhanced pitcher data with stats
+        let homePitcherWithStats = null;
+        let awayPitcherWithStats = null;
+        
+        if (game.teams.home.probablePitcher) {
+          const pitcher = game.teams.home.probablePitcher;
+          const stats = await getPitcherSeasonStatsEnhanced(pitcher.id);
+          homePitcherWithStats = {
+            ...pitcher,
+            seasonStats: stats
+          };
+          console.log(`[MLB API] Retrieved stats for home pitcher ${pitcher.fullName}:`, stats);
+        }
+        
+        if (game.teams.away.probablePitcher) {
+          const pitcher = game.teams.away.probablePitcher;
+          const stats = await getPitcherSeasonStatsEnhanced(pitcher.id);
+          awayPitcherWithStats = {
+            ...pitcher,
+            seasonStats: stats
+          };
+          console.log(`[MLB API] Retrieved stats for away pitcher ${pitcher.fullName}:`, stats);
+        }
+        
         game.enhancedData = {
-          homeProbablePitcher: game.teams.home.probablePitcher || null,
-          awayProbablePitcher: game.teams.away.probablePitcher || null
+          homeProbablePitcher: homePitcherWithStats,
+          awayProbablePitcher: awayPitcherWithStats
         };
       }
       
