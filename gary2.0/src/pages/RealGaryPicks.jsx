@@ -692,9 +692,9 @@ function RealGaryPicks() {
                                         textAlign: 'center'
                                       }}>
                                         {/* Gary's Pick - Large and Centered */}
-                                        <div style={{ 
-                                          fontSize: isMobile ? '1.75rem' : '2rem', 
-                                          fontWeight: 700, 
+                                                                                <div style={{
+                                          fontSize: isMobile ? '1.75rem' : '2rem',
+                                          fontWeight: 700,
                                           lineHeight: 1.1,
                                           color: '#bfa142',
                                           wordBreak: 'break-word',
@@ -702,11 +702,51 @@ function RealGaryPicks() {
                                           overflow: 'hidden',
                                           display: '-webkit-box',
                                           WebkitLineClamp: 2,
-                                          WebkitBoxOrient: 'vertical'
+                                          WebkitBoxOrient: 'vertical',
+                                          marginBottom: '1.25rem'
                                         }}>
-                                          {pick.pick}
+                                          {(() => {
+                                            // Remove odds from the end of the pick string
+                                            if (pick.pick) {
+                                              return pick.pick.replace(/([-+]\d+)$/, '').trim();
+                                            }
+                                            return pick.pick;
+                                          })()}
                                         </div>
                                         
+                                        {/* Odds Display */}
+                                        <div style={{
+                                          background: 'rgba(255, 255, 255, 0.05)',
+                                          padding: '0.5rem 1rem',
+                                          borderRadius: '6px',
+                                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                                          marginBottom: '1rem'
+                                        }}>
+                                          <div style={{ 
+                                            fontSize: '0.7rem', 
+                                            opacity: 0.7, 
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em', 
+                                            marginBottom: '0.25rem'
+                                          }}>
+                                            Odds
+                                          </div>
+                                          <div style={{
+                                            fontSize: '1.25rem',
+                                            fontWeight: 600,
+                                            color: '#ffffff'
+                                          }}>
+                                            {(() => {
+                                              // Extract odds from the pick string
+                                              if (pick.pick) {
+                                                const oddsMatch = pick.pick.match(/([-+]\d+)$/);
+                                                return oddsMatch ? oddsMatch[1] : '-110';
+                                              }
+                                              return pick.odds || '-110';
+                                            })()}
+                                          </div>
+                                        </div>
+
                                         {/* Confidence Score */}
                                         <div style={{
                                           background: 'rgba(191, 161, 66, 0.15)',
@@ -734,54 +774,7 @@ function RealGaryPicks() {
                                           </div>
                                         </div>
                                         
-                                                                                    {/* Enhanced preview with key stats bullet points - hide on mobile */}
-                                            {!isMobile && (
-                                              <div style={{
-                                                fontSize: '0.8rem',
-                                                opacity: 0.85,
-                                                marginBottom: '0.5rem',
-                                                lineHeight: 1.4
-                                              }}>
-                                                {pick.rationale ? (() => {
-                                                  const keyPoints = extractKeyPoints(pick.rationale);
-                                                  
-                                                  return keyPoints.length > 0 ? (
-                                                    <div>
-                                                      {keyPoints.map((point, idx) => (
-                                                        <div key={idx} style={{
-                                                          display: 'flex',
-                                                          alignItems: 'flex-start',
-                                                          marginBottom: '0.3rem',
-                                                          fontSize: '0.75rem'
-                                                        }}>
-                                                          <span style={{ 
-                                                            marginRight: '0.4rem',
-                                                            fontSize: '0.7rem',
-                                                            opacity: 0.6
-                                                          }}>
-                                                            •
-                                                          </span>
-                                                          <span style={{ 
-                                                            opacity: 0.9,
-                                                            lineHeight: 1.3
-                                                          }}>
-                                                            {point}
-                                                          </span>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  ) : (
-                                                    <div style={{ opacity: 0.7, fontStyle: 'italic' }}>
-                                                      Tap for detailed analysis
-                                                    </div>
-                                                  );
-                                                })() : (
-                                                  <div style={{ opacity: 0.7, fontStyle: 'italic' }}>
-                                                    Tap for analysis
-                                                  </div>
-                                                )}
-                                              </div>
-                                            )}
+
                                       </div>
                                     ) : (
                                       // Desktop front card design
@@ -810,7 +803,7 @@ function RealGaryPicks() {
                                           justifyContent: 'space-between',
                                           overflow: 'hidden',
                                         }}>
-                                          {/* League and Matchup in horizontal layout */}
+                                          {/* League, Odds, and Matchup in horizontal layout */}
                                           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                                             {/* League */}
                                             <div>
@@ -830,6 +823,37 @@ function RealGaryPicks() {
                                                 opacity: 0.95
                                               }}>
                                                 {pick.league || 'MLB'}
+                                              </div>
+                                            </div>
+                                            
+                                            {/* Odds - New section in the middle */}
+                                            <div style={{ marginLeft: '20px' }}>
+                                              <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                opacity: 0.6, 
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em', 
+                                                marginBottom: '0.25rem'
+                                              }}>
+                                                Odds
+                                              </div>
+                                              <div style={{ 
+                                                fontSize: '1.25rem', 
+                                                fontWeight: 600,
+                                                opacity: 0.9,
+                                                padding: '0.25rem 0.5rem',
+                                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                borderRadius: '4px',
+                                                background: 'rgba(255, 255, 255, 0.05)'
+                                              }}>
+                                                {(() => {
+                                                  // Extract odds from the pick string
+                                                  if (pick.pick) {
+                                                    const oddsMatch = pick.pick.match(/([-+]\d+)$/);
+                                                    return oddsMatch ? oddsMatch[1] : '-110';
+                                                  }
+                                                  return pick.odds || '-110';
+                                                })()}
                                               </div>
                                             </div>
                                             
@@ -877,9 +901,16 @@ function RealGaryPicks() {
                                               overflow: 'hidden',
                                               display: '-webkit-box',
                                               WebkitLineClamp: 2,
-                                              WebkitBoxOrient: 'vertical'
+                                              WebkitBoxOrient: 'vertical',
+                                              marginBottom: '1.25rem'
                                             }}>
-                                              {pick.pick}
+                                              {(() => {
+                                                // Remove odds from the end of the pick string
+                                                if (pick.pick) {
+                                                  return pick.pick.replace(/([-+]\d+)$/, '').trim();
+                                                }
+                                                return pick.pick;
+                                              })()}
                                             </div>
                                             
                                             {/* Enhanced preview with key stats bullet points - hide on mobile */}
@@ -888,6 +919,7 @@ function RealGaryPicks() {
                                                 fontSize: '0.8rem',
                                                 opacity: 0.85,
                                                 marginBottom: '0.5rem',
+                                                marginTop: '0.75rem',
                                                 lineHeight: 1.4
                                               }}>
                                                 {pick.rationale ? 
