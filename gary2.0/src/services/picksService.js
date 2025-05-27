@@ -12,6 +12,11 @@ import { picksService as enhancedPicksService } from './picksService.enhanced.js
 import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 import { openaiService } from './openaiService.js';
 
+// Global processing state to prevent multiple simultaneous generations
+let isCurrentlyGeneratingPicks = false;
+let lastGenerationTime = 0;
+const GENERATION_COOLDOWN = 30 * 1000; // 30 seconds
+
 // Add deduplication and processing locks to prevent repetitive processing
 const processedGames = new Set();
 const processingLocks = new Map();
@@ -267,6 +272,22 @@ async function generateNbaStatsReport(homeTeam, awayTeam) {
 
 // The core pick generator function
 async function generateDailyPicks() {
+  // Global deduplication check
+  const now = Date.now();
+  if (isCurrentlyGeneratingPicks) {
+    console.log('🛑 Picks already being generated, skipping duplicate request...');
+    return [];
+  }
+  
+  if (now - lastGenerationTime < GENERATION_COOLDOWN) {
+    console.log(`🛑 Generation cooldown active (${Math.round((GENERATION_COOLDOWN - (now - lastGenerationTime)) / 1000)}s remaining), skipping...`);
+    return [];
+  }
+  
+  isCurrentlyGeneratingPicks = true;
+  lastGenerationTime = now;
+  console.log('🚀 STARTING DAILY PICKS GENERATION - Global lock acquired');
+  
   try {
     const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl'];
     let allPicks = [];
@@ -629,9 +650,13 @@ async function generateDailyPicks() {
 
     // Store and return
     await storeDailyPicksInDatabase(allPicks);
+    console.log('✅ DAILY PICKS GENERATION COMPLETED - Releasing global lock');
     return allPicks;
   } catch (error) {
+    console.error('❌ DAILY PICKS GENERATION FAILED - Releasing global lock:', error);
     throw error;
+  } finally {
+    isCurrentlyGeneratingPicks = false;
   }
 }
 

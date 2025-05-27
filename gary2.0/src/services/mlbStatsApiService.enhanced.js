@@ -8,6 +8,46 @@ import axios from 'axios';
 
 const MLB_API_BASE_URL = 'https://statsapi.mlb.com/api/v1';
 
+// Add request deduplication for MLB API calls
+const activeRequests = new Map();
+const requestCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Make a deduplicated API request
+ * @param {string} key - Unique key for the request
+ * @param {Function} requestFunction - Function that makes the actual API call
+ * @returns {Promise} - The API response
+ */
+const makeDeduplicatedRequest = async (key, requestFunction) => {
+  // Check cache first
+  const cached = requestCache.get(key);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    console.log(`[MLB API] Using cached data for ${key}`);
+    return cached.data;
+  }
+
+  // Check if request is already in progress
+  if (activeRequests.has(key)) {
+    console.log(`[MLB API] Request for ${key} already in progress, waiting...`);
+    return activeRequests.get(key);
+  }
+
+  // Make the request
+  console.log(`[MLB API] Making fresh request for ${key}`);
+  const requestPromise = requestFunction();
+  activeRequests.set(key, requestPromise);
+
+  try {
+    const result = await requestPromise;
+    // Cache the result
+    requestCache.set(key, { data: result, timestamp: Date.now() });
+    return result;
+  } finally {
+    activeRequests.delete(key);
+  }
+};
+
 /**
  * Enhanced function to get pitcher season stats with better error handling
  * @param {number} playerId - The MLB player ID
@@ -22,7 +62,8 @@ async function getPitcherSeasonStatsEnhanced(playerId) {
   try {
     console.log(`[MLB API] Getting season stats for pitcher ${playerId}`);
     
-    const response = await axios.get(`${MLB_API_BASE_URL}/people/${playerId}/stats`, {
+    return makeDeduplicatedRequest(`pitcher-season-stats-${playerId}`, async () => {
+      const response = await axios.get(`${MLB_API_BASE_URL}/people/${playerId}/stats`, {
       params: {
         stats: 'season',
         group: 'pitching',
@@ -65,6 +106,7 @@ async function getPitcherSeasonStatsEnhanced(playerId) {
     
     console.log(`[MLB API] No stats found in response for pitcher ${playerId}`);
     return {};
+    });
   } catch (error) {
     console.error(`[MLB API] Error getting season stats for pitcher ${playerId}:`, error.message);
     console.error(`[MLB API] Error details:`, error.response?.data || 'No response data');
