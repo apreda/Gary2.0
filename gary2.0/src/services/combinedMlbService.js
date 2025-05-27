@@ -1,12 +1,13 @@
 /**
  * Combined MLB Service
  * This service combines data from all three data sources:
- * 1. Ball Don't Lie API for team stats (PRIORITY 1)
+ * 1. MLB Team Stats API for comprehensive team statistics (PRIORITY 1)
  * 2. MLB Stats API for pitcher data (PRIORITY 2)
  * 3. Perplexity for game context, storylines, and other relevant data
  */
 import { ballDontLieService } from './ballDontLieService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
+import { mlbTeamStatsService } from './mlbTeamStatsService.js';
 import { perplexityService } from './perplexityService.js';
 import { oddsService } from './oddsService.js';
 
@@ -173,15 +174,98 @@ const combinedMlbService = {
       // If we get here, we have a target game from MLB Stats API
       console.log(`[Combined MLB Service] Using MLB Stats API data for ${targetGame.teams.away.team.name} @ ${targetGame.teams.home.team.name}`);
 
-      // 3. Try to get team stats from various sources
+      // 3. Get comprehensive team stats using our new MLB Team Stats Service
       let teamStats = null;
+      let comprehensiveTeamStats = null;
       
       try {
-        // Note: ballDontLieService is primarily for NBA, not MLB
-        // Remove the call to non-existent getMlbTeamComparisonStats
-        console.log('[Combined MLB Service] Skipping ballDontLieService for MLB stats (NBA-only service)');
+        console.log('[Combined MLB Service] Getting comprehensive team statistics...');
         
-        // Use team records from the game data if available
+        // Get comprehensive team stats comparison
+        comprehensiveTeamStats = await mlbTeamStatsService.getTeamStatsComparison(homeTeamName, awayTeamName);
+        
+        if (comprehensiveTeamStats) {
+          console.log('[Combined MLB Service] Successfully got comprehensive team stats');
+          
+          // Extract basic team records for backward compatibility
+          teamStats = {
+            homeTeam: {
+              teamName: homeTeamName,
+              wins: targetGame?.teams?.home?.leagueRecord?.wins || 0,
+              losses: targetGame?.teams?.home?.leagueRecord?.losses || 0,
+              record: `${targetGame?.teams?.home?.leagueRecord?.wins || 0}-${targetGame?.teams?.home?.leagueRecord?.losses || 0}`,
+              winPercentage: targetGame?.teams?.home?.leagueRecord?.pct || '.000',
+              
+              // Add comprehensive offensive stats
+              runsPerGame: comprehensiveTeamStats.homeTeam.summary.runsPerGame,
+              teamAverage: comprehensiveTeamStats.homeTeam.offense.teamAverage,
+              teamOPS: comprehensiveTeamStats.homeTeam.summary.teamOPS,
+              homeRuns: comprehensiveTeamStats.homeTeam.offense.homeRuns,
+              stolenBases: comprehensiveTeamStats.homeTeam.offense.stolenBases,
+              
+              // Add comprehensive pitching stats
+              teamERA: comprehensiveTeamStats.homeTeam.summary.teamERA,
+              teamWHIP: comprehensiveTeamStats.homeTeam.summary.teamWHIP,
+              bullpenERA: comprehensiveTeamStats.homeTeam.summary.bullpenERA,
+              
+              // Add advanced sabermetrics
+              wOBA: comprehensiveTeamStats.homeTeam.summary.wOBA,
+              fip: comprehensiveTeamStats.homeTeam.summary.fip
+            },
+            awayTeam: {
+              teamName: awayTeamName,
+              wins: targetGame?.teams?.away?.leagueRecord?.wins || 0,
+              losses: targetGame?.teams?.away?.leagueRecord?.losses || 0,
+              record: `${targetGame?.teams?.away?.leagueRecord?.wins || 0}-${targetGame?.teams?.away?.leagueRecord?.losses || 0}`,
+              winPercentage: targetGame?.teams?.away?.leagueRecord?.pct || '.000',
+              
+              // Add comprehensive offensive stats
+              runsPerGame: comprehensiveTeamStats.awayTeam.summary.runsPerGame,
+              teamAverage: comprehensiveTeamStats.awayTeam.offense.teamAverage,
+              teamOPS: comprehensiveTeamStats.awayTeam.summary.teamOPS,
+              homeRuns: comprehensiveTeamStats.awayTeam.offense.homeRuns,
+              stolenBases: comprehensiveTeamStats.awayTeam.offense.stolenBases,
+              
+              // Add comprehensive pitching stats
+              teamERA: comprehensiveTeamStats.awayTeam.summary.teamERA,
+              teamWHIP: comprehensiveTeamStats.awayTeam.summary.teamWHIP,
+              bullpenERA: comprehensiveTeamStats.awayTeam.summary.bullpenERA,
+              
+              // Add advanced sabermetrics
+              wOBA: comprehensiveTeamStats.awayTeam.summary.wOBA,
+              fip: comprehensiveTeamStats.awayTeam.summary.fip
+            }
+          };
+          
+          console.log(`[Combined MLB Service] Enhanced team stats with comprehensive data:
+            ${homeTeamName}: ${teamStats.homeTeam.runsPerGame} RPG, ${teamStats.homeTeam.teamERA} ERA, ${teamStats.homeTeam.teamOPS} OPS
+            ${awayTeamName}: ${teamStats.awayTeam.runsPerGame} RPG, ${teamStats.awayTeam.teamERA} ERA, ${teamStats.awayTeam.teamOPS} OPS`);
+        } else {
+          // Fallback to basic team records from game data
+          if (targetGame && targetGame.teams) {
+            teamStats = {
+              homeTeam: {
+                teamName: homeTeamName,
+                wins: targetGame.teams.home.leagueRecord?.wins || 0,
+                losses: targetGame.teams.home.leagueRecord?.losses || 0,
+                record: `${targetGame.teams.home.leagueRecord?.wins || 0}-${targetGame.teams.home.leagueRecord?.losses || 0}`,
+                winPercentage: targetGame.teams.home.leagueRecord?.pct || '.000'
+              },
+              awayTeam: {
+                teamName: awayTeamName,
+                wins: targetGame.teams.away.leagueRecord?.wins || 0,
+                losses: targetGame.teams.away.leagueRecord?.losses || 0,
+                record: `${targetGame.teams.away.leagueRecord?.wins || 0}-${targetGame.teams.away.leagueRecord?.losses || 0}`,
+                winPercentage: targetGame.teams.away.leagueRecord?.pct || '.000'
+              }
+            };
+            console.log('[Combined MLB Service] Using basic team stats from MLB game data');
+          }
+        }
+      } catch (error) {
+        console.log('[Combined MLB Service] Error getting comprehensive team stats:', error.message);
+        
+        // Fallback to basic team records from game data
         if (targetGame && targetGame.teams) {
           teamStats = {
             homeTeam: {
@@ -199,10 +283,8 @@ const combinedMlbService = {
               winPercentage: targetGame.teams.away.leagueRecord?.pct || '.000'
             }
           };
-          console.log('[Combined MLB Service] Using team stats from MLB game data');
+          console.log('[Combined MLB Service] Using fallback basic team stats');
         }
-      } catch (error) {
-        console.log('[Combined MLB Service] Error getting team stats:', error.message);
       }
 
       // 4. Get starting pitcher data
@@ -449,6 +531,7 @@ const combinedMlbService = {
         homeTeam: homeTeamName,
         awayTeam: awayTeamName,
         teamStats: teamStats,
+        comprehensiveTeamStats: comprehensiveTeamStats, // Add the full comprehensive stats
         pitchers: startingPitchers,
         hitterStats,
         gameContext,
