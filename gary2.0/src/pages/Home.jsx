@@ -5,6 +5,7 @@ import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";
+import { extractKeyPoints } from '../utils/analysisPreview';
 
 // Using inline CSS for simplicity
 
@@ -150,76 +151,6 @@ function Home() {
                   lineHeight: 1.4
                 }}>
                   {displayPick.rationale ? (() => {
-                    // Extract key stats and insights from the rationale
-                    const extractKeyPoints = (text) => {
-                      const points = [];
-                      
-                      // Look for percentage stats (shooting, win rates, etc.)
-                      const percentageMatches = text.match(/\d+\.?\d*%/g);
-                      if (percentageMatches && percentageMatches.length > 0) {
-                        const firstPercentage = percentageMatches[0];
-                        const context = text.substring(
-                          Math.max(0, text.indexOf(firstPercentage) - 30),
-                          text.indexOf(firstPercentage) + firstPercentage.length + 30
-                        ).trim();
-                        points.push(`📊 ${context.split('.')[0].trim()}`);
-                      }
-                      
-                      // Look for record stats (W-L records)
-                      const recordMatches = text.match(/\d+-\d+/g);
-                      if (recordMatches && recordMatches.length > 0) {
-                        const firstRecord = recordMatches[0];
-                        const context = text.substring(
-                          Math.max(0, text.indexOf(firstRecord) - 25),
-                          text.indexOf(firstRecord) + firstRecord.length + 25
-                        ).trim();
-                        points.push(`🏆 ${context.split('.')[0].trim()}`);
-                      }
-                      
-                      // Look for ERA, averages, or other decimal stats
-                      const statMatches = text.match(/\d+\.\d+\s*(ERA|AVG|OPS|WHIP)/gi);
-                      if (statMatches && statMatches.length > 0) {
-                        const firstStat = statMatches[0];
-                        const context = text.substring(
-                          Math.max(0, text.indexOf(firstStat) - 20),
-                          text.indexOf(firstStat) + firstStat.length + 20
-                        ).trim();
-                        points.push(`⚾ ${context.split('.')[0].trim()}`);
-                      }
-                      
-                      // Look for momentum/trend indicators
-                      const trendWords = ['streak', 'momentum', 'hot', 'cold', 'trending', 'form'];
-                      for (const word of trendWords) {
-                        const regex = new RegExp(`[^.]*${word}[^.]*`, 'gi');
-                        const match = text.match(regex);
-                        if (match && match[0]) {
-                          points.push(`🔥 ${match[0].trim()}`);
-                          break;
-                        }
-                      }
-                      
-                      // Look for matchup advantages
-                      const matchupWords = ['advantage', 'edge', 'favors', 'struggles', 'dominates'];
-                      for (const word of matchupWords) {
-                        const regex = new RegExp(`[^.]*${word}[^.]*`, 'gi');
-                        const match = text.match(regex);
-                        if (match && match[0]) {
-                          points.push(`⚔️ ${match[0].trim()}`);
-                          break;
-                        }
-                      }
-                      
-                      // If we don't have enough specific points, extract first sentence
-                      if (points.length < 2) {
-                        const sentences = text.split('.').filter(s => s.trim().length > 10);
-                        if (sentences.length > 0) {
-                          points.push(`💡 ${sentences[0].trim()}`);
-                        }
-                      }
-                      
-                      return points.slice(0, 3); // Max 3 bullet points
-                    };
-                    
                     const keyPoints = extractKeyPoints(displayPick.rationale);
                     
                     return keyPoints.length > 0 ? (
@@ -233,15 +164,16 @@ function Home() {
                           }}>
                             <span style={{ 
                               marginRight: '0.4rem',
-                              fontSize: '0.7rem'
+                              fontSize: '0.7rem',
+                              opacity: 0.6
                             }}>
-                              {point.split(' ')[0]}
+                              •
                             </span>
                             <span style={{ 
                               opacity: 0.9,
                               lineHeight: 1.3
                             }}>
-                              {point.substring(point.indexOf(' ') + 1)}
+                              {point}
                             </span>
                           </div>
                         ))}
