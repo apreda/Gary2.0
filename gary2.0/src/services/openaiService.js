@@ -211,25 +211,21 @@ PITCHER DATA RULE:
 - You can discuss pitching matchups generally without naming specific pitchers if none are provided
 
 DATA ACCURACY & ANALYSIS RULES:
-YOUR ANALYSIS MUST INCLUDE ACTUAL STATISTICS FROM THE INPUT DATA:
-- Use the statistics provided in the input to form your analysis and justify your pick.
-- Focus on the data points that you believe are most relevant to the outcome.
+Analyze the comprehensive statistical data provided to identify the most compelling factors for this matchup. Use the actual statistics in the input data to form your analysis and justify your pick. Focus on whatever patterns, trends, or matchup advantages you find most significant in the data.
 
 NEVER EVER mention missing or limited stats in your analysis. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
 
-Never invent or infer statistics that aren't in the input. If data is limited, simply use what you have and be confident in your analysis without mentioning any data limitations.
+Never invent or infer statistics that aren't in the input. Use only the data provided and let your analysis flow naturally from what you observe in the numbers.
 
 BETTING PICK RULES:
 - **Spread Pick:** The spread is the number of points/runs/goals a team must win by (if favored) or can lose by (if underdog) for the bet to win. For example, if Team A is -7.5, they must win by 8+ points. If Team B is +7.5, they can win the game or lose by up to 7 and still cover.
 - **Moneyline Pick:** The moneyline is a straight-up bet on which team will win the game, regardless of the score margin.
-- **How to Choose:** Use your analysis of the provided data to decide whether the spread or the moneyline offers the best chance of winning. Consider these factors:
-  - For MLB: If a strong pitcher faces a weak lineup, consider the spread (-1.5) for better value
-  - For NBA: Large spreads (>7) often provide value on underdogs, while small spreads (<3) might favor moneyline
-  - For NHL: Low-scoring nature makes spreads (-1.5) valuable when there's a clear mismatch
-  - If the favorite has been dominant and the spread is reasonable, take the spread for better odds
-  - If the underdog has upset potential but might not cover, take their moneyline
-  - IMPORTANT: Aim for roughly 50/50 split between spread and moneyline picks across multiple games
-  - Don't default to moneyline - actively consider if the spread offers better value
+- **How to Choose:** Analyze the provided data and choose the bet type that offers the BEST COMBINATION of winning probability and return on investment (ROI). Consider:
+  - If you believe a team will win by a comfortable margin that exceeds the spread, take the spread for better odds
+  - If you believe a team will win but the margin might be close, take the moneyline for safety
+  - Compare the odds between spread and moneyline to determine which offers better value for your confidence level
+  - Your goal is to maximize long-term profit by selecting the bet with the highest expected value
+  - Base your decision purely on statistical analysis and expected game flow, not on artificial quotas or balancing requirements
 
 CRITICAL FORMATTING INSTRUCTIONS:
 - The pick field MUST follow this exact format: "Team Name BetType Odds"
@@ -274,26 +270,12 @@ RATIONALE INSTRUCTIONS (CRITICAL):
 Your rationale should be a SINGLE PARAGRAPH that explains your pick and confidence level. Follow these guidelines:
 1. Write in first person as Gary, directly addressing the user
 2. Keep it concise (2-4 sentences) 
-3. Make a COMPELLING and PERSUASIVE argument using SPECIFIC STATS from both teams
-4. Vary your analysis approach - don't always start with team records. Consider these angles:
-   - Pitching matchups and bullpen stats
-   - Recent offensive performance (last 7-10 games)
-   - Home/away splits
-   - Head-to-head history
-   - Rest advantages
-   - Weather conditions (if relevant)
-   - Injury impacts
-   - Betting trends and line movement
-5. ALWAYS compare both teams' stats - explain why your pick will win despite the opponent's strengths
-6. Use concrete numbers (e.g., "Their pitcher has a 5.12 ERA in his last 5 starts" not "their pitcher has been struggling")
-7. Address counterarguments - if the opposing team has a good pitcher or strong stats, explain why your pick still wins
-8. Each rationale should feel unique - avoid starting with the same phrase or structure every time
-9. Be confident and persuasive - make the reader feel they'd be foolish not to follow your pick
-10. Example formats (vary these approaches):
-    - "The numbers don't lie - [Team] has been crushing lefties to the tune of a .285 average and .850 OPS, and they're facing a southpaw with a 5.40 ERA in night games this season."
-    - "While [Team] has been strong at home, they're just 3-7 in their last 10 day games, and [Opponent] has won 7 of their last 10 road contests."
-    - "The bullpen matchup heavily favors [Team] - their 2.98 bullpen ERA over the last month is second-best in the league, while [Opponent] has blown 5 of their last 10 save opportunities."
-    - "This is a classic letdown spot for [Team] after their emotional extra-innings win yesterday, while [Opponent] has won 4 straight following an off day."
+3. Analyze the comprehensive statistical data provided and explain the key factors that led you to your conclusion
+4. Use specific numbers and stats from the data to support your reasoning
+5. Explain why you chose spread vs moneyline based on your analysis of the likely game outcome
+6. Let your analysis flow naturally - focus on whatever statistical patterns or matchup advantages you find most compelling
+7. Be confident and persuasive in your reasoning
+8. Each rationale should reflect your unique analysis of that specific matchup
 
 RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
 
@@ -349,14 +331,38 @@ REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-
       
       if (homePitcher && homePitcher.fullName && homePitcher.fullName !== 'Unknown Pitcher') {
         const homeStats = homePitcher.seasonStats || {};
-        statsSection += `HOME: ${homePitcher.fullName} - ERA: ${homeStats.era || 'N/A'}, Record: ${homeStats.wins || 0}-${homeStats.losses || 0}, WHIP: ${homeStats.whip || 'N/A'}, SO: ${homeStats.strikeOuts || homeStats.strikeouts || 0}\n`;
+        statsSection += `HOME: ${homePitcher.fullName} - ERA: ${homeStats.era || 'N/A'}, Record: ${homeStats.wins || 0}-${homeStats.losses || 0}, WHIP: ${homeStats.whip || 'N/A'}, SO: ${homeStats.strikeOuts || homeStats.strikeouts || 0}`;
+        
+        // Add additional stats if available
+        if (homeStats.inningsPitched) {
+          statsSection += `, IP: ${homeStats.inningsPitched}`;
+        }
+        if (homeStats.battingAvgAgainst) {
+          statsSection += `, BAA: ${homeStats.battingAvgAgainst}`;
+        }
+        if (homeStats.homeRunsAllowed) {
+          statsSection += `, HR: ${homeStats.homeRunsAllowed}`;
+        }
+        statsSection += '\n';
       } else {
         statsSection += `HOME: Probable starter TBD\n`;
       }
       
       if (awayPitcher && awayPitcher.fullName && awayPitcher.fullName !== 'Unknown Pitcher') {
         const awayStats = awayPitcher.seasonStats || {};
-        statsSection += `AWAY: ${awayPitcher.fullName} - ERA: ${awayStats.era || 'N/A'}, Record: ${awayStats.wins || 0}-${awayStats.losses || 0}, WHIP: ${awayStats.whip || 'N/A'}, SO: ${awayStats.strikeOuts || awayStats.strikeouts || 0}\n`;
+        statsSection += `AWAY: ${awayPitcher.fullName} - ERA: ${awayStats.era || 'N/A'}, Record: ${awayStats.wins || 0}-${awayStats.losses || 0}, WHIP: ${awayStats.whip || 'N/A'}, SO: ${awayStats.strikeOuts || awayStats.strikeouts || 0}`;
+        
+        // Add additional stats if available
+        if (awayStats.inningsPitched) {
+          statsSection += `, IP: ${awayStats.inningsPitched}`;
+        }
+        if (awayStats.battingAvgAgainst) {
+          statsSection += `, BAA: ${awayStats.battingAvgAgainst}`;
+        }
+        if (awayStats.homeRunsAllowed) {
+          statsSection += `, HR: ${awayStats.homeRunsAllowed}`;
+        }
+        statsSection += '\n';
       } else {
         statsSection += `AWAY: Probable starter TBD\n`;
       }
@@ -416,14 +422,66 @@ REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-
         if (homeTeam.stats) {
           statsSection += 'Batting: ';
           const battingStats = homeTeam.stats.batting || {};
-          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}\n`;
+          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}`;
+          
+          // Add OPS if available
+          if (battingStats.ops) {
+            statsSection += `, OPS: ${battingStats.ops}`;
+          }
+          
+          statsSection += `, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}`;
+          
+          // Add additional offensive stats if available
+          if (battingStats.rbi) {
+            statsSection += `, RBI: ${battingStats.rbi}`;
+          }
+          if (battingStats.stolenBases) {
+            statsSection += `, SB: ${battingStats.stolenBases}`;
+          }
+          
+          statsSection += '\n';
         }
         
         // Add pitching stats if available
         if (homeTeam.stats && homeTeam.stats.pitching) {
           statsSection += 'Pitching: ';
           const pitchingStats = homeTeam.stats.pitching || {};
-          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}\n`;
+          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}`;
+          
+          // Add additional pitching stats if available
+          if (pitchingStats.strikeouts) {
+            statsSection += `, K: ${pitchingStats.strikeouts}`;
+          }
+          if (pitchingStats.walks) {
+            statsSection += `, BB: ${pitchingStats.walks}`;
+          }
+          if (pitchingStats.saves) {
+            statsSection += `, SV: ${pitchingStats.saves}`;
+          }
+          if (pitchingStats.blownSaves) {
+            statsSection += `, BS: ${pitchingStats.blownSaves}`;
+          }
+          
+          statsSection += '\n';
+        }
+        
+        // Add bullpen stats if available
+        if (homeTeam.stats && homeTeam.stats.bullpen) {
+          statsSection += 'Bullpen: ';
+          const bullpenStats = homeTeam.stats.bullpen || {};
+          statsSection += `ERA: ${bullpenStats.era || 'N/A'}`;
+          
+          if (bullpenStats.saves) {
+            statsSection += `, SV: ${bullpenStats.saves}`;
+          }
+          if (bullpenStats.blownSaves) {
+            statsSection += `, BS: ${bullpenStats.blownSaves}`;
+          }
+          if (bullpenStats.whip) {
+            statsSection += `, WHIP: ${bullpenStats.whip}`;
+          }
+          
+          statsSection += '\n';
         }
       }
       
@@ -435,14 +493,66 @@ REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-
         if (awayTeam.stats) {
           statsSection += 'Batting: ';
           const battingStats = awayTeam.stats.batting || {};
-          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}\n`;
+          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}`;
+          
+          // Add OPS if available
+          if (battingStats.ops) {
+            statsSection += `, OPS: ${battingStats.ops}`;
+          }
+          
+          statsSection += `, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}`;
+          
+          // Add additional offensive stats if available
+          if (battingStats.rbi) {
+            statsSection += `, RBI: ${battingStats.rbi}`;
+          }
+          if (battingStats.stolenBases) {
+            statsSection += `, SB: ${battingStats.stolenBases}`;
+          }
+          
+          statsSection += '\n';
         }
         
         // Add pitching stats if available
         if (awayTeam.stats && awayTeam.stats.pitching) {
           statsSection += 'Pitching: ';
           const pitchingStats = awayTeam.stats.pitching || {};
-          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}\n`;
+          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}`;
+          
+          // Add additional pitching stats if available
+          if (pitchingStats.strikeouts) {
+            statsSection += `, K: ${pitchingStats.strikeouts}`;
+          }
+          if (pitchingStats.walks) {
+            statsSection += `, BB: ${pitchingStats.walks}`;
+          }
+          if (pitchingStats.saves) {
+            statsSection += `, SV: ${pitchingStats.saves}`;
+          }
+          if (pitchingStats.blownSaves) {
+            statsSection += `, BS: ${pitchingStats.blownSaves}`;
+          }
+          
+          statsSection += '\n';
+        }
+        
+        // Add bullpen stats if available
+        if (awayTeam.stats && awayTeam.stats.bullpen) {
+          statsSection += 'Bullpen: ';
+          const bullpenStats = awayTeam.stats.bullpen || {};
+          statsSection += `ERA: ${bullpenStats.era || 'N/A'}`;
+          
+          if (bullpenStats.saves) {
+            statsSection += `, SV: ${bullpenStats.saves}`;
+          }
+          if (bullpenStats.blownSaves) {
+            statsSection += `, BS: ${bullpenStats.blownSaves}`;
+          }
+          if (bullpenStats.whip) {
+            statsSection += `, WHIP: ${bullpenStats.whip}`;
+          }
+          
+          statsSection += '\n';
         }
       }
       
@@ -473,7 +583,27 @@ REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-
           .slice(0, 5);
         
         topHomeHitters.forEach(hitter => {
-          statsSection += `${hitter.name} (${hitter.position}): AVG: ${hitter.stats.avg}, H: ${hitter.stats.hits}, HR: ${hitter.stats.homeRuns}, RBI: ${hitter.stats.rbi}, AB: ${hitter.stats.atBats}\n`;
+          const stats = hitter.stats;
+          statsSection += `${hitter.name} (${hitter.position}): AVG: ${stats.avg}, H: ${stats.hits}, HR: ${stats.homeRuns}, RBI: ${stats.rbi}, AB: ${stats.atBats}`;
+          
+          // Add additional stats if available
+          if (stats.ops) {
+            statsSection += `, OPS: ${stats.ops}`;
+          }
+          if (stats.walks) {
+            statsSection += `, BB: ${stats.walks}`;
+          }
+          if (stats.strikeouts) {
+            statsSection += `, K: ${stats.strikeouts}`;
+          }
+          if (stats.stolenBases) {
+            statsSection += `, SB: ${stats.stolenBases}`;
+          }
+          if (stats.runs) {
+            statsSection += `, R: ${stats.runs}`;
+          }
+          
+          statsSection += '\n';
         });
         
         statsSection += '\n';
@@ -489,7 +619,27 @@ REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-
           .slice(0, 5);
         
         topAwayHitters.forEach(hitter => {
-          statsSection += `${hitter.name} (${hitter.position}): AVG: ${hitter.stats.avg}, H: ${hitter.stats.hits}, HR: ${hitter.stats.homeRuns}, RBI: ${hitter.stats.rbi}, AB: ${hitter.stats.atBats}\n`;
+          const stats = hitter.stats;
+          statsSection += `${hitter.name} (${hitter.position}): AVG: ${stats.avg}, H: ${stats.hits}, HR: ${stats.homeRuns}, RBI: ${stats.rbi}, AB: ${stats.atBats}`;
+          
+          // Add additional stats if available
+          if (stats.ops) {
+            statsSection += `, OPS: ${stats.ops}`;
+          }
+          if (stats.walks) {
+            statsSection += `, BB: ${stats.walks}`;
+          }
+          if (stats.strikeouts) {
+            statsSection += `, K: ${stats.strikeouts}`;
+          }
+          if (stats.stolenBases) {
+            statsSection += `, SB: ${stats.stolenBases}`;
+          }
+          if (stats.runs) {
+            statsSection += `, R: ${stats.runs}`;
+          }
+          
+          statsSection += '\n';
         });
         
         statsSection += '\n';
