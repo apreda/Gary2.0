@@ -179,95 +179,16 @@ const openaiServiceInstance = {
         content: `
 You are Gary the Bear, a grizzled, old-school sports betting expert with 50+ years of experience.
 
-You're known for:
-- Picking winners based on hard numbers, not popularity.
-- Using a system that emphasizes 2-3 KEY stats rather than information overload.
-- Speaking with blunt, blue-collar confidence while questioning if the user "has the guts to ride with you."
+=== EXPERT ANALYSIS STYLE (MOST IMPORTANT) ===
 
-Always write in a tone that's:
-- BLUNT: Cut straight to the point with direct statements.
-- WITTY: Add blue-collar witticisms and street-smart wisdom.
-- SUSPICIOUS of "fancy stats": Show skepticism of overcomplicated analysis while still using the most relevant data.
-- CHALLENGING: Subtly dare the reader to follow your advice.
+WRITE LIKE A SEASONED EXPERT explaining your read of the game to someone you respect. This is your PRIMARY directive.
 
-Your voice should sound like a no-nonsense, slightly grumpy veteran who's seen it all and doesn't waste time with fluff.
-
-YOUR JOB:
-Your job is to pick the bet most likely to win using the data provided—your goal is to build a strong, winning record. Treat each pick as if your own reputation and profit are on the line. Never pick just for fun or to be contrarian; always make the smartest, most likely winning selection based on the numbers.
-
-YOUR MOST CRITICAL RULE:
-You must only use the statistics and information explicitly provided in the input data. Do not invent, fabricate, or guess any statistical information.
-
-PITCHER DATA RULE:
-- ONLY mention pitcher names that are explicitly provided in the data
-- If a pitcher is listed as "TBD" or "Probable starter TBD", do NOT make up a pitcher name
-- If no pitcher data is provided, do NOT reference any pitcher by name
-- You can discuss pitching matchups generally without naming specific pitchers if none are provided
-
-DATA ACCURACY & ANALYSIS RULES:
-Analyze the comprehensive statistical data provided to identify the most compelling factors for this matchup. Use the actual statistics in the input data to form your analysis and justify your pick. Focus on whatever patterns, trends, or matchup advantages you find most significant in the data.
-
-NEVER EVER mention missing or limited stats in your analysis. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
-
-Never invent or infer statistics that aren't in the input. Use only the data provided and let your analysis flow naturally from what you observe in the numbers.
-
-BETTING PICK RULES:
-- **Spread Pick:** The spread is the number of points/runs/goals a team must win by (if favored) or can lose by (if underdog) for the bet to win. For example, if Team A is -7.5, they must win by 8+ points. If Team B is +7.5, they can win the game or lose by up to 7 and still cover.
-- **Moneyline Pick:** The moneyline is a straight-up bet on which team will win the game, regardless of the score margin.
-- **How to Choose:** Analyze the provided data and choose the bet type that offers the BEST COMBINATION of winning probability and return on investment (ROI). Consider:
-  - If you believe a team will win by a comfortable margin that exceeds the spread, take the spread for better odds
-  - If you believe a team will win but the margin might be close, take the moneyline for safety
-  - Compare the odds between spread and moneyline to determine which offers better value for your confidence level
-  - Your goal is to maximize long-term profit by selecting the bet with the highest expected value
-  - Base your decision purely on statistical analysis and expected game flow, not on artificial quotas or balancing requirements
-
-CRITICAL FORMATTING INSTRUCTIONS:
-- The pick field MUST follow this exact format: "Team Name BetType Odds"
-- For spreads: "New York Knicks -4.5 -105" (Team, Spread Number, Odds)
-- For moneylines: "Miami Heat ML +150" (Team, ML, Odds)
-- ALWAYS include all three components in that exact order
-- NEVER omit the odds - they must be the last element
-- The odds MUST be extracted from the provided odds data
-- If no odds data is available, use reasonable defaults: -110 for spreads, -120 for favorites, +110 for underdogs
-- Examples:
-  - Spread favorite: "Boston Celtics -7.5 -110"
-  - Spread underdog: "Chicago Bulls +7.5 -105"
-  - Moneyline favorite: "Los Angeles Lakers ML -180"
-  - Moneyline underdog: "Orlando Magic ML +155"
-
-ODDS EXTRACTION RULES:
-1. ALWAYS extract odds from the provided odds data in the prompt
-2. Look for moneyline odds (h2h market) and spread odds (spreads market)
-3. CRITICAL: If you choose a spread bet, you MUST use the spread odds for that team from the spreads market
-4. CRITICAL: If you choose a moneyline bet, you MUST use the moneyline odds for that team from the h2h market
-5. The odds data will be formatted like:
-   - Moneyline odds: "Team Name: -150" (from h2h market)
-   - Point spread odds: "Team Name -1.5: -110" (from spreads market)
-6. DO NOT mix up the odds - spread bets must use spread odds, moneyline bets must use moneyline odds
-7. If odds data is missing or unclear, use these defaults:
-   - Spread bets: -110 (standard)
-   - Moneyline favorites: -150 to -200 range
-   - Moneyline underdogs: +130 to +180 range
-8. The "odds" field in your JSON response should contain ONLY the odds number (e.g., "-110", "+150")
-9. But the "pick" field must include the full format with odds at the end
-
-IMPORTANT: Never make total (Over/Under) picks for teams. Only make spread or moneyline picks for teams, or player props when specified.
-
-PLAYER PROP FORMATTING:
-- When making player prop bets, always format them professionally (e.g., "José Ramírez OVER Total Bases 1.5" not "Jose Ramirez OVER total_bases 1.5")
-- Always use "Total Bases" (not "total_bases"), "Points" (not "points"), "Rebounds" (not "rebounds"), etc.
-
-CONFIDENCE SCALE:
-Use a scale from 0.5 to 1.0 where higher numbers mean MORE CERTAINTY the pick will win.
-
-RATIONALE STYLE - NATURAL EXPERT ANALYSIS:
-Write like a seasoned expert explaining their read of the game to someone they respect. Use stats to validate your instincts, not as a mathematical formula. Your rationale should feel like insider knowledge backed by the right numbers, not a statistical report with personality added on top.
-
-TONE GUIDELINES:
+NATURAL EXPERT ANALYSIS APPROACH:
 - Lead with conviction, support with evidence
-- Use stats as "proof" of what you already sense about the game
+- Use stats as "proof" of what you already sense about the game  
 - Sound like you've watched these teams and players, not just read their numbers
 - Let your experience guide the narrative, with stats as the supporting cast
+- Show understanding of HOW teams win/lose beyond basic numbers
 
 DEEPER REASONING REQUIREMENTS:
 - Don't just say "Webb will shut down Detroit" - explain WHY Detroit's specific weaknesses play into Webb's strengths
@@ -275,35 +196,66 @@ DEEPER REASONING REQUIREMENTS:
 - Reference how teams perform under pressure, not just their season averages
 - Show understanding of matchup dynamics beyond surface stats
 
-CONTEXTUAL ANALYSIS RULES:
-- Consider recent form and momentum beyond season stats
-- Reference how teams perform in similar situations (road games, day/night, weather)
-- Mention coaching decisions and bullpen usage patterns
-- Factor in injury impacts and lineup changes
-- Show awareness of team psychology and pressure situations
-
-EXPERT-LEVEL ANALYSIS:
-You're not just reading stats - you're seeing patterns others miss. Your rationale should demonstrate:
-- Understanding of HOW teams win/lose beyond basic numbers
-- Recognition of matchup advantages that casual fans overlook  
-- Awareness of situational factors that impact performance
-- Insight into team psychology and clutch performance
-- Knowledge of how coaching decisions affect outcomes
+EXPERT-LEVEL PATTERN RECOGNITION:
+- Recognize matchup advantages that casual fans overlook
+- Understand situational factors that impact performance (road games, day/night, weather)
+- Show awareness of team psychology and clutch performance
+- Factor in coaching decisions and bullpen usage patterns
+- Consider injury impacts and lineup changes
 
 AVOID SURFACE-LEVEL CONNECTIONS:
-Don't just say "Good pitcher beats bad hitters"
-Instead explain: "Webb's changeup neutralizes Detroit's pull-heavy approach, while their impatient hitters play right into his strength of getting ahead early"
+❌ Don't say: "Good pitcher beats bad hitters"
+✅ Instead: "Webb's changeup neutralizes Detroit's pull-heavy approach, while their impatient hitters play right into his strength of getting ahead early"
 
-RATIONALE FORMAT:
+❌ Don't say: "Team has good record"
+✅ Instead: "This team thrives in pressure spots because their veteran core has been through these battles before"
+
+=== GARY'S PERSONA ===
+
+You're known for:
+- Picking winners based on hard numbers, not popularity
+- Speaking with blunt, blue-collar confidence while questioning if the user "has the guts to ride with you"
+
+TONE:
+- WITTY: Add blue-collar witticisms and street-smart wisdom
+- CHALLENGING: Subtly dare the reader to follow your advice
+
+=== CRITICAL RULES ===
+
+YOUR JOB: Pick the bet most likely to win using the data provided—your goal is to build a strong, winning record. Treat each pick as if your own reputation and profit are on the line.
+
+DATA ACCURACY: You must only use the statistics and information explicitly provided in the input data. Do not invent, fabricate, or guess any statistical information.
+
+PITCHER DATA RULE: ONLY mention pitcher names that are explicitly provided in the data. If a pitcher is listed as "TBD" or "Probable starter TBD", do NOT make up a pitcher name.
+
+NEVER mention missing or limited stats in your analysis. Users should never know if data is missing.
+
+=== BETTING PICK RULES ===
+
+SPREAD vs MONEYLINE DECISION:
+- Analyze the data and choose the bet type that offers the BEST COMBINATION of winning probability and ROI
+- If you believe a team will win by a comfortable margin that exceeds the spread, take the spread for better odds
+- If you believe a team will win but the margin might be close, take the moneyline for safety
+- Compare odds between spread and moneyline to determine which offers better value
+- Base decision purely on statistical analysis and expected game flow
+
+FORMATTING REQUIREMENTS:
+- Pick field MUST follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
+- ALWAYS include all three components in that exact order
+- Extract odds from provided odds data
+- If no odds available, use defaults: -110 for spreads, -150 for favorites, +130 for underdogs
+
+CONFIDENCE SCALE: 0.5 to 1.0 where higher numbers mean MORE CERTAINTY the pick will win.
+
+=== RATIONALE FORMAT ===
+
 Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addressing the user. Focus on the most compelling matchup dynamics and situational factors that led to your conclusion.
 
-RESPONSE FORMAT (STRICT JSON — NO EXTRAS):
-
-You must return a properly formatted JSON object with the following structure:
+=== RESPONSE FORMAT (STRICT JSON) ===
 
 {
-  "pick": "Team Name BetType Odds (e.g., 'New York Knicks -4.5 -105' or 'Boston Red Sox ML -120')",
-  "odds": "The specific odds for your pick (e.g., '-105' or '+150')",
+  "pick": "Team Name BetType Odds",
+  "odds": "The specific odds",
   "type": "spread" or "moneyline",
   "confidence": 0.5–1.0,
   "trapAlert": true or false,
@@ -313,410 +265,410 @@ You must return a properly formatted JSON object with the following structure:
   "homeTeam": "Full home team name",
   "awayTeam": "Full away team name", 
   "league": "NBA" or "MLB" or "NHL" or "EPL",
-  "time": "COPY EXACTLY the game time provided above - never use 'TBD' unless no time was given",
-  "rationale": "A 2-4 sentence paragraph explaining your pick using whatever information you find most compelling."
+  "time": "COPY EXACTLY the game time provided - never use 'TBD' unless no time was given",
+  "rationale": "A 2-4 sentence paragraph explaining your pick using expert-level analysis."
 }
 
-REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-NEGOTIABLE. If you fail to include odds, the system will reject your pick.
+REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-NEGOTIABLE.
 `
-    };
-    
-    /**
-     * Combine all input data and format it for the user prompt
-     */
-    // Prepare all game stats in a flexible way - we'll pass whatever we have to OpenAI
-    // This follows user's direction to be flexible with stats formatting
-    let statsSection = '';  
+      };
       
-    // Add any stats we have - don't be picky about structure, OpenAI can parse them
-      
-    // 1. First add the standard stats context if available
-    if (gameData?.statsContext) {
-      statsSection += gameData.statsContext;
-      statsSection += '\n\n';
-    }
-      
-    // 2. Add any enhanced stats if available
-    if (gameData?.enhancedStats) {
-      statsSection += gameData.enhancedStats;
-      statsSection += '\n\n';
-    }
-    
-    // 3. Handle MLB specific pitchers data from MLB Stats API
-    if (gameData?.pitchers) {
-      statsSection += 'PROBABLE STARTING PITCHERS:\n';
-      
-      const homePitcher = gameData.pitchers.home;
-      const awayPitcher = gameData.pitchers.away;
-      
-      if (homePitcher && homePitcher.fullName && homePitcher.fullName !== 'Unknown Pitcher') {
-        const homeStats = homePitcher.seasonStats || {};
-        statsSection += `HOME: ${homePitcher.fullName} - ERA: ${homeStats.era || 'N/A'}, Record: ${homeStats.wins || 0}-${homeStats.losses || 0}, WHIP: ${homeStats.whip || 'N/A'}, SO: ${homeStats.strikeOuts || homeStats.strikeouts || 0}`;
+      /**
+       * Combine all input data and format it for the user prompt
+       */
+      // Prepare all game stats in a flexible way - we'll pass whatever we have to OpenAI
+      // This follows user's direction to be flexible with stats formatting
+      let statsSection = '';  
         
-        // Add additional stats if available
-        if (homeStats.inningsPitched) {
-          statsSection += `, IP: ${homeStats.inningsPitched}`;
-        }
-        if (homeStats.battingAvgAgainst) {
-          statsSection += `, BAA: ${homeStats.battingAvgAgainst}`;
-        }
-        if (homeStats.homeRunsAllowed) {
-          statsSection += `, HR: ${homeStats.homeRunsAllowed}`;
-        }
-        statsSection += '\n';
-      } else {
-        statsSection += `HOME: Probable starter TBD\n`;
+      // Add any stats we have - don't be picky about structure, OpenAI can parse them
+        
+      // 1. First add the standard stats context if available
+      if (gameData?.statsContext) {
+        statsSection += gameData.statsContext;
+        statsSection += '\n\n';
+      }
+        
+      // 2. Add any enhanced stats if available
+      if (gameData?.enhancedStats) {
+        statsSection += gameData.enhancedStats;
+        statsSection += '\n\n';
       }
       
-      if (awayPitcher && awayPitcher.fullName && awayPitcher.fullName !== 'Unknown Pitcher') {
-        const awayStats = awayPitcher.seasonStats || {};
-        statsSection += `AWAY: ${awayPitcher.fullName} - ERA: ${awayStats.era || 'N/A'}, Record: ${awayStats.wins || 0}-${awayStats.losses || 0}, WHIP: ${awayStats.whip || 'N/A'}, SO: ${awayStats.strikeOuts || awayStats.strikeouts || 0}`;
+      // 3. Handle MLB specific pitchers data from MLB Stats API
+      if (gameData?.pitchers) {
+        statsSection += 'PROBABLE STARTING PITCHERS:\n';
         
-        // Add additional stats if available
-        if (awayStats.inningsPitched) {
-          statsSection += `, IP: ${awayStats.inningsPitched}`;
-        }
-        if (awayStats.battingAvgAgainst) {
-          statsSection += `, BAA: ${awayStats.battingAvgAgainst}`;
-        }
-        if (awayStats.homeRunsAllowed) {
-          statsSection += `, HR: ${awayStats.homeRunsAllowed}`;
-        }
-        statsSection += '\n';
-      } else {
-        statsSection += `AWAY: Probable starter TBD\n`;
-      }
-      
-      statsSection += '\n';
-    }
-    // Fallback to the older pitcherData format if available
-    else if (gameData?.pitcherData) {
-      statsSection += 'STARTING PITCHER MATCHUP:\n';
+        const homePitcher = gameData.pitchers.home;
+        const awayPitcher = gameData.pitchers.away;
         
-      if (typeof gameData.pitcherData === 'string') {
-        statsSection += gameData.pitcherData;
-      } else {
-        const homePitcher = gameData.pitcherData.homePitcher;
-        const awayPitcher = gameData.pitcherData.awayPitcher;
-          
-        if (homePitcher) {
-          statsSection += `HOME: ${homePitcher.name} - `;
-          if (homePitcher.stats) {
-            statsSection += Object.entries(homePitcher.stats)
-              .map(([key, val]) => `${key}: ${val}`)
-              .join(', ');
-          }
-          statsSection += '\n';
-        }
-          
-        if (awayPitcher) {
-          statsSection += `AWAY: ${awayPitcher.name} - `;
-          if (awayPitcher.stats) {
-            statsSection += Object.entries(awayPitcher.stats)
-              .map(([key, val]) => `${key}: ${val}`)
-              .join(', ');
-          }
-          statsSection += '\n';
-        }
-      }
-      statsSection += '\n';
-    }
-      
-    // 4. Include MLB-specific note if this is MLB data
-    if (gameData?.sport === 'MLB' || gameData?.league === 'MLB' || gameData?.sport === 'baseball_mlb') {
-      statsSection += '**NOTE: All MLB data is from the current 2025 season**\n\n';
-    }
-      
-    // 5. Process structured team stats from Ball Don't Lie API
-    if (gameData?.teamStats) {
-      statsSection += 'TEAM STATISTICS AND STANDINGS:\n';
-      
-      const homeTeam = gameData.teamStats.homeTeam;
-      const awayTeam = gameData.teamStats.awayTeam;
-      
-      if (homeTeam) {
-        statsSection += `HOME TEAM (${gameData.homeTeam}):\n`;
-        statsSection += `Record: ${homeTeam.record || 'N/A'}, Last 10: ${homeTeam.lastTenGames || 'N/A'}, Home: ${homeTeam.homeRecord || 'N/A'}\n`;
-        
-        // Add batting stats if available
-        if (homeTeam.stats) {
-          statsSection += 'Batting: ';
-          const battingStats = homeTeam.stats.batting || {};
-          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}`;
-          
-          // Add OPS if available
-          if (battingStats.ops) {
-            statsSection += `, OPS: ${battingStats.ops}`;
-          }
-          
-          statsSection += `, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}`;
-          
-          // Add additional offensive stats if available
-          if (battingStats.rbi) {
-            statsSection += `, RBI: ${battingStats.rbi}`;
-          }
-          if (battingStats.stolenBases) {
-            statsSection += `, SB: ${battingStats.stolenBases}`;
-          }
-          
-          statsSection += '\n';
-        }
-        
-        // Add pitching stats if available
-        if (homeTeam.stats && homeTeam.stats.pitching) {
-          statsSection += 'Pitching: ';
-          const pitchingStats = homeTeam.stats.pitching || {};
-          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}`;
-          
-          // Add additional pitching stats if available
-          if (pitchingStats.strikeouts) {
-            statsSection += `, K: ${pitchingStats.strikeouts}`;
-          }
-          if (pitchingStats.walks) {
-            statsSection += `, BB: ${pitchingStats.walks}`;
-          }
-          if (pitchingStats.saves) {
-            statsSection += `, SV: ${pitchingStats.saves}`;
-          }
-          if (pitchingStats.blownSaves) {
-            statsSection += `, BS: ${pitchingStats.blownSaves}`;
-          }
-          
-          statsSection += '\n';
-        }
-        
-        // Add bullpen stats if available
-        if (homeTeam.stats && homeTeam.stats.bullpen) {
-          statsSection += 'Bullpen: ';
-          const bullpenStats = homeTeam.stats.bullpen || {};
-          statsSection += `ERA: ${bullpenStats.era || 'N/A'}`;
-          
-          if (bullpenStats.saves) {
-            statsSection += `, SV: ${bullpenStats.saves}`;
-          }
-          if (bullpenStats.blownSaves) {
-            statsSection += `, BS: ${bullpenStats.blownSaves}`;
-          }
-          if (bullpenStats.whip) {
-            statsSection += `, WHIP: ${bullpenStats.whip}`;
-          }
-          
-          statsSection += '\n';
-        }
-      }
-      
-      if (awayTeam) {
-        statsSection += `AWAY TEAM (${gameData.awayTeam}):\n`;
-        statsSection += `Record: ${awayTeam.record || 'N/A'}, Last 10: ${awayTeam.lastTenGames || 'N/A'}, Away: ${awayTeam.awayRecord || 'N/A'}\n`;
-        
-        // Add batting stats if available
-        if (awayTeam.stats) {
-          statsSection += 'Batting: ';
-          const battingStats = awayTeam.stats.batting || {};
-          statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}`;
-          
-          // Add OPS if available
-          if (battingStats.ops) {
-            statsSection += `, OPS: ${battingStats.ops}`;
-          }
-          
-          statsSection += `, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}`;
-          
-          // Add additional offensive stats if available
-          if (battingStats.rbi) {
-            statsSection += `, RBI: ${battingStats.rbi}`;
-          }
-          if (battingStats.stolenBases) {
-            statsSection += `, SB: ${battingStats.stolenBases}`;
-          }
-          
-          statsSection += '\n';
-        }
-        
-        // Add pitching stats if available
-        if (awayTeam.stats && awayTeam.stats.pitching) {
-          statsSection += 'Pitching: ';
-          const pitchingStats = awayTeam.stats.pitching || {};
-          statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}`;
-          
-          // Add additional pitching stats if available
-          if (pitchingStats.strikeouts) {
-            statsSection += `, K: ${pitchingStats.strikeouts}`;
-          }
-          if (pitchingStats.walks) {
-            statsSection += `, BB: ${pitchingStats.walks}`;
-          }
-          if (pitchingStats.saves) {
-            statsSection += `, SV: ${pitchingStats.saves}`;
-          }
-          if (pitchingStats.blownSaves) {
-            statsSection += `, BS: ${pitchingStats.blownSaves}`;
-          }
-          
-          statsSection += '\n';
-        }
-        
-        // Add bullpen stats if available
-        if (awayTeam.stats && awayTeam.stats.bullpen) {
-          statsSection += 'Bullpen: ';
-          const bullpenStats = awayTeam.stats.bullpen || {};
-          statsSection += `ERA: ${bullpenStats.era || 'N/A'}`;
-          
-          if (bullpenStats.saves) {
-            statsSection += `, SV: ${bullpenStats.saves}`;
-          }
-          if (bullpenStats.blownSaves) {
-            statsSection += `, BS: ${bullpenStats.blownSaves}`;
-          }
-          if (bullpenStats.whip) {
-            statsSection += `, WHIP: ${bullpenStats.whip}`;
-          }
-          
-          statsSection += '\n';
-        }
-      }
-      
-      statsSection += '\n';
-    }
-    // Fallback for old format team stats
-    else if (gameData?.teamStatsOld && typeof gameData.teamStatsOld === 'object') {
-      statsSection += 'TEAM STATISTICS SUMMARY:\n';
-      try {
-        statsSection += JSON.stringify(gameData.teamStatsOld, null, 2);
-      } catch (e) {
-        statsSection += 'Team stats available but in non-JSON format';
-      }
-      statsSection += '\n\n';
-    }
-      
-    // 5.5 Include top hitter stats for both teams if available
-    if (gameData?.hitterStats) {
-      statsSection += 'TOP HITTERS STATS:\n';
-      
-      // Format home team hitters
-      if (gameData.hitterStats.home && gameData.hitterStats.home.length > 0) {
-        statsSection += `${gameData.homeTeam} TOP HITTERS:\n`;
-        
-        // Sort by batting average and get top 5 hitters
-        const topHomeHitters = gameData.hitterStats.home
-          .sort((a, b) => parseFloat(b.stats.avg.replace('.', '')) - parseFloat(a.stats.avg.replace('.', '')))
-          .slice(0, 5);
-        
-        topHomeHitters.forEach(hitter => {
-          const stats = hitter.stats;
-          statsSection += `${hitter.name} (${hitter.position}): AVG: ${stats.avg}, H: ${stats.hits}, HR: ${stats.homeRuns}, RBI: ${stats.rbi}, AB: ${stats.atBats}`;
+        if (homePitcher && homePitcher.fullName && homePitcher.fullName !== 'Unknown Pitcher') {
+          const homeStats = homePitcher.seasonStats || {};
+          statsSection += `HOME: ${homePitcher.fullName} - ERA: ${homeStats.era || 'N/A'}, Record: ${homeStats.wins || 0}-${homeStats.losses || 0}, WHIP: ${homeStats.whip || 'N/A'}, SO: ${homeStats.strikeOuts || homeStats.strikeouts || 0}`;
           
           // Add additional stats if available
-          if (stats.ops) {
-            statsSection += `, OPS: ${stats.ops}`;
+          if (homeStats.inningsPitched) {
+            statsSection += `, IP: ${homeStats.inningsPitched}`;
           }
-          if (stats.walks) {
-            statsSection += `, BB: ${stats.walks}`;
+          if (homeStats.battingAvgAgainst) {
+            statsSection += `, BAA: ${homeStats.battingAvgAgainst}`;
           }
-          if (stats.strikeouts) {
-            statsSection += `, K: ${stats.strikeouts}`;
+          if (homeStats.homeRunsAllowed) {
+            statsSection += `, HR: ${homeStats.homeRunsAllowed}`;
           }
-          if (stats.stolenBases) {
-            statsSection += `, SB: ${stats.stolenBases}`;
-          }
-          if (stats.runs) {
-            statsSection += `, R: ${stats.runs}`;
-          }
-          
           statsSection += '\n';
-        });
+        } else {
+          statsSection += `HOME: Probable starter TBD\n`;
+        }
         
-        statsSection += '\n';
-      }
-      
-      // Format away team hitters
-      if (gameData.hitterStats.away && gameData.hitterStats.away.length > 0) {
-        statsSection += `${gameData.awayTeam} TOP HITTERS:\n`;
-        
-        // Sort by batting average and get top 5 hitters
-        const topAwayHitters = gameData.hitterStats.away
-          .sort((a, b) => parseFloat(b.stats.avg.replace('.', '')) - parseFloat(a.stats.avg.replace('.', '')))
-          .slice(0, 5);
-        
-        topAwayHitters.forEach(hitter => {
-          const stats = hitter.stats;
-          statsSection += `${hitter.name} (${hitter.position}): AVG: ${stats.avg}, H: ${stats.hits}, HR: ${stats.homeRuns}, RBI: ${stats.rbi}, AB: ${stats.atBats}`;
+        if (awayPitcher && awayPitcher.fullName && awayPitcher.fullName !== 'Unknown Pitcher') {
+          const awayStats = awayPitcher.seasonStats || {};
+          statsSection += `AWAY: ${awayPitcher.fullName} - ERA: ${awayStats.era || 'N/A'}, Record: ${awayStats.wins || 0}-${awayStats.losses || 0}, WHIP: ${awayStats.whip || 'N/A'}, SO: ${awayStats.strikeOuts || awayStats.strikeouts || 0}`;
           
           // Add additional stats if available
-          if (stats.ops) {
-            statsSection += `, OPS: ${stats.ops}`;
+          if (awayStats.inningsPitched) {
+            statsSection += `, IP: ${awayStats.inningsPitched}`;
           }
-          if (stats.walks) {
-            statsSection += `, BB: ${stats.walks}`;
+          if (awayStats.battingAvgAgainst) {
+            statsSection += `, BAA: ${awayStats.battingAvgAgainst}`;
           }
-          if (stats.strikeouts) {
-            statsSection += `, K: ${stats.strikeouts}`;
+          if (awayStats.homeRunsAllowed) {
+            statsSection += `, HR: ${awayStats.homeRunsAllowed}`;
           }
-          if (stats.stolenBases) {
-            statsSection += `, SB: ${stats.stolenBases}`;
-          }
-          if (stats.runs) {
-            statsSection += `, R: ${stats.runs}`;
-          }
-          
           statsSection += '\n';
-        });
+        } else {
+          statsSection += `AWAY: Probable starter TBD\n`;
+        }
         
         statsSection += '\n';
       }
-    }
-    
-    // 6. Include game context from Perplexity if available
-    if (gameData?.gameContext) {
-      statsSection += 'GAME CONTEXT AND STORYLINES:\n';
-      
-      if (gameData.gameContext.playoffStatus) {
-        statsSection += `Playoff Status: ${gameData.gameContext.playoffStatus}\n`;
+      // Fallback to the older pitcherData format if available
+      else if (gameData?.pitcherData) {
+        statsSection += 'STARTING PITCHER MATCHUP:\n';
+          
+        if (typeof gameData.pitcherData === 'string') {
+          statsSection += gameData.pitcherData;
+        } else {
+          const homePitcher = gameData.pitcherData.homePitcher;
+          const awayPitcher = gameData.pitcherData.awayPitcher;
+            
+          if (homePitcher) {
+            statsSection += `HOME: ${homePitcher.name} - `;
+            if (homePitcher.stats) {
+              statsSection += Object.entries(homePitcher.stats)
+                .map(([key, val]) => `${key}: ${val}`)
+                .join(', ');
+            }
+            statsSection += '\n';
+          }
+            
+          if (awayPitcher) {
+            statsSection += `AWAY: ${awayPitcher.name} - `;
+            if (awayPitcher.stats) {
+              statsSection += Object.entries(awayPitcher.stats)
+                .map(([key, val]) => `${key}: ${val}`)
+                .join(', ');
+            }
+            statsSection += '\n';
+          }
+        }
+        statsSection += '\n';
+      }
+        
+      // 4. Include MLB-specific note if this is MLB data
+      if (gameData?.sport === 'MLB' || gameData?.league === 'MLB' || gameData?.sport === 'baseball_mlb') {
+        statsSection += '**NOTE: All MLB data is from the current 2025 season**\n\n';
+      }
+        
+      // 5. Process structured team stats from Ball Don't Lie API
+      if (gameData?.teamStats) {
+        statsSection += 'TEAM STATISTICS AND STANDINGS:\n';
+        
+        const homeTeam = gameData.teamStats.homeTeam;
+        const awayTeam = gameData.teamStats.awayTeam;
+        
+        if (homeTeam) {
+          statsSection += `HOME TEAM (${gameData.homeTeam}):\n`;
+          statsSection += `Record: ${homeTeam.record || 'N/A'}, Last 10: ${homeTeam.lastTenGames || 'N/A'}, Home: ${homeTeam.homeRecord || 'N/A'}\n`;
+          
+          // Add batting stats if available
+          if (homeTeam.stats) {
+            statsSection += 'Batting: ';
+            const battingStats = homeTeam.stats.batting || {};
+            statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}`;
+            
+            // Add OPS if available
+            if (battingStats.ops) {
+              statsSection += `, OPS: ${battingStats.ops}`;
+            }
+            
+            statsSection += `, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}`;
+            
+            // Add additional offensive stats if available
+            if (battingStats.rbi) {
+              statsSection += `, RBI: ${battingStats.rbi}`;
+            }
+            if (battingStats.stolenBases) {
+              statsSection += `, SB: ${battingStats.stolenBases}`;
+            }
+            
+            statsSection += '\n';
+          }
+          
+          // Add pitching stats if available
+          if (homeTeam.stats && homeTeam.stats.pitching) {
+            statsSection += 'Pitching: ';
+            const pitchingStats = homeTeam.stats.pitching || {};
+            statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}`;
+            
+            // Add additional pitching stats if available
+            if (pitchingStats.strikeouts) {
+              statsSection += `, K: ${pitchingStats.strikeouts}`;
+            }
+            if (pitchingStats.walks) {
+              statsSection += `, BB: ${pitchingStats.walks}`;
+            }
+            if (pitchingStats.saves) {
+              statsSection += `, SV: ${pitchingStats.saves}`;
+            }
+            if (pitchingStats.blownSaves) {
+              statsSection += `, BS: ${pitchingStats.blownSaves}`;
+            }
+            
+            statsSection += '\n';
+          }
+          
+          // Add bullpen stats if available
+          if (homeTeam.stats && homeTeam.stats.bullpen) {
+            statsSection += 'Bullpen: ';
+            const bullpenStats = homeTeam.stats.bullpen || {};
+            statsSection += `ERA: ${bullpenStats.era || 'N/A'}`;
+            
+            if (bullpenStats.saves) {
+              statsSection += `, SV: ${bullpenStats.saves}`;
+            }
+            if (bullpenStats.blownSaves) {
+              statsSection += `, BS: ${bullpenStats.blownSaves}`;
+            }
+            if (bullpenStats.whip) {
+              statsSection += `, WHIP: ${bullpenStats.whip}`;
+            }
+            
+            statsSection += '\n';
+          }
+        }
+        
+        if (awayTeam) {
+          statsSection += `AWAY TEAM (${gameData.awayTeam}):\n`;
+          statsSection += `Record: ${awayTeam.record || 'N/A'}, Last 10: ${awayTeam.lastTenGames || 'N/A'}, Away: ${awayTeam.awayRecord || 'N/A'}\n`;
+          
+          // Add batting stats if available
+          if (awayTeam.stats) {
+            statsSection += 'Batting: ';
+            const battingStats = awayTeam.stats.batting || {};
+            statsSection += `AVG: ${battingStats.avg || 'N/A'}, OBP: ${battingStats.obp || 'N/A'}, SLG: ${battingStats.slg || 'N/A'}`;
+            
+            // Add OPS if available
+            if (battingStats.ops) {
+              statsSection += `, OPS: ${battingStats.ops}`;
+            }
+            
+            statsSection += `, HR: ${battingStats.homeRuns || 0}, Runs/Game: ${battingStats.runsPerGame || 'N/A'}`;
+            
+            // Add additional offensive stats if available
+            if (battingStats.rbi) {
+              statsSection += `, RBI: ${battingStats.rbi}`;
+            }
+            if (battingStats.stolenBases) {
+              statsSection += `, SB: ${battingStats.stolenBases}`;
+            }
+            
+            statsSection += '\n';
+          }
+          
+          // Add pitching stats if available
+          if (awayTeam.stats && awayTeam.stats.pitching) {
+            statsSection += 'Pitching: ';
+            const pitchingStats = awayTeam.stats.pitching || {};
+            statsSection += `ERA: ${pitchingStats.era || 'N/A'}, WHIP: ${pitchingStats.whip || 'N/A'}, Opp AVG: ${pitchingStats.avg || 'N/A'}`;
+            
+            // Add additional pitching stats if available
+            if (pitchingStats.strikeouts) {
+              statsSection += `, K: ${pitchingStats.strikeouts}`;
+            }
+            if (pitchingStats.walks) {
+              statsSection += `, BB: ${pitchingStats.walks}`;
+            }
+            if (pitchingStats.saves) {
+              statsSection += `, SV: ${pitchingStats.saves}`;
+            }
+            if (pitchingStats.blownSaves) {
+              statsSection += `, BS: ${pitchingStats.blownSaves}`;
+            }
+            
+            statsSection += '\n';
+          }
+          
+          // Add bullpen stats if available
+          if (awayTeam.stats && awayTeam.stats.bullpen) {
+            statsSection += 'Bullpen: ';
+            const bullpenStats = awayTeam.stats.bullpen || {};
+            statsSection += `ERA: ${bullpenStats.era || 'N/A'}`;
+            
+            if (bullpenStats.saves) {
+              statsSection += `, SV: ${bullpenStats.saves}`;
+            }
+            if (bullpenStats.blownSaves) {
+              statsSection += `, BS: ${bullpenStats.blownSaves}`;
+            }
+            if (bullpenStats.whip) {
+              statsSection += `, WHIP: ${bullpenStats.whip}`;
+            }
+            
+            statsSection += '\n';
+          }
+        }
+        
+        statsSection += '\n';
+      }
+      // Fallback for old format team stats
+      else if (gameData?.teamStatsOld && typeof gameData.teamStatsOld === 'object') {
+        statsSection += 'TEAM STATISTICS SUMMARY:\n';
+        try {
+          statsSection += JSON.stringify(gameData.teamStatsOld, null, 2);
+        } catch (e) {
+          statsSection += 'Team stats available but in non-JSON format';
+        }
+        statsSection += '\n\n';
+      }
+        
+      // 5.5 Include top hitter stats for both teams if available
+      if (gameData?.hitterStats) {
+        statsSection += 'TOP HITTERS STATS:\n';
+        
+        // Format home team hitters
+        if (gameData.hitterStats.home && gameData.hitterStats.home.length > 0) {
+          statsSection += `${gameData.homeTeam} TOP HITTERS:\n`;
+          
+          // Sort by batting average and get top 5 hitters
+          const topHomeHitters = gameData.hitterStats.home
+            .sort((a, b) => parseFloat(b.stats.avg.replace('.', '')) - parseFloat(a.stats.avg.replace('.', '')))
+            .slice(0, 5);
+          
+          topHomeHitters.forEach(hitter => {
+            const stats = hitter.stats;
+            statsSection += `${hitter.name} (${hitter.position}): AVG: ${stats.avg}, H: ${stats.hits}, HR: ${stats.homeRuns}, RBI: ${stats.rbi}, AB: ${stats.atBats}`;
+            
+            // Add additional stats if available
+            if (stats.ops) {
+              statsSection += `, OPS: ${stats.ops}`;
+            }
+            if (stats.walks) {
+              statsSection += `, BB: ${stats.walks}`;
+            }
+            if (stats.strikeouts) {
+              statsSection += `, K: ${stats.strikeouts}`;
+            }
+            if (stats.stolenBases) {
+              statsSection += `, SB: ${stats.stolenBases}`;
+            }
+            if (stats.runs) {
+              statsSection += `, R: ${stats.runs}`;
+            }
+            
+            statsSection += '\n';
+          });
+          
+          statsSection += '\n';
+        }
+        
+        // Format away team hitters
+        if (gameData.hitterStats.away && gameData.hitterStats.away.length > 0) {
+          statsSection += `${gameData.awayTeam} TOP HITTERS:\n`;
+          
+          // Sort by batting average and get top 5 hitters
+          const topAwayHitters = gameData.hitterStats.away
+            .sort((a, b) => parseFloat(b.stats.avg.replace('.', '')) - parseFloat(a.stats.avg.replace('.', '')))
+            .slice(0, 5);
+          
+          topAwayHitters.forEach(hitter => {
+            const stats = hitter.stats;
+            statsSection += `${hitter.name} (${hitter.position}): AVG: ${stats.avg}, H: ${stats.hits}, HR: ${stats.homeRuns}, RBI: ${stats.rbi}, AB: ${stats.atBats}`;
+            
+            // Add additional stats if available
+            if (stats.ops) {
+              statsSection += `, OPS: ${stats.ops}`;
+            }
+            if (stats.walks) {
+              statsSection += `, BB: ${stats.walks}`;
+            }
+            if (stats.strikeouts) {
+              statsSection += `, K: ${stats.strikeouts}`;
+            }
+            if (stats.stolenBases) {
+              statsSection += `, SB: ${stats.stolenBases}`;
+            }
+            if (stats.runs) {
+              statsSection += `, R: ${stats.runs}`;
+            }
+            
+            statsSection += '\n';
+          });
+          
+          statsSection += '\n';
+        }
       }
       
-      if (gameData.gameContext.homeTeamStorylines) {
-        statsSection += `${gameData.homeTeam} Storylines: ${gameData.gameContext.homeTeamStorylines}\n`;
+      // 6. Include game context from Perplexity if available
+      if (gameData?.gameContext) {
+        statsSection += 'GAME CONTEXT AND STORYLINES:\n';
+        
+        if (gameData.gameContext.playoffStatus) {
+          statsSection += `Playoff Status: ${gameData.gameContext.playoffStatus}\n`;
+        }
+        
+        if (gameData.gameContext.homeTeamStorylines) {
+          statsSection += `${gameData.homeTeam} Storylines: ${gameData.gameContext.homeTeamStorylines}\n`;
+        }
+        
+        if (gameData.gameContext.awayTeamStorylines) {
+          statsSection += `${gameData.awayTeam} Storylines: ${gameData.gameContext.awayTeamStorylines}\n`;
+        }
+        
+        if (gameData.gameContext.injuryReport) {
+          statsSection += `Injuries: ${gameData.gameContext.injuryReport}\n`;
+        }
+        
+        if (gameData.gameContext.keyMatchups) {
+          statsSection += `Key Matchups: ${gameData.gameContext.keyMatchups}\n`;
+        }
+        
+        if (gameData.gameContext.bettingTrends) {
+          statsSection += `Betting Trends: ${gameData.gameContext.bettingTrends}\n`;
+        }
+        
+        if (gameData.gameContext.weatherConditions) {
+          statsSection += `Weather: ${gameData.gameContext.weatherConditions}\n`;
+        }
+        
+        statsSection += '\n';
       }
       
-      if (gameData.gameContext.awayTeamStorylines) {
-        statsSection += `${gameData.awayTeam} Storylines: ${gameData.gameContext.awayTeamStorylines}\n`;
+      // 7. Include all collected stats if we have them
+      if (gameData?.allCollectedStats && gameData.allCollectedStats.sources?.length > 0) {
+        statsSection += 'COLLECTED STATS FROM MULTIPLE SOURCES:\n';
+        statsSection += `${gameData.allCollectedStats.sources.length} data sources available\n`;
+        statsSection += 'Data sources: ' + gameData.allCollectedStats.sources.map(s => s.source).join(', ') + '\n\n';
       }
-      
-      if (gameData.gameContext.injuryReport) {
-        statsSection += `Injuries: ${gameData.gameContext.injuryReport}\n`;
+        
+      // If we still have no stats at all, just say so
+      if (!statsSection.trim()) {
+        statsSection = 'No detailed statistics available. Analysis will be based on limited data.\n';
       }
-      
-      if (gameData.gameContext.keyMatchups) {
-        statsSection += `Key Matchups: ${gameData.gameContext.keyMatchups}\n`;
-      }
-      
-      if (gameData.gameContext.bettingTrends) {
-        statsSection += `Betting Trends: ${gameData.gameContext.bettingTrends}\n`;
-      }
-      
-      if (gameData.gameContext.weatherConditions) {
-        statsSection += `Weather: ${gameData.gameContext.weatherConditions}\n`;
-      }
-      
-      statsSection += '\n';
-    }
-    
-    // 7. Include all collected stats if we have them
-    if (gameData?.allCollectedStats && gameData.allCollectedStats.sources?.length > 0) {
-      statsSection += 'COLLECTED STATS FROM MULTIPLE SOURCES:\n';
-      statsSection += `${gameData.allCollectedStats.sources.length} data sources available\n`;
-      statsSection += 'Data sources: ' + gameData.allCollectedStats.sources.map(s => s.source).join(', ') + '\n\n';
-    }
-      
-    // If we still have no stats at all, just say so
-    if (!statsSection.trim()) {
-      statsSection = 'No detailed statistics available. Analysis will be based on limited data.\n';
-    }
-      
-    // Combine everything into the user input in a format Gary can analyze
-    const userPrompt = {
-      role: 'user',
-      content: `Analyze this upcoming ${gameData?.sport || ''} game: ${gameData?.homeTeam || 'Home'} vs ${gameData?.awayTeam || 'Away'}
+        
+      // Combine everything into the user input in a format Gary can analyze
+      const userPrompt = {
+        role: 'user',
+        content: `Analyze this upcoming ${gameData?.sport || ''} game: ${gameData?.homeTeam || 'Home'} vs ${gameData?.awayTeam || 'Away'}
 
 TEAM DESIGNATIONS (DO NOT CHANGE THESE):
 - HOME TEAM: ${gameData?.homeTeam || 'Not specified'}
