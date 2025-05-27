@@ -4,7 +4,7 @@
  * and avoids importing modules with dependencies issues
  */
 
-import { mlbStatsApiService } from './services/mlbStatsApiService.enhanced2.js';
+import { mlbStatsApiService } from './services/mlbStatsApiService.enhanced.js';
 import dotenv from 'dotenv';
 
 // Load environment variables

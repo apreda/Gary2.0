@@ -6,7 +6,7 @@
  * 3. Comprehensive matchup data with all stats combined
  */
 
-import { mlbStatsApiService } from './services/mlbStatsApiService.enhanced2.js';
+import { mlbStatsApiService } from './services/mlbStatsApiService.enhanced.js';
 import dotenv from 'dotenv';
 
 // Load environment variables
