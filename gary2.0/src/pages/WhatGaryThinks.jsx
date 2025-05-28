@@ -149,18 +149,6 @@ const WhatGaryThinks = () => {
           </div>
         </div>
 
-        {/* Gary's Confidence */}
-        {garyPicks?.confidence && (
-          <div className="mt-3 pt-3 border-t border-gray-700">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Gary's Confidence</span>
-              <span className="text-xs font-medium text-yellow-400">
-                {Math.round(garyPicks.confidence * 100)}%
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Gary's Rationale */}
         {garyPicks?.rationale && (
           <div className="mt-3 pt-3 border-t border-gray-700">

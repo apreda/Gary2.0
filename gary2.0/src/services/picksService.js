@@ -1087,7 +1087,6 @@ Respond in this exact JSON format:
   "spread": "home" or "away",
   "moneyline": "home" or "away", 
   "total": "over" or "under",
-  "confidence": 0.5-1.0,
   "rationale": "A 2-4 sentence paragraph explaining your picks using expert-level analysis."
 }
 
@@ -1127,7 +1126,6 @@ Make your picks for spread, moneyline, and total.`
       spread: 'home',
       moneyline: 'home', 
       total: 'over',
-      confidence: 0.6,
       rationale: 'Analysis based on available team data and current betting lines.'
     };
 
@@ -1137,8 +1135,7 @@ Make your picks for spread, moneyline, and total.`
     return {
       spread: 'home',
       moneyline: 'home',
-      total: 'over', 
-      confidence: 0.5,
+      total: 'over',
       rationale: 'Analysis based on available team data and current betting lines.'
     };
   }
