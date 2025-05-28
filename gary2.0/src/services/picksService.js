@@ -903,7 +903,15 @@ async function generateWhatGaryThinks() {
     const allGames = [];
     const sports = ['baseball_mlb', 'basketball_nba', 'icehockey_nhl'];
     
-    for (const sport of sports) {
+    for (let sportIndex = 0; sportIndex < sports.length; sportIndex++) {
+      const sport = sports[sportIndex];
+      
+      // Add delay between sports to prevent rate limiting (except for first sport)
+      if (sportIndex > 0) {
+        console.log(`⏳ Adding 2s delay between sports to prevent OpenAI rate limiting...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
       console.log(`🧠 Getting ${sport} games for What Gary Thinks...`);
       
       const games = await oddsService.getUpcomingGames(sport);
@@ -926,8 +934,15 @@ async function generateWhatGaryThinks() {
       
       console.log(`🧠 Found ${todayGames.length} ${sport} games for today`);
       
-      for (const game of todayGames) {
+      for (let i = 0; i < todayGames.length; i++) {
+        const game = todayGames[i];
         try {
+          // Add delay between games to prevent rate limiting (except for first game)
+          if (i > 0) {
+            console.log(`⏳ Adding 1.5s delay to prevent OpenAI rate limiting...`);
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+          
           // Extract odds data
           const odds = extractOddsData(game);
           
@@ -952,6 +967,12 @@ async function generateWhatGaryThinks() {
           
         } catch (error) {
           console.error(`🧠 Error processing game ${game.away_team} @ ${game.home_team}:`, error);
+          
+          // If it's a rate limiting error, add extra delay
+          if (error.message && (error.message.includes('429') || error.message.includes('Too Many Requests'))) {
+            console.log(`⏳ Rate limit detected, adding 5s delay before continuing...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
         }
       }
     }

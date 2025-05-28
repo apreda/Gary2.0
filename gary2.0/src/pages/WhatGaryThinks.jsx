@@ -65,6 +65,10 @@ const WhatGaryThinks = () => {
       
       console.log('🧠 No existing thoughts found, generating new Gary thoughts...');
       
+      // Add delay to prevent rate limiting
+      console.log('⏳ Adding delay to prevent OpenAI rate limiting...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       // Generate Gary's thoughts for all games
       const garyThoughts = await picksService.generateWhatGaryThinks();
       
@@ -79,7 +83,15 @@ const WhatGaryThinks = () => {
       }
     } catch (err) {
       console.error('Error loading Gary thoughts:', err);
-      setError('Failed to load Gary\'s thoughts. Please try again.');
+      
+      // Handle specific error types
+      if (err.message && err.message.includes('429')) {
+        setError('OpenAI rate limit reached. Please wait a moment and try again.');
+      } else if (err.message && err.message.includes('Too Many Requests')) {
+        setError('Too many requests to OpenAI. Please wait a moment and try again.');
+      } else {
+        setError('Failed to load Gary\'s thoughts. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -304,7 +316,7 @@ const WhatGaryThinks = () => {
   const BettingOption = ({ topLine, bottomLine, isSelected, singleLine = false }) => {
     return (
       <div className={`
-        px-2 py-3 rounded text-center transition-all duration-300 cursor-pointer h-16 flex flex-col justify-center
+        px-3 py-3 rounded text-center transition-all duration-300 cursor-pointer h-20 w-full flex flex-col justify-center
         ${isSelected 
           ? 'text-black font-bold' 
           : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -315,14 +327,12 @@ const WhatGaryThinks = () => {
         color: '#000'
       } : { backgroundColor: '#333' }}
       >
-        <div className="text-sm font-semibold">
+        <div className="text-sm font-semibold leading-tight">
           {topLine}
         </div>
-        {!singleLine && bottomLine && (
-          <div className={`text-xs mt-1 ${isSelected ? 'text-black' : 'text-gray-400'}`}>
-            {bottomLine}
-          </div>
-        )}
+        <div className={`text-xs mt-1 leading-tight ${isSelected ? 'text-black' : 'text-gray-400'}`}>
+          {!singleLine && bottomLine ? bottomLine : '\u00A0'}
+        </div>
       </div>
     );
   };
