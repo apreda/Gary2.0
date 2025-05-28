@@ -5,6 +5,7 @@ import { perplexityService } from '../services/perplexityService';
 import { openaiService } from '../services/openaiService';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import { propResultsService } from '../services/propResultsService';
+import AdminResultsProcessor from '../components/AdminResultsProcessor';
 
 function ResultsAdmin() {
   const [date, setDate] = useState('');
@@ -159,6 +160,12 @@ function ResultsAdmin() {
         >
           Player Prop Results
         </button>
+        <button
+          className={`px-4 py-2 font-medium ${activeTab === 'user_results' ? 'text-[#B8953F] border-b-2 border-[#B8953F]' : 'text-gray-400'}`}
+          onClick={() => setActiveTab('user_results')}
+        >
+          User Pick Results
+        </button>
       </div>
       
       {activeTab === 'game_results' ? (
@@ -219,7 +226,7 @@ function ResultsAdmin() {
         )}
       </div>
         </>
-      ) : (
+      ) : activeTab === 'prop_results' ? (
         <>
           <div className="bg-gray-800 p-6 rounded-lg mb-8">
             <h2 className="text-xl font-semibold mb-4">Check Player Prop Results</h2>
@@ -287,6 +294,8 @@ function ResultsAdmin() {
             </div>
           )}
         </>
+      ) : (
+        <AdminResultsProcessor />
       )}
     </div>
   );

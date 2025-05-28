@@ -1,279 +1,328 @@
 import { supabase } from '../supabaseClient';
-import { userStatsService } from './userStatsService';
 
 export const userPickResultsService = {
-  // Initialize the updateInterval property to null
-  updateInterval: null,
   /**
-   * Check and update user pick results
-   * This should be run periodically to update user stats when pick results come in
-   * @returns {Promise<Object>} Results of the update
+   * Process user pick results based on Gary's game results
+   * This function should be called manually or via a trigger when game results are updated
+   * @returns {Promise<Object>} Results of the processing
    */
-  async checkAndUpdateResults() {
+  async processUserPickResults() {
     try {
+      console.log('🎯 Starting user pick results processing...');
+      
       const results = {
         processed: 0,
         updated: 0,
-        errors: 0
+        errors: 0,
+        details: []
       };
       
-      // Get all recent game results with their pick_id
+      // Step 1: Get all user picks that don't have an outcome yet
+      const { data: pendingUserPicks, error: userPicksError } = await supabase
+        .from('user_picks')
+        .select('*')
+        .is('outcome', null);
+      
+      if (userPicksError) {
+        console.error('Error fetching pending user picks:', userPicksError);
+        throw userPicksError;
+      }
+      
+      if (!pendingUserPicks || pendingUserPicks.length === 0) {
+        console.log('No pending user picks found');
+        return { ...results, message: 'No pending user picks to process' };
+      }
+      
+      console.log(`Found ${pendingUserPicks.length} pending user picks`);
+      
+      // Step 2: Get all game results for the pick_ids that users have bet on
+      const pickIds = [...new Set(pendingUserPicks.map(pick => pick.pick_id))];
+      console.log(`Looking for game results for pick IDs: ${pickIds.slice(0, 5).join(', ')}${pickIds.length > 5 ? '...' : ''}`);
+      
       const { data: gameResults, error: gameResultsError } = await supabase
         .from('game_results')
-        .select('id, pick_id, result, final_score, matchup')
-        .order('created_at', { ascending: false })
-        .limit(100); // Increased to check more recent results
+        .select('*')
+        .in('pick_id', pickIds)
+        .not('result', 'is', null);
       
-      if (gameResultsError) throw gameResultsError;
+      if (gameResultsError) {
+        console.error('Error fetching game results:', gameResultsError);
+        throw gameResultsError;
+      }
       
       if (!gameResults || gameResults.length === 0) {
-        console.log('No game results found to process');
-        return results;
+        console.log('No game results found for pending user picks');
+        return { ...results, message: 'No game results available yet for pending picks' };
       }
       
       console.log(`Found ${gameResults.length} game results to process`);
       
-      // Create a map of pick_id to result for faster lookup
-      const resultsMap = {};
-      gameResults.forEach(gr => {
-        resultsMap[gr.pick_id] = gr.result;
+      // Step 3: Create a map of pick_id to Gary's result for quick lookup
+      const gameResultsMap = {};
+      gameResults.forEach(result => {
+        gameResultsMap[result.pick_id] = result.result; // 'won', 'lost', or 'push'
       });
       
-      // Get all user picks for these game results
-      const pickIds = gameResults.map(gr => gr.pick_id);
-      console.log(`Looking for user picks with these pick_ids: ${pickIds.slice(0, 5).join(', ')}${pickIds.length > 5 ? '...' : ''}`);
+      // Step 4: Process each user pick and determine their outcome
+      const userPickUpdates = [];
+      const userStatsUpdates = {};
       
-      const { data: userPicks, error: userPicksError } = await supabase
-        .from('user_picks')
-        .select('*')
-        .in('pick_id', pickIds)
-        .is('outcome', null); // Only get picks without an outcome yet
-      
-      if (userPicksError) {
-        console.error('Error fetching user picks:', userPicksError);
-        throw userPicksError;
-      }
-      
-      console.log(`Found ${userPicks?.length || 0} user picks to update`);
-      
-      // Process user picks and update outcomes
-      for (const userPick of (userPicks || [])) {
+      for (const userPick of pendingUserPicks) {
         results.processed++;
         
-        try {
-          const gameResult = resultsMap[userPick.pick_id];
-          if (!gameResult) continue;
-          
-          // Determine if user won based on their decision and the game result
-          // If user bet and game was won, or user faded and game was lost, user wins
-          const userWon = 
-            (userPick.decision === 'bet' && gameResult === 'won') || 
-            (userPick.decision === 'fade' && gameResult === 'lost');
-          
-          const outcome = userWon ? 'win' : 'loss';
-          
-          // Update the user pick with the outcome
+        const garyResult = gameResultsMap[userPick.pick_id];
+        
+        if (!garyResult) {
+          console.log(`No game result yet for pick_id: ${userPick.pick_id}`);
+          continue;
+        }
+        
+        // Calculate user outcome based on their decision and Gary's result
+        let userOutcome;
+        
+        if (garyResult === 'push') {
+          // If Gary's pick was a push, user gets a push regardless of bet/fade
+          userOutcome = 'push';
+        } else if (userPick.decision === 'bet') {
+          // User bet WITH Gary
+          userOutcome = garyResult === 'won' ? 'won' : 'lost';
+        } else if (userPick.decision === 'fade') {
+          // User bet AGAINST Gary (fade)
+          userOutcome = garyResult === 'won' ? 'lost' : 'won';
+        } else {
+          console.error(`Unknown decision type: ${userPick.decision}`);
+          results.errors++;
+          continue;
+        }
+        
+        console.log(`User ${userPick.user_id} ${userPick.decision} on pick ${userPick.pick_id}: Gary ${garyResult} → User ${userOutcome}`);
+        
+        // Prepare user_picks update
+        userPickUpdates.push({
+          id: userPick.id,
+          outcome: userOutcome
+        });
+        
+        // Prepare user_stats updates (aggregate by user_id)
+        if (!userStatsUpdates[userPick.user_id]) {
+          userStatsUpdates[userPick.user_id] = {
+            user_id: userPick.user_id,
+            wins: 0,
+            losses: 0,
+            pushes: 0,
+            total_picks: 0
+          };
+        }
+        
+        userStatsUpdates[userPick.user_id].total_picks++;
+        if (userOutcome === 'won') {
+          userStatsUpdates[userPick.user_id].wins++;
+        } else if (userOutcome === 'lost') {
+          userStatsUpdates[userPick.user_id].losses++;
+        } else if (userOutcome === 'push') {
+          userStatsUpdates[userPick.user_id].pushes++;
+        }
+        
+        results.details.push({
+          user_id: userPick.user_id,
+          pick_id: userPick.pick_id,
+          decision: userPick.decision,
+          gary_result: garyResult,
+          user_outcome: userOutcome
+        });
+      }
+      
+      // Step 5: Update user_picks with outcomes
+      if (userPickUpdates.length > 0) {
+        console.log(`Updating ${userPickUpdates.length} user picks with outcomes...`);
+        
+        for (const update of userPickUpdates) {
           const { error: updateError } = await supabase
             .from('user_picks')
-            .update({ 
-              outcome: outcome,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', userPick.id);
+            .update({ outcome: update.outcome })
+            .eq('id', update.id);
           
           if (updateError) {
-            console.error(`Error updating user pick ${userPick.id}:`, updateError);
+            console.error(`Error updating user pick ${update.id}:`, updateError);
             results.errors++;
-            continue;
+          } else {
+            results.updated++;
           }
-          
-          // Update user stats
-          await updateUserStats(userPick.user_id, outcome, userPick.decision);
-          
-          results.updated++;
-          console.log(`Updated user pick ${userPick.id} with outcome: ${outcome}`);
+        }
+      }
+      
+      // Step 6: Update user_stats
+      for (const [userId, stats] of Object.entries(userStatsUpdates)) {
+        try {
+          await this.updateUserStats(userId, stats);
         } catch (error) {
-          console.error(`Error processing user pick ${userPick.id}:`, error);
+          console.error(`Error updating stats for user ${userId}:`, error);
           results.errors++;
         }
       }
       
-      // Also check user_stats for any pending results in the recent_results array
-      try {
-        const { data: userStats, error: userStatsError } = await supabase
-          .from('user_stats')
-          .select('id, recent_results');
-        
-        if (userStatsError) throw userStatsError;
-        
-        let additionalUpdates = 0;
-        
-        // Process each user's stats for legacy data
-        for (const stats of (userStats || [])) {
-          const recentResults = stats.recent_results || [];
-          let updatedResults = false;
-          
-          // Check each pending result
-          for (let i = 0; i < recentResults.length; i++) {
-            const result = recentResults[i];
-            // Only process pending results that have a matching game result
-            if (result.result_pending && result.pick_id && resultsMap[result.pick_id]) {
-              const gameResult = resultsMap[result.pick_id];
-              
-              // Determine if user won
-              const userWon = 
-                (result.decision === 'bet' && gameResult === 'won') || 
-                (result.decision === 'fade' && gameResult === 'lost');
-              
-              // Update this result
-              recentResults[i] = {
-                ...result,
-                result_pending: false,
-                pick_result: gameResult,
-                user_correct: userWon
-              };
-              
-              updatedResults = true;
-              additionalUpdates++;
-            }
-          }
-          
-          // If we updated any results, save back to user_stats
-          if (updatedResults) {
-            const { error: updateError } = await supabase
-              .from('user_stats')
-              .update({ recent_results: recentResults })
-              .eq('id', stats.id);
-              
-            if (updateError) {
-              console.error(`Error updating user stats for ${stats.id}:`, updateError);
-              results.errors++;
-            }
-          }
-        }
-        
-        if (additionalUpdates > 0) {
-          console.log(`Updated ${additionalUpdates} results in user_stats recent_results arrays`);
-          results.updated += additionalUpdates;
-        }
-      } catch (error) {
-        console.error('Error processing user_stats recent_results:', error);
-        results.errors++;
+      console.log(`✅ Processing complete: ${results.updated} picks updated, ${results.errors} errors`);
+      
+      return {
+        ...results,
+        message: `Successfully processed ${results.updated} user picks`
+      };
+      
+    } catch (error) {
+      console.error('Error in processUserPickResults:', error);
+      return {
+        success: false,
+        error: error.message,
+        processed: 0,
+        updated: 0,
+        errors: 1
+      };
+    }
+  },
+  
+  /**
+   * Update user stats based on new results
+   * @param {string} userId - The user's ID
+   * @param {Object} stats - Stats object with wins, losses, pushes, total_picks
+   */
+  async updateUserStats(userId, stats) {
+    try {
+      // First, get current user stats
+      const { data: currentStats, error: fetchError } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw fetchError;
       }
       
-      return results;
+      let updatedStats;
+      
+      if (currentStats) {
+        // Update existing stats
+        updatedStats = {
+          total_picks: (currentStats.total_picks || 0) + stats.total_picks,
+          win_count: (currentStats.win_count || 0) + stats.wins,
+          loss_count: (currentStats.loss_count || 0) + stats.losses,
+          push_count: (currentStats.push_count || 0) + stats.pushes,
+          updated_at: new Date().toISOString()
+        };
+        
+        // Calculate new streak
+        if (stats.wins > 0 && stats.losses === 0) {
+          // User had wins, extend or start win streak
+          updatedStats.current_streak = currentStats.current_streak > 0 
+            ? currentStats.current_streak + stats.wins 
+            : stats.wins;
+        } else if (stats.losses > 0 && stats.wins === 0) {
+          // User had losses, extend or start loss streak
+          updatedStats.current_streak = currentStats.current_streak < 0 
+            ? currentStats.current_streak - stats.losses 
+            : -stats.losses;
+        } else if (stats.wins > 0 && stats.losses > 0) {
+          // Mixed results, reset streak to the last result
+          updatedStats.current_streak = stats.wins > stats.losses ? 1 : -1;
+        }
+        // If only pushes, keep current streak
+        
+        const { error: updateError } = await supabase
+          .from('user_stats')
+          .update(updatedStats)
+          .eq('id', userId);
+        
+        if (updateError) throw updateError;
+        
+      } else {
+        // Create new user stats
+        updatedStats = {
+          id: userId,
+          total_picks: stats.total_picks,
+          win_count: stats.wins,
+          loss_count: stats.losses,
+          push_count: stats.pushes,
+          ride_count: 0, // Will be updated separately when we track bet vs fade
+          fade_count: 0,
+          current_streak: stats.wins > 0 ? stats.wins : (stats.losses > 0 ? -stats.losses : 0),
+          longest_streak: stats.wins > 0 ? stats.wins : 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        const { error: insertError } = await supabase
+          .from('user_stats')
+          .insert([updatedStats]);
+        
+        if (insertError) throw insertError;
+      }
+      
+      console.log(`Updated stats for user ${userId}:`, updatedStats);
+      
     } catch (error) {
-      console.error('Error checking and updating results:', error);
+      console.error(`Error updating user stats for ${userId}:`, error);
       throw error;
     }
   },
   
   /**
-   * Update a user's stats based on a pick outcome
+   * Get user's current record and stats
    * @param {string} userId - The user's ID
-   * @param {string} outcome - 'win' or 'loss'
-   * @param {string} decision - 'bet' or 'fade'
-   * @returns {Promise<Object>} The updated user stats
-   * @private
+   * @returns {Promise<Object>} User's stats and record
    */
-  async updateUserStats(userId, outcome, decision) {
+  async getUserRecord(userId) {
     try {
-      // Get current user stats
       const { data: stats, error } = await supabase
         .from('user_stats')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
       
-      if (error) {
-        // If user stats don't exist, initialize them
-        if (error.code === 'PGRST116') {
-          return this.initializeUserStatsWithOutcome(userId, outcome, decision);
-        }
+      if (error && error.code !== 'PGRST116') {
         throw error;
       }
       
-      // Calculate updates
-      const updates = {};
-      
-      // Update win or loss count
-      if (outcome === 'win') {
-        updates.win_count = (stats.win_count || 0) + 1;
-        updates.current_streak = Math.max(0, (stats.current_streak || 0)) + 1;
-        updates.longest_streak = Math.max((stats.longest_streak || 0), updates.current_streak);
-        updates.last_result = 'win';
-      } else if (outcome === 'loss') {
-        updates.loss_count = (stats.loss_count || 0) + 1;
-        updates.current_streak = Math.min(0, (stats.current_streak || 0)) - 1;
-        updates.last_result = 'loss';
+      if (!stats) {
+        return {
+          record: '0-0-0',
+          win_rate: 0,
+          total_picks: 0,
+          current_streak: 0
+        };
       }
       
-      // Update the user stats
-      const { data: updatedStats, error: updateError } = await supabase
-        .from('user_stats')
-        .update(updates)
-        .eq('id', userId)
-        .select();
+      const wins = stats.win_count || 0;
+      const losses = stats.loss_count || 0;
+      const pushes = stats.push_count || 0;
+      const total = wins + losses;
       
-      if (updateError) throw updateError;
-      return updatedStats[0];
-    } catch (error) {
-      console.error(`Error updating stats for user ${userId}:`, error);
-      return null;
-    }
-  },
-  
-  /**
-   * Initialize user stats with an initial outcome
-   * @param {string} userId - The user's ID
-   * @param {string} outcome - 'win' or 'loss'
-   * @param {string} decision - 'bet' or 'fade'
-   * @returns {Promise<Object>} The created user stats
-   * @private
-   */
-  async initializeUserStatsWithOutcome(userId, outcome, decision) {
-    try {
-      // Set initial values based on the outcome
-      const newStats = {
-        id: userId,
-        total_picks: 1,
-        ride_count: decision === 'bet' ? 1 : 0,
-        fade_count: decision === 'fade' ? 1 : 0,
-        win_count: outcome === 'win' ? 1 : 0,
-        loss_count: outcome === 'loss' ? 1 : 0,
-        current_streak: outcome === 'win' ? 1 : -1,
-        longest_streak: outcome === 'win' ? 1 : 0,
-        recent_results: [],
-        last_result: outcome
+      return {
+        record: `${wins}-${losses}-${pushes}`,
+        win_rate: total > 0 ? ((wins / total) * 100).toFixed(1) : 0,
+        total_picks: stats.total_picks || 0,
+        current_streak: stats.current_streak || 0,
+        longest_streak: stats.longest_streak || 0,
+        ride_count: stats.ride_count || 0,
+        fade_count: stats.fade_count || 0
       };
       
-      const { data, error } = await supabase
-        .from('user_stats')
-        .insert([newStats])
-        .select();
-      
-      if (error) throw error;
-      return data[0];
     } catch (error) {
-      console.error(`Error initializing stats for user ${userId}:`, error);
-      return null;
+      console.error('Error getting user record:', error);
+      return {
+        record: '0-0-0',
+        win_rate: 0,
+        total_picks: 0,
+        current_streak: 0
+      };
     }
   },
   
   /**
-   * Schedule regular updates of user pick results - DISABLED
-   * @param {number} intervalMinutes - How often to check for updates (in minutes)
+   * Manual trigger to process results - can be called from admin interface
+   * @returns {Promise<Object>} Processing results
    */
-  scheduleResultsUpdates(intervalMinutes = 30) {
-    // Function disabled as requested by user
-    // Results are manually processed via the admin interface
-    
-    console.log('Automatic results checking is disabled - use admin interface instead');
-    
-    // Clear any existing interval (just in case)
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
-    }
+  async manualProcessResults() {
+    console.log('🔄 Manual processing of user pick results triggered');
+    return await this.processUserPickResults();
   }
 };
