@@ -893,6 +893,7 @@ async function generateDailyPicks() {
 // Export both styles!
 const picksService = {
   generateDailyPicks,
+  generateWhatGaryThinks,
   storeDailyPicksInDatabase,
   checkForExistingPicks,
   ensureValidSupabaseSession,
@@ -901,3 +902,257 @@ const picksService = {
 
 export { picksService, generateDailyPicks };
 export default picksService;
+
+/**
+ * Generate Gary's thoughts on all games for the day
+ * Returns spread, moneyline, and over/under picks for every game
+ * @returns {Promise<Array>} - Array of games with Gary's picks
+ */
+async function generateWhatGaryThinks() {
+  console.log('🧠 Starting What Gary Thinks generation...');
+  
+  try {
+    const allGames = [];
+    const sports = ['baseball_mlb', 'basketball_nba', 'icehockey_nhl'];
+    
+    for (const sport of sports) {
+      console.log(`🧠 Getting ${sport} games for What Gary Thinks...`);
+      
+      const games = await oddsService.getUpcomingGames(sport);
+      
+      // Get today's date in EST time zone format (YYYY-MM-DD)
+      const today = new Date();
+      const estOptions = { timeZone: 'America/New_York' };
+      const estDateString = today.toLocaleDateString('en-US', estOptions);
+      const [month, day, year] = estDateString.split('/');
+      const estFormattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      
+      // Filter games for today only
+      const todayGames = games.filter(game => {
+        const gameDate = new Date(game.commence_time);
+        const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
+        const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
+        const gameFormattedDate = `${gameYear}-${gameMonth.padStart(2, '0')}-${gameDay.padStart(2, '0')}`;
+        return gameFormattedDate === estFormattedDate;
+      });
+      
+      console.log(`🧠 Found ${todayGames.length} ${sport} games for today`);
+      
+      for (const game of todayGames) {
+        try {
+          // Extract odds data
+          const odds = extractOddsData(game);
+          
+          // Get game stats (reuse existing logic)
+          const gameStats = await getGameStatsForThoughts(game, sport);
+          
+          // Generate Gary's picks for this game
+          const garyPicks = await generateGaryPicksForGame(game, gameStats, sport);
+          
+          const gameData = {
+            id: game.id,
+            homeTeam: game.home_team,
+            awayTeam: game.away_team,
+            league: sport === 'baseball_mlb' ? 'MLB' : sport === 'basketball_nba' ? 'NBA' : 'NHL',
+            time: formatGameTime(game.commence_time),
+            odds: odds,
+            garyPicks: garyPicks,
+            sport: sport
+          };
+          
+          allGames.push(gameData);
+          
+        } catch (error) {
+          console.error(`🧠 Error processing game ${game.away_team} @ ${game.home_team}:`, error);
+        }
+      }
+    }
+    
+    console.log(`🧠 Generated What Gary Thinks for ${allGames.length} total games`);
+    return allGames;
+    
+  } catch (error) {
+    console.error('🧠 Error generating What Gary Thinks:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extract odds data from game object
+ * @param {Object} game - Game object from odds service
+ * @returns {Object} - Formatted odds data
+ */
+function extractOddsData(game) {
+  if (!game.bookmakers || game.bookmakers.length === 0) {
+    return null;
+  }
+  
+  const bookmaker = game.bookmakers[0];
+  const odds = {
+    spread: { home: null, away: null },
+    moneyline: { home: null, away: null },
+    total: { line: null, over: null, under: null }
+  };
+  
+  bookmaker.markets?.forEach(market => {
+    if (market.key === 'spreads') {
+      market.outcomes?.forEach(outcome => {
+        if (outcome.name === game.home_team) {
+          odds.spread.home = { line: outcome.point, odds: outcome.price };
+        } else if (outcome.name === game.away_team) {
+          odds.spread.away = { line: outcome.point, odds: outcome.price };
+        }
+      });
+    } else if (market.key === 'h2h') {
+      market.outcomes?.forEach(outcome => {
+        if (outcome.name === game.home_team) {
+          odds.moneyline.home = outcome.price;
+        } else if (outcome.name === game.away_team) {
+          odds.moneyline.away = outcome.price;
+        }
+      });
+    } else if (market.key === 'totals') {
+      if (market.outcomes?.length >= 2) {
+        odds.total.line = market.outcomes[0].point;
+        market.outcomes.forEach(outcome => {
+          if (outcome.name === 'Over') {
+            odds.total.over = outcome.price;
+          } else if (outcome.name === 'Under') {
+            odds.total.under = outcome.price;
+          }
+        });
+      }
+    }
+  });
+  
+  return odds;
+}
+
+/**
+ * Get game stats for What Gary Thinks (simplified version)
+ * @param {Object} game - Game object
+ * @param {string} sport - Sport type
+ * @returns {Object} - Game stats
+ */
+async function getGameStatsForThoughts(game, sport) {
+  // Reuse existing stats gathering logic but simplified
+  if (sport === 'baseball_mlb') {
+    // Get MLB stats
+    return await enhancedPicksService.getComprehensiveGameData(game.home_team, game.away_team);
+  } else if (sport === 'basketball_nba') {
+    // Get NBA stats
+    const playoffAnalysis = await ballDontLieService.getNbaPlayoffPlayerStats(
+      game.home_team,
+      game.away_team
+    );
+    return { playoffAnalysis };
+  } else if (sport === 'icehockey_nhl') {
+    // Get NHL stats
+    const playoffAnalysis = await ballDontLieService.getComprehensiveNhlPlayoffAnalysis(
+      game.home_team,
+      game.away_team
+    );
+    return { playoffAnalysis };
+  }
+  
+  return {};
+}
+
+/**
+ * Generate Gary's picks for a specific game (spread, moneyline, over/under)
+ * @param {Object} game - Game object
+ * @param {Object} gameStats - Game statistics
+ * @param {string} sport - Sport type
+ * @returns {Object} - Gary's picks
+ */
+async function generateGaryPicksForGame(game, gameStats, sport) {
+  try {
+    // Create a simplified prompt for What Gary Thinks
+    const systemMessage = {
+      role: "system",
+      content: `You are Gary the Bear, analyzing this game to make picks on spread, moneyline, and over/under.
+
+CRITICAL: You must pick ALL THREE bet types for this game:
+1. SPREAD: Pick either "home" or "away" 
+2. MONEYLINE: Pick either "home" or "away"
+3. TOTAL: Pick either "over" or "under"
+
+Respond in this exact JSON format:
+{
+  "spread": "home" or "away",
+  "moneyline": "home" or "away", 
+  "total": "over" or "under",
+  "confidence": 0.5-1.0
+}
+
+Base your picks on the provided stats and odds. Be decisive - you must pick a side for each bet type.`
+    };
+
+    const userMessage = {
+      role: "user",
+      content: `Analyze this ${sport} game and make your picks:
+
+GAME: ${game.away_team} @ ${game.home_team}
+TIME: ${game.commence_time}
+
+ODDS DATA:
+${JSON.stringify(extractOddsData(game), null, 2)}
+
+STATS DATA:
+${JSON.stringify(gameStats, null, 2)}
+
+Make your picks for spread, moneyline, and total.`
+    };
+
+    const response = await openaiService.generateResponse([systemMessage, userMessage], {
+      temperature: 0.7,
+      maxTokens: 300
+    });
+
+    // Parse the JSON response
+    const jsonMatch = response.match(/\{[\s\S]*?\}/);
+    if (jsonMatch) {
+      const picks = JSON.parse(jsonMatch[0]);
+      return picks;
+    }
+
+    // Fallback if parsing fails
+    return {
+      spread: 'home',
+      moneyline: 'home', 
+      total: 'over',
+      confidence: 0.6
+    };
+
+  } catch (error) {
+    console.error('Error generating Gary picks for game:', error);
+    // Return default picks if error
+    return {
+      spread: 'home',
+      moneyline: 'home',
+      total: 'over', 
+      confidence: 0.5
+    };
+  }
+}
+
+/**
+ * Format game time for display
+ * @param {string} timeString - ISO time string
+ * @returns {string} - Formatted time
+ */
+function formatGameTime(timeString) {
+  try {
+    const date = new Date(timeString);
+    const options = { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true, 
+      timeZone: 'America/New_York' 
+    };
+    const timeFormatted = new Intl.DateTimeFormat('en-US', options).format(date);
+    return `${timeFormatted} EST`;
+  } catch (error) {
+    return 'TBD';
+  }
+}

@@ -17,6 +17,7 @@ export function Navbar() {
   const navItems = [
     { path: '/', label: 'Home' },
     { path: '/real-gary-picks', label: 'Gary\'s Picks' },
+    { path: '/what-gary-thinks', label: 'What Gary Thinks' },
     { path: '/gary-props', label: 'Gary\'s Props' },
     { path: '/billfold', label: 'Billfold' },
     // Leaderboard page hidden from navbar but still accessible via direct URL
