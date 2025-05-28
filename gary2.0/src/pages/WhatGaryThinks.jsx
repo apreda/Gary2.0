@@ -697,12 +697,12 @@ const WhatGaryThinks = () => {
           const filteredGames = getFilteredGames();
           return filteredGames.length > 0 ? (
             <div className="w-full max-w-4xl mx-auto relative">
-              {/* Coin Image positioned absolutely - 2x bigger, no layout impact */}
-              <div className="absolute -top-16 right-8 z-10 pointer-events-none">
+              {/* Coin Image positioned absolutely - 50% bigger, moved up further and slightly left */}
+              <div className="absolute -top-24 right-4 z-10 pointer-events-none">
                 <img 
                   src={coin2} 
                   alt="Gary Coin" 
-                  className="w-40 h-40 object-contain opacity-90"
+                  className="w-60 h-60 object-contain opacity-90"
                   style={{ 
                     filter: 'drop-shadow(0 4px 12px rgba(212, 175, 55, 0.4))',
                     transform: 'rotate(-5deg)'
