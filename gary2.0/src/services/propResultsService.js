@@ -97,7 +97,7 @@ const propResultsService = {
         propsByDate[propDate].push(prop);
       });
 
-      // For each date, filter to keep only top 10 with highest confidence
+      // For each date, process all props (removed top 10 limit)
       let filteredApiResults = [];
       Object.keys(propsByDate).forEach(propDate => {
         const propsForDate = propsByDate[propDate];
@@ -106,12 +106,11 @@ const propResultsService = {
         // Sort by confidence level in descending order (highest confidence first)
         propsForDate.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
         
-        // Keep only the top 10 for this date
-        const topPropsForDate = propsForDate.slice(0, 10);
-        console.log(`Selected top ${topPropsForDate.length} prop picks for ${propDate} with confidence levels: ${topPropsForDate.map(r => r.confidence || 'unknown').join(', ')}`);
+        // Process ALL props for this date (removed .slice(0, 10) limit)
+        console.log(`Processing all ${propsForDate.length} prop picks for ${propDate} with confidence levels: ${propsForDate.map(r => r.confidence || 'unknown').join(', ')}`);
         
-        // Add to final filtered list
-        filteredApiResults = [...filteredApiResults, ...topPropsForDate];
+        // Add all props to final list
+        filteredApiResults = [...filteredApiResults, ...propsForDate];
       });
       
       console.log(`Total filtered prop picks across all dates: ${filteredApiResults.length}`);
@@ -121,7 +120,7 @@ const propResultsService = {
       }
       
       // 4. Format results for storage in Supabase prop_results table
-      // Use the filtered list (which has at most 10 items) instead of the full list
+      // Process all props (removed 10 item limit)
       const resultsToInsert = filteredApiResults.map(apiResult => {
         return {
           prop_pick_id: apiResult.prop_pick_id,
