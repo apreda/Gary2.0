@@ -167,7 +167,7 @@ const WhatGaryThinks = () => {
         <div 
           className="absolute top-0 left-1/5 right-1/5 h-px pointer-events-none"
           style={{
-            background: 'linear-gradient(90deg, transparent, rgba(241, 196, 15, 0.3), transparent)',
+            background: 'linear-gradient(90deg, transparent, rgba(184, 149, 63, 0.2), transparent)',
             transform: 'translateY(-1px)',
             zIndex: 1
           }}
@@ -350,14 +350,14 @@ const WhatGaryThinks = () => {
                     </div>
                     <div 
                       className="px-3 py-2 rounded-lg font-bold uppercase shadow-lg"
-                      style={{ 
-                        backgroundColor: '#d4af37', 
-                        color: '#000',
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        letterSpacing: '0.8px',
-                        border: '1px solid #f1c40f'
-                      }}
+                                             style={{ 
+                         backgroundColor: '#B8953F', 
+                         color: '#000',
+                         fontSize: '12px',
+                         fontWeight: '700',
+                         letterSpacing: '0.8px',
+                         border: '1px solid rgba(184, 149, 63, 0.6)'
+                       }}
                     >
                       Gary's Analysis
                     </div>
@@ -400,13 +400,13 @@ const WhatGaryThinks = () => {
         minHeight: '48px',
         minWidth: '80px',
         ...(isSelected ? { 
-          background: 'linear-gradient(135deg, #d4af37 0%, #f1c40f 100%)',
+          background: 'linear-gradient(135deg, #B8953F 0%, #C5A647 100%)',
           color: '#000',
-          border: '1px solid rgba(241, 196, 15, 0.6)',
+          border: '1px solid rgba(184, 149, 63, 0.6)',
           boxShadow: `
-            0 4px 16px rgba(212, 175, 55, 0.4),
-            0 2px 8px rgba(241, 196, 15, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.3)
+            0 4px 16px rgba(184, 149, 63, 0.3),
+            0 2px 8px rgba(184, 149, 63, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2)
           `
         } : { 
           background: 'rgba(51, 51, 51, 0.6)',
@@ -474,15 +474,15 @@ const WhatGaryThinks = () => {
               rgba(42, 42, 42, 0.9) 100%
             )`,
             backdropFilter: 'blur(20px) saturate(180%)',
-            border: '1px solid rgba(212, 175, 55, 0.6)',
-            boxShadow: `
-              0 8px 32px rgba(0, 0, 0, 0.3),
-              0 2px 8px rgba(212, 175, 55, 0.2),
-              inset 0 1px 0 rgba(255, 255, 255, 0.05)
-            `
-          }}
-        >
-            <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+                         border: '1px solid rgba(184, 149, 63, 0.4)',
+             boxShadow: `
+               0 8px 32px rgba(0, 0, 0, 0.3),
+               0 2px 8px rgba(184, 149, 63, 0.15),
+               inset 0 1px 0 rgba(255, 255, 255, 0.05)
+             `
+           }}
+         >
+            <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#B8953F' }}>
               <h3 className="font-bold text-black">LOADING GARY'S THOUGHTS...</h3>
             </div>
             <p className="text-yellow-500 mb-4">Gary is analyzing today's games...</p>
@@ -577,12 +577,12 @@ const WhatGaryThinks = () => {
               <button
                 onClick={() => navigate('/')}
                 className="p-2 rounded transition-all duration-300"
-                style={{ backgroundColor: '#d4af37', color: '#000' }}
+                style={{ backgroundColor: '#B8953F', color: '#000' }}
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h1 className="text-3xl font-bold" style={{ color: '#d4af37' }}>
+                <h1 className="text-3xl font-bold" style={{ color: '#B8953F' }}>
                   What Gary Thinks
                 </h1>
                 <p className="text-gray-400 mt-1">Gary's picks for every game today</p>
@@ -594,10 +594,10 @@ const WhatGaryThinks = () => {
               disabled={loading}
               className="flex items-center space-x-2 px-6 py-3 rounded-lg font-bold transition-all duration-300 disabled:opacity-50 transform hover:scale-105 shadow-lg"
               style={{ 
-                backgroundColor: '#d4af37', 
+                backgroundColor: '#B8953F', 
                 color: '#000',
-                border: '2px solid #f1c40f',
-                boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4)',
+                border: '1px solid rgba(184, 149, 63, 0.6)',
+                boxShadow: '0 4px 12px rgba(184, 149, 63, 0.3)',
                 fontSize: '14px',
                 fontWeight: '700',
                 letterSpacing: '0.5px'
@@ -633,12 +633,12 @@ const WhatGaryThinks = () => {
                       : 'text-gray-300 hover:text-white hover:bg-gray-700 hover:scale-102'
                   }`}
                   style={activeTab === sport ? { 
-                    background: 'linear-gradient(135deg, #d4af37 0%, #f1c40f 100%)',
-                    border: '1px solid rgba(241, 196, 15, 0.6)',
+                    background: 'linear-gradient(135deg, #B8953F 0%, #C5A647 100%)',
+                    border: '1px solid rgba(184, 149, 63, 0.6)',
                     boxShadow: `
-                      0 4px 16px rgba(212, 175, 55, 0.4),
-                      0 2px 8px rgba(241, 196, 15, 0.3),
-                      inset 0 1px 0 rgba(255, 255, 255, 0.3)
+                      0 4px 16px rgba(184, 149, 63, 0.3),
+                      0 2px 8px rgba(184, 149, 63, 0.2),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.2)
                     `,
                     fontSize: '16px',
                     fontWeight: '700',
@@ -684,22 +684,22 @@ const WhatGaryThinks = () => {
                   rgba(42, 42, 42, 0.9) 100%
                 )`,
                 backdropFilter: 'blur(20px) saturate(180%)',
-                border: '1px solid rgba(212, 175, 55, 0.6)',
+                border: '1px solid rgba(184, 149, 63, 0.4)',
                 boxShadow: `
                   0 8px 32px rgba(0, 0, 0, 0.3),
-                  0 2px 8px rgba(212, 175, 55, 0.2),
+                  0 2px 8px rgba(184, 149, 63, 0.15),
                   inset 0 1px 0 rgba(255, 255, 255, 0.05)
                 `
               }}
             >
-              <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+              <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#B8953F' }}>
                 <h3 className="font-bold text-black">ERROR</h3>
               </div>
               <p className="text-red-400 mb-4">{error}</p>
               <button 
                 onClick={loadGaryThoughts}
                 className="px-4 py-2 font-bold uppercase text-black rounded transition-all duration-300 hover:scale-105" 
-                style={{ backgroundColor: '#d4af37' }}
+                style={{ backgroundColor: '#B8953F' }}
               >
                 Try Again
               </button>
@@ -717,8 +717,8 @@ const WhatGaryThinks = () => {
                 className="absolute inset-0 pointer-events-none"
                 style={{
                   background: `
-                    radial-gradient(ellipse at center, rgba(241, 196, 15, 0.03) 0%, transparent 70%),
-                    radial-gradient(circle at 25% 25%, rgba(241, 196, 15, 0.02) 0%, transparent 50%),
+                    radial-gradient(ellipse at center, rgba(184, 149, 63, 0.02) 0%, transparent 70%),
+                    radial-gradient(circle at 25% 25%, rgba(184, 149, 63, 0.015) 0%, transparent 50%),
                     radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.01) 0%, transparent 50%)
                   `,
                   borderRadius: '20px',
@@ -756,15 +756,15 @@ const WhatGaryThinks = () => {
                     rgba(42, 42, 42, 0.9) 100%
                   )`,
                   backdropFilter: 'blur(20px) saturate(180%)',
-                  border: '1px solid rgba(212, 175, 55, 0.6)',
+                  border: '1px solid rgba(184, 149, 63, 0.4)',
                   boxShadow: `
                     0 8px 32px rgba(0, 0, 0, 0.3),
-                    0 2px 8px rgba(212, 175, 55, 0.2),
+                    0 2px 8px rgba(184, 149, 63, 0.15),
                     inset 0 1px 0 rgba(255, 255, 255, 0.05)
                   `
                 }}
               >
-                <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+                <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#B8953F' }}>
                   <h3 className="font-bold text-black">NO {activeTab} GAMES TODAY</h3>
                 </div>
                 <p className="text-gray-400 mb-4">No {activeTab} games found for today</p>
@@ -782,15 +782,15 @@ const WhatGaryThinks = () => {
                     rgba(42, 42, 42, 0.9) 100%
                   )`,
                   backdropFilter: 'blur(20px) saturate(180%)',
-                  border: '1px solid rgba(212, 175, 55, 0.6)',
+                  border: '1px solid rgba(184, 149, 63, 0.4)',
                   boxShadow: `
                     0 8px 32px rgba(0, 0, 0, 0.3),
-                    0 2px 8px rgba(212, 175, 55, 0.2),
+                    0 2px 8px rgba(184, 149, 63, 0.15),
                     inset 0 1px 0 rgba(255, 255, 255, 0.05)
                   `
                 }}
               >
-                <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+                <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#B8953F' }}>
                   <h3 className="font-bold text-black">NO GAMES TODAY</h3>
                 </div>
                 <p className="text-gray-400 mb-4">No games found for today</p>
@@ -820,13 +820,13 @@ const WhatGaryThinks = () => {
                 `
               }}
             >
-              <h3 className="text-lg font-bold mb-3" style={{ color: '#d4af37' }}>Legend</h3>
+                              <h3 className="text-lg font-bold mb-3" style={{ color: '#B8953F' }}>Legend</h3>
               <div className="flex flex-wrap gap-6 text-sm">
                 <div className="flex items-center space-x-2">
-                  <div 
-                    className="w-4 h-4 rounded"
-                    style={{ backgroundColor: '#d4af37' }}
-                  ></div>
+                                      <div 
+                      className="w-4 h-4 rounded"
+                      style={{ backgroundColor: '#B8953F' }}
+                    ></div>
                   <span className="text-gray-300 font-medium">Gary's Pick</span>
                 </div>
                 <div className="flex items-center space-x-2">
