@@ -549,9 +549,82 @@ const pickResultsService = {
   },
   
   /**
+   * Fetch player stats for a specific game date
+   * @param {string} playerName - Player name
+   * @param {string} team - Team name
+   * @param {string} dateStr - Date string in YYYY-MM-DD format
+   * @returns {Promise<Object|null>} - Player stats or null if not found
+   */
+  fetchPlayerStats: async function(playerName, team, dateStr) {
+    try {
+      // For now, use Perplexity to get player stats
+      const gameDate = new Date(dateStr).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      
+      const query = `What were the complete stats for ${playerName} on ${gameDate}? Include points, rebounds, assists, and any other relevant stats. Just respond with the numbers.`;
+      
+      console.log('Querying Perplexity for player stats');
+      const response = await perplexityService.fetchRealTimeInfo(query, { temperature: 0.1 });
+      
+      if (response) {
+        // Try to extract numbers from the response
+        const numbers = response.match(/(\d+(\.\d+)?)/g);
+        if (numbers && numbers.length > 0) {
+          // For simplicity, return the first number found as the main stat
+          return {
+            actualValue: parseFloat(numbers[0]),
+            fullResponse: response
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching player stats:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Grade a prop pick based on player stats
+   * @param {Object} propPick - Prop pick data
+   * @param {Object} playerStats - Player stats data
+   * @returns {string|null} - Result string ('won', 'lost', 'push') or null
+   */
+  gradePropPick: function(propPick, playerStats) {
+    try {
+      if (!playerStats || playerStats.actualValue === undefined) return null;
+      
+      const propType = propPick.prop?.split(' ')[0] || '';
+      const lineValue = parseFloat(propPick.prop?.split(' ')[1]) || 0;
+      const betType = propPick.bet?.toLowerCase() || '';
+      const actualValue = playerStats.actualValue;
+      
+      if (betType === 'over') {
+        if (actualValue > lineValue) return 'won';
+        else if (actualValue < lineValue) return 'lost';
+        else return 'push';
+      } else if (betType === 'under') {
+        if (actualValue < lineValue) return 'won';
+        else if (actualValue > lineValue) return 'lost';
+        else return 'push';
+      } else {
+        console.warn(`Unknown bet type: ${betType}`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`Error grading prop pick: ${error.message}`);
+      return null;
+    }
+  },
+
+  /**
    * Store graded prop pick result in prop_results table
    * @param {Object} propPick - Original prop pick data
-   * @param {number} actualValue - The actual value achieved by the player
+   * @param {number} actualValue - Actual stat value
    * @param {string} resultStr - Result string ('won', 'lost', 'push')
    * @returns {Promise<Object>} - Result of the database operation
    */
@@ -569,7 +642,7 @@ const pickResultsService = {
       const { error } = await supabase
         .from('prop_results')
         .insert({
-          prop_pick_id: propPick.prop_pick_id,
+          prop_pick_id: propPick.prop_pick_id || `prop-${Date.now()}`,
           game_date: propPick.game_date,
           player_name: propPick.player,
           prop_type: propType,
@@ -578,7 +651,7 @@ const pickResultsService = {
           result: resultStr,
           odds: propPick.odds?.toString() || '',
           pick_text: `${propPick.player} ${propPick.prop} ${propPick.bet}`,
-          matchup: propPick.team || '',
+          matchup: propPick.team,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
@@ -594,6 +667,7 @@ const pickResultsService = {
 
   /**
    * Process all game picks for a specific date and save results in game_results
+   * ALSO automatically process user bet/fade results
    * @param {string} dateStr - Date string in YYYY-MM-DD format
    * @returns {Promise<Object>} - Results processing summary
    */
@@ -703,10 +777,41 @@ const pickResultsService = {
         }
       }
       
+      // 🎯 NEW: Automatically process user bet/fade results after game results are saved
+      console.log('🎯 Automatically processing user bet/fade results...');
+      try {
+        // Import the userPickResultsService
+        const { userPickResultsService } = await import('./userPickResultsService.js');
+        
+        // Process user results for this date
+        const userResultsProcessing = await userPickResultsService.manualProcessResults(dateStr);
+        
+        if (userResultsProcessing.success) {
+          console.log(`✅ Successfully processed ${userResultsProcessing.updated} user bet/fade results`);
+          results.userResults = {
+            success: true,
+            processed: userResultsProcessing.updated,
+            message: `Automatically updated ${userResultsProcessing.updated} user bet/fade outcomes`
+          };
+        } else {
+          console.warn('⚠️ User results processing completed with issues:', userResultsProcessing.message);
+          results.userResults = {
+            success: false,
+            message: userResultsProcessing.message || 'Failed to process user results'
+          };
+        }
+      } catch (userError) {
+        console.error('❌ Error processing user bet/fade results:', userError);
+        results.userResults = {
+          success: false,
+          message: `Error processing user results: ${userError.message}`
+        };
+      }
+      
       return { 
         success: true, 
         results,
-        message: `Processed ${results.processed} picks: ${results.won} won, ${results.lost} lost, ${results.push} push, ${results.error} errors`
+        message: `Processed ${results.processed} picks: ${results.won} won, ${results.lost} lost, ${results.push} push, ${results.error} errors. ${results.userResults?.message || ''}`
       };
     } catch (error) {
       console.error('Error grading game picks:', error);
@@ -716,6 +821,7 @@ const pickResultsService = {
   
   /**
    * Process all prop picks for a specific date and save results in prop_results
+   * ALSO automatically process user bet/fade results
    * @param {string} dateStr - Date string in YYYY-MM-DD format
    * @returns {Promise<Object>} - Results processing summary
    */
@@ -724,12 +830,12 @@ const pickResultsService = {
       console.log(`Grading all prop picks for date: ${dateStr}`);
       
       // 1. Get prop picks from the date
-      const picksResult = await pickResultsService.getPropPicks(dateStr);
-      if (!picksResult.success || !picksResult.data?.length) {
-        return { success: false, message: picksResult.message || 'No prop picks found for the specified date' };
+      const propPicksResult = await pickResultsService.getPropPicks(dateStr);
+      if (!propPicksResult.success || !propPicksResult.data?.length) {
+        return { success: false, message: propPicksResult.message || 'No prop picks found for the specified date' };
       }
       
-      const propPicks = picksResult.data;
+      const propPicks = propPicksResult.data;
       console.log(`Found ${propPicks.length} prop picks to grade`);
       
       // 2. Process each prop pick
@@ -746,71 +852,51 @@ const pickResultsService = {
         try {
           console.log(`Processing prop pick: ${propPick.player} ${propPick.prop} ${propPick.bet}`);
           
-          // For props, use Perplexity to get actual value and result
-          const propType = propPick.prop?.split(' ')[0] || '';
-          const lineValue = parseFloat(propPick.prop?.split(' ')[1]) || 0;
-          const betType = propPick.bet?.toLowerCase() || '';
-          
-          // 3. Use Perplexity to get actual value
-          const gameDate = new Date(dateStr).toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-          });
-          
-          const query = `What was the final ${propType} stat for ${propPick.player} on ${gameDate}? Just respond with the number value and nothing else.`;
-          let actualValue;
-          
-          try {
-            console.log('Querying Perplexity for actual prop value');
-            const response = await perplexityService.fetchRealTimeInfo(query, { temperature: 0.1 });
-            if (response) {
-              // Try to extract a number from the response
-              const numberMatch = response.match(/(\d+(\.\d+)?)/); 
-              if (numberMatch) {
-                actualValue = parseFloat(numberMatch[0]);
-                console.log(`Found actual value: ${actualValue} for ${propPick.player} ${propType}`);
-              }
-            }
-          } catch (error) {
-            console.error('Perplexity query failed:', error);
-          }
-          
-          // If we couldn't get the value, skip this prop
-          if (actualValue === undefined || isNaN(actualValue)) {
-            console.warn(`Could not determine actual value for: ${propPick.player} ${propType}`);
+          // Skip picks that don't have required data
+          if (!propPick.player || !propPick.prop) {
+            console.warn(`Skipping prop pick due to missing data: ${JSON.stringify(propPick)}`);
             results.error++;
             results.details.push({
-              pick: `${propPick.player} ${propPick.prop} ${propPick.bet}`,
+              pick: `${propPick.player || ''} ${propPick.prop || ''} ${propPick.bet || ''}`,
               status: 'error',
-              reason: 'Could not determine actual value'
+              reason: 'Missing player or prop data'
             });
             continue;
           }
           
-          // 4. Grade the prop
-          let resultStr;
-          if (betType === 'over') {
-            if (actualValue > lineValue) resultStr = 'won';
-            else if (actualValue < lineValue) resultStr = 'lost';
-            else resultStr = 'push';
-          } else if (betType === 'under') {
-            if (actualValue < lineValue) resultStr = 'won';
-            else if (actualValue > lineValue) resultStr = 'lost';
-            else resultStr = 'push';
-          } else {
-            console.warn(`Unknown bet type: ${betType}`);
+          // 3. Fetch player stats for the game
+          const playerStats = await pickResultsService.fetchPlayerStats(
+            propPick.player,
+            propPick.team,
+            dateStr
+          );
+          
+          if (!playerStats) {
+            console.warn(`Could not find player stats for: ${propPick.player} on ${dateStr}`);
             results.error++;
             results.details.push({
               pick: `${propPick.player} ${propPick.prop} ${propPick.bet}`,
               status: 'error',
-              reason: 'Unknown bet type'
+              reason: 'Player stats not found'
+            });
+            continue;
+          }
+          
+          // 4. Grade the prop pick
+          const gradeResult = pickResultsService.gradePropPick(propPick, playerStats);
+          if (!gradeResult) {
+            console.warn(`Could not grade prop pick: ${propPick.player} ${propPick.prop}`);
+            results.error++;
+            results.details.push({
+              pick: `${propPick.player} ${propPick.prop} ${propPick.bet}`,
+              status: 'error',
+              reason: 'Could not determine result'
             });
             continue;
           }
           
           // 5. Save result to database
-          const dbResult = await pickResultsService.writePropResultToDb(propPick, actualValue, resultStr);
+          const dbResult = await pickResultsService.writePropResultToDb(propPick, playerStats.actualValue, gradeResult);
           if (!dbResult.success) {
             console.error(`Error saving prop result to database: ${dbResult.message}`);
             results.error++;
@@ -824,16 +910,15 @@ const pickResultsService = {
           
           // 6. Update counts
           results.processed++;
-          results[resultStr]++;
+          results[gradeResult]++;
           results.details.push({
             pick: `${propPick.player} ${propPick.prop} ${propPick.bet}`,
             status: 'success',
-            result: resultStr,
-            actual: actualValue,
-            line: lineValue
+            result: gradeResult,
+            actualValue: playerStats.actualValue
           });
           
-          console.log(`Successfully processed: ${propPick.player} ${propPick.prop} - ${resultStr} (${actualValue} vs ${lineValue})`);
+          console.log(`Successfully processed: ${propPick.player} ${propPick.prop} - ${gradeResult} (actual: ${playerStats.actualValue})`);
         } catch (error) {
           console.error(`Error processing prop pick:`, error);
           results.error++;
@@ -845,10 +930,41 @@ const pickResultsService = {
         }
       }
       
+      // 🎯 NEW: Automatically process user bet/fade results for prop picks after results are saved
+      console.log('🎯 Automatically processing user bet/fade results for prop picks...');
+      try {
+        // Import the userPickResultsService
+        const { userPickResultsService } = await import('./userPickResultsService.js');
+        
+        // Process user results for this date (this will handle both game and prop picks)
+        const userResultsProcessing = await userPickResultsService.manualProcessResults(dateStr);
+        
+        if (userResultsProcessing.success) {
+          console.log(`✅ Successfully processed ${userResultsProcessing.updated} user bet/fade results for prop picks`);
+          results.userResults = {
+            success: true,
+            processed: userResultsProcessing.updated,
+            message: `Automatically updated ${userResultsProcessing.updated} user bet/fade outcomes for prop picks`
+          };
+        } else {
+          console.warn('⚠️ User results processing for prop picks completed with issues:', userResultsProcessing.message);
+          results.userResults = {
+            success: false,
+            message: userResultsProcessing.message || 'Failed to process user results for prop picks'
+          };
+        }
+      } catch (userError) {
+        console.error('❌ Error processing user bet/fade results for prop picks:', userError);
+        results.userResults = {
+          success: false,
+          message: `Error processing user results for prop picks: ${userError.message}`
+        };
+      }
+      
       return { 
         success: true, 
         results,
-        message: `Processed ${results.processed} prop picks: ${results.won} won, ${results.lost} lost, ${results.push} push, ${results.error} errors`
+        message: `Processed ${results.processed} prop picks: ${results.won} won, ${results.lost} lost, ${results.push} push, ${results.error} errors. ${results.userResults?.message || ''}`
       };
     } catch (error) {
       console.error('Error grading prop picks:', error);
@@ -858,6 +974,7 @@ const pickResultsService = {
 
   /**
    * Main function for admin interface to check and grade both game and prop picks for a date
+   * ALSO automatically processes user bet/fade results
    * @param {string} dateStr - Date string in YYYY-MM-DD format
    * @returns {Promise<Object>} - Combined results
    */
@@ -874,10 +991,14 @@ const pickResultsService = {
       pickResultsService.gradeAllPropPicks(dateStr)
     ]);
     
+    // Extract user results info from game results processing
+    const userResultsInfo = gameResults.results?.userResults || { success: false, message: 'No user results processed' };
+    
     return {
       success: gameResults.success || propResults.success,
       gameResults,
       propResults,
+      userResults: userResultsInfo, // Include user results in the response
       message: `Game Picks: ${gameResults.message || 'Failed to process'}, Prop Picks: ${propResults.message || 'Failed to process'}`
     };
   }

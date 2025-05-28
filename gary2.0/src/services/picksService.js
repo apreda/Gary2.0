@@ -166,7 +166,7 @@ async function storeDailyPicksInDatabase(picks) {
   }
 
   // Simplify pick structure to only include essential fields from OpenAI output
-  const validPicks = picks.map(pick => {
+  const validPicks = picks.map((pick, index) => {
     // Extract the OpenAI output fields which contain the essential pick data
     let openAIOutput = null;
     
@@ -177,9 +177,24 @@ async function storeDailyPicksInDatabase(picks) {
       openAIOutput = pick.analysis.rawOpenAIOutput;
     }
     
+    // Generate a consistent pick ID for this pick
+    const generatePickId = (pickData, date, index) => {
+      const components = [
+        pickData.league || 'sport',
+        pickData.homeTeam || pickData.awayTeam || 'teams',
+        pickData.pick || 'pick',
+        index.toString() // Add index to ensure uniqueness
+      ];
+      
+      // Create a simple hash from the components
+      const pickString = components.join('-').toLowerCase().replace(/[^a-z0-9-]/g, '');
+      
+      return `pick-${date}-${pickString}`;
+    };
+    
     // If we found the OpenAI output, return just those fields
     if (openAIOutput) {
-      return {
+      const pickData = {
         pick: openAIOutput.pick || pick.pick,
         time: openAIOutput.time || pick.time,
         type: openAIOutput.type || pick.type,
@@ -195,10 +210,15 @@ async function storeDailyPicksInDatabase(picks) {
         // Include sport for filtering
         sport: pick.sport
       };
+      
+      // Add the generated pick ID
+      pickData.pick_id = generatePickId(pickData, currentDateString, index);
+      
+      return pickData;
     }
     
     // Fallback to original fields if we can't find the OpenAI output
-    return {
+    const pickData = {
       pick: pick.pick,
       time: pick.time,
       type: pick.type || 'moneyline',
@@ -213,6 +233,11 @@ async function storeDailyPicksInDatabase(picks) {
       superstition: false,
       sport: pick.sport
     };
+    
+    // Add the generated pick ID
+    pickData.pick_id = generatePickId(pickData, currentDateString, index);
+    
+    return pickData;
   }).filter(pick => {
     // Filter out picks with confidence below 0.72 - BUT ONLY FOR MLB
     // NBA and NHL picks are stored regardless of confidence level

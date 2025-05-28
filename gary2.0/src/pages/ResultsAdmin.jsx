@@ -17,6 +17,7 @@ function ResultsAdmin() {
   const [activeTab, setActiveTab] = useState('game_results');
   const [propResults, setPropResults] = useState([]);
   const [propResultsLoading, setPropResultsLoading] = useState(false);
+  const [results, setResults] = useState(null);
   
   // Set the default date to a recent past date (known to have results) and check API key status
   useEffect(() => {
@@ -135,6 +136,9 @@ function ResultsAdmin() {
       // Set the success message from the response
       setStatus(`Success: ${checkResultsResponse.message}`);
       
+      // Update results state
+      setResults(checkResultsResponse);
+      
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       console.error('Error checking results:', error);
@@ -229,6 +233,21 @@ function ResultsAdmin() {
         {status && (
           <div className="mt-4 p-3 bg-gray-700 rounded">
             {status}
+            
+            {/* Show user results processing info if available */}
+            {results?.userResults && (
+              <div className="mt-3 p-3 bg-gray-600 rounded">
+                <h4 className="font-semibold mb-2">🎯 User Bet/Fade Results (Automatic)</h4>
+                <div className={`text-sm ${results.userResults.success ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {results.userResults.message}
+                </div>
+                {results.userResults.success && results.userResults.processed > 0 && (
+                  <div className="text-xs text-gray-300 mt-1">
+                    ✅ {results.userResults.processed} user bet/fade outcomes updated automatically
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
