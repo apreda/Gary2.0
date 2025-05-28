@@ -32,6 +32,9 @@ export const Billfold = () => {
   // State for error
   const [error, setError] = useState(null);
 
+  // State for yesterday's record
+  const [yesterdayRecord, setYesterdayRecord] = useState('');
+
   // State for selected time period filter
   const [selectedTimeFrame, setSelectedTimeFrame] = useState('all');
   
@@ -185,6 +188,59 @@ export const Billfold = () => {
         
         // STEP 6: Calculate combined bet type distribution (to show on both tabs)
         const combinedBetTypeBreakdown = {};
+        
+        // Calculate yesterday's record from real data
+        const calculateYesterdayRecord = () => {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayDateString = yesterday.toISOString().split('T')[0];
+          
+          let yesterdayWins = 0;
+          let yesterdayLosses = 0;
+          let yesterdayPushes = 0;
+          
+          // Count yesterday's game results
+          if (gameResults) {
+            gameResults.forEach(game => {
+              const gameDate = game.game_date?.split('T')[0];
+              if (gameDate === yesterdayDateString) {
+                if (game.result === 'won') yesterdayWins++;
+                else if (game.result === 'lost') yesterdayLosses++;
+                else if (game.result === 'push') yesterdayPushes++;
+              }
+            });
+          }
+          
+          // Count yesterday's prop results (limited to top 10 per date)
+          if (propResults) {
+            const yesterdayProps = propResults.filter(prop => {
+              const propDate = prop.game_date?.split('T')[0];
+              return propDate === yesterdayDateString;
+            });
+            
+            // Sort by confidence and take top 10 for yesterday
+            const sortedYesterdayProps = yesterdayProps.sort((a, b) => {
+              const confA = a.confidence || 0;
+              const confB = b.confidence || 0;
+              return confB - confA;
+            }).slice(0, 10);
+            
+            sortedYesterdayProps.forEach(prop => {
+              if (prop.result === 'won') yesterdayWins++;
+              else if (prop.result === 'lost') yesterdayLosses++;
+              else if (prop.result === 'push') yesterdayPushes++;
+            });
+          }
+          
+          // Set yesterday's record
+          if (yesterdayWins > 0 || yesterdayLosses > 0 || yesterdayPushes > 0) {
+            setYesterdayRecord(`${yesterdayWins}-${yesterdayLosses}${yesterdayPushes > 0 ? `-${yesterdayPushes}` : ''}`);
+          } else {
+            setYesterdayRecord('0-0');
+          }
+        };
+        
+        calculateYesterdayRecord();
         
         // Add game bet types to combined distribution
         if (gameResults) {
@@ -600,6 +656,11 @@ export const Billfold = () => {
           <div className="gary-card-accent p-5">
             <h5 className="gary-text-small uppercase tracking-wider mb-1">RECORD</h5>
             <div className="font-bold" style={{ color: '#b8953f', fontSize: '3rem', lineHeight: '1', letterSpacing: '-0.02em' }}>{stats.record}</div>
+            {/* Yesterday's Record */}
+            <div className="mt-3 pt-2 border-t border-gray-700">
+              <div className="text-xs uppercase tracking-wider text-gray-400 mb-1">YESTERDAY</div>
+              <div className="font-semibold text-gray-300" style={{ fontSize: '1.2rem' }}>{yesterdayRecord || '0-0'}</div>
+            </div>
           </div>
           
           {/* WIN RATE - With enhanced styling */}
