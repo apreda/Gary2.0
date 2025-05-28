@@ -163,13 +163,34 @@ const WhatGaryThinks = () => {
     
     return (
       <div className="relative group mb-4">
-        {/* Card with clean design matching site color scheme */}
+        {/* Connecting visual element */}
         <div 
-          className="rounded-lg border transition-all duration-300"
+          className="absolute top-0 left-1/5 right-1/5 h-px pointer-events-none"
+          style={{
+            background: 'linear-gradient(90deg, transparent, rgba(241, 196, 15, 0.3), transparent)',
+            transform: 'translateY(-1px)',
+            zIndex: 1
+          }}
+        />
+        {/* Card with seamless background integration */}
+        <div 
+          className="rounded-xl border transition-all duration-300 hover:transform hover:-translate-y-1"
           style={{ 
-            backgroundColor: 'rgba(18, 18, 18, 0.85)', 
-            border: '1px solid rgba(51, 51, 51, 0.6)',
-            backdropFilter: 'blur(10px)',
+            background: `linear-gradient(135deg, 
+              rgba(42, 42, 42, 0.7) 0%,
+              rgba(26, 26, 26, 0.85) 50%,
+              rgba(42, 42, 42, 0.7) 100%
+            )`,
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '16px',
+            marginBottom: '8px',
+            boxShadow: `
+              0 8px 32px rgba(0, 0, 0, 0.3),
+              0 2px 8px rgba(0, 0, 0, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05)
+            `,
           }}
         >
           {/* League Header */}
@@ -296,7 +317,18 @@ const WhatGaryThinks = () => {
 
             {/* Game Time */}
             <div className="text-center pt-4 mt-2 border-t border-gray-600">
-              <div className="inline-flex items-center px-3 py-2 bg-gray-800 rounded-lg border border-gray-600">
+              <div 
+                className="inline-flex items-center px-3 py-2 rounded-lg border"
+                style={{
+                  background: 'rgba(42, 42, 42, 0.6)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  boxShadow: `
+                    0 2px 8px rgba(0, 0, 0, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.03)
+                  `
+                }}
+              >
                 <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -330,7 +362,18 @@ const WhatGaryThinks = () => {
                       Gary's Analysis
                     </div>
                   </div>
-                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow-inner">
+                  <div 
+                    className="rounded-lg p-4 border shadow-inner"
+                    style={{
+                      background: 'rgba(42, 42, 42, 0.6)',
+                      backdropFilter: 'blur(16px)',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      boxShadow: `
+                        0 8px 32px rgba(31, 38, 135, 0.37),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                      `
+                    }}
+                  >
                     <p className="text-gray-200 leading-relaxed italic" style={{ fontSize: '15px', lineHeight: '1.6' }}>
                       "{garyPicks.rationale}"
                     </p>
@@ -357,14 +400,22 @@ const WhatGaryThinks = () => {
         minHeight: '48px',
         minWidth: '80px',
         ...(isSelected ? { 
-          backgroundColor: '#d4af37', 
+          background: 'linear-gradient(135deg, #d4af37 0%, #f1c40f 100%)',
           color: '#000',
-          border: '2px solid #f1c40f',
-          boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+          border: '1px solid rgba(241, 196, 15, 0.6)',
+          boxShadow: `
+            0 4px 16px rgba(212, 175, 55, 0.4),
+            0 2px 8px rgba(241, 196, 15, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3)
+          `
         } : { 
-          backgroundColor: '#333',
-          border: '1px solid #444',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
+          background: 'rgba(51, 51, 51, 0.6)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: `
+            0 2px 8px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.03)
+          `
         })
       }}
       >
@@ -414,7 +465,23 @@ const WhatGaryThinks = () => {
         />
         
         <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
-          <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: 'rgba(18, 18, 18, 0.9)', border: '3px solid #d4af37', backdropFilter: 'blur(10px)' }}>
+          <div 
+          className="mx-auto max-w-md text-center py-4 px-6 rounded-xl" 
+          style={{ 
+            background: `linear-gradient(135deg, 
+              rgba(42, 42, 42, 0.9) 0%,
+              rgba(26, 26, 26, 0.95) 50%,
+              rgba(42, 42, 42, 0.9) 100%
+            )`,
+            backdropFilter: 'blur(20px) saturate(180%)',
+            border: '1px solid rgba(212, 175, 55, 0.6)',
+            boxShadow: `
+              0 8px 32px rgba(0, 0, 0, 0.3),
+              0 2px 8px rgba(212, 175, 55, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05)
+            `
+          }}
+        >
             <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
               <h3 className="font-bold text-black">LOADING GARY'S THOUGHTS...</h3>
             </div>
@@ -543,7 +610,19 @@ const WhatGaryThinks = () => {
 
           {/* Sport Tabs */}
           <div className="flex justify-center mb-8">
-            <div className="flex space-x-2 p-2 rounded-xl shadow-lg" style={{ backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
+            <div 
+              className="flex space-x-2 p-2 rounded-xl shadow-lg" 
+              style={{ 
+                background: 'rgba(42, 42, 42, 0.7)',
+                backdropFilter: 'blur(20px) saturate(180%)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: `
+                  0 8px 32px rgba(0, 0, 0, 0.3),
+                  0 2px 8px rgba(0, 0, 0, 0.2),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                `
+              }}
+            >
               {['NBA', 'MLB', 'NHL'].map((sport) => (
                 <button
                   key={sport}
@@ -554,15 +633,24 @@ const WhatGaryThinks = () => {
                       : 'text-gray-300 hover:text-white hover:bg-gray-700 hover:scale-102'
                   }`}
                   style={activeTab === sport ? { 
-                    backgroundColor: '#d4af37',
-                    border: '2px solid #f1c40f',
-                    boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4)',
+                    background: 'linear-gradient(135deg, #d4af37 0%, #f1c40f 100%)',
+                    border: '1px solid rgba(241, 196, 15, 0.6)',
+                    boxShadow: `
+                      0 4px 16px rgba(212, 175, 55, 0.4),
+                      0 2px 8px rgba(241, 196, 15, 0.3),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.3)
+                    `,
                     fontSize: '16px',
                     fontWeight: '700',
                     letterSpacing: '0.5px'
                   } : {
-                    backgroundColor: '#333',
-                    border: '1px solid #555',
+                    background: 'rgba(51, 51, 51, 0.6)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: `
+                      0 2px 8px rgba(0, 0, 0, 0.2),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.03)
+                    `,
                     fontSize: '16px',
                     fontWeight: '600',
                     letterSpacing: '0.5px'
@@ -587,7 +675,23 @@ const WhatGaryThinks = () => {
         {/* Error State */}
         {error && (
           <div className="w-full max-w-4xl mx-auto mb-6">
-            <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: 'rgba(18, 18, 18, 0.9)', border: '3px solid #d4af37', backdropFilter: 'blur(10px)' }}>
+            <div 
+              className="mx-auto max-w-md text-center py-4 px-6 rounded-xl" 
+              style={{ 
+                background: `linear-gradient(135deg, 
+                  rgba(42, 42, 42, 0.9) 0%,
+                  rgba(26, 26, 26, 0.95) 50%,
+                  rgba(42, 42, 42, 0.9) 100%
+                )`,
+                backdropFilter: 'blur(20px) saturate(180%)',
+                border: '1px solid rgba(212, 175, 55, 0.6)',
+                boxShadow: `
+                  0 8px 32px rgba(0, 0, 0, 0.3),
+                  0 2px 8px rgba(212, 175, 55, 0.2),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                `
+              }}
+            >
               <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
                 <h3 className="font-bold text-black">ERROR</h3>
               </div>
@@ -607,16 +711,59 @@ const WhatGaryThinks = () => {
         {(() => {
           const filteredGames = getFilteredGames();
           return filteredGames.length > 0 ? (
-            <div className="w-full max-w-4xl mx-auto">
-              <div className="space-y-4">
-                {filteredGames.map((game, index) => (
-                  <GameCard key={`${game.id}-${index}`} game={game} />
-                ))}
+            <div className="w-full max-w-4xl mx-auto relative">
+              {/* Subtle background overlay for visual cohesion */}
+              <div 
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `
+                    radial-gradient(ellipse at center, rgba(241, 196, 15, 0.03) 0%, transparent 70%),
+                    radial-gradient(circle at 25% 25%, rgba(241, 196, 15, 0.02) 0%, transparent 50%),
+                    radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.01) 0%, transparent 50%)
+                  `,
+                  borderRadius: '20px',
+                  zIndex: 0
+                }}
+              />
+              <div 
+                className="relative z-10"
+                style={{
+                  background: `linear-gradient(
+                    180deg,
+                    transparent 0%,
+                    rgba(0, 0, 0, 0.02) 50%,
+                    transparent 100%
+                  )`,
+                  padding: '8px',
+                  borderRadius: '20px'
+                }}
+              >
+                <div className="space-y-3">
+                  {filteredGames.map((game, index) => (
+                    <GameCard key={`${game.id}-${index}`} game={game} />
+                  ))}
+                </div>
               </div>
             </div>
           ) : games.length > 0 ? (
             <div className="text-center py-12">
-              <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: 'rgba(18, 18, 18, 0.9)', border: '3px solid #d4af37', backdropFilter: 'blur(10px)' }}>
+              <div 
+                className="mx-auto max-w-md text-center py-4 px-6 rounded-xl" 
+                style={{ 
+                  background: `linear-gradient(135deg, 
+                    rgba(42, 42, 42, 0.9) 0%,
+                    rgba(26, 26, 26, 0.95) 50%,
+                    rgba(42, 42, 42, 0.9) 100%
+                  )`,
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  border: '1px solid rgba(212, 175, 55, 0.6)',
+                  boxShadow: `
+                    0 8px 32px rgba(0, 0, 0, 0.3),
+                    0 2px 8px rgba(212, 175, 55, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                  `
+                }}
+              >
                 <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
                   <h3 className="font-bold text-black">NO {activeTab} GAMES TODAY</h3>
                 </div>
@@ -626,7 +773,23 @@ const WhatGaryThinks = () => {
             </div>
                       ) : !loading && (
             <div className="text-center py-12">
-              <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: 'rgba(18, 18, 18, 0.9)', border: '3px solid #d4af37', backdropFilter: 'blur(10px)' }}>
+              <div 
+                className="mx-auto max-w-md text-center py-4 px-6 rounded-xl" 
+                style={{ 
+                  background: `linear-gradient(135deg, 
+                    rgba(42, 42, 42, 0.9) 0%,
+                    rgba(26, 26, 26, 0.95) 50%,
+                    rgba(42, 42, 42, 0.9) 100%
+                  )`,
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  border: '1px solid rgba(212, 175, 55, 0.6)',
+                  boxShadow: `
+                    0 8px 32px rgba(0, 0, 0, 0.3),
+                    0 2px 8px rgba(212, 175, 55, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                  `
+                }}
+              >
                 <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
                   <h3 className="font-bold text-black">NO GAMES TODAY</h3>
                 </div>
@@ -641,8 +804,21 @@ const WhatGaryThinks = () => {
         {games.length > 0 && (
           <div className="w-full max-w-4xl mx-auto mt-8">
             <div 
-              className="p-4 rounded border"
-              style={{ backgroundColor: 'rgba(18, 18, 18, 0.85)', border: '1px solid rgba(51, 51, 51, 0.6)', backdropFilter: 'blur(10px)' }}
+              className="p-4 rounded-xl border"
+              style={{ 
+                background: `linear-gradient(135deg, 
+                  rgba(42, 42, 42, 0.7) 0%,
+                  rgba(26, 26, 26, 0.85) 50%,
+                  rgba(42, 42, 42, 0.7) 100%
+                )`,
+                backdropFilter: 'blur(20px) saturate(180%)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: `
+                  0 8px 32px rgba(0, 0, 0, 0.3),
+                  0 2px 8px rgba(0, 0, 0, 0.2),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                `
+              }}
             >
               <h3 className="text-lg font-bold mb-3" style={{ color: '#d4af37' }}>Legend</h3>
               <div className="flex flex-wrap gap-6 text-sm">
