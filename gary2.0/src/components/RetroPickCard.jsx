@@ -131,6 +131,7 @@ function formatGameTitle(game, homeTeam, awayTeam) {
   // COMPREHENSIVE debug log to identify pick data format issues
   console.log("RetroPickCard receiving pick data:", {
     id: pick?.id,
+    pick_id: pick?.pick_id, // Add this to debug logging
     // CRITICAL: Direct OpenAI format fields (these MUST exist)
     pick: pick?.pick ? `${pick.pick.substring(0, 30)}...` : 'MISSING',
     // Handle rationale that might be an object or string
@@ -155,7 +156,8 @@ function formatGameTitle(game, homeTeam, awayTeam) {
 
   // Only use the new OpenAI output format fields
   const safePick = {
-    id: pick?.id || 'unknown',
+    // PRIORITY: Use pick_id from data first, then fallback to id, then generate
+    id: pick?.pick_id || pick?.id || generatePickId(pick),
     
     // Store the OpenAI output fields
     pick: pick?.pick || '', // The betting pick
@@ -198,6 +200,37 @@ function formatGameTitle(game, homeTeam, awayTeam) {
       (pick?.confidence || '75%')
   };
 
+  // Log which ID source we're using
+  console.log('[RetroPickCard] Pick ID source:', {
+    using: pick?.pick_id ? 'pick_id from data' : pick?.id ? 'id from data' : 'generated fallback',
+    pick_id: pick?.pick_id,
+    id: pick?.id,
+    final_id: safePick.id
+  });
+
+  // Helper function to generate a consistent pick ID (fallback only)
+  function generatePickId(pick) {
+    if (!pick) return 'unknown-pick';
+    
+    console.log('[RetroPickCard] Generating fallback pick ID for:', pick);
+    
+    // Create a deterministic ID based on pick properties
+    const components = [
+      pick.league || 'sport',
+      pick.homeTeam || pick.awayTeam || 'teams',
+      pick.pick || 'pick',
+      pick.time || 'time'
+    ];
+    
+    // Create a simple hash from the components
+    const pickString = components.join('-').toLowerCase().replace(/[^a-z0-9-]/g, '');
+    
+    // Add today's date to make it unique per day
+    const today = new Date().toISOString().split('T')[0];
+    
+    return `pick-${today}-${pickString}`;
+  }
+
   // Apply formatting to safePick - store the formatted version as a new property to avoid overwriting original
   safePick.formattedPick = getFormattedShortPick(safePick);
   
@@ -229,55 +262,144 @@ function formatGameTitle(game, homeTeam, awayTeam) {
     setIsFlipped(false);
   }, [safePick.id]);
 
-  // Check if user already made a decision for this pick
+  // Load existing decision for this user and pick
   useEffect(() => {
     const fetchDecision = async () => {
-      if (!user || !safePick.id) return;
-      const { data } = await supabase
+      if (!user || !safePick.id) {
+        // Clear any previous decision if no user or pick
+        console.log('[RetroPickCard] No user or pick ID, clearing decision', { 
+          hasUser: !!user, 
+          pickId: safePick.id 
+        });
+        setDecision(null);
+        return;
+      }
+      
+      console.log('[RetroPickCard] Fetching decision for:', { 
+        userId: user.id, 
+        pickId: safePick.id,
+        userEmail: user.email 
+      });
+      
+      try {
+        const { data, error } = await supabase
+          .from('user_picks')
+          .select('decision')
+          .eq('user_id', user.id)
+          .eq('pick_id', safePick.id)
+          .maybeSingle();
+          
+        if (error) {
+          console.error('[RetroPickCard] Error fetching user decision:', error);
+          setDecision(null);
+          return;
+        }
+        
+        console.log('[RetroPickCard] Fetched decision data:', data);
+        
+        // Only set decision if data exists for THIS user
+        setDecision(data?.decision || null);
+      } catch (error) {
+        console.error('[RetroPickCard] Error in fetchDecision:', error);
+        setDecision(null);
+      }
+    };
+    
+    fetchDecision();
+  }, [user?.id, safePick.id]); // Use user.id specifically to trigger on user changes
+
+  // --- User Decision Handler ---
+  const handleUserDecision = async (userDecision) => {
+    console.log('[RetroPickCard] handleUserDecision called:', { 
+      userDecision, 
+      hasUser: !!user, 
+      userId: user?.id,
+      userEmail: user?.email,
+      pickId: safePick.id, 
+      currentDecision: decision,
+      loading 
+    });
+    
+    // Check authentication
+    if (!user) {
+      console.log('[RetroPickCard] No user authenticated');
+      showToast('Please sign in to make your pick!', 'error');
+      return;
+    }
+    
+    // Check if user already made a decision
+    if (decision) {
+      console.log('[RetroPickCard] User already has decision:', decision);
+      showToast(`You already chose to ${decision.toUpperCase()} this pick!`, 'info');
+      return;
+    }
+    
+    // Check if pick has valid ID
+    if (!safePick.id || safePick.id === 'unknown') {
+      console.log('[RetroPickCard] Invalid pick ID:', safePick.id);
+      showToast('Invalid pick data. Please refresh the page.', 'error');
+      return;
+    }
+    
+    console.log('[RetroPickCard] All checks passed, proceeding with decision save');
+    setLoading(true);
+    
+    try {
+      // Double-check if user already made a decision (race condition protection)
+      const { data: existingDecision } = await supabase
         .from('user_picks')
         .select('decision')
         .eq('user_id', user.id)
         .eq('pick_id', safePick.id)
         .maybeSingle();
-      if (data?.decision) setDecision(data.decision);
-    };
-    fetchDecision();
-  }, [user, safePick.id]);
-
-  // --- User Decision Handler ---
-  const handleUserDecision = async (userDecision) => {
-    if (!user) {
-      showToast('You must be logged in to make a pick.', 'error');
-      return;
-    }
-    if (decision) {
-      showToast('You have already made your choice for this pick.', 'info');
-      return;
-    }
-    setLoading(true);
-    try {
+        
+      console.log('[RetroPickCard] Double-check existing decision:', existingDecision);
+        
+      if (existingDecision?.decision) {
+        setDecision(existingDecision.decision);
+        showToast(`You already chose to ${existingDecision.decision.toUpperCase()} this pick!`, 'info');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('[RetroPickCard] Inserting new decision:', {
+        user_id: user.id,
+        pick_id: safePick.id,
+        decision: userDecision
+      });
+      
+      // Insert the new decision
       const { error } = await supabase.from('user_picks').insert([
         {
           user_id: user.id,
           pick_id: safePick.id,
-          decision: userDecision
+          decision: userDecision,
+          created_at: new Date().toISOString()
         }
       ]);
+      
       if (error) {
+        console.error('[RetroPickCard] Supabase error:', error);
         showToast('Failed to save your pick. Please try again.', 'error');
       } else {
+        console.log('[RetroPickCard] Decision saved successfully');
+        // Success! Update local state
         setDecision(userDecision);
+        
+        // Notify parent component if callback provided
         if (typeof onDecisionMade === 'function') {
           onDecisionMade(userDecision, safePick);
         }
-        if (userDecision === 'bet') {
-          showToast('You bet with Gary! Good luck! 🍀', 'success');
-        } else if (userDecision === 'fade') {
-          showToast('Fading Gary! Bold move! 🎲', 'success');
-        }
+        
+        // Show success message
+        const successMessage = userDecision === 'bet' 
+          ? 'You bet with Gary! Good luck! 🍀' 
+          : 'Fading Gary! Bold move! 🎲';
+        showToast(successMessage, 'success');
       }
     } catch (err) {
-      showToast('Error saving your pick. Try again.', 'error');
+      console.error('[RetroPickCard] Error saving pick:', err);
+      showToast('Something went wrong. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -387,9 +509,39 @@ function formatGameTitle(game, homeTeam, awayTeam) {
         gap: '1rem',
         zIndex: 3,
       }}>
+        {/* Debug info - remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div style={{
+            position: 'absolute',
+            top: '-60px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: '10px',
+            color: '#666',
+            background: 'rgba(255,255,255,0.9)',
+            padding: '4px',
+            borderRadius: '4px',
+            whiteSpace: 'nowrap'
+          }}>
+            ID: {safePick.id} | Decision: {decision || 'none'} | Loading: {loading ? 'yes' : 'no'}
+          </div>
+        )}
+        
         {/* BET Button */}
         <button 
-          onClick={() => safePick.id ? handleUserDecision('bet') : null}
+          onClick={() => {
+            console.log('[RetroPickCard] BET button clicked:', { 
+              pickId: safePick.id, 
+              hasPickId: !!safePick.id,
+              decision,
+              loading 
+            });
+            if (safePick.id) {
+              handleUserDecision('bet');
+            } else {
+              console.error('[RetroPickCard] No pick ID available for BET button');
+            }
+          }}
           disabled={!!decision || loading || !safePick.id}
           style={{
             backgroundColor: colors.primary,
@@ -402,8 +554,8 @@ function formatGameTitle(game, homeTeam, awayTeam) {
             border: 'none',
             borderRadius: '4px',
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-            cursor: !!decision || loading ? 'not-allowed' : 'pointer',
-            opacity: !!decision || loading ? 0.7 : 1,
+            cursor: !!decision || loading || !safePick.id ? 'not-allowed' : 'pointer',
+            opacity: !!decision || loading || !safePick.id ? 0.7 : 1,
             textTransform: 'uppercase',
             letterSpacing: '0.08em',
           }}
@@ -413,7 +565,19 @@ function formatGameTitle(game, homeTeam, awayTeam) {
         
         {/* FADE Button */}
         <button 
-          onClick={() => safePick.id ? handleUserDecision('fade') : null}
+          onClick={() => {
+            console.log('[RetroPickCard] FADE button clicked:', { 
+              pickId: safePick.id, 
+              hasPickId: !!safePick.id,
+              decision,
+              loading 
+            });
+            if (safePick.id) {
+              handleUserDecision('fade');
+            } else {
+              console.error('[RetroPickCard] No pick ID available for FADE button');
+            }
+          }}
           disabled={!!decision || loading || !safePick.id}
           style={{
             backgroundColor: '#18181b',
@@ -426,8 +590,8 @@ function formatGameTitle(game, homeTeam, awayTeam) {
             border: `1px solid ${colors.primary}`,
             borderRadius: '4px',
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-            cursor: !!decision || loading ? 'not-allowed' : 'pointer',
-            opacity: !!decision || loading ? 0.7 : 1,
+            cursor: !!decision || loading || !safePick.id ? 'not-allowed' : 'pointer',
+            opacity: !!decision || loading || !safePick.id ? 0.7 : 1,
             textTransform: 'uppercase',
             letterSpacing: '0.08em',
           }}
