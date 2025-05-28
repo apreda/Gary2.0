@@ -72,141 +72,144 @@ const WhatGaryThinks = () => {
     const { homeTeam, awayTeam, odds, garyPicks, league, time } = game;
     
     return (
-      <div className="relative group">
-        {/* Card with site's styling pattern */}
+      <div className="relative group mb-4">
+        {/* Card with clean design matching screenshot */}
         <div 
-          className="p-6 rounded-lg border-2 transition-all duration-300 hover:scale-105 hover:shadow-xl"
+          className="rounded-lg border transition-all duration-300"
           style={{ 
-            backgroundColor: '#121212', 
-            border: '2px solid #333',
-            boxShadow: '0 4px 20px rgba(184, 149, 63, 0.1)'
+            backgroundColor: '#1a1a1a', 
+            border: '1px solid #333',
           }}
         >
-          {/* Header with league and time */}
-          <div className="flex justify-between items-center mb-6">
+          {/* Game Time Header */}
+          <div className="flex justify-between items-center px-4 py-3 border-b border-gray-700">
             <div 
-              className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wide"
-              style={{ backgroundColor: '#d4af37', color: '#000' }}
+              className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide"
+              style={{ backgroundColor: '#00d4aa', color: '#000' }}
             >
               {league}
             </div>
-            <span className="text-xs text-gray-400 font-medium">
+            <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">
               {time || 'TBD'}
             </span>
           </div>
 
-          {/* Column Headers */}
-          <div className="grid grid-cols-4 gap-3 items-center mb-4 pb-2 border-b border-gray-700">
-            <div className="col-span-1">
-              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Team</span>
-            </div>
-            <div className="col-span-1 text-center">
-              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Spread</span>
-            </div>
-            <div className="col-span-1 text-center">
-              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Moneyline</span>
-            </div>
-            <div className="col-span-1 text-center">
-              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Total</span>
-            </div>
-          </div>
-
           {/* Teams and Betting Grid */}
-          <div className="space-y-3">
+          <div className="p-4">
             {/* Away Team Row */}
-            <div className="grid grid-cols-4 gap-3 items-center">
-              {/* Team Name */}
-              <div className="col-span-1">
-                <span className="text-white font-bold text-sm">{awayTeam}</span>
+            <div className="grid grid-cols-12 gap-3 items-center mb-3">
+              {/* Team Info */}
+              <div className="col-span-5 flex items-center space-x-3">
+                <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center">
+                  <span className="text-xs font-bold text-white">
+                    {awayTeam.charAt(0)}
+                  </span>
+                </div>
+                <span className="text-white font-medium text-sm">{awayTeam}</span>
               </div>
               
               {/* Spread */}
-              <div className="col-span-1">
+              <div className="col-span-2">
                 <BettingOption
-                  label={odds?.spread?.away?.line || 'N/A'}
-                  odds={odds?.spread?.away?.odds || 'N/A'}
+                  topLine={odds?.spread?.away?.line || 'N/A'}
+                  bottomLine={odds?.spread?.away?.odds || 'N/A'}
                   isSelected={garyPicks?.spread === 'away'}
-                  compact={true}
                 />
               </div>
               
               {/* Moneyline */}
-              <div className="col-span-1">
+              <div className="col-span-2">
                 <BettingOption
-                  label="ML"
-                  odds={odds?.moneyline?.away || 'N/A'}
+                  topLine={odds?.moneyline?.away || 'N/A'}
+                  bottomLine=""
                   isSelected={garyPicks?.moneyline === 'away'}
-                  compact={true}
+                  singleLine={true}
                 />
               </div>
               
-              {/* Total (only show on away team row) */}
-              <div className="col-span-1">
+              {/* Total */}
+              <div className="col-span-3">
                 <BettingOption
-                  label={`O ${odds?.total?.line || 'N/A'}`}
-                  odds={odds?.total?.over || 'N/A'}
+                  topLine={`O ${odds?.total?.line || 'N/A'}`}
+                  bottomLine={odds?.total?.over || 'N/A'}
                   isSelected={garyPicks?.total === 'over'}
-                  icon={<TrendingUp size={12} />}
-                  compact={true}
                 />
               </div>
             </div>
 
             {/* Home Team Row */}
-            <div className="grid grid-cols-4 gap-3 items-center">
-              {/* Team Name */}
-              <div className="col-span-1">
-                <span className="text-white font-bold text-sm">{homeTeam}</span>
+            <div className="grid grid-cols-12 gap-3 items-center">
+              {/* Team Info */}
+              <div className="col-span-5 flex items-center space-x-3">
+                <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center">
+                  <span className="text-xs font-bold text-white">
+                    {homeTeam.charAt(0)}
+                  </span>
+                </div>
+                <span className="text-white font-medium text-sm">{homeTeam}</span>
               </div>
               
               {/* Spread */}
-              <div className="col-span-1">
+              <div className="col-span-2">
                 <BettingOption
-                  label={odds?.spread?.home?.line || 'N/A'}
-                  odds={odds?.spread?.home?.odds || 'N/A'}
+                  topLine={odds?.spread?.home?.line || 'N/A'}
+                  bottomLine={odds?.spread?.home?.odds || 'N/A'}
                   isSelected={garyPicks?.spread === 'home'}
-                  compact={true}
                 />
               </div>
               
               {/* Moneyline */}
-              <div className="col-span-1">
+              <div className="col-span-2">
                 <BettingOption
-                  label="ML"
-                  odds={odds?.moneyline?.home || 'N/A'}
+                  topLine={odds?.moneyline?.home || 'N/A'}
+                  bottomLine=""
                   isSelected={garyPicks?.moneyline === 'home'}
-                  compact={true}
+                  singleLine={true}
                 />
               </div>
               
-              {/* Total (only show on home team row) */}
-              <div className="col-span-1">
+              {/* Total */}
+              <div className="col-span-3">
                 <BettingOption
-                  label={`U ${odds?.total?.line || 'N/A'}`}
-                  odds={odds?.total?.under || 'N/A'}
+                  topLine={`U ${odds?.total?.line || 'N/A'}`}
+                  bottomLine={odds?.total?.under || 'N/A'}
                   isSelected={garyPicks?.total === 'under'}
-                  icon={<TrendingDown size={12} />}
-                  compact={true}
                 />
+              </div>
+            </div>
+
+            {/* Column Headers */}
+            <div className="grid grid-cols-12 gap-3 items-center mt-4 pt-3 border-t border-gray-700">
+              <div className="col-span-5"></div>
+              <div className="col-span-2 text-center">
+                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Spread</span>
+              </div>
+              <div className="col-span-2 text-center">
+                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Money Line</span>
+              </div>
+              <div className="col-span-3 text-center">
+                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Total Points</span>
               </div>
             </div>
           </div>
 
           {/* Gary's Rationale */}
           {garyPicks?.rationale && (
-            <div className="mt-6 pt-4 border-t border-gray-700">
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <div 
-                    className="px-2 py-1 rounded text-xs font-bold uppercase"
-                    style={{ backgroundColor: '#d4af37', color: '#000' }}
-                  >
-                    Gary's Analysis
+            <div className="px-4 pb-4">
+              <div className="mt-4 pt-4 border-t border-gray-700">
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div 
+                      className="px-2 py-1 rounded text-xs font-bold uppercase"
+                      style={{ backgroundColor: '#d4af37', color: '#000' }}
+                    >
+                      Gary's Analysis
+                    </div>
                   </div>
+                  <p className="text-sm text-gray-300 leading-relaxed italic">
+                    "{garyPicks.rationale}"
+                  </p>
                 </div>
-                <p className="text-sm text-gray-300 leading-relaxed italic">
-                  "{garyPicks.rationale}"
-                </p>
               </div>
             </div>
           )}
@@ -215,29 +218,29 @@ const WhatGaryThinks = () => {
     );
   };
 
-  const BettingOption = ({ label, odds, isSelected, icon, compact = false }) => {
+  const BettingOption = ({ topLine, bottomLine, isSelected, singleLine = false }) => {
     return (
       <div className={`
-        px-2 py-2 rounded-lg text-xs font-medium text-center transition-all duration-300
+        px-2 py-2 rounded text-center transition-all duration-300 cursor-pointer
         ${isSelected 
-          ? 'border-2 text-black font-bold' 
-          : 'bg-gray-800 border-2 border-gray-600 text-gray-300 hover:bg-gray-700 hover:border-gray-500'
+          ? 'text-black font-bold' 
+          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
         }
-        ${compact ? 'min-h-[50px]' : ''}
+        ${singleLine ? 'py-3' : ''}
       `}
       style={isSelected ? { 
-        backgroundColor: '#d4af37', 
-        borderColor: '#d4af37',
-        boxShadow: '0 0 15px rgba(212, 175, 55, 0.3)'
-      } : {}}
+        backgroundColor: '#00d4aa', 
+        color: '#000'
+      } : { backgroundColor: '#333' }}
       >
-        <div className="flex items-center justify-center space-x-1 mb-1">
-          {icon && <span>{icon}</span>}
-          <span className="font-semibold text-xs">{label}</span>
+        <div className="text-sm font-semibold">
+          {topLine}
         </div>
-        <div className={`text-xs ${isSelected ? 'text-black' : 'text-gray-400'}`}>
-          {odds}
-        </div>
+        {!singleLine && bottomLine && (
+          <div className={`text-xs mt-1 ${isSelected ? 'text-black' : 'text-gray-400'}`}>
+            {bottomLine}
+          </div>
+        )}
       </div>
     );
   };
@@ -328,29 +331,29 @@ const WhatGaryThinks = () => {
       {/* Main content */}
       <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
         {/* Header */}
-        <div className="w-full max-w-7xl mx-auto mb-8">
+        <div className="w-full max-w-4xl mx-auto mb-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/')}
-                className="p-3 rounded-lg transition-all duration-300 hover:scale-110"
-                style={{ backgroundColor: '#d4af37', color: '#000' }}
+                className="p-2 rounded transition-all duration-300"
+                style={{ backgroundColor: '#00d4aa', color: '#000' }}
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h1 className="text-4xl font-bold" style={{ color: '#d4af37' }}>
+                <h1 className="text-3xl font-bold text-white">
                   What Gary Thinks
                 </h1>
-                <p className="text-gray-400 mt-2">Gary's picks for every game today</p>
+                <p className="text-gray-400 mt-1">Gary's picks for every game today</p>
               </div>
             </div>
             
             <button
               onClick={loadGaryThoughts}
               disabled={loading}
-              className="flex items-center space-x-2 px-6 py-3 rounded-lg font-bold uppercase transition-all duration-300 hover:scale-105 disabled:opacity-50"
-              style={{ backgroundColor: '#d4af37', color: '#000' }}
+              className="flex items-center space-x-2 px-4 py-2 rounded font-medium transition-all duration-300 disabled:opacity-50"
+              style={{ backgroundColor: '#00d4aa', color: '#000' }}
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
               <span>Refresh</span>
@@ -386,10 +389,10 @@ const WhatGaryThinks = () => {
           </div>
         )}
 
-        {/* Games Grid */}
+        {/* Games List */}
         {games.length > 0 ? (
-          <div className="w-full max-w-7xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="w-full max-w-4xl mx-auto">
+            <div className="space-y-4">
               {games.map((game, index) => (
                 <GameCard key={index} game={game} />
               ))}
@@ -409,27 +412,26 @@ const WhatGaryThinks = () => {
 
         {/* Legend */}
         {games.length > 0 && (
-          <div className="w-full max-w-7xl mx-auto mt-12">
+          <div className="w-full max-w-4xl mx-auto mt-8">
             <div 
-              className="p-6 rounded-lg border-2"
-              style={{ backgroundColor: '#121212', border: '2px solid #333' }}
+              className="p-4 rounded border"
+              style={{ backgroundColor: '#1a1a1a', border: '1px solid #333' }}
             >
-              <h3 className="text-lg font-bold mb-4" style={{ color: '#d4af37' }}>Legend</h3>
+              <h3 className="text-lg font-bold mb-3 text-white">Legend</h3>
               <div className="flex flex-wrap gap-6 text-sm">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
                   <div 
-                    className="w-6 h-6 rounded border-2"
-                    style={{ backgroundColor: '#d4af37', borderColor: '#d4af37' }}
+                    className="w-4 h-4 rounded"
+                    style={{ backgroundColor: '#00d4aa' }}
                   ></div>
                   <span className="text-gray-300 font-medium">Gary's Pick</span>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <TrendingUp size={20} className="text-gray-400" />
-                  <span className="text-gray-300 font-medium">Over</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <TrendingDown size={20} className="text-gray-400" />
-                  <span className="text-gray-300 font-medium">Under</span>
+                <div className="flex items-center space-x-2">
+                  <div 
+                    className="w-4 h-4 rounded"
+                    style={{ backgroundColor: '#333' }}
+                  ></div>
+                  <span className="text-gray-300 font-medium">Available Option</span>
                 </div>
               </div>
             </div>
