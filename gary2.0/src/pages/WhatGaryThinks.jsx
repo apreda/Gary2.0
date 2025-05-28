@@ -253,11 +253,6 @@ const WhatGaryThinks = () => {
             <div className="grid grid-cols-12 gap-3 items-center mb-3 pb-4 border-b border-gray-700">
               {/* Team Info */}
               <div className="col-span-5 flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center shadow-lg">
-                  <span className="text-sm font-bold text-white">
-                    {awayTeam.charAt(0)}
-                  </span>
-                </div>
                 <span className="text-white font-semibold" style={{ fontSize: '18px', fontWeight: '600' }}>
                   {awayTeam}
                 </span>
@@ -297,11 +292,6 @@ const WhatGaryThinks = () => {
             <div className="grid grid-cols-12 gap-3 items-center mb-4 pb-4">
               {/* Team Info */}
               <div className="col-span-5 flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center shadow-lg">
-                  <span className="text-sm font-bold text-white">
-                    {homeTeam.charAt(0)}
-                  </span>
-                </div>
                 <span className="text-white font-semibold" style={{ fontSize: '18px', fontWeight: '600' }}>
                   {homeTeam}
                 </span>
@@ -345,9 +335,6 @@ const WhatGaryThinks = () => {
               <div className="mt-4 pt-4 border-t border-gray-600">
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-lg">
-                      <span className="text-black font-bold text-sm">G</span>
-                    </div>
                     <div 
                       className="px-3 py-2 rounded-lg font-bold uppercase shadow-lg"
                                              style={{ 
@@ -698,7 +685,7 @@ const WhatGaryThinks = () => {
           return filteredGames.length > 0 ? (
             <div className="w-full max-w-4xl mx-auto relative">
               {/* Coin Image positioned absolutely - 50% bigger, moved up further and slightly left */}
-              <div className="absolute right-4 z-10 pointer-events-none" style={{ top: '-144px' }}>
+              <div className="absolute right-4 z-10 pointer-events-none" style={{ top: '-168px' }}>
                 <img 
                   src={coin2} 
                   alt="Gary Coin" 
