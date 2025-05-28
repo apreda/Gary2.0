@@ -317,28 +317,6 @@ export function Pricing() {
             </div>
           </div>
           
-          {/* Stats Section - Moved up and simplified */}
-          <div className="mt-20 max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-light text-gray-300 tracking-wider mb-4">Why Choose Gary?</h2>
-            </div>
-            
-            <div className="grid md:grid-cols-3 gap-8 text-center">
-              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
-                <div className="text-[#b8953f] text-3xl font-light mb-2">67%</div>
-                <p className="text-gray-400 text-sm">Win Rate on Premium Picks</p>
-              </div>
-              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
-                <div className="text-[#b8953f] text-3xl font-light mb-2">+18%</div>
-                <p className="text-gray-400 text-sm">Average Monthly ROI</p>
-              </div>
-              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
-                <div className="text-[#b8953f] text-3xl font-light mb-2">15-20</div>
-                <p className="text-gray-400 text-sm">Premium Picks Per Week</p>
-              </div>
-            </div>
-          </div>
-          
           {/* FAQ Section - Simplified */}
           <div className="mt-20 mb-16 max-w-4xl mx-auto">
             <div className="text-center mb-12">
