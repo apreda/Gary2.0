@@ -3,28 +3,33 @@ import { useState, useEffect } from "react";
 import { useUserPlan } from "../contexts/UserPlanContext";
 import { useBetCardProfile } from "../contexts/BetCardProfileContext";
 import { useAuth } from '../contexts/AuthContext';
+import { ChevronDown } from 'lucide-react';
 
 export function Navbar() {
   const location = useLocation();
   const [activeLink, setActiveLink] = useState(location.pathname);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isPicksDropdownOpen, setIsPicksDropdownOpen] = useState(false);
   const { userPlan } = useUserPlan();
   const { openBetCardProfile } = useBetCardProfile();
   const { user } = useAuth();
   const session = !!user;
   
-  // Navigation items matching user requirements
+  // Navigation items with dropdown structure
   const navItems = [
     { path: '/', label: 'Home' },
-    { path: '/real-gary-picks', label: 'Gary\'s Picks' },
-    { path: '/what-gary-thinks', label: 'Gary\'s Thoughts' },
-    { path: '/gary-props', label: 'Gary\'s Props' },
+    { 
+      path: '/real-gary-picks', 
+      label: 'Gary\'s Picks',
+      hasDropdown: true,
+      dropdownItems: [
+        { path: '/real-gary-picks', label: 'Gary\'s Picks' },
+        { path: '/what-gary-thinks', label: 'Gary\'s Thoughts' },
+        { path: '/gary-props', label: 'Gary\'s Props' }
+      ]
+    },
     { path: '/billfold', label: 'Billfold' },
-    // Leaderboard page hidden from navbar but still accessible via direct URL
-    // { path: '/leaderboard', label: 'Leaderboard' },
     { path: '/pricing', label: 'Pricing' },
-    // Learn More page hidden from navbar but still accessible via direct URL
-    // { path: '/learn-more', label: 'Learn More' },
   ];
   
   // We don't need to modify signedInNavItems differently, just use the navItems defined above
@@ -34,6 +39,20 @@ export function Navbar() {
   useEffect(() => {
     setActiveLink(location.pathname);
   }, [location.pathname]);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isPicksDropdownOpen && !event.target.closest('.dropdown-container')) {
+        setIsPicksDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isPicksDropdownOpen]);
   
   return (
     <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#B8953F]/20 py-3 rounded-3xl shadow-xl w-11/12 max-w-6xl">
@@ -60,17 +79,64 @@ export function Navbar() {
         {/* Center navigation - Exactly like Hashnode */}
         <nav className="hidden md:flex space-x-6 mx-auto">
           {filteredNavItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`text-sm font-medium transition-colors duration-200 px-1 py-1 ${
-                activeLink === item.path 
-                ? 'text-[#B8953F]' 
-                : 'text-gray-300 hover:text-white'}`}
-              onClick={() => setActiveLink(item.path)}
-            >
-              {item.label}
-            </Link>
+            item.hasDropdown ? (
+              <div 
+                key={item.path}
+                className="relative dropdown-container"
+                onMouseEnter={() => setIsPicksDropdownOpen(true)}
+                onMouseLeave={() => setIsPicksDropdownOpen(false)}
+              >
+                <button
+                  className={`text-sm font-medium transition-colors duration-200 px-1 py-1 flex items-center space-x-1 ${
+                    ['/real-gary-picks', '/what-gary-thinks', '/gary-props'].includes(activeLink)
+                    ? 'text-[#B8953F]' 
+                    : 'text-gray-300 hover:text-white'}`}
+                  onClick={() => setIsPicksDropdownOpen(!isPicksDropdownOpen)}
+                >
+                  <span>{item.label}</span>
+                  <ChevronDown 
+                    size={14} 
+                    className={`transition-transform duration-200 ${
+                      isPicksDropdownOpen ? 'rotate-180' : ''
+                    }`} 
+                  />
+                </button>
+                
+                {/* Dropdown Menu */}
+                {isPicksDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-black border border-[#B8953F]/20 rounded-xl shadow-xl z-50 py-2">
+                    {item.dropdownItems.map((dropdownItem) => (
+                      <Link
+                        key={dropdownItem.path}
+                        to={dropdownItem.path}
+                        className={`block px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                          activeLink === dropdownItem.path 
+                          ? 'text-[#B8953F] bg-[#B8953F]/10' 
+                          : 'text-gray-300 hover:text-white hover:bg-gray-800/50'}`}
+                        onClick={() => {
+                          setActiveLink(dropdownItem.path);
+                          setIsPicksDropdownOpen(false);
+                        }}
+                      >
+                        {dropdownItem.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`text-sm font-medium transition-colors duration-200 px-1 py-1 ${
+                  activeLink === item.path 
+                  ? 'text-[#B8953F]' 
+                  : 'text-gray-300 hover:text-white'}`}
+                onClick={() => setActiveLink(item.path)}
+              >
+                {item.label}
+              </Link>
+            )
           ))}
         </nav>
       
@@ -129,17 +195,62 @@ export function Navbar() {
           <div className="py-4 px-6">
             <div className="flex flex-col space-y-3">
               {filteredNavItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`py-2 text-sm font-medium ${activeLink === item.path ? 'text-[#B8953F]' : 'text-gray-300 hover:text-white'}`}
-                  onClick={() => {
-                    setActiveLink(item.path);
-                    setIsMobileMenuOpen(false);
-                  }}
-                >
-                  {item.label}
-                </Link>
+                item.hasDropdown ? (
+                  <div key={item.path}>
+                    <button
+                      className={`w-full text-left py-2 text-sm font-medium flex items-center justify-between ${
+                        ['/real-gary-picks', '/what-gary-thinks', '/gary-props'].includes(activeLink) 
+                        ? 'text-[#B8953F]' 
+                        : 'text-gray-300 hover:text-white'
+                      }`}
+                      onClick={() => setIsPicksDropdownOpen(!isPicksDropdownOpen)}
+                    >
+                      <span>{item.label}</span>
+                      <ChevronDown 
+                        size={14} 
+                        className={`transition-transform duration-200 ${
+                          isPicksDropdownOpen ? 'rotate-180' : ''
+                        }`} 
+                      />
+                    </button>
+                    
+                    {/* Mobile Dropdown Items */}
+                    {isPicksDropdownOpen && (
+                      <div className="ml-4 mt-2 space-y-2">
+                        {item.dropdownItems.map((dropdownItem) => (
+                          <Link
+                            key={dropdownItem.path}
+                            to={dropdownItem.path}
+                            className={`block py-1 text-sm font-medium ${
+                              activeLink === dropdownItem.path 
+                              ? 'text-[#B8953F]' 
+                              : 'text-gray-400 hover:text-white'
+                            }`}
+                            onClick={() => {
+                              setActiveLink(dropdownItem.path);
+                              setIsMobileMenuOpen(false);
+                              setIsPicksDropdownOpen(false);
+                            }}
+                          >
+                            {dropdownItem.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`py-2 text-sm font-medium ${activeLink === item.path ? 'text-[#B8953F]' : 'text-gray-300 hover:text-white'}`}
+                    onClick={() => {
+                      setActiveLink(item.path);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    {item.label}
+                  </Link>
+                )
               ))}
               
               {/* Mobile menu additional options */}
