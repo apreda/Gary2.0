@@ -890,19 +890,6 @@ async function generateDailyPicks() {
   }
 }
 
-// Export both styles!
-const picksService = {
-  generateDailyPicks,
-  generateWhatGaryThinks,
-  storeDailyPicksInDatabase,
-  checkForExistingPicks,
-  ensureValidSupabaseSession,
-  _teamNameMatch
-};
-
-export { picksService, generateDailyPicks };
-export default picksService;
-
 /**
  * Generate Gary's thoughts on all games for the day
  * Returns spread, moneyline, and over/under picks for every game
@@ -1161,3 +1148,16 @@ function formatGameTime(timeString) {
     return 'TBD';
   }
 }
+
+// Export both styles!
+const picksService = {
+  generateDailyPicks,
+  generateWhatGaryThinks,
+  storeDailyPicksInDatabase,
+  checkForExistingPicks,
+  ensureValidSupabaseSession,
+  _teamNameMatch
+};
+
+export { picksService, generateDailyPicks };
+export default picksService;
