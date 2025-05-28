@@ -160,6 +160,18 @@ const WhatGaryThinks = () => {
             </div>
           </div>
         )}
+
+        {/* Gary's Rationale */}
+        {garyPicks?.rationale && (
+          <div className="mt-3 pt-3 border-t border-gray-700">
+            <div className="space-y-2">
+              <span className="text-xs text-gray-400 uppercase tracking-wide">Gary's Analysis</span>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                {garyPicks.rationale}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
