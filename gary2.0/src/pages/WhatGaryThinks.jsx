@@ -64,7 +64,7 @@ const WhatGaryThinks = () => {
       
       // Add delay to prevent rate limiting
       console.log('⏳ Adding delay to prevent OpenAI rate limiting...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
       // Generate Gary's thoughts for all games
       const garyThoughts = await picksService.generateWhatGaryThinks();

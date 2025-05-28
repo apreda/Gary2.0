@@ -909,8 +909,8 @@ async function generateWhatGaryThinks() {
       
       // Add delay between sports to prevent rate limiting (except for first sport)
       if (sportIndex > 0) {
-        console.log(`⏳ Adding 2s delay between sports to prevent OpenAI rate limiting...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`⏳ Adding 5s delay between sports to prevent OpenAI rate limiting...`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
       
       console.log(`🧠 Getting ${sport} games for What Gary Thinks...`);
@@ -940,8 +940,8 @@ async function generateWhatGaryThinks() {
         try {
           // Add delay between games to prevent rate limiting (except for first game)
           if (i > 0) {
-            console.log(`⏳ Adding 1.5s delay to prevent OpenAI rate limiting...`);
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log(`⏳ Adding 3s delay to prevent OpenAI rate limiting...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
           }
           
           // Extract odds data
@@ -971,8 +971,8 @@ async function generateWhatGaryThinks() {
           
           // If it's a rate limiting error, add extra delay
           if (error.message && (error.message.includes('429') || error.message.includes('Too Many Requests'))) {
-            console.log(`⏳ Rate limit detected, adding 5s delay before continuing...`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            console.log(`⏳ Rate limit detected, adding 10s delay before continuing...`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
           }
         }
       }
