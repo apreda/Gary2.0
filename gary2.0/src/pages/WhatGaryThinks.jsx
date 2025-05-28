@@ -697,12 +697,12 @@ const WhatGaryThinks = () => {
           const filteredGames = getFilteredGames();
           return filteredGames.length > 0 ? (
             <div className="w-full max-w-4xl mx-auto relative">
-              {/* Coin Image positioned above the first game card */}
-              <div className="flex justify-end mb-4 pr-8">
+              {/* Coin Image positioned absolutely - 2x bigger, no layout impact */}
+              <div className="absolute top-0 right-8 z-10 pointer-events-none">
                 <img 
                   src={coin2} 
                   alt="Gary Coin" 
-                  className="w-20 h-20 object-contain opacity-90"
+                  className="w-40 h-40 object-contain opacity-90"
                   style={{ 
                     filter: 'drop-shadow(0 4px 12px rgba(212, 175, 55, 0.4))',
                     transform: 'rotate(-5deg)'
