@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { picksService } from '../services/picksService';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../supabaseClient';
 
 const WhatGaryThinks = () => {
   const navigate = useNavigate();
