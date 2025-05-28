@@ -3,6 +3,7 @@ import { ArrowLeft, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { picksService } from '../services/picksService';
 import { supabase } from '../supabaseClient';
+import { getESTDate, getESTTimestamp } from '../utils/dateUtils';
 import BG2 from '/BG2.png';
 
 const WhatGaryThinks = () => {
@@ -25,11 +26,7 @@ const WhatGaryThinks = () => {
       console.log('🧠 Loading What Gary Thinks...');
       
       // Get today's date in EST
-      const today = new Date();
-      const estOptions = { timeZone: 'America/New_York' };
-      const estDateString = today.toLocaleDateString('en-US', estOptions);
-      const [month, day, year] = estDateString.split('/');
-      const todayDateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      const todayDateString = getESTDate();
       
       console.log(`🧠 Checking for existing Gary thoughts for ${todayDateString}`);
       
@@ -101,13 +98,16 @@ const WhatGaryThinks = () => {
     try {
       console.log(`🗄️ Storing Gary thoughts for ${dateString} (${thoughts.length} games)`);
       
+      // Get current time in EST
+      const estTimestamp = getESTTimestamp();
+      
       const { error } = await supabase
         .from('gary_thoughts')
         .upsert({
           date: dateString,
           thoughts: JSON.stringify(thoughts),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: estTimestamp,
+          updated_at: estTimestamp
         }, {
           onConflict: 'date'
         });
@@ -185,29 +185,41 @@ const WhatGaryThinks = () => {
           {/* Teams and Betting Grid */}
           <div className="p-4">
             {/* Column Headers */}
-            <div className="grid grid-cols-12 gap-3 items-center mb-4 pb-2">
-              <div className="col-span-5"></div>
-              <div className="col-span-2 text-center">
-                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Spread</span>
+            <div className="grid grid-cols-12 gap-3 items-center mb-6 pb-3 border-b border-gray-600">
+              <div className="col-span-5">
+                <span className="text-gray-400 font-semibold" style={{ fontSize: '14px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Teams
+                </span>
               </div>
               <div className="col-span-2 text-center">
-                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Money Line</span>
+                <span className="text-gray-400 font-semibold" style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Spread
+                </span>
+              </div>
+              <div className="col-span-2 text-center">
+                <span className="text-gray-400 font-semibold" style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Money Line
+                </span>
               </div>
               <div className="col-span-3 text-center">
-                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Total Points</span>
+                <span className="text-gray-400 font-semibold" style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Total Points
+                </span>
               </div>
             </div>
 
             {/* Away Team Row */}
-            <div className="grid grid-cols-12 gap-3 items-center mb-3">
+            <div className="grid grid-cols-12 gap-3 items-center mb-3 pb-4 border-b border-gray-700">
               {/* Team Info */}
               <div className="col-span-5 flex items-center space-x-3">
-                <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center shadow-lg">
+                  <span className="text-sm font-bold text-white">
                     {awayTeam.charAt(0)}
                   </span>
                 </div>
-                <span className="text-white font-medium text-sm">{awayTeam}</span>
+                <span className="text-white font-semibold" style={{ fontSize: '18px', fontWeight: '600' }}>
+                  {awayTeam}
+                </span>
               </div>
               
               {/* Spread */}
@@ -240,15 +252,17 @@ const WhatGaryThinks = () => {
             </div>
 
             {/* Home Team Row */}
-            <div className="grid grid-cols-12 gap-3 items-center mb-4">
+            <div className="grid grid-cols-12 gap-3 items-center mb-4 pb-4">
               {/* Team Info */}
               <div className="col-span-5 flex items-center space-x-3">
-                <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center shadow-lg">
+                  <span className="text-sm font-bold text-white">
                     {homeTeam.charAt(0)}
                   </span>
                 </div>
-                <span className="text-white font-medium text-sm">{homeTeam}</span>
+                <span className="text-white font-semibold" style={{ fontSize: '18px', fontWeight: '600' }}>
+                  {homeTeam}
+                </span>
               </div>
               
               {/* Spread */}
@@ -281,29 +295,46 @@ const WhatGaryThinks = () => {
             </div>
 
             {/* Game Time */}
-            <div className="text-center pt-2 border-t border-gray-700">
-              <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">
-                {time || 'TBD'}
-              </span>
+            <div className="text-center pt-4 mt-2 border-t border-gray-600">
+              <div className="inline-flex items-center px-3 py-2 bg-gray-800 rounded-lg border border-gray-600">
+                <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-gray-300 font-semibold" style={{ fontSize: '14px', fontWeight: '600', letterSpacing: '0.5px' }}>
+                  {time || 'TBD'}
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Gary's Rationale */}
           {garyPicks?.rationale && (
             <div className="px-4 pb-4">
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
+              <div className="mt-6 pt-6 border-t border-gray-600">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-lg">
+                      <span className="text-black font-bold text-sm">G</span>
+                    </div>
                     <div 
-                      className="px-2 py-1 rounded text-xs font-bold uppercase"
-                      style={{ backgroundColor: '#d4af37', color: '#000' }}
+                      className="px-3 py-2 rounded-lg font-bold uppercase shadow-lg"
+                      style={{ 
+                        backgroundColor: '#d4af37', 
+                        color: '#000',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        letterSpacing: '0.8px',
+                        border: '1px solid #f1c40f'
+                      }}
                     >
                       Gary's Analysis
                     </div>
                   </div>
-                  <p className="text-sm text-gray-300 leading-relaxed italic">
-                    "{garyPicks.rationale}"
-                  </p>
+                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow-inner">
+                    <p className="text-gray-200 leading-relaxed italic" style={{ fontSize: '15px', lineHeight: '1.6' }}>
+                      "{garyPicks.rationale}"
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -316,21 +347,33 @@ const WhatGaryThinks = () => {
   const BettingOption = ({ topLine, bottomLine, isSelected, singleLine = false }) => {
     return (
       <div className={`
-        px-3 py-3 rounded text-center transition-all duration-300 cursor-pointer h-20 w-full flex flex-col justify-center
+        px-3 py-3 rounded-lg text-center transition-all duration-300 cursor-pointer w-full flex flex-col justify-center
         ${isSelected 
-          ? 'text-black font-bold' 
-          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+          ? 'text-black font-bold transform scale-105' 
+          : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:scale-102 hover:shadow-lg'
         }
       `}
-      style={isSelected ? { 
-        backgroundColor: '#d4af37', 
-        color: '#000'
-      } : { backgroundColor: '#333' }}
+      style={{
+        minHeight: '48px',
+        minWidth: '80px',
+        ...(isSelected ? { 
+          backgroundColor: '#d4af37', 
+          color: '#000',
+          border: '2px solid #f1c40f',
+          boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+        } : { 
+          backgroundColor: '#333',
+          border: '1px solid #444',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
+        })
+      }}
       >
-        <div className="text-sm font-semibold leading-tight">
+        <div className={`leading-tight ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
+             style={{ fontSize: '16px', fontWeight: '700' }}>
           {topLine}
         </div>
-        <div className={`text-xs mt-1 leading-tight ${isSelected ? 'text-black' : 'text-gray-400'}`}>
+        <div className={`mt-1 leading-tight ${isSelected ? 'text-black' : 'text-gray-400'}`}
+             style={{ fontSize: '12px', fontWeight: '400', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {!singleLine && bottomLine ? bottomLine : '\u00A0'}
         </div>
       </div>
@@ -482,29 +525,48 @@ const WhatGaryThinks = () => {
             <button
               onClick={loadGaryThoughts}
               disabled={loading}
-              className="flex items-center space-x-2 px-4 py-2 rounded font-medium transition-all duration-300 disabled:opacity-50"
-              style={{ backgroundColor: '#d4af37', color: '#000' }}
+              className="flex items-center space-x-2 px-6 py-3 rounded-lg font-bold transition-all duration-300 disabled:opacity-50 transform hover:scale-105 shadow-lg"
+              style={{ 
+                backgroundColor: '#d4af37', 
+                color: '#000',
+                border: '2px solid #f1c40f',
+                boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4)',
+                fontSize: '14px',
+                fontWeight: '700',
+                letterSpacing: '0.5px'
+              }}
             >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
               <span>Refresh</span>
             </button>
           </div>
 
           {/* Sport Tabs */}
-          <div className="flex justify-center mb-6">
-            <div className="flex space-x-1 p-1 rounded-lg" style={{ backgroundColor: '#333' }}>
+          <div className="flex justify-center mb-8">
+            <div className="flex space-x-2 p-2 rounded-xl shadow-lg" style={{ backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
               {['NBA', 'MLB', 'NHL'].map((sport) => (
                 <button
                   key={sport}
                   onClick={() => setActiveTab(sport)}
-                  className={`px-6 py-2 rounded-md font-medium transition-all duration-300 ${
+                  className={`px-8 py-3 rounded-lg font-bold transition-all duration-300 transform ${
                     activeTab === sport 
-                      ? 'text-black font-bold' 
-                      : 'text-gray-300 hover:text-white'
+                      ? 'text-black scale-105 shadow-lg' 
+                      : 'text-gray-300 hover:text-white hover:bg-gray-700 hover:scale-102'
                   }`}
                   style={activeTab === sport ? { 
-                    backgroundColor: '#d4af37' 
-                  } : {}}
+                    backgroundColor: '#d4af37',
+                    border: '2px solid #f1c40f',
+                    boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4)',
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    letterSpacing: '0.5px'
+                  } : {
+                    backgroundColor: '#333',
+                    border: '1px solid #555',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    letterSpacing: '0.5px'
+                  }}
                 >
                   {sport}
                 </button>

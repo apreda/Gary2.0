@@ -38,8 +38,13 @@ export default function GaryProps() {
     setLoading(true);
     setError(null);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      console.log(`Looking for prop picks for date ${today}`);
+      // Get today's date in EST
+      const now = new Date();
+      const estOptions = { timeZone: 'America/New_York' };
+      const estDateString = now.toLocaleDateString('en-US', estOptions);
+      const [month, day, year] = estDateString.split('/');
+      const today = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      console.log(`Looking for prop picks for date (EST): ${today}`);
       const data = await propPicksService.getTodayPropPicks();
       let processedPicks = [];
 
