@@ -39,7 +39,7 @@ function Home() {
     };
 
     return (
-      <div style={{ width: 576, height: 384, perspective: '1000px', cursor: 'pointer' }} onClick={() => setIsCardFlipped(!isCardFlipped)}>
+      <div style={{ width: 576, height: 420, perspective: '1000px', cursor: 'pointer' }} onClick={() => setIsCardFlipped(!isCardFlipped)}>
         {/* Card container with 3D effect */}
         <div style={{ 
           position: 'relative', 
@@ -69,14 +69,14 @@ function Home() {
               top: 0,
               bottom: 0,
               width: '70%',
-              padding: '1.5rem',
+              padding: '1.25rem',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
               overflow: 'hidden',
             }}>
               {/* League, Odds, and Matchup in horizontal layout - Fixed Width Columns */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '0.75rem' }}>
                 {/* League - Fixed width */}
                 <div style={{ width: '80px', minWidth: '80px' }}>
                   <div style={{ 
@@ -149,7 +149,7 @@ function Home() {
               </div>
               
               {/* The main pick display */}
-              <div style={{ marginBottom: '1rem' }}>
+              <div style={{ marginBottom: '0.75rem', flex: '1' }}>
                 <div style={{ 
                   fontSize: '0.75rem', 
                   opacity: 0.6, 
@@ -160,12 +160,12 @@ function Home() {
                   Gary's Pick
                 </div>
                 <div style={{ 
-                  fontSize: '2rem', 
+                  fontSize: '1.8rem', 
                   fontWeight: 700, 
                   lineHeight: 1.1,
                   color: '#bfa142', /* Keeping gold color for the actual pick */
                   wordBreak: 'break-word',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1rem'
                 }}>
                   {(() => {
                     // Remove odds from the end of the pick string
@@ -181,20 +181,19 @@ function Home() {
                   fontSize: '0.8rem',
                   opacity: 0.85,
                   marginBottom: '0.5rem',
-                  marginTop: '0.75rem',
-                  lineHeight: 1.4
+                  lineHeight: 1.3
                 }}>
                   {displayPick.rationale ? 
-                    displayPick.rationale.length > 240 ? 
-                      displayPick.rationale.substring(0, 240) + '...' : 
+                    displayPick.rationale.length > 200 ? 
+                      displayPick.rationale.substring(0, 200) + '...' : 
                       displayPick.rationale
                     : 'Tap for detailed analysis'
                   }
                 </div>
               </div>
               
-              {/* Bet or Fade Buttons */}
-              <div>
+              {/* Bet or Fade Buttons - Fixed at bottom */}
+              <div style={{ marginTop: 'auto' }}>
                 <div style={{ 
                   fontSize: '0.75rem', 
                   opacity: 0.6, 
@@ -214,7 +213,7 @@ function Home() {
                       background: 'rgba(191, 161, 66, 0.15)',
                       color: '#bfa142',
                       fontWeight: '600',
-                      padding: '0.5rem 1rem',
+                      padding: '0.6rem 1rem',
                       borderRadius: '8px',
                       border: '1px solid rgba(191, 161, 66, 0.3)',
                       cursor: 'pointer',
@@ -232,7 +231,7 @@ function Home() {
                       background: 'rgba(255, 255, 255, 0.05)',
                       color: 'rgba(255, 255, 255, 0.8)',
                       fontWeight: '600',
-                      padding: '0.5rem 1rem',
+                      padding: '0.6rem 1rem',
                       borderRadius: '8px',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                       cursor: 'pointer',
