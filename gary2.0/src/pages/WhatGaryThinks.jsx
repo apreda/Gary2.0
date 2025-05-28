@@ -83,7 +83,7 @@ const WhatGaryThinks = () => {
           }}
         >
           {/* Header with league and time */}
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-6">
             <div 
               className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wide"
               style={{ backgroundColor: '#d4af37', color: '#000' }}
@@ -95,78 +95,98 @@ const WhatGaryThinks = () => {
             </span>
           </div>
 
-          {/* Teams */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-white font-bold text-lg">{awayTeam}</span>
-              <span className="text-gray-400 text-sm">@</span>
+          {/* Column Headers */}
+          <div className="grid grid-cols-4 gap-3 items-center mb-4 pb-2 border-b border-gray-700">
+            <div className="col-span-1">
+              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Team</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-white font-bold text-lg">{homeTeam}</span>
+            <div className="col-span-1 text-center">
+              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Spread</span>
+            </div>
+            <div className="col-span-1 text-center">
+              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Moneyline</span>
+            </div>
+            <div className="col-span-1 text-center">
+              <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Total</span>
             </div>
           </div>
 
-          {/* Betting Lines */}
-          <div className="space-y-4">
-            {/* Spread */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Spread</span>
+          {/* Teams and Betting Grid */}
+          <div className="space-y-3">
+            {/* Away Team Row */}
+            <div className="grid grid-cols-4 gap-3 items-center">
+              {/* Team Name */}
+              <div className="col-span-1">
+                <span className="text-white font-bold text-sm">{awayTeam}</span>
               </div>
-              <div className="flex space-x-2">
+              
+              {/* Spread */}
+              <div className="col-span-1">
                 <BettingOption
                   label={odds?.spread?.away?.line || 'N/A'}
                   odds={odds?.spread?.away?.odds || 'N/A'}
                   isSelected={garyPicks?.spread === 'away'}
-                  team="away"
-                />
-                <BettingOption
-                  label={odds?.spread?.home?.line || 'N/A'}
-                  odds={odds?.spread?.home?.odds || 'N/A'}
-                  isSelected={garyPicks?.spread === 'home'}
-                  team="home"
+                  compact={true}
                 />
               </div>
-            </div>
-
-            {/* Moneyline */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Moneyline</span>
-              </div>
-              <div className="flex space-x-2">
+              
+              {/* Moneyline */}
+              <div className="col-span-1">
                 <BettingOption
                   label="ML"
                   odds={odds?.moneyline?.away || 'N/A'}
                   isSelected={garyPicks?.moneyline === 'away'}
-                  team="away"
-                />
-                <BettingOption
-                  label="ML"
-                  odds={odds?.moneyline?.home || 'N/A'}
-                  isSelected={garyPicks?.moneyline === 'home'}
-                  team="home"
+                  compact={true}
                 />
               </div>
-            </div>
-
-            {/* Over/Under */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Total</span>
-              </div>
-              <div className="flex space-x-2">
+              
+              {/* Total (only show on away team row) */}
+              <div className="col-span-1">
                 <BettingOption
                   label={`O ${odds?.total?.line || 'N/A'}`}
                   odds={odds?.total?.over || 'N/A'}
                   isSelected={garyPicks?.total === 'over'}
-                  icon={<TrendingUp size={14} />}
+                  icon={<TrendingUp size={12} />}
+                  compact={true}
                 />
+              </div>
+            </div>
+
+            {/* Home Team Row */}
+            <div className="grid grid-cols-4 gap-3 items-center">
+              {/* Team Name */}
+              <div className="col-span-1">
+                <span className="text-white font-bold text-sm">{homeTeam}</span>
+              </div>
+              
+              {/* Spread */}
+              <div className="col-span-1">
+                <BettingOption
+                  label={odds?.spread?.home?.line || 'N/A'}
+                  odds={odds?.spread?.home?.odds || 'N/A'}
+                  isSelected={garyPicks?.spread === 'home'}
+                  compact={true}
+                />
+              </div>
+              
+              {/* Moneyline */}
+              <div className="col-span-1">
+                <BettingOption
+                  label="ML"
+                  odds={odds?.moneyline?.home || 'N/A'}
+                  isSelected={garyPicks?.moneyline === 'home'}
+                  compact={true}
+                />
+              </div>
+              
+              {/* Total (only show on home team row) */}
+              <div className="col-span-1">
                 <BettingOption
                   label={`U ${odds?.total?.line || 'N/A'}`}
                   odds={odds?.total?.under || 'N/A'}
                   isSelected={garyPicks?.total === 'under'}
-                  icon={<TrendingDown size={14} />}
+                  icon={<TrendingDown size={12} />}
+                  compact={true}
                 />
               </div>
             </div>
@@ -195,24 +215,25 @@ const WhatGaryThinks = () => {
     );
   };
 
-  const BettingOption = ({ label, odds, isSelected, icon, team }) => {
+  const BettingOption = ({ label, odds, isSelected, icon, compact = false }) => {
     return (
       <div className={`
-        flex-1 px-4 py-3 rounded-lg text-sm font-medium text-center transition-all duration-300
+        px-2 py-2 rounded-lg text-xs font-medium text-center transition-all duration-300
         ${isSelected 
           ? 'border-2 text-black font-bold' 
           : 'bg-gray-800 border-2 border-gray-600 text-gray-300 hover:bg-gray-700 hover:border-gray-500'
         }
+        ${compact ? 'min-h-[50px]' : ''}
       `}
       style={isSelected ? { 
         backgroundColor: '#d4af37', 
         borderColor: '#d4af37',
-        boxShadow: '0 0 20px rgba(212, 175, 55, 0.3)'
+        boxShadow: '0 0 15px rgba(212, 175, 55, 0.3)'
       } : {}}
       >
         <div className="flex items-center justify-center space-x-1 mb-1">
           {icon && <span>{icon}</span>}
-          <span className="font-semibold">{label}</span>
+          <span className="font-semibold text-xs">{label}</span>
         </div>
         <div className={`text-xs ${isSelected ? 'text-black' : 'text-gray-400'}`}>
           {odds}
