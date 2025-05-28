@@ -21,6 +21,7 @@ import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import LearnMore from "./pages/LearnMore";
 import { CheckoutSuccess } from "./pages/CheckoutSuccess";
 import { CheckoutCancel } from "./pages/CheckoutCancel";
+import WhatGaryThinks from "./pages/WhatGaryThinks";
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
@@ -142,6 +143,7 @@ function AppContent() {
               {/* Admin routes */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
               <Route path="/admin/results" element={<ResultsAdmin />} />
+              <Route path="/what-gary-thinks" element={<WhatGaryThinks />} />
             </Routes>
           </Suspense>
         </div>
