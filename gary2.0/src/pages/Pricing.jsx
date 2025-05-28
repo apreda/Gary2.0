@@ -38,61 +38,61 @@ export function Pricing() {
       <div className="relative z-10">
         <div className="max-w-7xl mx-auto px-6">
           {/* Header Section - More compact */}
-          <div className="text-center mb-16 pt-12">
-            <h1 className="text-5xl font-bold text-[#b8953f] mb-3 drop-shadow-lg">Pricing</h1>
-            <p className="text-lg text-gray-300 max-w-2xl mx-auto font-light">
+          <div className="text-center mb-12 pt-8">
+            <h1 className="text-4xl font-bold text-[#b8953f] mb-2 drop-shadow-lg">Pricing</h1>
+            <p className="text-base text-gray-300 max-w-2xl mx-auto font-light">
               Simple, transparent pricing to upgrade your betting game
             </p>
           </div>
 
           {/* Social Proof Section */}
-          <div className="text-center mb-12">
-            <p className="text-sm text-gray-400 mb-6 tracking-wider">TRUSTED BY WINNING BETTORS</p>
-            <div className="flex justify-center items-center space-x-8 opacity-60">
-              <div className="text-[#b8953f] font-bold text-lg">67% WIN RATE</div>
-              <div className="w-px h-6 bg-gray-600"></div>
-              <div className="text-[#b8953f] font-bold text-lg">+18% ROI</div>
-              <div className="w-px h-6 bg-gray-600"></div>
-              <div className="text-[#b8953f] font-bold text-lg">15-20 PICKS/WEEK</div>
+          <div className="text-center mb-8">
+            <p className="text-xs text-gray-400 mb-4 tracking-wider">TRUSTED BY WINNING BETTORS</p>
+            <div className="flex justify-center items-center space-x-6 opacity-60">
+              <div className="text-[#b8953f] font-bold text-base">67% WIN RATE</div>
+              <div className="w-px h-5 bg-gray-600"></div>
+              <div className="text-[#b8953f] font-bold text-base">+18% ROI</div>
+              <div className="w-px h-5 bg-gray-600"></div>
+              <div className="text-[#b8953f] font-bold text-base">15-20 PICKS/WEEK</div>
             </div>
           </div>
           
           {/* Pricing Cards - Two tier layout */}
-          <div className="grid lg:grid-cols-2 gap-12 max-w-5xl mx-auto mb-20">
+          <div className="grid lg:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16">
             
             {/* Free Tier - Ticket Style */}
-            <div className="flex flex-col h-[550px] relative group
+            <div className="flex flex-col h-[420px] relative group
                            transition-all duration-300 ease-out
                            hover:-translate-y-1 hover:shadow-xl
                            shadow-[0_15px_40px_4px_rgba(0,0,0,0.4)]">
               
               {/* Ticket notches */}
-              <div className="absolute -left-2 top-1/4 w-4 h-8 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-1/2 w-4 h-8 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-3/4 w-4 h-8 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/4 w-4 h-8 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/2 w-4 h-8 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-3/4 w-4 h-8 bg-black rounded-l-full z-10 shadow-md"></div>
+              <div className="absolute -left-2 top-1/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
+              <div className="absolute -left-2 top-1/2 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
+              <div className="absolute -left-2 top-3/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
+              <div className="absolute -right-2 top-1/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
+              <div className="absolute -right-2 top-1/2 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
+              <div className="absolute -right-2 top-3/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
               
               {/* Ticket header */}
-              <div className="w-full py-4 px-6 rounded-t-xl relative z-20" 
+              <div className="w-full py-3 px-5 rounded-t-xl relative z-20" 
                    style={{
                      background: "linear-gradient(135deg, #6b7280 0%, #9ca3af 50%, #6b7280 100%)",
                      boxShadow: "0px 6px 20px rgba(0,0,0,0.3)"
                    }}>
                 <div className="flex flex-col">
                   <div className="flex justify-between items-center">
-                    <div className="text-xl font-bold text-black font-sans tracking-wider">GARY A.I.</div>
+                    <div className="text-lg font-bold text-black font-sans tracking-wider">GARY A.I.</div>
                     <div className="text-xs text-black font-sans tracking-wider font-medium">FREE ACCESS</div>
                   </div>
-                  <div className="flex justify-between mt-2">
+                  <div className="flex justify-between mt-1">
                     <div className="font-mono text-xs opacity-90 text-black">
                       <div className="mb-1">SECTION: GENERAL</div>
                       <div>SEAT: LIMITED</div>
                     </div>
                     <div className="text-xs text-black font-medium text-right">
                       <div className="mb-1">VALID: FOREVER</div>
-                      <div className="text-right font-black text-xl">
+                      <div className="text-right font-black text-lg">
                         <span className="font-medium text-sm">$</span>0
                         <span className="text-sm font-normal">/mo</span>
                       </div>
@@ -102,7 +102,7 @@ export function Pricing() {
               </div>
               
               {/* Ticket body */}
-              <div className="flex-grow text-white p-6 flex flex-col justify-between relative" 
+              <div className="flex-grow text-white p-5 flex flex-col justify-between relative" 
                    style={{ 
                      backgroundColor: '#000000', 
                      backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(107, 114, 128, 0.05) 0%, transparent 50%)',
@@ -110,22 +110,22 @@ export function Pricing() {
                      zIndex: 5 
                    }}> 
                 <div>
-                  <h3 className="text-xl font-bold mb-4 text-gray-300 tracking-wide">Free Membership</h3>
-                  <ul className="space-y-3 text-gray-200">
+                  <h3 className="text-lg font-bold mb-3 text-gray-300 tracking-wide">Free Membership</h3>
+                  <ul className="space-y-2 text-gray-200">
                     <li className="flex items-start">
-                      <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span className="text-sm leading-relaxed">1 Daily High Confidence Pick</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span className="text-sm leading-relaxed">Prop Picks</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span className="text-sm leading-relaxed">Gary's Thoughts</span>
@@ -134,29 +134,29 @@ export function Pricing() {
                 </div>
                 
                 {/* Value proposition badge */}
-                <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-gray-600/20 to-gray-500/20 border border-gray-600/30">
+                <div className="mt-3 p-2 rounded-lg bg-gradient-to-r from-gray-600/20 to-gray-500/20 border border-gray-600/30">
                   <div className="text-center">
-                    <div className="text-gray-300 font-bold text-base">Get Started</div>
+                    <div className="text-gray-300 font-bold text-sm">Get Started</div>
                     <div className="text-gray-400 text-xs">No Credit Card Required</div>
                   </div>
                 </div>
               </div>
               
               {/* Ticket footer */}
-              <div className="relative p-4 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
+              <div className="relative p-3 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
                    style={{ backgroundColor: '#000000', position: 'relative', zIndex: 5 }}>
                 <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
                   style={{
                     background: "linear-gradient(135deg, #6b7280 0%, #9ca3af 50%, #6b7280 100%)",
                     boxShadow: "0px -6px 20px rgba(0,0,0,0.3)"
                   }}>
-                  <div className="py-4 px-6 flex justify-center flex-col">
+                  <div className="py-3 px-5 flex justify-center flex-col">
                     <div className="flex items-center justify-between mb-1">
                       <div className="font-mono text-xs opacity-90 text-black font-medium">FREE</div>
                       <div className="text-xs text-black font-medium">INSTANT</div>
                     </div>
                     <a href="https://www.betwithgary.ai/signin" className="group relative w-full text-center">
-                      <div className="text-lg font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
+                      <div className="text-base font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
                         GET STARTED
                       </div>
                       <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent 
@@ -165,7 +165,7 @@ export function Pricing() {
                   </div>
                   
                   {/* Free badge */}
-                  <div className="absolute bottom-3 right-6 w-8 h-8 rounded-full bg-black 
+                  <div className="absolute bottom-2 right-5 w-7 h-7 rounded-full bg-black 
                                 flex items-center justify-center overflow-hidden shadow-xl z-20
                                 group-hover:rotate-[360deg] group-hover:scale-110 transition-all duration-1000 ease-out">
                     <div className="absolute inset-1 rounded-full bg-gradient-to-br from-gray-600 to-gray-500 opacity-95"></div>
@@ -176,13 +176,13 @@ export function Pricing() {
             </div>
 
             {/* Pro Tier - Enhanced and highlighted */}
-            <div className="flex flex-col h-[550px] relative group
+            <div className="flex flex-col h-[420px] relative group
                            transition-all duration-500 ease-out
                            hover:-translate-y-2 hover:shadow-2xl hover:scale-105
                            shadow-[0_20px_60px_8px_rgba(0,0,0,0.6)]">
               {/* Popular badge */}
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-30">
-                <div className="bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black text-xs font-bold px-4 py-2 rounded-full">
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-30">
+                <div className="bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black text-xs font-bold px-3 py-1 rounded-full">
                   MOST POPULAR
                 </div>
               </div>
@@ -192,32 +192,32 @@ export function Pricing() {
                              group-hover:opacity-75 rounded-xl blur-lg transition duration-700"></div>
               
               {/* Ticket notches - more refined */}
-              <div className="absolute -left-2 top-1/4 w-4 h-8 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-1/2 w-4 h-8 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-3/4 w-4 h-8 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/4 w-4 h-8 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/2 w-4 h-8 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-3/4 w-4 h-8 bg-black rounded-l-full z-10 shadow-md"></div>
+              <div className="absolute -left-2 top-1/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
+              <div className="absolute -left-2 top-1/2 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
+              <div className="absolute -left-2 top-3/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
+              <div className="absolute -right-2 top-1/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
+              <div className="absolute -right-2 top-1/2 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
+              <div className="absolute -right-2 top-3/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
               
               {/* Ticket header with premium branding */}
-              <div className="w-full py-4 px-6 rounded-t-xl relative z-20" 
+              <div className="w-full py-3 px-5 rounded-t-xl relative z-20" 
                    style={{
                      background: "linear-gradient(135deg, #b8953f 0%, #d4af37 50%, #b8953f 100%)",
                      boxShadow: "0px 6px 20px rgba(0,0,0,0.3)"
                    }}>
                 <div className="flex flex-col">
                   <div className="flex justify-between items-center">
-                    <div className="text-xl font-bold text-black font-sans tracking-wider">GARY A.I.</div>
+                    <div className="text-lg font-bold text-black font-sans tracking-wider">GARY A.I.</div>
                     <div className="text-xs text-black font-sans tracking-wider font-medium">PREMIUM ACCESS</div>
                   </div>
-                  <div className="flex justify-between mt-2">
+                  <div className="flex justify-between mt-1">
                     <div className="font-mono text-xs opacity-90 text-black">
                       <div className="mb-1">SECTION: VIP</div>
                       <div>SEAT: UNLIMITED</div>
                     </div>
                     <div className="text-xs text-black font-medium text-right">
                       <div className="mb-1">VALID: 30 DAYS</div>
-                      <div className="text-right font-black text-xl">
+                      <div className="text-right font-black text-lg">
                         <span className="font-medium text-sm">$</span>29
                         <span className="text-sm font-normal">/mo</span>
                       </div>
@@ -227,7 +227,7 @@ export function Pricing() {
               </div>
               
               {/* Ticket body */}
-              <div className="flex-grow text-white p-6 flex flex-col justify-between relative" 
+              <div className="flex-grow text-white p-5 flex flex-col justify-between relative" 
                    style={{ 
                      backgroundColor: '#000000', 
                      backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(184, 149, 63, 0.05) 0%, transparent 50%)',
@@ -235,28 +235,28 @@ export function Pricing() {
                      zIndex: 5 
                    }}> 
                 <div>
-                  <h3 className="text-xl font-bold mb-4 text-[#b8953f] tracking-wide">Pro Membership</h3>
-                  <ul className="space-y-3 text-gray-200">
+                  <h3 className="text-lg font-bold mb-3 text-[#b8953f] tracking-wide">Pro Membership</h3>
+                  <ul className="space-y-2 text-gray-200">
                     <li className="flex items-start">
-                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span className="text-sm leading-relaxed">Everything in Free</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span className="text-sm leading-relaxed">Daily Access to All High Confidence Picks (NBA MLB NHL NFL)</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span className="text-sm leading-relaxed">BetCard Tracking and Win Rate</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span className="text-sm leading-relaxed">Exclusive Discounts, Picks and More</span>
@@ -265,30 +265,30 @@ export function Pricing() {
                 </div>
                 
                 {/* Value proposition badge */}
-                <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-[#b8953f]/20 to-[#d4af37]/20 border border-[#b8953f]/30">
+                <div className="mt-3 p-2 rounded-lg bg-gradient-to-r from-[#b8953f]/20 to-[#d4af37]/20 border border-[#b8953f]/30">
                   <div className="text-center">
-                    <div className="text-[#d4af37] font-bold text-base">67% Win Rate</div>
+                    <div className="text-[#d4af37] font-bold text-sm">67% Win Rate</div>
                     <div className="text-gray-300 text-xs">Proven Track Record</div>
                   </div>
                 </div>
               </div>
               
               {/* Ticket footer */}
-              <div className="relative p-4 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
+              <div className="relative p-3 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
                    style={{ backgroundColor: '#000000', position: 'relative', zIndex: 5 }}>
                 <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
                   style={{
                     background: "linear-gradient(135deg, #b8953f 0%, #d4af37 50%, #b8953f 100%)",
                     boxShadow: "0px -6px 20px rgba(0,0,0,0.3)"
                   }}>
-                  <div className="py-4 px-6 flex justify-center flex-col">
+                  <div className="py-3 px-5 flex justify-center flex-col">
                     <div className="flex items-center justify-between mb-1">
                       <div className="font-mono text-xs opacity-90 text-black font-medium">PREMIUM</div>
                       <div className="text-xs text-black font-medium">INSTANT</div>
                     </div>
                     {user ? (
                       <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group relative w-full text-center">
-                        <div className="text-lg font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
+                        <div className="text-base font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
                           SELECT PLAN
                         </div>
                         <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent 
@@ -296,7 +296,7 @@ export function Pricing() {
                       </a>
                     ) : (
                       <a href="https://www.betwithgary.ai/signin" className="group relative w-full text-center">
-                        <div className="text-lg font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
+                        <div className="text-base font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
                           SELECT PLAN
                         </div>
                         <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent 
@@ -306,7 +306,7 @@ export function Pricing() {
                   </div>
                   
                   {/* VIP badge */}
-                  <div className="absolute bottom-3 right-6 w-8 h-8 rounded-full bg-black 
+                  <div className="absolute bottom-2 right-5 w-7 h-7 rounded-full bg-black 
                                 flex items-center justify-center overflow-hidden shadow-xl z-20
                                 group-hover:rotate-[360deg] group-hover:scale-110 transition-all duration-1000 ease-out">
                     <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#b8953f] to-[#d4af37] opacity-95"></div>
