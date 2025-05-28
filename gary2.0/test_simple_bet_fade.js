@@ -1,12 +1,13 @@
 /**
- * Live Test for Bet/Fade Functionality
- * Tests the actual flow with real table structures
+ * Simple Bet/Fade Test
+ * Tests the core bet/fade logic without complex database triggers
  */
 import { supabase } from './src/supabaseClient.js';
 import { userPickResultsService } from './src/services/userPickResultsService.js';
+import { randomUUID } from 'crypto';
 
-const testLiveBetFade = async () => {
-  console.log('🚀 LIVE BET/FADE TEST STARTING...\n');
+const testSimpleBetFade = async () => {
+  console.log('🧪 SIMPLE BET/FADE TEST STARTING...\n');
   
   const testData = {
     pickId: null,
@@ -15,51 +16,17 @@ const testLiveBetFade = async () => {
   };
 
   try {
-    // Step 1: Create a test pick in daily_picks
-    console.log('1️⃣ Creating test pick in daily_picks...');
-    const testPickId = `test-${Date.now()}`;
-    
-    // Create the pick object that will go in the picks array
-    const testPickObject = {
-      id: testPickId,
-      matchup: 'Lakers @ Warriors',
-      pick: 'Lakers -3.5',
-      odds: '-110',
-      confidence: 'High',
-      league: 'NBA',
-      sport: 'basketball_nba',
-      time: '10:30 PM ET'
-    };
-    
-    // The daily_picks table stores picks as a JSONB array
-    const testPick = {
-      date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-      picks: [testPickObject], // Array of pick objects
-      created_at: new Date().toISOString()
-    };
-    
-    const { data: createdPick, error: pickError } = await supabase
-      .from('daily_picks')
-      .insert([testPick])
-      .select()
-      .single();
-    
-    if (pickError) {
-      console.error('❌ Failed to create test pick:', pickError);
-      return { success: false, error: pickError.message };
-    }
-    
-    testData.pickId = testPickId; // Use the pick ID from within the picks array
-    testData.cleanup.push(() => supabase.from('daily_picks').delete().eq('id', createdPick.id));
-    console.log('✅ Test pick created with ID:', testPickId);
+    // Step 1: Create a simple test pick ID (we'll simulate this without daily_picks)
+    const testPickId = randomUUID();
+    testData.pickId = testPickId;
+    console.log('1️⃣ Using test pick ID:', testPickId);
 
-    // Step 2: Create test users and their decisions
+    // Step 2: Create test users and their decisions directly in user_picks
     console.log('\n2️⃣ Creating test user decisions...');
     
-    // Generate unique test user IDs
-    const testUser1 = `test-user-${Date.now()}-1`;
-    const testUser2 = `test-user-${Date.now()}-2`;
-    const testUser3 = `test-user-${Date.now()}-3`;
+    const testUser1 = randomUUID();
+    const testUser2 = randomUUID();
+    const testUser3 = randomUUID();
     
     testData.userIds = [testUser1, testUser2, testUser3];
     
@@ -102,19 +69,20 @@ const testLiveBetFade = async () => {
     
     // Display the decisions
     createdDecisions.forEach(decision => {
-      console.log(`   ${decision.user_id}: ${decision.decision.toUpperCase()}`);
+      console.log(`   ${decision.user_id.slice(-1)}: ${decision.decision.toUpperCase()}`);
     });
 
-    // Step 3: Test Scenario 1 - Gary WINS
-    console.log('\n3️⃣ Testing Scenario 1: Gary WINS...');
+    // Step 3: Create a game result directly (simulating Gary's pick result)
+    console.log('\n3️⃣ Creating Gary\'s pick result (WON)...');
     
     const gameResultWin = {
       pick_id: testPickId,
       result: 'won',
       final_score: 'Lakers 112 - Warriors 108',
-      matchup: testPickObject.matchup,
+      matchup: 'Lakers @ Warriors',
       game_date: new Date().toISOString(),
-      league: 'NBA'
+      league: 'NBA',
+      pick_text: 'Lakers -3.5'
     };
     
     const { data: winResult, error: winError } = await supabase
@@ -124,14 +92,14 @@ const testLiveBetFade = async () => {
       .single();
     
     if (winError) {
-      console.error('❌ Failed to create win result:', winError);
+      console.error('❌ Failed to create game result:', winError);
       return { success: false, error: winError.message };
     }
     
     testData.cleanup.push(() => supabase.from('game_results').delete().eq('pick_id', testPickId));
     console.log('✅ Gary WIN result created');
 
-    // Step 4: Process the results
+    // Step 4: Process the results using our service
     console.log('\n4️⃣ Processing user results...');
     const processingResult = await userPickResultsService.manualProcessResults();
     
@@ -170,28 +138,11 @@ const testLiveBetFade = async () => {
       
       if (!isCorrect) allCorrect = false;
       
-      console.log(`  ${decision.user_id.slice(-1)}: ${decision.decision.toUpperCase()} → ${actualOutcome?.toUpperCase() || 'NULL'} ${isCorrect ? '✅' : '❌'}`);
+      console.log(`  User ${decision.user_id.slice(-1)}: ${decision.decision.toUpperCase()} → ${actualOutcome?.toUpperCase() || 'NULL'} ${isCorrect ? '✅' : '❌'}`);
     });
 
-    // Step 6: Test user stats updates
-    console.log('\n6️⃣ Checking user stats...');
-    const { data: userStats, error: statsError } = await supabase
-      .from('user_stats')
-      .select('*')
-      .in('id', testData.userIds);
-    
-    if (statsError) {
-      console.log('⚠️ No user stats found (normal for test users)');
-    } else if (userStats && userStats.length > 0) {
-      console.log('📊 User stats created:');
-      userStats.forEach(stat => {
-        console.log(`  User ${stat.id.slice(-1)}: ${stat.win_count}W-${stat.loss_count}L-${stat.push_count}P`);
-      });
-      testData.cleanup.push(() => supabase.from('user_stats').delete().in('id', testData.userIds));
-    }
-
-    // Step 7: Test Scenario 2 - Change to Gary LOSES
-    console.log('\n7️⃣ Testing Scenario 2: Changing Gary result to LOST...');
+    // Step 6: Test the opposite scenario (Gary loses)
+    console.log('\n6️⃣ Testing opposite scenario (Gary LOSES)...');
     
     // Update the game result to lost
     const { error: updateError } = await supabase
@@ -234,22 +185,90 @@ const testLiveBetFade = async () => {
       console.log('  - FADE users should WIN');
       console.log('\nActual outcomes:');
       
+      let allCorrect2 = true;
       newDecisions?.forEach(decision => {
         const expectedOutcome = decision.decision === 'bet' ? 'lost' : 'won';
         const actualOutcome = decision.outcome;
         const isCorrect = expectedOutcome === actualOutcome;
         
-        console.log(`  ${decision.user_id.slice(-1)}: ${decision.decision.toUpperCase()} → ${actualOutcome?.toUpperCase() || 'NULL'} ${isCorrect ? '✅' : '❌'}`);
+        if (!isCorrect) allCorrect2 = false;
+        
+        console.log(`  User ${decision.user_id.slice(-1)}: ${decision.decision.toUpperCase()} → ${actualOutcome?.toUpperCase() || 'NULL'} ${isCorrect ? '✅' : '❌'}`);
       });
+      
+      allCorrect = allCorrect && allCorrect2;
+    }
+
+    // Step 7: Test push scenario
+    console.log('\n7️⃣ Testing PUSH scenario...');
+    
+    // Update the game result to push
+    const { error: pushUpdateError } = await supabase
+      .from('game_results')
+      .update({ 
+        result: 'push',
+        final_score: 'Lakers 108 - Warriors 108 (Push on -3.5)'
+      })
+      .eq('pick_id', testPickId);
+    
+    if (pushUpdateError) {
+      console.error('❌ Failed to update to push:', pushUpdateError);
+    } else {
+      console.log('✅ Gary result changed to PUSH');
+      
+      // Reset user pick outcomes to null
+      await supabase
+        .from('user_picks')
+        .update({ outcome: null })
+        .eq('pick_id', testPickId);
+      
+      // Process again
+      const processingResult3 = await userPickResultsService.manualProcessResults();
+      console.log('📊 Push processing result:', {
+        processed: processingResult3.processed,
+        updated: processingResult3.updated
+      });
+      
+      // Check push outcomes
+      const { data: pushDecisions } = await supabase
+        .from('user_picks')
+        .select('*')
+        .eq('pick_id', testPickId)
+        .order('user_id');
+      
+      console.log('\n📋 PUSH RESULTS ANALYSIS:');
+      console.log('Gary\'s pick: PUSH');
+      console.log('Expected outcomes:');
+      console.log('  - ALL users should get PUSH (regardless of bet/fade)');
+      console.log('\nActual outcomes:');
+      
+      let allCorrect3 = true;
+      pushDecisions?.forEach(decision => {
+        const expectedOutcome = 'push'; // Everyone gets push
+        const actualOutcome = decision.outcome;
+        const isCorrect = expectedOutcome === actualOutcome;
+        
+        if (!isCorrect) allCorrect3 = false;
+        
+        console.log(`  User ${decision.user_id.slice(-1)}: ${decision.decision.toUpperCase()} → ${actualOutcome?.toUpperCase() || 'NULL'} ${isCorrect ? '✅' : '❌'}`);
+      });
+      
+      allCorrect = allCorrect && allCorrect3;
     }
 
     console.log('\n' + '='.repeat(60));
-    console.log('🎉 LIVE TEST COMPLETE!');
+    console.log('🎉 SIMPLE BET/FADE TEST COMPLETE!');
     console.log('='.repeat(60));
+    
+    if (allCorrect) {
+      console.log('✅ ALL SCENARIOS PASSED! Your bet/fade system is working perfectly!');
+    } else {
+      console.log('❌ Some scenarios failed. Check the results above.');
+    }
     
     return {
       success: allCorrect,
-      testPick: testPickObject,
+      testPickId: testPickId,
       userDecisions: createdDecisions,
       finalOutcomes: finalDecisions,
       processingResult
@@ -276,11 +295,11 @@ const testLiveBetFade = async () => {
 };
 
 // Export for use
-export { testLiveBetFade };
+export { testSimpleBetFade };
 
 // If running directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  testLiveBetFade().then((result) => {
+  testSimpleBetFade().then((result) => {
     if (result.success) {
       console.log('\n🎉 ALL TESTS PASSED! Your bet/fade system is working correctly!');
     } else {
