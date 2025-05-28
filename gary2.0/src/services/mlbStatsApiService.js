@@ -302,6 +302,7 @@ const mlbStatsApiService = {
           return stats.batting?.homeRuns || 0;
         case 'runs':
         case 'r':
+        case 'runs_scored':
           return stats.batting?.runs || 0;
         case 'hits_runs_rbis': 
         case 'hitsrunsrbis':
@@ -311,8 +312,17 @@ const mlbStatsApiService = {
           return stats.batting?.baseOnBalls || 0;
         case 'pitches':
           return stats.pitching?.pitchesThrown || 0;
+        case 'stolen_bases':
+        case 'sb':
+          return stats.batting?.stolenBases || 0;
+        case 'doubles':
+        case '2b':
+          return stats.batting?.doubles || 0;
+        case 'triples':
+        case '3b':
+          return stats.batting?.triples || 0;
         default:
-          console.log(`[MLB API] Unknown prop type: ${normalizedPropType}`);
+          console.log(`[MLB API] Unknown prop type: ${normalizedPropType}. Available stats:`, Object.keys(stats));
           return null;
       }
     } catch (error) {
@@ -396,8 +406,20 @@ const mlbStatsApiService = {
       // Step 3: Get player stats from boxscore
       const stats = await mlbStatsApiService.getPlayerStats(game.gamePk, playerId);
       
+      if (!stats) {
+        console.log(`[MLB API] No stats found for ${prop.player} (ID: ${playerId}) in game ${game.gamePk}`);
+        results.push({ ...prop, actual: null, result: 'pending', reason: 'Player stats not found in boxscore' });
+        continue;
+      }
+      
       // Step 4: Extract the relevant stat
       const actual = mlbStatsApiService.extractStat(stats, prop.prop);
+      
+      if (actual === null) {
+        console.log(`[MLB API] Could not extract stat '${prop.prop}' for ${prop.player}. Available stats:`, Object.keys(stats));
+        results.push({ ...prop, actual: null, result: 'pending', reason: `Stat type '${prop.prop}' not found` });
+        continue;
+      }
       
       // Step 5: Evaluate the prop
       const result = mlbStatsApiService.evaluateProp(actual, prop.line, prop.bet || 'over');
