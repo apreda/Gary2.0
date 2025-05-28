@@ -600,18 +600,8 @@ const WhatGaryThinks = () => {
             </div>
           </div>
 
-          {/* Sport Tabs with Coin Image */}
+          {/* Sport Tabs - Remove coin image from here */}
           <div className="flex justify-center items-center space-x-6 mb-6">
-            {/* Coin Image */}
-            <div className="flex-shrink-0">
-              <img 
-                src={coin2} 
-                alt="Gary Coin" 
-                className="w-12 h-12 object-contain opacity-80"
-                style={{ filter: 'drop-shadow(0 2px 8px rgba(212, 175, 55, 0.3))' }}
-              />
-            </div>
-            
             {/* Sport Tabs - Smaller and More Subtle */}
             <div 
               className="flex space-x-1 p-1 rounded-lg shadow-md" 
@@ -702,11 +692,24 @@ const WhatGaryThinks = () => {
           </div>
         )}
 
-        {/* Games List */}
+        {/* Games List with Coin Image positioned above first game */}
         {(() => {
           const filteredGames = getFilteredGames();
           return filteredGames.length > 0 ? (
             <div className="w-full max-w-4xl mx-auto relative">
+              {/* Coin Image positioned above the first game card */}
+              <div className="flex justify-end mb-4 pr-8">
+                <img 
+                  src={coin2} 
+                  alt="Gary Coin" 
+                  className="w-20 h-20 object-contain opacity-90"
+                  style={{ 
+                    filter: 'drop-shadow(0 4px 12px rgba(212, 175, 55, 0.4))',
+                    transform: 'rotate(-5deg)'
+                  }}
+                />
+              </div>
+              
               {/* Subtle background overlay for visual cohesion */}
               <div 
                 className="absolute inset-0 pointer-events-none"
