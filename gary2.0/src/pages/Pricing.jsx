@@ -20,7 +20,7 @@ export function Pricing() {
   };
 
   return (
-    <div className="min-h-screen w-full py-12 relative" style={{ overflowX: 'auto' }}>
+    <div className="min-h-screen w-full py-8 relative" style={{ overflowX: 'auto' }}>
       {/* Stadium background image with parallax effect */}
       <div className="absolute inset-0 bg-cover bg-center z-0" style={{
         backgroundImage: `url(${colorBackground})`,
@@ -36,23 +36,72 @@ export function Pricing() {
       
       {/* Content container with overlay */}
       <div className="relative z-10">
-        <div className="max-w-5xl mx-auto px-4">
-          {/* Header Section */}
-          <div className="text-center mb-24 pt-16">  {/* Increased margin bottom */}
-            <h1 className="text-6xl font-bold text-[#b8953f] mb-4 drop-shadow-lg">Pricing</h1>
-            <p className="text-xl text-gray-300 max-w-xl mx-auto font-light">
+        <div className="max-w-7xl mx-auto px-6">
+          {/* Header Section - More compact */}
+          <div className="text-center mb-16 pt-12">
+            <h1 className="text-5xl font-bold text-[#b8953f] mb-3 drop-shadow-lg">Pricing</h1>
+            <p className="text-lg text-gray-300 max-w-2xl mx-auto font-light">
               Simple, transparent pricing to upgrade your betting game
             </p>
           </div>
+
+          {/* Social Proof Section */}
+          <div className="text-center mb-12">
+            <p className="text-sm text-gray-400 mb-6 tracking-wider">TRUSTED BY WINNING BETTORS</p>
+            <div className="flex justify-center items-center space-x-8 opacity-60">
+              <div className="text-[#b8953f] font-bold text-lg">67% WIN RATE</div>
+              <div className="w-px h-6 bg-gray-600"></div>
+              <div className="text-[#b8953f] font-bold text-lg">+18% ROI</div>
+              <div className="w-px h-6 bg-gray-600"></div>
+              <div className="text-[#b8953f] font-bold text-lg">15-20 PICKS/WEEK</div>
+            </div>
+          </div>
           
-          {/* Pricing Card - Centered */}
-          <div className="flex justify-center mx-auto">
+          {/* Pricing Cards - Three tier layout */}
+          <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto mb-20">
             
-            {/* Pro Tier - Modern Ticket Style */}
-            <div className="flex flex-col h-[650px] max-w-[360px] w-[360px] mx-auto relative group
+            {/* Free Tier */}
+            <div className="flex flex-col h-[500px] relative group transition-all duration-300 hover:-translate-y-1">
+              <div className="flex-grow bg-gray-900/80 backdrop-blur-sm rounded-xl border border-gray-700 p-6 flex flex-col">
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-bold text-gray-300 mb-2">Free</h3>
+                  <div className="text-3xl font-bold text-white mb-1">$0</div>
+                  <div className="text-sm text-gray-400">Forever</div>
+                </div>
+                
+                <ul className="space-y-3 text-gray-300 flex-grow">
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">Limited daily picks</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">Basic performance tracking</span>
+                  </li>
+                </ul>
+                
+                <button className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors mt-6">
+                  Get Started
+                </button>
+              </div>
+            </div>
+
+            {/* Pro Tier - Enhanced and highlighted */}
+            <div className="flex flex-col h-[550px] relative group
                            transition-all duration-500 ease-out
-                           hover:-translate-y-3 hover:shadow-2xl hover:scale-105 hover:rotate-1
-                           shadow-[0_25px_80px_8px_rgba(0,0,0,0.65)]">
+                           hover:-translate-y-2 hover:shadow-2xl hover:scale-105
+                           shadow-[0_20px_60px_8px_rgba(0,0,0,0.6)]">
+              {/* Popular badge */}
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-30">
+                <div className="bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black text-xs font-bold px-4 py-2 rounded-full">
+                  MOST POPULAR
+                </div>
+              </div>
+              
               {/* Glowing border effect on hover */}
               <div className="absolute -inset-1 bg-gradient-to-r from-[#b8953f] via-[#d4af37] to-[#b8953f] opacity-0 
                              group-hover:opacity-75 rounded-xl blur-lg transition duration-700"></div>
@@ -66,26 +115,24 @@ export function Pricing() {
               <div className="absolute -right-2 top-3/4 w-4 h-8 bg-black rounded-l-full z-10 shadow-md"></div>
               
               {/* Ticket header with premium branding */}
-              <div className="w-full py-5 px-7 rounded-t-xl relative z-20" 
+              <div className="w-full py-4 px-6 rounded-t-xl relative z-20" 
                    style={{
                      background: "linear-gradient(135deg, #b8953f 0%, #d4af37 50%, #b8953f 100%)",
                      boxShadow: "0px 6px 20px rgba(0,0,0,0.3)"
                    }}>
                 <div className="flex flex-col">
                   <div className="flex justify-between items-center">
-                    <div className="text-2xl font-bold text-black font-sans tracking-wider">GARY A.I.</div>
-                    <div className="text-sm text-black font-sans tracking-wider font-medium">PREMIUM ACCESS</div>
+                    <div className="text-xl font-bold text-black font-sans tracking-wider">GARY A.I.</div>
+                    <div className="text-xs text-black font-sans tracking-wider font-medium">PREMIUM ACCESS</div>
                   </div>
-                  <div className="flex justify-between mt-3">
-                    {/* Ticket seat information with modern font */}
+                  <div className="flex justify-between mt-2">
                     <div className="font-mono text-xs opacity-90 text-black">
-                      <div className="mb-1">SECTION: VIP BOX</div>
-                      <div className="mb-1">ROW: PRO</div>
+                      <div className="mb-1">SECTION: VIP</div>
                       <div>SEAT: UNLIMITED</div>
                     </div>
                     <div className="text-xs text-black font-medium text-right">
-                      <div className="mb-2">VALID: 30 DAYS</div>
-                      <div className="text-right font-black text-2xl">
+                      <div className="mb-1">VALID: 30 DAYS</div>
+                      <div className="text-right font-black text-xl">
                         <span className="font-medium text-sm">$</span>29
                         <span className="text-sm font-normal">/mo</span>
                       </div>
@@ -94,70 +141,69 @@ export function Pricing() {
                 </div>
               </div>
               
-              {/* Ticket body - with enhanced styling */}
-              <div className="flex-grow text-white p-7 flex flex-col justify-between relative" 
+              {/* Ticket body */}
+              <div className="flex-grow text-white p-6 flex flex-col justify-between relative" 
                    style={{ 
                      backgroundColor: '#000000', 
-                     backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(184, 149, 63, 0.05) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(212, 175, 55, 0.05) 0%, transparent 50%)',
+                     backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(184, 149, 63, 0.05) 0%, transparent 50%)',
                      position: 'relative', 
                      zIndex: 5 
                    }}> 
                 <div>
-                  <h3 className="text-2xl font-bold mb-6 text-[#b8953f] tracking-wide">Pro Membership</h3>
-                  <ul className="space-y-4 text-gray-200">
+                  <h3 className="text-xl font-bold mb-4 text-[#b8953f] tracking-wide">Pro Membership</h3>
+                  <ul className="space-y-3 text-gray-200">
                     <li className="flex items-start">
-                      <svg className="h-6 w-6 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-base leading-relaxed">Access to Gary's Highest Confidence Picks</span>
+                      <span className="text-sm leading-relaxed">Access to Gary's Highest Confidence Picks</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-6 w-6 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-base leading-relaxed">Complete access to player prop picks</span>
+                      <span className="text-sm leading-relaxed">Complete access to player prop picks</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-6 w-6 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-base leading-relaxed">Full betting history & performance tracking</span>
+                      <span className="text-sm leading-relaxed">Full betting history & performance tracking</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-6 w-6 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-base leading-relaxed">Early access to new features & markets</span>
+                      <span className="text-sm leading-relaxed">Early access to new features & markets</span>
                     </li>
                   </ul>
                 </div>
                 
                 {/* Value proposition badge */}
-                <div className="mt-6 p-3 rounded-lg bg-gradient-to-r from-[#b8953f]/20 to-[#d4af37]/20 border border-[#b8953f]/30">
+                <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-[#b8953f]/20 to-[#d4af37]/20 border border-[#b8953f]/30">
                   <div className="text-center">
-                    <div className="text-[#d4af37] font-bold text-lg">67% Win Rate</div>
-                    <div className="text-gray-300 text-sm">Proven Track Record</div>
+                    <div className="text-[#d4af37] font-bold text-base">67% Win Rate</div>
+                    <div className="text-gray-300 text-xs">Proven Track Record</div>
                   </div>
                 </div>
               </div>
               
-              {/* Ticket footer with enhanced action button */}
-              <div className="relative p-5 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
+              {/* Ticket footer */}
+              <div className="relative p-4 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
                    style={{ backgroundColor: '#000000', position: 'relative', zIndex: 5 }}>
                 <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
                   style={{
                     background: "linear-gradient(135deg, #b8953f 0%, #d4af37 50%, #b8953f 100%)",
                     boxShadow: "0px -6px 20px rgba(0,0,0,0.3)"
                   }}>
-                  {/* Enhanced button design */}
-                  <div className="py-5 px-7 flex justify-center flex-col">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-mono text-xs opacity-90 text-black font-medium">PREMIUM ACCESS</div>
-                      <div className="text-xs text-black font-medium">INSTANT ACTIVATION</div>
+                  <div className="py-4 px-6 flex justify-center flex-col">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-mono text-xs opacity-90 text-black font-medium">PREMIUM</div>
+                      <div className="text-xs text-black font-medium">INSTANT</div>
                     </div>
                     {user ? (
                       <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group relative w-full text-center">
-                        <div className="text-2xl font-bold text-black font-sans tracking-wider py-3 hover:opacity-90 transition-opacity">
+                        <div className="text-lg font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
                           SELECT PLAN
                         </div>
                         <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent 
@@ -165,7 +211,7 @@ export function Pricing() {
                       </a>
                     ) : (
                       <a href="https://www.betwithgary.ai/signin" className="group relative w-full text-center">
-                        <div className="text-2xl font-bold text-black font-sans tracking-wider py-3 hover:opacity-90 transition-opacity">
+                        <div className="text-lg font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
                           SELECT PLAN
                         </div>
                         <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent 
@@ -174,8 +220,8 @@ export function Pricing() {
                     )}
                   </div>
                   
-                  {/* Enhanced VIP hologram effect */}
-                  <div className="absolute bottom-5 right-8 w-10 h-10 rounded-full bg-black 
+                  {/* VIP badge */}
+                  <div className="absolute bottom-3 right-6 w-8 h-8 rounded-full bg-black 
                                 flex items-center justify-center overflow-hidden shadow-xl z-20
                                 group-hover:rotate-[360deg] group-hover:scale-110 transition-all duration-1000 ease-out">
                     <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[#b8953f] to-[#d4af37] opacity-95"></div>
@@ -184,54 +230,97 @@ export function Pricing() {
                 </div>
               </div>
             </div>
+
+            {/* Enterprise Tier */}
+            <div className="flex flex-col h-[500px] relative group transition-all duration-300 hover:-translate-y-1">
+              <div className="flex-grow bg-gray-900/80 backdrop-blur-sm rounded-xl border border-gray-700 p-6 flex flex-col">
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-bold text-gray-300 mb-2">Enterprise</h3>
+                  <div className="text-3xl font-bold text-white mb-1">Custom</div>
+                  <div className="text-sm text-gray-400">Contact us</div>
+                </div>
+                
+                <ul className="space-y-3 text-gray-300 flex-grow">
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">Everything in Pro plus</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">Custom betting strategies</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">Dedicated account manager</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">API access</span>
+                  </li>
+                </ul>
+                
+                <button className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors mt-6">
+                  Contact Sales
+                </button>
+              </div>
+            </div>
           </div>
           
-          {/* Stats Section */}
-          <div className="mt-40 max-w-4xl mx-auto">
-            <div className="flex justify-center mb-12">
-              <div className="h-px w-24 bg-gray-800 self-center mr-5"></div>
-              <h2 className="text-xl font-light text-gray-300 tracking-wider">THE NUMBERS</h2>
-              <div className="h-px w-24 bg-gray-800 self-center ml-5"></div>
+          {/* Stats Section - Moved up and simplified */}
+          <div className="mt-20 max-w-4xl mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-light text-gray-300 tracking-wider mb-4">Why Choose Gary?</h2>
             </div>
             
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="text-[#b8953f] text-4xl font-light mb-1">67%</div>
-                <p className="text-gray-500 text-sm">Win Rate on Premium Picks</p>
+            <div className="grid md:grid-cols-3 gap-8 text-center">
+              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
+                <div className="text-[#b8953f] text-3xl font-light mb-2">67%</div>
+                <p className="text-gray-400 text-sm">Win Rate on Premium Picks</p>
               </div>
-              <div className="text-center">
-                <div className="text-[#b8953f] text-4xl font-light mb-1">+18%</div>
-                <p className="text-gray-500 text-sm">Average Monthly ROI</p>
+              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
+                <div className="text-[#b8953f] text-3xl font-light mb-2">+18%</div>
+                <p className="text-gray-400 text-sm">Average Monthly ROI</p>
               </div>
-              <div className="text-center">
-                <div className="text-[#b8953f] text-4xl font-light mb-1">15-20</div>
-                <p className="text-gray-500 text-sm">Premium Picks Per Week</p>
+              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
+                <div className="text-[#b8953f] text-3xl font-light mb-2">15-20</div>
+                <p className="text-gray-400 text-sm">Premium Picks Per Week</p>
               </div>
             </div>
           </div>
           
-          {/* FAQ Section */}
-          <div className="mt-40 mb-20 max-w-3xl mx-auto">
-            <div className="flex justify-center mb-12">
-              <div className="h-px w-24 bg-gray-800 self-center mr-5"></div>
-              <h2 className="text-xl font-light text-gray-300 tracking-wider">FAQ</h2>
-              <div className="h-px w-24 bg-gray-800 self-center ml-5"></div>
+          {/* FAQ Section - Simplified */}
+          <div className="mt-20 mb-16 max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-2xl font-light text-gray-300 tracking-wider">Frequently Asked Questions</h2>
             </div>
             
-            <div className="space-y-8">
-              <div className="border-b border-gray-800 pb-6">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
                 <h3 className="font-medium text-white mb-3">When do I get access to the picks?</h3>
-                <p className="text-gray-500 text-sm">Pro members gain immediate access to all picks as soon as they're released each day. You'll never miss a pick with your Pro membership.</p>
+                <p className="text-gray-400 text-sm">Pro members gain immediate access to all picks as soon as they're released each day. You'll never miss a pick with your Pro membership.</p>
               </div>
               
-              <div className="border-b border-gray-800 pb-6">
+              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
                 <h3 className="font-medium text-white mb-3">Can I cancel my subscription anytime?</h3>
-                <p className="text-gray-500 text-sm">Yes, you can cancel at any time with no questions asked. Your access will remain active until the end of your current billing period.</p>
+                <p className="text-gray-400 text-sm">Yes, you can cancel at any time with no questions asked. Your access will remain active until the end of your current billing period.</p>
               </div>
               
-              <div className="border-b border-gray-800 pb-6">
+              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
                 <h3 className="font-medium text-white mb-3">How does Gary make his picks?</h3>
-                <p className="text-gray-500 text-sm">Gary combines advanced statistical models, insider information, and years of betting experience to identify the highest value opportunities each day.</p>
+                <p className="text-gray-400 text-sm">Gary combines advanced statistical models, insider information, and years of betting experience to identify the highest value opportunities each day.</p>
+              </div>
+              
+              <div className="p-6 bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700">
+                <h3 className="font-medium text-white mb-3">What sports are covered?</h3>
+                <p className="text-gray-400 text-sm">Gary provides picks for MLB, NBA, NHL, and NFL with comprehensive coverage across all major betting markets and prop bets.</p>
               </div>
             </div>
           </div>
