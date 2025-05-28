@@ -698,7 +698,7 @@ const WhatGaryThinks = () => {
           return filteredGames.length > 0 ? (
             <div className="w-full max-w-4xl mx-auto relative">
               {/* Coin Image positioned absolutely - 2x bigger, no layout impact */}
-              <div className="absolute top-0 right-8 z-10 pointer-events-none">
+              <div className="absolute -top-16 right-8 z-10 pointer-events-none">
                 <img 
                   src={coin2} 
                   alt="Gary Coin" 
