@@ -698,7 +698,7 @@ const WhatGaryThinks = () => {
           return filteredGames.length > 0 ? (
             <div className="w-full max-w-4xl mx-auto relative">
               {/* Coin Image positioned absolutely - 50% bigger, moved up further and slightly left */}
-              <div className="absolute right-4 z-10 pointer-events-none" style={{ top: '-120px' }}>
+              <div className="absolute right-4 z-10 pointer-events-none" style={{ top: '-144px' }}>
                 <img 
                   src={coin2} 
                   alt="Gary Coin" 
@@ -797,47 +797,6 @@ const WhatGaryThinks = () => {
             </div>
           );
         })()}
-
-        {/* Legend */}
-        {games.length > 0 && (
-          <div className="w-full max-w-4xl mx-auto mt-6">
-            <div 
-              className="p-4 rounded-xl border"
-              style={{ 
-                background: `linear-gradient(135deg, 
-                  rgba(42, 42, 42, 0.7) 0%,
-                  rgba(26, 26, 26, 0.85) 50%,
-                  rgba(42, 42, 42, 0.7) 100%
-                )`,
-                backdropFilter: 'blur(20px) saturate(180%)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: `
-                  0 8px 32px rgba(0, 0, 0, 0.3),
-                  0 2px 8px rgba(0, 0, 0, 0.2),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.05)
-                `
-              }}
-            >
-                              <h3 className="text-lg font-bold mb-3" style={{ color: '#B8953F' }}>Legend</h3>
-              <div className="flex flex-wrap gap-6 text-sm">
-                <div className="flex items-center space-x-2">
-                                      <div 
-                      className="w-4 h-4 rounded"
-                      style={{ backgroundColor: '#B8953F' }}
-                    ></div>
-                  <span className="text-gray-300 font-medium">Gary's Pick</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div 
-                    className="w-4 h-4 rounded"
-                    style={{ backgroundColor: '#333' }}
-                  ></div>
-                  <span className="text-gray-300 font-medium">Available Option</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
