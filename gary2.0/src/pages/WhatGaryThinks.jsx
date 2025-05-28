@@ -689,9 +689,10 @@ const WhatGaryThinks = () => {
                 <img 
                   src={coin2} 
                   alt="Gary Coin" 
-                  className="w-60 h-60 object-contain opacity-60"
+                  className="w-60 h-60 object-contain"
                   style={{ 
-                    transform: 'rotate(-5deg)'
+                    transform: 'rotate(-5deg)',
+                    filter: 'sepia(0.3) saturate(1.2) hue-rotate(30deg) brightness(1.1)'
                   }}
                 />
               </div>
