@@ -36,359 +36,180 @@ export function Pricing() {
       
       {/* Content container with overlay */}
       <div className="relative z-10">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-8">
           {/* Header Section - More compact */}
-          <div className="text-center mb-8 pt-6">
-            <h1 className="text-3xl font-bold text-[#b8953f] mb-2 drop-shadow-lg">Pricing</h1>
-            <p className="text-sm text-gray-300 max-w-xl mx-auto font-light">
+          <div className="text-center mb-16 pt-12">
+            <h1 className="text-4xl font-bold text-[#b8953f] mb-4 drop-shadow-lg">Pricing</h1>
+            <p className="text-lg text-gray-300 max-w-2xl mx-auto font-light">
               Simple, transparent pricing to upgrade your betting game
             </p>
           </div>
           
-          {/* Pricing Cards - Three skinnier columns */}
-          <div className="grid lg:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
+          {/* Pricing Cards - Wide three columns with lots of space */}
+          <div className="grid lg:grid-cols-3 gap-12 max-w-6xl mx-auto mb-20">
             
-            {/* Free Tier - Ticket Style */}
-            <div className="flex flex-col h-[500px] relative group
-                           transition-all duration-300 ease-out
-                           hover:-translate-y-1 hover:shadow-xl
-                           shadow-[0_15px_40px_4px_rgba(0,0,0,0.4)]">
-              
-              {/* Ticket notches */}
-              <div className="absolute -left-2 top-1/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-1/2 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-3/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/2 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-3/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              
-              {/* Ticket header */}
-              <div className="w-full py-3 px-4 rounded-t-xl relative z-20" 
-                   style={{
-                     background: "linear-gradient(135deg, #6b7280 0%, #9ca3af 50%, #6b7280 100%)",
-                     boxShadow: "0px 6px 20px rgba(0,0,0,0.3)"
-                   }}>
-                <div className="flex flex-col">
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm font-bold text-black font-sans tracking-wider">GARY A.I.</div>
-                    <div className="text-xs text-black font-sans tracking-wider font-medium">FREE</div>
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <div className="font-mono text-xs opacity-90 text-black">
-                      <div className="mb-1">GENERAL</div>
-                      <div>LIMITED</div>
-                    </div>
-                    <div className="text-xs text-black font-medium text-right">
-                      <div className="mb-1">FOREVER</div>
-                      <div className="text-right font-black text-lg">
-                        <span className="font-medium text-sm">$</span>0
-                        <span className="text-xs font-normal">/mo</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {/* Free Tier - Clean Card Style */}
+            <div className="bg-gray-900/80 backdrop-blur-sm rounded-2xl border border-gray-700 p-8 flex flex-col h-[600px] relative group transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl">
+              <div className="text-center mb-8">
+                <h3 className="text-2xl font-bold text-gray-300 mb-4">Free</h3>
+                <div className="text-5xl font-bold text-white mb-2">$0</div>
+                <div className="text-gray-400">/month</div>
+                <div className="text-sm text-gray-500 mt-2">For getting started</div>
               </div>
               
-              {/* Ticket body */}
-              <div className="flex-grow text-white p-4 flex flex-col justify-between relative" 
-                   style={{ 
-                     backgroundColor: '#000000', 
-                     backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(107, 114, 128, 0.05) 0%, transparent 50%)',
-                     position: 'relative', 
-                     zIndex: 5 
-                   }}> 
-                <div>
-                  <h3 className="text-base font-bold mb-4 text-gray-300 tracking-wide text-center">Free</h3>
-                  <ul className="space-y-3 text-gray-200">
+              <div className="flex-grow">
+                <div className="mb-8">
+                  <div className="text-sm font-medium text-gray-400 mb-4">Get started with:</div>
+                  <ul className="space-y-4 text-gray-200">
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">1 Daily High Confidence Pick</span>
+                      <span className="text-sm">1 Daily High Confidence Pick</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">Prop Picks</span>
+                      <span className="text-sm">Prop Picks</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">Gary's Thoughts</span>
+                      <span className="text-sm">Gary's Thoughts</span>
                     </li>
                   </ul>
                 </div>
-                
-                {/* Value proposition badge */}
-                <div className="mt-4 p-2 rounded-lg bg-gradient-to-r from-gray-600/20 to-gray-500/20 border border-gray-600/30">
-                  <div className="text-center">
-                    <div className="text-gray-300 font-bold text-xs">Get Started</div>
-                    <div className="text-gray-400 text-xs">No Credit Card</div>
-                  </div>
-                </div>
               </div>
               
-              {/* Ticket footer */}
-              <div className="relative p-3 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
-                   style={{ backgroundColor: '#000000', position: 'relative', zIndex: 5 }}>
-                <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
-                  style={{
-                    background: "linear-gradient(135deg, #6b7280 0%, #9ca3af 50%, #6b7280 100%)",
-                    boxShadow: "0px -6px 20px rgba(0,0,0,0.3)"
-                  }}>
-                  <div className="py-2 px-4 flex justify-center flex-col">
-                    <a href="https://www.betwithgary.ai/signin" className="group relative w-full text-center">
-                      <div className="text-sm font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
-                        GET STARTED
-                      </div>
-                    </a>
-                  </div>
-                </div>
-              </div>
+              <button className="w-full py-4 px-6 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold transition-colors">
+                Get Started
+              </button>
             </div>
 
-            {/* Pro Tier - Enhanced and highlighted */}
-            <div className="flex flex-col h-[500px] relative group
-                           transition-all duration-500 ease-out
-                           hover:-translate-y-2 hover:shadow-2xl hover:scale-105
-                           shadow-[0_20px_60px_8px_rgba(0,0,0,0.6)]">
+            {/* Pro Tier - Highlighted */}
+            <div className="bg-gray-900/80 backdrop-blur-sm rounded-2xl border-2 border-[#b8953f] p-8 flex flex-col h-[600px] relative group transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl">
               {/* Popular badge */}
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-30">
-                <div className="bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black text-xs font-bold px-3 py-1 rounded-full">
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <div className="bg-[#b8953f] text-black text-sm font-bold px-4 py-2 rounded-full">
                   POPULAR
                 </div>
               </div>
               
-              {/* Glowing border effect on hover */}
-              <div className="absolute -inset-1 bg-gradient-to-r from-[#b8953f] via-[#d4af37] to-[#b8953f] opacity-0 
-                             group-hover:opacity-75 rounded-xl blur-lg transition duration-700"></div>
-              
-              {/* Ticket notches - more refined */}
-              <div className="absolute -left-2 top-1/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-1/2 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-3/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/2 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-3/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              
-              {/* Ticket header with premium branding */}
-              <div className="w-full py-3 px-4 rounded-t-xl relative z-20" 
-                   style={{
-                     background: "linear-gradient(135deg, #b8953f 0%, #d4af37 50%, #b8953f 100%)",
-                     boxShadow: "0px 6px 20px rgba(0,0,0,0.3)"
-                   }}>
-                <div className="flex flex-col">
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm font-bold text-black font-sans tracking-wider">GARY A.I.</div>
-                    <div className="text-xs text-black font-sans tracking-wider font-medium">PRO</div>
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <div className="font-mono text-xs opacity-90 text-black">
-                      <div className="mb-1">VIP</div>
-                      <div>UNLIMITED</div>
-                    </div>
-                    <div className="text-xs text-black font-medium text-right">
-                      <div className="mb-1">30 DAYS</div>
-                      <div className="text-right font-black text-lg">
-                        <span className="font-medium text-sm">$</span>29
-                        <span className="text-xs font-normal">/mo</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div className="text-center mb-8">
+                <h3 className="text-2xl font-bold text-[#b8953f] mb-4">Pro</h3>
+                <div className="text-5xl font-bold text-white mb-2">$29</div>
+                <div className="text-gray-400">/month</div>
+                <div className="text-sm text-gray-500 mt-2">For serious bettors</div>
               </div>
               
-              {/* Ticket body */}
-              <div className="flex-grow text-white p-4 flex flex-col justify-between relative" 
-                   style={{ 
-                     backgroundColor: '#000000', 
-                     backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(184, 149, 63, 0.05) 0%, transparent 50%)',
-                     position: 'relative', 
-                     zIndex: 5 
-                   }}> 
-                <div>
-                  <h3 className="text-base font-bold mb-4 text-[#b8953f] tracking-wide text-center">Pro</h3>
-                  <ul className="space-y-3 text-gray-200">
+              <div className="flex-grow">
+                <div className="mb-8">
+                  <div className="text-sm font-medium text-gray-400 mb-4">Everything in Free, plus:</div>
+                  <ul className="space-y-4 text-gray-200">
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">Everything in Free</span>
+                      <span className="text-sm">All High Confidence Picks (NBA MLB NHL NFL)</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">All High Confidence Picks (NBA MLB NHL NFL)</span>
+                      <span className="text-sm">BetCard Tracking and Win Rate</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">BetCard Tracking</span>
+                      <span className="text-sm">Exclusive Discounts and More</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-[#b8953f] mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">Exclusive Discounts & More</span>
+                      <span className="text-sm">Early access to new features</span>
                     </li>
                   </ul>
                 </div>
                 
-                {/* Value proposition badge */}
-                <div className="mt-4 p-2 rounded-lg bg-gradient-to-r from-[#b8953f]/20 to-[#d4af37]/20 border border-[#b8953f]/30">
+                {/* Value proposition */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-[#b8953f]/20 to-[#d4af37]/20 border border-[#b8953f]/30">
                   <div className="text-center">
-                    <div className="text-[#d4af37] font-bold text-xs">67% Win Rate</div>
-                    <div className="text-gray-300 text-xs">Proven Record</div>
+                    <div className="text-[#d4af37] font-bold text-lg">67% Win Rate</div>
+                    <div className="text-gray-300 text-sm">Proven Track Record</div>
                   </div>
                 </div>
               </div>
               
-              {/* Ticket footer */}
-              <div className="relative p-3 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
-                   style={{ backgroundColor: '#000000', position: 'relative', zIndex: 5 }}>
-                <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
-                  style={{
-                    background: "linear-gradient(135deg, #b8953f 0%, #d4af37 50%, #b8953f 100%)",
-                    boxShadow: "0px -6px 20px rgba(0,0,0,0.3)"
-                  }}>
-                  <div className="py-2 px-4 flex justify-center flex-col">
-                    {user ? (
-                      <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="group relative w-full text-center">
-                        <div className="text-sm font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
-                          SELECT PLAN
-                        </div>
-                      </a>
-                    ) : (
-                      <a href="https://www.betwithgary.ai/signin" className="group relative w-full text-center">
-                        <div className="text-sm font-bold text-black font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
-                          SELECT PLAN
-                        </div>
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {user ? (
+                <a href="https://buy.stripe.com/dR603v2UndMebrq144" className="w-full py-4 px-6 bg-[#b8953f] hover:bg-[#d4af37] text-black rounded-xl font-semibold transition-colors text-center block">
+                  Get Started
+                </a>
+              ) : (
+                <a href="https://www.betwithgary.ai/signin" className="w-full py-4 px-6 bg-[#b8953f] hover:bg-[#d4af37] text-black rounded-xl font-semibold transition-colors text-center block">
+                  Get Started
+                </a>
+              )}
             </div>
 
-            {/* Enterprise Tier - Simple */}
-            <div className="flex flex-col h-[500px] relative group
-                           transition-all duration-300 ease-out
-                           hover:-translate-y-1 hover:shadow-xl
-                           shadow-[0_15px_40px_4px_rgba(0,0,0,0.4)]">
-              
-              {/* Ticket notches */}
-              <div className="absolute -left-2 top-1/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-1/2 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -left-2 top-3/4 w-4 h-6 bg-black rounded-r-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-1/2 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              <div className="absolute -right-2 top-3/4 w-4 h-6 bg-black rounded-l-full z-10 shadow-md"></div>
-              
-              {/* Ticket header */}
-              <div className="w-full py-3 px-4 rounded-t-xl relative z-20" 
-                   style={{
-                     background: "linear-gradient(135deg, #374151 0%, #4b5563 50%, #374151 100%)",
-                     boxShadow: "0px 6px 20px rgba(0,0,0,0.3)"
-                   }}>
-                <div className="flex flex-col">
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm font-bold text-white font-sans tracking-wider">GARY A.I.</div>
-                    <div className="text-xs text-white font-sans tracking-wider font-medium">ENTERPRISE</div>
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <div className="font-mono text-xs opacity-90 text-white">
-                      <div className="mb-1">CUSTOM</div>
-                      <div>UNLIMITED</div>
-                    </div>
-                    <div className="text-xs text-white font-medium text-right">
-                      <div className="mb-1">CUSTOM</div>
-                      <div className="text-right font-black text-lg">
-                        <span className="text-xs font-normal">Contact</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {/* Enterprise Tier */}
+            <div className="bg-gray-900/80 backdrop-blur-sm rounded-2xl border border-gray-700 p-8 flex flex-col h-[600px] relative group transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl">
+              <div className="text-center mb-8">
+                <h3 className="text-2xl font-bold text-gray-300 mb-4">Enterprise</h3>
+                <div className="text-5xl font-bold text-white mb-2">Custom</div>
+                <div className="text-gray-400">pricing</div>
+                <div className="text-sm text-gray-500 mt-2">For teams and organizations</div>
               </div>
               
-              {/* Ticket body */}
-              <div className="flex-grow text-white p-4 flex flex-col justify-between relative" 
-                   style={{ 
-                     backgroundColor: '#000000', 
-                     backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(75, 85, 99, 0.05) 0%, transparent 50%)',
-                     position: 'relative', 
-                     zIndex: 5 
-                   }}> 
-                <div>
-                  <h3 className="text-base font-bold mb-4 text-gray-300 tracking-wide text-center">Enterprise</h3>
-                  <ul className="space-y-3 text-gray-200">
+              <div className="flex-grow">
+                <div className="mb-8">
+                  <div className="text-sm font-medium text-gray-400 mb-4">Everything in Pro, plus:</div>
+                  <ul className="space-y-4 text-gray-200">
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">Everything in Pro</span>
+                      <span className="text-sm">Custom betting strategies</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">Custom Strategies</span>
+                      <span className="text-sm">Dedicated account manager</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">Dedicated Support</span>
+                      <span className="text-sm">API access and integrations</span>
                     </li>
                     <li className="flex items-start">
-                      <svg className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="h-5 w-5 text-[#b8953f] mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-xs leading-relaxed">API Access</span>
+                      <span className="text-sm">Priority support</span>
                     </li>
                   </ul>
                 </div>
-                
-                {/* Value proposition badge */}
-                <div className="mt-4 p-2 rounded-lg bg-gradient-to-r from-gray-600/20 to-gray-500/20 border border-gray-600/30">
-                  <div className="text-center">
-                    <div className="text-gray-300 font-bold text-xs">Custom Needs</div>
-                    <div className="text-gray-400 text-xs">Contact Sales</div>
-                  </div>
-                </div>
               </div>
               
-              {/* Ticket footer */}
-              <div className="relative p-3 rounded-b-xl group-hover:shadow-lg transition duration-300 overflow-hidden" 
-                   style={{ backgroundColor: '#000000', position: 'relative', zIndex: 5 }}>
-                <div className="relative z-20 rounded-b-xl overflow-hidden w-full"
-                  style={{
-                    background: "linear-gradient(135deg, #374151 0%, #4b5563 50%, #374151 100%)",
-                    boxShadow: "0px -6px 20px rgba(0,0,0,0.3)"
-                  }}>
-                  <div className="py-2 px-4 flex justify-center flex-col">
-                    <a href="mailto:contact@betwithgary.ai" className="group relative w-full text-center">
-                      <div className="text-sm font-bold text-white font-sans tracking-wider py-2 hover:opacity-90 transition-opacity">
-                        CONTACT US
-                      </div>
-                    </a>
-                  </div>
-                </div>
-              </div>
+              <a href="mailto:contact@betwithgary.ai" className="w-full py-4 px-6 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold transition-colors text-center block">
+                Contact Sales
+              </a>
             </div>
           </div>
 
-          {/* Social Proof Section - Moved below */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center items-center space-x-6 opacity-60">
-              <div className="text-[#b8953f] font-bold text-sm">67% WIN RATE</div>
-              <div className="w-px h-4 bg-gray-600"></div>
-              <div className="text-[#b8953f] font-bold text-sm">+18% ROI</div>
-              <div className="w-px h-4 bg-gray-600"></div>
-              <div className="text-[#b8953f] font-bold text-sm">15-20 PICKS/WEEK</div>
+          {/* Social Proof Section - Moved below with more space */}
+          <div className="text-center mb-16">
+            <div className="flex justify-center items-center space-x-12 opacity-60">
+              <div className="text-[#b8953f] font-bold text-lg">67% WIN RATE</div>
+              <div className="w-px h-6 bg-gray-600"></div>
+              <div className="text-[#b8953f] font-bold text-lg">+18% ROI</div>
+              <div className="w-px h-6 bg-gray-600"></div>
+              <div className="text-[#b8953f] font-bold text-lg">15-20 PICKS/WEEK</div>
             </div>
           </div>
           
