@@ -1077,12 +1077,18 @@ CRITICAL: You must pick ALL THREE bet types for this game:
 2. MONEYLINE: Pick either "home" or "away"
 3. TOTAL: Pick either "over" or "under"
 
+=== RATIONALE FORMAT ===
+Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addressing the user. Focus on the most compelling matchup dynamics and situational factors that led to your conclusions across all three bet types.
+
+NEVER EVER mention missing or limited stats in your rationale. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
+
 Respond in this exact JSON format:
 {
   "spread": "home" or "away",
   "moneyline": "home" or "away", 
   "total": "over" or "under",
-  "confidence": 0.5-1.0
+  "confidence": 0.5-1.0,
+  "rationale": "A 2-4 sentence paragraph explaining your picks using expert-level analysis."
 }
 
 Base your picks on the provided stats and odds. Be decisive - you must pick a side for each bet type.`
@@ -1121,7 +1127,8 @@ Make your picks for spread, moneyline, and total.`
       spread: 'home',
       moneyline: 'home', 
       total: 'over',
-      confidence: 0.6
+      confidence: 0.6,
+      rationale: 'Analysis based on available team data and current betting lines.'
     };
 
   } catch (error) {
@@ -1131,7 +1138,8 @@ Make your picks for spread, moneyline, and total.`
       spread: 'home',
       moneyline: 'home',
       total: 'over', 
-      confidence: 0.5
+      confidence: 0.5,
+      rationale: 'Analysis based on available team data and current betting lines.'
     };
   }
 }
