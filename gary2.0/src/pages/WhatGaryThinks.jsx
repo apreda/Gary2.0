@@ -389,16 +389,16 @@ const WhatGaryThinks = () => {
   const BettingOption = ({ topLine, bottomLine, isSelected, singleLine = false, centerSingle = false }) => {
     return (
       <div className={`
-        px-3 py-3 rounded-lg text-center transition-all duration-300 cursor-pointer w-full flex flex-col justify-center items-center
+        rounded-lg text-center transition-all duration-300 cursor-pointer flex flex-col justify-center items-center
         ${isSelected 
           ? 'text-black font-bold transform scale-105' 
           : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:scale-102 hover:shadow-lg'
         }
       `}
       style={{
+        width: '120px',
         height: '64px',
-        minWidth: '80px',
-        maxWidth: '100%',
+        padding: '8px',
         ...(isSelected ? { 
           background: 'linear-gradient(135deg, #B8953F 0%, #C5A647 100%)',
           color: '#000',
@@ -420,18 +420,18 @@ const WhatGaryThinks = () => {
       }}
       >
         {centerSingle && singleLine ? (
-          <div className={`leading-tight text-center ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
-               style={{ fontSize: '16px', fontWeight: '700' }}>
+          <div className={`leading-tight text-center overflow-hidden ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
+               style={{ fontSize: '14px', fontWeight: '700', wordBreak: 'break-all' }}>
             {topLine}
           </div>
         ) : (
           <>
-            <div className={`leading-tight text-center ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
-                 style={{ fontSize: '16px', fontWeight: '700' }}>
+            <div className={`leading-tight text-center overflow-hidden ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
+                 style={{ fontSize: '14px', fontWeight: '700', wordBreak: 'break-all' }}>
               {topLine}
             </div>
-            <div className={`mt-1 leading-tight text-center ${isSelected ? 'text-black' : 'text-gray-400'}`}
-                 style={{ fontSize: '12px', fontWeight: '400', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div className={`mt-1 leading-tight text-center overflow-hidden ${isSelected ? 'text-black' : 'text-gray-400'}`}
+                 style={{ fontSize: '11px', fontWeight: '400', textTransform: 'uppercase', letterSpacing: '0.5px', wordBreak: 'break-all' }}>
               {!singleLine && bottomLine ? bottomLine : '\u00A0'}
             </div>
           </>
