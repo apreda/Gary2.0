@@ -350,6 +350,7 @@ function RealGaryPicks() {
         return;
       }
 
+      // Check if user already made a decision (this is now also checked in betTrackingService)
       const { hasMade } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
       if (hasMade) {
         showToast('You already placed a bet on this pick!', 'warning', 3000, false);
@@ -360,21 +361,44 @@ function RealGaryPicks() {
         return;
       }
 
+      // Save decision to user_picks table via betTrackingService
+      const saveResult = await betTrackingService.saveBetDecision(pick.id, decision, userId);
+      
+      if (!saveResult.success) {
+        if (saveResult.existingDecision) {
+          showToast(saveResult.error, 'warning', 3000, false);
+          // Update local state with existing decision
+          setUserDecisions(prev => ({
+            ...prev,
+            [pick.id]: saveResult.existingDecision
+          }));
+        } else {
+          showToast(saveResult.error || 'Failed to save your decision. Please try again.', 'error', 3000, false);
+        }
+        setProcessingDecisions(prev => ({
+          ...prev,
+          [pick.id]: false
+        }));
+        return;
+      }
+
+      // Update user stats (this updates the user_stats table)
+      await userStatsService.recordDecision(userId, decision, pick);
+
+      // Show success message
       const toastMessage = decision === 'bet'
         ? garyPhrases.getRandom('betPhrases')
         : garyPhrases.getRandom('fadePhrases');
 
       showToast(toastMessage, decision === 'bet' ? 'success' : 'info', 4000, true);
 
-      await userStatsService.recordDecision(userId, decision, pick);
-
-      await betTrackingService.saveBetDecision(pick.id, decision, userId);
-
+      // Update local state
       setUserDecisions(prev => ({
         ...prev,
         [pick.id]: decision
       }));
 
+      // Reload picks to refresh any state
       loadPicks();
 
       setReloadKey(prev => prev + 1);

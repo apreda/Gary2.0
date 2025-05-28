@@ -2,11 +2,57 @@ import { supabase } from '../supabaseClient';
 
 // Service for tracking user bet decisions and results
 export const betTrackingService = {
-  // Save a user's bet decision (ride or fade) to localStorage only
-  // Note: Supabase update is handled by userStatsService.recordDecision called in handleDecisionMade
+  // Save a user's bet decision (bet or fade) to both Supabase and localStorage
   saveBetDecision: async (pickId, decision, userId = null) => {
     try {
-      // Get existing decisions from localStorage
+      console.log('[betTrackingService] Saving decision:', { pickId, decision, userId });
+      
+      // First, save to Supabase user_picks table if user is authenticated
+      if (userId) {
+        // Check if user already made a decision for this pick
+        const { data: existingDecision, error: checkError } = await supabase
+          .from('user_picks')
+          .select('id, decision')
+          .eq('user_id', userId)
+          .eq('pick_id', pickId)
+          .maybeSingle();
+        
+        if (checkError) {
+          console.error('[betTrackingService] Error checking existing decision:', checkError);
+          throw checkError;
+        }
+        
+        if (existingDecision) {
+          console.log('[betTrackingService] User already made decision:', existingDecision.decision);
+          return { 
+            success: false, 
+            error: `You already chose to ${existingDecision.decision.toUpperCase()} this pick!`,
+            existingDecision: existingDecision.decision
+          };
+        }
+        
+        // Insert new decision
+        const { error: supabaseError } = await supabase
+          .from('user_picks')
+          .insert([
+            {
+              user_id: userId,
+              pick_id: pickId,
+              decision: decision,
+              outcome: null, // Will be updated when results are processed
+              created_at: new Date().toISOString()
+            }
+          ]);
+        
+        if (supabaseError) {
+          console.error('[betTrackingService] Supabase error:', supabaseError);
+          throw supabaseError;
+        }
+        
+        console.log('[betTrackingService] Successfully saved to user_picks table');
+      }
+      
+      // Also save to localStorage for immediate UI updates
       const savedDecisions = localStorage.getItem('userPickDecisions') || '{}';
       const decisions = JSON.parse(savedDecisions);
       
@@ -23,9 +69,7 @@ export const betTrackingService = {
       // Update BetCard stats
       betTrackingService.updateBetCardStats(decision);
       
-      // Note: We no longer update Supabase here as that's handled by
-      // userStatsService.recordDecision in the RealGaryPicks.handleDecisionMade function
-      
+      console.log('[betTrackingService] Decision saved successfully to both Supabase and localStorage');
       return { success: true };
     } catch (error) {
       console.error('Error saving bet decision:', error);
