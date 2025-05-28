@@ -330,7 +330,7 @@ const WhatGaryThinks = () => {
   if (loading) {
     return (
       <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
-        {/* Lighter, more vibrant background */}
+        {/* Creme, Black, and Gold background */}
         <div
           style={{
             position: 'fixed',
@@ -340,7 +340,7 @@ const WhatGaryThinks = () => {
             height: '100vh',
             zIndex: 0,
             pointerEvents: 'none',
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #533483 75%, #7209b7 100%)',
+            background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%, #0f0f0f 100%)',
           }}
         />
         
@@ -354,9 +354,9 @@ const WhatGaryThinks = () => {
             height: '100vh',
             zIndex: 1,
             pointerEvents: 'none',
-            background: `radial-gradient(circle at 20% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%),
+            background: `radial-gradient(circle at 20% 80%, rgba(212, 175, 55, 0.12) 0%, transparent 50%),
                         radial-gradient(circle at 80% 20%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
-                        radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.02) 0%, transparent 50%)`,
+                        radial-gradient(circle at 40% 40%, rgba(245, 245, 220, 0.03) 0%, transparent 50%)`,
           }}
         />
         
@@ -377,68 +377,68 @@ const WhatGaryThinks = () => {
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
-      {/* Lighter, more vibrant background */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          zIndex: 0,
-          pointerEvents: 'none',
-          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #533483 75%, #7209b7 100%)',
-        }}
-      />
+              {/* Creme, Black, and Gold background */}
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 0,
+            pointerEvents: 'none',
+            background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%, #0f0f0f 100%)',
+          }}
+        />
+        
+        {/* Animated background elements */}
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 1,
+            pointerEvents: 'none',
+            background: `radial-gradient(circle at 20% 80%, rgba(212, 175, 55, 0.12) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 40%, rgba(245, 245, 220, 0.03) 0%, transparent 50%)`,
+          }}
+        />
       
-      {/* Animated background elements */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          zIndex: 1,
-          pointerEvents: 'none',
-          background: `radial-gradient(circle at 20% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%),
-                      radial-gradient(circle at 80% 20%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
-                      radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.02) 0%, transparent 50%)`,
-        }}
-      />
-      
-      {/* Floating orbs for depth */}
-      <div
-        style={{
-          position: 'fixed',
-          top: '15%',
-          left: '10%',
-          width: '300px',
-          height: '300px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.06) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-          animation: 'float 6s ease-in-out infinite',
-          zIndex: 1,
-          pointerEvents: 'none',
-        }}
-      />
-      
-      <div
-        style={{
-          position: 'fixed',
-          bottom: '20%',
-          right: '15%',
-          width: '400px',
-          height: '400px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(114, 9, 183, 0.04) 0%, transparent 70%)',
-          filter: 'blur(80px)',
-          animation: 'float 8s ease-in-out infinite reverse',
-          zIndex: 1,
-          pointerEvents: 'none',
-        }}
-      />
+              {/* Floating orbs for depth */}
+        <div
+          style={{
+            position: 'fixed',
+            top: '15%',
+            left: '10%',
+            width: '300px',
+            height: '300px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(212, 175, 55, 0.08) 0%, transparent 70%)',
+            filter: 'blur(60px)',
+            animation: 'float 6s ease-in-out infinite',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
+        
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '20%',
+            right: '15%',
+            width: '400px',
+            height: '400px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(245, 245, 220, 0.04) 0%, transparent 70%)',
+            filter: 'blur(80px)',
+            animation: 'float 8s ease-in-out infinite reverse',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
       
       <style jsx>{`
         @keyframes float {
