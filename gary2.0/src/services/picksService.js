@@ -9,6 +9,7 @@ import { apiSportsService } from './apiSportsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { nhlPlayoffService } from './nhlPlayoffService.js';
 import { picksService as enhancedPicksService } from './picksService.enhanced.js';
+import { combinedMlbService } from './combinedMlbService.js';
 import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 import { openaiService } from './openaiService.js';
 
@@ -1025,7 +1026,7 @@ async function getGameStatsForThoughts(game, sport) {
   // Reuse existing stats gathering logic but simplified
   if (sport === 'baseball_mlb') {
     // Get MLB stats
-    return await enhancedPicksService.getComprehensiveGameData(game.home_team, game.away_team);
+    return await combinedMlbService.getComprehensiveGameData(game.home_team, game.away_team);
   } else if (sport === 'basketball_nba') {
     // Get NBA stats
     const playoffAnalysis = await ballDontLieService.getNbaPlayoffPlayerStats(

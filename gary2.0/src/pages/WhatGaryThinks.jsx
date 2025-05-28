@@ -3,6 +3,7 @@ import { ArrowLeft, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { picksService } from '../services/picksService';
 import { supabase } from '../supabaseClient';
+import BG2 from '/BG2.png';
 
 const WhatGaryThinks = () => {
   const navigate = useNavigate();
@@ -71,113 +72,149 @@ const WhatGaryThinks = () => {
     const { homeTeam, awayTeam, odds, garyPicks, league, time } = game;
     
     return (
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-3">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-            {league}
-          </span>
-          <span className="text-xs text-gray-400">
-            {time || 'TBD'}
-          </span>
+      <div className="relative group">
+        {/* Card with site's styling pattern */}
+        <div 
+          className="p-6 rounded-lg border-2 transition-all duration-300 hover:scale-105 hover:shadow-xl"
+          style={{ 
+            backgroundColor: '#121212', 
+            border: '2px solid #333',
+            boxShadow: '0 4px 20px rgba(184, 149, 63, 0.1)'
+          }}
+        >
+          {/* Header with league and time */}
+          <div className="flex justify-between items-center mb-4">
+            <div 
+              className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wide"
+              style={{ backgroundColor: '#d4af37', color: '#000' }}
+            >
+              {league}
+            </div>
+            <span className="text-xs text-gray-400 font-medium">
+              {time || 'TBD'}
+            </span>
+          </div>
+
+          {/* Teams */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white font-bold text-lg">{awayTeam}</span>
+              <span className="text-gray-400 text-sm">@</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white font-bold text-lg">{homeTeam}</span>
+            </div>
+          </div>
+
+          {/* Betting Lines */}
+          <div className="space-y-4">
+            {/* Spread */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Spread</span>
+              </div>
+              <div className="flex space-x-2">
+                <BettingOption
+                  label={odds?.spread?.away?.line || 'N/A'}
+                  odds={odds?.spread?.away?.odds || 'N/A'}
+                  isSelected={garyPicks?.spread === 'away'}
+                  team="away"
+                />
+                <BettingOption
+                  label={odds?.spread?.home?.line || 'N/A'}
+                  odds={odds?.spread?.home?.odds || 'N/A'}
+                  isSelected={garyPicks?.spread === 'home'}
+                  team="home"
+                />
+              </div>
+            </div>
+
+            {/* Moneyline */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Moneyline</span>
+              </div>
+              <div className="flex space-x-2">
+                <BettingOption
+                  label="ML"
+                  odds={odds?.moneyline?.away || 'N/A'}
+                  isSelected={garyPicks?.moneyline === 'away'}
+                  team="away"
+                />
+                <BettingOption
+                  label="ML"
+                  odds={odds?.moneyline?.home || 'N/A'}
+                  isSelected={garyPicks?.moneyline === 'home'}
+                  team="home"
+                />
+              </div>
+            </div>
+
+            {/* Over/Under */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Total</span>
+              </div>
+              <div className="flex space-x-2">
+                <BettingOption
+                  label={`O ${odds?.total?.line || 'N/A'}`}
+                  odds={odds?.total?.over || 'N/A'}
+                  isSelected={garyPicks?.total === 'over'}
+                  icon={<TrendingUp size={14} />}
+                />
+                <BettingOption
+                  label={`U ${odds?.total?.line || 'N/A'}`}
+                  odds={odds?.total?.under || 'N/A'}
+                  isSelected={garyPicks?.total === 'under'}
+                  icon={<TrendingDown size={14} />}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Gary's Rationale */}
+          {garyPicks?.rationale && (
+            <div className="mt-6 pt-4 border-t border-gray-700">
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <div 
+                    className="px-2 py-1 rounded text-xs font-bold uppercase"
+                    style={{ backgroundColor: '#d4af37', color: '#000' }}
+                  >
+                    Gary's Analysis
+                  </div>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed italic">
+                  "{garyPicks.rationale}"
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-
-        {/* Teams */}
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center justify-between">
-            <span className="text-white font-medium">{awayTeam}</span>
-            <span className="text-xs text-gray-400">@</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-white font-medium">{homeTeam}</span>
-          </div>
-        </div>
-
-        {/* Betting Lines */}
-        <div className="space-y-3">
-          {/* Spread */}
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-400 uppercase tracking-wide">Spread</span>
-            <div className="flex space-x-2">
-              <BettingOption
-                label={odds?.spread?.away?.line || 'N/A'}
-                odds={odds?.spread?.away?.odds || 'N/A'}
-                isSelected={garyPicks?.spread === 'away'}
-              />
-              <BettingOption
-                label={odds?.spread?.home?.line || 'N/A'}
-                odds={odds?.spread?.home?.odds || 'N/A'}
-                isSelected={garyPicks?.spread === 'home'}
-              />
-            </div>
-          </div>
-
-          {/* Moneyline */}
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-400 uppercase tracking-wide">Moneyline</span>
-            <div className="flex space-x-2">
-              <BettingOption
-                label="ML"
-                odds={odds?.moneyline?.away || 'N/A'}
-                isSelected={garyPicks?.moneyline === 'away'}
-              />
-              <BettingOption
-                label="ML"
-                odds={odds?.moneyline?.home || 'N/A'}
-                isSelected={garyPicks?.moneyline === 'home'}
-              />
-            </div>
-          </div>
-
-          {/* Over/Under */}
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-400 uppercase tracking-wide">Total</span>
-            <div className="flex space-x-2">
-              <BettingOption
-                label={`O ${odds?.total?.line || 'N/A'}`}
-                odds={odds?.total?.over || 'N/A'}
-                isSelected={garyPicks?.total === 'over'}
-                icon={<TrendingUp size={12} />}
-              />
-              <BettingOption
-                label={`U ${odds?.total?.line || 'N/A'}`}
-                odds={odds?.total?.under || 'N/A'}
-                isSelected={garyPicks?.total === 'under'}
-                icon={<TrendingDown size={12} />}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Gary's Rationale */}
-        {garyPicks?.rationale && (
-          <div className="mt-3 pt-3 border-t border-gray-700">
-            <div className="space-y-2">
-              <span className="text-xs text-gray-400 uppercase tracking-wide">Gary's Analysis</span>
-              <p className="text-xs text-gray-300 leading-relaxed">
-                {garyPicks.rationale}
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
 
-  const BettingOption = ({ label, odds, isSelected, icon }) => {
+  const BettingOption = ({ label, odds, isSelected, icon, team }) => {
     return (
       <div className={`
-        px-3 py-2 rounded text-xs font-medium text-center min-w-[60px] transition-all
+        flex-1 px-4 py-3 rounded-lg text-sm font-medium text-center transition-all duration-300
         ${isSelected 
-          ? 'bg-green-600/20 border border-green-500/50 text-green-400' 
-          : 'bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600'
+          ? 'border-2 text-black font-bold' 
+          : 'bg-gray-800 border-2 border-gray-600 text-gray-300 hover:bg-gray-700 hover:border-gray-500'
         }
-      `}>
-        <div className="flex items-center justify-center space-x-1">
+      `}
+      style={isSelected ? { 
+        backgroundColor: '#d4af37', 
+        borderColor: '#d4af37',
+        boxShadow: '0 0 20px rgba(212, 175, 55, 0.3)'
+      } : {}}
+      >
+        <div className="flex items-center justify-center space-x-1 mb-1">
           {icon && <span>{icon}</span>}
-          <span>{label}</span>
+          <span className="font-semibold">{label}</span>
         </div>
-        <div className="text-xs opacity-75 mt-1">
+        <div className={`text-xs ${isSelected ? 'text-black' : 'text-gray-400'}`}>
           {odds}
         </div>
       </div>
@@ -186,13 +223,31 @@ const WhatGaryThinks = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-center">
-              <RefreshCw className="animate-spin mx-auto mb-4" size={48} />
-              <p className="text-xl">Gary is analyzing today's games...</p>
-              <p className="text-gray-400 mt-2">This may take a moment</p>
+      <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
+        {/* Background matching site pattern */}
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 0,
+            pointerEvents: 'none',
+            background: `#121212 url(${BG2}) no-repeat center center`,
+            backgroundSize: 'cover',
+            opacity: 0.15,
+          }}
+        />
+        
+        <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
+          <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
+            <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+              <h3 className="font-bold text-black">LOADING GARY'S THOUGHTS...</h3>
+            </div>
+            <p className="text-yellow-500 mb-4">Gary is analyzing today's games...</p>
+            <div className="flex justify-center">
+              <div className="w-8 h-8 border-t-2 border-b-2 border-[#d4af37] rounded-full animate-spin"></div>
             </div>
           </div>
         </div>
@@ -201,79 +256,160 @@ const WhatGaryThinks = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/')}
-              className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-yellow-400">What Gary Thinks</h1>
-              <p className="text-gray-400 mt-1">Gary's picks for every game today</p>
-            </div>
-          </div>
-          
-          <button
-            onClick={loadGaryThoughts}
-            disabled={loading}
-            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 rounded-lg transition-colors"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            <span>Refresh</span>
-          </button>
-        </div>
+    <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
+      {/* Background matching site pattern */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 0,
+          pointerEvents: 'none',
+          background: `#121212 url(${BG2}) no-repeat center center`,
+          backgroundSize: 'cover',
+          opacity: 0.15,
+        }}
+      >
+        {/* Gradient overlay */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(circle at 50% 50%, rgba(40, 40, 50, 0.4) 0%, rgba(20, 20, 25, 0.2) 50%, rgba(10, 10, 15, 0.1) 100%)',
+          opacity: 0.6,
+        }} />
+        
+        {/* Abstract shapes */}
+        <div style={{
+          position: 'absolute',
+          top: '10%',
+          left: '5%',
+          width: '20vw',
+          height: '20vw',
+          borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%',
+          background: 'rgba(191, 161, 66, 0.03)',
+          filter: 'blur(40px)',
+        }} />
+        
+        <div style={{
+          position: 'absolute',
+          bottom: '15%',
+          right: '10%',
+          width: '25vw',
+          height: '25vw',
+          borderRadius: '63% 37% 30% 70% / 50% 45% 55% 50%',
+          background: 'rgba(191, 161, 66, 0.02)',
+          filter: 'blur(50px)',
+        }} />
+      </div>
 
-        {/* Last Updated */}
-        {lastUpdated && (
-          <div className="mb-6 text-center">
-            <p className="text-sm text-gray-400">
-              Last updated: {lastUpdated.toLocaleTimeString()}
-            </p>
+      {/* Main content */}
+      <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
+        {/* Header */}
+        <div className="w-full max-w-7xl mx-auto mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/')}
+                className="p-3 rounded-lg transition-all duration-300 hover:scale-110"
+                style={{ backgroundColor: '#d4af37', color: '#000' }}
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div>
+                <h1 className="text-4xl font-bold" style={{ color: '#d4af37' }}>
+                  What Gary Thinks
+                </h1>
+                <p className="text-gray-400 mt-2">Gary's picks for every game today</p>
+              </div>
+            </div>
+            
+            <button
+              onClick={loadGaryThoughts}
+              disabled={loading}
+              className="flex items-center space-x-2 px-6 py-3 rounded-lg font-bold uppercase transition-all duration-300 hover:scale-105 disabled:opacity-50"
+              style={{ backgroundColor: '#d4af37', color: '#000' }}
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              <span>Refresh</span>
+            </button>
           </div>
-        )}
+
+          {/* Last Updated */}
+          {lastUpdated && (
+            <div className="text-center mb-6">
+              <p className="text-sm text-gray-400">
+                Last updated: {lastUpdated.toLocaleTimeString()}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4 mb-6">
-            <p className="text-red-400">{error}</p>
+          <div className="w-full max-w-7xl mx-auto mb-6">
+            <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
+              <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+                <h3 className="font-bold text-black">ERROR</h3>
+              </div>
+              <p className="text-red-400 mb-4">{error}</p>
+              <button 
+                onClick={loadGaryThoughts}
+                className="px-4 py-2 font-bold uppercase text-black rounded transition-all duration-300 hover:scale-105" 
+                style={{ backgroundColor: '#d4af37' }}
+              >
+                Try Again
+              </button>
+            </div>
           </div>
         )}
 
         {/* Games Grid */}
         {games.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {games.map((game, index) => (
-              <GameCard key={index} game={game} />
-            ))}
+          <div className="w-full max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {games.map((game, index) => (
+                <GameCard key={index} game={game} />
+              ))}
+            </div>
           </div>
         ) : !loading && (
           <div className="text-center py-12">
-            <p className="text-xl text-gray-400">No games found for today</p>
-            <p className="text-gray-500 mt-2">Check back later or try refreshing</p>
+            <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
+              <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
+                <h3 className="font-bold text-black">NO GAMES TODAY</h3>
+              </div>
+              <p className="text-gray-400 mb-4">No games found for today</p>
+              <p className="text-gray-500 text-sm">Check back later or try refreshing</p>
+            </div>
           </div>
         )}
 
         {/* Legend */}
         {games.length > 0 && (
-          <div className="mt-8 p-4 bg-gray-800 rounded-lg border border-gray-700">
-            <h3 className="text-lg font-semibold mb-3">Legend</h3>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-green-600/20 border border-green-500/50 rounded"></div>
-                <span className="text-gray-300">Gary's Pick</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <TrendingUp size={16} className="text-gray-400" />
-                <span className="text-gray-300">Over</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <TrendingDown size={16} className="text-gray-400" />
-                <span className="text-gray-300">Under</span>
+          <div className="w-full max-w-7xl mx-auto mt-12">
+            <div 
+              className="p-6 rounded-lg border-2"
+              style={{ backgroundColor: '#121212', border: '2px solid #333' }}
+            >
+              <h3 className="text-lg font-bold mb-4" style={{ color: '#d4af37' }}>Legend</h3>
+              <div className="flex flex-wrap gap-6 text-sm">
+                <div className="flex items-center space-x-3">
+                  <div 
+                    className="w-6 h-6 rounded border-2"
+                    style={{ backgroundColor: '#d4af37', borderColor: '#d4af37' }}
+                  ></div>
+                  <span className="text-gray-300 font-medium">Gary's Pick</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <TrendingUp size={20} className="text-gray-400" />
+                  <span className="text-gray-300 font-medium">Over</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <TrendingDown size={20} className="text-gray-400" />
+                  <span className="text-gray-300 font-medium">Under</span>
+                </div>
               </div>
             </div>
           </div>
