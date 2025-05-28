@@ -430,7 +430,7 @@ async function generateDailyPicks() {
 
         for (const game of todayGames) {
           const gameId = `nba-${game.id}`;
-          
+
           const result = await processGameOnce(gameId, async () => {
             console.log(`🔄 PICK GENERATION STARTED: ${new Date().toISOString()}`);
             console.trace('Pick generation call stack');
@@ -442,15 +442,15 @@ async function generateDailyPicks() {
               'nba-teams', 
               () => ballDontLieService.getNbaTeams()
             );
-            const homeTeam = nbaTeams.find(t => 
-              t.full_name.toLowerCase().includes(game.home_team.toLowerCase()) ||
-              game.home_team.toLowerCase().includes(t.full_name.toLowerCase())
-            );
-            const awayTeam = nbaTeams.find(t => 
-              t.full_name.toLowerCase().includes(game.away_team.toLowerCase()) ||
-              game.away_team.toLowerCase().includes(t.full_name.toLowerCase())
-            );
-            
+              const homeTeam = nbaTeams.find(t => 
+                t.full_name.toLowerCase().includes(game.home_team.toLowerCase()) ||
+                game.home_team.toLowerCase().includes(t.full_name.toLowerCase())
+              );
+              const awayTeam = nbaTeams.find(t => 
+                t.full_name.toLowerCase().includes(game.away_team.toLowerCase()) ||
+                game.away_team.toLowerCase().includes(t.full_name.toLowerCase())
+              );
+              
             // Use Ball Don't Lie API for NBA team stats with caching
             let homeTeamStats = null;
             let awayTeamStats = null;
@@ -497,8 +497,8 @@ async function generateDailyPicks() {
                 game.away_team
               ),
               ballDontLieService.getNbaPlayoffPlayerStats(
-                game.home_team,
-                game.away_team,
+              game.home_team, 
+              game.away_team, 
                 playoffSeason
               ),
               ballDontLieService.getNbaPlayoffSeries(
@@ -739,7 +739,7 @@ async function generateDailyPicks() {
 
         for (const game of todayGames) {
           const gameId = `nhl-${game.id}`;
-          
+
           const result = await processGameOnce(gameId, async () => {
             console.log(`Processing NHL game: ${game.away_team} @ ${game.home_team}`);
             
@@ -792,7 +792,7 @@ async function generateDailyPicks() {
             let awayStats = { name: game.away_team, conference: '?', division: '?' };
             
             if (playoffAnalysis?.homeTeam?.teamData) {
-              homeStats = {
+                homeStats = {
                 name: playoffAnalysis.homeTeam.teamData.full_name || game.home_team,
                 conference: playoffAnalysis.homeTeam.teamData.conference || '?',
                 division: playoffAnalysis.homeTeam.teamData.division || '?'
@@ -800,7 +800,7 @@ async function generateDailyPicks() {
             }
             
             if (playoffAnalysis?.awayTeam?.teamData) {
-              awayStats = {
+                awayStats = {
                 name: playoffAnalysis.awayTeam.teamData.full_name || game.away_team,
                 conference: playoffAnalysis.awayTeam.teamData.conference || '?',
                 division: playoffAnalysis.awayTeam.teamData.division || '?'

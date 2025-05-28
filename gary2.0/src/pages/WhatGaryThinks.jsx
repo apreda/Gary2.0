@@ -194,12 +194,31 @@ const WhatGaryThinks = () => {
           }}
         >
           {/* League Header */}
-          <div className="flex justify-start items-center px-4 py-3 border-b border-gray-700">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-gray-700">
             <div 
               className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide"
               style={{ backgroundColor: '#d4af37', color: '#000' }}
             >
               {league}
+            </div>
+            <div 
+              className="flex items-center px-3 py-2 rounded-lg border"
+              style={{
+                background: 'rgba(42, 42, 42, 0.6)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: `
+                  0 2px 8px rgba(0, 0, 0, 0.2),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.03)
+                `
+              }}
+            >
+              <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-gray-300 font-semibold" style={{ fontSize: '14px', fontWeight: '600', letterSpacing: '0.5px' }}>
+                {time || 'TBD'}
+              </span>
             </div>
           </div>
 
@@ -259,6 +278,7 @@ const WhatGaryThinks = () => {
                   bottomLine=""
                   isSelected={garyPicks?.moneyline === 'away'}
                   singleLine={true}
+                  centerSingle={true}
                 />
               </div>
               
@@ -302,6 +322,7 @@ const WhatGaryThinks = () => {
                   bottomLine=""
                   isSelected={garyPicks?.moneyline === 'home'}
                   singleLine={true}
+                  centerSingle={true}
                 />
               </div>
               
@@ -315,34 +336,12 @@ const WhatGaryThinks = () => {
               </div>
             </div>
 
-            {/* Game Time */}
-            <div className="text-center pt-4 mt-2 border-t border-gray-600">
-              <div 
-                className="inline-flex items-center px-3 py-2 rounded-lg border"
-                style={{
-                  background: 'rgba(42, 42, 42, 0.6)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  boxShadow: `
-                    0 2px 8px rgba(0, 0, 0, 0.2),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.03)
-                  `
-                }}
-              >
-                <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-gray-300 font-semibold" style={{ fontSize: '14px', fontWeight: '600', letterSpacing: '0.5px' }}>
-                  {time || 'TBD'}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Gary's Rationale */}
           {garyPicks?.rationale && (
             <div className="px-4 pb-4">
-              <div className="mt-6 pt-6 border-t border-gray-600">
+              <div className="mt-4 pt-4 border-t border-gray-600">
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-lg">
@@ -387,7 +386,7 @@ const WhatGaryThinks = () => {
     );
   };
 
-  const BettingOption = ({ topLine, bottomLine, isSelected, singleLine = false }) => {
+  const BettingOption = ({ topLine, bottomLine, isSelected, singleLine = false, centerSingle = false }) => {
     return (
       <div className={`
         px-3 py-3 rounded-lg text-center transition-all duration-300 cursor-pointer w-full flex flex-col justify-center items-center
@@ -397,8 +396,9 @@ const WhatGaryThinks = () => {
         }
       `}
       style={{
-        minHeight: '48px',
+        height: '64px',
         minWidth: '80px',
+        maxWidth: '100%',
         ...(isSelected ? { 
           background: 'linear-gradient(135deg, #B8953F 0%, #C5A647 100%)',
           color: '#000',
@@ -419,14 +419,23 @@ const WhatGaryThinks = () => {
         })
       }}
       >
-        <div className={`leading-tight text-center ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
-             style={{ fontSize: '16px', fontWeight: '700' }}>
-          {topLine}
-        </div>
-        <div className={`mt-1 leading-tight text-center ${isSelected ? 'text-black' : 'text-gray-400'}`}
-             style={{ fontSize: '12px', fontWeight: '400', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {!singleLine && bottomLine ? bottomLine : '\u00A0'}
-        </div>
+        {centerSingle && singleLine ? (
+          <div className={`leading-tight text-center ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
+               style={{ fontSize: '16px', fontWeight: '700' }}>
+            {topLine}
+          </div>
+        ) : (
+          <>
+            <div className={`leading-tight text-center ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
+                 style={{ fontSize: '16px', fontWeight: '700' }}>
+              {topLine}
+            </div>
+            <div className={`mt-1 leading-tight text-center ${isSelected ? 'text-black' : 'text-gray-400'}`}
+                 style={{ fontSize: '12px', fontWeight: '400', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {!singleLine && bottomLine ? bottomLine : '\u00A0'}
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -572,7 +581,7 @@ const WhatGaryThinks = () => {
       <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
         {/* Header */}
         <div className="w-full max-w-4xl mx-auto mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center mb-6">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/')}
@@ -588,24 +597,6 @@ const WhatGaryThinks = () => {
                 <p className="text-gray-400 mt-1">Gary's picks for every game today</p>
               </div>
             </div>
-            
-            <button
-              onClick={loadGaryThoughts}
-              disabled={loading}
-              className="flex items-center space-x-2 px-6 py-3 rounded-lg font-bold transition-all duration-300 disabled:opacity-50 transform hover:scale-105 shadow-lg"
-              style={{ 
-                backgroundColor: '#B8953F', 
-                color: '#000',
-                border: '1px solid rgba(184, 149, 63, 0.6)',
-                boxShadow: '0 4px 12px rgba(184, 149, 63, 0.3)',
-                fontSize: '14px',
-                fontWeight: '700',
-                letterSpacing: '0.5px'
-              }}
-            >
-              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-              <span>Refresh</span>
-            </button>
           </div>
 
           {/* Sport Tabs */}
@@ -662,14 +653,7 @@ const WhatGaryThinks = () => {
             </div>
           </div>
 
-          {/* Last Updated */}
-          {lastUpdated && (
-            <div className="text-center mb-6">
-              <p className="text-sm text-gray-400">
-                Last updated: {lastUpdated.toLocaleTimeString()}
-              </p>
-            </div>
-          )}
+
         </div>
 
         {/* Error State */}
