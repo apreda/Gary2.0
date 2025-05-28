@@ -4,6 +4,7 @@ import { BetHistory } from "../components/BetHistory";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { useToast } from "../components/ui/ToastProvider";
 import { useAuth } from "../contexts/AuthContext";
+import { userPickResultsService } from "../services/userPickResultsService";
 import { motion } from "framer-motion";
 
 /**
@@ -42,28 +43,46 @@ export function BetCard({ reloadKey }) {
           throw error;
         }
 
-        // Calculate stats
-        let wins = 0, losses = 0, ride = 0, fade = 0;
-        userPicks.forEach((pick) => {
-          if (pick.decision === "ride") ride++;
-          else fade++;
+        // Also get user record from the new service
+        let serviceRecord = null;
+        try {
+          serviceRecord = await userPickResultsService.getUserRecord(user.id);
+        } catch (error) {
+          console.log('Could not fetch service record, using manual calculation:', error);
+        }
 
-          if (pick.outcome === "win") wins++;
-          else if (pick.outcome === "loss") losses++;
+        // Calculate stats from user_picks (for backward compatibility and recent picks)
+        let wins = 0, losses = 0, pushes = 0, bet = 0, fade = 0;
+        userPicks.forEach((pick) => {
+          // Handle both old (ride/fade) and new (bet/fade) decision formats
+          if (pick.decision === "bet" || pick.decision === "ride") bet++;
+          else if (pick.decision === "fade") fade++;
+
+          // Handle both old (win/loss) and new (won/lost/push) outcome formats
+          if (pick.outcome === "won" || pick.outcome === "win") wins++;
+          else if (pick.outcome === "lost" || pick.outcome === "loss") losses++;
+          else if (pick.outcome === "push") pushes++;
         });
 
-        const total = wins + losses;
-        const rideFadeTotal = ride + fade;
+        const total = wins + losses; // Don't count pushes in win rate calculation
+        const betFadeTotal = bet + fade;
 
-        // Calculate streaks
+        // Calculate streaks (only count wins and losses, not pushes)
         let currentStreak = 0;
         let streakType = null;
 
         for (let i = userPicks.length - 1; i >= 0; i--) {
-          if (i === userPicks.length - 1) {
+          const outcome = userPicks[i].outcome;
+          // Skip pushes when calculating streaks
+          if (outcome === "push") continue;
+          
+          // Normalize outcome format
+          const normalizedOutcome = (outcome === "won" || outcome === "win") ? "win" : "loss";
+          
+          if (streakType === null) {
             currentStreak = 1;
-            streakType = userPicks[i].outcome;
-          } else if (userPicks[i].outcome === streakType) {
+            streakType = normalizedOutcome;
+          } else if (normalizedOutcome === streakType) {
             currentStreak++;
           } else {
             break;
@@ -72,28 +91,44 @@ export function BetCard({ reloadKey }) {
 
         if (streakType === "loss") currentStreak = -currentStreak;
 
-        // Show streak notification
-        if (Math.abs(currentStreak) >= 3) {
-          const streakMessage = currentStreak > 0
-            ? `You're on a ${currentStreak} win streak!`
-            : `❄️ You're on a ${Math.abs(currentStreak)} loss streak`;
-          showToast(streakMessage, currentStreak > 0 ? 'success' : 'warning');
-        }
-
-        setStats({
+        // Use service record if available, otherwise use manual calculation
+        const finalStats = serviceRecord ? {
+          wins: parseInt(serviceRecord.record.split('-')[0]) || wins,
+          losses: parseInt(serviceRecord.record.split('-')[1]) || losses,
+          pushes: parseInt(serviceRecord.record.split('-')[2]) || pushes,
+          bet,
+          fade,
+          winRate: serviceRecord.win_rate || (total ? ((wins / total) * 100).toFixed(1) : 0),
+          betRate: betFadeTotal ? ((bet / betFadeTotal) * 100).toFixed(1) : 0,
+          fadeRate: betFadeTotal ? ((fade / betFadeTotal) * 100).toFixed(1) : 0,
+          streak: {
+            current_streak: serviceRecord.current_streak || currentStreak || 0,
+            streak_type: serviceRecord.current_streak > 0 ? "win" : serviceRecord.current_streak < 0 ? "loss" : streakType
+          }
+        } : {
           wins,
           losses,
-          ride,
+          pushes,
+          bet,
           fade,
           winRate: total ? ((wins / total) * 100).toFixed(1) : 0,
-          rideRate: rideFadeTotal ? ((ride / rideFadeTotal) * 100).toFixed(1) : 0,
-          fadeRate: rideFadeTotal ? ((fade / rideFadeTotal) * 100).toFixed(1) : 0,
+          betRate: betFadeTotal ? ((bet / betFadeTotal) * 100).toFixed(1) : 0,
+          fadeRate: betFadeTotal ? ((fade / betFadeTotal) * 100).toFixed(1) : 0,
           streak: {
-            current_streak: currentStreak,
+            current_streak: currentStreak || 0,
             streak_type: streakType
           }
-        });
+        };
 
+        // Show streak notification
+        if (Math.abs(finalStats.streak.current_streak) >= 3) {
+          const streakMessage = finalStats.streak.current_streak > 0
+            ? `You're on a ${finalStats.streak.current_streak} win streak!`
+            : `❄️ You're on a ${Math.abs(finalStats.streak.current_streak)} loss streak`;
+          showToast(streakMessage, finalStats.streak.current_streak > 0 ? 'success' : 'warning');
+        }
+
+        setStats(finalStats);
         setPicks(userPicks);
 
         if (userPicks.length === 0) {
@@ -182,6 +217,12 @@ export function BetCard({ reloadKey }) {
               <span className="text-green-400">{stats.wins}</span>
               <span className="text-gray-500 mx-1">-</span>
               <span className="text-red-400">{stats.losses}</span>
+              {stats.pushes > 0 && (
+                <>
+                  <span className="text-gray-500 mx-1">-</span>
+                  <span className="text-yellow-400">{stats.pushes}</span>
+                </>
+              )}
             </div>
             <div className="text-sm text-gray-400 font-medium">Record</div>
           </motion.div>
@@ -191,9 +232,9 @@ export function BetCard({ reloadKey }) {
             className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 text-center border border-gray-700/30"
           >
             <div className="text-3xl font-bold text-blue-400 mb-1 tabular-nums">
-              {stats.rideRate}%
+              {stats.betRate}%
             </div>
-            <div className="text-sm text-gray-400 font-medium">Ride Rate</div>
+            <div className="text-sm text-gray-400 font-medium">Bet Rate</div>
           </motion.div>
           
           <motion.div 

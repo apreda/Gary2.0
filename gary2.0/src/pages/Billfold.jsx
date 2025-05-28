@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
-import { userPickResultsService } from '../services/userPickResultsService';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/BillfoldEnhanced.css'; // Consolidated high-tech modern styling
@@ -20,14 +19,6 @@ export const Billfold = () => {
     winLoss: 0,
     sportPerformance: [],
     betTypePerformance: [],
-  });
-
-  // State for user's betting record
-  const [userRecord, setUserRecord] = useState({
-    record: '0-0-0',
-    win_rate: 0,
-    total_picks: 0,
-    current_streak: 0
   });
 
   // State for betting log/history
@@ -234,17 +225,6 @@ export const Billfold = () => {
         
         calculateYesterdayRecord();
         
-        // Fetch user's betting record if user is logged in
-        if (user?.id) {
-          try {
-            const userRecordData = await userPickResultsService.getUserRecord(user.id);
-            setUserRecord(userRecordData);
-          } catch (error) {
-            console.error('Error fetching user record:', error);
-            // Keep default values if error
-          }
-        }
-        
         // Add game bet types to combined distribution
         if (gameResults) {
           gameResults.forEach(game => {
@@ -447,7 +427,7 @@ export const Billfold = () => {
     };
     
     fetchData();
-  }, [selectedTimeFrame, showPicksType, user]); // Re-fetch when tab changes or user changes
+  }, [selectedTimeFrame, showPicksType]); // Re-fetch when tab changes
   
   // Helper function to determine bet type based on pick text
   const determineBetType = (pickText) => {
@@ -665,29 +645,6 @@ export const Billfold = () => {
               <div className="font-semibold text-gray-300" style={{ fontSize: '1.2rem' }}>{yesterdayRecord || '0-0'}</div>
             </div>
           </div>
-          
-          {/* USER RECORD - Show user's betting performance */}
-          {user && (
-            <div className="gary-card-accent p-5">
-              <h5 className="gary-text-small uppercase tracking-wider mb-1">YOUR RECORD</h5>
-              <div className="font-bold" style={{ color: '#b8953f', fontSize: '3rem', lineHeight: '1', letterSpacing: '-0.02em' }}>{userRecord.record}</div>
-              {/* User Stats */}
-              <div className="mt-3 pt-2 border-t border-gray-700">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="text-xs uppercase tracking-wider text-gray-400">WIN RATE</div>
-                  <div className="font-semibold text-gray-300">{userRecord.win_rate}%</div>
-                </div>
-                {userRecord.current_streak !== 0 && (
-                  <div className="flex justify-between items-center">
-                    <div className="text-xs uppercase tracking-wider text-gray-400">STREAK</div>
-                    <div className={`font-semibold ${userRecord.current_streak > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {userRecord.current_streak > 0 ? '+' : ''}{userRecord.current_streak}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
           
           {/* WIN RATE - With enhanced styling */}
           <div className="gary-card-accent p-5">
