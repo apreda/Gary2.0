@@ -24,7 +24,7 @@ export function Navbar() {
       label: 'Gary\'s Picks',
       hasDropdown: true,
       dropdownItems: [
-        { path: '/real-gary-picks', label: 'Gary\'s Picks' },
+        { path: '/real-gary-picks', label: 'Gary\'s Premium Picks' },
         { path: '/what-gary-thinks', label: 'Gary\'s Thoughts' },
         { path: '/gary-props', label: 'Gary\'s Props' }
       ]
