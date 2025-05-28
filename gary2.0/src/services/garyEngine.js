@@ -39,6 +39,14 @@ export async function makeGaryPick(gameData, options = {}) {
       
       const trimmedName = teamName.trim();
       
+      // Special handling for Sox teams FIRST (before city removal)
+      if (trimmedName.includes('White Sox')) {
+        return 'White Sox';
+      }
+      if (trimmedName.includes('Red Sox')) {
+        return 'Red Sox';
+      }
+      
       // Check if the team name starts with any city name
       for (const city of cityNames) {
         if (trimmedName.startsWith(city + ' ')) {
@@ -47,11 +55,8 @@ export async function makeGaryPick(gameData, options = {}) {
         }
       }
       
-      // Special handling for multi-word team names that don't start with a city
-      // For teams like "White Sox", "Red Sox", "Blue Jays", etc.
+      // Special handling for other multi-word team names that don't start with a city
       const specialTeams = {
-        'White Sox': 'White Sox',
-        'Red Sox': 'Red Sox', 
         'Blue Jays': 'Blue Jays',
         'Maple Leafs': 'Maple Leafs',
         'Golden Knights': 'Golden Knights',

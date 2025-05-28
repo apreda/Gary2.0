@@ -5,11 +5,20 @@ const AdminResultsProcessor = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastResult, setLastResult] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [processAllPending, setProcessAllPending] = useState(true);
 
   const handleProcessResults = async () => {
     setIsProcessing(true);
     try {
-      const result = await userPickResultsService.manualProcessResults();
+      let result;
+      if (processAllPending) {
+        // Process all pending picks
+        result = await userPickResultsService.manualProcessResults();
+      } else {
+        // Process picks from specific date
+        result = await userPickResultsService.manualProcessResults(selectedDate);
+      }
       setLastResult(result);
       console.log('Processing result:', result);
     } catch (error) {
@@ -26,27 +35,82 @@ const AdminResultsProcessor = () => {
     }
   };
 
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
+  const getYesterdayDate = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  };
+
   return (
-    <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
-      <h3 className="text-xl font-bold text-white mb-4">User Pick Results Processor</h3>
+    <div className="bg-gray-800 p-6 rounded-lg">
+      <h2 className="text-xl font-semibold mb-4 text-white">User Pick Results Processor</h2>
       
-      <div className="mb-4">
-        <p className="text-gray-300 text-sm mb-4">
-          This tool processes user bet/fade decisions against Gary's pick results and updates user records accordingly.
-        </p>
+      {/* Processing Options */}
+      <div className="mb-6 space-y-4">
+        <div className="flex items-center space-x-4">
+          <label className="flex items-center">
+            <input
+              type="radio"
+              checked={processAllPending}
+              onChange={() => setProcessAllPending(true)}
+              className="mr-2"
+            />
+            <span className="text-gray-300">Process All Pending Picks</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              type="radio"
+              checked={!processAllPending}
+              onChange={() => setProcessAllPending(false)}
+              className="mr-2"
+            />
+            <span className="text-gray-300">Process Specific Date</span>
+          </label>
+        </div>
         
-        <button
-          onClick={handleProcessResults}
-          disabled={isProcessing}
-          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-            isProcessing
-              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              : 'bg-[#b8953f] text-black hover:bg-[#a8853f]'
-          }`}
-        >
-          {isProcessing ? 'Processing...' : 'Process User Pick Results'}
-        </button>
+        {!processAllPending && (
+          <div className="flex items-center space-x-4">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 bg-gray-700 text-white rounded border border-gray-600"
+            />
+            <button
+              onClick={() => setSelectedDate(getYesterdayDate())}
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            >
+              Yesterday
+            </button>
+            <button
+              onClick={() => setSelectedDate(getTodayDate())}
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            >
+              Today
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Process Button */}
+      <button
+        onClick={handleProcessResults}
+        disabled={isProcessing || (!processAllPending && !selectedDate)}
+        className={`px-6 py-3 rounded font-medium ${
+          isProcessing || (!processAllPending && !selectedDate)
+            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+            : 'bg-[#B8953F] text-black hover:bg-[#A08235]'
+        }`}
+      >
+        {isProcessing ? 'Processing...' : 
+         processAllPending ? 'Process All User Pick Results' : 
+         `Process Results for ${selectedDate || 'Selected Date'}`}
+      </button>
 
       {lastResult && (
         <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-600">
