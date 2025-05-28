@@ -209,7 +209,9 @@ function RealGaryPicks() {
             const oddsValue = extractOddsFromAnalysis(pick);
 
             const simplePick = {
-              id: pick.id || `pick-${currentDate}-${pick.league}-${pick.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
+              // PRIORITY: Use pick_id from data, then id, then generate fallback
+              id: pick.pick_id || pick.id || `pick-${currentDate}-${pick.league}-${pick.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
+              pick_id: pick.pick_id || pick.id, // Preserve the original pick_id
               pick: pick.pick || '',
               rationale: pick.rationale || '',
               game: pick.game || '',
@@ -262,7 +264,9 @@ function RealGaryPicks() {
             setPicks(generatedPicks.map(pick => {
               const rawOutput = pick.rawAnalysis || pick;
               return {
-                id: pick.id || `pick-${today}-${rawOutput.league}-${rawOutput.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
+                // PRIORITY: Use pick_id from data, then id, then generate fallback
+                id: pick.pick_id || pick.id || `pick-${today}-${rawOutput.league}-${rawOutput.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
+                pick_id: pick.pick_id || pick.id, // Preserve the original pick_id
                 pick: rawOutput.pick,
                 type: rawOutput.type || 'moneyline',
                 confidence: rawOutput.confidence,

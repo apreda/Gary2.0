@@ -310,9 +310,24 @@ const database = {
     }
 
     // Filter picks by confidence (>= 0.7 for MLB, all others included)
-    const validPicks = picks.map(pick => {
+    const validPicks = picks.map((pick, index) => {
       const pickData = utils.parsePickAnalysis(pick);
-      return {
+      
+      // Generate a consistent pick ID
+      const generatePickId = (data, date, index) => {
+        const components = [
+          data?.league || 'sport',
+          data?.homeTeam || data?.awayTeam || 'teams',
+          data?.pick || 'pick',
+          index.toString()
+        ];
+        
+        const pickString = components.join('-').toLowerCase().replace(/[^a-z0-9-]/g, '');
+        return `pick-${date}-${pickString}`;
+      };
+      
+      const result = {
+        pick_id: generatePickId(pickData || pick, currentDateString, index),
         pick: pickData?.pick || pick.pick,
         time: pickData?.time || pick.time,
         type: pickData?.type || pick.type || 'moneyline',
@@ -327,6 +342,8 @@ const database = {
         superstition: pickData?.superstition || false,
         sport: pick.sport
       };
+      
+      return result;
     }).filter(pick => {
       const confidence = typeof pick.confidence === 'number' ? pick.confidence : 0;
       const sport = pick.sport || '';
