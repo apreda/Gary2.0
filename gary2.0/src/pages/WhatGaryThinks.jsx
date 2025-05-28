@@ -5,6 +5,7 @@ import { picksService } from '../services/picksService';
 import { supabase } from '../supabaseClient';
 import { getESTDate, getESTTimestamp } from '../utils/dateUtils';
 import BG2 from '/BG2.png';
+import coin2 from '/coin2.png';
 
 const WhatGaryThinks = () => {
   const navigate = useNavigate();
@@ -473,7 +474,7 @@ const WhatGaryThinks = () => {
           }}
         />
         
-        <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
+        <div className="w-full flex flex-col items-center justify-center pt-24 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
           <div 
           className="mx-auto max-w-md text-center py-4 px-6 rounded-xl" 
           style={{ 
@@ -578,10 +579,10 @@ const WhatGaryThinks = () => {
       `}</style>
 
       {/* Main content */}
-      <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
+      <div className="w-full flex flex-col items-center justify-center pt-24 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
         {/* Header */}
-        <div className="w-full max-w-4xl mx-auto mb-8">
-          <div className="flex items-center mb-6">
+        <div className="w-full max-w-4xl mx-auto mb-6">
+          <div className="flex items-center mb-4">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/')}
@@ -599,18 +600,29 @@ const WhatGaryThinks = () => {
             </div>
           </div>
 
-          {/* Sport Tabs */}
-          <div className="flex justify-center mb-8">
+          {/* Sport Tabs with Coin Image */}
+          <div className="flex justify-center items-center space-x-6 mb-6">
+            {/* Coin Image */}
+            <div className="flex-shrink-0">
+              <img 
+                src={coin2} 
+                alt="Gary Coin" 
+                className="w-12 h-12 object-contain opacity-80"
+                style={{ filter: 'drop-shadow(0 2px 8px rgba(212, 175, 55, 0.3))' }}
+              />
+            </div>
+            
+            {/* Sport Tabs - Smaller and More Subtle */}
             <div 
-              className="flex space-x-2 p-2 rounded-xl shadow-lg" 
+              className="flex space-x-1 p-1 rounded-lg shadow-md" 
               style={{ 
-                background: 'rgba(42, 42, 42, 0.7)',
-                backdropFilter: 'blur(20px) saturate(180%)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'rgba(42, 42, 42, 0.6)',
+                backdropFilter: 'blur(16px) saturate(160%)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
                 boxShadow: `
-                  0 8px 32px rgba(0, 0, 0, 0.3),
-                  0 2px 8px rgba(0, 0, 0, 0.2),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                  0 4px 16px rgba(0, 0, 0, 0.2),
+                  0 1px 4px rgba(0, 0, 0, 0.1),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.03)
                 `
               }}
             >
@@ -618,33 +630,33 @@ const WhatGaryThinks = () => {
                 <button
                   key={sport}
                   onClick={() => setActiveTab(sport)}
-                  className={`px-8 py-3 rounded-lg font-bold transition-all duration-300 transform ${
+                  className={`px-4 py-2 rounded-md font-semibold transition-all duration-300 transform text-sm ${
                     activeTab === sport 
-                      ? 'text-black scale-105 shadow-lg' 
-                      : 'text-gray-300 hover:text-white hover:bg-gray-700 hover:scale-102'
+                      ? 'text-black scale-102 shadow-sm' 
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-101'
                   }`}
                   style={activeTab === sport ? { 
                     background: 'linear-gradient(135deg, #B8953F 0%, #C5A647 100%)',
-                    border: '1px solid rgba(184, 149, 63, 0.6)',
+                    border: '1px solid rgba(184, 149, 63, 0.4)',
                     boxShadow: `
-                      0 4px 16px rgba(184, 149, 63, 0.3),
                       0 2px 8px rgba(184, 149, 63, 0.2),
-                      inset 0 1px 0 rgba(255, 255, 255, 0.2)
+                      0 1px 4px rgba(184, 149, 63, 0.1),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.15)
                     `,
-                    fontSize: '16px',
-                    fontWeight: '700',
-                    letterSpacing: '0.5px'
-                  } : {
-                    background: 'rgba(51, 51, 51, 0.6)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    boxShadow: `
-                      0 2px 8px rgba(0, 0, 0, 0.2),
-                      inset 0 1px 0 rgba(255, 255, 255, 0.03)
-                    `,
-                    fontSize: '16px',
+                    fontSize: '13px',
                     fontWeight: '600',
-                    letterSpacing: '0.5px'
+                    letterSpacing: '0.3px'
+                  } : {
+                    background: 'rgba(51, 51, 51, 0.4)',
+                    backdropFilter: 'blur(6px)',
+                    border: '1px solid rgba(255, 255, 255, 0.04)',
+                    boxShadow: `
+                      0 1px 4px rgba(0, 0, 0, 0.1),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.02)
+                    `,
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    letterSpacing: '0.3px'
                   }}
                 >
                   {sport}
@@ -652,7 +664,6 @@ const WhatGaryThinks = () => {
               ))}
             </div>
           </div>
-
 
         </div>
 
@@ -730,7 +741,7 @@ const WhatGaryThinks = () => {
               </div>
             </div>
           ) : games.length > 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-6">
               <div 
                 className="mx-auto max-w-md text-center py-4 px-6 rounded-xl" 
                 style={{ 
@@ -756,7 +767,7 @@ const WhatGaryThinks = () => {
               </div>
             </div>
                       ) : !loading && (
-            <div className="text-center py-12">
+            <div className="text-center py-6">
               <div 
                 className="mx-auto max-w-md text-center py-4 px-6 rounded-xl" 
                 style={{ 
@@ -786,7 +797,7 @@ const WhatGaryThinks = () => {
 
         {/* Legend */}
         {games.length > 0 && (
-          <div className="w-full max-w-4xl mx-auto mt-8">
+          <div className="w-full max-w-4xl mx-auto mt-6">
             <div 
               className="p-4 rounded-xl border"
               style={{ 
