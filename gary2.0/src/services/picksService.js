@@ -1069,6 +1069,27 @@ async function getGameStatsForThoughts(game, sport) {
 }
 
 /**
+ * Validate logical consistency between spread and moneyline picks
+ * @param {Object} picks - The picks object with spread, moneyline, and total
+ * @returns {Object} - Validated and corrected picks
+ */
+function validatePickConsistency(picks) {
+  if (!picks || !picks.spread || !picks.moneyline) {
+    return picks;
+  }
+  
+  // Check for logical inconsistency
+  if (picks.spread !== picks.moneyline) {
+    console.warn(`🚨 Logical inconsistency detected: ${picks.moneyline} moneyline but ${picks.spread} spread. Fixing...`);
+    // Fix by making spread match moneyline (since moneyline is the primary pick)
+    picks.spread = picks.moneyline;
+    console.log(`✅ Fixed: Both spread and moneyline now pick ${picks.moneyline}`);
+  }
+  
+  return picks;
+}
+
+/**
  * Generate Gary's picks for a specific game (spread, moneyline, over/under)
  * @param {Object} game - Game object
  * @param {Object} gameStats - Game statistics
@@ -1087,6 +1108,18 @@ CRITICAL: You must pick ALL THREE bet types for this game:
 2. MONEYLINE: Pick either "home" or "away"
 3. TOTAL: Pick either "over" or "under"
 
+=== LOGICAL CONSISTENCY RULES (EXTREMELY IMPORTANT) ===
+Your spread and moneyline picks MUST be logically consistent:
+
+- If you pick a team on the MONEYLINE (meaning you think they'll WIN the game), you should generally pick the SAME team on the SPREAD (unless there's a very specific reason not to)
+- If you pick the HOME team moneyline, you should pick the HOME team spread
+- If you pick the AWAY team moneyline, you should pick the AWAY team spread
+- The only exception is if you think a team will win but not cover a large spread, but this should be rare
+
+NEVER pick contradictory bets like:
+❌ Detroit moneyline + San Francisco spread
+❌ Home team moneyline + Away team spread
+
 === RATIONALE FORMAT ===
 Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addressing the user. Focus on the most compelling matchup dynamics and situational factors that led to your conclusions across all three bet types.
 
@@ -1100,7 +1133,7 @@ Respond in this exact JSON format:
   "rationale": "A 2-4 sentence paragraph explaining your picks using expert-level analysis."
 }
 
-Base your picks on the provided stats and odds. Be decisive - you must pick a side for each bet type.`
+Base your picks on the provided stats and odds. Be decisive - you must pick a side for each bet type. Remember: logical consistency between spread and moneyline is MANDATORY.`
     };
 
     const userMessage = {
@@ -1128,7 +1161,9 @@ Make your picks for spread, moneyline, and total.`
     const jsonMatch = response.match(/\{[\s\S]*?\}/);
     if (jsonMatch) {
       const picks = JSON.parse(jsonMatch[0]);
-      return picks;
+      
+      // Validate logical consistency between spread and moneyline
+      return validatePickConsistency(picks);
     }
 
     // Fallback if parsing fails
@@ -1141,7 +1176,7 @@ Make your picks for spread, moneyline, and total.`
 
   } catch (error) {
     console.error('Error generating Gary picks for game:', error);
-    // Return default picks if error
+    // Return default picks if error (ensuring consistency)
     return {
       spread: 'home',
       moneyline: 'home',
@@ -1179,6 +1214,7 @@ const picksService = {
   storeDailyPicksInDatabase,
   checkForExistingPicks,
   ensureValidSupabaseSession,
+  validatePickConsistency,
   _teamNameMatch
 };
 
