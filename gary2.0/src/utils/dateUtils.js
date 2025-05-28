@@ -233,3 +233,105 @@ export const getPicksQueryDate = () => {
   
   return eastern.dateString;
 };
+
+/**
+ * Date utilities for consistent EST timezone handling across the application
+ */
+
+/**
+ * Get current date in EST timezone formatted as YYYY-MM-DD
+ * @returns {string} Date string in YYYY-MM-DD format
+ */
+export const getESTDate = () => {
+  const now = new Date();
+  const estOptions = { timeZone: 'America/New_York' };
+  const estDateString = now.toLocaleDateString('en-US', estOptions);
+  const [month, day, year] = estDateString.split('/');
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+};
+
+/**
+ * Get current timestamp in EST timezone as ISO string
+ * @returns {string} ISO timestamp string adjusted for EST
+ */
+export const getESTTimestamp = () => {
+  const now = new Date();
+  const estTimestamp = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+  return estTimestamp.toISOString();
+};
+
+/**
+ * Convert any date to EST date string (YYYY-MM-DD)
+ * @param {Date|string} date - Date to convert
+ * @returns {string} Date string in YYYY-MM-DD format
+ */
+export const toESTDate = (date) => {
+  const dateObj = new Date(date);
+  const estOptions = { timeZone: 'America/New_York' };
+  const estDateString = dateObj.toLocaleDateString('en-US', estOptions);
+  const [month, day, year] = estDateString.split('/');
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+};
+
+/**
+ * Get EST date for a specific number of days offset from today
+ * @param {number} daysOffset - Number of days to offset (positive for future, negative for past)
+ * @returns {string} Date string in YYYY-MM-DD format
+ */
+export const getESTDateOffset = (daysOffset = 0) => {
+  const now = new Date();
+  now.setDate(now.getDate() + daysOffset);
+  return toESTDate(now);
+};
+
+/**
+ * Check if a date string is today in EST
+ * @param {string} dateString - Date string in YYYY-MM-DD format
+ * @returns {boolean} True if the date is today in EST
+ */
+export const isESTToday = (dateString) => {
+  return dateString === getESTDate();
+};
+
+/**
+ * Format a date for display in EST timezone
+ * @param {Date|string} date - Date to format
+ * @param {object} options - Intl.DateTimeFormat options
+ * @returns {string} Formatted date string
+ */
+export const formatESTDate = (date, options = {}) => {
+  const dateObj = new Date(date);
+  const defaultOptions = { 
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  };
+  return new Intl.DateTimeFormat('en-US', { ...defaultOptions, ...options }).format(dateObj);
+};
+
+/**
+ * Get the current hour in EST (0-23)
+ * @returns {number} Current hour in EST
+ */
+export const getESTHour = () => {
+  const now = new Date();
+  const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+  return estTime.getHours();
+};
+
+/**
+ * Check if it's currently a specific time range in EST
+ * @param {number} startHour - Start hour (0-23)
+ * @param {number} endHour - End hour (0-23)
+ * @returns {boolean} True if current EST time is within the range
+ */
+export const isESTTimeInRange = (startHour, endHour) => {
+  const currentHour = getESTHour();
+  if (startHour <= endHour) {
+    return currentHour >= startHour && currentHour < endHour;
+  } else {
+    // Handle overnight ranges (e.g., 22 to 6)
+    return currentHour >= startHour || currentHour < endHour;
+  }
+};

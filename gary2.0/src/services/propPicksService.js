@@ -4,7 +4,7 @@ import { oddsService } from './oddsService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 import { openaiService } from './openaiService.js';
 // Using MLB Stats API exclusively for prop picks - no need for sportsDbApiService or perplexityService
-import { nbaSeason, formatSeason, getCurrentEST, formatInEST } from '../utils/dateUtils.js';
+import { nbaSeason, formatSeason, getCurrentEST, formatInEST, getESTDate } from '../utils/dateUtils.js';
 import { debugUtils } from '../utils/debugUtils.js';
 
 // Import Supabase named export
@@ -55,8 +55,8 @@ const propPicksService = {
       console.log(`Formatting comprehensive MLB player stats for ${homeTeam} vs ${awayTeam}`);
       debugUtils.logApiCall('propPicksService', 'formatMLBPlayerStats', { homeTeam, awayTeam }, null);
 
-      // Get today's date
-      const today = new Date().toISOString().slice(0, 10);
+      // Get today's date in EST
+      const today = getESTDate();
 
       // Add timeout and retry logic for API calls
       const timeoutPromise = (promise, timeout = 10000) => {
@@ -829,8 +829,9 @@ Respond with ONLY a JSON array of your best prop picks.
    */
   getTodayPropPicks: async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-      console.log(`Fetching prop picks for today: ${today}`);
+      // Get today's date in EST
+      const today = getESTDate();
+      console.log(`Fetching prop picks for today (EST): ${today}`);
       
       // Query the prop_picks table for today's date
       const { data, error } = await supabase

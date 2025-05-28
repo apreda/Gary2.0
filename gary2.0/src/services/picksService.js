@@ -12,6 +12,7 @@ import { picksService as enhancedPicksService } from './picksService.enhanced.js
 import { combinedMlbService } from './combinedMlbService.js';
 import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 import { openaiService } from './openaiService.js';
+import { getESTDate } from '../utils/dateUtils.js';
 
 // Global processing state to prevent multiple simultaneous generations
 let isCurrentlyGeneratingPicks = false;
@@ -35,8 +36,8 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * @returns {Promise} - Processing result or null if already processed
  */
 const processGameOnce = async (gameId, processingFunction) => {
-  // Create a unique session key to prevent cross-session duplicates
-  const sessionKey = `${gameId}-${new Date().toISOString().split('T')[0]}`;
+  // Create a unique session key to prevent cross-session duplicates (using EST date)
+  const sessionKey = `${gameId}-${getESTDate()}`;
   
   if (processedGames.has(sessionKey)) {
     console.log(`🔄 Game ${gameId} already processed today, skipping...`);
