@@ -369,7 +369,7 @@ const WhatGaryThinks = () => {
                       backdropFilter: 'blur(16px)',
                       border: '1px solid rgba(255, 255, 255, 0.06)',
                       boxShadow: `
-                        0 8px 32px rgba(31, 38, 135, 0.37),
+                        0 8px 32px rgba(212, 175, 55, 0.37),
                         inset 0 1px 0 rgba(255, 255, 255, 0.05)
                       `
                     }}
@@ -390,7 +390,7 @@ const WhatGaryThinks = () => {
   const BettingOption = ({ topLine, bottomLine, isSelected, singleLine = false }) => {
     return (
       <div className={`
-        px-3 py-3 rounded-lg text-center transition-all duration-300 cursor-pointer w-full flex flex-col justify-center
+        px-3 py-3 rounded-lg text-center transition-all duration-300 cursor-pointer w-full flex flex-col justify-center items-center
         ${isSelected 
           ? 'text-black font-bold transform scale-105' 
           : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:scale-102 hover:shadow-lg'
@@ -419,11 +419,11 @@ const WhatGaryThinks = () => {
         })
       }}
       >
-        <div className={`leading-tight ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
+        <div className={`leading-tight text-center ${isSelected ? 'text-black font-bold' : 'text-white font-semibold'}`}
              style={{ fontSize: '16px', fontWeight: '700' }}>
           {topLine}
         </div>
-        <div className={`mt-1 leading-tight ${isSelected ? 'text-black' : 'text-gray-400'}`}
+        <div className={`mt-1 leading-tight text-center ${isSelected ? 'text-black' : 'text-gray-400'}`}
              style={{ fontSize: '12px', fontWeight: '400', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {!singleLine && bottomLine ? bottomLine : '\u00A0'}
         </div>
@@ -583,7 +583,7 @@ const WhatGaryThinks = () => {
               </button>
               <div>
                 <h1 className="text-3xl font-bold" style={{ color: '#B8953F' }}>
-                  What Gary Thinks
+                  Gary's Thoughts
                 </h1>
                 <p className="text-gray-400 mt-1">Gary's picks for every game today</p>
               </div>
