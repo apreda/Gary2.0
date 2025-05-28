@@ -10,6 +10,7 @@ export function Navbar() {
   const [activeLink, setActiveLink] = useState(location.pathname);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPicksDropdownOpen, setIsPicksDropdownOpen] = useState(false);
+  const [dropdownTimeout, setDropdownTimeout] = useState(null);
   const { userPlan } = useUserPlan();
   const { openBetCardProfile } = useBetCardProfile();
   const { user } = useAuth();
@@ -54,6 +55,31 @@ export function Navbar() {
     };
   }, [isPicksDropdownOpen]);
   
+  // Helper functions for dropdown with delay
+  const handleDropdownMouseEnter = () => {
+    if (dropdownTimeout) {
+      clearTimeout(dropdownTimeout);
+      setDropdownTimeout(null);
+    }
+    setIsPicksDropdownOpen(true);
+  };
+
+  const handleDropdownMouseLeave = () => {
+    const timeout = setTimeout(() => {
+      setIsPicksDropdownOpen(false);
+    }, 300); // 300ms delay before closing
+    setDropdownTimeout(timeout);
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dropdownTimeout) {
+        clearTimeout(dropdownTimeout);
+      }
+    };
+  }, [dropdownTimeout]);
+  
   return (
     <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#B8953F]/20 py-3 rounded-3xl shadow-xl w-11/12 max-w-6xl">
       <div className="w-full px-6 flex items-center justify-between">
@@ -83,8 +109,8 @@ export function Navbar() {
               <div 
                 key={item.path}
                 className="relative dropdown-container"
-                onMouseEnter={() => setIsPicksDropdownOpen(true)}
-                onMouseLeave={() => setIsPicksDropdownOpen(false)}
+                onMouseEnter={handleDropdownMouseEnter}
+                onMouseLeave={handleDropdownMouseLeave}
               >
                 <button
                   className={`text-sm font-medium transition-colors duration-200 px-1 py-1 flex items-center space-x-1 ${
@@ -104,7 +130,11 @@ export function Navbar() {
                 
                 {/* Dropdown Menu */}
                 {isPicksDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-black border border-[#B8953F]/20 rounded-xl shadow-xl z-50 py-2">
+                  <div 
+                    className="absolute top-full left-0 mt-2 w-48 bg-black border border-[#B8953F]/20 rounded-xl shadow-xl z-50 py-2"
+                    onMouseEnter={handleDropdownMouseEnter}
+                    onMouseLeave={handleDropdownMouseLeave}
+                  >
                     {item.dropdownItems.map((dropdownItem) => (
                       <Link
                         key={dropdownItem.path}
