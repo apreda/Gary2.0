@@ -199,7 +199,7 @@ export const Billfold = () => {
           let yesterdayLosses = 0;
           let yesterdayPushes = 0;
           
-          // Count yesterday's game results
+          // Count yesterday's game results only (no prop picks)
           if (gameResults) {
             gameResults.forEach(game => {
               const gameDate = game.game_date?.split('T')[0];
@@ -211,28 +211,7 @@ export const Billfold = () => {
             });
           }
           
-          // Count yesterday's prop results (limited to top 10 per date)
-          if (propResults) {
-            const yesterdayProps = propResults.filter(prop => {
-              const propDate = prop.game_date?.split('T')[0];
-              return propDate === yesterdayDateString;
-            });
-            
-            // Sort by confidence and take top 10 for yesterday
-            const sortedYesterdayProps = yesterdayProps.sort((a, b) => {
-              const confA = a.confidence || 0;
-              const confB = b.confidence || 0;
-              return confB - confA;
-            }).slice(0, 10);
-            
-            sortedYesterdayProps.forEach(prop => {
-              if (prop.result === 'won') yesterdayWins++;
-              else if (prop.result === 'lost') yesterdayLosses++;
-              else if (prop.result === 'push') yesterdayPushes++;
-            });
-          }
-          
-          // Set yesterday's record
+          // Set yesterday's record (games only)
           if (yesterdayWins > 0 || yesterdayLosses > 0 || yesterdayPushes > 0) {
             setYesterdayRecord(`${yesterdayWins}-${yesterdayLosses}${yesterdayPushes > 0 ? `-${yesterdayPushes}` : ''}`);
           } else {
