@@ -5,6 +5,7 @@ import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { useToast } from "../components/ui/ToastProvider";
 import { useAuth } from "../contexts/AuthContext";
 import { userPickResultsService } from "../services/userPickResultsService";
+import { betTrackingService } from "../services/betTrackingService";
 import { motion } from "framer-motion";
 
 /**
@@ -23,27 +24,34 @@ export function BetCard({ reloadKey }) {
     console.log('[BetCard] useEffect triggered', { reloadKey, user });
     if (!user) {
       showToast('Please sign in to view your BetCard', 'info');
+      setLoading(false);
       return;
     }
 
     async function fetchUserData() {
       try {
-        // Fetch user picks
-        const { data: userPicks, error } = await supabase
-          .from("user_picks")
-          .select(`
-            *,
-            pick_reference
-          `)
-          .eq("user_id", user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          showToast('Error loading your picks', 'error');
-          throw error;
+        // Fetch user picks from Supabase only
+        const userPicks = await betTrackingService.getBetDecisions(user.id);
+        
+        if (!userPicks || userPicks.length === 0) {
+          setStats({
+            wins: 0,
+            losses: 0,
+            pushes: 0,
+            bet: 0,
+            fade: 0,
+            winRate: 0,
+            betRate: 0,
+            fadeRate: 0,
+            streak: { current_streak: 0, streak_type: null }
+          });
+          setPicks([]);
+          setLoading(false);
+          showToast('Welcome! Start by betting or fading Gary\'s picks', 'info');
+          return;
         }
 
-        // Also get user record from the new service
+        // Also get user record from the service
         let serviceRecord = null;
         try {
           serviceRecord = await userPickResultsService.getUserRecord(user.id);
@@ -51,7 +59,7 @@ export function BetCard({ reloadKey }) {
           console.log('Could not fetch service record, using manual calculation:', error);
         }
 
-        // Calculate stats from user_picks (for backward compatibility and recent picks)
+        // Calculate stats from user_picks
         let wins = 0, losses = 0, pushes = 0, bet = 0, fade = 0;
         userPicks.forEach((pick) => {
           // Handle both old (ride/fade) and new (bet/fade) decision formats
@@ -71,8 +79,11 @@ export function BetCard({ reloadKey }) {
         let currentStreak = 0;
         let streakType = null;
 
-        for (let i = userPicks.length - 1; i >= 0; i--) {
-          const outcome = userPicks[i].outcome;
+        // Sort picks by created_at descending to get most recent first
+        const sortedPicks = [...userPicks].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        for (let i = 0; i < sortedPicks.length; i++) {
+          const outcome = sortedPicks[i].outcome;
           // Skip pushes when calculating streaks
           if (outcome === "push") continue;
           
@@ -131,9 +142,6 @@ export function BetCard({ reloadKey }) {
         setStats(finalStats);
         setPicks(userPicks);
 
-        if (userPicks.length === 0) {
-          showToast('Welcome! Start by riding or fading Gary\'s picks', 'info');
-        }
       } catch (error) {
         console.error("Error fetching user data:", error);
         showToast('Failed to load your betting data', 'error');
@@ -153,6 +161,19 @@ export function BetCard({ reloadKey }) {
     </div>
   );
 
+  if (!user) return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-4xl mx-auto p-4 sm:p-6 text-center"
+    >
+      <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-8 shadow-lg border border-gray-800">
+        <h3 className="text-xl font-semibold text-gray-200 mb-2">Sign In Required</h3>
+        <p className="text-gray-400">Please sign in to view your BetCard and track your picks.</p>
+      </div>
+    </motion.div>
+  );
+
   if (!stats) return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -161,7 +182,7 @@ export function BetCard({ reloadKey }) {
     >
       <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-8 shadow-lg border border-gray-800">
         <h3 className="text-xl font-semibold text-gray-200 mb-2">Welcome to Your BetCard!</h3>
-        <p className="text-gray-400">Start your journey by riding or fading Gary's picks.</p>
+        <p className="text-gray-400">Start your journey by betting or fading Gary's picks.</p>
       </div>
     </motion.div>
   );
