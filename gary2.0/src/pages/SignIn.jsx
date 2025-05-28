@@ -145,8 +145,6 @@ export function SignIn() {
           setSignupComplete(true);
         } else if (data?.session) {
           // Auto-confirm enabled, user is logged in
-          localStorage.setItem('username', email.split('@')[0]);
-          localStorage.setItem('userPlan', 'free');
           navigate('/');
         }
         // Don't navigate if confirmation required - show confirmation message
@@ -156,27 +154,7 @@ export function SignIn() {
         
         if (error) throw error;
         
-        // Set user information if authentication succeeds
-        localStorage.setItem('username', email.split('@')[0]);
-        
-        // Get user plan from Supabase user metadata or set default to 'free'
-        const userPlan = data?.user?.user_metadata?.plan || 'free';
-        localStorage.setItem('userPlan', userPlan);
-        
-        // Initialize betting tracking if not exists
-        if (!localStorage.getItem('garyBetTracking')) {
-          const initialTracking = {
-            betsWithGary: 0,
-            betsAgainstGary: 0,
-            totalBets: 0,
-            correctDecisions: 0,
-            currentStreak: 0,
-            picks: []
-          };
-          localStorage.setItem('garyBetTracking', JSON.stringify(initialTracking));
-        }
-        
-        // Navigate to home page
+        // Navigate to home page - user data will be handled by AuthContext
         navigate('/');
       }
     } catch (err) {
