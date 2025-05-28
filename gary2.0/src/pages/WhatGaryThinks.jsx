@@ -691,7 +691,6 @@ const WhatGaryThinks = () => {
                   alt="Gary Coin" 
                   className="w-60 h-60 object-contain opacity-60"
                   style={{ 
-                    filter: 'drop-shadow(0 4px 12px rgba(212, 175, 55, 0.4))',
                     transform: 'rotate(-5deg)'
                   }}
                 />
