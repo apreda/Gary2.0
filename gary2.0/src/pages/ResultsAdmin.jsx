@@ -6,6 +6,7 @@ import { openaiService } from '../services/openaiService';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import { propResultsService } from '../services/propResultsService';
 import AdminResultsProcessor from '../components/AdminResultsProcessor';
+import BetFadeTestPanel from '../components/BetFadeTestPanel';
 
 function ResultsAdmin() {
   const [date, setDate] = useState('');
@@ -166,6 +167,12 @@ function ResultsAdmin() {
         >
           User Pick Results
         </button>
+        <button
+          className={`px-4 py-2 font-medium ${activeTab === 'bet_fade_test' ? 'text-[#B8953F] border-b-2 border-[#B8953F]' : 'text-gray-400'}`}
+          onClick={() => setActiveTab('bet_fade_test')}
+        >
+          Bet/Fade Test
+        </button>
       </div>
       
       {activeTab === 'game_results' ? (
@@ -294,8 +301,10 @@ function ResultsAdmin() {
             </div>
           )}
         </>
-      ) : (
+      ) : activeTab === 'user_results' ? (
         <AdminResultsProcessor />
+      ) : (
+        <BetFadeTestPanel />
       )}
     </div>
   );
