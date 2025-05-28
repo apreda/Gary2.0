@@ -6,6 +6,54 @@
 import { supabase } from '../supabaseClient.js';
 import { mlbStatsApiService } from './mlbStatsApiService.js';
 
+// Team name normalization mapping to fix shortened names
+const teamNameMapping = {
+  'Sox': 'White Sox',  // Only change Sox to White Sox to distinguish from Red Sox
+  'White Sox': 'Chicago White Sox', 
+  'Red Sox': 'Boston Red Sox',
+  'Cubs': 'Chicago Cubs',
+  'Yankees': 'New York Yankees',
+  'Mets': 'New York Mets',
+  'Dodgers': 'Los Angeles Dodgers',
+  'Angels': 'Los Angeles Angels',
+  'Giants': 'San Francisco Giants',
+  'Padres': 'San Diego Padres',
+  'Astros': 'Houston Astros',
+  'Rangers': 'Texas Rangers',
+  'Mariners': 'Seattle Mariners',
+  'Athletics': 'Oakland Athletics',
+  'Twins': 'Minnesota Twins',
+  'Tigers': 'Detroit Tigers',
+  'Guardians': 'Cleveland Guardians',
+  'Royals': 'Kansas City Royals',
+  'Orioles': 'Baltimore Orioles',
+  'Blue Jays': 'Toronto Blue Jays',
+  'Rays': 'Tampa Bay Rays',
+  'Marlins': 'Miami Marlins',
+  'Nationals': 'Washington Nationals',
+  'Braves': 'Atlanta Braves',
+  'Phillies': 'Philadelphia Phillies',
+  'Pirates': 'Pittsburgh Pirates',
+  'Reds': 'Cincinnati Reds',
+  'Brewers': 'Milwaukee Brewers',
+  'Cardinals': 'St. Louis Cardinals',
+  'Rockies': 'Colorado Rockies',
+  'Diamondbacks': 'Arizona Diamondbacks'
+};
+
+/**
+ * Normalize team name to fix ambiguous shortened names
+ * @param {string} teamName - The team name to normalize
+ * @returns {string} - The normalized team name
+ */
+const normalizeTeamName = (teamName) => {
+  if (!teamName) return teamName;
+  
+  // Only map "Sox" to "White Sox" to avoid confusion with Red Sox
+  // All other team names stay as their shortened versions (Cubs, Yankees, etc.)
+  return teamNameMapping[teamName] || teamName;
+};
+
 const propResultsService = {
   /**
    * Check and process results for player props
@@ -44,7 +92,7 @@ const propResultsService = {
             prop_pick_id: row.id, // Store the prop_pick_id for DB relation
             date: row.date,
             player: pick.player,
-            team: pick.team,
+            team: normalizeTeamName(pick.team), // Normalize team name
             league: row.league || 'MLB', // Default to MLB
             prop: pick.prop?.split(' ')?.[0] || pick.prop, // Extract prop type
             line: pick.line || parseFloat(pick.prop?.split(' ')?.[1]) || 0, // Extract line
@@ -97,17 +145,14 @@ const propResultsService = {
         propsByDate[propDate].push(prop);
       });
 
-      // For each date, process all props (removed top 10 limit)
+      // For each date, process all props (removed confidence sorting)
       let filteredApiResults = [];
       Object.keys(propsByDate).forEach(propDate => {
         const propsForDate = propsByDate[propDate];
         console.log(`Processing ${propsForDate.length} props for date ${propDate}`);
         
-        // Sort by confidence level in descending order (highest confidence first)
-        propsForDate.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-        
-        // Process ALL props for this date (removed .slice(0, 10) limit)
-        console.log(`Processing all ${propsForDate.length} prop picks for ${propDate} with confidence levels: ${propsForDate.map(r => r.confidence || 'unknown').join(', ')}`);
+        // Process ALL props for this date (no sorting needed for results)
+        console.log(`Processing all ${propsForDate.length} prop picks for ${propDate}`);
         
         // Add all props to final list
         filteredApiResults = [...filteredApiResults, ...propsForDate];
@@ -122,6 +167,12 @@ const propResultsService = {
       // 4. Format results for storage in Supabase prop_results table
       // Process all props (removed 10 item limit)
       const resultsToInsert = filteredApiResults.map(apiResult => {
+        // Create a proper matchup if missing, using normalized team names
+        let matchup = apiResult.matchup;
+        if (!matchup && apiResult.team) {
+          matchup = `${normalizeTeamName(apiResult.team)} Game`;
+        }
+        
         return {
           prop_pick_id: apiResult.prop_pick_id,
           game_date: date,
@@ -133,7 +184,7 @@ const propResultsService = {
           bet: apiResult.bet,
           odds: apiResult.odds || null,
           pick_text: apiResult.pick_text,
-          matchup: apiResult.matchup || null,
+          matchup: matchup,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
           // Removed player_id and game_id as they're not in the Supabase schema
@@ -277,7 +328,7 @@ const propResultsService = {
         prop_pick_id: propPick.id,
         date: propPick.date,
         player: pick.player,
-        team: pick.team,
+        team: normalizeTeamName(pick.team), // Normalize team name
         league: propPick.league || 'MLB',
         prop: pick.prop?.split(' ')?.[0] || pick.prop,
         line: pick.line || parseFloat(pick.prop?.split(' ')?.[1]) || 0,
@@ -299,22 +350,30 @@ const propResultsService = {
       }
       
       // 4. Format the result for storage
-      const resultsToInsert = apiResults.map(apiResult => ({
-        prop_pick_id: apiResult.prop_pick_id,
-        game_date: propPick.date,
-        player_name: apiResult.player,
-        prop_type: apiResult.prop,
-        line_value: apiResult.line,
-        actual_value: apiResult.actual !== null ? apiResult.actual : null,
-        result: apiResult.result,
-        bet: apiResult.bet,
-        odds: apiResult.odds || null,
-        pick_text: apiResult.pick_text,
-        matchup: apiResult.matchup || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-        // Removed player_id and game_id as they're not in the Supabase schema
-      }));
+      const resultsToInsert = apiResults.map(apiResult => {
+        // Create a proper matchup if missing, using normalized team names
+        let matchup = apiResult.matchup;
+        if (!matchup && apiResult.team) {
+          matchup = `${normalizeTeamName(apiResult.team)} Game`;
+        }
+        
+        return {
+          prop_pick_id: apiResult.prop_pick_id,
+          game_date: propPick.date,
+          player_name: apiResult.player,
+          prop_type: apiResult.prop,
+          line_value: apiResult.line,
+          actual_value: apiResult.actual !== null ? apiResult.actual : null,
+          result: apiResult.result,
+          bet: apiResult.bet,
+          odds: apiResult.odds || null,
+          pick_text: apiResult.pick_text,
+          matchup: matchup,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+          // Removed player_id and game_id as they're not in the Supabase schema
+        };
+      });
       
       // 5. Check if we already have results for this pick
       const { data: existingResults, error: fetchError } = await supabase
