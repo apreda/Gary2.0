@@ -691,8 +691,7 @@ const WhatGaryThinks = () => {
                   alt="Gary Coin" 
                   className="w-60 h-60 object-contain"
                   style={{ 
-                    transform: 'rotate(-5deg)',
-                    filter: 'sepia(0.3) saturate(1.2) hue-rotate(30deg) brightness(1.1)'
+                    transform: 'rotate(-5deg)'
                   }}
                 />
               </div>
