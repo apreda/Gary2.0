@@ -121,10 +121,10 @@ export const userPickResultsService = {
           userOutcome = 'push';
         } else if (userPick.decision === 'bet') {
           // User bet WITH Gary
-          userOutcome = finalResult === 'won' ? 'won' : 'lost';
+          userOutcome = finalResult === 'won' ? 'correct' : 'incorrect';
         } else if (userPick.decision === 'fade') {
           // User bet AGAINST Gary (fade)
-          userOutcome = finalResult === 'won' ? 'lost' : 'won';
+          userOutcome = finalResult === 'won' ? 'incorrect' : 'correct';
         } else {
           console.error(`Unknown decision type: ${userPick.decision}`);
           results.errors++;
@@ -151,9 +151,9 @@ export const userPickResultsService = {
         }
         
         userStatsUpdates[userPick.user_id].total_picks++;
-        if (userOutcome === 'won') {
+        if (userOutcome === 'correct') {
           userStatsUpdates[userPick.user_id].wins++;
-        } else if (userOutcome === 'lost') {
+        } else if (userOutcome === 'incorrect') {
           userStatsUpdates[userPick.user_id].losses++;
         } else if (userOutcome === 'push') {
           userStatsUpdates[userPick.user_id].pushes++;
@@ -488,10 +488,10 @@ export const userPickResultsService = {
           userOutcome = 'push';
         } else if (userPick.decision === 'bet') {
           // User bet WITH Gary
-          userOutcome = finalResult === 'won' ? 'won' : 'lost';
+          userOutcome = finalResult === 'won' ? 'correct' : 'incorrect';
         } else if (userPick.decision === 'fade') {
           // User bet AGAINST Gary (fade)
-          userOutcome = finalResult === 'won' ? 'lost' : 'won';
+          userOutcome = finalResult === 'won' ? 'incorrect' : 'correct';
         } else {
           console.error(`Unknown decision type: ${userPick.decision}`);
           results.errors++;
@@ -518,9 +518,9 @@ export const userPickResultsService = {
         }
         
         userStatsUpdates[userPick.user_id].total_picks++;
-        if (userOutcome === 'won') {
+        if (userOutcome === 'correct') {
           userStatsUpdates[userPick.user_id].wins++;
-        } else if (userOutcome === 'lost') {
+        } else if (userOutcome === 'incorrect') {
           userStatsUpdates[userPick.user_id].losses++;
         } else if (userOutcome === 'push') {
           userStatsUpdates[userPick.user_id].pushes++;
