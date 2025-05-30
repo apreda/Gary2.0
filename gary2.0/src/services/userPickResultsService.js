@@ -35,14 +35,24 @@ export const userPickResultsService = {
       
       console.log(`Found ${pendingUserPicks.length} pending user picks`);
       
-      // Step 2: Get all game results for the pick_ids that users have bet on
-      const pickIds = [...new Set(pendingUserPicks.map(pick => pick.pick_id))];
-      console.log(`Looking for game results for pick IDs: ${pickIds.slice(0, 5).join(', ')}${pickIds.length > 5 ? '...' : ''}`);
+      // Step 2: Instead of trying to match pick_ids directly (format mismatch),
+      // get game results for the date range and match by other criteria
+      console.log(`Found ${pendingUserPicks.length} pending user picks`);
       
+      // Extract dates from user picks to query game results by date
+      const userPickDates = new Set();
+      pendingUserPicks.forEach(pick => {
+        const createdDate = new Date(pick.created_at).toISOString().split('T')[0];
+        userPickDates.add(createdDate);
+      });
+      
+      console.log(`Looking for game results for dates: ${Array.from(userPickDates).join(', ')}`);
+      
+      // Get game results for all relevant dates
       const { data: gameResults, error: gameResultsError } = await supabase
         .from('game_results')
         .select('*')
-        .in('pick_id', pickIds)
+        .in('game_date', Array.from(userPickDates))
         .not('result', 'is', null);
       
       if (gameResultsError) {
@@ -51,16 +61,22 @@ export const userPickResultsService = {
       }
       
       if (!gameResults || gameResults.length === 0) {
-        console.log('No game results found for pending user picks');
-        return { ...results, message: 'No game results available yet for pending picks' };
+        console.log('No game results found for pending user picks dates');
+        return { ...results, message: 'No game results available yet for pending picks dates' };
       }
       
       console.log(`Found ${gameResults.length} game results to process`);
       
-      // Step 3: Create a map of pick_id to Gary's result for quick lookup
-      const gameResultsMap = {};
+      // Step 3: Create a mapping strategy since pick_ids don't match format
+      // For now, we'll use a simple approach: match by date and assume one main result per date
+      // This is a temporary fix - ideally we'd have consistent pick_id formats
+      const gameResultsByDate = {};
       gameResults.forEach(result => {
-        gameResultsMap[result.pick_id] = result.result; // 'won', 'lost', or 'push'
+        const resultDate = result.game_date;
+        if (!gameResultsByDate[resultDate]) {
+          gameResultsByDate[resultDate] = [];
+        }
+        gameResultsByDate[resultDate].push(result);
       });
       
       // Step 4: Process each user pick and determine their outcome
@@ -70,32 +86,52 @@ export const userPickResultsService = {
       for (const userPick of pendingUserPicks) {
         results.processed++;
         
-        const garyResult = gameResultsMap[userPick.pick_id];
+        // Get the date for this user pick
+        const pickDate = new Date(userPick.created_at).toISOString().split('T')[0];
+        const dayResults = gameResultsByDate[pickDate];
         
-        if (!garyResult) {
-          console.log(`No game result yet for pick_id: ${userPick.pick_id}`);
+        if (!dayResults || dayResults.length === 0) {
+          console.log(`No game results found for user pick on date: ${pickDate}`);
           continue;
         }
+        
+        // For now, use the first result of the day as the "main" result
+        // TODO: Implement proper pick_id matching once formats are consistent
+        const garyResult = dayResults[0].result;
+        
+        // Extract sport/league info from user pick_id for better matching
+        let matchedResult = null;
+        if (userPick.pick_id.includes('MLB')) {
+          matchedResult = dayResults.find(r => r.league === 'MLB');
+        } else if (userPick.pick_id.includes('NBA')) {
+          matchedResult = dayResults.find(r => r.league === 'NBA');
+        } else if (userPick.pick_id.includes('NHL')) {
+          matchedResult = dayResults.find(r => r.league === 'NHL');
+        }
+        
+        const finalResult = matchedResult ? matchedResult.result : garyResult;
+        
+        console.log(`User pick: ${userPick.pick_id} (${userPick.decision}) matched to ${matchedResult ? matchedResult.league : 'first'} result: ${finalResult}`);
         
         // Calculate user outcome based on their decision and Gary's result
         let userOutcome;
         
-        if (garyResult === 'push') {
+        if (finalResult === 'push') {
           // If Gary's pick was a push, user gets a push regardless of bet/fade
           userOutcome = 'push';
         } else if (userPick.decision === 'bet') {
           // User bet WITH Gary
-          userOutcome = garyResult === 'won' ? 'won' : 'lost';
+          userOutcome = finalResult === 'won' ? 'won' : 'lost';
         } else if (userPick.decision === 'fade') {
           // User bet AGAINST Gary (fade)
-          userOutcome = garyResult === 'won' ? 'lost' : 'won';
+          userOutcome = finalResult === 'won' ? 'lost' : 'won';
         } else {
           console.error(`Unknown decision type: ${userPick.decision}`);
           results.errors++;
           continue;
         }
         
-        console.log(`User ${userPick.user_id} ${userPick.decision} on pick ${userPick.pick_id}: Gary ${garyResult} → User ${userOutcome}`);
+        console.log(`User ${userPick.user_id} ${userPick.decision} on pick ${userPick.pick_id}: Gary ${finalResult} → User ${userOutcome}`);
         
         // Prepare user_picks update
         userPickUpdates.push({
@@ -127,7 +163,7 @@ export const userPickResultsService = {
           user_id: userPick.user_id,
           pick_id: userPick.pick_id,
           decision: userPick.decision,
-          gary_result: garyResult,
+          gary_result: finalResult,
           user_outcome: userOutcome
         });
       }
@@ -366,14 +402,24 @@ export const userPickResultsService = {
       console.log(`📊 Found ${pendingUserPicks.length} pending user picks to process`);
       results.processed = pendingUserPicks.length;
       
-      // Step 2: Get all game results for the pick_ids that users have bet on
-      const pickIds = [...new Set(pendingUserPicks.map(pick => pick.pick_id))];
-      console.log(`Looking for game results for pick IDs: ${pickIds.slice(0, 5).join(', ')}${pickIds.length > 5 ? '...' : ''}`);
+      // Step 2: Instead of trying to match pick_ids directly (format mismatch),
+      // get game results for the date range and match by other criteria
+      console.log(`Found ${pendingUserPicks.length} pending user picks`);
       
+      // Extract dates from user picks to query game results by date
+      const userPickDates = new Set();
+      pendingUserPicks.forEach(pick => {
+        const createdDate = new Date(pick.created_at).toISOString().split('T')[0];
+        userPickDates.add(createdDate);
+      });
+      
+      console.log(`Looking for game results for dates: ${Array.from(userPickDates).join(', ')}`);
+      
+      // Get game results for all relevant dates
       const { data: gameResults, error: gameResultsError } = await supabase
         .from('game_results')
         .select('*')
-        .in('pick_id', pickIds)
+        .in('game_date', Array.from(userPickDates))
         .not('result', 'is', null);
       
       if (gameResultsError) {
@@ -382,16 +428,22 @@ export const userPickResultsService = {
       }
       
       if (!gameResults || gameResults.length === 0) {
-        console.log('No game results found for pending user picks');
-        return { ...results, message: 'No game results available yet for pending picks' };
+        console.log('No game results found for pending user picks dates');
+        return { ...results, message: 'No game results available yet for pending picks dates' };
       }
       
       console.log(`Found ${gameResults.length} game results to process`);
       
-      // Step 3: Create a map of pick_id to Gary's result for quick lookup
-      const gameResultsMap = {};
+      // Step 3: Create a mapping strategy since pick_ids don't match format
+      // For now, we'll use a simple approach: match by date and assume one main result per date
+      // This is a temporary fix - ideally we'd have consistent pick_id formats
+      const gameResultsByDate = {};
       gameResults.forEach(result => {
-        gameResultsMap[result.pick_id] = result.result; // 'won', 'lost', or 'push'
+        const resultDate = result.game_date;
+        if (!gameResultsByDate[resultDate]) {
+          gameResultsByDate[resultDate] = [];
+        }
+        gameResultsByDate[resultDate].push(result);
       });
       
       // Step 4: Process each user pick and determine their outcome
@@ -401,32 +453,52 @@ export const userPickResultsService = {
       for (const userPick of pendingUserPicks) {
         results.processed++;
         
-        const garyResult = gameResultsMap[userPick.pick_id];
+        // Get the date for this user pick
+        const pickDate = new Date(userPick.created_at).toISOString().split('T')[0];
+        const dayResults = gameResultsByDate[pickDate];
         
-        if (!garyResult) {
-          console.log(`No game result yet for pick_id: ${userPick.pick_id}`);
+        if (!dayResults || dayResults.length === 0) {
+          console.log(`No game results found for user pick on date: ${pickDate}`);
           continue;
         }
+        
+        // For now, use the first result of the day as the "main" result
+        // TODO: Implement proper pick_id matching once formats are consistent
+        const garyResult = dayResults[0].result;
+        
+        // Extract sport/league info from user pick_id for better matching
+        let matchedResult = null;
+        if (userPick.pick_id.includes('MLB')) {
+          matchedResult = dayResults.find(r => r.league === 'MLB');
+        } else if (userPick.pick_id.includes('NBA')) {
+          matchedResult = dayResults.find(r => r.league === 'NBA');
+        } else if (userPick.pick_id.includes('NHL')) {
+          matchedResult = dayResults.find(r => r.league === 'NHL');
+        }
+        
+        const finalResult = matchedResult ? matchedResult.result : garyResult;
+        
+        console.log(`User pick: ${userPick.pick_id} (${userPick.decision}) matched to ${matchedResult ? matchedResult.league : 'first'} result: ${finalResult}`);
         
         // Calculate user outcome based on their decision and Gary's result
         let userOutcome;
         
-        if (garyResult === 'push') {
+        if (finalResult === 'push') {
           // If Gary's pick was a push, user gets a push regardless of bet/fade
           userOutcome = 'push';
         } else if (userPick.decision === 'bet') {
           // User bet WITH Gary
-          userOutcome = garyResult === 'won' ? 'won' : 'lost';
+          userOutcome = finalResult === 'won' ? 'won' : 'lost';
         } else if (userPick.decision === 'fade') {
           // User bet AGAINST Gary (fade)
-          userOutcome = garyResult === 'won' ? 'lost' : 'won';
+          userOutcome = finalResult === 'won' ? 'lost' : 'won';
         } else {
           console.error(`Unknown decision type: ${userPick.decision}`);
           results.errors++;
           continue;
         }
         
-        console.log(`User ${userPick.user_id} ${userPick.decision} on pick ${userPick.pick_id}: Gary ${garyResult} → User ${userOutcome}`);
+        console.log(`User ${userPick.user_id} ${userPick.decision} on pick ${userPick.pick_id}: Gary ${finalResult} → User ${userOutcome}`);
         
         // Prepare user_picks update
         userPickUpdates.push({
@@ -458,7 +530,7 @@ export const userPickResultsService = {
           user_id: userPick.user_id,
           pick_id: userPick.pick_id,
           decision: userPick.decision,
-          gary_result: garyResult,
+          gary_result: finalResult,
           user_outcome: userOutcome
         });
       }
