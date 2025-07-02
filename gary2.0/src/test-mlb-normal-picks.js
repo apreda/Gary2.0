@@ -14,8 +14,14 @@ import { openaiService } from './services/openaiService.js';
 dotenv.config();
 
 // Explicitly set the Perplexity API key for testing
-const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY || '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';
+const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
 perplexityService.API_KEY = PERPLEXITY_API_KEY;
+
+if (!PERPLEXITY_API_KEY) {
+  console.error('❌ PERPLEXITY_API_KEY not found in environment variables');
+  process.exit(1);
+}
+
 console.log(`🔑 Perplexity API Key (masked): ${PERPLEXITY_API_KEY.substring(0, 4)}...${PERPLEXITY_API_KEY.substring(PERPLEXITY_API_KEY.length - 4)}`);
 
 // Mock a game for testing

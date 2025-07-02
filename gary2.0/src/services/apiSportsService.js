@@ -15,13 +15,13 @@ const MLB_API_HOST = 'v1.baseball.api-sports.io';
 const NBA_API_HOST = 'v1.basketball.api-sports.io';
 const NHL_API_HOST = 'v1.hockey.api-sports.io';
 
-// Handle environment variables in both Vite and standalone Node.js
+// For client-side (browser) usage in Vite environment
 let apiSportsKey = '';
-try {
-  apiSportsKey = import.meta.env?.VITE_API_SPORTS_KEY || process.env.VITE_API_SPORTS_KEY || 'd3318d31b32a103de8357d1f7924e76a';
-} catch (e) {
-  // If import.meta.env is not available (running in Node directly)
-  apiSportsKey = process.env.VITE_API_SPORTS_KEY || 'd3318d31b32a103de8357d1f7924e76a';
+if (typeof window !== 'undefined') {
+  apiSportsKey = import.meta.env?.VITE_API_SPORTS_KEY || process.env.VITE_API_SPORTS_KEY;
+} else {
+  // For server-side usage
+  apiSportsKey = process.env.VITE_API_SPORTS_KEY;
 }
 
 const apiSportsService = {

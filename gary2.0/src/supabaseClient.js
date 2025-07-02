@@ -2,8 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 import axios from 'axios';
 
 // Properly use environment variables from .env file
-const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || 'https://xuttubsfgdcjfgmskcol.supabase.co';
-const supabaseKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1dHR1YnNmZ2RjamZnbXNrY29sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4OTY4MDQsImV4cCI6MjA1OTQ3MjgwNH0.wppXQAUHQXoD0z5wbjy93_0KYMREPufl_BCtb4Ugd40';
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env?.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Supabase configuration missing from environment variables');
+  console.error('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
+}
 
 console.log('Initializing Supabase client with:', { url: supabaseUrl, keyLength: supabaseKey?.length });
 

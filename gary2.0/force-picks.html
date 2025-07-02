@@ -91,8 +91,13 @@
   <div id="debug-container"></div>
   
   <script>
-    // Constants
-    const ODDS_API_KEY = 'c57da2d1d5a76fe44976da964fcab5dc';
+    // Get API key from environment or fail
+    const ODDS_API_KEY = window.ENV_VARS?.VITE_ODDS_API_KEY;
+    if (!ODDS_API_KEY) {
+      console.error('❌ ODDS_API_KEY not found in environment variables');
+      alert('API key not configured. Please check environment variables.');
+    }
+    
     const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
     
     // Elements

@@ -8,8 +8,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Constants
-const ODDS_API_KEY = process.env.VITE_ODDS_API_KEY || 'c57da2d1d5a76fe44976da964fcab5dc';
+const ODDS_API_KEY = process.env.VITE_ODDS_API_KEY;
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
+
+if (!ODDS_API_KEY) {
+  console.error('❌ ODDS_API_KEY not found in environment variables');
+  process.exit(1);
+}
 
 /**
  * Makes a Gary AI pick based on game data
