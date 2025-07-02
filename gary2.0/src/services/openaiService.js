@@ -7,76 +7,62 @@
 import axios from 'axios';
 import { apiCache } from '../utils/apiCache.js';
 import { requestQueue } from '../utils/requestQueue.js';
-import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: import.meta.env?.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
-});
+// Use secure proxy instead of direct OpenAI API calls
+const OPENAI_PROXY_URL = typeof window !== 'undefined' ? '/api/openai-proxy' : 'https://api.openai.com/v1/chat/completions';
 
 const openaiServiceInstance = {
   /**
-   * The OpenAI API key (loaded from environment variables)
-   */
-  API_KEY: import.meta.env?.VITE_OPENAI_API_KEY || '',
-  
-  /**
    * Flag to indicate if initialization was successful
    */
-  initialized: false,
+  initialized: true, // Always true since we use proxy
   
   /**
-   * Initialize the API key from environment variables
+   * Initialize the service (no longer needs API key on client side)
    */
   init: function() {
-    const apiKey = import.meta.env?.VITE_OPENAI_API_KEY;
-    if (!apiKey) {
-      console.error('❌ CRITICAL ERROR: OpenAI API key not found in environment variables');
-      console.error('❌ Gary requires a valid OpenAI API key to function - please check your .env file');
-      this.initialized = false;
-    } else {
-      console.log('✅ OpenAI API key loaded successfully from environment variables');
-      // Mask the API key for security when logging (only showing first 5 chars)
-      const maskedKey = apiKey.substring(0, 5) + '...' + apiKey.substring(apiKey.length - 4);
-      console.log(`🔑 API Key (masked): ${maskedKey}`);
-      this.API_KEY = apiKey;
-      this.initialized = true;
-    }
+    console.log('✅ OpenAI service initialized with secure proxy');
+    this.initialized = true;
     return this;
   },
   
   /**
    * Default model for OpenAI
    */
-  DEFAULT_MODEL: 'gpt-4.1', 
+  DEFAULT_MODEL: 'gpt-4',
   
   /**
-   * Generate a response from OpenAI based on the provided messages
+   * Generate a response from OpenAI using secure proxy
    * @param {Array} messages - The messages to send to OpenAI
    * @param {Object} options - Configuration options for the OpenAI API
    * @returns {Promise<string>} - The generated response
    */
   generateResponse: async function(messages, options = {}) {
     try {
-      console.log('Generating response from OpenAI...');
+      console.log('Generating response from OpenAI via secure proxy...');
       
       const { temperature = 0.5, maxTokens = 800 } = options;
       
-      // We don't log the full messages array to avoid sensitive info in logs
-      // but we do log enough to debug if needed
       console.log(`Request messages count: ${messages.length}, ` + 
                  `Temp: ${temperature}, MaxTokens: ${maxTokens}`);
       
-      // Make the API request
-      const response = await openai.chat.completions.create({
+      // Use secure proxy for API calls
+      const requestData = {
         model: options.model || this.DEFAULT_MODEL,
         messages: messages,
         temperature,
         max_tokens: maxTokens,
+      };
+      
+      const response = await axios.post(OPENAI_PROXY_URL, requestData, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000 // 60 second timeout
       });
       
       // Extract the assistant's message
-      const content = response.choices[0].message.content;
+      const content = response.data.choices[0].message.content;
       
       // Add comprehensive logging to debug the structure of the OpenAI response
       console.log('\n🔍 OpenAI raw response received. Attempting to parse JSON...');

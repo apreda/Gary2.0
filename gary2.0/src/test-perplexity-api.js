@@ -11,7 +11,7 @@ import { perplexityService } from './services/perplexityService.js';
 dotenv.config();
 
 // Explicitly set the API key
-const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY || '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';
+const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
 perplexityService.API_KEY = PERPLEXITY_API_KEY;
 
 async function testPerplexityAPI() {
