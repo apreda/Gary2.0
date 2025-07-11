@@ -6,7 +6,11 @@
   "functions": {
     "api/**/*.js": {
       "memory": 1024,
-      "maxDuration": 10
+      "maxDuration": 30
+    },
+    "api/openai-proxy.js": {
+      "memory": 1024,
+      "maxDuration": 60
     }
   },
   "buildCommand": "vite build"
