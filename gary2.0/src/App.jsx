@@ -62,6 +62,10 @@ function AppContent() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    console.log('Current route path:', location.pathname);
+  }, [location]);
   
   // Theme toggling functionality
   const ThemeToggle = () => {
@@ -129,7 +133,7 @@ function AppContent() {
               <Route path="/learn-more" element={<LearnMore />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
-              <Route path="/team-props" element={<TeamProps />} />
+              <Route path="/team-picks" element={<TeamProps />} />
 
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signout" element={<SignOut />} />
