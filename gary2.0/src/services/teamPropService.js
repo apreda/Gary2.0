@@ -1,6 +1,7 @@
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 import { oddsService } from './oddsService.js';
 import { supabase } from '../supabaseClient.js';
+import { getYesterdayDate } from '../utils/dateUtils.js';
 
 export const teamPropService = {
   async generateTeamPropsForToday() {
@@ -21,11 +22,12 @@ export const teamPropService = {
   },
   // Similar for stolen_base and two_hits
   async gradeResults() {
-    const yesterday = // calculate yesterday;
-    const props = await supabase.from('team_specific_props').select('*').eq('date', yesterday);
+    const yesterday = getYesterdayDate();
+    const { data: props } = await supabase.from('team_specific_props').select('*').eq('date', yesterday);
     for (const prop of props) {
-      const outcome = await // use mlbStatsApi to check if player achieved prop;
-      await supabase.from('team_specific_prop_results').insert({prop_id: prop.id, actual_outcome: outcome, grade_date: today});
+      // Fetch actual stats
+      const outcome = await mlbStatsApiService.checkPropOutcome(prop); // Implement this method
+      await supabase.from('team_specific_prop_results').insert({prop_id: prop.id, actual_outcome: outcome, grade_date: new Date().toISOString().split('T')[0]});
     }
   }
 }; 
