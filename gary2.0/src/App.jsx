@@ -133,6 +133,7 @@ function AppContent() {
               <Route path="/learn-more" element={<LearnMore />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/test" element={<div>Test Page - If you see this, routing is working</div>} />
               <Route path="/team-picks" element={<TeamProps />} />
 
               <Route path="/signin" element={<SignIn />} />
