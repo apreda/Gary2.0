@@ -350,11 +350,18 @@ const database = {
       
       // For NBA and NHL, always include regardless of confidence
       if (sport === 'basketball_nba' || sport === 'icehockey_nhl') {
+        console.log(`✅ Including ${sport} pick with confidence ${confidence} (no filtering for NBA/NHL)`);
         return true;
       }
       
-      // For MLB, apply 0.7 confidence threshold
-      return confidence >= 0.7;
+      // For MLB, apply 0.6 confidence threshold (LOWERED from 0.7)
+      const passesThreshold = confidence >= 0.6;
+      if (passesThreshold) {
+        console.log(`✅ Including ${sport} pick with confidence ${confidence} (passes 0.6 threshold)`);
+      } else {
+        console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (below 0.6 threshold)`);
+      }
+      return passesThreshold;
     });
 
     console.log(`After filtering: ${validPicks.length} picks remaining from ${picks.length} total`);

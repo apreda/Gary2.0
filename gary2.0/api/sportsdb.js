@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     }
 
     // Get the API key from environment variables
-    const API_KEY = process.env.VITE_SPORTSDB_API_KEY || '943802'; // Fallback to hardcoded key only if env var is missing
+    const API_KEY = process.env.VITE_SPORTSDB_API_KEY || ''; // No hardcoded fallback for security
     
     // Remove endpoint from query params to avoid duplication
     const params = { ...req.query };

@@ -7,9 +7,9 @@ const cacheMap = new Map();
 // Get API key from environment
 let API_KEY;
 try {
-  API_KEY = import.meta.env.VITE_BALLDONTLIE_API_KEY || '3363660a-a082-43b7-a130-6249ff68e5ab';
+  API_KEY = import.meta.env.VITE_BALLDONTLIE_API_KEY || '';
 } catch (e) {
-  API_KEY = '3363660a-a082-43b7-a130-6249ff68e5ab';
+  API_KEY = '';
 }
 
 /**
