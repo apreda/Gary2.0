@@ -1,6 +1,22 @@
 import React from 'react';
 
-export function PickCard({ pick, isFlipped, toggleFlip, isMobile, userDecision, handleDecision, processing }) {
+export function PickCard({ pick, isFlipped, toggleFlip, isMobile, userDecision, handleDecision, processing, formatPropType, getTeamNickname }) {
+  // Default implementations for prop-specific functions
+  const defaultFormatPropType = (propType) => {
+    if (!propType) return '';
+    return propType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+  
+  const defaultGetTeamNickname = (teamName) => {
+    if (!teamName) return 'TBD';
+    const words = teamName.trim().split(' ');
+    return words[words.length - 1];
+  };
+  
+  // Use provided functions or defaults
+  const formatProp = formatPropType || defaultFormatPropType;
+  const getTeamName = getTeamNickname || defaultGetTeamNickname;
+  
   const cardStyle = { width: '100%', maxWidth: isMobile ? '350px' : '634px', height: isMobile ? '200px' : '422px' };
   return (
     <div className="pick-card-container" style={cardStyle}>
@@ -10,7 +26,7 @@ export function PickCard({ pick, isFlipped, toggleFlip, isMobile, userDecision, 
           <div style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)', borderRadius: isMobile ? '12px' : '16px', fontFamily: 'Inter, system-ui, sans-serif', overflow: 'hidden', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)', color: '#ffffff' }}>
             {isMobile ? (
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '1.5rem', textAlign: 'center', height: '100%' }}>
-                <div style={{ fontSize: '1.75rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142', wordBreak: 'break-word', maxHeight: '3rem', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '1.75rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142', wordBreak: 'break-word', maxHeight: '3rem', overflow: 'hidden', display: '-webkit-box', 'WebkitLineClamp': 2, 'WebkitBoxOrient': 'vertical', marginBottom: '1.25rem' }}>
                   {pick.pick ? pick.pick.replace(/([-+]\d+)$/, '').trim() : 'MISSING PICK'}
                 </div>
               </div>
@@ -24,7 +40,7 @@ export function PickCard({ pick, isFlipped, toggleFlip, isMobile, userDecision, 
                 <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.75rem', minHeight: '80px' }}>
                   <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gary's Pick</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2, color: '#bfa142', wordWrap: 'break-word', wordBreak: 'break-word' }}>
-                    {pick.pick ? pick.pick.replace(/([-+]\d+)$/, '').trim() : 'MISSING PICK'}
+                    {pick.player ? `${pick.player} to ${formatProp(pick.prop_type)}` : (pick.pick ? pick.pick.replace(/([-+]\d+)$/, '').trim() : 'MISSING PICK')}
                   </div>
                 </div>
                 {/* Add more desktop front content as in original */}

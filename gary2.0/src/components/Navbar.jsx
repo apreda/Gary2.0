@@ -25,7 +25,6 @@ export function Navbar() {
       hasDropdown: true,
       dropdownItems: [
         { path: '/real-gary-picks', label: 'Gary\'s Premium Picks' },
-        { path: '/what-gary-thinks', label: 'Gary\'s Thoughts' },
         { path: '/gary-props', label: 'Gary\'s Props' }
       ]
     },
@@ -114,7 +113,7 @@ export function Navbar() {
               >
                 <button
                   className={`text-sm font-medium transition-colors duration-200 px-1 py-1 flex items-center space-x-1 ${
-                    ['/real-gary-picks', '/what-gary-thinks', '/gary-props'].includes(activeLink)
+                    ['/real-gary-picks', '/gary-props'].includes(activeLink)
                     ? 'text-[#B8953F]' 
                     : 'text-gray-300 hover:text-white'}`}
                   onClick={() => setIsPicksDropdownOpen(!isPicksDropdownOpen)}
@@ -229,7 +228,7 @@ export function Navbar() {
                   <div key={item.path}>
                     <button
                       className={`w-full text-left py-2 text-sm font-medium flex items-center justify-between ${
-                        ['/real-gary-picks', '/what-gary-thinks', '/gary-props'].includes(activeLink) 
+                        ['/real-gary-picks', '/gary-props'].includes(activeLink) 
                         ? 'text-[#B8953F]' 
                         : 'text-gray-300 hover:text-white'
                       }`}
