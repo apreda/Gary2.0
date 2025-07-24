@@ -6,6 +6,8 @@ export function PickCard(props) {
   return (
     <div className="pick-card-container" style={cardStyle}>
       {/* full card JSX without types */}
+      <div>{prop_type === 'home_run' ? 'To Hit a Home Run' : /* etc */}: {pick.player}</div>
+      {/* Analysis on back */}
     </div>
   );
 } 

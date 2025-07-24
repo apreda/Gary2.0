@@ -22,6 +22,7 @@ import LearnMore from "./pages/LearnMore";
 import { CheckoutSuccess } from "./pages/CheckoutSuccess";
 import { CheckoutCancel } from "./pages/CheckoutCancel";
 import WhatGaryThinks from "./pages/WhatGaryThinks";
+import TeamProps from './pages/TeamProps';
 
 // Admin components - dynamically loaded
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
@@ -128,6 +129,7 @@ function AppContent() {
               <Route path="/learn-more" element={<LearnMore />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/team-props" element={<TeamProps />} />
 
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signout" element={<SignOut />} />
