@@ -725,5 +725,6 @@ const picksService = {
   _teamNameMatch
 };
 
+export { processGameOnce, cachedApiCall, _teamNameMatch };
 export { picksService, generateDailyPicks };
 export default picksService;
