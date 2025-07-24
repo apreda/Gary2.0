@@ -23,11 +23,16 @@ export const teamPropService = {
   // Similar for stolen_base and two_hits
   async gradeResults() {
     const yesterday = getYesterdayDate();
-    const { data: props } = await supabase.from('team_specific_props').select('*').eq('date', yesterday);
+    const { data: props, error } = await supabase.from('team_specific_props').select('*').eq('date', yesterday);
+    if (error) throw error;
     for (const prop of props) {
-      // Fetch actual stats
-      const outcome = await mlbStatsApiService.checkPropOutcome(prop); // Implement this method
-      await supabase.from('team_specific_prop_results').insert({prop_id: prop.id, actual_outcome: outcome, grade_date: new Date().toISOString().split('T')[0]});
+      // TODO: Implement actual outcome check using mlbStatsApi
+      const outcome = await mlbStatsApiService.checkPropOutcome(prop);
+      await supabase.from('team_specific_prop_results').insert({
+        prop_id: prop.id,
+        actual_outcome: outcome,
+        grade_date: new Date().toISOString().split('T')[0]
+      });
     }
   }
 }; 
