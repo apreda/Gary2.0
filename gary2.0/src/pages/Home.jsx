@@ -618,14 +618,14 @@ function Home() {
         if (data && data.picks) {
           const picksArray = typeof data.picks === "string" ? JSON.parse(data.picks) : data.picks;
           
-          // Sort by confidence (high to low) and get top pick
-          const sortedPicks = [...picksArray].sort((a, b) => {
-            const confA = a.confidence ? parseFloat(a.confidence) : 0;
-            const confB = b.confidence ? parseFloat(b.confidence) : 0;
-            return confB - confA;
-          }).slice(0, 1); // Get only top 1 pick
+          // Sort by confidence (high to low) and get only top 1 pick
+          const topPicks = picksArray.filter(pick => pick && pick.confidence).sort((a, b) => {
+            const aConf = typeof a.confidence === 'number' ? a.confidence : parseFloat(a.confidence) || 0;
+            const bConf = typeof b.confidence === 'number' ? b.confidence : parseFloat(b.confidence) || 0;
+            return bConf - aConf;
+          }).slice(0, 1); // RESTORED slice to limit to top 1 pick for home page display only
           
-          setFeaturedPicks(sortedPicks);
+          setFeaturedPicks(topPicks);
         } else {
           // Use default picks if none found
           setFeaturedPicks([]);

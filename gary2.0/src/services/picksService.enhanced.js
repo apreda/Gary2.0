@@ -60,11 +60,15 @@ export const picksService = {
         return bConfidence - aConfidence;
       });
       
-      // Only return the top 6 picks with the highest confidence
-      const topPicks = picks.slice(0, 6);
-      console.log(`[Enhanced Picks Service] Generated ${topPicks.length} top picks out of ${picks.length} total`);
+      // Return all picks that meet the confidence threshold instead of limiting to top 6
+      const qualifiedPicks = picks.filter(pick => {
+        const confidence = this.extractHighestConfidence(pick.analysis);
+        return confidence >= 0.6; // Use same 0.6 threshold as other services
+      });
       
-      return topPicks;
+      console.log(`[Enhanced Picks Service] Generated ${qualifiedPicks.length} qualified picks out of ${picks.length} total (confidence >= 0.6)`);
+      
+      return qualifiedPicks;
     } catch (error) {
       console.error(`[Enhanced Picks Service] Error generating daily picks:`, error);
       throw error;

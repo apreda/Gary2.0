@@ -5,20 +5,15 @@ import axios from 'axios';
  * https://the-odds-api.com/
  */
 export const oddsApiService = {
-  API_KEY: import.meta.env.VITE_ODDS_API_KEY || '',
+  API_KEY: '', // API key should be handled server-side only
   
   /**
    * Initialize the service
    */
   initialize: () => {
     console.log('Initializing Odds API Service');
-    console.log(`Odds API key ${oddsApiService.API_KEY ? 'is set' : 'is NOT set'}`);
-    if (oddsApiService.API_KEY) {
-      console.log(`🔑 Odds API Key (masked): ${oddsApiService.API_KEY.substring(0, 3)}...${oddsApiService.API_KEY.substring(oddsApiService.API_KEY.length - 4)}`);
-    } else {
-      console.error('❌ VITE_ODDS_API_KEY environment variable is not set!');
-    }
-    return oddsApiService.API_KEY !== '';
+    console.warn('⚠️ Client-side Odds API calls are deprecated for security. Use server-side proxy instead.');
+    return false; // Always return false to prevent client-side usage
   },
   BASE_URL: 'https://api.the-odds-api.com/v4',
   

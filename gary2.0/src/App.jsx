@@ -28,6 +28,8 @@ const RefreshTool = lazy(() => import('./components/RefreshTool'));
 const ResultsAdmin = lazy(() => import('./pages/ResultsAdmin'));
 // Demo component removed - no longer needed
 
+// Import debug utilities for troubleshooting
+import './utils/debugUserStatus';
 
 import { SignIn } from "./pages/SignIn";
 import { SignOut } from "./pages/SignOut";
