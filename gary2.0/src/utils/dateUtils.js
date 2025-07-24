@@ -186,7 +186,7 @@ export const getEasternDate = () => {
  * @param {number} day - Day
  * @returns {string} Yesterday's date in YYYY-MM-DD format
  */
-export const getYesterdayDate = (year, month, day) => {
+export const getYesterdayDateFromParams = (year, month, day) => {
   const yesterdayDate = new Date(year, month - 1, day);
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
   
@@ -228,7 +228,7 @@ export const getPicksQueryDate = () => {
   
   // Before 10am EST, use yesterday's date
   if (eastern.easternHour < 10) {
-    return getYesterdayDate(eastern.year, eastern.month, eastern.day);
+    return getYesterdayDateFromParams(eastern.year, eastern.month, eastern.day);
   }
   
   return eastern.dateString;
