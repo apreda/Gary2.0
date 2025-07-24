@@ -1,7 +1,6 @@
-import { openaiService } from './openaiService.js';
+import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 import { oddsService } from './oddsService.js';
 import { supabase } from '../supabaseClient.js';
-import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 
 export const teamPropService = {
   async generateTeamPropsForToday() {
