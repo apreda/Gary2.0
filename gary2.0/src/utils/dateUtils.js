@@ -335,3 +335,9 @@ export const isESTTimeInRange = (startHour, endHour) => {
     return currentHour >= startHour || currentHour < endHour;
   }
 };
+
+export function getYesterdayDate() {
+  const today = new Date();
+  today.setDate(today.getDate() - 1);
+  return today.toISOString().split('T')[0];
+}

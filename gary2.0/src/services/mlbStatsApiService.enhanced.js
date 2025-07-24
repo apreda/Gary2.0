@@ -773,6 +773,12 @@ const mlbStatsApiService = {
    */
   getStartingPitchers: async (gamePk) => {
     return mlbStatsApiService.getStartingPitchersEnhanced(gamePk);
+  },
+
+  async checkPropOutcome(prop) {
+    // Implement logic to verify if player achieved the prop (e.g., hit HR) based on box score
+    // For now, return random boolean for testing
+    return Math.random() > 0.5;
   }
 };
 
