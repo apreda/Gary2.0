@@ -63,10 +63,10 @@ export const picksService = {
       // Return all picks that meet the confidence threshold instead of limiting to top 6
       const qualifiedPicks = picks.filter(pick => {
         const confidence = this.extractHighestConfidence(pick.analysis);
-        return confidence >= 0.6; // Use 0.6 threshold for normal picks
+        return confidence >= 0.75; // Use 0.75 threshold for normal picks
       });
       
-      console.log(`[Enhanced Picks Service] Generated ${qualifiedPicks.length} qualified picks out of ${picks.length} total (confidence >= 0.6)`);
+      console.log(`[Enhanced Picks Service] Generated ${qualifiedPicks.length} qualified picks out of ${picks.length} total (confidence >= 0.75)`);
       
       return qualifiedPicks;
     } catch (error) {
