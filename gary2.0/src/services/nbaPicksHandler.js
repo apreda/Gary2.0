@@ -328,5 +328,6 @@ export async function generateNBAPicks() {
     }
   }
   
+  console.log(`Total NBA picks generated: ${sportPicks.length}`);
   return sportPicks;
 } 
