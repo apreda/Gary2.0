@@ -242,7 +242,7 @@ async function storeDailyPicksInDatabase(picks) {
     
     return pickData;
   }).filter(pick => {
-    // Filter out picks with confidence below 0.6 - LOWERED THRESHOLD
+    // Filter out picks with confidence below 0.7 threshold for MLB
     // NBA and NHL picks are stored regardless of confidence level
     const confidence = typeof pick.confidence === 'number' ? pick.confidence : 0;
     const sport = pick.sport || '';
@@ -253,17 +253,17 @@ async function storeDailyPicksInDatabase(picks) {
       return true;
     }
     
-    // For other sports (mainly MLB), apply the 0.6 confidence threshold (LOWERED from 0.72)
-    const passesThreshold = confidence >= 0.6;
+    // For other sports (mainly MLB), apply the 0.7 confidence threshold
+    const passesThreshold = confidence >= 0.7;
     if (passesThreshold) {
-      console.log(`✅ Including ${sport} pick with confidence ${confidence} (passes 0.6 threshold)`);
+      console.log(`✅ Including ${sport} pick with confidence ${confidence} (passes 0.7 threshold)`);
     } else {
-      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (below 0.6 threshold)`);
+      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (below 0.7 threshold)`);
     }
     return passesThreshold;
   });
 
-  console.log(`After confidence filtering (>= 0.6 for MLB only, all NBA/NHL picks included), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After confidence filtering (>= 0.7 for MLB only, all NBA/NHL picks included), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // Skip if there are no valid picks (should never happen if picks array had items)
   if (validPicks.length === 0) {
