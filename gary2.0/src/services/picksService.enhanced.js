@@ -90,12 +90,34 @@ export const picksService = {
         parsedAnalysis = analysis;
       }
       
+      // First check if confidence is directly on the parsed analysis (new format)
+      if (parsedAnalysis.confidence !== undefined) {
+        const confidence = parseFloat(parsedAnalysis.confidence);
+        if (!isNaN(confidence)) {
+          console.log(`[Enhanced Picks Service] Found direct confidence: ${confidence}`);
+          return confidence;
+        }
+      }
+      
+      // Check if it's in rawOpenAIOutput (alternative structure)
+      if (parsedAnalysis.rawOpenAIOutput && parsedAnalysis.rawOpenAIOutput.confidence !== undefined) {
+        const confidence = parseFloat(parsedAnalysis.rawOpenAIOutput.confidence);
+        if (!isNaN(confidence)) {
+          console.log(`[Enhanced Picks Service] Found confidence in rawOpenAIOutput: ${confidence}`);
+          return confidence;
+        }
+      }
+      
+      // Legacy format: check recommendations array
       if (parsedAnalysis.recommendations && Array.isArray(parsedAnalysis.recommendations)) {
         // Find the highest confidence score among all recommendations
         const confidenceScores = parsedAnalysis.recommendations.map(rec => rec.confidence || 0);
-        return Math.max(...confidenceScores, 0);
+        const maxConfidence = Math.max(...confidenceScores, 0);
+        console.log(`[Enhanced Picks Service] Found confidence in recommendations: ${maxConfidence}`);
+        return maxConfidence;
       }
       
+      console.log(`[Enhanced Picks Service] No confidence found in analysis structure:`, Object.keys(parsedAnalysis));
       return 0;
     } catch (error) {
       console.error('Error extracting confidence score:', error);
