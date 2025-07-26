@@ -4,9 +4,13 @@ import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 export async function generateMLBPicks() {
   console.log('Processing MLB games');
   let sportPicks = [];
+  
   // Normal picks
   try {
+    console.log('Attempting to generate normal MLB picks...');
     const normalMlbPicks = await enhancedPicksService.generateDailyPicks('baseball_mlb');
+    console.log(`Generated ${normalMlbPicks.length} normal MLB picks`);
+    
     sportPicks = normalMlbPicks.map(pick => {
       // Parse the analysis to extract the structured pick data
       let pickData = null;
@@ -44,13 +48,20 @@ export async function generateMLBPicks() {
         superstition: pickData?.superstition || false
       };
     });
-  } catch (e) { /* Log if you want */ }
+  } catch (e) { 
+    console.error('Error generating normal MLB picks:', e);
+  }
 
   // Prop picks
   try {
-    const propPicks = await mlbPicksGenerationService.generateDailyPropPicks();
+    console.log('Attempting to generate MLB prop picks...');
+    const propPicks = await mlbPicksGenerationService.generateMLBPropPicks([]);
+    console.log(`Generated ${propPicks.length} prop picks`);
     sportPicks = [...sportPicks, ...propPicks];
-  } catch (e) { /* Log if you want */ }
+  } catch (e) { 
+    console.error('Error generating MLB prop picks:', e);
+  }
   
+  console.log(`Total MLB picks generated: ${sportPicks.length}`);
   return sportPicks;
 } 
