@@ -42,8 +42,8 @@ export const Billfold = () => {
   // State for selected time period filter
   const [selectedTimeFrame, setSelectedTimeFrame] = useState('all');
   
-  // State for toggling between game picks and prop picks
-  const [showPicksType, setShowPicksType] = useState('games'); // 'games' or 'props'
+  // State for toggling between game picks and prop picks - now defaults to games only
+  const [showPicksType, setShowPicksType] = useState('games'); // Always show games since toggle was removed
 
   // Filter options for charts
   const timeFrameOptions = [
@@ -581,57 +581,6 @@ export const Billfold = () => {
       </div>
       
       <div className="max-w-screen-2xl !mx-auto !px-8 !py-8 border-x border-gray-700/30 shadow-lg backdrop-blur-sm relative z-10" style={{ maxWidth: '1792px', padding: '2rem' }}>
-        {/* Enhanced Header with GARY A.I. and garymoney image */}
-        <div className="billfold-header mb-8 relative">
-          <div className="flex items-center justify-between space-x-8">
-            <div>
-              <h2 className="mb-1 flex items-center relative">
-                <span className="font-bold tracking-wide" style={{ color: '#b8953f', fontSize: '28px', opacity: 0.95 }}>GARY</span>
-                <span className="font-bold tracking-wide" style={{ color: 'white', fontSize: '28px' }}>A.I.</span>
-              </h2>
-              <div className="h-1 w-28 mt-2 rounded-sm" style={{ backgroundColor: '#b8953f', opacity: 0.85 }}></div>
-            </div>
-            <img 
-              src="/garymoney.png" 
-              alt="Gary Money" 
-              className="h-32 w-auto object-contain opacity-90 animate-float" 
-              style={{ 
-                filter: 'drop-shadow(0 0 8px rgba(184, 149, 63, 0.3))',
-                marginBottom: '-1.5rem',
-                position: 'relative',
-                zIndex: 5
-              }}
-            />
-          </div>
-          
-          {/* Toggle between Game Picks and Prop Picks */}
-          <div className="flex justify-center mt-6 mb-8">
-            <div className="inline-flex rounded-md shadow-sm" role="group">
-              <button
-                type="button"
-                onClick={() => setShowPicksType('games')}
-                className={`px-6 py-2 text-sm font-medium rounded-l-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
-                  showPicksType === 'games' 
-                    ? 'bg-[#b8953f] text-gray-900 font-bold' 
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                Game Picks
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowPicksType('props')}
-                className={`px-6 py-2 text-sm font-medium rounded-r-lg focus:z-10 focus:ring-2 focus:ring-[#b8953f] focus:ring-opacity-50 transition-colors ${
-                  showPicksType === 'props' 
-                    ? 'bg-[#b8953f] text-gray-900 font-bold' 
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                Prop Picks
-              </button>
-            </div>
-          </div>
-        </div>
         
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
         <div className="gary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
@@ -692,7 +641,7 @@ export const Billfold = () => {
                   <tr>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>DATE</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>SPORT</th>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>{showPicksType === 'props' ? 'ODDS' : 'MATCHUP'}</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>MATCHUP</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>PICK</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000', textAlign: 'right' }}>RESULT</th>
                   </tr>
@@ -704,11 +653,7 @@ export const Billfold = () => {
                       {formatDateFromSupabase(bet.rawGameDate) || new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.sport}</td>
-                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{
-                      showPicksType === 'props' ? 
-                        (bet.odds || 'N/A') : 
-                        (bet.matchup || 'Game not found')
-                    }</td>
+                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{bet.matchup || 'Game not found'}</td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6">
                       <div className="flex items-center">
                         <span className="inline-block w-2 h-2 rounded-sm bg-[#b8953f]"></span>
