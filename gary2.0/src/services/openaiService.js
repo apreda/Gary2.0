@@ -233,7 +233,7 @@ FORMATTING REQUIREMENTS:
 - Extract odds from provided odds data
 - If no odds available, use defaults: -110 for spreads, -150 for favorites, +130 for underdogs
 
-CONFIDENCE SCALE: 0.5 to 1.0 where higher numbers mean MORE CERTAINTY the pick will win.
+CONFIDENCE SCALE: 0.30 to 0.99 where higher numbers mean MORE CERTAINTY the pick will win.
 
 === RATIONALE FORMAT ===
 
@@ -245,7 +245,7 @@ Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addre
   "pick": "Team Name BetType Odds",
   "odds": "The specific odds",
   "type": "spread" or "moneyline",
-  "confidence": 0.5–1.0,
+  "confidence": 0.30–0.99,
   "trapAlert": true or false,
   "revenge": true or false,
   "superstition": true or false,
@@ -781,7 +781,7 @@ Response format (valid JSON):
     "line": 0.5,
     "bet": "over",
     "odds": -110,
-    "confidence": 0.85,
+      "confidence": 0.78,
     "ev": 12.5,
     "rationale": "• First complete sentence with key stat or insight. • Second complete sentence with matchup analysis. • Third complete sentence with value or trend. • Optional fourth sentence with conclusion."
   },
