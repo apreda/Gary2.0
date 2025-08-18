@@ -266,11 +266,7 @@ function RealGaryPicks() {
 
           // Serverless generation to ensure Supabase write succeeds under RLS
           try {
-            const resp = await fetch('/api/generate-daily-picks', { method: 'POST' });
-            if (!resp.ok) {
-              console.warn('POST /api/generate-daily-picks not ok, retrying with GET');
-              await fetch('/api/generate-daily-picks');
-            }
+            await fetch('/api/generate-daily-picks', { method: 'POST' });
           } catch (e) {
             console.warn('Serverless generation failed, falling back to client generation:', e?.message || e);
             try {
@@ -316,10 +312,7 @@ function RealGaryPicks() {
               await supabase.from('daily_picks').delete().eq('date', today);
             } catch {}
             try {
-              const resp = await fetch('/api/generate-daily-picks', { method: 'POST' });
-              if (!resp.ok) {
-                await fetch('/api/generate-daily-picks');
-              }
+              await fetch('/api/generate-daily-picks', { method: 'POST' });
             } catch {
               try { await picksService.generateDailyPicks(); } catch {}
             }
