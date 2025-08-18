@@ -13,7 +13,13 @@
     {
       "path": "/api/generate-daily-picks",
       "schedule": "0 15 * * *"
-    }
+    },
+    { "path": "/api/ingest-odds", "schedule": "*/2 * * * *" },
+    { "path": "/api/derive-features", "schedule": "*/5 * * * *" },
+    { "path": "/api/write-baseline-model", "schedule": "*/6 * * * *" },
+    { "path": "/api/publish-picks", "schedule": "*/7 * * * *" },
+    { "path": "/api/write-narratives", "schedule": "*/5 * * * *" },
+    { "path": "/api/reprice-clv", "schedule": "*/10 * * * *" }
   ],
   "buildCommand": "vite build"
 }
