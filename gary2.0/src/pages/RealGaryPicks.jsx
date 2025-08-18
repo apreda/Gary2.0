@@ -253,16 +253,35 @@ function RealGaryPicks() {
         try {
           setLoading(true);
 
-          // Prefer serverless generation to ensure Supabase write succeeds under RLS
-          try {
-            await fetch('/api/generate-daily-picks', { method: 'POST' });
-          } catch (e) {
-            console.warn('Serverless generation failed, falling back to client generation:', e?.message || e);
-            try {
-              await picksService.generateDailyPicks();
-            } catch (clientGenErr) {
-              console.error('Client-side generation failed:', clientGenErr);
-            }
+          await supabase
+            .from('daily_picks')
+            .delete()
+            .eq('date', today);
+
+          const generatedPicks = await picksService.generateDailyPicks();
+
+          if (generatedPicks && Array.isArray(generatedPicks) && generatedPicks.length > 0) {
+            setPicks(generatedPicks.map(pick => {
+              const rawOutput = pick.rawAnalysis || pick;
+              return {
+                // PRIORITY: Use pick_id from data, then id, then generate fallback
+                id: pick.pick_id || pick.id || `pick-${today}-${rawOutput.league}-${rawOutput.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
+                pick_id: pick.pick_id || pick.id, // Preserve the original pick_id
+                pick: rawOutput.pick,
+                type: rawOutput.type || 'moneyline',
+                confidence: rawOutput.confidence,
+                rationale: rawOutput.rationale,
+                trapAlert: rawOutput.trapAlert || false,
+                revenge: rawOutput.revenge || false,
+                momentum: rawOutput.momentum || 0,
+                homeTeam: rawOutput.homeTeam || pick.home_team || '',
+                awayTeam: rawOutput.awayTeam || pick.away_team || '',
+                league: rawOutput.league || pick.league || '',
+                time: rawOutput.time || pick.time || ''
+              };
+            }));
+            setLoading(false);
+            return;
           }
 
           const { data: freshData } = await supabase
