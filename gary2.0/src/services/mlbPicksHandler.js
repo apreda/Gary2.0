@@ -74,8 +74,12 @@ export async function generateMLBPicks() {
     console.log('Attempting to generate MLB prop picks...');
     const propPicks = await mlbPicksGenerationService.generateMLBPropPicks([]);
     console.log(`Generated ${propPicks.length} prop picks`);
-    // Keep current filters intact; just cap total prop picks to 10 (take the first 10 as-is)
-    const cappedPropPicks = Array.isArray(propPicks) ? propPicks.slice(0, 10) : [];
+    // Sort by confidence then ev and cap to 10
+    const cappedPropPicks = Array.isArray(propPicks)
+      ? propPicks
+          .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
+          .slice(0, 10)
+      : [];
     sportPicks = [...sportPicks, ...cappedPropPicks];
   } catch (e) { 
     console.error('Error generating MLB prop picks:', e);
