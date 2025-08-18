@@ -319,14 +319,19 @@ Respond with ONLY a JSON array of your best prop picks.
         console.log('Fetching player stats for analysis...');
         playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
         
+        // Ensure we have a string; guard against undefined/null returns
+        if (typeof playerStatsText !== 'string') {
+          playerStatsText = '';
+        }
+
         // Limit stats text to prevent token overflow
-        if (playerStatsText.length > 5000) {
+        if (playerStatsText && playerStatsText.length > 5000) {
           playerStatsText = playerStatsText.substring(0, 5000) + '\n... (stats truncated for brevity)';
         }
         
-        console.log(`Player stats retrieved successfully (${playerStatsText.length} characters)`);
+        console.log(`Player stats retrieved successfully (${playerStatsText?.length || 0} characters)`);
       } catch (statsError) {
-        console.error('Error getting player stats:', statsError);
+        console.warn('Error getting player stats, using fallback text:', statsError?.message || statsError);
         playerStatsText = `Basic game analysis for ${gameData.homeTeam} vs ${gameData.awayTeam}. Player statistics temporarily unavailable.`;
       }
 
