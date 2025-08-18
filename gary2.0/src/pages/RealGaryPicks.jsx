@@ -46,6 +46,7 @@ function RealGaryPicks() {
   const [processingDecisions, setProcessingDecisions] = useState({});
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [regenTried, setRegenTried] = useState(false);
   const [animating, setAnimating] = useState(false);
 
   const checkUserDecisions = async () => {
@@ -253,7 +254,17 @@ function RealGaryPicks() {
         try {
           setLoading(true);
 
-          // Prefer serverless generation to ensure Supabase write succeeds under RLS
+          // Remove any stale row for today, then prefer serverless generation
+          try {
+            await supabase
+              .from('daily_picks')
+              .delete()
+              .eq('date', today);
+          } catch (delErr) {
+            console.warn('Delete existing today row failed (continuing):', delErr?.message || delErr);
+          }
+
+          // Serverless generation to ensure Supabase write succeeds under RLS
           try {
             await fetch('/api/generate-daily-picks', { method: 'POST' });
           } catch (e) {
@@ -286,6 +297,40 @@ function RealGaryPicks() {
           setError('Failed to generate picks. Please try again later.');
         }
       } else {
+        // If after 10am EST, today is the query date, and we have too-few picks, force a one-time regeneration
+        try {
+          const now = new Date();
+          const estOptions = { timeZone: 'America/New_York' };
+          const estDateString = now.toLocaleDateString('en-US', estOptions);
+          const [m2, d2, y2] = estDateString.split('/');
+          const today = `${y2}-${m2.padStart(2, '0')}-${d2.padStart(2, '0')}`;
+          const easternHour = Number(now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }));
+
+          if (queryDate === today && easternHour >= 10 && picksArray.length < 5 && !regenTried) {
+            setRegenTried(true);
+            try {
+              await supabase.from('daily_picks').delete().eq('date', today);
+            } catch {}
+            try {
+              await fetch('/api/generate-daily-picks', { method: 'POST' });
+            } catch {
+              try { await picksService.generateDailyPicks(); } catch {}
+            }
+            const { data: refreshed } = await supabase
+              .from('daily_picks')
+              .select('picks, date')
+              .eq('date', today)
+              .maybeSingle();
+            if (refreshed?.picks) {
+              const arr = typeof refreshed.picks === 'string' ? JSON.parse(refreshed.picks) : refreshed.picks;
+              const cleaned = arr.filter(pick => pick.id && !pick.id.includes('emergency') && pick.pick && pick.rationale);
+              setPicks(cleaned);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {}
+
         setPicks(picksArray);
       }
     } catch (err) {
