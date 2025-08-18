@@ -271,10 +271,17 @@ async function storeDailyPicksInDatabase(picks) {
     return { success: false, message: 'No picks to store' };
   }
 
+  // Cap total prop picks to 10 without changing existing filters
+  const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
+  const propOnly = validPicks.filter(isPropPick);
+  const nonProps = validPicks.filter(p => !isPropPick(p));
+  const cappedProps = propOnly.slice(0, 10);
+  const finalPicks = [...nonProps, ...cappedProps];
+
   // Create data structure for Supabase
   const pickData = {
     date: currentDateString,
-    picks: validPicks
+    picks: finalPicks
   };
 
   console.log('Storing picks in Supabase daily_picks table');
@@ -310,8 +317,8 @@ async function storeDailyPicksInDatabase(picks) {
       return { success: true, count: validPicks.length, method: 'alternative' };
     }
 
-    console.log(`✅ Successfully stored ${validPicks.length} picks in database`);
-    return { success: true, count: validPicks.length };
+    console.log(`✅ Successfully stored ${finalPicks.length} picks in database (props capped at ${cappedProps.length}/10)`);
+    return { success: true, count: finalPicks.length };
   } catch (error) {
     console.error('❌ Error storing picks:', error);
     throw new Error(`Failed to store picks: ${error.message}`);
