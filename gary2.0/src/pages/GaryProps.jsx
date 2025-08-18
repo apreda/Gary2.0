@@ -147,8 +147,8 @@ export default function GaryProps() {
               return (b.ev || 0) - (a.ev || 0);
             });
             
-            // Take top 20 picks across all games
-            const topPicks = sortedPicks.slice(0, 20);
+            // Take top 10 picks across all games
+            const topPicks = sortedPicks.slice(0, 10);
             console.log(`Selected top ${topPicks.length} picks from ${allPropPicks.length} total picks`);
             
             // Log team diversity
@@ -158,7 +158,16 @@ export default function GaryProps() {
             });
             console.log('Team distribution in top picks:', teamCounts);
             
-            // Store the generated picks in Supabase
+            // Replace any existing records for today, then store the generated picks in Supabase
+            try {
+              await supabase
+                .from('prop_picks')
+                .delete()
+                .eq('date', today);
+            } catch (delErr) {
+              console.warn('Warning deleting existing prop_picks for today:', delErr?.message || delErr);
+            }
+
             const { data: insertData, error: insertError } = await supabase
               .from('prop_picks')
               .insert({
@@ -211,6 +220,11 @@ export default function GaryProps() {
               }
             });
             
+            // Sort and cap to top 10 for display
+            processedPicks = processedPicks
+              .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
+              .slice(0, 10);
+
             showToast(`Generated ${processedPicks.length} new prop picks!`, 'success');
           } else {
             console.log('No prop picks could be generated');
@@ -222,7 +236,12 @@ export default function GaryProps() {
         }
       }
 
-      setPicks(processedPicks);
+      // Always display only the top 10 picks across any records
+      const cappedForDisplay = processedPicks
+        .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
+        .slice(0, 10);
+
+      setPicks(cappedForDisplay);
     } catch (err) {
       console.error('Error in loadPicks:', err);
       setError('Unable to load prop picks. Please try refreshing the page.');

@@ -466,10 +466,12 @@ Respond with ONLY a JSON array of your best prop picks.
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Filter the picks by confidence threshold (0.7)
+      // Filter the picks by confidence threshold (0.7), then cap each record's picks to 10 by confidence
       const filteredData = data.map(record => {
-        // Filter each record's picks to only include those with confidence >= 0.7
-        record.picks = record.picks.filter(pick => pick.confidence >= 0.7);
+        const filtered = record.picks.filter(pick => pick.confidence >= 0.7);
+        record.picks = filtered
+          .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
+          .slice(0, 10);
         return record;
       }).filter(record => record.picks.length > 0);
       
