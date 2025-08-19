@@ -1,0 +1,23 @@
+name: GaryApp
+options:
+  minimumXcodeGenVersion: 2.32.0
+settings:
+  base:
+    DEVELOPMENT_TEAM: SFBTX6KPLM
+    PRODUCT_BUNDLE_IDENTIFIER: ai.betwithgary.app
+    CODE_SIGN_STYLE: Automatic
+    INFOPLIST_FILE: ios/GaryApp/Info.plist
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+targets:
+  GaryApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: ios/GaryApp
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+    scheme:
+      testTargets: []
+
