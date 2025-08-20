@@ -1,5 +1,5 @@
 # Build Fix Summary - JSX Syntax Error
-
+Redeploy trigger: update to ensure latest GPT-5 prompt and confidence changes are deployed.
 ## Issue
 Build was failing with the error:
 ```
