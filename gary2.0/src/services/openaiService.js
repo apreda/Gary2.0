@@ -8,8 +8,23 @@ import axios from 'axios';
 import { apiCache } from '../utils/apiCache.js';
 import { requestQueue } from '../utils/requestQueue.js';
 
-// Use secure proxy instead of direct OpenAI API calls
-const OPENAI_PROXY_URL = typeof window !== 'undefined' ? '/api/openai-proxy' : 'https://api.openai.com/v1/chat/completions';
+// Determine proxy URL (works in browser, serverless, and local dev)
+const resolveProxyUrl = () => {
+  try {
+    const explicit = process.env.OPENAI_PROXY_URL;
+    if (explicit) return explicit;
+    let base = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
+    if (base) {
+      if (!base.startsWith('http')) base = `https://${base}`;
+      return `${base}/api/openai-proxy`;
+    }
+  } catch {}
+  return '/api/openai-proxy';
+};
+
+const OPENAI_PROXY_URL = resolveProxyUrl();
+const OPENAI_DIRECT_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_SERVER_KEY = (() => { try { return process.env.OPENAI_API_KEY; } catch { return undefined; } })();
 
 const openaiServiceInstance = {
   /**
@@ -29,7 +44,7 @@ const openaiServiceInstance = {
   /**
    * Default model for OpenAI
    */
-  DEFAULT_MODEL: 'gpt-4',
+  DEFAULT_MODEL: (typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5',
   
   /**
    * Generate a response from OpenAI using secure proxy
@@ -46,7 +61,7 @@ const openaiServiceInstance = {
       console.log(`Request messages count: ${messages.length}, ` + 
                  `Temp: ${temperature}, MaxTokens: ${maxTokens}`);
       
-      // Use secure proxy for API calls
+      // Payload
       const requestData = {
         model: options.model || this.DEFAULT_MODEL,
         messages: messages,
@@ -54,12 +69,27 @@ const openaiServiceInstance = {
         max_tokens: maxTokens,
       };
       
-      const response = await axios.post(OPENAI_PROXY_URL, requestData, {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        timeout: 60000 // 60 second timeout
-      });
+      // First try proxy
+      let response;
+      try {
+        response = await axios.post(OPENAI_PROXY_URL, requestData, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 60000
+        });
+      } catch (proxyErr) {
+        // If proxy fails (401/404/5xx) and server key is available, fall back to direct call (server only)
+        const status = proxyErr?.response?.status;
+        const isServer = typeof window === 'undefined';
+        const canFallback = isServer && OPENAI_SERVER_KEY;
+        if (canFallback) {
+          response = await axios.post(OPENAI_DIRECT_URL, requestData, {
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_SERVER_KEY}` },
+            timeout: 60000
+          });
+        } else {
+          throw proxyErr;
+        }
+      }
       
       // Extract the assistant's message
       const content = response.data.choices[0].message.content;

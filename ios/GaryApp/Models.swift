@@ -93,9 +93,35 @@ struct PropPick: Identifiable, Codable {
             bet: dict["bet"] as? String,
             odds: (dict["odds"] as? String) ?? (dict["odds"] as? NSNumber).map { $0.stringValue },
             confidence: (dict["confidence"] as? NSNumber)?.doubleValue,
-            analysis: dict["analysis"] as? String
+            analysis: (dict["analysis"] as? String) ?? (dict["rationale"] as? String)
         )
     }
 }
 
+
+// MARK: - Billfold (Results) Models
+
+struct GameResult: Decodable {
+    let game_date: String?
+    let league: String?
+    let matchup: String?
+    let pick_text: String?
+    let result: String?
+    let odds: String?
+    let final_score: String?
+}
+
+struct PropResult: Decodable {
+    let game_date: String?
+    let matchup: String?
+    let player_name: String?
+    let pick_text: String?
+    let prop_type: String?
+    let bet: String?
+    let line_value: String?
+    let result: String?
+    let odds: String?
+    let actual_value: String?
+    let confidence: Double?
+}
 

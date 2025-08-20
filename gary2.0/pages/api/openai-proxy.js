@@ -9,7 +9,15 @@
  */
 export default async function handler(req, res) {
   // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '';
+  const allowed = [
+    'https://www.betwithgary.ai',
+    'https://betwithgary.ai',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ];
+  const allowOrigin = allowed.includes(origin) ? origin : 'https://www.betwithgary.ai';
+  res.setHeader('Access-Control-Allow-Origin', allowOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
@@ -50,11 +58,20 @@ export default async function handler(req, res) {
       });
     }
     
-    console.log(`[OPENAI PROXY] Using API key: ${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)}`);
+    // Do not log key fragments in production
     
+    // Resolve and enforce gpt-5 unless explicitly allowed
+    let resolvedModel = model || process.env.OPENAI_MODEL || 'gpt-5';
+    if (!/^gpt-5/i.test(resolvedModel)) {
+      console.warn(`[OPENAI PROXY] Overriding requested model '${resolvedModel}' -> 'gpt-5' (set ALLOW_LEGACY_MODELS=true to bypass)`);
+      if (process.env.ALLOW_LEGACY_MODELS !== 'true') {
+        resolvedModel = 'gpt-5';
+      }
+    }
+
     // Prepare request to OpenAI API
     const requestData = {
-      model: model || 'gpt-4',
+      model: resolvedModel,
       messages,
       temperature: temperature || 0.5,
       max_tokens: max_tokens || 800
@@ -62,35 +79,40 @@ export default async function handler(req, res) {
     
     console.log(`[OPENAI PROXY] Forwarding request to OpenAI API with model: ${requestData.model}`);
     
-    // Send request to OpenAI API
-    console.log('[OPENAI PROXY] Making request to OpenAI API...');
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestData)
-    });
-    
-    // Check if the response is OK
-    if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.json().catch(() => ({}));
-      console.error(`[OPENAI PROXY] API error: ${openaiResponse.status}`, errorData);
-      
-      return res.status(openaiResponse.status).json({
-        error: 'Error from OpenAI API',
-        status: openaiResponse.status,
-        data: errorData
-      });
+    // Try strict model then fallback to gpt-5-mini and gpt-5-nano
+    const candidates = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']));
+    let lastErr = null;
+    for (const m of candidates) {
+      const payload = { ...requestData, model: m };
+      console.log(`[OPENAI PROXY] Trying model: ${m}`);
+      try {
+        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (openaiResponse.ok) {
+          const responseData = await openaiResponse.json();
+          console.log(`[OPENAI PROXY] Success using model: ${m}`);
+          return res.status(200).json(responseData);
+        }
+        const errorData = await openaiResponse.json().catch(() => ({}));
+        console.warn(`[OPENAI PROXY] Model ${m} failed with ${openaiResponse.status}`);
+        lastErr = { status: openaiResponse.status, data: errorData };
+      } catch (e) {
+        console.warn(`[OPENAI PROXY] Transport error with model ${m}: ${e.message}`);
+        lastErr = { status: 502, data: { message: e.message } };
+      }
     }
-    
-    // Parse the response
-    const responseData = await openaiResponse.json();
-    console.log('[OPENAI PROXY] Successfully received response from OpenAI API');
-    
-    // Forward the response back to the client
-    return res.status(200).json(responseData);
+    const status = lastErr?.status || 502;
+    return res.status(status).json({
+      error: 'OpenAI request failed across all allowed models',
+      status,
+      data: lastErr?.data || null
+    });
     
   } catch (error) {
     console.error('[OPENAI PROXY] Error:', error.message);
