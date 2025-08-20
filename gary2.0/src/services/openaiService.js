@@ -95,51 +95,46 @@ const openaiServiceInstance = {
         }
       }
       
-      // Extract the assistant's message
-      const content = response.data.choices[0].message.content;
-      
-      // Add comprehensive logging to debug the structure of the OpenAI response
-      console.log('\n🔍 OpenAI raw response received. Attempting to parse JSON...');
-      try {
-        // Helper function to preprocess JSON string to handle betting odds notation
-        const preprocessJSON = (jsonStr) => {
-          // First, handle the odds field with plus signs
-          let processed = jsonStr
-            // Handle "odds": +120 or "odds": "+120"
-            .replace(/"odds"\s*:\s*\+([0-9]+)/g, '"odds": $1')
-            .replace(/"odds"\s*:\s*"\+([0-9]+)"/g, '"odds": "$1"')
-            // Handle negative odds
-            .replace(/"odds"\s*:\s*"-([0-9]+)"/g, '"odds": "-$1"')
-            // Handle odds in pick field (e.g., "pick": "Team Name ML +120")
-            .replace(/("pick"\s*:\s*"[^"]*)([\s(])([+-]\d+)([)\s]?[^"]*")/g, 
-              (match, prefix, sep, odds, suffix) => `${prefix}${sep}${odds}${suffix}`);
-
-          // Log the preprocessed JSON for debugging
-          console.log('Preprocessed JSON:', processed);
-          return processed;
-        };
-        
-        // Attempt to find and parse JSON in the response
-        const jsonMatch = content.match(/\{[\s\S]*?\}/); // Match everything between { and } (non-greedy)
-        if (jsonMatch) {
-          const jsonContent = jsonMatch[0];
-          // Preprocess the JSON to handle betting odds notation
-          const preprocessed = preprocessJSON(jsonContent);
-          try {
-            const parsedJson = JSON.parse(preprocessed);
-            console.log('✅ Successfully parsed JSON from OpenAI response');
-          } catch (innerError) {
-            console.warn('⚠️ Preprocessed JSON still failed to parse:', innerError.message);
-            // Still return original content even if parsing fails
-          }
+      // Extract assistant content from either Chat Completions or Responses API
+      const data = response.data || {};
+      let content = undefined;
+      if (data?.choices?.[0]?.message?.content) {
+        content = data.choices[0].message.content;
+      } else if (Array.isArray(data?.output)) {
+        // Responses API shape: prefer output_text, else first text segment
+        if (typeof data.output_text === 'string' && data.output_text.trim()) {
+          content = data.output_text;
         } else {
-          console.warn('⚠️ No JSON object found in OpenAI response');
+          for (const block of data.output) {
+            const parts = block?.content || [];
+            for (const seg of parts) {
+              if (typeof seg?.text === 'string' && seg.text.trim()) { content = seg.text; break; }
+              if (Array.isArray(seg) && seg[0]?.text) { content = seg[0].text; break; }
+            }
+            if (content) break;
+          }
+        }
+      }
+
+      // Guard: empty content
+      if (!content || String(content).trim().length === 0) {
+        throw new Error('OpenAI returned empty content (no assistant text in response)');
+      }
+
+      // Prefer strict top-level JSON parse first; if it fails, return raw text
+      console.log('\n🔍 OpenAI response received. Checking for top-level JSON...');
+      try {
+        const trimmed = String(content).trim();
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+          JSON.parse(trimmed);
+          console.log('✅ Top-level JSON detected and parseable.');
+        } else {
+          console.log('ℹ️ Non-JSON text response. Returning raw content.');
         }
       } catch (parseError) {
-        console.error('❌ Error parsing JSON from OpenAI response:', parseError.message);
-        console.log('Raw response preview:', content.substring(0, 200) + '...');
+        console.warn('⚠️ Top-level JSON parse failed:', parseError.message);
       }
-      
+
       return content;
     } catch (error) {
       console.error('Error generating OpenAI response:', error);
