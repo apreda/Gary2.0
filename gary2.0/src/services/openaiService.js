@@ -118,9 +118,34 @@ const openaiServiceInstance = {
         }
       }
 
-      // Guard: empty content
+      // Guard: empty content → one retry with higher token cap via proxy
       if (!content || String(content).trim().length === 0) {
-        throw new Error('OpenAI returned empty content (no assistant text in response)');
+        try {
+          const retryMax = Math.min((maxTokens || 800) * 2, 3200);
+          console.warn(`[OpenAI] Empty content. Retrying once with max_tokens=${retryMax}...`);
+          const retryReq = { ...requestData, max_tokens: retryMax };
+          const retryRes = await axios.post(OPENAI_PROXY_URL, retryReq, { headers: { 'Content-Type': 'application/json' }, timeout: 60000 });
+          const rd = retryRes.data || {};
+          let fallback;
+          if (rd?.choices?.[0]?.message?.content) fallback = rd.choices[0].message.content;
+          if (!fallback && typeof rd?.output_text === 'string' && rd.output_text.trim()) fallback = rd.output_text;
+          if (!fallback && Array.isArray(rd?.output)) {
+            for (const block of rd.output) {
+              const parts = block?.content || [];
+              for (const seg of parts) {
+                if (typeof seg?.text === 'string' && seg.text.trim()) { fallback = seg.text; break; }
+                if (Array.isArray(seg) && seg[0]?.text) { fallback = seg[0].text; break; }
+              }
+              if (fallback) break;
+            }
+          }
+          if (!fallback || String(fallback).trim().length === 0) {
+            throw new Error('OpenAI returned empty content after retry');
+          }
+          content = fallback;
+        } catch (e) {
+          throw new Error('OpenAI returned empty content (no assistant text in response)');
+        }
       }
 
       // Prefer strict top-level JSON parse first; if it fails, attempt to strip common wrappers, else return raw text
