@@ -74,28 +74,28 @@ export default async function handler(req, res) {
       }
     }
 
-    // Prepare request to OpenAI API
+    // Prepare request to OpenAI API (GPT-5 uses max_completion_tokens)
+    const baseMax = max_tokens || 800;
     const requestData = {
       model: resolvedModel,
       messages,
-      temperature: temperature || 0.5,
-      max_tokens: max_tokens || 800
+      temperature: temperature || 0.5
     };
     
     console.log(`[OPENAI PROXY] Forwarding request to OpenAI API with model: ${requestData.model}`);
     
-    // Try strict model then fallback to official GPT-5 tiers
-    const candidates = Array.from(new Set([requestData.model, 'gpt-5-medium', 'gpt-5-high']));
+    // Try strict model then fallback to compact tiers
+    const candidates = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']));
     let lastErr = null;
     for (const m of candidates) {
-      // Cap tokens per tier to reduce 400s from context/token limits
-      let capped = requestData.max_tokens || 800;
-      if (m === 'gpt-5-high') capped = Math.min(capped, 4096);
-      else if (m === 'gpt-5-medium') capped = Math.min(capped, 2048);
+      // Cap tokens per model and use max_completion_tokens for GPT-5 family
+      let capped = baseMax;
+      if (m === 'gpt-5-nano') capped = Math.min(capped, 512);
+      else if (m === 'gpt-5-mini') capped = Math.min(capped, 1024);
       else capped = Math.min(capped, 2048);
 
-      const payload = { ...requestData, model: m, max_tokens: capped };
-      console.log(`[OPENAI PROXY] Trying model: ${m} with max_tokens: ${capped}`);
+      const payload = { ...requestData, model: m, max_completion_tokens: capped };
+      console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}`);
       try {
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',

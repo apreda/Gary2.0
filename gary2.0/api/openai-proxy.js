@@ -78,11 +78,12 @@ export default async function handler(req, res) {
       }
     }
 
+    const baseMax = Math.min(max_tokens || 800, 1000);
     const requestData = {
       model: resolvedModel,
       messages,
       temperature: temperature || 0.5,
-      max_tokens: Math.min(max_tokens || 800, 1000), // Limit tokens to prevent long responses
+      // GPT-5 expects max_completion_tokens; leave max_tokens off
       stream: false // Ensure we don't use streaming
     };
     
@@ -96,14 +97,14 @@ export default async function handler(req, res) {
     const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
     
     try {
-      const models = Array.from(new Set([requestData.model, 'gpt-5-medium', 'gpt-5-high']))
+      const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']))
       let lastErr = null;
       for (const m of models) {
         // Cap tokens per model to reduce 400s from context/token limits
-        const base = requestData.max_tokens || 800;
-        const capped = m === 'gpt-5-high' ? Math.min(base, 4096) : (m === 'gpt-5-medium' ? Math.min(base, 2048) : Math.min(base, 2048));
-        const payload = { ...requestData, model: m, max_tokens: capped };
-        console.log(`[OPENAI PROXY] Trying model: ${m} with max_tokens: ${capped}`);
+        const base = baseMax;
+        const capped = m === 'gpt-5-nano' ? Math.min(base, 512) : (m === 'gpt-5-mini' ? Math.min(base, 1024) : Math.min(base, 2048));
+        const payload = { ...requestData, model: m, max_completion_tokens: capped };
+        console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}`);
         try {
           const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
