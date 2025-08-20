@@ -253,12 +253,12 @@ async function storeDailyPicksInDatabase(picks) {
       return true;
     }
     
-    // For other sports (mainly MLB), apply the 0.60 confidence threshold
-    const passesThreshold = confidence >= 0.60;
+    // For other sports (mainly MLB), apply the 0.51 confidence threshold
+    const passesThreshold = confidence >= 0.51;
     if (passesThreshold) {
-      console.log(`✅ Including ${sport} pick with confidence ${confidence} (passes 0.60 threshold)`);
+      console.log(`✅ Including ${sport} pick with confidence ${confidence} (passes 0.51 threshold)`);
     } else {
-      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (below 0.60 threshold)`);
+      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (below 0.51 threshold)`);
     }
     return passesThreshold;
   });
