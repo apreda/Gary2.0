@@ -121,7 +121,9 @@ export default async function handler(req, res) {
             const requestDuration = Date.now() - startTime;
             console.log(`[OPENAI PROXY] OpenAI API responded in ${requestDuration}ms using model: ${m}`);
             const responseData = await openaiResponse.json();
-            const content = responseData?.choices?.[0]?.message?.content;
+            const msg = responseData?.choices?.[0]?.message || {};
+            console.log(`[OPENAI PROXY] message keys: ${Object.keys(msg || {}).join(',')} | contentLen: ${(msg.content||'').length} | tool_calls: ${Array.isArray(msg.tool_calls)} | refusal: ${msg.refusal ? 'yes' : 'no'}`);
+            const content = msg?.content;
             if (typeof content === 'string' && content.trim().length > 0) {
               return res.status(200).json(responseData);
             }

@@ -98,21 +98,23 @@ const openaiServiceInstance = {
       // Extract assistant content from either Chat Completions or Responses API
       const data = response.data || {};
       let content = undefined;
+      // 1) Chat Completions
       if (data?.choices?.[0]?.message?.content) {
         content = data.choices[0].message.content;
-      } else if (Array.isArray(data?.output)) {
-        // Responses API shape: prefer output_text, else first text segment
-        if (typeof data.output_text === 'string' && data.output_text.trim()) {
-          content = data.output_text;
-        } else {
-          for (const block of data.output) {
-            const parts = block?.content || [];
-            for (const seg of parts) {
-              if (typeof seg?.text === 'string' && seg.text.trim()) { content = seg.text; break; }
-              if (Array.isArray(seg) && seg[0]?.text) { content = seg[0].text; break; }
-            }
-            if (content) break;
+      }
+      // 2) Responses API (output_text)
+      if (!content && typeof data?.output_text === 'string' && data.output_text.trim()) {
+        content = data.output_text;
+      }
+      // 3) Responses API (output array with text segments)
+      if (!content && Array.isArray(data?.output)) {
+        for (const block of data.output) {
+          const parts = block?.content || [];
+          for (const seg of parts) {
+            if (typeof seg?.text === 'string' && seg.text.trim()) { content = seg.text; break; }
+            if (Array.isArray(seg) && seg[0]?.text) { content = seg[0].text; break; }
           }
+          if (content) break;
         }
       }
 
@@ -121,12 +123,16 @@ const openaiServiceInstance = {
         throw new Error('OpenAI returned empty content (no assistant text in response)');
       }
 
-      // Prefer strict top-level JSON parse first; if it fails, return raw text
+      // Prefer strict top-level JSON parse first; if it fails, attempt to strip common wrappers, else return raw text
       console.log('\n🔍 OpenAI response received. Checking for top-level JSON...');
       try {
         const trimmed = String(content).trim();
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-          JSON.parse(trimmed);
+        let candidate = trimmed;
+        if (candidate.startsWith('```')) {
+          candidate = candidate.replace(/^```json\s*/i, '').replace(/^```/i, '').replace(/```\s*$/i, '').trim();
+        }
+        if (candidate.startsWith('{') || candidate.startsWith('[')) {
+          JSON.parse(candidate);
           console.log('✅ Top-level JSON detected and parseable.');
         } else {
           console.log('ℹ️ Non-JSON text response. Returning raw content.');
