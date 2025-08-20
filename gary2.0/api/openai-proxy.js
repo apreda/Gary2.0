@@ -91,12 +91,12 @@ export default async function handler(req, res) {
     const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
     
     try {
-      const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']));
+      const models = Array.from(new Set([requestData.model, 'gpt-5-medium', 'gpt-5-high']))
       let lastErr = null;
       for (const m of models) {
         // Cap tokens per model to reduce 400s from context/token limits
         const base = requestData.max_tokens || 800;
-        const capped = m === 'gpt-5-nano' ? Math.min(base, 512) : (m === 'gpt-5-mini' ? Math.min(base, 1024) : Math.min(base, 2048));
+        const capped = m === 'gpt-5-high' ? Math.min(base, 4096) : (m === 'gpt-5-medium' ? Math.min(base, 2048) : Math.min(base, 2048));
         const payload = { ...requestData, model: m, max_tokens: capped };
         console.log(`[OPENAI PROXY] Trying model: ${m} with max_tokens: ${capped}`);
         try {

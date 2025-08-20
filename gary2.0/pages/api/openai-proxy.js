@@ -79,14 +79,14 @@ export default async function handler(req, res) {
     
     console.log(`[OPENAI PROXY] Forwarding request to OpenAI API with model: ${requestData.model}`);
     
-    // Try strict model then fallback to gpt-5-mini and gpt-5-nano
-    const candidates = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']));
+    // Try strict model then fallback to official GPT-5 tiers
+    const candidates = Array.from(new Set([requestData.model, 'gpt-5-medium', 'gpt-5-high']));
     let lastErr = null;
     for (const m of candidates) {
-      // Cap tokens per model to avoid 400s
+      // Cap tokens per tier to reduce 400s from context/token limits
       let capped = requestData.max_tokens || 800;
-      if (m === 'gpt-5-nano') capped = Math.min(capped, 512);
-      else if (m === 'gpt-5-mini') capped = Math.min(capped, 1024);
+      if (m === 'gpt-5-high') capped = Math.min(capped, 4096);
+      else if (m === 'gpt-5-medium') capped = Math.min(capped, 2048);
       else capped = Math.min(capped, 2048);
 
       const payload = { ...requestData, model: m, max_tokens: capped };
