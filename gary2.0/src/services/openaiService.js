@@ -310,7 +310,7 @@ Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addre
   "pick": "Team Name BetType Odds",
   "odds": "The specific odds",
   "type": "spread" or "moneyline",
-  "confidence": 0.50–1.00,
+  "confidence": 0.50–1.00, // return as a numeric value between 0.50 and 1.00
   "trapAlert": true or false,
   "revenge": true or false,
   "superstition": true or false,

@@ -19,6 +19,9 @@ struct ContentView: View {
             BetCardView()
                 .tabItem { Label("BetCard", systemImage: "creditcard") }
                 .tag(4)
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tag(5)
         }
         .tint(Color(hex: "#B8953F"))
     }
