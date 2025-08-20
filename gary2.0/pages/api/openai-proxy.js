@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     const requestData = {
       model: resolvedModel,
       messages,
-      temperature: temperature || 0.5
+      temperature: 1 // Force default temp for GPT-5 family
     };
     
     console.log(`[OPENAI PROXY] Forwarding request to OpenAI API with model: ${requestData.model}`);
@@ -94,8 +94,8 @@ export default async function handler(req, res) {
       else if (m === 'gpt-5-mini') capped = Math.min(capped, 1024);
       else capped = Math.min(capped, 2048);
 
-      const payload = { ...requestData, model: m, max_completion_tokens: capped };
-      console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}`);
+      const payload = { ...requestData, model: m, temperature: 1, max_completion_tokens: capped };
+      console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1`);
       try {
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
         // If chat/completions rejects 'messages', retry via Responses API using 'input'
         if (openaiResponse.status === 400 && errorData?.error?.code === 'unsupported_parameter' && errorData?.error?.param === 'messages') {
           const input = messages.map(msg => `${msg.role.toUpperCase()}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`).join('\n\n');
-          const respPayload = { model: m, input, temperature: payload.temperature, max_output_tokens: capped };
+          const respPayload = { model: m, input, temperature: 1, max_output_tokens: capped };
           console.log(`[OPENAI PROXY] Retrying via Responses API for model: ${m} with max_output_tokens: ${capped}`);
           const resp = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
