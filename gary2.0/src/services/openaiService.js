@@ -56,17 +56,18 @@ const openaiServiceInstance = {
     try {
       console.log('Generating response from OpenAI via secure proxy...');
       
-      const { temperature = 0.5, maxTokens = 800 } = options;
+      const { temperature = 0.5, maxTokens = 800, schema } = options;
       
       console.log(`Request messages count: ${messages.length}, ` + 
                  `Temp: ${temperature}, MaxTokens: ${maxTokens}`);
       
-      // Payload
+      // Payload (include schema when provided)
       const requestData = {
         model: options.model || this.DEFAULT_MODEL,
         messages: messages,
         temperature,
         max_tokens: maxTokens,
+        schema: schema || undefined,
       };
       
       // First try proxy
@@ -732,10 +733,28 @@ Provide your betting analysis in the exact JSON format specified. Remember to ON
       };
       
       // Use our standard generateResponse method to make the API call
+      // Enforce strict schema so GPT-5 returns parseable JSON for daily_picks
+      const pickSchema = {
+        type: 'object',
+        properties: {
+          pick: { type: 'string' },
+          odds: { type: 'string' },
+          type: { type: 'string', enum: ['spread', 'moneyline'] },
+          confidence: { type: 'number' },
+          homeTeam: { type: 'string' },
+          awayTeam: { type: 'string' },
+          league: { type: 'string' },
+          time: { type: 'string' },
+          rationale: { type: 'string' }
+        },
+        required: ['pick','odds','type','confidence','homeTeam','awayTeam','league','time','rationale']
+      };
+
       return await this.generateResponse([systemMessage, userPrompt], {
         temperature: options.temperature || 0.7,
         maxTokens: options.maxTokens || 1500,
-        model: options.model || this.DEFAULT_MODEL
+        model: options.model || this.DEFAULT_MODEL,
+        schema: pickSchema
       });
     } catch (error) {
       console.error('Error generating Gary\'s analysis:', error);

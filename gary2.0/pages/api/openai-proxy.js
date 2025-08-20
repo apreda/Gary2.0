@@ -43,7 +43,7 @@ export default async function handler(req, res) {
 
   try {
     // Parse the request body
-    const { model, messages, temperature, max_tokens } = req.body;
+    const { model, messages, temperature, max_tokens, schema } = req.body;
     
     // Validate required parameters
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -93,6 +93,39 @@ export default async function handler(req, res) {
       if (m === 'gpt-5-nano') capped = Math.min(capped, 512);
       else if (m === 'gpt-5-mini') capped = Math.min(capped, 1024);
       else capped = Math.min(capped, 2048);
+
+      // If a schema is provided, prefer the Responses API with strict JSON schema
+      if (schema) {
+        const input = messages.map(msg => `${msg.role.toUpperCase()}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`).join('\n\n');
+        const respPayload = {
+          model: m,
+          input,
+          temperature: 1,
+          max_output_tokens: capped,
+          response_format: { type: 'json_schema', json_schema: { name: 'GaryPick', schema, strict: true } }
+        };
+        console.log(`[OPENAI PROXY] Trying Responses API model: ${m} with max_output_tokens: ${capped} and schema`);
+        try {
+          const resp = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(respPayload)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            console.log(`[OPENAI PROXY] Responses API success using model: ${m}`);
+            return res.status(200).json(data);
+          }
+          const err2 = await resp.json().catch(() => ({}));
+          console.warn(`[OPENAI PROXY] Responses API failed for model ${m} with ${resp.status}`, err2);
+          lastErr = { status: resp.status, data: err2, model: m };
+          continue; // try next model
+        } catch (e) {
+          console.warn(`[OPENAI PROXY] Transport error (Responses API) with model ${m}:`, e.message);
+          lastErr = { status: 502, data: { message: e.message }, model: m };
+          continue;
+        }
+      }
 
       const payload = { ...requestData, model: m, temperature: 1, max_completion_tokens: capped };
       console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1`);
