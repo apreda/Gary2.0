@@ -78,7 +78,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const baseMax = Math.min(max_tokens || 800, 1000);
+    // Allow a larger default output budget; GPT-5 may spend tokens on hidden reasoning
+    const baseMax = Math.min(max_tokens || 3200, 4096);
     const requestData = {
       model: resolvedModel,
       messages,
@@ -100,9 +101,16 @@ export default async function handler(req, res) {
       const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']))
       let lastErr = null;
       for (const m of models) {
-        // Cap tokens per model to reduce 400s from context/token limits
-        const base = baseMax;
-        const capped = m === 'gpt-5-nano' ? Math.min(base, 512) : (m === 'gpt-5-mini' ? Math.min(base, 1024) : Math.min(base, 2048));
+        // Generous caps per model to avoid finish_reason: "length"
+        let capped;
+        if (m === 'gpt-5-nano') {
+          capped = Math.max(1024, Math.min(baseMax, 1024));
+        } else if (m === 'gpt-5-mini') {
+          capped = Math.max(2048, Math.min(baseMax, 2048));
+        } else {
+          // gpt-5 default
+          capped = Math.max(3072, Math.min(baseMax, 4096));
+        }
         let payload = { ...requestData, model: m, max_completion_tokens: capped, response_format: { type: 'json_object' } };
         console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1 (json_object mode)`);
         try {
