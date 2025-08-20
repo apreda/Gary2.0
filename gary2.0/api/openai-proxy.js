@@ -121,6 +121,25 @@ export default async function handler(req, res) {
             const requestDuration = Date.now() - startTime;
             console.log(`[OPENAI PROXY] OpenAI API responded in ${requestDuration}ms using model: ${m}`);
             const responseData = await openaiResponse.json();
+            const content = responseData?.choices?.[0]?.message?.content;
+            if (typeof content === 'string' && content.trim().length > 0) {
+              return res.status(200).json(responseData);
+            }
+            // Fallback: empty content – retry via Responses API with json_object
+            const input = messages.map(msg => `${msg.role.toUpperCase()}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`).join('\n\n');
+            const respPayload = { model: m, input, max_output_tokens: capped, response_format: { type: 'json_object' } };
+            console.log(`[OPENAI PROXY] Empty content; retrying via Responses API for model: ${m}`);
+            const resp = await fetch('https://api.openai.com/v1/responses', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(respPayload),
+              signal: controller.signal
+            });
+            if (resp.ok) {
+              const data2 = await resp.json();
+              return res.status(200).json(data2);
+            }
+            // Return original even if empty to aid client diagnostics
             return res.status(200).json(responseData);
           }
 

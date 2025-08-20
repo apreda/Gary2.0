@@ -107,8 +107,28 @@ export default async function handler(req, res) {
         });
         if (openaiResponse.ok) {
           const responseData = await openaiResponse.json();
-          console.log(`[OPENAI PROXY] Success using model: ${m}`);
-          return res.status(200).json(responseData);
+          const content = responseData?.choices?.[0]?.message?.content;
+          if (typeof content === 'string' && content.trim().length > 0) {
+            console.log(`[OPENAI PROXY] Success using model: ${m}`);
+            return res.status(200).json(responseData);
+          }
+          // Fallback: empty content – retry with Responses API to coerce JSON
+          const input = messages.map(msg => `${msg.role.toUpperCase()}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`).join('\n\n');
+          const respPayload = { model: m, input, temperature: 1, max_output_tokens: capped, response_format: { type: 'json_object' } };
+          console.log(`[OPENAI PROXY] Empty content from Chat Completions. Retrying via Responses API for model: ${m}`);
+          const resp = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(respPayload)
+          });
+          if (resp.ok) {
+            const data2 = await resp.json();
+            console.log(`[OPENAI PROXY] Responses API success using model: ${m}`);
+            return res.status(200).json(data2);
+          }
+          const err2 = await resp.json().catch(() => ({}));
+          console.warn(`[OPENAI PROXY] Responses API fallback failed for model ${m} with ${resp.status}`, err2);
+          return res.status(200).json(responseData); // Return original even if empty to aid debugging client-side
         }
         const errorData = await openaiResponse.json().catch(() => ({}));
         console.warn(`[OPENAI PROXY] Model ${m} failed with ${openaiResponse.status}`, errorData);
