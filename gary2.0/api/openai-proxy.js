@@ -95,7 +95,7 @@ export default async function handler(req, res) {
     
     // Create AbortController for timeout handling
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
     
     try {
       const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']))

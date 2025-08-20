@@ -765,7 +765,7 @@ Provide your betting analysis in the exact JSON format specified. Remember to ON
       // Use our standard generateResponse method to make the API call
       return await this.generateResponse([systemMessage, userPrompt], {
         temperature: options.temperature || 0.7,
-        maxTokens: options.maxTokens || 1500,
+        maxTokens: options.maxTokens || 3200,
         model: options.model || this.DEFAULT_MODEL
       });
     } catch (error) {
