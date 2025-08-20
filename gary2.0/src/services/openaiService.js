@@ -79,6 +79,10 @@ const openaiServiceInstance = {
       } catch (proxyErr) {
         // If proxy fails (401/404/5xx) and server key is available, fall back to direct call (server only)
         const status = proxyErr?.response?.status;
+        if (status === 400) {
+          // Surface proxy error details to console to debug payload/model issues
+          try { console.error('[OPENAI PROXY 400]', JSON.stringify(proxyErr.response.data)); } catch {}
+        }
         const isServer = typeof window === 'undefined';
         const canFallback = isServer && OPENAI_SERVER_KEY;
         if (canFallback) {

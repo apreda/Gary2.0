@@ -94,8 +94,11 @@ export default async function handler(req, res) {
       const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']));
       let lastErr = null;
       for (const m of models) {
-        const payload = { ...requestData, model: m };
-        console.log(`[OPENAI PROXY] Trying model: ${m}`);
+        // Cap tokens per model to reduce 400s from context/token limits
+        const base = requestData.max_tokens || 800;
+        const capped = m === 'gpt-5-nano' ? Math.min(base, 512) : (m === 'gpt-5-mini' ? Math.min(base, 1024) : Math.min(base, 2048));
+        const payload = { ...requestData, model: m, max_tokens: capped };
+        console.log(`[OPENAI PROXY] Trying model: ${m} with max_tokens: ${capped}`);
         try {
           const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -117,11 +120,11 @@ export default async function handler(req, res) {
 
           const errorData = await openaiResponse.json().catch(() => ({}));
           console.warn(`[OPENAI PROXY] Model ${m} failed with ${openaiResponse.status}`, errorData);
-          lastErr = { status: openaiResponse.status, data: errorData };
+          lastErr = { status: openaiResponse.status, data: errorData, model: m };
           // continue to next fallback
         } catch (innerErr) {
           console.warn(`[OPENAI PROXY] Transport error with model ${m}:`, innerErr.message);
-          lastErr = { status: 502, data: { message: innerErr.message } };
+          lastErr = { status: 502, data: { message: innerErr.message }, model: m };
           // continue
         }
       }
@@ -131,6 +134,7 @@ export default async function handler(req, res) {
       return res.status(status).json({
         error: 'OpenAI request failed across all allowed models',
         status,
+        lastTriedModel: lastErr?.model || null,
         data: lastErr?.data || null
       });
 
