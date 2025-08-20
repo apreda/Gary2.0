@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     }
 
     // Prepare request to OpenAI API (GPT-5 uses max_completion_tokens)
-    const baseMax = max_tokens || 800;
+    const baseMax = max_tokens || 2000;
     const requestData = {
       model: resolvedModel,
       messages,
@@ -90,9 +90,9 @@ export default async function handler(req, res) {
     for (const m of candidates) {
       // Cap tokens per model and use max_completion_tokens for GPT-5 family
       let capped = baseMax;
-      if (m === 'gpt-5-nano') capped = Math.min(capped, 512);
-      else if (m === 'gpt-5-mini') capped = Math.min(capped, 1024);
-      else capped = Math.min(capped, 2048);
+      if (m === 'gpt-5-nano') capped = Math.min(capped, 1024);
+      else if (m === 'gpt-5-mini') capped = Math.min(capped, 2048);
+      else capped = Math.min(capped, 4096);
 
       let payload = { ...requestData, model: m, temperature: 1, max_completion_tokens: capped, response_format: { type: 'json_object' } };
       console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1 (json_object mode)`);
@@ -114,9 +114,40 @@ export default async function handler(req, res) {
             console.log(`[OPENAI PROXY] Success using model: ${m}`);
             return res.status(200).json(responseData);
           }
-          // Fallback: empty content – retry with Responses API to coerce JSON
+          // Fallback: empty content – first, retry Chat Completions with higher cap
+          if (capped < 4096) {
+            const bump = Math.min(4096, capped * 2);
+            const retryPayload = { ...requestData, model: m, temperature: 1, max_completion_tokens: bump, response_format: { type: 'json_object' } };
+            console.log(`[OPENAI PROXY] Empty content. Retrying Chat Completions with higher cap: ${bump}`);
+            const retry = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST', headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(retryPayload)
+            });
+            if (retry.ok) {
+              const retryData = await retry.json();
+              const retryContent = retryData?.choices?.[0]?.message?.content;
+              if (typeof retryContent === 'string' && retryContent.trim().length > 0) {
+                console.log('[OPENAI PROXY] Higher-cap retry succeeded');
+                return res.status(200).json(retryData);
+              }
+            }
+          }
+
+          // Then, retry with Responses API to coerce JSON
           const input = messages.map(msg => `${msg.role.toUpperCase()}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`).join('\n\n');
-          const respPayload = { model: m, input, temperature: 1, max_output_tokens: capped, response_format: { type: 'json_object' } };
+          const respPayload = {
+            model: m,
+            input,
+            temperature: 1,
+            max_output_tokens: Math.max(capped, 1024),
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'AnyJSON',
+                schema: { type: 'object', additionalProperties: true },
+                strict: true
+              }
+            }
+          };
           console.log(`[OPENAI PROXY] Empty content from Chat Completions. Retrying via Responses API for model: ${m}`);
           const resp = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
