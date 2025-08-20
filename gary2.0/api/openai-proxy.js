@@ -129,7 +129,19 @@ export default async function handler(req, res) {
             }
             // Fallback: empty content – retry via Responses API with json_object
             const input = messages.map(msg => `${msg.role.toUpperCase()}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`).join('\n\n');
-            const respPayload = { model: m, input, max_output_tokens: capped, response_format: { type: 'json_object' } };
+            const respPayload = {
+              model: m,
+              input,
+              max_output_tokens: Math.max(capped, 1024),
+              response_format: {
+                type: 'json_schema',
+                json_schema: {
+                  name: 'AnyJSON',
+                  schema: { type: 'object', additionalProperties: true },
+                  strict: true
+                }
+              }
+            };
             console.log(`[OPENAI PROXY] Empty content; retrying via Responses API for model: ${m}`);
             const resp = await fetch('https://api.openai.com/v1/responses', {
               method: 'POST',
