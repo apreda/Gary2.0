@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   ];
   const allowOrigin = allowed.includes(origin) ? origin : 'https://www.betwithgary.ai';
   res.setHeader('Access-Control-Allow-Origin', allowOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   // Handle OPTIONS preflight request
@@ -27,7 +27,12 @@ export default async function handler(req, res) {
     return;
   }
   
-  // Only allow POST requests
+  // Health check GET
+  if (req.method === 'GET') {
+    return res.status(200).json({ ok: true, endpoint: 'api/openai-proxy' });
+  }
+
+  // Only allow POST for completions
   if (req.method !== 'POST') {
     console.log(`[OPENAI PROXY] Method ${req.method} not allowed`);
     return res.status(405).json({ 
