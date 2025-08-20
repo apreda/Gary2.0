@@ -89,10 +89,15 @@ export default async function handler(req, res) {
     let lastErr = null;
     for (const m of candidates) {
       // Cap tokens per model and use max_completion_tokens for GPT-5 family
-      let capped = baseMax;
-      if (m === 'gpt-5-nano') capped = Math.min(capped, 1024);
-      else if (m === 'gpt-5-mini') capped = Math.min(capped, 2048);
-      else capped = Math.min(capped, 4096);
+      // Ensure a generous cap by default to avoid finish_reason:"length"
+      let capped;
+      if (m === 'gpt-5-nano') {
+        capped = Math.max(1024, Math.min(baseMax, 1024));
+      } else if (m === 'gpt-5-mini') {
+        capped = Math.max(2048, Math.min(baseMax, 2048));
+      } else {
+        capped = Math.max(3072, Math.min(baseMax, 4096));
+      }
 
       let payload = { ...requestData, model: m, temperature: 1, max_completion_tokens: capped, response_format: { type: 'json_object' } };
       console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1 (json_object mode)`);
