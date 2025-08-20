@@ -112,7 +112,28 @@ export default async function handler(req, res) {
         }
         const errorData = await openaiResponse.json().catch(() => ({}));
         console.warn(`[OPENAI PROXY] Model ${m} failed with ${openaiResponse.status}`, errorData);
-        lastErr = { status: openaiResponse.status, data: errorData, model: m };
+
+        // If chat/completions rejects 'messages', retry via Responses API using 'input'
+        if (openaiResponse.status === 400 && errorData?.error?.code === 'unsupported_parameter' && errorData?.error?.param === 'messages') {
+          const input = messages.map(msg => `${msg.role.toUpperCase()}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`).join('\n\n');
+          const respPayload = { model: m, input, temperature: payload.temperature, max_output_tokens: capped };
+          console.log(`[OPENAI PROXY] Retrying via Responses API for model: ${m} with max_output_tokens: ${capped}`);
+          const resp = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(respPayload)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            console.log(`[OPENAI PROXY] Responses API success using model: ${m}`);
+            return res.status(200).json(data);
+          }
+          const err2 = await resp.json().catch(() => ({}));
+          console.warn(`[OPENAI PROXY] Responses API failed for model ${m} with ${resp.status}`, err2);
+          lastErr = { status: resp.status, data: err2, model: m };
+        } else {
+          lastErr = { status: openaiResponse.status, data: errorData, model: m };
+        }
       } catch (e) {
         console.warn(`[OPENAI PROXY] Transport error with model ${m}: ${e.message}`);
         lastErr = { status: 502, data: { message: e.message }, model: m };
