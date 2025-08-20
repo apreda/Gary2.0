@@ -94,8 +94,8 @@ export default async function handler(req, res) {
       else if (m === 'gpt-5-mini') capped = Math.min(capped, 1024);
       else capped = Math.min(capped, 2048);
 
-      const payload = { ...requestData, model: m, temperature: 1, max_completion_tokens: capped };
-      console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1`);
+      let payload = { ...requestData, model: m, temperature: 1, max_completion_tokens: capped, response_format: { type: 'json_object' } };
+      console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1 (json_object mode)`);
       try {
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -112,6 +112,21 @@ export default async function handler(req, res) {
         }
         const errorData = await openaiResponse.json().catch(() => ({}));
         console.warn(`[OPENAI PROXY] Model ${m} failed with ${openaiResponse.status}`, errorData);
+        // If JSON mode unsupported, retry once without response_format
+        if (errorData?.error?.code === 'unsupported_parameter' && errorData?.error?.param === 'response_format') {
+          const fallbackPayload = { ...requestData, model: m, temperature: 1, max_completion_tokens: capped };
+          console.log(`[OPENAI PROXY] Retrying model: ${m} without response_format`);
+          const resp2 = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(fallbackPayload)
+          });
+          if (resp2.ok) {
+            const data2 = await resp2.json();
+            console.log(`[OPENAI PROXY] Success using model: ${m} without response_format`);
+            return res.status(200).json(data2);
+          }
+        }
 
         // If chat/completions rejects 'messages', retry via Responses API using 'input'
         if (openaiResponse.status === 400 && errorData?.error?.code === 'unsupported_parameter' && errorData?.error?.param === 'messages') {
