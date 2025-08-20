@@ -13,7 +13,7 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: ios/GaryApp
+      - path: .
     settings:
       base:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

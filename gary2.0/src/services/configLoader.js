@@ -24,8 +24,9 @@ function getEnvVar(key, defaultValue = '') {
 export const configLoader = {
   // Variables to hold API credentials
   odds_api_key: getEnvVar('VITE_ODDS_API_KEY', ''),
-  openai_api_key: getEnvVar('VITE_OPENAI_API_KEY', ''),
-  openai_base_url: getEnvVar('VITE_OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+  // Never load OpenAI keys on the client; proxy uses server-side OPENAI_API_KEY only
+  openai_api_key: '',
+  openai_base_url: 'https://api.openai.com/v1',
   perplexity_api_key: getEnvVar('VITE_PERPLEXITY_API_KEY', ''),
   sports_db_api_key: getEnvVar('VITE_SPORTS_DB_API_KEY', '3'), // Default to free tier
   loaded: false,
@@ -39,20 +40,16 @@ export const configLoader = {
       return;
     }
 
-    // If we already have the keys from environment variables, just use those
-    // Check for the OpenAI API key as the primary provider
+    // If we already have the odds (client-safe) and other non-sensitive keys, just use those
     const oddsApiKey = getEnvVar('VITE_ODDS_API_KEY');
-    const openaiApiKey = getEnvVar('VITE_OPENAI_API_KEY');
     
-    if (oddsApiKey && openaiApiKey) {
+    if (oddsApiKey) {
       this.odds_api_key = oddsApiKey;
-      this.openai_api_key = openaiApiKey;
-      this.openai_base_url = getEnvVar('VITE_OPENAI_BASE_URL', 'https://api.openai.com/v1');
       this.perplexity_api_key = getEnvVar('VITE_PERPLEXITY_API_KEY', '');
       this.sports_db_api_key = getEnvVar('VITE_SPORTS_DB_API_KEY', '3'); // Default to free tier
       
       this.loaded = true;
-      console.log('Using environment variables for API keys');
+      console.log('Using environment variables for non-sensitive API keys');
       return;
     }
 
@@ -62,8 +59,8 @@ export const configLoader = {
       const response = await axios.get('/api/config');
       if (response.data) {
         this.odds_api_key = response.data.odds_api_key || this.odds_api_key;
-        this.openai_api_key = response.data.openai_api_key || this.openai_api_key;
-        this.openai_base_url = response.data.openai_base_url || this.openai_base_url;
+        // Never hydrate OpenAI keys client-side
+        this.openai_base_url = this.openai_base_url;
         this.perplexity_api_key = response.data.perplexity_api_key || this.perplexity_api_key;
         this.sports_db_api_key = response.data.sports_db_api_key || this.sports_db_api_key || '3';
         
@@ -106,8 +103,8 @@ export const configLoader = {
    * @returns {Promise<string>} - The OpenAI API key
    */
   getOpenaiApiKey: async function() {
-    await this.load();
-    return this.openai_api_key;
+    // Intentionally return empty on client; server should read process.env.OPENAI_API_KEY
+    return '';
   },
 
   /**

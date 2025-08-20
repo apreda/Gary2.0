@@ -9,7 +9,15 @@
  */
 export default async function handler(req, res) {
   // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '';
+  const allowed = [
+    'https://www.betwithgary.ai',
+    'https://betwithgary.ai',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ];
+  const allowOrigin = allowed.includes(origin) ? origin : 'https://www.betwithgary.ai';
+  res.setHeader('Access-Control-Allow-Origin', allowOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
@@ -53,11 +61,20 @@ export default async function handler(req, res) {
       });
     }
     
-    console.log(`[OPENAI PROXY] Using API key: ${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)}`);
+    // Do not log key fragments
     
     // Prepare request to OpenAI API with optimized parameters
+    // Resolve model and hard-enforce gpt-5 unless explicitly allowed
+    let resolvedModel = model || process.env.OPENAI_MODEL || 'gpt-5';
+    if (!/^gpt-5/i.test(resolvedModel)) {
+      console.warn(`[OPENAI PROXY] Overriding requested model '${resolvedModel}' -> 'gpt-5' (set ALLOW_LEGACY_MODELS=true to bypass)`);
+      if (process.env.ALLOW_LEGACY_MODELS !== 'true') {
+        resolvedModel = 'gpt-5';
+      }
+    }
+
     const requestData = {
-      model: model || 'gpt-4',
+      model: resolvedModel,
       messages,
       temperature: temperature || 0.5,
       max_tokens: Math.min(max_tokens || 800, 1000), // Limit tokens to prevent long responses
@@ -74,40 +91,49 @@ export default async function handler(req, res) {
     const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
     
     try {
-      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestData),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      const requestDuration = Date.now() - startTime;
-      console.log(`[OPENAI PROXY] OpenAI API responded in ${requestDuration}ms`);
-      
-      // Check if the response is OK
-      if (!openaiResponse.ok) {
-        const errorData = await openaiResponse.json().catch(() => ({}));
-        console.error(`[OPENAI PROXY] API error: ${openaiResponse.status}`, errorData);
-        
-        return res.status(openaiResponse.status).json({
-          error: 'Error from OpenAI API',
-          status: openaiResponse.status,
-          data: errorData
-        });
+      const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']));
+      let lastErr = null;
+      for (const m of models) {
+        const payload = { ...requestData, model: m };
+        console.log(`[OPENAI PROXY] Trying model: ${m}`);
+        try {
+          const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+
+          if (openaiResponse.ok) {
+            clearTimeout(timeoutId);
+            const requestDuration = Date.now() - startTime;
+            console.log(`[OPENAI PROXY] OpenAI API responded in ${requestDuration}ms using model: ${m}`);
+            const responseData = await openaiResponse.json();
+            return res.status(200).json(responseData);
+          }
+
+          const errorData = await openaiResponse.json().catch(() => ({}));
+          console.warn(`[OPENAI PROXY] Model ${m} failed with ${openaiResponse.status}`, errorData);
+          lastErr = { status: openaiResponse.status, data: errorData };
+          // continue to next fallback
+        } catch (innerErr) {
+          console.warn(`[OPENAI PROXY] Transport error with model ${m}:`, innerErr.message);
+          lastErr = { status: 502, data: { message: innerErr.message } };
+          // continue
+        }
       }
-      
-      // Parse the response
-      const responseData = await openaiResponse.json();
-      console.log(`[OPENAI PROXY] Successfully received response from OpenAI API (${requestDuration}ms)`);
-      
-      // Forward the response back to the client
-      return res.status(200).json(responseData);
-      
+
+      clearTimeout(timeoutId);
+      const status = lastErr?.status || 502;
+      return res.status(status).json({
+        error: 'OpenAI request failed across all allowed models',
+        status,
+        data: lastErr?.data || null
+      });
+
     } catch (fetchError) {
       clearTimeout(timeoutId);
       

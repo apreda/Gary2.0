@@ -1,18 +1,24 @@
 import SwiftUI
 
 struct ContentView: View {
+    @AppStorage("selectedTab") private var selectedTab: Int = 0
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             HomeView()
                 .tabItem { Label("Home", systemImage: "house.fill") }
+                .tag(0)
             GaryPicksView()
                 .tabItem { Label("Gary's Picks", systemImage: "list.bullet.rectangle") }
+                .tag(1)
             GaryPropsView()
                 .tabItem { Label("Gary's Props", systemImage: "sportscourt") }
+                .tag(2)
             BillfoldView()
                 .tabItem { Label("Billfold", systemImage: "wallet.pass") }
+                .tag(3)
             BetCardView()
                 .tabItem { Label("BetCard", systemImage: "creditcard") }
+                .tag(4)
         }
         .tint(Color(hex: "#B8953F"))
     }
