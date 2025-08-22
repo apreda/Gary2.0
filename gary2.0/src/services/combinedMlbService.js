@@ -385,8 +385,7 @@ const combinedMlbService = {
       try {
         gameContext = await perplexityService.getRichGameContext(homeTeamName, awayTeamName, 'mlb', date);
         if (!gameContext || Object.keys(gameContext).length === 0) {
-          console.log('[Combined MLB Service] Perplexity returned empty context; using fallback text block');
-          gameContext = { gamePreview: 'No preview available', generalContext: 'No structured context returned.' };
+          throw new Error('Perplexity returned empty context');
         } else {
           // Keep only 3-4 key findings to pass to OpenAI, avoid info dump
           const findings = Array.isArray(gameContext.key_findings) ? gameContext.key_findings.slice(0, 4) : [];
@@ -394,7 +393,8 @@ const combinedMlbService = {
         }
       } catch (contextError) {
         console.error(`[Combined MLB Service] Error getting rich game context: ${contextError.message}`);
-        gameContext = { gamePreview: 'No preview available' };
+        // Explicitly surface missing context rather than silently substituting
+        gameContext = { key_findings: [] };
       }
 
       // 7. Get odds data with improved team name matching
