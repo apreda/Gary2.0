@@ -380,13 +380,17 @@ const combinedMlbService = {
         console.error(`[Combined MLB Service] Error getting hitter stats: ${hitterError.message}`);
       }
 
-      // 6. Get game context from Perplexity (rich structured JSON)
+      // 6. Get game context from Perplexity (rich structured JSON) and keep only key findings
       let gameContext = {};
       try {
         gameContext = await perplexityService.getRichGameContext(homeTeamName, awayTeamName, 'mlb', date);
         if (!gameContext || Object.keys(gameContext).length === 0) {
           console.log('[Combined MLB Service] Perplexity returned empty context; using fallback text block');
           gameContext = { gamePreview: 'No preview available', generalContext: 'No structured context returned.' };
+        } else {
+          // Keep only 3-4 key findings to pass to OpenAI, avoid info dump
+          const findings = Array.isArray(gameContext.key_findings) ? gameContext.key_findings.slice(0, 4) : [];
+          gameContext = { key_findings: findings };
         }
       } catch (contextError) {
         console.error(`[Combined MLB Service] Error getting rich game context: ${contextError.message}`);
