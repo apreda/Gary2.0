@@ -21,7 +21,7 @@ export const perplexityService = {
       
       // Default options with correct model name from Perplexity documentation
       const defaultOptions = {
-        model: 'llama-3.1-sonar-small-128k-online',
+        model: 'sonar',
         temperature: 0.3,
         maxTokens: 500
       };
@@ -30,12 +30,15 @@ export const perplexityService = {
       const normalizeModel = (m) => {
         if (!m) return defaultOptions.model;
         const map = {
-          // Map generic aliases to current Perplexity model IDs
+          // Current Perplexity model IDs
           'sonar': 'sonar',
-          'sonar-small': 'sonar-small-online',
-          'sonar-large': 'sonar-large-online',
-          'llama-3.1-sonar-small-128k-online': 'sonar-small-online',
-          'llama-3.1-sonar-large-128k-online': 'sonar-large-online'
+          'sonar-pro': 'sonar-pro',
+          'sonar-large': 'sonar-pro',
+          'sonar-large-online': 'sonar-pro',
+          'llama-3.1-sonar-large-128k-online': 'sonar-pro',
+          'sonar-small': 'sonar',
+          'sonar-small-online': 'sonar',
+          'llama-3.1-sonar-small-128k-online': 'sonar'
         };
         return map[m] || m;
       };
@@ -80,8 +83,7 @@ export const perplexityService = {
 
       const candidates = Array.from(new Set([
         requestOptions.model,
-        'sonar-large-online',
-        'sonar-small-online',
+        'sonar-pro',
         'sonar'
       ]));
 

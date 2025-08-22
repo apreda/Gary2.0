@@ -5,11 +5,8 @@
 
 // Define supported models (updated for 2025)
 const SUPPORTED_MODELS = [
-  'llama-3.1-sonar-small-128k-online',
-  'llama-3.1-sonar-large-128k-online',
-  'llama-3.1-sonar-huge-128k-online',
-  'llama-3-sonar-online',
-  'llama-3-70b-online',
+  'sonar',
+  'sonar-pro',
   'pplx-7b-online',
   'pplx-70b-online',
   'mixtral-8x7b-instruct',
@@ -53,7 +50,7 @@ export default async function handler(req, res) {
     }
     
     // Select and validate model
-    const selectedModel = model || 'llama-3.1-sonar-small-128k-online';
+    const selectedModel = model || 'sonar';
     if (!SUPPORTED_MODELS.includes(selectedModel)) {
       console.log(`[PERPLEXITY PROXY] Invalid model requested: ${selectedModel}`);
       return res.status(400).json({
