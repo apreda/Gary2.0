@@ -78,7 +78,8 @@ export default async function handler(req, res) {
     const supabase = getSupabaseAdmin();
     const dateParam = req.query.date || EST_DATE();
     const cursor = parseInt(req.query.cursor ?? '0', 10) || 0;
-    const batch = Math.max(1, Math.min(5, parseInt(req.query.batch ?? '3', 10) || 3));
+    // Default batch size to 1 to reduce serverless execution time per request
+    const batch = Math.max(1, Math.min(5, parseInt(req.query.batch ?? '1', 10) || 1));
 
     console.log(`[Daily Picks] Start batch – date=${dateParam} cursor=${cursor} batch=${batch}`);
 
