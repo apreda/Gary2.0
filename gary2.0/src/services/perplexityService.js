@@ -109,12 +109,7 @@ export const perplexityService = {
     if (typeof window !== 'undefined') {
       return '/api/perplexity-proxy';
     }
-    // Server: prefer proxy via deployment URL if available; else fall back to vendor
-    const host = process.env.VERCEL_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.PUBLIC_SITE_URL;
-    if (host) {
-      const base = host.startsWith('http') ? host : `https://${host}`;
-      return `${base.replace(/\/$/, '')}/api/perplexity-proxy`;
-    }
+    // Server: call vendor API directly to avoid Vercel deployment protection gates
     return 'https://api.perplexity.ai/chat/completions';
   })(),
   
