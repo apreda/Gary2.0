@@ -27,7 +27,16 @@ export const perplexityService = {
       };
       
       // Merge options
-      const requestOptions = { ...defaultOptions, ...options };
+      const normalizeModel = (m) => {
+        if (!m) return defaultOptions.model;
+        const map = {
+          'sonar': 'llama-3.1-sonar-small-128k-online',
+          'sonar-small': 'llama-3.1-sonar-small-128k-online',
+          'sonar-large': 'llama-3.1-sonar-large-128k-online'
+        };
+        return map[m] || m;
+      };
+      const requestOptions = { ...defaultOptions, ...options, model: normalizeModel(options.model) };
 
       // Add system message if provided
       const messages = [];
@@ -43,8 +52,8 @@ export const perplexityService = {
         content: query
       });
       
-      // Decide headers based on whether we're calling our proxy (client) or the vendor API (server)
-      const isProxy = typeof window !== 'undefined' ? this.API_BASE_URL.startsWith('/') : false;
+      // Decide headers based on whether we're calling our proxy or the vendor API
+      const isProxy = this.API_BASE_URL.includes('/api/perplexity-proxy');
       const headers = { 'Content-Type': 'application/json' };
       if (!isProxy && this.API_KEY) {
         headers['Authorization'] = `Bearer ${this.API_KEY}`;
@@ -60,7 +69,7 @@ export const perplexityService = {
         },
         {
           headers,
-          timeout: 30000 // 30 second timeout
+          timeout: 60000 // allow more time for online search
         }
       );
       
@@ -71,7 +80,7 @@ export const perplexityService = {
       };
       
     } catch (error) {
-      console.error('Error in Perplexity search:', error);
+      console.error('Error in Perplexity search:', error.response?.data || error.message);
       return {
         success: false,
         error: error.message,
@@ -96,12 +105,16 @@ export const perplexityService = {
    * Base URL for Perplexity API
    */
   API_BASE_URL: (() => {
-    // Check if we're in a browser environment
+    // Browser: always use local proxy
     if (typeof window !== 'undefined') {
-      // Use relative path - this will work for both local and deployed environments
       return '/api/perplexity-proxy';
     }
-    // Use direct API in Node.js environment
+    // Server: prefer proxy via deployment URL if available; else fall back to vendor
+    const host = process.env.VERCEL_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.PUBLIC_SITE_URL;
+    if (host) {
+      const base = host.startsWith('http') ? host : `https://${host}`;
+      return `${base.replace(/\/$/, '')}/api/perplexity-proxy`;
+    }
     return 'https://api.perplexity.ai/chat/completions';
   })(),
   
@@ -252,6 +265,65 @@ export const perplexityService = {
       temperature: 0.2,
       maxTokens: 200
     });
+  },
+  
+  /**
+   * Get rich structured game context for OpenAI consumption
+   * Includes: player streaks, team trends, injuries, weather, fan storylines, superstition,
+   * betting trends, key matchup insights, and citations
+   */
+  getRichGameContext: async function(homeTeam, awayTeam, league = 'mlb', dateStr = new Date().toISOString().slice(0, 10)) {
+    try {
+      const cacheKey = `richctx:${league}:${dateStr}:${homeTeam}|${awayTeam}`;
+      const cached = cache.get(cacheKey);
+      if (cached && (Date.now() - cached.t) < CACHE_TTL) {
+        return cached.v;
+      }
+
+      const systemMessage = [
+        'You are a sports facts extractor.',
+        'Return strict JSON only with keys: ',
+        'player_streaks[], team_trends[], injuries[], weather, fan_storylines[], superstition[], betting_trends[], key_matchup_insights[], citations[].',
+        'Each array item should include "source_url" when possible. No text outside JSON.'
+      ].join(' ');
+
+      const query = [
+        `Find current, verifiable context for the upcoming ${league.toUpperCase()} game`,
+        `${awayTeam} at ${homeTeam} on ${dateStr} (ET).`,
+        'Include: player hitting/pitching streaks; team trends last 5/10/30; confirmed injuries with status;',
+        'expected weather (stadium/roof, temp, wind); notable fan storylines; superstition/narratives (clearly labeled);',
+        'betting trends (line movement, public % if available); key matchup insights (pitcher vs lineup, splits).',
+        'Return only JSON.'
+      ].join(' ');
+
+      const res = await this.search(query, {
+        model: 'llama-3.1-sonar-large-128k-online',
+        temperature: 0.1,
+        maxTokens: 1400,
+        systemMessage
+      });
+
+      if (!res?.success || !res?.data) return {};
+
+      const tryParse = (txt) => {
+        try { return JSON.parse(txt); } catch (e) {}
+        const codeMatch = txt.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (codeMatch && codeMatch[1]) { try { return JSON.parse(codeMatch[1]); } catch (e) {} }
+        const braceMatch = txt.match(/\{[\s\S]*\}/);
+        if (braceMatch && braceMatch[0]) { try { return JSON.parse(braceMatch[0]); } catch (e) {} }
+        return null;
+      };
+
+      const obj = tryParse(res.data);
+      if (obj && typeof obj === 'object') {
+        cache.set(cacheKey, { t: Date.now(), v: obj });
+        return obj;
+      }
+      return {};
+    } catch (e) {
+      console.error('getRichGameContext error:', e.message);
+      return {};
+    }
   },
   
   /**
