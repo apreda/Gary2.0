@@ -327,14 +327,28 @@ export const perplexityService = {
         'Also synthesize key_findings: 3-4 most predictive items with brief rationale and source_url.'
       ].join(' ');
 
-      const res = await this.search(query, {
-        model: 'sonar-pro',
-        temperature: 0.1,
-        maxTokens: 1400,
-        systemMessage
-      });
+      const attempt = async (prompt, preferLarge = true) => {
+        const res = await this.search(prompt, {
+          model: preferLarge ? 'sonar-pro' : 'sonar',
+          temperature: 0.05,
+          maxTokens: 1600,
+          systemMessage
+        });
+        return res;
+      };
 
-      if (!res?.success || !res?.data) return {};
+      let res = await attempt(query, true);
+      if (!res?.success || !res?.data) {
+        console.warn('getRichGameContext: first attempt failed', res?.status, res?.error);
+        // Simplify instruction and retry (often helps JSON compliance)
+        const simplified = [
+          `Return strict JSON with keys: player_streaks[], team_trends[], injuries[], weather, bullpen_usage, manager_tendencies, umpire_data, travel_rest, stadium_factors, lineup_confirmation, fan_storylines[], superstition[], rivalry_history, clubhouse_vibes, motivation_factor, key_matchup_insights[], citations[], key_findings[].`,
+          `Game: ${awayTeam} at ${homeTeam} (${league.toUpperCase()}) on ${dateStr} (ET).`,
+          'Focus on verifiable on-field/context factors only. key_findings = top 3-4 predictive items with rationale and source_url.'
+        ].join(' ');
+        res = await attempt(simplified, false);
+        if (!res?.success || !res?.data) return {};
+      }
 
       const tryParse = (txt) => {
         try { return JSON.parse(txt); } catch (e) {}
