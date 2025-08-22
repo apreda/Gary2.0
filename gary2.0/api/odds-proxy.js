@@ -15,13 +15,11 @@ export default async function handler(req, res) {
   }
   
   try {
-    // Get the API key from environment variables
-    const apiKey = process.env.VITE_ODDS_API_KEY;
+    // Get the API key from server environment variables (no VITE prefix)
+    const apiKey = process.env.ODDS_API_KEY;
     
     if (!apiKey) {
-      return res.status(500).json({
-        error: 'API key is missing in environment variables'
-      });
+      return res.status(500).json({ error: 'Missing ODDS_API_KEY on server' });
     }
     
     // Extract the endpoint and query params from the request

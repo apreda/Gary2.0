@@ -15,5 +15,5 @@
       "schedule": "0 15 * * *"
     }
   ],
-  "buildCommand": "vite build"
+  "buildCommand": "npm run build:secure"
 }

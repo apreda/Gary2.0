@@ -27,7 +27,8 @@ export const configLoader = {
   // Never load OpenAI keys on the client; proxy uses server-side OPENAI_API_KEY only
   openai_api_key: '',
   openai_base_url: 'https://api.openai.com/v1',
-  perplexity_api_key: getEnvVar('VITE_PERPLEXITY_API_KEY', ''),
+  // Never expose Perplexity key in browser; proxy uses server-side PERPLEXITY_API_KEY only
+  perplexity_api_key: '',
   sports_db_api_key: getEnvVar('VITE_SPORTS_DB_API_KEY', '3'), // Default to free tier
   loaded: false,
 
@@ -45,7 +46,8 @@ export const configLoader = {
     
     if (oddsApiKey) {
       this.odds_api_key = oddsApiKey;
-      this.perplexity_api_key = getEnvVar('VITE_PERPLEXITY_API_KEY', '');
+      // Do not load Perplexity key in the browser
+      this.perplexity_api_key = '';
       this.sports_db_api_key = getEnvVar('VITE_SPORTS_DB_API_KEY', '3'); // Default to free tier
       
       this.loaded = true;

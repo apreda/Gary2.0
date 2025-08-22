@@ -56,7 +56,7 @@ const openaiServiceInstance = {
     try {
       console.log('Generating response from OpenAI via secure proxy...');
       
-      const { temperature = 0.5, maxTokens = 800 } = options;
+      const { temperature = 0.5, maxTokens = 6000 } = options;
       
       console.log(`Request messages count: ${messages.length}, ` + 
                  `Temp: ${temperature}, MaxTokens: ${maxTokens}`);
@@ -74,7 +74,7 @@ const openaiServiceInstance = {
       try {
         response = await axios.post(OPENAI_PROXY_URL, requestData, {
           headers: { 'Content-Type': 'application/json' },
-          timeout: 60000
+          timeout: 120000
         });
       } catch (proxyErr) {
         // If proxy fails (401/404/5xx) and server key is available, fall back to direct call (server only)
@@ -88,7 +88,7 @@ const openaiServiceInstance = {
         if (canFallback) {
           response = await axios.post(OPENAI_DIRECT_URL, requestData, {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_SERVER_KEY}` },
-            timeout: 60000
+            timeout: 120000
           });
         } else {
           throw proxyErr;
@@ -124,7 +124,7 @@ const openaiServiceInstance = {
           const retryMax = Math.min((maxTokens || 800) * 2, 3200);
           console.warn(`[OpenAI] Empty content. Retrying once with max_tokens=${retryMax}...`);
           const retryReq = { ...requestData, max_tokens: retryMax };
-          const retryRes = await axios.post(OPENAI_PROXY_URL, retryReq, { headers: { 'Content-Type': 'application/json' }, timeout: 60000 });
+          const retryRes = await axios.post(OPENAI_PROXY_URL, retryReq, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
           const rd = retryRes.data || {};
           let fallback;
           if (rd?.choices?.[0]?.message?.content) fallback = rd.choices[0].message.content;

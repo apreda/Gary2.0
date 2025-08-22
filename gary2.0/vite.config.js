@@ -1,44 +1,33 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from 'tailwindcss'
 import autoprefixer from 'autoprefixer'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
-  const env = loadEnv(mode, process.cwd(), '')
-  
-  // Expose process.env as import.meta.env in JS
-  const processEnvValues = {
-    'process.env': Object.entries(env).reduce(
-      (prev, [key, val]) => {
-        return {
-          ...prev,
-          [key]: val,
-        }
-      },
-      {},
-    )
-  }
+	const isProd = mode === 'production'
 
-  return {
-    plugins: [react()],
-    define: processEnvValues,
-    build: {
-      sourcemap: true
-    },
-    // Configure optimizations for Vercel Analytics
-    optimizeDeps: {
-      include: ['@vercel/analytics/react']
-    },
-    css: {
-      postcss: {
-        plugins: [
-          tailwindcss,
-          autoprefixer,
-        ],
-      },
-    },
-  }
+	return {
+		plugins: [react()],
+		define: {
+			// Do not expose server env to the client bundle
+			'process.env': {}
+		},
+		build: {
+			// Avoid leaking internals via source maps in production bundles
+			sourcemap: false
+		},
+		// Configure optimizations for Vercel Analytics
+		optimizeDeps: {
+			include: ['@vercel/analytics/react']
+		},
+		css: {
+			postcss: {
+				plugins: [
+					tailwindcss,
+					autoprefixer,
+				],
+			},
+		},
+	}
 })

@@ -43,6 +43,13 @@ export const perplexityService = {
         content: query
       });
       
+      // Decide headers based on whether we're calling our proxy (client) or the vendor API (server)
+      const isProxy = typeof window !== 'undefined' ? this.API_BASE_URL.startsWith('/') : false;
+      const headers = { 'Content-Type': 'application/json' };
+      if (!isProxy && this.API_KEY) {
+        headers['Authorization'] = `Bearer ${this.API_KEY}`;
+      }
+      
       const response = await axios.post(
         this.API_BASE_URL,
         {
@@ -52,10 +59,7 @@ export const perplexityService = {
           max_tokens: requestOptions.maxTokens
         },
         {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.API_KEY}`
-          },
+          headers,
           timeout: 30000 // 30 second timeout
         }
       );
@@ -80,18 +84,12 @@ export const perplexityService = {
    * The Perplexity API key (will be loaded from environment variables)
    */
   API_KEY: (() => {
-    // When running in Node.js environment, dotenv should already have loaded
-    // the environment variables from .env file
-    if (typeof process !== 'undefined' && process.env) {
-      return process.env.VITE_PERPLEXITY_API_KEY || '';
+    // Only resolve secrets in server environments
+    if (typeof window === 'undefined' && typeof process !== 'undefined' && process.env) {
+      return process.env.PERPLEXITY_API_KEY || '';
     }
-    // When running in browser environment with Vite
-    try {
-      return import.meta.env?.VITE_PERPLEXITY_API_KEY || '';
-    } catch (e) {
-      console.error('Error loading Perplexity API key:', e);
-      return '';
-    }
+    // Never expose Perplexity key in the browser bundle
+    return '';
   })(),
   
   /**

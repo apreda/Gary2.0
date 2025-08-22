@@ -78,8 +78,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // Allow a larger default output budget; GPT-5 may spend tokens on hidden reasoning
-    const baseMax = Math.min(max_tokens || 3200, 4096);
+    // Allow a larger default output budget for long analyses
+    const baseMax = Math.min(max_tokens || 6000, 8192);
     const requestData = {
       model: resolvedModel,
       messages,
@@ -95,7 +95,7 @@ export default async function handler(req, res) {
     
     // Create AbortController for timeout handling
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
     
     try {
       const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']))
@@ -104,12 +104,12 @@ export default async function handler(req, res) {
         // Generous caps per model to avoid finish_reason: "length"
         let capped;
         if (m === 'gpt-5-nano') {
-          capped = Math.max(1024, Math.min(baseMax, 1024));
+          capped = Math.max(1024, Math.min(baseMax, 2048));
         } else if (m === 'gpt-5-mini') {
-          capped = Math.max(2048, Math.min(baseMax, 2048));
+          capped = Math.max(2048, Math.min(baseMax, 4096));
         } else {
           // gpt-5 default
-          capped = Math.max(3072, Math.min(baseMax, 4096));
+          capped = Math.max(4096, Math.min(baseMax, 8192));
         }
         let payload = { ...requestData, model: m, max_completion_tokens: capped, response_format: { type: 'json_object' } };
         console.log(`[OPENAI PROXY] Trying model: ${m} with max_completion_tokens: ${capped}, temperature: 1 (json_object mode)`);

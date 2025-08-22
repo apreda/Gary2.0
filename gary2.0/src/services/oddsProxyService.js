@@ -13,20 +13,7 @@ export const oddsProxyService = {
     try {
       console.log('📊 Fetching sports via proxy service...');
       
-      // Try the direct API first (for local development with CORS extensions)
-      try {
-        const directResponse = await axios.get(`https://api.the-odds-api.com/v4/sports`, {
-          params: {
-            apiKey: import.meta.env.VITE_ODDS_API_KEY
-          }
-        });
-        console.log(`✅ Successfully retrieved ${directResponse.data.length} sports directly`);
-        return directResponse.data;
-      } catch (directError) {
-        console.log('Direct API call failed, trying proxy:', directError.message);
-      }
-      
-      // Fall back to the proxy if direct call fails
+      // Always use server proxy to avoid exposing the key
       const response = await axios.get('/api/odds-proxy?endpoint=sports');
       console.log(`✅ Successfully retrieved ${response.data.length} sports via proxy`);
       return response.data;
@@ -45,23 +32,7 @@ export const oddsProxyService = {
     try {
       console.log(`📊 Fetching odds for ${sport} via proxy...`);
       
-      // Try direct API first
-      try {
-        const params = {
-          apiKey: import.meta.env.VITE_ODDS_API_KEY,
-          regions: 'us',
-          markets: 'spreads,totals,h2h',
-          oddsFormat: 'american'
-        };
-        
-        const directResponse = await axios.get(`https://api.the-odds-api.com/v4/sports/${sport}/odds`, { params });
-        console.log(`✅ Retrieved ${directResponse.data.length} games for ${sport} directly`);
-        return directResponse.data;
-      } catch (directError) {
-        console.log(`Direct API call for ${sport} failed, trying proxy:`, directError.message);
-      }
-      
-      // Fall back to proxy
+      // Always use server proxy
       const proxyUrl = `/api/odds-proxy?endpoint=sports/${sport}/odds&regions=us&markets=spreads,totals,h2h&oddsFormat=american`;
       const response = await axios.get(proxyUrl);
       
