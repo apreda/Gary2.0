@@ -309,22 +309,26 @@ export const perplexityService = {
 
       const systemMessage = [
         'You are a sports facts extractor.',
-        'Return strict JSON only with keys: ',
-        'player_streaks[], team_trends[], injuries[], weather, fan_storylines[], superstition[], betting_trends[], key_matchup_insights[], citations[].',
-        'Each array item should include "source_url" when possible. No text outside JSON.'
+        'Return strict JSON only with keys:',
+        'player_streaks[], team_trends[], injuries[], weather, bullpen_usage, manager_tendencies, umpire_data, travel_rest, stadium_factors, lineup_confirmation, fan_storylines[], superstition[], rivalry_history, clubhouse_vibes, motivation_factor, key_matchup_insights[], citations[], key_findings[].',
+        'key_findings must contain the 3-4 most predictive, verifiable items across categories, each with a short rationale and source_url when possible.',
+        'No text outside JSON.'
       ].join(' ');
 
       const query = [
         `Find current, verifiable context for the upcoming ${league.toUpperCase()} game`,
         `${awayTeam} at ${homeTeam} on ${dateStr} (ET).`,
-        'Include: player hitting/pitching streaks; team trends last 5/10/30; confirmed injuries with status;',
-        'expected weather (stadium/roof, temp, wind); notable fan storylines; superstition/narratives (clearly labeled);',
-        'betting trends (line movement, public % if available); key matchup insights (pitcher vs lineup, splits).',
-        'Return only JSON.'
+        'Include only on-field/contextual factors (no betting trends):',
+        'player hitting/pitching streaks; team trends (last 5/10/30); confirmed injuries and status;',
+        'expected weather (stadium/roof, temp, wind); bullpen usage (last 7 days workload, top relievers availability);',
+        'manager tendencies (bullpen decisions, platoons, pinch-hit history); umpire data (plate ump, zone tendencies, OU impact);',
+        'travel & rest (distance, games last 10 days, day/night splits); stadium factors (park HR/run factors and today’s weather interaction);',
+        'lineup confirmation timing and surprise changes; rivalry/history angles; clubhouse vibes (recent quotes); fan superstitions; motivation factor (playoff race).',
+        'Also synthesize key_findings: 3-4 most predictive items with brief rationale and source_url.'
       ].join(' ');
 
       const res = await this.search(query, {
-        model: 'llama-3.1-sonar-large-128k-online',
+        model: 'sonar-pro',
         temperature: 0.1,
         maxTokens: 1400,
         systemMessage
