@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
   try {
     // Parse the request body
-    const { model, messages } = req.body;
+    const { model, messages, temperature, max_tokens } = req.body || {};
     
     // Validate required parameters
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -78,7 +78,8 @@ export default async function handler(req, res) {
     const requestData = {
       model: selectedModel,
       messages,
-      max_tokens: 512
+      temperature: typeof temperature === 'number' ? temperature : 0.3,
+      max_tokens: typeof max_tokens === 'number' ? max_tokens : 512
     };
     
     console.log(`[PERPLEXITY PROXY] Forwarding request to Perplexity API with model: ${selectedModel}`);

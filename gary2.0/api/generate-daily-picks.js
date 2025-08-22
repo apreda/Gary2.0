@@ -10,10 +10,6 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { oddsService } from '../src/services/oddsService.js';
-import { combinedMlbService } from '../src/services/combinedMlbService.js';
-import { generateGaryAnalysis } from '../src/services/garyEngine.js';
-import { picksService as enhancedPicksService } from '../src/services/picksService.enhanced.js';
 
 const EST_DATE = () => {
   const now = new Date();
@@ -32,6 +28,10 @@ function getSupabaseAdmin() {
 }
 
 async function generatePickForGame(game, date) {
+  // Lazy-import heavy modules to avoid top-level evaluation issues
+  const { combinedMlbService } = await import('../src/services/combinedMlbService.js');
+  const { generateGaryAnalysis } = await import('../src/services/garyEngine.js');
+  const { picksService: enhancedPicksService } = await import('../src/services/picksService.enhanced.js');
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
 
@@ -82,7 +82,8 @@ export default async function handler(req, res) {
 
     console.log(`[Daily Picks] Start batch – date=${dateParam} cursor=${cursor} batch=${batch}`);
 
-    // Fetch all upcoming MLB games
+    // Lazy import oddsService to avoid import-time side effects
+    const { oddsService } = await import('../src/services/oddsService.js');
     const games = await oddsService.getUpcomingGames('baseball_mlb');
     const total = games?.length || 0;
     if (total === 0) {
