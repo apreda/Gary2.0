@@ -59,18 +59,16 @@ async function generatePickForGame(game, date) {
   const analysis = await generateGaryAnalysis(complete);
   if (!analysis) return null;
 
-  return {
+  // Minimal pick-card payload: store only what the UI needs from OpenAI JSON
+  const oai = analysis?.rawOpenAIOutput || {};
+  const minimal = {
     id: game.id,
-    sport: 'baseball_mlb',
-    homeTeam,
-    awayTeam,
-    analysisPrompt,
-    analysis,
-    gameData,
-    gameTime: game.commence_time,
-    pickType: 'normal',
-    timestamp: new Date().toISOString()
+    date,
+    // Spread OpenAI card fields (pick, odds, type, confidence, homeTeam, awayTeam, league, time, rationale, etc.)
+    ...oai
   };
+
+  return minimal;
 }
 
 export default async function handler(req, res) {
@@ -129,7 +127,10 @@ export default async function handler(req, res) {
     if (selErr) console.warn('[Daily Picks] select error:', selErr.message);
 
     const prev = Array.isArray(existing?.picks) ? existing.picks : (existing?.picks ? JSON.parse(existing.picks) : []);
-    const nextPicks = [...prev, ...picks];
+    // De-duplicate by id, prefer latest
+    const byId = new Map(prev.map(p => [p.id, p]));
+    for (const p of picks) byId.set(p.id, p);
+    const nextPicks = Array.from(byId.values());
 
     if (existing?.id) {
       const { error: upErr } = await supabase
