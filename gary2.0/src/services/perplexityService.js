@@ -30,9 +30,12 @@ export const perplexityService = {
       const normalizeModel = (m) => {
         if (!m) return defaultOptions.model;
         const map = {
-          'sonar': 'llama-3.1-sonar-small-128k-online',
-          'sonar-small': 'llama-3.1-sonar-small-128k-online',
-          'sonar-large': 'llama-3.1-sonar-large-128k-online'
+          // Map generic aliases to current Perplexity model IDs
+          'sonar': 'sonar',
+          'sonar-small': 'sonar-small-online',
+          'sonar-large': 'sonar-large-online',
+          'llama-3.1-sonar-small-128k-online': 'sonar-small-online',
+          'llama-3.1-sonar-large-128k-online': 'sonar-large-online'
         };
         return map[m] || m;
       };
@@ -59,19 +62,46 @@ export const perplexityService = {
         headers['Authorization'] = `Bearer ${this.API_KEY}`;
       }
       
-      const response = await axios.post(
-        this.API_BASE_URL,
-        {
-          model: requestOptions.model,
-          messages: messages,
-          temperature: requestOptions.temperature,
-          max_tokens: requestOptions.maxTokens
-        },
-        {
-          headers,
-          timeout: 60000 // allow more time for online search
+      const postOnce = async (modelId) => {
+        return axios.post(
+          this.API_BASE_URL,
+          {
+            model: modelId,
+            messages: messages,
+            temperature: requestOptions.temperature,
+            max_tokens: requestOptions.maxTokens
+          },
+          {
+            headers,
+            timeout: 60000
+          }
+        );
+      };
+
+      const candidates = Array.from(new Set([
+        requestOptions.model,
+        'sonar-large-online',
+        'sonar-small-online',
+        'sonar'
+      ]));
+
+      let response = null;
+      let lastError = null;
+      for (const modelId of candidates) {
+        try {
+          response = await postOnce(modelId);
+          break;
+        } catch (err) {
+          const status = err?.response?.status;
+          const errType = err?.response?.data?.error?.type;
+          if (status === 400 && errType === 'invalid_model') {
+            lastError = err;
+            continue; // try next candidate model
+          }
+          throw err;
         }
-      );
+      }
+      if (!response) throw lastError || new Error('Perplexity request failed');
       
       return {
         success: true,
