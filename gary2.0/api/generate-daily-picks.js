@@ -82,6 +82,20 @@ export default async function handler(req, res) {
     const batch = Math.max(1, Math.min(5, parseInt(req.query.batch ?? '1', 10) || 1));
     const autoNext = (req.query.autonext === '1' || req.query.autonext === 'true');
 
+    // Status-only mode: return processed vs total without doing work
+    if (req.query.status === '1' || req.query.status === 'true') {
+      const { oddsService } = await import('../src/services/oddsService.js');
+      const games = await oddsService.getUpcomingGames('baseball_mlb');
+      const total = games?.length || 0;
+      const { data: existing } = await supabase
+        .from('daily_picks')
+        .select('picks')
+        .eq('date', dateParam)
+        .maybeSingle();
+      const prev = Array.isArray(existing?.picks) ? existing.picks : (existing?.picks ? JSON.parse(existing.picks) : []);
+      return res.status(200).json({ ok: true, processed: prev.length, total });
+    }
+
     console.log(`[Daily Picks] Start batch – date=${dateParam} cursor=${cursor} batch=${batch}`);
 
     // Lazy import oddsService to avoid import-time side effects
