@@ -15,14 +15,8 @@ const MLB_API_HOST = 'v1.baseball.api-sports.io';
 const NBA_API_HOST = 'v1.basketball.api-sports.io';
 const NHL_API_HOST = 'v1.hockey.api-sports.io';
 
-// For client-side (browser) usage in Vite environment
+// Key no longer read client-side; server proxy holds API_SPORTS_KEY
 let apiSportsKey = '';
-if (typeof window !== 'undefined') {
-  apiSportsKey = import.meta.env?.VITE_API_SPORTS_KEY || process.env.VITE_API_SPORTS_KEY;
-} else {
-  // For server-side usage
-  apiSportsKey = process.env.VITE_API_SPORTS_KEY;
-}
 
 const apiSportsService = {
   // Use the API key from environment variables with fallback
@@ -52,17 +46,9 @@ const apiSportsService = {
       const url = `${baseUrl}${endpoint}`;
       console.log(`API-Sports Request [${sport}]: ${url} with params:`, params);
       
-      // Create headers exactly as shown in the API documentation
-      const headers = {
-        'x-rapidapi-key': this.API_KEY,
-        'x-rapidapi-host': apiHost
-      };
-      
-      console.log('Using headers:', headers);
-      
-      const response = await axios.get(url, {
-        params,
-        headers: headers
+      // Call our serverless proxy so the key is never exposed
+      const response = await axios.get('/api/api-sports-proxy', {
+        params: { endpoint, sport, ...params }
       });
       
       return response.data;

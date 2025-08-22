@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:secure": "vite build && node scripts/scan-dist-for-secrets.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "api": "node api/stripe-api.js",

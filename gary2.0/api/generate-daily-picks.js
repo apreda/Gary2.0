@@ -1,0 +1,138 @@
+/**
+ * Chunked daily picks generator (server-side)
+ * - Processes MLB games in small batches to respect serverless limits
+ * - Upserts results into Supabase `daily_picks` per date
+ *
+ * Query params (optional):
+ * - cursor: starting game index (default 0)
+ * - batch: number of games to process this call (default 3)
+ * - date: YYYY-MM-DD (defaults to EST today)
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import { oddsService } from '../src/services/oddsService.js';
+import { combinedMlbService } from '../src/services/combinedMlbService.js';
+import { generateGaryAnalysis } from '../src/services/garyEngine.js';
+import { picksService as enhancedPicksService } from '../src/services/picksService.enhanced.js';
+
+const EST_DATE = () => {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const est = new Date(utc + (3600000 * -5));
+  return est.toISOString().split('T')[0];
+};
+
+function getSupabaseAdmin() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    throw new Error('Missing Supabase admin env (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
+  }
+  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false }});
+}
+
+async function generatePickForGame(game, date) {
+  const homeTeam = game.home_team;
+  const awayTeam = game.away_team;
+
+  const gameData = await combinedMlbService.getComprehensiveGameData(homeTeam, awayTeam, date);
+  if (!gameData) return null;
+
+  const analysisPrompt = enhancedPicksService.buildMlbGameAnalysisPrompt({ game: { homeTeam, awayTeam }, ...gameData }, game);
+
+  const ensure = (v, d) => v || d;
+  const complete = {
+    homeTeam,
+    awayTeam,
+    prompt: analysisPrompt,
+    sport: 'baseball_mlb',
+    league: 'MLB',
+    teamStats: ensure(gameData.teamStats, { homeTeam: { teamName: homeTeam }, awayTeam: { teamName: awayTeam } }),
+    pitchers: ensure(gameData.pitchers, { home: { fullName: 'TBD', seasonStats: {} }, away: { fullName: 'TBD', seasonStats: {} }}),
+    gameContext: ensure(gameData.gameContext, {}),
+    hitterStats: ensure(gameData.hitterStats, { home: [], away: [] }),
+    odds: gameData.odds ? { bookmakers: gameData.odds.bookmakers || [], markets: gameData.odds.bookmakers?.[0]?.markets || [] } : null,
+    gameTime: game.commence_time || new Date().toISOString(),
+    time: game.commence_time || new Date().toISOString()
+  };
+
+  const analysis = await generateGaryAnalysis(complete);
+  if (!analysis) return null;
+
+  return {
+    id: game.id,
+    sport: 'baseball_mlb',
+    homeTeam,
+    awayTeam,
+    analysisPrompt,
+    analysis,
+    gameData,
+    gameTime: game.commence_time,
+    pickType: 'normal',
+    timestamp: new Date().toISOString()
+  };
+}
+
+export default async function handler(req, res) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const dateParam = req.query.date || EST_DATE();
+    const cursor = parseInt(req.query.cursor ?? '0', 10) || 0;
+    const batch = Math.max(1, Math.min(5, parseInt(req.query.batch ?? '3', 10) || 3));
+
+    console.log(`[Daily Picks] Start batch – date=${dateParam} cursor=${cursor} batch=${batch}`);
+
+    // Fetch all upcoming MLB games
+    const games = await oddsService.getUpcomingGames('baseball_mlb');
+    const total = games?.length || 0;
+    if (total === 0) {
+      return res.status(200).json({ ok: true, message: 'No upcoming MLB games found', total: 0 });
+    }
+
+    const start = Math.min(cursor, total);
+    const end = Math.min(start + batch, total);
+    const slice = games.slice(start, end);
+
+    const picks = [];
+    for (const game of slice) {
+      try {
+        const pick = await generatePickForGame(game, dateParam);
+        if (pick) picks.push(pick);
+      } catch (e) {
+        console.error('[Daily Picks] Game failed:', e.message);
+      }
+    }
+
+    // Upsert into daily_picks table
+    const { data: existing, error: selErr } = await supabase
+      .from('daily_picks')
+      .select('*')
+      .eq('date', dateParam)
+      .maybeSingle();
+    if (selErr) console.warn('[Daily Picks] select error:', selErr.message);
+
+    const prev = Array.isArray(existing?.picks) ? existing.picks : (existing?.picks ? JSON.parse(existing.picks) : []);
+    const nextPicks = [...prev, ...picks];
+
+    if (existing?.id) {
+      const { error: upErr } = await supabase
+        .from('daily_picks')
+        .update({ picks: nextPicks, updated_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      if (upErr) console.error('[Daily Picks] update error:', upErr.message);
+    } else {
+      const { error: insErr } = await supabase
+        .from('daily_picks')
+        .insert({ date: dateParam, picks: nextPicks, created_at: new Date().toISOString() });
+      if (insErr) console.error('[Daily Picks] insert error:', insErr.message);
+    }
+
+    const nextCursor = end < total ? end : null;
+    return res.status(200).json({ ok: true, processed: picks.length, cursor: nextCursor, total });
+  } catch (error) {
+    console.error('[Daily Picks] Fatal error:', error.message);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+}
+
+
