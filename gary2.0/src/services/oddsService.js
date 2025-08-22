@@ -318,23 +318,39 @@ const getCachedOdds = async (sport) => {
   }
   
   console.log(`[Odds Service] Fetching fresh odds for ${sport}`);
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error('Odds API key not configured');
+  const isBrowser = typeof window !== 'undefined';
+  let data;
+  if (isBrowser) {
+    // Use server proxy in browser so the key never reaches the client
+    const proxyResp = await axios.get('/api/odds-proxy', {
+      params: {
+        endpoint: `sports/${sport}/odds`,
+        regions: 'us',
+        markets: 'h2h,spreads,totals',
+        oddsFormat: 'american',
+        bookmakers: 'fanduel,draftkings,betmgm,caesars,pointsbetus,superbook'
+      }
+    });
+    data = proxyResp.data || [];
+  } else {
+    // Server environment: call vendor API directly with server key
+    const apiKey = await getApiKey();
+    if (!apiKey) {
+      throw new Error('Odds API key not configured');
+    }
+    const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
+    const response = await axios.get(url, {
+      params: {
+        apiKey,
+        regions: 'us',
+        markets: 'h2h,spreads,totals',
+        oddsFormat: 'american',
+        bookmakers: 'fanduel,draftkings,betmgm,caesars,pointsbetus,superbook'
+      }
+    });
+    data = response.data || [];
   }
   
-  const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
-  const response = await axios.get(url, {
-    params: {
-      apiKey,
-      regions: 'us',
-      markets: 'h2h,spreads,totals',
-      oddsFormat: 'american',
-      bookmakers: 'fanduel,draftkings,betmgm,caesars,pointsbetus,superbook'
-    }
-  });
-  
-  const data = response.data || [];
   oddsCache.set(cacheKey, { data, timestamp: Date.now() });
   
   return data;
