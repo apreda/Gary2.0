@@ -80,6 +80,7 @@ export default async function handler(req, res) {
     const cursor = parseInt(req.query.cursor ?? '0', 10) || 0;
     // Default batch size to 1 to reduce serverless execution time per request
     const batch = Math.max(1, Math.min(5, parseInt(req.query.batch ?? '1', 10) || 1));
+    const autoNext = (req.query.autonext === '1' || req.query.autonext === 'true');
 
     console.log(`[Daily Picks] Start batch – date=${dateParam} cursor=${cursor} batch=${batch}`);
 
@@ -130,6 +131,23 @@ export default async function handler(req, res) {
     }
 
     const nextCursor = end < total ? end : null;
+
+    // Self-chaining: schedule the next cursor invocation and return immediately
+    if (nextCursor !== null && autoNext) {
+      try {
+        const host = process.env.SITE_URL || process.env.VERCEL_URL || req.headers.host;
+        const origin = host?.startsWith('http') ? host : `https://${host}`;
+        const nextUrl = `${origin.replace(/\/$/, '')}/api/generate-daily-picks?cursor=${nextCursor}&date=${encodeURIComponent(dateParam)}&batch=${batch}&autonext=1`;
+        // Fire-and-forget; do not await
+        // eslint-disable-next-line no-undef
+        fetch(nextUrl, { method: 'GET', headers: { 'x-self-chain': '1' } }).catch(() => {});
+        console.log(`[Daily Picks] Chained next batch → ${nextUrl}`);
+      } catch (chainErr) {
+        console.warn('[Daily Picks] self-chain failed:', chainErr.message);
+      }
+      return res.status(202).json({ ok: true, processed: picks.length, cursor: nextCursor, total, chained: true });
+    }
+
     return res.status(200).json({ ok: true, processed: picks.length, cursor: nextCursor, total });
   } catch (error) {
     console.error('[Daily Picks] Fatal error:', error.message);
