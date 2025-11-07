@@ -223,9 +223,30 @@ const ballDontLieService = {
       const cacheKey = `${sportKey}_games_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
-        if (!sport?.getGames) throw new Error('getGames not supported');
-        const resp = await sport.getGames(params);
-        return resp?.data || [];
+        if (sport?.getGames) {
+          const resp = await sport.getGames(params);
+          return resp?.data || [];
+        }
+        // HTTP fallback for sports without SDK getGames
+        const endpointMap = {
+          icehockey_nhl: 'nhl/v1/games',
+          americanfootball_nfl: 'nfl/v1/games',
+          americanfootball_ncaaf: 'ncaaf/v1/games',
+          basketball_ncaab: 'ncaab/v1/games',
+          basketball_wnba: 'wnba/v1/games',
+          basketball_nba: 'nba/v1/games'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) throw new Error('getGames not supported');
+        const qs = buildQuery(params);
+        const url = `https://api.balldontlie.io/${path}${qs}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getGames error:`, e.message);
@@ -306,9 +327,31 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
         const fn = sport?.getPlayerInjuries || sport?.getInjuries;
-        if (!fn) throw new Error('injuries endpoint not supported');
-        const resp = await fn.call(sport, params);
-        return resp?.data || [];
+        if (fn) {
+          const resp = await fn.call(sport, params);
+          return resp?.data || [];
+        }
+        // HTTP fallback for sports with documented injuries endpoints
+        const endpointMap = {
+          basketball_nba: 'nba/v1/player_injuries',
+          basketball_wnba: 'wnba/v1/player_injuries',
+          americanfootball_nfl: 'nfl/v1/player_injuries',
+          icehockey_nhl: 'nhl/v1/player_injuries'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) {
+          // Not supported: return empty without throwing
+          return [];
+        }
+        const qs = buildQuery(params);
+        const url = `https://api.balldontlie.io/${path}${qs}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getInjuries error:`, e.message);
