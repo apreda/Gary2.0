@@ -7,7 +7,11 @@ const SPORT_KEY = 'basketball_ncaab';
 
 export async function generateNCAABPicks(options = {}) {
   console.log('Processing NCAAB games');
-  const games = await oddsService.getUpcomingGames(SPORT_KEY);
+  if (options.nocache) {
+    console.log('NCAAB nocache mode: clearing Ball Don\'t Lie cache');
+    ballDontLieService.clearCache();
+  }
+  const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache: options.nocache === true });
   console.log(`Found ${games.length} NCAAB games from odds service`);
 
   const now = new Date();

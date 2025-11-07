@@ -39,7 +39,8 @@ export default async function handler(req, res) {
     const cursor = Number.isFinite(Number(params.cursor)) ? Number(params.cursor) : 0;
     const batch = Number.isFinite(Number(params.batch)) ? Number(params.batch) : 1;
     const autoNext = params.autonext === '1' || params.autonext === 'true' || params.autonext === true;
-    const noCache = params.nocache === '1' || params.nocache === 'true' || params.nocache === true;
+    // Default to fresh data (nocache=true) unless explicitly disabled
+    const noCache = !(params.nocache === '0' || params.nocache === 'false');
 
     const handlerMap = {
       baseball_mlb: generateMLBPicks,

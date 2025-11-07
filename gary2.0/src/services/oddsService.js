@@ -308,13 +308,17 @@ const dedupeRequest = async (key, fn) => {
 /**
  * Get odds with caching to prevent redundant API calls
  */
-const getCachedOdds = async (sport) => {
+const getCachedOdds = async (sport, { nocache = false } = {}) => {
   const cacheKey = `odds_${sport}`;
   const cached = oddsCache.get(cacheKey);
   
-  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-    console.log(`[Odds Service] Using cached odds for ${sport}`);
-    return cached.data;
+  if (!nocache) {
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+      console.log(`[Odds Service] Using cached odds for ${sport}`);
+      return cached.data;
+    }
+  } else {
+    console.log(`[Odds Service] nocache=1: bypassing cache for ${sport}`);
   }
   
   console.log(`[Odds Service] Fetching fresh odds for ${sport}`);
@@ -351,7 +355,10 @@ const getCachedOdds = async (sport) => {
     data = response.data || [];
   }
   
-  oddsCache.set(cacheKey, { data, timestamp: Date.now() });
+  // Only cache when nocache is false
+  if (!nocache) {
+    oddsCache.set(cacheKey, { data, timestamp: Date.now() });
+  }
   
   return data;
 };
@@ -585,8 +592,8 @@ export const oddsService = {
         sport: sport
       };
       
-      // Use cached odds to prevent redundant API calls
-      const games = await getCachedOdds(sport);
+      // Use nocache to force fresh odds when requested
+      const games = await getCachedOdds(sport, { nocache: options.nocache === true });
       
       if (games && games.length > 0) {
         console.log(`Raw API response: Found ${games.length} total games for ${sport}`);

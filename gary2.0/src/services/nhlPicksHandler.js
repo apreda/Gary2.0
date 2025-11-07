@@ -5,7 +5,11 @@ import { processGameOnce } from './picksService.js'; // Import shared helper
 
 export async function generateNHLPicks(options = {}) {
   console.log('Processing NHL games');
-  const games = await oddsService.getUpcomingGames('icehockey_nhl');
+  if (options.nocache) {
+    console.log('NHL nocache mode: clearing Ball Don\'t Lie cache');
+    ballDontLieService.clearCache();
+  }
+  const games = await oddsService.getUpcomingGames('icehockey_nhl', { nocache: options.nocache === true });
   // Get today's date in EST time zone format (YYYY-MM-DD)
   const today = new Date();
   const estOptions = { timeZone: 'America/New_York' };

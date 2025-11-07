@@ -7,7 +7,11 @@ const SPORT_KEY = 'americanfootball_nfl';
 
 export async function generateNFLPicks(options = {}) {
   console.log('Processing NFL games');
-  const games = await oddsService.getUpcomingGames(SPORT_KEY);
+  if (options.nocache) {
+    console.log('NFL nocache mode: clearing Ball Don\'t Lie cache');
+    ballDontLieService.clearCache();
+  }
+  const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache: options.nocache === true });
   console.log(`Found ${games.length} NFL games from odds service`);
 
   // 36-hour window
