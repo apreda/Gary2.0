@@ -9,7 +9,7 @@ export async function generateNBAPicks(options = {}) {
     console.log('NBA nocache mode: clearing Ball Don\'t Lie cache');
     ballDontLieService.clearCache();
   }
-  const games = await oddsService.getUpcomingGames('basketball_nba');
+  const games = await oddsService.getUpcomingGames('basketball_nba', { nocache: options.nocache === true });
   console.log(`Found ${games.length} NBA games from odds service`);
   
   // Get today's date in EST time zone format (YYYY-MM-DD)

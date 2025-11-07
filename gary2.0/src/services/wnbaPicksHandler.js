@@ -7,7 +7,11 @@ const SPORT_KEY = 'basketball_wnba';
 
 export async function generateWNBAPicks(options = {}) {
   console.log('Processing WNBA games');
-  const games = await oddsService.getUpcomingGames(SPORT_KEY);
+  if (options.nocache) {
+    console.log('WNBA nocache mode: clearing Ball Don\'t Lie cache');
+    ballDontLieService.clearCache();
+  }
+  const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache: options.nocache === true });
   console.log(`Found ${games.length} WNBA games from odds service`);
 
   // 36-hour window

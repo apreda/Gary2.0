@@ -7,7 +7,11 @@ const SPORT_KEY = 'americanfootball_ncaaf';
 
 export async function generateNCAAFPicks(options = {}) {
   console.log('Processing NCAAF games');
-  const games = await oddsService.getUpcomingGames(SPORT_KEY);
+  if (options.nocache) {
+    console.log('NCAAF nocache mode: clearing Ball Don\'t Lie cache');
+    ballDontLieService.clearCache();
+  }
+  const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache: options.nocache === true });
   console.log(`Found ${games.length} NCAAF games from odds service`);
 
   const now = new Date();
