@@ -69,6 +69,18 @@ export async function generateNFLPicks(options = {}) {
         injuriesSample: injuries?.slice?.(0, 6) || []
       };
 
+      // Provide combined teamStats and a minimal gameContext so Gary sees them as available
+      const teamStats = {
+        home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
+        away: Array.isArray(awayTeamStats) ? awayTeamStats : []
+      };
+      const gameContext = {
+        injuries: Array.isArray(injuries) ? injuries : [],
+        season,
+        postseason: false,
+        notes: 'Regular season context from BDL NFL'
+      };
+
       // Odds payload
       let oddsData = null;
       if (game.bookmakers && game.bookmakers.length > 0) {
@@ -84,6 +96,8 @@ export async function generateNFLPicks(options = {}) {
         league: 'NFL',
         homeTeam: game.home_team,
         awayTeam: game.away_team,
+        teamStats,
+        gameContext,
         statsReport,
         odds: oddsData,
         gameTime: game.commence_time,
