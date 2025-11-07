@@ -39,6 +39,7 @@ export default async function handler(req, res) {
     const cursor = Number.isFinite(Number(params.cursor)) ? Number(params.cursor) : 0;
     const batch = Number.isFinite(Number(params.batch)) ? Number(params.batch) : 1;
     const autoNext = params.autonext === '1' || params.autonext === 'true' || params.autonext === true;
+    const noCache = params.nocache === '1' || params.nocache === 'true' || params.nocache === true;
 
     const handlerMap = {
       baseball_mlb: generateMLBPicks,
@@ -58,7 +59,7 @@ export default async function handler(req, res) {
       for (let i = 0; i < batch; i++) {
         const index = cursor + i;
         try {
-          const one = await handlerMap[sport]({ onlyAtIndex: index });
+          const one = await handlerMap[sport]({ onlyAtIndex: index, nocache: noCache });
           if (Array.isArray(one) && one.length > 0) {
             collected.push(...one);
           }
