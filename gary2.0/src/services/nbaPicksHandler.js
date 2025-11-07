@@ -64,7 +64,6 @@ export async function generateNBAPicks(options = {}) {
 
     const result = await processGameOnce(gameId, async () => {
       console.log(`🔄 PICK GENERATION STARTED: ${new Date().toISOString()}`);
-      console.trace('Pick generation call stack');
       console.log(`Processing NBA game: ${game.away_team} @ ${game.home_team}`);
 
       // Resolve teams
