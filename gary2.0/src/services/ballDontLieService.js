@@ -5,16 +5,17 @@ const TTL_MINUTES = 5;
 const cacheMap = new Map();
 
 // Get API key from environment (support both browser and serverless)
-let API_KEY;
+let API_KEY = '';
 try {
-  API_KEY =
-    (typeof import !== 'undefined' && import.meta?.env?.VITE_BALLDONTLIE_API_KEY) ||
-    process.env.BALLDONTLIE_API_KEY ||
-    process.env.VITE_BALLDONTLIE_API_KEY ||
-    process.env.NEXT_PUBLIC_BALLDONTLIE_API_KEY ||
-    '';
-} catch (e) {
-  API_KEY = process.env?.BALLDONTLIE_API_KEY || '';
+  const serverKey =
+    (typeof process !== 'undefined' && process?.env?.BALLDONTLIE_API_KEY) ||
+    (typeof process !== 'undefined' && process?.env?.VITE_BALLDONTLIE_API_KEY) ||
+    (typeof process !== 'undefined' && process?.env?.NEXT_PUBLIC_BALLDONTLIE_API_KEY);
+  const clientKey =
+    (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_BALLDONTLIE_API_KEY) || undefined;
+  API_KEY = serverKey || clientKey || '';
+} catch {
+  API_KEY = '';
 }
 
 /**
