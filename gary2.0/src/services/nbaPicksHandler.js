@@ -1,7 +1,7 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
-import { processGameOnce } from './picksService.js'; // Import shared helper
+import { processGameOnce, cachedApiCall } from './picksService.js'; // Import shared helpers
 
 export async function generateNBAPicks() {
   console.log('Processing NBA games');
