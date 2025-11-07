@@ -292,6 +292,11 @@ SPREAD vs MONEYLINE DECISION:
 - Compare odds between spread and moneyline to determine which offers better value
 - Base decision purely on statistical analysis and expected game flow
 
+ODDS LIMITS (APPLIES TO ALL SPORTS):
+- Never return a moneyline favorite pick priced worse than -200 (e.g., -201, -220, -900 are NOT allowed).
+- If the moneyline price on the preferred side is worse than -200, pick the spread instead (or the other side if the spread/value dictates).
+- Ensure the "pick" and "odds" fields reflect this constraint. Do not output ML favorites below -200.
+
 FORMATTING REQUIREMENTS:
 - Pick field MUST follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
 - ALWAYS include all three components in that exact order
