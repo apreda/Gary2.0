@@ -250,8 +250,7 @@ async function storeDailyPicksInDatabase(picks) {
     
     return pickData;
   }).filter(pick => {
-    // Filter out picks with confidence below 0.60 threshold for MLB
-    // NBA and NHL picks are stored regardless of confidence level
+    // Filter out picks with confidence below 0.60 threshold (all sports)
     // Robust confidence parsing (handles string values like "0.66")
     let confidence = 0;
     if (typeof pick.confidence === 'number') {
@@ -261,31 +260,13 @@ async function storeDailyPicksInDatabase(picks) {
       confidence = Number.isFinite(parsed) ? parsed : 0;
     }
     const sport = pick.sport || '';
-    
-    // For non-MLB sports, include regardless of confidence (we rely on upstream validations)
-    if (
-      sport === 'basketball_nba' ||
-      sport === 'icehockey_nhl' ||
-      sport === 'americanfootball_nfl' ||
-      sport === 'basketball_wnba' ||
-      sport === 'americanfootball_ncaaf' ||
-      sport === 'basketball_ncaab'
-    ) {
-      console.log(`✅ Including ${sport} pick with confidence ${confidence} (no threshold for non-MLB)`);
-      return true;
-    }
-    
-    // For other sports (mainly MLB), apply the 0.60 confidence threshold
     const passesThreshold = confidence >= 0.60;
-    if (passesThreshold) {
-      console.log(`✅ Including ${sport} pick with confidence ${confidence} (passes 0.60 threshold)`);
-    } else {
-      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (below 0.60 threshold)`);
-    }
+    if (passesThreshold) console.log(`✅ Including ${sport} pick with confidence ${confidence} (>= 0.60)`);
+    else console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.60)`);
     return passesThreshold;
   });
 
-  console.log(`After confidence filtering (>= 0.51 for MLB only, all NBA/NHL picks included), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After confidence filtering (>= 0.60 across all sports), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // Skip if there are no valid picks (should never happen if picks array had items)
   if (validPicks.length === 0) {
