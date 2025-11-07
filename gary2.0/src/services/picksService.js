@@ -169,12 +169,15 @@ async function storeDailyPicksInDatabase(picks) {
   
   console.log(`Storing picks for date: ${currentDateString}`);
 
-  // Check if picks already exist
-  const picksExist = await checkForExistingPicks(currentDateString);
-  if (picksExist) {
-    console.log(`Picks for ${currentDateString} already exist in database, skipping insertion`);
-    return { success: true, count: 0, message: 'Picks already exist for today' };
-  }
+  // Helper to parse confidence safely
+  const parseConfidenceValue = (value) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
 
   // Simplify pick structure to only include essential fields from OpenAI output
   const validPicks = picks.map((pick, index) => {
@@ -268,60 +271,109 @@ async function storeDailyPicksInDatabase(picks) {
 
   console.log(`After confidence filtering (>= 0.60 across all sports), ${validPicks.length} picks remaining from ${picks.length} total`);
 
-  // Skip if there are no valid picks (should never happen if picks array had items)
+  // If no valid picks, exit early
   if (validPicks.length === 0) {
     console.warn('No picks to store after field mapping');
+    isStoringPicks = false;
+    console.log('🔓 Storage lock released');
     return { success: false, message: 'No picks to store' };
   }
 
-  // Cap total prop picks to 10 without changing existing filters
-  const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
-  const propOnly = validPicks.filter(isPropPick);
-  const nonProps = validPicks.filter(p => !isPropPick(p));
-  const cappedProps = propOnly.slice(0, 10);
-  const finalPicks = [...nonProps, ...cappedProps];
-
-  // Create data structure for Supabase
-  const pickData = {
-    date: currentDateString,
-    picks: finalPicks
-  };
-
-  console.log('Storing picks in Supabase daily_picks table');
-
-  // Ensure there's a valid Supabase session before database operation
+  // Create append/merge storage: fetch existing row, merge, then upsert
   await ensureValidSupabaseSession();
-
   try {
-    // First try direct insert
-    const { error } = await supabase
+    const { data: existingRows, error: selectError } = await supabase
       .from('daily_picks')
-      .insert(pickData);
+      .select('id, picks')
+      .eq('date', currentDateString)
+      .limit(1);
 
-    if (error) {
-      console.error('Error inserting picks into daily_picks table:', error);
-
-      // Try an alternative approach with an explicit JSON string
-      console.log('Trying alternative approach with explicit JSON string...');
-      const { error: altError } = await supabase
-        .from('daily_picks')
-        .insert({
-          date: currentDateString,
-          picks: JSON.stringify(validPicks),
-          sport: validPicks[0]?.sport || 'MLB'
-        });
-
-      if (altError) {
-        console.error('Alternative approach also failed:', altError);
-        throw new Error(`Failed to store picks: ${altError.message}`);
-      }
-
-      console.log('✅ Successfully stored picks using alternative approach');
-      return { success: true, count: validPicks.length, method: 'alternative' };
+    if (selectError) {
+      console.error('Error selecting existing daily_picks row:', selectError);
     }
 
-    console.log(`✅ Successfully stored ${finalPicks.length} picks in database (props capped at ${cappedProps.length}/10)`);
-    return { success: true, count: finalPicks.length };
+    // Prepare merged picks
+    let mergedPicks = [];
+    if (existingRows && existingRows.length > 0) {
+      const existing = existingRows[0];
+      const existingPicks = Array.isArray(existing.picks)
+        ? existing.picks
+        : (() => { try { return JSON.parse(existing.picks || '[]'); } catch { return []; } })();
+
+      // Deduplicate by pick_id if present, else by tuple (league, homeTeam, awayTeam, pick)
+      const dedupeKey = (p) => p.pick_id || `${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}|${p.pick || ''}`;
+      const seen = new Set(existingPicks.map(dedupeKey));
+      const toAppend = validPicks.filter(p => {
+        const key = dedupeKey(p);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      // Apply cap for props only on the combined set (keep existing first)
+      const combined = [...existingPicks, ...toAppend];
+      const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
+      const props = combined.filter(isPropPick);
+      const nonProps = combined.filter(p => !isPropPick(p));
+      const cappedProps = props.slice(0, 10);
+      mergedPicks = [...nonProps, ...cappedProps];
+
+      console.log(`Merging ${toAppend.length} new picks into existing ${existingPicks.length}; final size ${mergedPicks.length}`);
+
+      // Try JSON update
+      const { error: updateError } = await supabase
+        .from('daily_picks')
+        .update({ picks: mergedPicks })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        console.warn('JSON update failed, retrying with stringified picks:', updateError.message);
+        const { error: updateAltError } = await supabase
+          .from('daily_picks')
+          .update({ picks: JSON.stringify(mergedPicks) })
+          .eq('id', existing.id);
+        if (updateAltError) {
+          throw new Error(`Failed to append picks: ${updateAltError.message}`);
+        }
+      }
+
+      console.log('✅ Successfully appended picks to existing daily_picks row');
+      return { success: true, count: validPicks.length, mode: 'append' };
+    } else {
+      // No existing row: insert new
+      // Cap total prop picks to 10 without changing existing filters
+      const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
+      const propOnly = validPicks.filter(isPropPick);
+      const nonProps = validPicks.filter(p => !isPropPick(p));
+      const cappedProps = propOnly.slice(0, 10);
+      const finalPicks = [...nonProps, ...cappedProps];
+
+      const pickData = { date: currentDateString, picks: finalPicks };
+      console.log('Inserting new daily_picks row');
+
+      const { error: insertError } = await supabase
+        .from('daily_picks')
+        .insert(pickData);
+
+      if (insertError) {
+        console.error('Insert failed, retrying with stringified picks:', insertError.message);
+        const { error: insertAltError } = await supabase
+          .from('daily_picks')
+          .insert({
+            date: currentDateString,
+            picks: JSON.stringify(finalPicks),
+            sport: finalPicks[0]?.sport || 'MLB'
+          });
+        if (insertAltError) {
+          throw new Error(`Failed to store picks: ${insertAltError.message}`);
+        }
+        console.log('✅ Successfully stored picks using alternative approach');
+        return { success: true, count: finalPicks.length, method: 'alternative' };
+      }
+
+      console.log(`✅ Successfully stored ${finalPicks.length} picks in database (props capped at ${cappedProps.length}/10)`);
+      return { success: true, count: finalPicks.length };
+    }
   } catch (error) {
     console.error('❌ Error storing picks:', error);
     throw new Error(`Failed to store picks: ${error.message}`);

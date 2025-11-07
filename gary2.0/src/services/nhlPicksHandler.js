@@ -3,7 +3,7 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce } from './picksService.js'; // Import shared helper
 
-export async function generateNHLPicks() {
+export async function generateNHLPicks(options = {}) {
   console.log('Processing NHL games');
   const games = await oddsService.getUpcomingGames('icehockey_nhl');
   // Get today's date in EST time zone format (YYYY-MM-DD)
@@ -16,7 +16,7 @@ export async function generateNHLPicks() {
   console.log(`NHL filtering: Today in EST is ${estFormattedDate}`);
   
   // Filter games by checking if they occur on the same day in EST
-  const todayGames = games.filter(game => {
+  let todayGames = games.filter(game => {
     const gameDate = new Date(game.commence_time);
     const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
     const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
@@ -28,6 +28,12 @@ export async function generateNHLPicks() {
   });
 
   console.log(`After date filtering: ${todayGames.length} NHL games for today`);
+
+  // If options.onlyAtIndex is provided, process only that game
+  if (typeof options.onlyAtIndex === 'number') {
+    const idx = options.onlyAtIndex;
+    todayGames = idx >= 0 && idx < todayGames.length ? [todayGames[idx]] : [];
+  }
 
   const sportPicks = [];
   for (const game of todayGames) {

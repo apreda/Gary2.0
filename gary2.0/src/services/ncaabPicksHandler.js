@@ -5,18 +5,23 @@ import { processGameOnce } from './picksService.js';
 
 const SPORT_KEY = 'basketball_ncaab';
 
-export async function generateNCAABPicks() {
+export async function generateNCAABPicks(options = {}) {
   console.log('Processing NCAAB games');
   const games = await oddsService.getUpcomingGames(SPORT_KEY);
   console.log(`Found ${games.length} NCAAB games from odds service`);
 
   const now = new Date();
   const end = new Date(now.getTime() + 36 * 60 * 60 * 1000);
-  const windowed = games.filter(g => {
+  let windowed = games.filter(g => {
     const t = new Date(g.commence_time);
     return t >= now && t <= end;
   });
   console.log(`After date filtering: ${windowed.length} NCAAB games in next 36h`);
+
+  if (typeof options.onlyAtIndex === 'number') {
+    const idx = options.onlyAtIndex;
+    windowed = idx >= 0 && idx < windowed.length ? [windowed[idx]] : [];
+  }
 
   const season = new Date().getFullYear();
   const picks = [];
