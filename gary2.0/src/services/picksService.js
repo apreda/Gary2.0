@@ -16,12 +16,20 @@ import { getESTDate } from '../utils/dateUtils.js';
 import { generateNBAPicks } from './nbaPicksHandler.js';
 import { generateMLBPicks } from './mlbPicksHandler.js';
 import { generateNHLPicks } from './nhlPicksHandler.js';
+import { generateNFLPicks } from './nflPicksHandler.js';
+import { generateWNBAPicks } from './wnbaPicksHandler.js';
+import { generateNCAAFPicks } from './ncaafPicksHandler.js';
+import { generateNCAABPicks } from './ncaabPicksHandler.js';
 
 // Global processing state to prevent multiple simultaneous generations
 let isCurrentlyGeneratingPicks = false;
 let isProcessingNHL = false;
 let isProcessingNBA = false;
 let isProcessingMLB = false;
+let isProcessingNFL = false;
+let isProcessingWNBA = false;
+let isProcessingNCAAF = false;
+let isProcessingNCAAB = false;
 let isStoringPicks = false;
 let lastGenerationTime = 0;
 const GENERATION_COOLDOWN = 30 * 1000; // 30 seconds
@@ -356,7 +364,15 @@ async function generateDailyPicks() {
   console.log('🚀 STARTING DAILY PICKS GENERATION - Global lock acquired');
   
   try {
-    const sportsToAnalyze = ['basketball_nba', 'baseball_mlb', 'icehockey_nhl'];
+    const sportsToAnalyze = [
+      'basketball_nba',
+      'baseball_mlb',
+      'icehockey_nhl',
+      'americanfootball_nfl',
+      'basketball_wnba',
+      'americanfootball_ncaaf',
+      'basketball_ncaab'
+    ];
     let allPicks = [];
 
     for (const sport of sportsToAnalyze) {
@@ -375,6 +391,22 @@ async function generateDailyPicks() {
         console.log('🛑 NHL picks already being processed, skipping...');
         continue;
       }
+      if (sport === 'americanfootball_nfl' && isProcessingNFL) {
+        console.log('🛑 NFL picks already being processed, skipping...');
+        continue;
+      }
+      if (sport === 'basketball_wnba' && isProcessingWNBA) {
+        console.log('🛑 WNBA picks already being processed, skipping...');
+        continue;
+      }
+      if (sport === 'americanfootball_ncaaf' && isProcessingNCAAF) {
+        console.log('🛑 NCAAF picks already being processed, skipping...');
+        continue;
+      }
+      if (sport === 'basketball_ncaab' && isProcessingNCAAB) {
+        console.log('🛑 NCAAB picks already being processed, skipping...');
+        continue;
+      }
       
       if (sport === 'baseball_mlb') {
         isProcessingMLB = true;
@@ -388,6 +420,22 @@ async function generateDailyPicks() {
         isProcessingNHL = true;
         sportPicks = await generateNHLPicks();
         isProcessingNHL = false;
+      } else if (sport === 'americanfootball_nfl') {
+        isProcessingNFL = true;
+        sportPicks = await generateNFLPicks();
+        isProcessingNFL = false;
+      } else if (sport === 'basketball_wnba') {
+        isProcessingWNBA = true;
+        sportPicks = await generateWNBAPicks();
+        isProcessingWNBA = false;
+      } else if (sport === 'americanfootball_ncaaf') {
+        isProcessingNCAAF = true;
+        sportPicks = await generateNCAAFPicks();
+        isProcessingNCAAF = false;
+      } else if (sport === 'basketball_ncaab') {
+        isProcessingNCAAB = true;
+        sportPicks = await generateNCAABPicks();
+        isProcessingNCAAB = false;
       }
 
       // Add for this sport
@@ -408,6 +456,10 @@ async function generateDailyPicks() {
     isProcessingMLB = false;
     isProcessingNBA = false;
     isProcessingNHL = false;
+    isProcessingNFL = false;
+    isProcessingWNBA = false;
+    isProcessingNCAAF = false;
+    isProcessingNCAAB = false;
     isStoringPicks = false;
     console.log('🔓 All processing locks released');
   }
