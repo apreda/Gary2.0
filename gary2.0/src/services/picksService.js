@@ -332,7 +332,7 @@ async function storeDailyPicksInDatabase(picks) {
         console.warn('JSON update failed, retrying with stringified picks:', updateError.message);
         const { error: updateAltError } = await supabase
           .from('daily_picks')
-          .update({ picks: JSON.stringify(mergedPicks) })
+          .update({ picks: mergedPicks })
           .eq('id', existing.id);
         if (updateAltError) {
           throw new Error(`Failed to append picks: ${updateAltError.message}`);
@@ -364,7 +364,7 @@ async function storeDailyPicksInDatabase(picks) {
           .from('daily_picks')
           .insert({
             date: currentDateString,
-            picks: JSON.stringify(finalPicks)
+            picks: finalPicks
           });
         if (insertAltError) {
           throw new Error(`Failed to store picks: ${insertAltError.message}`);
