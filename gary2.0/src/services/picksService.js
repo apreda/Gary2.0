@@ -263,13 +263,13 @@ async function storeDailyPicksInDatabase(picks) {
       confidence = Number.isFinite(parsed) ? parsed : 0;
     }
     const sport = pick.sport || '';
-    const passesThreshold = confidence >= 0.60;
-    if (passesThreshold) console.log(`✅ Including ${sport} pick with confidence ${confidence} (>= 0.60)`);
-    else console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.60)`);
+    const passesThreshold = confidence >= 0.50;
+    if (passesThreshold) console.log(`✅ Including ${sport} pick with confidence ${confidence} (>= 0.50)`);
+    else console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.50)`);
     return passesThreshold;
   });
 
-  console.log(`After confidence filtering (>= 0.60 across all sports), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After confidence filtering (>= 0.50 across all sports), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // If no valid picks, exit early
   if (validPicks.length === 0) {
