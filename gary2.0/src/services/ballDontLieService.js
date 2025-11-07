@@ -65,6 +65,148 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
  */
 const ballDontLieService = {
   /**
+   * Get sport-specific client from the SDK
+   */
+  _getSportClient(sportKey) {
+    const client = initApi();
+    if (!client) return null;
+    const map = {
+      basketball_nba: 'nba',
+      basketball_wnba: 'wnba',
+      icehockey_nhl: 'nhl',
+      americanfootball_nfl: 'nfl',
+      americanfootball_ncaaf: 'ncaaf',
+      basketball_ncaab: 'ncaab'
+    };
+    const prop = map[sportKey] || sportKey;
+    return client[prop] || null;
+  },
+
+  /**
+   * Generic helpers (multi-sport)
+   */
+  async getTeams(sportKey, params = {}) {
+    try {
+      const cacheKey = `${sportKey}_teams_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        if (!sport?.getTeams) throw new Error('getTeams not supported');
+        const resp = await sport.getTeams(params);
+        return resp?.data || [];
+      }, 60);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getTeams error:`, e.message);
+      return [];
+    }
+  },
+
+  async getTeamByNameGeneric(sportKey, nameOrId) {
+    try {
+      if (nameOrId == null || nameOrId === '') return null;
+      const nameStr = String(nameOrId).toLowerCase();
+      const idNum = !isNaN(Number(nameStr)) ? Number(nameStr) : null;
+      const teams = await this.getTeams(sportKey);
+      if (!Array.isArray(teams) || teams.length === 0) return null;
+      if (idNum !== null) {
+        const byId = teams.find(t => t.id === idNum);
+        if (byId) return byId;
+      }
+      const exact = teams.find(t =>
+        (t.name && String(t.name).toLowerCase() === nameStr) ||
+        (t.full_name && String(t.full_name).toLowerCase() === nameStr) ||
+        (t.abbreviation && String(t.abbreviation).toLowerCase() === nameStr)
+      );
+      if (exact) return exact;
+      const partial = teams.find(t =>
+        (t.name && String(t.name).toLowerCase().includes(nameStr)) ||
+        (t.full_name && String(t.full_name).toLowerCase().includes(nameStr)) ||
+        (t.abbreviation && String(t.abbreviation).toLowerCase().includes(nameStr))
+      );
+      return partial || null;
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getTeamByName error:`, e.message);
+      return null;
+    }
+  },
+
+  async getGames(sportKey, params = {}, ttlMinutes = 10) {
+    try {
+      const cacheKey = `${sportKey}_games_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        if (!sport?.getGames) throw new Error('getGames not supported');
+        const resp = await sport.getGames(params);
+        return resp?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getGames error:`, e.message);
+      return [];
+    }
+  },
+
+  async getPlayerStats(sportKey, params = {}, ttlMinutes = 10) {
+    try {
+      const cacheKey = `${sportKey}_player_stats_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        const fn = sport?.getPlayerStats || sport?.getStats;
+        if (!fn) throw new Error('player stats not supported');
+        const resp = await fn.call(sport, params);
+        return resp?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getPlayerStats error:`, e.message);
+      return [];
+    }
+  },
+
+  async getTeamStats(sportKey, params = {}, ttlMinutes = 10) {
+    try {
+      const cacheKey = `${sportKey}_team_stats_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        const fn = sport?.getTeamStats || sport?.getStats;
+        if (!fn) throw new Error('team stats not supported');
+        const resp = await fn.call(sport, params);
+        return resp?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getTeamStats error:`, e.message);
+      return [];
+    }
+  },
+
+  async getStandingsGeneric(sportKey, params = {}, ttlMinutes = 30) {
+    try {
+      const cacheKey = `${sportKey}_standings_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        if (!sport?.getStandings) throw new Error('getStandings not supported');
+        const resp = await sport.getStandings(params);
+        return resp?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getStandings error:`, e.message);
+      return [];
+    }
+  },
+
+  async getInjuriesGeneric(sportKey, params = {}, ttlMinutes = 5) {
+    try {
+      const cacheKey = `${sportKey}_injuries_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        const fn = sport?.getPlayerInjuries || sport?.getInjuries;
+        if (!fn) throw new Error('injuries endpoint not supported');
+        const resp = await fn.call(sport, params);
+        return resp?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getInjuries error:`, e.message);
+      return [];
+    }
+  },
+  /**
    * Clear all cached data (useful for debugging or forcing fresh data)
    */
   clearCache() {
