@@ -14,16 +14,16 @@ export async function generateNFLPicks(options = {}) {
   const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache: options.nocache === true });
   console.log(`Found ${games.length} NFL games from odds service`);
 
-  // Weekly window: include games in the next 8 days (Thu-Mon cadence supported)
+  // Weekly window: include games in the next 5 days (Thu-Mon cadence supported)
   const now = new Date();
-  const end = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000);
-  console.log(`NFL weekly window: ${now.toISOString()} to ${end.toISOString()}`);
+  const end = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+  console.log(`NFL 5-day window: ${now.toISOString()} to ${end.toISOString()}`);
 
   let todayGames = games.filter(g => {
     const t = new Date(g.commence_time);
     return t >= now && t <= end;
   });
-  console.log(`After date filtering: ${todayGames.length} NFL games in next 8 days (weekly window)`);
+  console.log(`After date filtering: ${todayGames.length} NFL games in next 5 days`);
 
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;

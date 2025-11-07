@@ -610,9 +610,9 @@ export const oddsService = {
         const windowEnd = new Date(estDate);
         // Default: today/tomorrow window
         let addDays = 1;
-        // NFL: widen to next 8 days to ensure weekly slate is captured
+        // NFL: widen to next 5 days to cover Thu-Mon slate
         if (sport === 'americanfootball_nfl') {
-          addDays = 8;
+          addDays = 5;
         }
         windowEnd.setDate(windowEnd.getDate() + addDays);
         windowEnd.setHours(6, 0, 0, 0);
