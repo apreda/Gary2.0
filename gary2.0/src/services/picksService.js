@@ -51,7 +51,7 @@ const processGameOnce = async (gameId, processingFunction) => {
   const sessionKey = `${gameId}-${getESTDate()}`;
   
   if (processedGames.has(sessionKey)) {
-    console.log(`🔄 Game ${gameId} already processed today, skipping...`);
+    console.log(`🔄 Game ${gameId} skipped (already processed today)`);
     return null;
   }
   
