@@ -261,6 +261,7 @@ const ballDontLieService = {
         }
         // HTTP fallback for college sports where SDK may not expose team stats
         const endpointMap = {
+          americanfootball_nfl: 'nfl/v1/team_stats',
           americanfootball_ncaaf: 'ncaaf/v1/team_stats',
           basketball_ncaab: 'ncaab/v1/team_stats'
         };
