@@ -22,7 +22,20 @@ export default async function handler(req, res) {
     const params = { ...query, ...body };
 
     // Optional per-sport, per-game batching
-    const sport = params.sport;
+    const allMode = params.all === '1' || params.all === 'true' || params.all === true;
+    const sportsOrder = [
+      'basketball_nba',
+      'baseball_mlb',
+      'icehockey_nhl',
+      'americanfootball_nfl',
+      'basketball_wnba',
+      'americanfootball_ncaaf',
+      'basketball_ncaab'
+    ];
+    let sport = params.sport || null;
+    if (allMode && !sport) {
+      sport = sportsOrder[0];
+    }
     const cursor = Number.isFinite(Number(params.cursor)) ? Number(params.cursor) : 0;
     const batch = Number.isFinite(Number(params.batch)) ? Number(params.batch) : 1;
     const autoNext = params.autonext === '1' || params.autonext === 'true' || params.autonext === true;
@@ -38,6 +51,7 @@ export default async function handler(req, res) {
     };
 
     let picks;
+    let processedCount = 0;
     if (sport && handlerMap[sport]) {
       console.log(`[run-daily-picks] Batched processing for sport=${sport}, cursor=${cursor}, batch=${batch}`);
       const collected = [];
@@ -53,6 +67,7 @@ export default async function handler(req, res) {
         }
       }
       picks = collected;
+      processedCount = Array.isArray(picks) ? picks.length : 0;
       // Append/store immediately (per-game/per-batch)
       if (Array.isArray(picks) && picks.length > 0) {
         await picksService.storeDailyPicksInDatabase(picks);
@@ -67,19 +82,44 @@ export default async function handler(req, res) {
     const baseUrl = req.headers['x-forwarded-proto'] && req.headers['x-forwarded-host']
       ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host']}`
       : '';
-    const nextUrl = sport
-      ? `${baseUrl}/api/run-daily-picks?sport=${encodeURIComponent(sport)}&cursor=${nextCursor}&batch=${batch}${autoNext ? '&autonext=1' : ''}`
-      : null;
+    // Determine nextUrl considering all-sports mode and whether this batch produced picks
+    let nextSport = sport || null;
+    let nextUrl = null;
+    if (sport) {
+      if (allMode && processedCount === 0) {
+        // Advance to next sport when current sport returns no more picks
+        const idx = sportsOrder.indexOf(sport);
+        const nextIdx = idx >= 0 && idx + 1 < sportsOrder.length ? idx + 1 : -1;
+        nextSport = nextIdx >= 0 ? sportsOrder[nextIdx] : null;
+        if (nextSport) {
+          nextUrl = `${baseUrl}/api/run-daily-picks?all=1&sport=${encodeURIComponent(nextSport)}&cursor=0&batch=${batch}${autoNext ? '&autonext=1' : ''}`;
+        } else {
+          nextUrl = null; // All done
+        }
+      } else {
+        // Continue within same sport
+        nextUrl = `${baseUrl}/api/run-daily-picks?${allMode ? 'all=1&' : ''}sport=${encodeURIComponent(sport)}&cursor=${nextCursor}&batch=${batch}${autoNext ? '&autonext=1' : ''}`;
+      }
+    }
+
+    // Auto-redirect to next step to avoid manual URL changes
+    if (autoNext && nextUrl) {
+      res.statusCode = 302;
+      res.setHeader('Location', nextUrl);
+      return res.end();
+    }
 
     return res.status(200).json({
       success: true,
       generatedCount: Array.isArray(picks) ? picks.length : 0,
       durationMs,
-      message: sport ? 'Batched picks generation step complete' : 'Daily picks generation complete',
+      message: sport ? (allMode ? 'Batched (all-sports) step complete' : 'Batched picks generation step complete') : 'Daily picks generation complete',
       sport: sport || null,
+      allMode,
       cursor,
       batch,
       nextCursor,
+      nextSport,
       nextUrl
     });
   } catch (error) {
