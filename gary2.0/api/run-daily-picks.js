@@ -37,7 +37,8 @@ export default async function handler(req, res) {
       sport = sportsOrder[0];
     }
     const cursor = Number.isFinite(Number(params.cursor)) ? Number(params.cursor) : 0;
-    const batch = Number.isFinite(Number(params.batch)) ? Number(params.batch) : 1;
+    // Force single-game processing per request to avoid Vercel 120s timeouts
+    const batch = 1;
     const autoNext = params.autonext === '1' || params.autonext === 'true' || params.autonext === true;
     // Default to fresh data (nocache=true) unless explicitly disabled
     const noCache = !(params.nocache === '0' || params.nocache === 'false');
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
     }
 
     const durationMs = Date.now() - startedAt;
-    const nextCursor = sport ? cursor + batch : null;
+    const nextCursor = sport ? cursor + 1 : null;
     const baseUrl = req.headers['x-forwarded-proto'] && req.headers['x-forwarded-host']
       ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host']}`
       : '';
@@ -100,7 +101,7 @@ export default async function handler(req, res) {
         }
       } else {
         // Continue within same sport
-        nextUrl = `${baseUrl}/api/run-daily-picks?${allMode ? 'all=1&' : ''}sport=${encodeURIComponent(sport)}&cursor=${nextCursor}&batch=${batch}${autoNext ? '&autonext=1' : ''}`;
+        nextUrl = `${baseUrl}/api/run-daily-picks?${allMode ? 'all=1&' : ''}sport=${encodeURIComponent(sport)}&cursor=${nextCursor}&batch=1${autoNext ? '&autonext=1' : ''}`;
       }
     }
 
