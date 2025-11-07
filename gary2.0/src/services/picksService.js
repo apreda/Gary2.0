@@ -4,7 +4,7 @@
  */
 import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService.js';
-import { supabase } from '../supabaseClient.js';
+import { supabase, storeDailyPicks } from '../supabaseClient.js';
 import { apiSportsService } from './apiSportsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { nhlPlayoffService } from './nhlPlayoffService.js';
@@ -294,6 +294,7 @@ async function storeDailyPicksInDatabase(picks) {
 
     // Prepare merged picks
     let mergedPicks = [];
+    let fallbackPicksRef = validPicks;
     if (existingRows && existingRows.length > 0) {
       const existing = existingRows[0];
       const existingPicks = Array.isArray(existing.picks)
@@ -317,6 +318,7 @@ async function storeDailyPicksInDatabase(picks) {
       const nonProps = combined.filter(p => !isPropPick(p));
       const cappedProps = props.slice(0, 10);
       mergedPicks = [...nonProps, ...cappedProps];
+      fallbackPicksRef = mergedPicks;
 
       console.log(`Merging ${toAppend.length} new picks into existing ${existingPicks.length}; final size ${mergedPicks.length}`);
 
@@ -347,6 +349,7 @@ async function storeDailyPicksInDatabase(picks) {
       const nonProps = validPicks.filter(p => !isPropPick(p));
       const cappedProps = propOnly.slice(0, 10);
       const finalPicks = [...nonProps, ...cappedProps];
+      fallbackPicksRef = finalPicks;
 
       const pickData = { date: currentDateString, picks: finalPicks };
       console.log('Inserting new daily_picks row');
@@ -361,8 +364,7 @@ async function storeDailyPicksInDatabase(picks) {
           .from('daily_picks')
           .insert({
             date: currentDateString,
-            picks: JSON.stringify(finalPicks),
-            sport: finalPicks[0]?.sport || 'MLB'
+            picks: JSON.stringify(finalPicks)
           });
         if (insertAltError) {
           throw new Error(`Failed to store picks: ${insertAltError.message}`);
@@ -376,7 +378,18 @@ async function storeDailyPicksInDatabase(picks) {
     }
   } catch (error) {
     console.error('❌ Error storing picks:', error);
-    throw new Error(`Failed to store picks: ${error.message}`);
+    // Final fallback: use service-role direct REST helper (bypasses RLS)
+    try {
+      const fb = await storeDailyPicks(currentDateString, validPicks);
+      if (fb?.success) {
+        console.log('✅ Stored picks via service-role REST fallback');
+        return { success: true, count: validPicks.length, method: 'service-role' };
+      }
+      throw new Error(fb?.message || 'Unknown REST fallback failure');
+    } catch (restError) {
+      console.error('❌ REST fallback also failed:', restError);
+      throw new Error(`Failed to store picks: ${error.message}`);
+    }
   } finally {
     isStoringPicks = false;
     console.log('🔓 Storage lock released');
