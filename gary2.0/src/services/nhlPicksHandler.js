@@ -107,6 +107,18 @@ export async function generateNHLPicks(options = {}) {
         nhlStatsReport += '\n';
       }
 
+      // Provide a generic teamStats object and gameContext so Gary recognizes availability
+      const teamStats = {
+        homeRecent: Array.isArray(homeRecent) ? homeRecent : [],
+        awayRecent: Array.isArray(awayRecent) ? awayRecent : []
+      };
+      const gameContext = {
+        injuries: Array.isArray(injuries) ? injuries : [],
+        season,
+        postseason: false,
+        notes: 'Regular season context from BDL NHL'
+      };
+
       // Format odds data for OpenAI
       let oddsData = null;
       if (game.bookmakers && game.bookmakers.length > 0) {
@@ -126,6 +138,8 @@ export async function generateNHLPicks(options = {}) {
         league: 'NHL',
         homeTeam: game.home_team,
         awayTeam: game.away_team,
+        teamStats,
+        gameContext,
         homeTeamStats: homeStats,
         awayTeamStats: awayStats,
         statsReport: nhlStatsReport,
