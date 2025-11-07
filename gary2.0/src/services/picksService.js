@@ -262,9 +262,16 @@ async function storeDailyPicksInDatabase(picks) {
     }
     const sport = pick.sport || '';
     
-    // For NBA and NHL, always include the pick regardless of confidence
-    if (sport === 'basketball_nba' || sport === 'icehockey_nhl') {
-      console.log(`✅ Including ${sport} pick with confidence ${confidence} (no filtering for NBA/NHL)`);
+    // For non-MLB sports, include regardless of confidence (we rely on upstream validations)
+    if (
+      sport === 'basketball_nba' ||
+      sport === 'icehockey_nhl' ||
+      sport === 'americanfootball_nfl' ||
+      sport === 'basketball_wnba' ||
+      sport === 'americanfootball_ncaaf' ||
+      sport === 'basketball_ncaab'
+    ) {
+      console.log(`✅ Including ${sport} pick with confidence ${confidence} (no threshold for non-MLB)`);
       return true;
     }
     
