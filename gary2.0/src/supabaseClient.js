@@ -107,7 +107,7 @@ export const storeDailyPicks = async (dateString, picksArray) => {
     // Create minimal record to avoid PostgreSQL JSON handling issues
     const payload = {
       date: dateString,
-      picks: JSON.stringify(sanitizedPicks) // Force string serialization
+      picks: sanitizedPicks // Pass as JSON array, not string
     };
 
     // Use axios for more reliable network handling
@@ -128,32 +128,22 @@ export const storeDailyPicks = async (dateString, picksArray) => {
   } catch (insertError) {
     console.error('Direct API insert failed:', insertError.message);
     
-    // Try one more approach with a completely different payload structure
+    // Final attempt: try upserting using the same JSON shape
     try {
-      console.log('STORAGE FIX: Trying final fallback approach...');
-      
-      // Create a very minimal structure that avoids all JSON parsing
-      const textRecord = {
-        date: dateString,
-        picks_text: JSON.stringify(sanitizedPicks),
-        picks_count: sanitizedPicks.length,
-        created_at: new Date().toISOString()
-      };
-      
-      // Use direct HTTP POST
+      console.log('STORAGE FIX: Trying upsert fallback...');
+      const upsertPayload = [{ date: dateString, picks: sanitizedPicks }];
       await axios({
         method: 'POST',
         url: `${supabaseUrl}/rest/v1/daily_picks`,
-        data: textRecord,
+        data: upsertPayload,
         headers: {
           'apikey': adminKey,
           'Authorization': `Bearer ${adminKey}`,
           'Content-Type': 'application/json',
-          'Prefer': 'return=minimal'
+          'Prefer': 'return=representation,resolution=merge-duplicates'
         }
       });
-      
-      console.log('STORAGE FIX: Fallback storage approach succeeded');
+      console.log('STORAGE FIX: Upsert fallback succeeded');
       return { success: true };
     } catch (fallbackError) {
       console.error('All storage approaches failed:', fallbackError.message);
