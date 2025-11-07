@@ -62,6 +62,18 @@ export async function generateNCAABPicks(options = {}) {
         injuriesSample: injuries?.slice?.(0, 6) || []
       };
 
+      // Provide combined teamStats and minimal gameContext
+      const teamStats = {
+        home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
+        away: Array.isArray(awayTeamStats) ? awayTeamStats : []
+      };
+      const gameContext = {
+        injuries: Array.isArray(injuries) ? injuries : [],
+        season,
+        postseason: false,
+        notes: 'Regular season context from BDL NCAAB'
+      };
+
       let oddsData = null;
       if (game.bookmakers?.length) {
         oddsData = { bookmaker: game.bookmakers[0]?.title, markets: game.bookmakers[0]?.markets || [] };
@@ -73,6 +85,8 @@ export async function generateNCAABPicks(options = {}) {
         league: 'NCAAB',
         homeTeam: game.home_team,
         awayTeam: game.away_team,
+        teamStats,
+        gameContext,
         statsReport,
         odds: oddsData,
         gameTime: game.commence_time,

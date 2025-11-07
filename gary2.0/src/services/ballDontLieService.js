@@ -284,7 +284,8 @@ const ballDontLieService = {
         const endpointMap = {
           americanfootball_nfl: 'nfl/v1/team_stats',
           americanfootball_ncaaf: 'ncaaf/v1/team_stats',
-          basketball_ncaab: 'ncaab/v1/team_stats'
+          basketball_ncaab: 'ncaab/v1/team_stats',
+          basketball_wnba: 'wnba/v1/team_stats'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('team stats not supported');
