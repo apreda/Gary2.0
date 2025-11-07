@@ -1,7 +1,7 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
-import { processGameOnce, cachedApiCall } from './picksService.js'; // Import shared helpers
+import { processGameOnce } from './picksService.js'; // Import shared helper
 
 export async function generateNBAPicks() {
   console.log('Processing NBA games');
@@ -58,11 +58,8 @@ export async function generateNBAPicks() {
       
       console.log(`Processing NBA game: ${game.away_team} @ ${game.home_team}`);
       
-      // Get team objects first for all subsequent operations
-      const nbaTeams = await cachedApiCall(
-        'nba-teams', 
-        () => ballDontLieService.getNbaTeams()
-      );
+      // Get team objects for all subsequent operations (avoid circular import by not using cachedApiCall here)
+      const nbaTeams = await ballDontLieService.getNbaTeams();
         const homeTeam = nbaTeams.find(t => 
           t.full_name.toLowerCase().includes(game.home_team.toLowerCase()) ||
           game.home_team.toLowerCase().includes(t.full_name.toLowerCase())
