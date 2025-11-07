@@ -608,7 +608,13 @@ export const oddsService = {
         windowStart.setHours(18, 0, 0, 0);
         
         const windowEnd = new Date(estDate);
-        windowEnd.setDate(windowEnd.getDate() + 1);
+        // Default: today/tomorrow window
+        let addDays = 1;
+        // NFL: widen to next 8 days to ensure weekly slate is captured
+        if (sport === 'americanfootball_nfl') {
+          addDays = 8;
+        }
+        windowEnd.setDate(windowEnd.getDate() + addDays);
         windowEnd.setHours(6, 0, 0, 0);
         
         console.log(`Expanded time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);

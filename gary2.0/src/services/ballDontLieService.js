@@ -84,6 +84,18 @@ function buildQuery(params = {}) {
 }
 
 /**
+ * Normalize team/school names for fuzzy matching (handles "Univ.", punctuation, spacing)
+ */
+function normalizeName(value) {
+  if (!value) return '';
+  let s = String(value).toLowerCase();
+  s = s.replace(/\buniv\.?\b/g, 'university');
+  s = s.replace(/[^a-z0-9\s]/g, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+/**
  * Service for Ball Don't Lie API interactions
  */
 const ballDontLieService = {
@@ -150,23 +162,55 @@ const ballDontLieService = {
       if (nameOrId == null || nameOrId === '') return null;
       const nameStr = String(nameOrId).toLowerCase();
       const idNum = !isNaN(Number(nameStr)) ? Number(nameStr) : null;
-      const teams = await this.getTeams(sportKey);
+      let teams = await this.getTeams(sportKey);
+      // HTTP fallback if SDK path empty
+      if (!Array.isArray(teams) || teams.length === 0) {
+        const endpointMap = {
+          americanfootball_ncaaf: 'ncaaf/v1/teams',
+          basketball_ncaab: 'ncaab/v1/teams',
+          icehockey_nhl: 'nhl/v1/teams',
+          americanfootball_nfl: 'nfl/v1/teams',
+          basketball_wnba: 'wnba/v1/teams',
+          basketball_nba: 'nba/v1/teams'
+        };
+        const path = endpointMap[sportKey];
+        if (path) {
+          const url = `https://api.balldontlie.io/${path}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (resp.ok) {
+            const json = await resp.json().catch(() => ({}));
+            teams = Array.isArray(json?.data) ? json.data : [];
+          }
+        }
+      }
       if (!Array.isArray(teams) || teams.length === 0) return null;
       if (idNum !== null) {
         const byId = teams.find(t => t.id === idNum);
         if (byId) return byId;
       }
-      const exact = teams.find(t =>
-        (t.name && String(t.name).toLowerCase() === nameStr) ||
-        (t.full_name && String(t.full_name).toLowerCase() === nameStr) ||
-        (t.abbreviation && String(t.abbreviation).toLowerCase() === nameStr)
-      );
+      // Enhanced matching across common fields + normalization
+      const target = normalizeName(nameOrId);
+      const exact = teams.find(t => {
+        const fields = [
+          t.name,
+          t.full_name,
+          t.abbreviation,
+          t.city,
+          t.college
+        ].filter(Boolean).map(normalizeName);
+        return fields.includes(target);
+      });
       if (exact) return exact;
-      const partial = teams.find(t =>
-        (t.name && String(t.name).toLowerCase().includes(nameStr)) ||
-        (t.full_name && String(t.full_name).toLowerCase().includes(nameStr)) ||
-        (t.abbreviation && String(t.abbreviation).toLowerCase().includes(nameStr))
-      );
+      const partial = teams.find(t => {
+        const fields = [
+          t.name,
+          t.full_name,
+          t.abbreviation,
+          t.city,
+          t.college
+        ].filter(Boolean).map(normalizeName);
+        return fields.some(f => f.includes(target) || target.includes(f));
+      });
       return partial || null;
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getTeamByName error:`, e.message);
