@@ -266,36 +266,12 @@ async function storeDailyPicksInDatabase(picks) {
     }
     const sport = pick.sport || '';
     const passesConfidence = confidence >= 0.60;
-    if (!passesConfidence) {
-      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.60)`);
-      return false;
-    }
-    // Enforce moneyline odds cap: exclude heavy favorites worse than -200
-    if ((pick.type || '').toLowerCase() === 'moneyline') {
-      let oddsNum = 0;
-      if (typeof pick.odds === 'number') {
-        oddsNum = pick.odds;
-      } else if (typeof pick.odds === 'string') {
-        const parsedOdds = parseFloat(pick.odds);
-        oddsNum = Number.isFinite(parsedOdds) ? parsedOdds : 0;
-      } else if (typeof pick.pick === 'string') {
-        // Try extract odds from the tail of the pick string e.g., "Team ML -225"
-        const match = pick.pick.match(/[-+]\d{2,4}\s*$/);
-        if (match) {
-          const parsedTail = parseFloat(match[0]);
-          oddsNum = Number.isFinite(parsedTail) ? parsedTail : 0;
-        }
-      }
-      if (Number.isFinite(oddsNum) && oddsNum < -200) {
-        console.log(`❌ FILTERING OUT ${sport} moneyline pick at ${oddsNum} (odds cap > -200)`);
-        return false;
-      }
-    }
-    console.log(`✅ Including ${sport} pick with confidence ${confidence} (>= 0.60)`);
-    return true;
+    if (passesConfidence) console.log(`✅ Including ${sport} pick with confidence ${confidence} (>= 0.60)`);
+    else console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.60)`);
+    return passesConfidence;
   });
 
-  console.log(`After filters (confidence >= 0.60, ML odds cap > -200), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After confidence filter (>= 0.60), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // If no valid picks, exit early
   if (validPicks.length === 0) {
