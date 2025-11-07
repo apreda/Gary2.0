@@ -17,9 +17,16 @@ export default async function handler(req, res) {
 
   try {
     const startedAt = Date.now();
+    // Robust query parsing (req.query can be empty on some runtimes/redirects)
+    let urlParams = {};
+    try {
+      const u = new URL(req.url, `http://${req.headers.host}`);
+      urlParams = Object.fromEntries(u.searchParams.entries());
+    } catch {}
     const query = req.query || {};
     const body = req.body || {};
-    const params = { ...query, ...body };
+    // Merge with URL params first so explicit query string values are honored
+    const params = { ...urlParams, ...query, ...body };
 
     // Optional per-sport, per-game batching
     const allMode = params.all === '1' || params.all === 'true' || params.all === true;
