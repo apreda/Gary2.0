@@ -4,12 +4,17 @@ import { BalldontlieAPI } from '@balldontlie/sdk';
 const TTL_MINUTES = 5;
 const cacheMap = new Map();
 
-// Get API key from environment
+// Get API key from environment (support both browser and serverless)
 let API_KEY;
 try {
-  API_KEY = import.meta.env.VITE_BALLDONTLIE_API_KEY || '';
+  API_KEY =
+    (typeof import !== 'undefined' && import.meta?.env?.VITE_BALLDONTLIE_API_KEY) ||
+    process.env.BALLDONTLIE_API_KEY ||
+    process.env.VITE_BALLDONTLIE_API_KEY ||
+    process.env.NEXT_PUBLIC_BALLDONTLIE_API_KEY ||
+    '';
 } catch (e) {
-  API_KEY = '';
+  API_KEY = process.env?.BALLDONTLIE_API_KEY || '';
 }
 
 /**
@@ -166,7 +171,7 @@ const ballDontLieService = {
   async getNbaTeams() {
     try {
       const cacheKey = 'nba_teams';
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         console.log('Fetching NBA teams from BallDontLie API');
         const client = initApi();
         const response = await client.nba.getTeams();
@@ -198,7 +203,7 @@ const ballDontLieService = {
     
     try {
       const cacheKey = todayOnly ? `nba_playoff_games_today_${actualSeason}` : `nba_playoff_games_${actualSeason}`;
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         console.log(`🏀 Fetching NBA playoff games for ${actualSeason} season (${actualSeason}-${actualSeason + 1}) from Ball Don't Lie API${todayOnly ? ' - TODAY ONLY' : ''}`);
         
         const client = initApi();
@@ -264,7 +269,7 @@ const ballDontLieService = {
     
     try {
       const cacheKey = `nba_season_averages_${actualSeason}_${teamIds.join('_')}`;
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         console.log(`🏀 Fetching NBA season averages for ${actualSeason} season`);
         const client = initApi();
         
@@ -291,7 +296,7 @@ const ballDontLieService = {
   async getNbaPlayerInjuries(teamIds = []) {
     try {
       const cacheKey = `nba_player_injuries_${teamIds.join('_')}`;
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         console.log(`🏀 Fetching NBA player injuries for teams: ${teamIds.join(', ')}`);
         const client = initApi();
         
@@ -319,7 +324,7 @@ const ballDontLieService = {
   async getNbaAdvancedStats(gameIds = []) {
     try {
       const cacheKey = `nba_advanced_stats_${gameIds.join('_')}`;
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         console.log(`🏀 Fetching NBA advanced stats for ${gameIds.length} games`);
         const client = initApi();
         
@@ -369,7 +374,7 @@ const ballDontLieService = {
     
     try {
       const cacheKey = `nba_standings_${actualSeason}`;
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         console.log(`🏀 Fetching NBA standings for ${actualSeason} season`);
         const client = initApi();
         
@@ -505,7 +510,7 @@ const ballDontLieService = {
     
     try {
       const cacheKey = `nba_playoff_series_${actualSeason}_${teamA}_${teamB}`;
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         // Get all playoff games for the season
         const playoffGames = await this.getNbaPlayoffGames(actualSeason);
         
@@ -589,7 +594,7 @@ const ballDontLieService = {
   async getNbaPlayoffGameStats(gameId) {
     try {
       const cacheKey = `nba_playoff_game_stats_${gameId}`;
-      return getCachedOrFetch(cacheKey, async () => {
+      return await getCachedOrFetch(cacheKey, async () => {
         console.log(`Fetching NBA playoff game stats for game ID ${gameId}`);
         const client = initApi();
         const response = await client.nba.getStats({
