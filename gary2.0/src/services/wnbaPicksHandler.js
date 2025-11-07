@@ -5,7 +5,7 @@ import { processGameOnce } from './picksService.js';
 
 const SPORT_KEY = 'basketball_wnba';
 
-export async function generateWNBAPicks() {
+export async function generateWNBAPicks(options = {}) {
   console.log('Processing WNBA games');
   const games = await oddsService.getUpcomingGames(SPORT_KEY);
   console.log(`Found ${games.length} WNBA games from odds service`);
@@ -13,11 +13,16 @@ export async function generateWNBAPicks() {
   // 36-hour window
   const now = new Date();
   const end = new Date(now.getTime() + 36 * 60 * 60 * 1000);
-  const windowed = games.filter(g => {
+  let windowed = games.filter(g => {
     const t = new Date(g.commence_time);
     return t >= now && t <= end;
   });
   console.log(`After date filtering: ${windowed.length} WNBA games in next 36h`);
+
+  if (typeof options.onlyAtIndex === 'number') {
+    const idx = options.onlyAtIndex;
+    windowed = idx >= 0 && idx < windowed.length ? [windowed[idx]] : [];
+  }
 
   const season = new Date().getFullYear();
   const picks = [];

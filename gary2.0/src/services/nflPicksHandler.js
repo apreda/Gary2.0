@@ -5,7 +5,7 @@ import { processGameOnce } from './picksService.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 
-export async function generateNFLPicks() {
+export async function generateNFLPicks(options = {}) {
   console.log('Processing NFL games');
   const games = await oddsService.getUpcomingGames(SPORT_KEY);
   console.log(`Found ${games.length} NFL games from odds service`);
@@ -14,11 +14,16 @@ export async function generateNFLPicks() {
   const now = new Date();
   const end = new Date(now.getTime() + 36 * 60 * 60 * 1000);
 
-  const todayGames = games.filter(g => {
+  let todayGames = games.filter(g => {
     const t = new Date(g.commence_time);
     return t >= now && t <= end;
   });
   console.log(`After date filtering: ${todayGames.length} NFL games in next 36h`);
+
+  if (typeof options.onlyAtIndex === 'number') {
+    const idx = options.onlyAtIndex;
+    todayGames = idx >= 0 && idx < todayGames.length ? [todayGames[idx]] : [];
+  }
 
   const season = new Date().getFullYear();
   const picks = [];

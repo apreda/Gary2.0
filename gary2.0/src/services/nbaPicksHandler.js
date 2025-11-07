@@ -3,7 +3,7 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce } from './picksService.js'; // Import shared helper
 
-export async function generateNBAPicks() {
+export async function generateNBAPicks(options = {}) {
   console.log('Processing NBA games');
   const games = await oddsService.getUpcomingGames('basketball_nba');
   console.log(`Found ${games.length} NBA games from odds service`);
@@ -21,7 +21,7 @@ export async function generateNBAPicks() {
   const nowTime = today.getTime();
   const twentyFourHoursLater = nowTime + (24 * 60 * 60 * 1000);
   
-  const todayGames = games.filter(game => {
+  let todayGames = games.filter(game => {
     const gameTime = new Date(game.commence_time).getTime();
     const isWithin24Hours = gameTime >= nowTime && gameTime <= twentyFourHoursLater;
     
@@ -47,6 +47,12 @@ export async function generateNBAPicks() {
   });
 
   console.log(`After date filtering: ${todayGames.length} NBA games within next 24 hours or today/tomorrow`);
+
+  // If options.onlyAtIndex is provided, process only that game
+  if (typeof options.onlyAtIndex === 'number') {
+    const idx = options.onlyAtIndex;
+    todayGames = idx >= 0 && idx < todayGames.length ? [todayGames[idx]] : [];
+  }
 
   const sportPicks = [];
   for (const game of todayGames) {

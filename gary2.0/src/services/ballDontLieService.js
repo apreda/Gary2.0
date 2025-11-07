@@ -1410,39 +1410,61 @@ const ballDontLieService = {
         return [];
       }
       
-      const playoffSeason = season || new Date().getFullYear();
-      console.log(`🏀 Using season: ${playoffSeason}`);
+      const currentMonth = new Date().getMonth() + 1;
+      const nowYear = new Date().getFullYear();
+      const playoffSeason = season || (currentMonth <= 6 ? nowYear - 1 : nowYear);
+      console.log(`🏀 Using season: ${playoffSeason} (real-only)`);
       
-      // TEMPORARY FIX: Ball Don't Lie Season Averages API is causing toString() errors
-      // Return placeholder team stats to keep the system working
-      console.log('⚠️ Ball Don\'t Lie Season Averages API is currently causing errors - returning placeholder stats');
+      // Attempt to fetch real team season stats from the SDK; if not supported, return []
+      const client = initApi();
+      if (!client?.nba) {
+        console.warn('⚠️ NBA client not available; cannot fetch team stats');
+        return [];
+      }
       
-      const placeholderStats = validTeamIds.map(teamId => {
-        // Convert team name to numeric ID if needed
-        const numericTeamId = typeof teamId === 'string' ? this._getTeamIdFromName(teamId) : teamId;
-        
-        return {
-          teamId: numericTeamId,
-          season: playoffSeason,
-          stats: {
-            wins: 41, // Reasonable playoff team record
-            losses: 41,
-            pointsPerGame: 112,
-            pointsAllowedPerGame: 108,
-            fieldGoalPct: 0.46,
-            threePointPct: 0.36,
-            reboundsPerGame: 44,
-            assistsPerGame: 25,
-            turnoversPerGame: 14,
-            stealsPerGame: 8,
-            blocksPerGame: 5,
-            playerCount: 12
+      // Normalize IDs to numbers if possible
+      const numericIds = validTeamIds.map(id => (typeof id === 'string' ? Number(id) : id)).filter(n => Number.isFinite(n));
+      
+      // Try several potential SDK methods to retrieve team season stats
+      let response = null;
+      try {
+        if (typeof client.nba.getTeamSeasonStats === 'function') {
+          response = await client.nba.getTeamSeasonStats({
+            team_ids: numericIds,
+            season: playoffSeason,
+            season_type: 'playoffs',
+            per_page: 100
+          });
+        }
+      } catch (e1) {
+        console.warn('getTeamSeasonStats not available or failed:', e1.message);
+      }
+      
+      if (!response) {
+        try {
+          if (typeof client.nba.getTeamStats === 'function') {
+            response = await client.nba.getTeamStats({
+              team_ids: numericIds,
+              season: playoffSeason,
+              season_type: 'playoffs',
+              per_page: 100
+            });
           }
-        };
-      });
+        } catch (e2) {
+          console.warn('getTeamStats not available or failed:', e2.message);
+        }
+      }
       
-      console.log(`✅ Returning ${placeholderStats.length} placeholder team stats`);
-      return placeholderStats;
+      if (!response) {
+        console.warn('⚠️ No supported NBA team stats method found in SDK; returning empty stats (real-only enforcement).');
+        return [];
+      }
+      
+      const rows = response?.data || [];
+      console.log(`🏀 Retrieved ${rows.length} NBA team season stats rows from API`);
+      
+      // Return raw rows for now (real data only). Downstream may adapt format or skip if not consumable.
+      return rows;
       
     } catch (error) {
       console.error('Error fetching NBA team stats:', error);
