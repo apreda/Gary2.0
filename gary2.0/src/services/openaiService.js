@@ -293,9 +293,11 @@ SPREAD vs MONEYLINE DECISION:
 - Base decision purely on statistical analysis and expected game flow
 
 ODDS LIMITS (APPLIES TO ALL SPORTS):
-- Never return a moneyline favorite pick priced worse than -200 (e.g., -201, -220, -900 are NOT allowed).
-- If the moneyline price on the preferred side is worse than -200, pick the spread instead (or the other side if the spread/value dictates).
-- Ensure the "pick" and "odds" fields reflect this constraint. Do not output ML favorites below -200.
+- Do NOT return a moneyline favorite pick priced worse than -200 (e.g., -201, -220, -900 are NOT allowed).
+- If your read is on the favorite but ML is worse than -200, evaluate the SPREAD for that side and take it if the matchup supports covering.
+- If the favorite’s spread is shaky at fair juice, consider the OTHER SIDE (including underdog ML) when the value is superior.
+- Do NOT be afraid of underdogs regardless of odds; if the analysis shows real value, you can take the plus-money ML or the points.
+- The goal is best value: choose between spread vs ML accordingly, and never output ML favorites below -200.
 
 FORMATTING REQUIREMENTS:
 - Pick field MUST follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
