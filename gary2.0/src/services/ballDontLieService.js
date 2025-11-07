@@ -62,6 +62,28 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
 }
 
 /**
+ * Build query string from params, supporting array syntax key[]=v
+ */
+function buildQuery(params = {}) {
+  const parts = [];
+  Object.entries(params).forEach(([key, value]) => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach(v => {
+        if (v == null) return;
+        parts.push(`${encodeURIComponent(key)}[]=${encodeURIComponent(String(v))}`);
+      });
+    } else if (typeof value === 'object') {
+      // Basic JSON encode for nested objects
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(JSON.stringify(value))}`);
+    } else {
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
+  });
+  return parts.length ? `?${parts.join('&')}` : '';
+}
+
+/**
  * Service for Ball Don't Lie API interactions
  */
 const ballDontLieService = {
@@ -91,9 +113,31 @@ const ballDontLieService = {
       const cacheKey = `${sportKey}_teams_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
-        if (!sport?.getTeams) throw new Error('getTeams not supported');
-        const resp = await sport.getTeams(params);
-        return resp?.data || [];
+        // Prefer SDK if available
+        if (sport?.getTeams) {
+          const resp = await sport.getTeams(params);
+          return resp?.data || [];
+        }
+        // Fallback to direct HTTP for sports where SDK lacks getTeams
+        const endpointMap = {
+          americanfootball_ncaaf: 'ncaaf/v1/teams',
+          basketball_ncaab: 'ncaab/v1/teams',
+          icehockey_nhl: 'nhl/v1/teams',
+          americanfootball_nfl: 'nfl/v1/teams',
+          basketball_wnba: 'wnba/v1/teams'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) throw new Error('getTeams not supported');
+        const url = `https://api.balldontlie.io/${path}`;
+        const resp = await fetch(url, {
+          headers: { Authorization: API_KEY }
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
       }, 60);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getTeams error:`, e.message);
@@ -167,9 +211,28 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
         const fn = sport?.getTeamStats || sport?.getStats;
-        if (!fn) throw new Error('team stats not supported');
-        const resp = await fn.call(sport, params);
-        return resp?.data || [];
+        if (fn) {
+          const resp = await fn.call(sport, params);
+          return resp?.data || [];
+        }
+        // HTTP fallback for college sports where SDK may not expose team stats
+        const endpointMap = {
+          americanfootball_ncaaf: 'ncaaf/v1/team_stats',
+          basketball_ncaab: 'ncaab/v1/team_stats'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) throw new Error('team stats not supported');
+        const qs = buildQuery(params);
+        const url = `https://api.balldontlie.io/${path}${qs}`;
+        const resp = await fetch(url, {
+          headers: { Authorization: API_KEY }
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getTeamStats error:`, e.message);
