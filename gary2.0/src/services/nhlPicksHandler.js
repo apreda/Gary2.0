@@ -46,72 +46,66 @@ export async function generateNHLPicks(options = {}) {
     const result = await processGameOnce(gameId, async () => {
       console.log(`Processing NHL game: ${game.away_team} @ ${game.home_team}`);
       
-      // Get comprehensive NHL playoff analysis using Ball Don't Lie API (2025 playoffs only)
-      const playoffAnalysis = await ballDontLieService.getComprehensiveNhlPlayoffAnalysis(
-        game.home_team,
-        game.away_team
-      );
+      // Resolve teams via BDL NHL
+      const homeTeam = await ballDontLieService.getTeamByNameGeneric('icehockey_nhl', game.home_team);
+      const awayTeam = await ballDontLieService.getTeamByNameGeneric('icehockey_nhl', game.away_team);
       
-      // Generate playoff stats report from Ball Don't Lie data
-      let playoffStatsReport = `# NHL PLAYOFF REPORT: ${game.away_team} @ ${game.home_team}\n\n`;
-      
-      if (playoffAnalysis) {
-        // Add series information if available
-        if (playoffAnalysis.series?.seriesFound) {
-          playoffStatsReport += `## Series Status: ${playoffAnalysis.series.seriesStatus}\n\n`;
-        }
-        
-        // Add home team playoff stats
-        if (playoffAnalysis.homeTeam?.stats?.length > 0) {
-          playoffStatsReport += `## ${game.home_team} Top Playoff Performers:\n`;
-          playoffAnalysis.homeTeam.stats.slice(0, 3).forEach(player => {
-            playoffStatsReport += `- ${player.player.first_name} ${player.player.last_name}: ${player.avgGoals}G, ${player.avgAssists}A, ${player.avgPoints}P per game (${player.games} games)\n`;
-            playoffStatsReport += `  +/- ${player.avgPlusMinus}, ${player.shootingPct}% shooting, ${player.avgTimeOnIce} min TOI\n`;
-          });
-          playoffStatsReport += '\n';
-        }
-        
-        // Add away team playoff stats
-        if (playoffAnalysis.awayTeam?.stats?.length > 0) {
-          playoffStatsReport += `## ${game.away_team} Top Playoff Performers:\n`;
-          playoffAnalysis.awayTeam.stats.slice(0, 3).forEach(player => {
-            playoffStatsReport += `- ${player.player.first_name} ${player.player.last_name}: ${player.avgGoals}G, ${player.avgAssists}A, ${player.avgPoints}P per game (${player.games} games)\n`;
-            playoffStatsReport += `  +/- ${player.avgPlusMinus}, ${player.shootingPct}% shooting, ${player.avgTimeOnIce} min TOI\n`;
-          });
-          playoffStatsReport += '\n';
-        }
-        
-        // Add playoff context
-        playoffStatsReport += `## 2025 Playoff Context:\n`;
-        playoffStatsReport += `- Season: ${playoffAnalysis.season} (2024-25 NHL season)\n`;
-        playoffStatsReport += `- Active playoff teams: ${playoffAnalysis.activePlayoffTeams?.length || 0}\n`;
-        playoffStatsReport += `- Data source: Ball Don't Lie API (playoff games only)\n\n`;
-      } else {
-        playoffStatsReport += `Unable to retrieve comprehensive playoff data for this matchup.\n\n`;
-      }
-      
-      // Get basic team info for context
       let homeStats = { name: game.home_team, conference: '?', division: '?' };
       let awayStats = { name: game.away_team, conference: '?', division: '?' };
-      
-      if (playoffAnalysis?.homeTeam?.teamData) {
-          homeStats = {
-          name: playoffAnalysis.homeTeam.teamData.full_name || game.home_team,
-          conference: playoffAnalysis.homeTeam.teamData.conference || '?',
-          division: playoffAnalysis.homeTeam.teamData.division || '?'
+      if (homeTeam) {
+        homeStats = {
+          name: homeTeam.full_name || game.home_team,
+          conference: homeTeam.conference || homeTeam.conference_name || '?',
+          division: homeTeam.division || homeTeam.division_name || '?'
+        };
+      }
+      if (awayTeam) {
+        awayStats = {
+          name: awayTeam.full_name || game.away_team,
+          conference: awayTeam.conference || awayTeam.conference_name || '?',
+          division: awayTeam.division || awayTeam.division_name || '?'
         };
       }
       
-      if (playoffAnalysis?.awayTeam?.teamData) {
-          awayStats = {
-          name: playoffAnalysis.awayTeam.teamData.full_name || game.away_team,
-          conference: playoffAnalysis.awayTeam.teamData.conference || '?',
-          division: playoffAnalysis.awayTeam.teamData.division || '?'
-        };
-      }
+      // Regular season window (last 21 days) and injuries if available
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      const season = month <= 6 ? year - 1 : year;
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 21);
+      const startStr = startDate.toISOString().slice(0, 10);
+      const endStr = now.toISOString().slice(0, 10);
       
-      // PLAYOFFS ONLY - No regular season stats
-      const nhlStatsReport = playoffStatsReport;
+      const teamIds = [];
+      if (homeTeam?.id != null) teamIds.push(homeTeam.id);
+      if (awayTeam?.id != null) teamIds.push(awayTeam.id);
+      
+      let injuries = [];
+      try {
+        injuries = await ballDontLieService.getInjuriesGeneric('icehockey_nhl', { team_ids: teamIds }, options.nocache ? 0 : 5);
+      } catch {}
+      let homeRecent = [];
+      let awayRecent = [];
+      try {
+        homeRecent = homeTeam ? await ballDontLieService.getGames('icehockey_nhl', { seasons: [season], team_ids: [homeTeam.id], postseason: false, start_date: startStr, end_date: endStr, per_page: 50 }, options.nocache ? 0 : 10) : [];
+        awayRecent = awayTeam ? await ballDontLieService.getGames('icehockey_nhl', { seasons: [season], team_ids: [awayTeam.id], postseason: false, start_date: startStr, end_date: endStr, per_page: 50 }, options.nocache ? 0 : 10) : [];
+      } catch {}
+      
+      let nhlStatsReport = `\n## REGULAR SEASON CONTEXT (NHL):\n\n`;
+      nhlStatsReport += `Season: ${season}-${season + 1}\n\n`;
+      nhlStatsReport += `Recent window: ${startStr} to ${endStr}\n\n`;
+      nhlStatsReport += `- ${game.home_team} recent games: ${Array.isArray(homeRecent) ? homeRecent.length : 0}\n`;
+      nhlStatsReport += `- ${game.away_team} recent games: ${Array.isArray(awayRecent) ? awayRecent.length : 0}\n\n`;
+      if (Array.isArray(injuries) && injuries.length > 0) {
+        nhlStatsReport += `Injuries sample (${Math.min(5, injuries.length)} shown):\n`;
+        injuries.slice(0, 5).forEach(inj => {
+          const fn = inj?.player?.first_name || '';
+          const ln = inj?.player?.last_name || '';
+          nhlStatsReport += `- ${fn} ${ln}: ${inj?.status || 'Unknown'} — ${inj?.description || ''}\n`;
+        });
+        nhlStatsReport += '\n';
+      }
 
       // Format odds data for OpenAI
       let oddsData = null;
@@ -135,7 +129,7 @@ export async function generateNHLPicks(options = {}) {
         homeTeamStats: homeStats,
         awayTeamStats: awayStats,
         statsReport: nhlStatsReport,
-        isPlayoffGame: true, // Mark this as focusing on playoff stats
+        isPlayoffGame: false,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time
