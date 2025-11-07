@@ -14,6 +14,9 @@ const supabaseKey =
   process.env.VITE_SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+// Prefer service role key for server-side admin operations
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Supabase configuration missing from environment variables');
   console.error('Please set SUPABASE_URL and SUPABASE_ANON_KEY (server), or VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (client).');
@@ -74,6 +77,9 @@ export const storeDailyPicks = async (dateString, picksArray) => {
     sanitizedPicks = picksArray; // Use original as fallback
   }
 
+  // Use service role key when available to bypass RLS on server
+  const adminKey = supabaseServiceKey || supabaseKey;
+
   // 1. Delete any existing entry for this date
   console.log(`STORAGE FIX: Removing existing daily picks for ${dateString}...`);
   try {
@@ -84,8 +90,8 @@ export const storeDailyPicks = async (dateString, picksArray) => {
         date: `eq.${dateString}`
       },
       headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': adminKey,
+        'Authorization': `Bearer ${adminKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -110,8 +116,8 @@ export const storeDailyPicks = async (dateString, picksArray) => {
       url: `${supabaseUrl}/rest/v1/daily_picks`,
       data: payload,
       headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': adminKey,
+        'Authorization': `Bearer ${adminKey}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=minimal'
       }
@@ -140,8 +146,8 @@ export const storeDailyPicks = async (dateString, picksArray) => {
         url: `${supabaseUrl}/rest/v1/daily_picks`,
         data: textRecord,
         headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': adminKey,
+          'Authorization': `Bearer ${adminKey}`,
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal'
         }
