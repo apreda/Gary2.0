@@ -329,7 +329,15 @@ Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addre
   "rationale": "A 2-4 sentence paragraph explaining your pick using expert-level analysis."
 }
 
-REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-NEGOTIABLE.
+                REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-NEGOTIABLE.
+
+=== LEAGUE-FOCUSED METRICS (WEIGHT THESE HIGH) ===
+- Basketball (NBA/NCAAB/WNBA): eFG%, Turnover Rate, Offensive Rebound Rate, Free Throw Rate, Pace, recent 5–10 form and home/away splits.
+- Hockey (NHL): Power-play %, Penalty-kill %, Shots For/Against per game, Faceoff win %, Goals For/Against per game, last-10 form.
+- Football (NFL/NCAAF): Offense PPG, Defense PPG allowed, Yards/Play, 3rd/4th down conversion %, Red-zone efficiency (proxy), Turnover differential. Special attention to QB performance and opponent defensive profile.
+
+=== MODEL VS MARKET EDGE (IF PROVIDED) ===
+When a "model edge" is provided, explicitly use it to decide between ML and spread. If the model’s expected margin exceeds the market spread by ≥ 0.5, prefer the spread when juice is standard. If the market spread exceeds the expected margin, consider dog ML or taking the points if odds justify. Never force it—use it as a weighting signal along with the rest of the data.
 `
       };
       
@@ -738,6 +746,10 @@ TEAM DESIGNATIONS (DO NOT CHANGE THESE):
 ${gameData?.oddsText || (gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.odds, null, 2)}` : 'No odds data available')}
 
 ${gameData?.lineMovement ? `Line Movement: ${JSON.stringify(gameData.lineMovement, null, 2)}` : 'No line movement data available'}
+
+${gameData?.modelEdge ? `MODEL EDGE:\n- Expected Margin: ${gameData.modelEdge.expectedMargin}\n- Market Spread (home): ${gameData.modelEdge.marketSpread}\n- Edge (Model - Market): ${gameData.modelEdge.edge}\n` : 'MODEL EDGE: Not computed'}
+
+${Array.isArray(gameData?.gameContext?.richKeyFindings) && gameData.gameContext.richKeyFindings.length > 0 ? `KEY FINDINGS (Most predictive, verified):\n- ${gameData.gameContext.richKeyFindings.map(k => (k?.rationale ? `${k?.title || 'Finding'} — ${k.rationale}` : (k?.title || JSON.stringify(k)))).join('\n- ')}\n` : ''}
 
 TEAM STATISTICS AND DATA:
 ${statsSection}

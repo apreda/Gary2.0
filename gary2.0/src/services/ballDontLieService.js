@@ -118,6 +118,74 @@ const ballDontLieService = {
   },
 
   /**
+   * NFL player per-game stats for specific game_ids
+   */
+  async getNflPlayerGameStats({ playerId, gameIds } = {}, ttlMinutes = 5) {
+    try {
+      if (!playerId || !Array.isArray(gameIds) || gameIds.length === 0) return [];
+      const key = `nfl_player_game_stats_${playerId}_${gameIds.slice(0, 10).join(',')}`;
+      return await getCachedOrFetch(key, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery({ player_ids: [playerId], game_ids: gameIds.slice(0, 50), per_page: 100 })}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] nfl getNflPlayerGameStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Generic players fetch with HTTP fallback
+   */
+  async getPlayersGeneric(sportKey, params = {}, ttlMinutes = 10) {
+    try {
+      const cacheKey = `${sportKey}_players_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        if (sport?.getPlayers) {
+          const resp = await sport.getPlayers(params);
+          return resp?.data || [];
+        }
+        const endpointMap = {
+          basketball_nba: 'nba/v1/players',
+          basketball_wnba: 'wnba/v1/players',
+          basketball_ncaab: 'ncaab/v1/players',
+          icehockey_nhl: 'nhl/v1/players',
+          americanfootball_nfl: 'nfl/v1/players',
+          americanfootball_ncaaf: 'ncaaf/v1/players'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) return [];
+        const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getPlayers error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
+   * NFL player season stats (offense focus)
+   */
+  async getNflPlayerSeasonStats({ playerId, season, postseason = false } = {}, ttlMinutes = 10) {
+    try {
+      if (!playerId || !season) return [];
+      const cacheKey = `nfl_player_season_stats_${playerId}_${season}_${postseason}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/season_stats${buildQuery({ player_ids: [playerId], season, postseason })}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] nfl getNflPlayerSeasonStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * Generic helpers (multi-sport)
    */
   async getTeams(sportKey, params = {}) {
@@ -284,8 +352,7 @@ const ballDontLieService = {
         const endpointMap = {
           americanfootball_nfl: 'nfl/v1/team_stats',
           americanfootball_ncaaf: 'ncaaf/v1/team_stats',
-          basketball_ncaab: 'ncaab/v1/team_stats',
-          basketball_wnba: 'wnba/v1/team_stats'
+          basketball_ncaab: 'ncaab/v1/team_stats'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('team stats not supported');
@@ -312,14 +379,201 @@ const ballDontLieService = {
       const cacheKey = `${sportKey}_standings_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
-        if (!sport?.getStandings) throw new Error('getStandings not supported');
-        const resp = await sport.getStandings(params);
-        return resp?.data || [];
+        if (sport?.getStandings) {
+          const resp = await sport.getStandings(params);
+          return resp?.data || [];
+        }
+        // HTTP fallback
+        const endpointMap = {
+          basketball_nba: 'nba/v1/standings',
+          basketball_ncaab: 'ncaab/v1/standings',
+          icehockey_nhl: 'nhl/v1/standings',
+          americanfootball_nfl: 'nfl/v1/standings'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) throw new Error('getStandings not supported');
+        const qs = buildQuery(params);
+        const url = `https://api.balldontlie.io/${path}${qs}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getStandings error:`, e.message);
       return [];
     }
+  },
+
+  /**
+   * Team season stats by sport (HTTP fallbacks where needed)
+   * NBA: use standings/leaders as proxy (no direct season stats endpoint documented)
+   * NHL: /nhl/v1/teams/:id/season_stats
+   * NFL: /nfl/v1/team_season_stats
+   * NCAAB: /ncaab/v1/team_season_stats
+   * NCAAF: not documented as team season stats; use team_stats and standings as proxy
+   */
+  async getTeamSeasonStats(sportKey, { teamId, season, postseason = false } = {}, ttlMinutes = 30) {
+    try {
+      const cacheKey = `${sportKey}_team_season_stats_${teamId}_${season}_${postseason}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        if (!teamId || !season) return [];
+        // NHL team season stats
+        if (sportKey === 'icehockey_nhl') {
+          const url = `https://api.balldontlie.io/nhl/v1/teams/${encodeURIComponent(teamId)}/season_stats${buildQuery({ season, postseason })}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          return Array.isArray(json?.data) ? json.data : [];
+        }
+        // NFL team season stats
+        if (sportKey === 'americanfootball_nfl') {
+          const url = `https://api.balldontlie.io/nfl/v1/team_season_stats${buildQuery({ season, team_ids: [teamId], postseason })}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          return Array.isArray(json?.data) ? json.data : [];
+        }
+        // NCAAB team season stats
+        if (sportKey === 'basketball_ncaab') {
+          const url = `https://api.balldontlie.io/ncaab/v1/team_season_stats${buildQuery({ season, team_ids: [teamId] })}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          return Array.isArray(json?.data) ? json.data : [];
+        }
+        // WNBA: use team_stats (game stats) aggregated by season via team_ids + seasons
+        if (sportKey === 'basketball_wnba') {
+          const url = `https://api.balldontlie.io/wnba/v1/team_stats${buildQuery({ seasons: [season], team_ids: [teamId], per_page: 100 })}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          return Array.isArray(json?.data) ? json.data : [];
+        }
+        // NBA/NCAAF: fall back to standings/leaders or team_stats by season
+        // NBA: no direct team season stats; caller should use getStandingsGeneric + leaders
+        // NCAAF: use team_stats by season + standings
+        if (sportKey === 'americanfootball_ncaaf') {
+          const url = `https://api.balldontlie.io/ncaaf/v1/team_stats${buildQuery({ seasons: [season], team_ids: [teamId], per_page: 100 })}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          return Array.isArray(json?.data) ? json.data : [];
+        }
+        return [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getTeamSeasonStats error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Leaders endpoints (NBA/NHL/NCAAB) via HTTP fallback
+   */
+  async getLeadersGeneric(sportKey, { season, type, postseason = false } = {}, ttlMinutes = 30) {
+    try {
+      const cacheKey = `${sportKey}_leaders_${season}_${type}_${postseason}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const endpointMap = {
+          basketball_nba: 'nba/v1/leaders', // if available; otherwise use player_stats/leaders
+          basketball_ncaab: 'ncaab/v1/player_stats/leaders',
+          icehockey_nhl: 'nhl/v1/player_stats/leaders',
+          icehockey_nhl_team: 'nhl/v1/team_stats/leaders'
+        };
+        let path = endpointMap[sportKey] || null;
+        // Allow special alias for NHL team leaders
+        if (!path && sportKey === 'icehockey_nhl_team') path = endpointMap.icehockey_nhl_team;
+        if (!path) return [];
+        const url = `https://api.balldontlie.io/${path}${buildQuery({ season, type, postseason })}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getLeaders error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Compute simple derived metrics
+   */
+  deriveBasketballFourFactors(teamSeasonRow) {
+    // Expecting season aggregates; many leagues expose percentages directly
+    const safeNum = (v) => (typeof v === 'number' && !isNaN(v) ? v : 0);
+    return {
+      effectiveFgPct: safeNum(teamSeasonRow?.fg_pct), // proxy
+      turnoverRate: safeNum(teamSeasonRow?.turnovers_per_game) || 0,
+      offensiveRebRate: safeNum(teamSeasonRow?.oreb_per_game) || 0,
+      freeThrowRate: safeNum(teamSeasonRow?.ftm) && safeNum(teamSeasonRow?.fga) ? teamSeasonRow.ftm / teamSeasonRow.fga : 0
+    };
+  },
+
+  deriveNhlTeamRates(teamSeasonPairs) {
+    // teamSeasonPairs is array of {name,value}; build map
+    if (!Array.isArray(teamSeasonPairs)) return {};
+    const map = {};
+    teamSeasonPairs.forEach(r => {
+      if (r && r.name) map[r.name] = r.value;
+    });
+    return {
+      ppPct: map.power_play_percentage,
+      pkPct: map.penalty_kill_percentage,
+      shotsForPerGame: map.shots_for_per_game,
+      shotsAgainstPerGame: map.shots_against_per_game,
+      faceoffWinPct: map.faceoff_win_percentage,
+      goalsForPerGame: map.goals_for_per_game,
+      goalsAgainstPerGame: map.goals_against_per_game
+    };
+  },
+
+  deriveNflTeamRates(teamSeason) {
+    // teamSeason is array of season records fields; build map
+    if (!Array.isArray(teamSeason) || teamSeason.length === 0) return {};
+    const first = teamSeason[0];
+    const map = {};
+    // Flatten name/value pairs or direct fields
+    if (first.name && typeof first.value !== 'undefined') {
+      teamSeason.forEach(r => { map[r.name] = r.value; });
+    } else {
+      Object.assign(map, first);
+    }
+    // Derived
+    const yardsPerPlay = (map.net_total_offensive_yards && map.total_offensive_plays)
+      ? map.net_total_offensive_yards / map.total_offensive_plays
+      : undefined;
+    return {
+      pointsPerGame: map.total_points_per_game,
+      oppPointsPerGame: map.opp_total_points_per_game,
+      yardsPerPlay,
+      thirdDownPct: map.misc_third_down_conv_pct,
+      fourthDownPct: map.misc_fourth_down_conv_pct,
+      redZoneProxy: map.red_zone_scores ? map.red_zone_scores / (map.red_zone_attempts || 1) : undefined,
+      turnoverDiff: map.misc_turnover_differential
+    };
   },
 
   async getInjuriesGeneric(sportKey, params = {}, ttlMinutes = 5) {

@@ -1,5 +1,6 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce } from './picksService.js'; // Import shared helper
 
@@ -97,6 +98,20 @@ export async function generateNHLPicks(options = {}) {
       nhlStatsReport += `Recent window: ${startStr} to ${endStr}\n\n`;
       nhlStatsReport += `- ${game.home_team} recent games: ${Array.isArray(homeRecent) ? homeRecent.length : 0}\n`;
       nhlStatsReport += `- ${game.away_team} recent games: ${Array.isArray(awayRecent) ? awayRecent.length : 0}\n\n`;
+      // Season aggregates (PP/PK/Shots rates)
+      try {
+        const [homePairs, awayPairs] = await Promise.all([
+          homeTeam ? ballDontLieService.getTeamSeasonStats('icehockey_nhl', { teamId: homeTeam.id, season, postseason: false }) : Promise.resolve([]),
+          awayTeam ? ballDontLieService.getTeamSeasonStats('icehockey_nhl', { teamId: awayTeam.id, season, postseason: false }) : Promise.resolve([])
+        ]);
+        const homeRates = ballDontLieService.deriveNhlTeamRates(homePairs);
+        const awayRates = ballDontLieService.deriveNhlTeamRates(awayPairs);
+        if (homeRates || awayRates) {
+          nhlStatsReport += `Special Teams & Rates:\n`;
+          nhlStatsReport += `- ${game.home_team} PP%: ${homeRates.ppPct ?? 'N/A'}, PK%: ${homeRates.pkPct ?? 'N/A'}, Shots/G: ${homeRates.shotsForPerGame ?? 'N/A'}, ShotsAga/G: ${homeRates.shotsAgainstPerGame ?? 'N/A'}\n`;
+          nhlStatsReport += `- ${game.away_team} PP%: ${awayRates.ppPct ?? 'N/A'}, PK%: ${awayRates.pkPct ?? 'N/A'}, Shots/G: ${awayRates.shotsForPerGame ?? 'N/A'}, ShotsAga/G: ${awayRates.shotsAgainstPerGame ?? 'N/A'}\n\n`;
+        }
+      } catch {}
       if (Array.isArray(injuries) && injuries.length > 0) {
         nhlStatsReport += `Injuries sample (${Math.min(5, injuries.length)} shown):\n`;
         injuries.slice(0, 5).forEach(inj => {
@@ -106,18 +121,6 @@ export async function generateNHLPicks(options = {}) {
         });
         nhlStatsReport += '\n';
       }
-
-      // Provide a generic teamStats object and gameContext so Gary recognizes availability
-      const teamStats = {
-        homeRecent: Array.isArray(homeRecent) ? homeRecent : [],
-        awayRecent: Array.isArray(awayRecent) ? awayRecent : []
-      };
-      const gameContext = {
-        injuries: Array.isArray(injuries) ? injuries : [],
-        season,
-        postseason: false,
-        notes: 'Regular season context from BDL NHL'
-      };
 
       // Format odds data for OpenAI
       let oddsData = null;
@@ -132,18 +135,63 @@ export async function generateNHLPicks(options = {}) {
         console.log(`No odds data available for ${game.home_team} vs ${game.away_team}`);
       }
 
+      // Model-vs-market edge using goals per game vs against if available
+      let modelEdge = null;
+      try {
+        const spreadsMarket = oddsData?.markets?.find?.(m => m.key === 'spreads');
+        const homeOutcome = spreadsMarket?.outcomes?.find?.(o => o.name === game.home_team);
+        const marketSpread = typeof homeOutcome?.point === 'number' ? homeOutcome.point : null;
+        // Fetch season rates again to compute edge (if not already in scope)
+        const [homePairs2, awayPairs2] = await Promise.all([
+          homeTeam ? ballDontLieService.getTeamSeasonStats('icehockey_nhl', { teamId: homeTeam.id, season, postseason: false }) : Promise.resolve([]),
+          awayTeam ? ballDontLieService.getTeamSeasonStats('icehockey_nhl', { teamId: awayTeam.id, season, postseason: false }) : Promise.resolve([])
+        ]);
+        const homeRates2 = ballDontLieService.deriveNhlTeamRates(homePairs2);
+        const awayRates2 = ballDontLieService.deriveNhlTeamRates(awayPairs2);
+        if (marketSpread !== null &&
+            typeof homeRates2.goalsForPerGame === 'number' &&
+            typeof homeRates2.goalsAgainstPerGame === 'number' &&
+            typeof awayRates2.goalsForPerGame === 'number' &&
+            typeof awayRates2.goalsAgainstPerGame === 'number') {
+          const expectedMargin = (homeRates2.goalsForPerGame - awayRates2.goalsAgainstPerGame) -
+                                 (awayRates2.goalsForPerGame - homeRates2.goalsAgainstPerGame);
+          const edge = expectedMargin - marketSpread;
+          modelEdge = { expectedMargin: Number(expectedMargin.toFixed(2)), marketSpread, edge: Number(edge.toFixed(2)) };
+        }
+      } catch {}
+
+      // Perplexity key findings
+      let richKeyFindings = [];
+      try {
+        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
+        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nhl', dateStr);
+        if (Array.isArray(rich?.key_findings)) {
+          richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+      } catch {}
+
       const gameObj = {
         id: gameId,
         sport: 'nhl',
         league: 'NHL',
         homeTeam: game.home_team,
         awayTeam: game.away_team,
-        teamStats,
-        gameContext,
+        teamStats: {
+          homeRecent: Array.isArray(homeRecent) ? homeRecent : [],
+          awayRecent: Array.isArray(awayRecent) ? awayRecent : []
+        },
+        gameContext: {
+          injuries: Array.isArray(injuries) ? injuries : [],
+          season,
+          postseason: false,
+          notes: 'Regular season context from BDL NHL',
+          richKeyFindings
+        },
         homeTeamStats: homeStats,
         awayTeamStats: awayStats,
         statsReport: nhlStatsReport,
         isPlayoffGame: false,
+        modelEdge,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time

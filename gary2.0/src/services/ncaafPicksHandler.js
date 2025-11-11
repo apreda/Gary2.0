@@ -1,6 +1,7 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
+import { perplexityService } from './perplexityService.js';
 import { processGameOnce } from './picksService.js';
 
 const SPORT_KEY = 'americanfootball_ncaaf';
@@ -67,11 +68,20 @@ export async function generateNCAAFPicks(options = {}) {
         home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
         away: Array.isArray(awayTeamStats) ? awayTeamStats : []
       };
+      let richKeyFindings = [];
+      try {
+        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
+        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'ncaaf', dateStr);
+        if (Array.isArray(rich?.key_findings)) {
+          richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+      } catch {}
       const gameContext = {
         injuries: Array.isArray(injuries) ? injuries : [],
         season,
         postseason: false,
-        notes: 'Regular season context from BDL NCAAF'
+        notes: 'Regular season context from BDL NCAAF',
+        richKeyFindings
       };
 
       let oddsData = null;
