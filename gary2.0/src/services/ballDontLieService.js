@@ -175,10 +175,58 @@ const ballDontLieService = {
       if (!season) return [];
       const cacheKey = `nfl_adv_passing_${season}_${pid || 'all'}_${postseason}_${week}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const qs = buildQuery({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
-        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/passing${qs}`;
-        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
-        return response.data?.data || [];
+        const endpoint = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/passing`;
+        const baseParams = { season, postseason, week };
+        // Helper: fetch with pagination (season-wide)
+        const fetchSeasonAll = async (omitWeek = false) => {
+          const all = [];
+          let cursor;
+          let loops = 0;
+          while (loops < 5) {
+            const params = { season, postseason, per_page: 100 };
+            if (!omitWeek && typeof week === 'number') params.week = week;
+            if (cursor) params.cursor = cursor;
+            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY } , params });
+            const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+            all.push(...rows);
+            cursor = resp?.data?.meta?.next_cursor;
+            if (!cursor) break;
+            loops += 1;
+          }
+          return all;
+        };
+        // First: try targeted request (player_id + week)
+        try {
+          const params = { ...baseParams, ...(pid ? { player_id: pid } : {}) };
+          const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+          let data = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+          // If targeted call returned empty, fallback to season-all then filter by player id (if provided)
+          if ((!data || data.length === 0) && pid) {
+            try {
+              // Try without week first, then with week if needed
+              let seasonAll = await fetchSeasonAll(true);
+              if ((!seasonAll || seasonAll.length === 0)) {
+                seasonAll = await fetchSeasonAll(false);
+              }
+              data = Array.isArray(seasonAll) ? seasonAll.filter(r => r?.player?.id === pid) : [];
+            } catch {}
+          }
+          return data || [];
+        } catch (primaryErr) {
+          // Fallback: season-all (no player_id), then filter locally (no previous seasons)
+          try {
+            let seasonAll = await fetchSeasonAll(true);
+            if ((!seasonAll || seasonAll.length === 0)) {
+              seasonAll = await fetchSeasonAll(false);
+            }
+            if (pid) {
+              seasonAll = seasonAll.filter(r => r?.player?.id === pid);
+            }
+            return seasonAll || [];
+          } catch (fallbackErr) {
+            throw primaryErr;
+          }
+        }
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] nfl getNflAdvancedPassingStats error:', e.message);
@@ -196,10 +244,52 @@ const ballDontLieService = {
       if (!season) return [];
       const cacheKey = `nfl_adv_rushing_${season}_${pid || 'all'}_${postseason}_${week}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const qs = buildQuery({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
-        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/rushing${qs}`;
-        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
-        return response.data?.data || [];
+        const endpoint = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/rushing`;
+        const fetchSeasonAll = async (omitWeek = false) => {
+          const all = [];
+          let cursor;
+          let loops = 0;
+          while (loops < 5) {
+            const params = { season, postseason, per_page: 100 };
+            if (!omitWeek && typeof week === 'number') params.week = week;
+            if (cursor) params.cursor = cursor;
+            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+            const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+            all.push(...rows);
+            cursor = resp?.data?.meta?.next_cursor;
+            if (!cursor) break;
+            loops += 1;
+          }
+          return all;
+        };
+        try {
+          const params = { season, postseason, week, ...(pid ? { player_id: pid } : {}) };
+          const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+          let data = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+          if ((!data || data.length === 0) && pid) {
+            try {
+              let seasonAll = await fetchSeasonAll(true);
+              if ((!seasonAll || seasonAll.length === 0)) {
+                seasonAll = await fetchSeasonAll(false);
+              }
+              data = Array.isArray(seasonAll) ? seasonAll.filter(r => r?.player?.id === pid) : [];
+            } catch {}
+          }
+          return data || [];
+        } catch (primaryErr) {
+          try {
+            let seasonAll = await fetchSeasonAll(true);
+            if ((!seasonAll || seasonAll.length === 0)) {
+              seasonAll = await fetchSeasonAll(false);
+            }
+            if (pid) {
+              seasonAll = seasonAll.filter(r => r?.player?.id === pid);
+            }
+            return seasonAll || [];
+          } catch (fallbackErr) {
+            throw primaryErr;
+          }
+        }
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] nfl getNflAdvancedRushingStats error:', e.message);
@@ -217,10 +307,52 @@ const ballDontLieService = {
       if (!season) return [];
       const cacheKey = `nfl_adv_receiving_${season}_${pid || 'all'}_${postseason}_${week}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const qs = buildQuery({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
-        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/receiving${qs}`;
-        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
-        return response.data?.data || [];
+        const endpoint = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/receiving`;
+        const fetchSeasonAll = async (omitWeek = false) => {
+          const all = [];
+          let cursor;
+          let loops = 0;
+          while (loops < 5) {
+            const params = { season, postseason, per_page: 100 };
+            if (!omitWeek && typeof week === 'number') params.week = week;
+            if (cursor) params.cursor = cursor;
+            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+            const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+            all.push(...rows);
+            cursor = resp?.data?.meta?.next_cursor;
+            if (!cursor) break;
+            loops += 1;
+          }
+          return all;
+        };
+        try {
+          const params = { season, postseason, week, ...(pid ? { player_id: pid } : {}) };
+          const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+          let data = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+          if ((!data || data.length === 0) && pid) {
+            try {
+              let seasonAll = await fetchSeasonAll(true);
+              if ((!seasonAll || seasonAll.length === 0)) {
+                seasonAll = await fetchSeasonAll(false);
+              }
+              data = Array.isArray(seasonAll) ? seasonAll.filter(r => r?.player?.id === pid) : [];
+            } catch {}
+          }
+          return data || [];
+        } catch (primaryErr) {
+          try {
+            let seasonAll = await fetchSeasonAll(true);
+            if ((!seasonAll || seasonAll.length === 0)) {
+              seasonAll = await fetchSeasonAll(false);
+            }
+            if (pid) {
+              seasonAll = seasonAll.filter(r => r?.player?.id === pid);
+            }
+            return seasonAll || [];
+          } catch (fallbackErr) {
+            throw primaryErr;
+          }
+        }
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] nfl getNflAdvancedReceivingStats error:', e.message);
