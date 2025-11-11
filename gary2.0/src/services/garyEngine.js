@@ -213,15 +213,15 @@ export async function generateGaryAnalysis(gameData, options = {}) {
           m.outcomes.some((o) => typeof o?.price === 'number')
       );
     if (!hasMlOrSpread) {
-      console.warn('Missing required moneyline/spread odds — skipping analysis for this game.');
-      return {
-        success: false,
-        message: 'MISSING_ODDS',
-        rawOpenAIOutput: null,
+      const error = new Error('Missing required moneyline/spread odds');
+      error.code = 'MISSING_ODDS';
+      error.context = {
         game: formattedData.game,
         sport: formattedData.sport,
-        timestamp: new Date().toISOString()
+        homeTeam: formattedData.homeTeam,
+        awayTeam: formattedData.awayTeam
       };
+      throw error;
     }
     
     // Add sport-specific data
