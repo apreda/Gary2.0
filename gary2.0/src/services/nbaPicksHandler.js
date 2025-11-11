@@ -212,7 +212,83 @@ export async function generateNBAPicks(options = {}) {
       
       if (result.success) {
         console.log(`Successfully generated NBA pick: ${result.rawAnalysis?.rawOpenAIOutput?.pick || 'Unknown pick'}`);
-        // Return the formatted pick data instead of adding to sportPicks here
+        // Attempt to compute a recommended sportsbook from BDL V2 odds
+        try {
+          const estOptions = { timeZone: 'America/New_York' };
+          const gameDateEst = new Date(game.commence_time).toLocaleDateString('en-US', estOptions);
+          const [gm, gd, gy] = gameDateEst.split('/');
+          const dateStr = `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
+          // Resolve the BDL game id for this matchup on the date
+          let bdlGames = [];
+          try {
+            bdlGames = await ballDontLieService.getGames('basketball_nba', { start_date: dateStr, end_date: dateStr, per_page: 100, postseason: false }, options.nocache ? 0 : 5);
+          } catch {}
+          const homeId = homeTeam?.id;
+          const awayId = awayTeam?.id;
+          const bdlGame = Array.isArray(bdlGames) ? bdlGames.find(g => {
+            const h = g?.home_team?.id || g?.home_team_id;
+            const a = g?.away_team?.id || g?.away_team_id;
+            return (h === homeId && a === awayId) || (h === awayId && a === homeId);
+          }) : null;
+          const gameId = bdlGame?.id;
+          let v2odds = [];
+          if (gameId) {
+            v2odds = await ballDontLieService.getOddsV2({ game_ids: [gameId], per_page: 100 });
+          } else {
+            v2odds = await ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 });
+          }
+          const extract = result.rawAnalysis?.rawOpenAIOutput || result.pick || {};
+          const pickType = (extract.type || '').toLowerCase();
+          const pickStr = extract.pick || '';
+          const chooseBest = () => {
+            if (!Array.isArray(v2odds) || v2odds.length === 0) return null;
+            const sideIsHome = pickStr.toLowerCase().includes(String(game.home_team).toLowerCase());
+            const sideIsAway = pickStr.toLowerCase().includes(String(game.away_team).toLowerCase());
+            const side = sideIsHome ? 'home' : (sideIsAway ? 'away' : null);
+            if (!side) return null;
+            if (pickType === 'moneyline') {
+              let best = null;
+              for (const row of v2odds) {
+                const odds = side === 'home' ? row.moneyline_home_odds : row.moneyline_away_odds;
+                if (typeof odds !== 'number') continue;
+                // For favorites (negative), higher (closer to 0) is better; for underdogs (positive), higher is better
+                if (!best) best = { vendor: row.vendor, odds };
+                else {
+                  const current = best.odds;
+                  const isFav = String(extract.odds || odds).startsWith('-');
+                  const better = isFav ? (odds > current) : (odds > current);
+                  if (better) best = { vendor: row.vendor, odds };
+                }
+              }
+              return best;
+            } else if (pickType === 'spread') {
+              // Parse spread value from pick string (e.g., "Magic -3.5 -110")
+              const m = pickStr.match(/([+-]?\d+(\.\d+)?)/g);
+              const target = m ? parseFloat(m[0]) : null;
+              let best = null;
+              for (const row of v2odds) {
+                const valueStr = side === 'home' ? row.spread_home_value : row.spread_away_value;
+                const odds = side === 'home' ? row.spread_home_odds : row.spread_away_odds;
+                if (!valueStr || typeof odds !== 'number') continue;
+                const val = parseFloat(valueStr);
+                if (isNaN(val)) continue;
+                const lineMatches = (target != null) ? Math.abs(val - target) < 0.01 : true;
+                if (!lineMatches) continue;
+                if (!best) best = { vendor: row.vendor, odds, line: valueStr };
+                else if (odds > best.odds) best = { vendor: row.vendor, odds, line: valueStr };
+              }
+              return best;
+            }
+            return null;
+          };
+          const bestVendor = chooseBest();
+          if (bestVendor) {
+            result.recommendedSportsbook = bestVendor;
+          }
+        } catch (e) {
+          console.warn('Failed to compute recommended sportsbook:', e?.message || e);
+        }
+        // Return the formatted pick data
         return {
           ...result,
           game: `${game.away_team} @ ${game.home_team}`,

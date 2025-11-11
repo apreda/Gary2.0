@@ -118,6 +118,32 @@ const ballDontLieService = {
   },
 
   /**
+   * V2 Odds endpoint (currently documented for NBA). Accepts dates[] or game_ids[].
+   * Example params: { dates: ['2025-01-15'], game_ids: [18446819], per_page: 100, cursor }
+   */
+  async getOddsV2(params = {}, ttlMinutes = 1) {
+    try {
+      const norm = {};
+      if (Array.isArray(params.dates) && params.dates.length) norm['dates[]'] = params.dates;
+      if (Array.isArray(params.game_ids) && params.game_ids.length) norm['game_ids[]'] = params.game_ids;
+      if (params.per_page) norm.per_page = params.per_page;
+      if (params.cursor) norm.cursor = params.cursor;
+      const cacheKey = `v2_odds_${JSON.stringify(norm)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `https://api.balldontlie.io/v2/odds`;
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY },
+          params: norm
+        });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] v2 getOdds error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
    * NFL player per-game stats for specific game_ids
    */
   async getNflPlayerGameStats({ playerId, gameIds } = {}, ttlMinutes = 5) {
