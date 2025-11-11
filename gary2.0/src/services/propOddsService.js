@@ -19,6 +19,17 @@ const PROP_MARKETS = {
     'player_blocks',
     'player_steals'
   ],
+  americanfootball_nfl: [
+    // Common NFL player prop markets
+    'player_pass_yds',
+    'player_pass_tds',
+    'player_pass_interceptions',
+    'player_rush_yds',
+    'player_rush_att',
+    'player_receiving_yds',
+    'player_receptions',
+    'player_anytime_td'
+  ],
   baseball_mlb: [
     // Standard MLB player props - using only non-alternate lines
     'batter_home_runs',
@@ -639,6 +650,37 @@ export const propOddsService = {
       if (type.includes('three') || type.includes('3pt') || type.includes('3-point')) return 'threes';
       if (type.includes('block')) return 'blocks';
       if (type.includes('steal')) return 'steals';
+    }
+    // NFL standardization
+    else if (sport === 'nfl' || sport === 'americanfootball_nfl') {
+      // Map exact Odds API market keys when present
+      const nflMap = {
+        'player_pass_yds': 'pass_yds',
+        'player_pass_tds': 'pass_tds',
+        'player_pass_interceptions': 'interceptions',
+        'player_rush_yds': 'rush_yds',
+        'player_rush_att': 'rush_att',
+        'player_receiving_yds': 'rec_yds',
+        'player_receptions': 'receptions',
+        'player_anytime_td': 'anytime_td'
+      };
+      if (nflMap[type]) return nflMap[type];
+      // Pattern-based fallback
+      if (type.includes('pass') && type.includes('yd')) return 'pass_yds';
+      if (type.includes('pass') && (type.includes('td') || type.includes('touchdown'))) return 'pass_tds';
+      if (type.includes('interception')) return 'interceptions';
+      if (type.includes('rush') && type.includes('yd')) return 'rush_yds';
+      if (type.includes('rush') && (type.includes('attempt') || type.includes('att'))) return 'rush_att';
+      if ((type.includes('receiving') || type.includes('rec')) && type.includes('yd')) return 'rec_yds';
+      if (type.includes('reception')) return 'receptions';
+      if (type.includes('anytime') && type.includes('td')) return 'anytime_td';
+    }
+    // NHL standardization
+    else if (sport === 'nhl' || sport === 'icehockey_nhl') {
+      if (type.includes('goal')) return 'goals';
+      if (type.includes('assist')) return 'assists';
+      if (type.includes('shot')) return 'shots_on_goal';
+      if (type.includes('point')) return 'points';
     }
     
     // Return the market name without prefixes if no standardization matches
