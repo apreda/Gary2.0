@@ -100,6 +100,9 @@ export async function makeGaryPick(gameData, options = {}) {
     };
   } catch (error) {
     console.error('Error making Gary pick:', error);
+    if (error?.code === 'MISSING_ODDS') {
+      throw error;
+    }
     return {
       success: false,
       pick: null,
