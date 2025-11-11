@@ -13,7 +13,9 @@ export async function generateMLBPicks() {
     console.log(`Generated ${normalMlbPicks.length} normal MLB picks`);
     console.log('Raw normal picks data:', normalMlbPicks);
     
-    sportPicks = normalMlbPicks.map((pick, index) => {
+    const builtPicks = [];
+    for (let index = 0; index < normalMlbPicks.length; index++) {
+      const pick = normalMlbPicks[index];
       console.log(`Processing normal pick ${index + 1}:`, {
         id: pick.id,
         analysis: typeof pick.analysis,
@@ -38,14 +40,13 @@ export async function generateMLBPicks() {
         console.error(`Error parsing MLB pick analysis for pick ${index + 1}:`, parseError);
       }
       
-      // Return properly structured pick with extracted data
+      // Build structured pick
       const structuredPick = {
         ...pick,
         sport: 'baseball_mlb',
         pickType: 'normal',
         success: true,
         rawAnalysis: { rawOpenAIOutput: pickData },
-        // Also include the fields directly for easier access
         pick: pickData?.pick || '',
         time: pickData?.time || pick.gameTime || 'TBD',
         type: pickData?.type || 'moneyline',
@@ -60,7 +61,7 @@ export async function generateMLBPicks() {
         superstition: pickData?.superstition || false
       };
       
-      // Attempt to compute recommended sportsbook using BDL v2 odds for the game date
+      // Compute recommended sportsbook using BDL v2 odds for the game date
       try {
         const dt = structuredPick.time && typeof structuredPick.time === 'string'
           ? new Date(structuredPick.time)
@@ -69,7 +70,6 @@ export async function generateMLBPicks() {
           ? new Date().toISOString().slice(0, 10)
           : dt.toISOString().slice(0, 10);
         const games = await ballDontLieService.getGames('baseball_mlb', { start_date: dateStr, end_date: dateStr, per_page: 100, postseason: false }, 1);
-        // Find matching game by team names
         const home = String(structuredPick.homeTeam || '').toLowerCase();
         const away = String(structuredPick.awayTeam || '').toLowerCase();
         const bdlGame = Array.isArray(games) ? games.find(g => {
@@ -116,8 +116,9 @@ export async function generateMLBPicks() {
       }
       
       console.log(`Structured pick ${index + 1} confidence:`, structuredPick.confidence);
-      return structuredPick;
-    });
+      builtPicks.push(structuredPick);
+    }
+    sportPicks = builtPicks;
     
     console.log(`Final normal picks array has ${sportPicks.length} picks with confidences:`, 
       sportPicks.map(p => p.confidence));
