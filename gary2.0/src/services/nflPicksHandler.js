@@ -52,8 +52,8 @@ export async function generateNFLPicks(options = {}) {
 
       // Fetch team stats and injuries (fail if no stats for both teams)
       const [homeTeamStats, awayTeamStats, injuries] = await Promise.all([
-        ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [homeTeam.id] }),
-        ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [awayTeam.id] }),
+        ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [homeTeam.id], per_page: 100 }),
+        ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [awayTeam.id], per_page: 100 }),
         ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] })
       ]);
 
@@ -67,6 +67,37 @@ export async function generateNFLPicks(options = {}) {
       };
       const homeTeamStatsScoped = filterByTeamId(homeTeamStats, homeTeam.id);
       const awayTeamStatsScoped = filterByTeamId(awayTeamStats, awayTeam.id);
+
+      // Fallback: if scoped team_stats are empty, fetch recent games and query by game_ids
+      let finalHomeTeamStats = homeTeamStatsScoped;
+      let finalAwayTeamStats = awayTeamStatsScoped;
+      if (finalHomeTeamStats.length === 0 || finalAwayTeamStats.length === 0) {
+        try {
+          const recentWindowStart = new Date();
+          recentWindowStart.setDate(recentWindowStart.getDate() - 35); // last ~5 weeks
+          const startStr = recentWindowStart.toISOString().slice(0, 10);
+          const endStr = new Date().toISOString().slice(0, 10);
+          const [homeGames, awayGames] = await Promise.all([
+            ballDontLieService.getGames(SPORT_KEY, { seasons: [season], team_ids: [homeTeam.id], start_date: startStr, end_date: endStr, postseason: false, per_page: 100 }, options.nocache ? 0 : 10),
+            ballDontLieService.getGames(SPORT_KEY, { seasons: [season], team_ids: [awayTeam.id], start_date: startStr, end_date: endStr, postseason: false, per_page: 100 }, options.nocache ? 0 : 10)
+          ]);
+          const homeGameIds = (homeGames || []).map(g => g?.id).filter(Boolean).slice(-8);
+          const awayGameIds = (awayGames || []).map(g => g?.id).filter(Boolean).slice(-8);
+          const [homeByGames, awayByGames] = await Promise.all([
+            homeGameIds.length ? ballDontLieService.getTeamStats(SPORT_KEY, { game_ids: homeGameIds, team_ids: [homeTeam.id], per_page: 100 }) : Promise.resolve([]),
+            awayGameIds.length ? ballDontLieService.getTeamStats(SPORT_KEY, { game_ids: awayGameIds, team_ids: [awayTeam.id], per_page: 100 }) : Promise.resolve([])
+          ]);
+          const scopedHomeByGames = filterByTeamId(homeByGames, homeTeam.id);
+          const scopedAwayByGames = filterByTeamId(awayByGames, awayTeam.id);
+          if (finalHomeTeamStats.length === 0 && scopedHomeByGames.length > 0) finalHomeTeamStats = scopedHomeByGames;
+          if (finalAwayTeamStats.length === 0 && scopedAwayByGames.length > 0) finalAwayTeamStats = scopedAwayByGames;
+          if (finalHomeTeamStats.length === 0 || finalAwayTeamStats.length === 0) {
+            console.warn(`NFL fallback by game_ids still empty for ${game.away_team} @ ${game.home_team}`);
+          }
+        } catch (e) {
+          console.warn('NFL team_stats fallback failed:', e?.message || e);
+        }
+      }
 
       // Season aggregates for offense/defense summary
       const [homeSeason, awaySeason] = await Promise.all([
@@ -114,8 +145,8 @@ export async function generateNFLPicks(options = {}) {
 
       const statsReport = {
         season,
-        home: { team: homeTeam, sample: homeTeamStatsScoped.slice(0, 3) },
-        away: { team: awayTeam, sample: awayTeamStatsScoped.slice(0, 3) },
+        home: { team: homeTeam, sample: finalHomeTeamStats.slice(0, 3) },
+        away: { team: awayTeam, sample: finalAwayTeamStats.slice(0, 3) },
         injuriesSample: injuries?.slice?.(0, 6) || [],
         seasonSummary: {
           home: homeRates,
@@ -201,8 +232,8 @@ export async function generateNFLPicks(options = {}) {
 
       // Provide combined teamStats and minimal gameContext
       const teamStats = {
-        home: homeTeamStatsScoped,
-        away: awayTeamStatsScoped
+        home: finalHomeTeamStats,
+        away: finalAwayTeamStats
       };
       const gameContext = {
         injuries: Array.isArray(injuries) ? injuries : [],
