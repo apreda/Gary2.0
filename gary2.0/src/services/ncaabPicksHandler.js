@@ -17,12 +17,12 @@ export async function generateNCAABPicks(options = {}) {
   console.log(`Found ${games.length} NCAAB games from odds service`);
 
   const now = new Date();
-  const end = new Date(now.getTime() + 36 * 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 16 * 60 * 60 * 1000);
   let windowed = games.filter(g => {
     const t = new Date(g.commence_time);
     return t >= now && t <= end;
   });
-  console.log(`After date filtering: ${windowed.length} NCAAB games in next 36h`);
+  console.log(`After date filtering: ${windowed.length} NCAAB games in next 16h`);
 
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;

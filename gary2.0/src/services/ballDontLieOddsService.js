@@ -168,7 +168,23 @@ export const ballDontLieOddsService = {
     }
     // Fetch games (v1 multi-sport wrapper) and v2 odds (date-based)
     const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
-    const odds = await fetchOddsByDates([dateStr]);
+    let odds = await fetchOddsByDates([dateStr]);
+
+    // NFL: if date-based odds are sparse, fall back to querying by game_ids (covers season/week cases)
+    if (sportKey === 'americanfootball_nfl') {
+      try {
+        const uniqueGameIds = (games || []).map(g => g?.id).filter(id => id != null);
+        const hasVendors = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
+        if (uniqueGameIds.length && !hasVendors) {
+          const byIds = await ballDontLieService.getOddsV2({ game_ids: uniqueGameIds, per_page: 100 });
+          if (Array.isArray(byIds) && byIds.length) {
+            odds = byIds;
+          }
+        }
+      } catch (e) {
+        console.warn('[OddsService][NFL] Fallback by game_ids failed:', e?.message || e);
+      }
+    }
 
     // Index odds by game_id
     const gameIdToVendors = new Map();

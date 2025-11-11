@@ -378,6 +378,26 @@ const normalizeTeamString = (teamObjOrStr) => {
 
 const computeWindow = (sport) => {
   const now = new Date();
+  // 16-hour windows for high-frequency sports
+  const SIXTEEN_HOURS_MS = 16 * 60 * 60 * 1000;
+  const sixteenHourSports = new Set([
+    'basketball_nba',
+    'basketball_wnba',
+    'basketball_ncaab',
+    'americanfootball_ncaaf'
+  ]);
+  if (sixteenHourSports.has(sport)) {
+    const windowStart = new Date(now.getTime());
+    const windowEnd = new Date(now.getTime() + SIXTEEN_HOURS_MS);
+    return { windowStart, windowEnd };
+  }
+  // NFL weekly window stays 5 days
+  if (sport === 'americanfootball_nfl') {
+    const windowStart = new Date(now.getTime());
+    const windowEnd = new Date(now.getTime() + (5 * 24 * 60 * 60 * 1000));
+    return { windowStart, windowEnd };
+  }
+  // Default behavior: 36-hour spanning window (legacy)
   const estOffset = -5;
   const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
   const estDate = new Date(utcDate + (3600000 * estOffset));
@@ -385,9 +405,7 @@ const computeWindow = (sport) => {
   windowStart.setDate(windowStart.getDate() - 1);
   windowStart.setHours(18, 0, 0, 0);
   const windowEnd = new Date(estDate);
-  let addDays = 1;
-  if (sport === 'americanfootball_nfl') addDays = 5;
-  windowEnd.setDate(windowEnd.getDate() + addDays);
+  windowEnd.setDate(windowEnd.getDate() + 1);
   windowEnd.setHours(6, 0, 0, 0);
   return { windowStart, windowEnd };
 };

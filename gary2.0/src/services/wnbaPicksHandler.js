@@ -16,14 +16,14 @@ export async function generateWNBAPicks(options = {}) {
   const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache: options.nocache === true });
   console.log(`Found ${games.length} WNBA games from odds service`);
 
-  // 36-hour window
+  // 16-hour window
   const now = new Date();
-  const end = new Date(now.getTime() + 36 * 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 16 * 60 * 60 * 1000);
   let windowed = games.filter(g => {
     const t = new Date(g.commence_time);
     return t >= now && t <= end;
   });
-  console.log(`After date filtering: ${windowed.length} WNBA games in next 36h`);
+  console.log(`After date filtering: ${windowed.length} WNBA games in next 16h`);
 
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;
