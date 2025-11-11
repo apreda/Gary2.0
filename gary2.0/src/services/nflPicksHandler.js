@@ -68,13 +68,6 @@ export async function generateNFLPicks(options = {}) {
       const homeTeamStatsScoped = filterByTeamId(homeTeamStats, homeTeam.id);
       const awayTeamStatsScoped = filterByTeamId(awayTeamStats, awayTeam.id);
 
-      const hasHomeStats = homeTeamStatsScoped.length > 0;
-      const hasAwayStats = awayTeamStatsScoped.length > 0;
-      if (!hasHomeStats || !hasAwayStats) {
-        console.warn(`NFL: Missing required stats for ${game.away_team} @ ${game.home_team} — skipping.`);
-        return null;
-      }
-
       // Season aggregates for offense/defense summary
       const [homeSeason, awaySeason] = await Promise.all([
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season, postseason: false }),
@@ -82,6 +75,14 @@ export async function generateNFLPicks(options = {}) {
       ]);
       const homeRates = ballDontLieService.deriveNflTeamRates(homeSeason);
       const awayRates = ballDontLieService.deriveNflTeamRates(awaySeason);
+
+      // Require season-level stats (per-game team_stats may be empty on some weeks)
+      const hasHomeSeason = Array.isArray(homeSeason) && homeSeason.length > 0;
+      const hasAwaySeason = Array.isArray(awaySeason) && awaySeason.length > 0;
+      if (!hasHomeSeason || !hasAwaySeason) {
+        console.warn(`NFL: Missing required season stats for ${game.away_team} @ ${game.home_team} — skipping.`);
+        return null;
+      }
 
       // Identify probable QBs and fetch season stats
       let homeQb = null;
