@@ -4,6 +4,9 @@ import { BalldontlieAPI } from '@balldontlie/sdk';
 const TTL_MINUTES = 5;
 const cacheMap = new Map();
 
+// Base URL for Ball Don't Lie HTTP fallbacks
+const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
+
 // Get API key from environment (support both browser and serverless)
 let API_KEY = '';
 try {
