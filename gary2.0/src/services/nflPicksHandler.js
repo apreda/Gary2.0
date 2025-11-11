@@ -84,8 +84,8 @@ export async function generateNFLPicks(options = {}) {
           const homeGameIds = (homeGames || []).map(g => g?.id).filter(Boolean).slice(-8);
           const awayGameIds = (awayGames || []).map(g => g?.id).filter(Boolean).slice(-8);
           const [homeByGames, awayByGames] = await Promise.all([
-            homeGameIds.length ? ballDontLieService.getTeamStats(SPORT_KEY, { game_ids: homeGameIds, team_ids: [homeTeam.id], per_page: 100 }) : Promise.resolve([]),
-            awayGameIds.length ? ballDontLieService.getTeamStats(SPORT_KEY, { game_ids: awayGameIds, team_ids: [awayTeam.id], per_page: 100 }) : Promise.resolve([])
+            homeGameIds.length ? ballDontLieService.getTeamStats(SPORT_KEY, { game_ids: homeGameIds, per_page: 100 }) : Promise.resolve([]),
+            awayGameIds.length ? ballDontLieService.getTeamStats(SPORT_KEY, { game_ids: awayGameIds, per_page: 100 }) : Promise.resolve([])
           ]);
           const scopedHomeByGames = filterByTeamId(homeByGames, homeTeam.id);
           const scopedAwayByGames = filterByTeamId(awayByGames, awayTeam.id);
