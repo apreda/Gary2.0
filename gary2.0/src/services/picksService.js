@@ -15,15 +15,17 @@ import { openaiService } from './openaiService.js';
 import { getESTDate } from '../utils/dateUtils.js';
 import { generateNBAPicks } from './nbaPicksHandler.js';
 import { generateMLBPicks } from './mlbPicksHandler.js';
-import { generateNHLPicks } from './nhlPicksHandler.js';
+// NHL disabled
 import { generateNFLPicks } from './nflPicksHandler.js';
 import { generateWNBAPicks } from './wnbaPicksHandler.js';
 import { generateNCAAFPicks } from './ncaafPicksHandler.js';
 import { generateNCAABPicks } from './ncaabPicksHandler.js';
+import { generateEPLPicks } from './eplPicksHandler.js';
 
 // Global processing state to prevent multiple simultaneous generations
 let isCurrentlyGeneratingPicks = false;
-let isProcessingNHL = false;
+// NHL disabled
+let isProcessingEPL = false;
 let isProcessingNBA = false;
 let isProcessingMLB = false;
 let isProcessingNFL = false;
@@ -422,11 +424,11 @@ async function generateDailyPicks() {
     const sportsToAnalyze = [
       'basketball_nba',
       'baseball_mlb',
-      'icehockey_nhl',
       'americanfootball_nfl',
       'basketball_wnba',
       'americanfootball_ncaaf',
-      'basketball_ncaab'
+      'basketball_ncaab',
+      'soccer_epl'
     ];
     let allPicks = [];
 
@@ -442,10 +444,7 @@ async function generateDailyPicks() {
         console.log('🛑 NBA picks already being processed, skipping...');
         continue;
       }
-      if (sport === 'icehockey_nhl' && isProcessingNHL) {
-        console.log('🛑 NHL picks already being processed, skipping...');
-        continue;
-      }
+      // NHL disabled
       if (sport === 'americanfootball_nfl' && isProcessingNFL) {
         console.log('🛑 NFL picks already being processed, skipping...');
         continue;
@@ -471,10 +470,6 @@ async function generateDailyPicks() {
         isProcessingNBA = true;
         sportPicks = await generateNBAPicks();
         isProcessingNBA = false;
-      } else if (sport === 'icehockey_nhl') {
-        isProcessingNHL = true;
-        sportPicks = await generateNHLPicks();
-        isProcessingNHL = false;
       } else if (sport === 'americanfootball_nfl') {
         isProcessingNFL = true;
         sportPicks = await generateNFLPicks();
@@ -491,6 +486,10 @@ async function generateDailyPicks() {
         isProcessingNCAAB = true;
         sportPicks = await generateNCAABPicks();
         isProcessingNCAAB = false;
+      } else if (sport === 'soccer_epl') {
+        isProcessingEPL = true;
+        sportPicks = await generateEPLPicks();
+        isProcessingEPL = false;
       }
 
       // Add for this sport
@@ -510,7 +509,7 @@ async function generateDailyPicks() {
     // Release all sport-specific locks in case of error
     isProcessingMLB = false;
     isProcessingNBA = false;
-    isProcessingNHL = false;
+    // NHL disabled
     isProcessingNFL = false;
     isProcessingWNBA = false;
     isProcessingNCAAF = false;

@@ -4,11 +4,12 @@
 import { picksService } from '../src/services/picksService.js';
 import { generateNBAPicks } from '../src/services/nbaPicksHandler.js';
 import { generateMLBPicks } from '../src/services/mlbPicksHandler.js';
-import { generateNHLPicks } from '../src/services/nhlPicksHandler.js';
+// NHL removed
 import { generateNFLPicks } from '../src/services/nflPicksHandler.js';
 import { generateWNBAPicks } from '../src/services/wnbaPicksHandler.js';
 import { generateNCAAFPicks } from '../src/services/ncaafPicksHandler.js';
 import { generateNCAABPicks } from '../src/services/ncaabPicksHandler.js';
+import { generateEPLPicks } from '../src/services/eplPicksHandler.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -33,11 +34,11 @@ export default async function handler(req, res) {
     const sportsOrder = [
       'basketball_nba',
       'baseball_mlb',
-      'icehockey_nhl',
       'americanfootball_nfl',
       'basketball_wnba',
       'americanfootball_ncaaf',
-      'basketball_ncaab'
+      'basketball_ncaab',
+      'soccer_epl'
     ];
     let sport = params.sport || null;
     if (allMode && !sport) {
@@ -53,11 +54,11 @@ export default async function handler(req, res) {
     const handlerMap = {
       baseball_mlb: generateMLBPicks,
       basketball_nba: generateNBAPicks,
-      icehockey_nhl: generateNHLPicks,
       americanfootball_nfl: generateNFLPicks,
       basketball_wnba: generateWNBAPicks,
       americanfootball_ncaaf: generateNCAAFPicks,
-      basketball_ncaab: generateNCAABPicks
+      basketball_ncaab: generateNCAABPicks,
+      soccer_epl: generateEPLPicks
     };
 
     let picks;
