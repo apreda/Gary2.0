@@ -178,7 +178,7 @@ const ballDontLieService = {
         // Prefer SDK per dev docs
         const nfl = this._getSportClient('americanfootball_nfl');
         const endpoint = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/passing`;
-        const baseParams = { season, postseason, week: 0 };
+        const baseParams = { season, week: 0, ...(postseason ? { postseason } : {}) };
         // Helper: SDK paginated fetch
         const sdkFetch = async (params) => {
           if (!nfl?.getAdvancedPassingStats) throw new Error('SDK getAdvancedPassingStats not available');
@@ -199,7 +199,7 @@ const ballDontLieService = {
         };
         // Helper: fetch with pagination (season-wide)
         const fetchSeasonAll = async (omitWeek = false) => {
-          const params = { season, postseason, per_page: 100 };
+          const params = { season, per_page: 100, ...(postseason ? { postseason } : {}) };
           if (!omitWeek) params.week = 0;
           try {
             if (nfl?.getAdvancedPassingStats) {
@@ -263,7 +263,7 @@ const ballDontLieService = {
           // If still empty and pid set, grab season-all then filter
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
-            try { seasonAll = await sdkFetch({ season, postseason }); } catch {}
+            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch {}
             if (!seasonAll || seasonAll.length === 0) {
               seasonAll = await fetchSeasonAll(true);
               if (!seasonAll || seasonAll.length === 0) seasonAll = await fetchSeasonAll(false);
@@ -331,7 +331,7 @@ const ballDontLieService = {
           return all;
         };
         const fetchSeasonAll = async (omitWeek = false) => {
-          const params = { season, postseason, per_page: 100 };
+          const params = { season, per_page: 100, ...(postseason ? { postseason } : {}) };
           if (!omitWeek) params.week = 0;
           try {
             if (nfl?.getAdvancedRushingStats) {
@@ -347,7 +347,7 @@ const ballDontLieService = {
           let cursor;
           let loops = 0;
           while (loops < 5) {
-            const httpParams = { season, postseason, per_page: 100, week: omitWeek ? undefined : 0 };
+            const httpParams = { season, per_page: 100, week: omitWeek ? undefined : 0, ...(postseason ? { postseason } : {}) };
             if (cursor) httpParams.cursor = cursor;
             try {
               const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
@@ -369,7 +369,7 @@ const ballDontLieService = {
         try {
           let data = [];
           try {
-            data = await sdkFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}) });
+            data = await sdkFetch({ season, week: 0, ...(postseason ? { postseason } : {}) , ...(pid ? { player_id: pid } : {}) });
           } catch (sdkErr) {
             if (sdkErr?.response?.status === 400) {
               console.warn('[Ball Don\'t Lie] nfl advanced rushing SDK 400', sdkErr?.response?.data || '');
@@ -379,11 +379,11 @@ const ballDontLieService = {
             }
           }
           if (!data || data.length === 0) {
-            data = await httpFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}), per_page: 100 });
+            data = await httpFetch({ season, week: 0, ...(postseason ? { postseason } : {}), ...(pid ? { player_id: pid } : {}), per_page: 100 });
           }
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
-            try { seasonAll = await sdkFetch({ season, postseason }); } catch {}
+            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch {}
             if (!seasonAll || seasonAll.length === 0) {
               seasonAll = await fetchSeasonAll(true);
               if ((!seasonAll || seasonAll.length === 0)) {
@@ -452,7 +452,7 @@ const ballDontLieService = {
           return all;
         };
         const fetchSeasonAll = async (omitWeek = false) => {
-          const params = { season, postseason, per_page: 100 };
+          const params = { season, per_page: 100, ...(postseason ? { postseason } : {}) };
           if (!omitWeek) params.week = 0;
           try {
             if (nfl?.getAdvancedReceivingStats) {
@@ -468,7 +468,7 @@ const ballDontLieService = {
           let cursor;
           let loops = 0;
           while (loops < 5) {
-            const httpParams = { season, postseason, per_page: 100, week: omitWeek ? undefined : 0 };
+            const httpParams = { season, per_page: 100, week: omitWeek ? undefined : 0, ...(postseason ? { postseason } : {}) };
             if (cursor) httpParams.cursor = cursor;
             try {
               const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
@@ -490,7 +490,7 @@ const ballDontLieService = {
         try {
           let data = [];
           try {
-            data = await sdkFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}) });
+            data = await sdkFetch({ season, week: 0, ...(postseason ? { postseason } : {}), ...(pid ? { player_id: pid } : {}) });
           } catch (sdkErr) {
             if (sdkErr?.response?.status === 400) {
               console.warn('[Ball Don\'t Lie] nfl advanced receiving SDK 400', sdkErr?.response?.data || '');
@@ -500,11 +500,11 @@ const ballDontLieService = {
             }
           }
           if (!data || data.length === 0) {
-            data = await httpFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}), per_page: 100 });
+            data = await httpFetch({ season, week: 0, ...(postseason ? { postseason } : {}), ...(pid ? { player_id: pid } : {}), per_page: 100 });
           }
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
-            try { seasonAll = await sdkFetch({ season, postseason }); } catch {}
+            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch {}
             if (!seasonAll || seasonAll.length === 0) {
               seasonAll = await fetchSeasonAll(true);
               if ((!seasonAll || seasonAll.length === 0)) {
