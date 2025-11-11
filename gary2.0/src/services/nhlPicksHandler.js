@@ -161,13 +161,17 @@ export async function generateNHLPicks(options = {}) {
         }
       } catch {}
 
-      // Perplexity key findings
+      // Perplexity key findings (and injuries fallback for NHL)
       let richKeyFindings = [];
       try {
         const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
         const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nhl', dateStr);
         if (Array.isArray(rich?.key_findings)) {
           richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+        // If BDL injuries are unavailable (404) or empty, use Perplexity injuries as a fallback
+        if ((!Array.isArray(injuries) || injuries.length === 0) && Array.isArray(rich?.injuries)) {
+          injuries = rich.injuries.slice(0, 10);
         }
       } catch {}
 
