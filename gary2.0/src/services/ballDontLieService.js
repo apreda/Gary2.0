@@ -1,4 +1,5 @@
 import { BalldontlieAPI } from '@balldontlie/sdk';
+import axios from 'axios';
 
 // Set cache TTL (5 minutes for playoff data)
 const TTL_MINUTES = 5;
@@ -233,7 +234,8 @@ const ballDontLieService = {
           basketball_ncaab: 'ncaab/v1/teams',
           icehockey_nhl: 'nhl/v1/teams',
           americanfootball_nfl: 'nfl/v1/teams',
-          basketball_wnba: 'wnba/v1/teams'
+          basketball_wnba: 'wnba/v1/teams',
+          soccer_epl: 'epl/v1/teams'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getTeams not supported');
@@ -268,7 +270,8 @@ const ballDontLieService = {
           icehockey_nhl: 'nhl/v1/teams',
           americanfootball_nfl: 'nfl/v1/teams',
           basketball_wnba: 'wnba/v1/teams',
-          basketball_nba: 'nba/v1/teams'
+          basketball_nba: 'nba/v1/teams',
+          soccer_epl: 'epl/v1/teams'
         };
         const path = endpointMap[sportKey];
         if (path) {
@@ -331,7 +334,8 @@ const ballDontLieService = {
           americanfootball_ncaaf: 'ncaaf/v1/games',
           basketball_ncaab: 'ncaab/v1/games',
           basketball_wnba: 'wnba/v1/games',
-          basketball_nba: 'nba/v1/games'
+          basketball_nba: 'nba/v1/games',
+          soccer_epl: 'epl/v1/games'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getGames not supported');
@@ -453,6 +457,17 @@ const ballDontLieService = {
         // NHL team season stats
         if (sportKey === 'icehockey_nhl') {
           const url = `https://api.balldontlie.io/nhl/v1/teams/${encodeURIComponent(teamId)}/season_stats${buildQuery({ season, postseason })}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          return Array.isArray(json?.data) ? json.data : [];
+        }
+        // EPL team season stats
+        if (sportKey === 'soccer_epl') {
+          const url = `https://api.balldontlie.io/epl/v1/teams/${encodeURIComponent(teamId)}/season_stats${buildQuery({ season })}`;
           const resp = await fetch(url, { headers: { Authorization: API_KEY } });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');

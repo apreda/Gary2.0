@@ -15,9 +15,11 @@ export function computeRecommendedSportsbook({ pickType, pickStr, homeTeam, away
     const pick = String(pickStr || '');
     const home = String(homeTeam || '').toLowerCase();
     const away = String(awayTeam || '').toLowerCase();
+    const lower = pick.toLowerCase();
     const side =
-      pick.toLowerCase().includes(home) ? 'home' :
-      pick.toLowerCase().includes(away) ? 'away' :
+      lower.includes(home) ? 'home' :
+      lower.includes(away) ? 'away' :
+      /\b(draw|tie|x)\b/i.test(pick) ? 'draw' :
       null;
     if (!side) return null;
 
@@ -29,7 +31,10 @@ export function computeRecommendedSportsbook({ pickType, pickStr, homeTeam, away
         if (!m || !Array.isArray(m.outcomes)) continue;
         const out = m.outcomes.find(o => {
           const n = String(o?.name || '').toLowerCase();
-          return side === 'home' ? n.includes(home) : n.includes(away);
+          if (side === 'home') return n.includes(home);
+          if (side === 'away') return n.includes(away);
+          if (side === 'draw') return n === 'draw' || n === 'tie' || n === 'x';
+          return false;
         });
         if (out && typeof out.price === 'number') {
           entries.push({

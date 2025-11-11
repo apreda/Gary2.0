@@ -120,6 +120,52 @@ export const ballDontLieOddsService = {
    * @returns {Promise<Array>} games with bookmakers/markets in a unified shape
    */
   async getGamesWithOddsForSport(sportKey, dateStr) {
+    // EPL: use sport-specific v1 odds endpoint with moneyline including draw
+    if (sportKey === 'soccer_epl') {
+      const apiKey = getApiKey();
+      const games = await ballDontLieService.getGames('soccer_epl', { dates: [dateStr], per_page: 100 }, 10);
+      const ids = (games || []).map(g => g.id).filter(Boolean);
+      let oddsRows = [];
+      if (ids.length > 0) {
+        const params = {};
+        params['game_ids[]'] = ids.slice(0, 100);
+        const resp = await axios.get('https://api.balldontlie.io/epl/v1/odds', { params, headers: { Authorization: apiKey } });
+        oddsRows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+      }
+      const byGame = oddsRows.reduce((acc, r) => {
+        const list = acc.get(r.game_id) || [];
+        list.push(r);
+        acc.set(r.game_id, list);
+        return acc;
+      }, new Map());
+      const mapTeamName = (t) => (typeof t === 'string' ? t : (t?.full_name || t?.name || t?.short_name || ''));
+      return (games || []).map(g => {
+        const vendors = byGame.get(g.id) || [];
+        const bookmakers = vendors.map(v => {
+          const h2hOutcomes = [];
+          if (typeof v.moneyline_home_odds !== 'undefined') {
+            h2hOutcomes.push({ name: mapTeamName(g.home_team), price: v.moneyline_home_odds });
+          }
+          if (typeof v.moneyline_away_odds !== 'undefined') {
+            h2hOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), price: v.moneyline_away_odds });
+          }
+          if (typeof v.moneyline_draw_odds !== 'undefined') {
+            h2hOutcomes.push({ name: 'Draw', price: v.moneyline_draw_odds });
+          }
+          const markets = [];
+          if (h2hOutcomes.length) markets.push({ key: 'h2h', outcomes: h2hOutcomes });
+          return { key: v.vendor, title: v.vendor, markets };
+        });
+        return {
+          id: g.id,
+          sport_key: sportKey,
+          home_team: mapTeamName(g.home_team),
+          away_team: mapTeamName(g.visitor_team || g.away_team),
+          commence_time: g.kickoff || g.date || g.commence_time || new Date().toISOString(),
+          bookmakers
+        };
+      });
+    }
     // Fetch games (v1 multi-sport wrapper) and v2 odds (date-based)
     const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
     const odds = await fetchOddsByDates([dateStr]);
@@ -160,6 +206,9 @@ export const ballDontLieOddsService = {
         if (typeof v.moneyline_away_odds !== 'undefined') {
           h2hOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), price: v.moneyline_away_odds });
         }
+      if (typeof v.moneyline_draw_odds !== 'undefined') {
+        h2hOutcomes.push({ name: 'Draw', price: v.moneyline_draw_odds });
+      }
 
         const markets = [];
         if (h2hOutcomes.length) markets.push({ key: 'h2h', outcomes: h2hOutcomes });
