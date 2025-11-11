@@ -1,6 +1,7 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
+import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { perplexityService } from './perplexityService.js';
 import { processGameOnce } from './picksService.js';
 
@@ -107,8 +108,23 @@ export async function generateWNBAPicks(options = {}) {
 
       const pick = await makeGaryPick(gameObj);
       if (!pick?.success) return null;
+      // Recommended sportsbook
+      let recommendedSportsbook = null;
+      try {
+        const extract = pick.rawAnalysis?.rawOpenAIOutput || pick.pick || {};
+        recommendedSportsbook = computeRecommendedSportsbook({
+          pickType: (extract.type || '').toLowerCase(),
+          pickStr: extract.pick || '',
+          homeTeam: game.home_team,
+          awayTeam: game.away_team,
+          bookmakers: Array.isArray(game.bookmakers) ? game.bookmakers : []
+        });
+      } catch (e) {
+        console.warn('Failed to compute recommended sportsbook (WNBA):', e?.message || e);
+      }
       return {
         ...pick,
+        recommendedSportsbook: recommendedSportsbook || undefined,
         game: `${game.away_team} @ ${game.home_team}`,
         sport: SPORT_KEY,
         homeTeam: game.home_team,

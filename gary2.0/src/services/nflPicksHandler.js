@@ -1,5 +1,6 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce } from './picksService.js';
@@ -209,9 +210,24 @@ export async function generateNFLPicks(options = {}) {
 
       const pick = await makeGaryPick(gameObj);
       if (!pick?.success) return null;
+      // Recommended sportsbook from bookmakers
+      let recommendedSportsbook = null;
+      try {
+        const extract = pick.rawAnalysis?.rawOpenAIOutput || pick.pick || {};
+        recommendedSportsbook = computeRecommendedSportsbook({
+          pickType: (extract.type || '').toLowerCase(),
+          pickStr: extract.pick || '',
+          homeTeam: game.home_team,
+          awayTeam: game.away_team,
+          bookmakers: Array.isArray(game.bookmakers) ? game.bookmakers : []
+        });
+      } catch (e) {
+        console.warn('Failed to compute recommended sportsbook (NFL):', e?.message || e);
+      }
 
       return {
         ...pick,
+        recommendedSportsbook: recommendedSportsbook || undefined,
         game: `${game.away_team} @ ${game.home_team}`,
         sport: SPORT_KEY,
         homeTeam: game.home_team,

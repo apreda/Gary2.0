@@ -1,5 +1,6 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce } from './picksService.js'; // Import shared helper
@@ -202,6 +203,20 @@ export async function generateNHLPicks(options = {}) {
       
       if (result.success) {
         console.log(`Successfully generated NHL pick: ${result.rawAnalysis?.rawOpenAIOutput?.pick || 'Unknown pick'}`);
+        // Recommend sportsbook
+        try {
+          const extract = result.rawAnalysis?.rawOpenAIOutput || result.pick || {};
+          const rec = computeRecommendedSportsbook({
+            pickType: (extract.type || '').toLowerCase(),
+            pickStr: extract.pick || '',
+            homeTeam: game.home_team,
+            awayTeam: game.away_team,
+            bookmakers: Array.isArray(game.bookmakers) ? game.bookmakers : []
+          });
+          if (rec) result.recommendedSportsbook = rec;
+        } catch (e) {
+          console.warn('Failed to compute recommended sportsbook (NHL):', e?.message || e);
+        }
         // Return the formatted pick data instead of adding to sportPicks here
         return {
           ...result,
