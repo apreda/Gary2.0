@@ -487,15 +487,14 @@ export const picksService = {
     prompt += `2. If you pick a MONEYLINE bet (e.g., "Yankees ML"), you MUST use the moneyline odds from "MONEYLINE ODDS" section\n`;
     prompt += `3. NEVER mix up the odds - using moneyline odds for a spread bet is WRONG\n\n`;
     
-    prompt += `IMPORTANT: The "pick" field MUST ALWAYS include the odds. Never omit the odds. Examples:\n`;
-    prompt += `- For moneyline: "Boston Red Sox ML -120" or "Yankees ML +145"\n`;
-    prompt += `- For spread: "Yankees -1.5 -110" or "Red Sox +1.5 -105"\n`;
-    prompt += `NEVER write just "Boston Red Sox ML" without the odds!\n\n`;
+    prompt += `IMPORTANT: Use REAL odds only. If the required odds are not available, set the odds to "N/A" and end the pick with "N/A". Examples:\n`;
+    prompt += `- For moneyline with odds: "Boston Red Sox ML -120"; if no odds available: "Boston Red Sox ML N/A"\n`;
+    prompt += `- For spread with odds: "Yankees -1.5 -110"; if no odds available: "Yankees -1.5 N/A"\n\n`;
     
     prompt += `The JSON must include ALL these fields exactly:\n`;
     prompt += `{\n`;
     prompt += `  "pick": "MUST include team name, bet type (ML or spread with number), AND odds (e.g., 'Boston Red Sox ML -120' or 'Yankees -1.5 -105')",\n`;
-    prompt += `  "odds": "${oddsString ? 'The specific odds number for your chosen bet type (e.g., "-110" or "+145")' : '-110'}",\n`;
+    prompt += `  "odds": "${oddsString ? 'The specific odds number for your chosen bet type (e.g., \"-110\" or \"+145\")' : 'N/A'}",\n`;
     prompt += `  "time": "${game.commence_time ? new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' EST' : 'TBD'}",\n`;
     prompt += `  "type": "spread" or "moneyline",\n`;
     prompt += `  "league": "MLB",\n`;

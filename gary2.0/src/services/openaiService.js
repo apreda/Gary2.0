@@ -300,10 +300,9 @@ ODDS LIMITS (APPLIES TO ALL SPORTS):
 - The goal is best value: choose between spread vs ML accordingly, and never output ML favorites below -200.
 
 FORMATTING REQUIREMENTS:
-- Pick field MUST follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
-- ALWAYS include all three components in that exact order
-- Extract odds from provided odds data
-- If no odds available, use defaults: -110 for spreads, -150 for favorites, +130 for underdogs
+- Pick field SHOULD follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
+- Extract odds ONLY from the provided odds data.
+- If odds are NOT provided for your chosen bet type, do NOT fabricate odds. Set the odds to "N/A". In that case, end the pick with "N/A" (e.g., "Miami Heat ML N/A").
 
 CONFIDENCE SCALE: 0.50 to 1.00 where higher numbers mean MORE CERTAINTY the pick will win.
 
@@ -764,11 +763,11 @@ EXTREMELY IMPORTANT - ABOUT THE GAME TIME:
 Example: If provided with game time "7:30 PM EST", your JSON must include "time": "7:30 PM EST" - not "TBD".
 
 EXTREMELY IMPORTANT - ABOUT ODDS:
-1. You MUST extract odds from the betting odds data provided above.
-2. The "pick" field MUST include the odds at the end (e.g., "Lakers ML -150" or "Celtics -7.5 -110").
-3. The "odds" field should contain just the odds number (e.g., "-150" or "-110").
-4. If no odds are provided, use standard defaults: -110 for spreads, -150 for moneyline favorites, +130 for underdogs.
-5. NEVER leave odds blank or use "TBD" for odds.
+1. You MUST extract odds from the betting odds data provided above; never infer or invent odds.
+2. The "pick" field should include the odds at the end when available (e.g., "Lakers ML -150" or "Celtics -7.5 -110").
+3. The "odds" field should contain just the odds value when available (e.g., "-150" or "-110").
+4. If no odds are available for your chosen bet type, set both the "pick" trailing value and the "odds" field to "N/A".
+5. NEVER use default or placeholder odds values.
 
 This is CRITICALLY important for our system's integrity.
 
