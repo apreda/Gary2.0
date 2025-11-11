@@ -57,8 +57,19 @@ export async function generateNFLPicks(options = {}) {
         ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] })
       ]);
 
-      const hasHomeStats = Array.isArray(homeTeamStats) && homeTeamStats.length > 0;
-      const hasAwayStats = Array.isArray(awayTeamStats) && awayTeamStats.length > 0;
+      // Strictly scope any returned rows to the actual matchup teams
+      const filterByTeamId = (rows, teamId) => {
+        if (!Array.isArray(rows)) return [];
+        return rows.filter(r => {
+          const id = r?.team?.id ?? r?.team_id ?? r?.team?.team_id;
+          return id === teamId;
+        });
+      };
+      const homeTeamStatsScoped = filterByTeamId(homeTeamStats, homeTeam.id);
+      const awayTeamStatsScoped = filterByTeamId(awayTeamStats, awayTeam.id);
+
+      const hasHomeStats = homeTeamStatsScoped.length > 0;
+      const hasAwayStats = awayTeamStatsScoped.length > 0;
       if (!hasHomeStats || !hasAwayStats) {
         console.warn(`NFL: Missing required stats for ${game.away_team} @ ${game.home_team} — skipping.`);
         return null;
@@ -78,10 +89,18 @@ export async function generateNFLPicks(options = {}) {
       let homeQbSeason = [];
       let awayQbSeason = [];
       try {
-        const [homeQbs, awayQbs] = await Promise.all([
+        let [homeQbs, awayQbs] = await Promise.all([
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'QB', per_page: 5 }),
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'QB', per_page: 5 })
         ]);
+        // Some backends ignore the 'position' filter; enforce locally
+        const isQB = (p) => {
+          const pos = (p?.position || '').toLowerCase();
+          const abbr = (p?.position_abbreviation || '').toLowerCase();
+          return abbr === 'qb' || pos.includes('quarterback');
+        };
+        if (Array.isArray(homeQbs)) homeQbs = homeQbs.filter(isQB);
+        if (Array.isArray(awayQbs)) awayQbs = awayQbs.filter(isQB);
         homeQb = Array.isArray(homeQbs) && homeQbs[0] ? homeQbs[0] : null;
         awayQb = Array.isArray(awayQbs) && awayQbs[0] ? awayQbs[0] : null;
         const [homeQbSeasonRes, awayQbSeasonRes] = await Promise.all([
@@ -94,8 +113,8 @@ export async function generateNFLPicks(options = {}) {
 
       const statsReport = {
         season,
-        home: { team: homeTeam, sample: homeTeamStats.slice(0, 3) },
-        away: { team: awayTeam, sample: awayTeamStats.slice(0, 3) },
+        home: { team: homeTeam, sample: homeTeamStatsScoped.slice(0, 3) },
+        away: { team: awayTeam, sample: awayTeamStatsScoped.slice(0, 3) },
         injuriesSample: injuries?.slice?.(0, 6) || [],
         seasonSummary: {
           home: homeRates,
@@ -181,8 +200,8 @@ export async function generateNFLPicks(options = {}) {
 
       // Provide combined teamStats and minimal gameContext
       const teamStats = {
-        home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
-        away: Array.isArray(awayTeamStats) ? awayTeamStats : []
+        home: homeTeamStatsScoped,
+        away: awayTeamStatsScoped
       };
       const gameContext = {
         injuries: Array.isArray(injuries) ? injuries : [],

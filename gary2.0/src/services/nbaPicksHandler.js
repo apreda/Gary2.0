@@ -23,36 +23,18 @@ export async function generateNBAPicks(options = {}) {
   
   console.log(`NBA filtering: Today in EST is ${estFormattedDate}`);
   
-  // Be more flexible with date filtering - include games within next 24 hours
+  // Narrow filtering - include games within next 16 hours
   const nowTime = today.getTime();
-  const twentyFourHoursLater = nowTime + (24 * 60 * 60 * 1000);
+  const sixteenHoursLater = nowTime + (16 * 60 * 60 * 1000);
   
   let todayGames = games.filter(game => {
     const gameTime = new Date(game.commence_time).getTime();
-    const isWithin24Hours = gameTime >= nowTime && gameTime <= twentyFourHoursLater;
-    
-    // Also check if it's today or tomorrow in EST
-    const gameDate = new Date(game.commence_time);
-    const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
-    const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
-    const gameFormattedDate = `${gameYear}-${gameMonth.padStart(2, '0')}-${gameDay.padStart(2, '0')}`;
-    
-    // Include games from today and tomorrow
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowString = tomorrow.toLocaleDateString('en-US', estOptions);
-    const [tomorrowMonth, tomorrowDay, tomorrowYear] = tomorrowString.split('/');
-    const tomorrowFormattedDate = `${tomorrowYear}-${tomorrowMonth.padStart(2, '0')}-${tomorrowDay.padStart(2, '0')}`;
-    
-    const isTodayOrTomorrow = gameFormattedDate === estFormattedDate || gameFormattedDate === tomorrowFormattedDate;
-    const includeGame = isWithin24Hours || isTodayOrTomorrow;
-    
-    console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Date: ${gameFormattedDate}, Time: ${new Date(game.commence_time).toLocaleString('en-US', estOptions)}, Include: ${includeGame}`);
-    
+    const includeGame = gameTime >= nowTime && gameTime <= sixteenHoursLater;
+    console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Time: ${new Date(game.commence_time).toLocaleString('en-US', estOptions)}, Include: ${includeGame}`);
     return includeGame;
   });
 
-  console.log(`After date filtering: ${todayGames.length} NBA games within next 24 hours or today/tomorrow`);
+  console.log(`After date filtering: ${todayGames.length} NBA games within next 16 hours`);
 
   // If options.onlyAtIndex is provided, process only that game
   if (typeof options.onlyAtIndex === 'number') {
