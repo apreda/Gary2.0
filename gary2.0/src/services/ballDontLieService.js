@@ -178,7 +178,7 @@ const ballDontLieService = {
         // Prefer SDK per dev docs
         const nfl = this._getSportClient('americanfootball_nfl');
         const endpoint = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/passing`;
-        const baseParams = { season, postseason, week };
+        const baseParams = { season, postseason, week: 0 };
         // Helper: SDK paginated fetch
         const sdkFetch = async (params) => {
           if (!nfl?.getAdvancedPassingStats) throw new Error('SDK getAdvancedPassingStats not available');
@@ -199,28 +199,66 @@ const ballDontLieService = {
         };
         // Helper: fetch with pagination (season-wide)
         const fetchSeasonAll = async (omitWeek = false) => {
+          const params = { season, postseason, per_page: 100 };
+          if (!omitWeek) params.week = 0;
+          try {
+            if (nfl?.getAdvancedPassingStats) {
+              return await sdkFetch(params);
+            }
+          } catch (sdkErr) {
+            // fall through to HTTP
+          }
           const all = [];
           let cursor;
           let loops = 0;
           while (loops < 5) {
-            const params = { season, postseason, per_page: 100 };
-            if (!omitWeek && typeof week === 'number') params.week = week;
-            if (cursor) params.cursor = cursor;
-            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY } , params });
-            const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-            all.push(...rows);
-            cursor = resp?.data?.meta?.next_cursor;
-            if (!cursor) break;
+            const httpParams = { season, postseason, per_page: 100, week: omitWeek ? undefined : 0, cursor };
+            if (cursor) httpParams.cursor = cursor;
+            try {
+              const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
+              const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+              all.push(...rows);
+              cursor = resp?.data?.meta?.next_cursor;
+              if (!cursor) break;
+            } catch (httpErr) {
+              if (httpErr?.response?.status === 400) {
+                console.warn('[Ball Don\'t Lie] nfl advanced passing 400 (season-wide)', httpErr?.response?.data || '');
+                break;
+              }
+              throw httpErr;
+            }
             loops += 1;
           }
           return all;
         };
+        const httpFetch = async (params) => {
+          try {
+            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+            const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+            return rows || [];
+          } catch (err) {
+            if (err?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced passing 400', err?.response?.data || '');
+              return [];
+            }
+            throw err;
+          }
+        };
         // First: try SDK with targeted params (player_id + week)
         try {
-          let data = await sdkFetch({ ...baseParams, ...(pid ? { player_id: pid } : {}) });
-          // If SDK returns empty for targeted, try without week (still SDK)
-          if ((!data || data.length === 0) && typeof week === 'number') {
-            data = await sdkFetch({ season, postseason, ...(pid ? { player_id: pid } : {}), per_page: 100 });
+          let data = [];
+          try {
+            data = await sdkFetch({ ...baseParams, ...(pid ? { player_id: pid } : {}) });
+          } catch (sdkErr) {
+            if (sdkErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced passing SDK 400', sdkErr?.response?.data || '');
+              data = [];
+            } else {
+              throw sdkErr;
+            }
+          }
+          if (!data || data.length === 0) {
+            data = await httpFetch({ ...baseParams, per_page: 100, ...(pid ? { player_id: pid } : {}) });
           }
           // If still empty and pid set, grab season-all then filter
           if ((!data || data.length === 0) && pid) {
@@ -245,11 +283,19 @@ const ballDontLieService = {
             }
             return seasonAll || [];
           } catch (fallbackErr) {
+            if (primaryErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced passing fallback 400', primaryErr?.response?.data || '');
+              return [];
+            }
             throw primaryErr;
           }
         }
       }, ttlMinutes);
     } catch (e) {
+      if (e?.response?.status === 400) {
+        console.warn('[Ball Don\'t Lie] nfl getNflAdvancedPassingStats 400', e?.response?.data || '');
+        return [];
+      }
       console.error('[Ball Don\'t Lie] nfl getNflAdvancedPassingStats error:', e.message);
       return [];
     }
@@ -285,26 +331,55 @@ const ballDontLieService = {
           return all;
         };
         const fetchSeasonAll = async (omitWeek = false) => {
+          const params = { season, postseason, per_page: 100 };
+          if (!omitWeek) params.week = 0;
+          try {
+            if (nfl?.getAdvancedRushingStats) {
+              return await sdkFetch(params);
+            }
+          } catch (sdkErr) {
+            if (sdkErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced rushing SDK 400 (season-wide)', sdkErr?.response?.data || '');
+              return [];
+            }
+          }
           const all = [];
           let cursor;
           let loops = 0;
           while (loops < 5) {
-            const params = { season, postseason, per_page: 100 };
-            if (!omitWeek && typeof week === 'number') params.week = week;
-            if (cursor) params.cursor = cursor;
-            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
-            const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-            all.push(...rows);
-            cursor = resp?.data?.meta?.next_cursor;
+            const httpParams = { season, postseason, per_page: 100, week: omitWeek ? undefined : 0 };
+            if (cursor) httpParams.cursor = cursor;
+            try {
+              const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
+              const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+              all.push(...rows);
+              cursor = resp?.data?.meta?.next_cursor;
+            } catch (httpErr) {
+              if (httpErr?.response?.status === 400) {
+                console.warn('[Ball Don\'t Lie] nfl advanced rushing 400 (season-wide)', httpErr?.response?.data || '');
+                break;
+              }
+              throw httpErr;
+            }
             if (!cursor) break;
             loops += 1;
           }
           return all;
         };
         try {
-          let data = await sdkFetch({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
-          if ((!data || data.length === 0) && typeof week === 'number') {
-            data = await sdkFetch({ season, postseason, ...(pid ? { player_id: pid } : {}) });
+          let data = [];
+          try {
+            data = await sdkFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}) });
+          } catch (sdkErr) {
+            if (sdkErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced rushing SDK 400', sdkErr?.response?.data || '');
+              data = [];
+            } else {
+              throw sdkErr;
+            }
+          }
+          if (!data || data.length === 0) {
+            data = await httpFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}), per_page: 100 });
           }
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
@@ -329,11 +404,19 @@ const ballDontLieService = {
             }
             return seasonAll || [];
           } catch (fallbackErr) {
+            if (primaryErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced rushing fallback 400', primaryErr?.response?.data || '');
+              return [];
+            }
             throw primaryErr;
           }
         }
       }, ttlMinutes);
     } catch (e) {
+      if (e?.response?.status === 400) {
+        console.warn('[Ball Don\'t Lie] nfl getNflAdvancedRushingStats 400', e?.response?.data || '');
+        return [];
+      }
       console.error('[Ball Don\'t Lie] nfl getNflAdvancedRushingStats error:', e.message);
       return [];
     }
@@ -369,26 +452,55 @@ const ballDontLieService = {
           return all;
         };
         const fetchSeasonAll = async (omitWeek = false) => {
+          const params = { season, postseason, per_page: 100 };
+          if (!omitWeek) params.week = 0;
+          try {
+            if (nfl?.getAdvancedReceivingStats) {
+              return await sdkFetch(params);
+            }
+          } catch (sdkErr) {
+            if (sdkErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced receiving SDK 400 (season-wide)', sdkErr?.response?.data || '');
+              return [];
+            }
+          }
           const all = [];
           let cursor;
           let loops = 0;
           while (loops < 5) {
-            const params = { season, postseason, per_page: 100 };
-            if (!omitWeek && typeof week === 'number') params.week = week;
-            if (cursor) params.cursor = cursor;
-            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
-            const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-            all.push(...rows);
-            cursor = resp?.data?.meta?.next_cursor;
+            const httpParams = { season, postseason, per_page: 100, week: omitWeek ? undefined : 0 };
+            if (cursor) httpParams.cursor = cursor;
+            try {
+              const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
+              const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+              all.push(...rows);
+              cursor = resp?.data?.meta?.next_cursor;
+            } catch (httpErr) {
+              if (httpErr?.response?.status === 400) {
+                console.warn('[Ball Don\'t Lie] nfl advanced receiving 400 (season-wide)', httpErr?.response?.data || '');
+                break;
+              }
+              throw httpErr;
+            }
             if (!cursor) break;
             loops += 1;
           }
           return all;
         };
         try {
-          let data = await sdkFetch({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
-          if ((!data || data.length === 0) && typeof week === 'number') {
-            data = await sdkFetch({ season, postseason, ...(pid ? { player_id: pid } : {}) });
+          let data = [];
+          try {
+            data = await sdkFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}) });
+          } catch (sdkErr) {
+            if (sdkErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced receiving SDK 400', sdkErr?.response?.data || '');
+              data = [];
+            } else {
+              throw sdkErr;
+            }
+          }
+          if (!data || data.length === 0) {
+            data = await httpFetch({ season, postseason, week: 0, ...(pid ? { player_id: pid } : {}), per_page: 100 });
           }
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
@@ -413,11 +525,19 @@ const ballDontLieService = {
             }
             return seasonAll || [];
           } catch (fallbackErr) {
+            if (primaryErr?.response?.status === 400) {
+              console.warn('[Ball Don\'t Lie] nfl advanced receiving fallback 400', primaryErr?.response?.data || '');
+              return [];
+            }
             throw primaryErr;
           }
         }
       }, ttlMinutes);
     } catch (e) {
+      if (e?.response?.status === 400) {
+        console.warn('[Ball Don\'t Lie] nfl getNflAdvancedReceivingStats 400', e?.response?.data || '');
+        return [];
+      }
       console.error('[Ball Don\'t Lie] nfl getNflAdvancedReceivingStats error:', e.message);
       return [];
     }
