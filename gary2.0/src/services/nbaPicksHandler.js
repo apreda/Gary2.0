@@ -1,5 +1,6 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce } from './picksService.js'; // Import shared helper
 
@@ -148,17 +149,59 @@ export async function generateNBAPicks(options = {}) {
         console.log(`No odds data available for ${game.home_team} vs ${game.away_team}`);
       }
 
+      // Simple model-vs-market edge from recent scoring differential
+      let modelEdge = null;
+      try {
+        const spreadsMarket = oddsData?.markets?.find?.(m => m.key === 'spreads');
+        const homeOutcome = spreadsMarket?.outcomes?.find?.(o => o.name === game.home_team);
+        const marketSpread = typeof homeOutcome?.point === 'number' ? homeOutcome.point : null;
+        const computeDiff = (recentList, teamObj) => {
+          if (!Array.isArray(recentList) || !teamObj?.id) return null;
+          let forPts = 0, againstPts = 0, n = 0;
+          for (const g of recentList) {
+            const hId = g?.home_team?.id || g?.home_team_id;
+            const aId = g?.away_team?.id || g?.away_team_id;
+            const hs = g?.home_score;
+            const as = g?.away_score;
+            if (typeof hs !== 'number' || typeof as !== 'number') continue;
+            if (hId === teamObj.id) { forPts += hs; againstPts += as; n++; }
+            else if (aId === teamObj.id) { forPts += as; againstPts += hs; n++; }
+          }
+          if (n === 0) return null;
+          return (forPts / n) - (againstPts / n);
+        };
+        const homeDiff = homeTeam ? computeDiff(homeRecent, homeTeam) : null;
+        const awayDiff = awayTeam ? computeDiff(awayRecent, awayTeam) : null;
+        if (marketSpread !== null && homeDiff !== null && awayDiff !== null) {
+          const expectedMargin = homeDiff - awayDiff;
+          const edge = expectedMargin - marketSpread;
+          modelEdge = { expectedMargin: Number(expectedMargin.toFixed(2)), marketSpread, edge: Number(edge.toFixed(2)) };
+        }
+      } catch {}
+
+      // Perplexity key findings (trim to 3–4)
+      let richKeyFindings = [];
+      try {
+        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
+        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nba', dateStr);
+        if (Array.isArray(rich?.key_findings)) {
+          richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+      } catch {}
+
       const gameObj = {
         id: gameId,
         sport: 'nba',
         league: 'NBA',
         homeTeam: game.home_team,
         awayTeam: game.away_team,
+        gameContext: { season, postseason: false, notes: 'Regular season context from BDL NBA', richKeyFindings },
         homeTeamStats: homeTeamInfo,
         awayTeamStats: awayTeamInfo,
         statsReport: report,
         playoffPlayerStats: null,
         seriesData: null,
+        modelEdge,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time

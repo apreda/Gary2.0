@@ -1,5 +1,6 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce } from './picksService.js';
 
@@ -62,23 +63,47 @@ export async function generateNFLPicks(options = {}) {
         return null;
       }
 
+      // Season aggregates for offense/defense summary
+      const [homeSeason, awaySeason] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season, postseason: false })
+      ]);
+      const homeRates = ballDontLieService.deriveNflTeamRates(homeSeason);
+      const awayRates = ballDontLieService.deriveNflTeamRates(awaySeason);
+
+      // Identify probable QBs and fetch season stats
+      let homeQb = null;
+      let awayQb = null;
+      let homeQbSeason = [];
+      let awayQbSeason = [];
+      try {
+        const [homeQbs, awayQbs] = await Promise.all([
+          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'QB', per_page: 5 }),
+          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'QB', per_page: 5 })
+        ]);
+        homeQb = Array.isArray(homeQbs) && homeQbs[0] ? homeQbs[0] : null;
+        awayQb = Array.isArray(awayQbs) && awayQbs[0] ? awayQbs[0] : null;
+        const [homeQbSeasonRes, awayQbSeasonRes] = await Promise.all([
+          homeQb ? ballDontLieService.getNflPlayerSeasonStats({ playerId: homeQb.id, season, postseason: false }) : Promise.resolve([]),
+          awayQb ? ballDontLieService.getNflPlayerSeasonStats({ playerId: awayQb.id, season, postseason: false }) : Promise.resolve([])
+        ]);
+        homeQbSeason = homeQbSeasonRes;
+        awayQbSeason = awayQbSeasonRes;
+      } catch {}
+
       const statsReport = {
         season,
         home: { team: homeTeam, sample: homeTeamStats.slice(0, 3) },
         away: { team: awayTeam, sample: awayTeamStats.slice(0, 3) },
-        injuriesSample: injuries?.slice?.(0, 6) || []
-      };
-
-      // Provide combined teamStats and a minimal gameContext so Gary sees them as available
-      const teamStats = {
-        home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
-        away: Array.isArray(awayTeamStats) ? awayTeamStats : []
-      };
-      const gameContext = {
-        injuries: Array.isArray(injuries) ? injuries : [],
-        season,
-        postseason: false,
-        notes: 'Regular season context from BDL NFL'
+        injuriesSample: injuries?.slice?.(0, 6) || [],
+        seasonSummary: {
+          home: homeRates,
+          away: awayRates
+        },
+        qbSeason: {
+          home: { qb: homeQb ? { id: homeQb.id, name: homeQb.full_name || `${homeQb.first_name || ''} ${homeQb.last_name || ''}`.trim() } : null, stats: homeQbSeason },
+          away: { qb: awayQb ? { id: awayQb.id, name: awayQb.full_name || `${awayQb.first_name || ''} ${awayQb.last_name || ''}`.trim() } : null, stats: awayQbSeason }
+        }
       };
 
       // Odds payload
@@ -90,6 +115,83 @@ export async function generateNFLPicks(options = {}) {
         };
       }
 
+      // Compute a simple model-vs-market edge using season scoring/allowing rates
+      let modelEdge = null;
+      try {
+        const spreadsMarket = oddsData?.markets?.find?.(m => m.key === 'spreads');
+        const homeOutcome = spreadsMarket?.outcomes?.find?.(o => o.name === game.home_team);
+        const marketSpread = typeof homeOutcome?.point === 'number' ? homeOutcome.point : null;
+        if (marketSpread !== null &&
+            typeof homeRates.pointsPerGame === 'number' &&
+            typeof homeRates.oppPointsPerGame === 'number' &&
+            typeof awayRates.pointsPerGame === 'number' &&
+            typeof awayRates.oppPointsPerGame === 'number') {
+          const expectedMargin = (homeRates.pointsPerGame - awayRates.oppPointsPerGame) -
+                                 (awayRates.pointsPerGame - homeRates.oppPointsPerGame);
+          const edge = expectedMargin - marketSpread;
+          modelEdge = { expectedMargin: Number(expectedMargin.toFixed(2)), marketSpread, edge: Number(edge.toFixed(2)) };
+        }
+      } catch {}
+
+      // Perplexity key findings (trim to 3-4)
+      let richKeyFindings = [];
+      try {
+        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
+        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nfl', dateStr);
+        if (Array.isArray(rich?.key_findings)) {
+          richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+      } catch {}
+
+      // QB venue and head-to-head samples (last two seasons)
+      let qbVenueH2H = { home: {}, away: {} };
+      try {
+        const seasons = [season, season - 1];
+        const teamGames = await ballDontLieService.getGames(SPORT_KEY, { seasons, team_ids: [homeTeam.id, awayTeam.id], postseason: false, per_page: 100 }, options.nocache ? 0 : 10);
+        const isH2H = (g) => {
+          const hId = g?.home_team?.id || g?.home_team?.team_id || g?.home_team_id;
+          const aId = g?.away_team?.id || g?.away_team?.team_id || g?.away_team_id;
+          return (hId === homeTeam.id && aId === awayTeam.id) || (hId === awayTeam.id && aId === homeTeam.id);
+        };
+        const homeVenue = teamGames.filter(g => {
+          const hId = g?.home_team?.id || g?.home_team?.team_id || g?.home_team_id;
+          return hId === homeTeam.id;
+        }).slice(0, 5).map(g => g.id).filter(Boolean);
+        const awayVenue = teamGames.filter(g => {
+          const hId = g?.home_team?.id || g?.home_team?.team_id || g?.home_team_id;
+          return hId === awayTeam.id;
+        }).slice(0, 5).map(g => g.id).filter(Boolean);
+        const h2hIds = teamGames.filter(isH2H).slice(0, 6).map(g => g.id).filter(Boolean);
+        if (homeQb?.id) {
+          const [homeVenueStats, h2hStats] = await Promise.all([
+            homeVenue.length ? ballDontLieService.getNflPlayerGameStats({ playerId: homeQb.id, gameIds: homeVenue }) : Promise.resolve([]),
+            h2hIds.length ? ballDontLieService.getNflPlayerGameStats({ playerId: homeQb.id, gameIds: h2hIds }) : Promise.resolve([])
+          ]);
+          qbVenueH2H.home = { qbId: homeQb.id, venueSample: homeVenueStats, h2hSample: h2hStats };
+        }
+        if (awayQb?.id) {
+          const [awayVenueStats, h2hStatsA] = await Promise.all([
+            awayVenue.length ? ballDontLieService.getNflPlayerGameStats({ playerId: awayQb.id, gameIds: awayVenue }) : Promise.resolve([]),
+            h2hIds.length ? ballDontLieService.getNflPlayerGameStats({ playerId: awayQb.id, gameIds: h2hIds }) : Promise.resolve([])
+          ]);
+          qbVenueH2H.away = { qbId: awayQb.id, venueSample: awayVenueStats, h2hSample: h2hStatsA };
+        }
+      } catch {}
+
+      // Provide combined teamStats and minimal gameContext
+      const teamStats = {
+        home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
+        away: Array.isArray(awayTeamStats) ? awayTeamStats : []
+      };
+      const gameContext = {
+        injuries: Array.isArray(injuries) ? injuries : [],
+        season,
+        postseason: false,
+        notes: 'Regular season context from BDL NFL',
+        richKeyFindings,
+        qbVenueH2H
+      };
+
       const gameObj = {
         id: gameId,
         sport: 'nfl',
@@ -99,6 +201,7 @@ export async function generateNFLPicks(options = {}) {
         teamStats,
         gameContext,
         statsReport,
+        modelEdge,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time

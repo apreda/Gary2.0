@@ -1,6 +1,7 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
+import { perplexityService } from './perplexityService.js';
 import { processGameOnce } from './picksService.js';
 
 const SPORT_KEY = 'basketball_wnba';
@@ -64,22 +65,31 @@ export async function generateWNBAPicks(options = {}) {
         injuriesSample: injuries?.slice?.(0, 6) || []
       };
 
+      let oddsData = null;
+      if (game.bookmakers?.length) {
+        oddsData = { bookmaker: game.bookmakers[0]?.title, markets: game.bookmakers[0]?.markets || [] };
+      }
+
       // Provide combined teamStats and minimal gameContext for Gary
       const teamStats = {
         home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
         away: Array.isArray(awayTeamStats) ? awayTeamStats : []
       };
+      let richKeyFindings = [];
+      try {
+        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
+        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'wnba', dateStr);
+        if (Array.isArray(rich?.key_findings)) {
+          richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+      } catch {}
       const gameContext = {
         injuries: Array.isArray(injuries) ? injuries : [],
         season,
         postseason: false,
-        notes: 'Regular season context from BDL WNBA'
+        notes: 'Regular season context from BDL WNBA',
+        richKeyFindings
       };
-
-      let oddsData = null;
-      if (game.bookmakers?.length) {
-        oddsData = { bookmaker: game.bookmakers[0]?.title, markets: game.bookmakers[0]?.markets || [] };
-      }
 
       const gameObj = {
         id: gameId,
