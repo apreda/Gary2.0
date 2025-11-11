@@ -166,6 +166,69 @@ const ballDontLieService = {
   },
 
   /**
+   * NFL Advanced Passing Stats (season-level; optional player filter)
+   * GET /nfl/v1/advanced_stats/passing
+   */
+  async getNflAdvancedPassingStats({ season, playerId, player_id, postseason = false, week = 0 } = {}, ttlMinutes = 10) {
+    try {
+      const pid = playerId || player_id || undefined;
+      if (!season) return [];
+      const cacheKey = `nfl_adv_passing_${season}_${pid || 'all'}_${postseason}_${week}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const qs = buildQuery({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/passing${qs}`;
+        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] nfl getNflAdvancedPassingStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * NFL Advanced Rushing Stats (season-level; optional player filter)
+   * GET /nfl/v1/advanced_stats/rushing
+   */
+  async getNflAdvancedRushingStats({ season, playerId, player_id, postseason = false, week = 0 } = {}, ttlMinutes = 10) {
+    try {
+      const pid = playerId || player_id || undefined;
+      if (!season) return [];
+      const cacheKey = `nfl_adv_rushing_${season}_${pid || 'all'}_${postseason}_${week}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const qs = buildQuery({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/rushing${qs}`;
+        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] nfl getNflAdvancedRushingStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * NFL Advanced Receiving Stats (season-level; optional player filter)
+   * GET /nfl/v1/advanced_stats/receiving
+   */
+  async getNflAdvancedReceivingStats({ season, playerId, player_id, postseason = false, week = 0 } = {}, ttlMinutes = 10) {
+    try {
+      const pid = playerId || player_id || undefined;
+      if (!season) return [];
+      const cacheKey = `nfl_adv_receiving_${season}_${pid || 'all'}_${postseason}_${week}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const qs = buildQuery({ season, postseason, week, ...(pid ? { player_id: pid } : {}) });
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/advanced_stats/receiving${qs}`;
+        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] nfl getNflAdvancedReceivingStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * Generic players fetch with HTTP fallback
    */
   async getPlayersGeneric(sportKey, params = {}, ttlMinutes = 10) {

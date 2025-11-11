@@ -120,6 +120,17 @@ export async function generateNFLPicks(options = {}) {
       let awayQb = null;
       let homeQbSeason = [];
       let awayQbSeason = [];
+      let homeQbAdvanced = [];
+      let awayQbAdvanced = [];
+      // Optional skill players with advanced rushing/receiving
+      let homeLeadRb = null;
+      let awayLeadRb = null;
+      let homeLeadWr = null;
+      let awayLeadWr = null;
+      let homeRbAdvanced = [];
+      let awayRbAdvanced = [];
+      let homeWrAdvanced = [];
+      let awayWrAdvanced = [];
       try {
         let [homeQbs, awayQbs] = await Promise.all([
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'QB', per_page: 5 }),
@@ -135,12 +146,38 @@ export async function generateNFLPicks(options = {}) {
         if (Array.isArray(awayQbs)) awayQbs = awayQbs.filter(isQB);
         homeQb = Array.isArray(homeQbs) && homeQbs[0] ? homeQbs[0] : null;
         awayQb = Array.isArray(awayQbs) && awayQbs[0] ? awayQbs[0] : null;
-        const [homeQbSeasonRes, awayQbSeasonRes] = await Promise.all([
+        const [homeQbSeasonRes, awayQbSeasonRes, homeQbAdvRes, awayQbAdvRes] = await Promise.all([
           homeQb ? ballDontLieService.getNflPlayerSeasonStats({ playerId: homeQb.id, season, postseason: false }) : Promise.resolve([]),
-          awayQb ? ballDontLieService.getNflPlayerSeasonStats({ playerId: awayQb.id, season, postseason: false }) : Promise.resolve([])
+          awayQb ? ballDontLieService.getNflPlayerSeasonStats({ playerId: awayQb.id, season, postseason: false }) : Promise.resolve([]),
+          homeQb ? ballDontLieService.getNflAdvancedPassingStats({ season, playerId: homeQb.id, postseason: false, week: 0 }) : Promise.resolve([]),
+          awayQb ? ballDontLieService.getNflAdvancedPassingStats({ season, playerId: awayQb.id, postseason: false, week: 0 }) : Promise.resolve([])
         ]);
         homeQbSeason = homeQbSeasonRes;
         awayQbSeason = awayQbSeasonRes;
+        homeQbAdvanced = homeQbAdvRes;
+        awayQbAdvanced = awayQbAdvRes;
+
+        // Try to identify a lead RB and WR per team, then pull advanced rushing/receiving (season-level)
+        const [homeRbs, awayRbs, homeWrs, awayWrs] = await Promise.all([
+          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'RB', per_page: 5 }),
+          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'RB', per_page: 5 }),
+          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'WR', per_page: 5 }),
+          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'WR', per_page: 5 })
+        ]);
+        homeLeadRb = Array.isArray(homeRbs) && homeRbs[0] ? homeRbs[0] : null;
+        awayLeadRb = Array.isArray(awayRbs) && awayRbs[0] ? awayRbs[0] : null;
+        homeLeadWr = Array.isArray(homeWrs) && homeWrs[0] ? homeWrs[0] : null;
+        awayLeadWr = Array.isArray(awayWrs) && awayWrs[0] ? awayWrs[0] : null;
+        const [homeRbAdvRes, awayRbAdvRes, homeWrAdvRes, awayWrAdvRes] = await Promise.all([
+          homeLeadRb ? ballDontLieService.getNflAdvancedRushingStats({ season, playerId: homeLeadRb.id, postseason: false, week: 0 }) : Promise.resolve([]),
+          awayLeadRb ? ballDontLieService.getNflAdvancedRushingStats({ season, playerId: awayLeadRb.id, postseason: false, week: 0 }) : Promise.resolve([]),
+          homeLeadWr ? ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: homeLeadWr.id, postseason: false, week: 0 }) : Promise.resolve([]),
+          awayLeadWr ? ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: awayLeadWr.id, postseason: false, week: 0 }) : Promise.resolve([])
+        ]);
+        homeRbAdvanced = homeRbAdvRes;
+        awayRbAdvanced = awayRbAdvRes;
+        homeWrAdvanced = homeWrAdvRes;
+        awayWrAdvanced = awayWrAdvRes;
       } catch {}
 
       const statsReport = {
@@ -155,16 +192,43 @@ export async function generateNFLPicks(options = {}) {
         qbSeason: {
           home: { qb: homeQb ? { id: homeQb.id, name: homeQb.full_name || `${homeQb.first_name || ''} ${homeQb.last_name || ''}`.trim() } : null, stats: homeQbSeason },
           away: { qb: awayQb ? { id: awayQb.id, name: awayQb.full_name || `${awayQb.first_name || ''} ${awayQb.last_name || ''}`.trim() } : null, stats: awayQbSeason }
+        },
+        advanced: {
+          passing: {
+            home: homeQbAdvanced,
+            away: awayQbAdvanced
+          },
+          rushing: {
+            home: { player: homeLeadRb ? { id: homeLeadRb.id, name: homeLeadRb.full_name || `${homeLeadRb.first_name || ''} ${homeLeadRb.last_name || ''}`.trim() } : null, stats: homeRbAdvanced },
+            away: { player: awayLeadRb ? { id: awayLeadRb.id, name: awayLeadRb.full_name || `${awayLeadRb.first_name || ''} ${awayLeadRb.last_name || ''}`.trim() } : null, stats: awayRbAdvanced }
+          },
+          receiving: {
+            home: { player: homeLeadWr ? { id: homeLeadWr.id, name: homeLeadWr.full_name || `${homeLeadWr.first_name || ''} ${homeLeadWr.last_name || ''}`.trim() } : null, stats: homeWrAdvanced },
+            away: { player: awayLeadWr ? { id: awayLeadWr.id, name: awayLeadWr.full_name || `${awayLeadWr.first_name || ''} ${awayLeadWr.last_name || ''}`.trim() } : null, stats: awayWrAdvanced }
+          }
         }
       };
 
-      // Odds payload
+      // Odds payload: choose a bookmaker that actually has ML or spreads with numeric prices
       let oddsData = null;
-      if (game.bookmakers && game.bookmakers.length > 0) {
-        oddsData = {
-          bookmaker: game.bookmakers[0]?.title,
-          markets: game.bookmakers[0]?.markets || []
-        };
+      if (Array.isArray(game.bookmakers) && game.bookmakers.length > 0) {
+        const preferWithBoth = game.bookmakers.find(b => {
+          const hasMl = Array.isArray(b?.markets) && b.markets.some(m => m.key === 'h2h' && Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number'));
+          const hasSpread = Array.isArray(b?.markets) && b.markets.some(m => m.key === 'spreads' && Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number'));
+          return hasMl && hasSpread;
+        });
+        const fallbackOne = preferWithBoth || game.bookmakers.find(b => {
+          return Array.isArray(b?.markets) && b.markets.some(m =>
+            (m.key === 'h2h' || m.key === 'spreads') &&
+            Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number')
+          );
+        });
+        if (fallbackOne) {
+          oddsData = {
+            bookmaker: fallbackOne.title,
+            markets: fallbackOne.markets || []
+          };
+        }
       }
 
       // Compute a simple model-vs-market edge using season scoring/allowing rates

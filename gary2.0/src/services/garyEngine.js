@@ -201,6 +201,29 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       time: gameData?.gameTime || gameData?.time || 'TBD'
     };
     
+    // HARD REQUIREMENT: We must have real odds (moneyline or spread) before calling OpenAI.
+    // If not present, fail fast so the caller can skip this game. No "N/A" fallbacks.
+    const hasOddsMarkets = Array.isArray(formattedData?.odds?.markets) && formattedData.odds.markets.length > 0;
+    const hasMlOrSpread =
+      hasOddsMarkets &&
+      formattedData.odds.markets.some(
+        (m) =>
+          (m?.key === 'h2h' || m?.key === 'spreads') &&
+          Array.isArray(m?.outcomes) &&
+          m.outcomes.some((o) => typeof o?.price === 'number')
+      );
+    if (!hasMlOrSpread) {
+      console.warn('Missing required moneyline/spread odds — skipping analysis for this game.');
+      return {
+        success: false,
+        message: 'MISSING_ODDS',
+        rawOpenAIOutput: null,
+        game: formattedData.game,
+        sport: formattedData.sport,
+        timestamp: new Date().toISOString()
+      };
+    }
+    
     // Add sport-specific data
     if (isBaseball) {
       // Baseball-specific fields
@@ -277,10 +300,6 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       formattedData.oddsMap = oddsMap;
       formattedData.oddsText = oddsText;
       console.log('Formatted odds text:', oddsText);
-    } else {
-      console.log('No odds data available for formatting');
-      formattedData.oddsText = '\nNo current betting odds available.\n';
-      formattedData.oddsMap = {};
     }
     
     // Log the availability of team stats for debugging - sport-specific
@@ -500,12 +519,30 @@ export function parseGaryAnalysis(analysisObject) {
     // If we have the raw OpenAI output, return it directly
     if (analysisObject.rawOpenAIOutput) {
       console.log('Returning raw OpenAI output directly without transformation');
-      return analysisObject.rawOpenAIOutput;
+      const out = analysisObject.rawOpenAIOutput;
+      // Enforce "real odds only": reject if odds are missing or marked as N/A
+      try {
+        const oddsStr = String(out?.odds ?? '').trim();
+        const isNA = oddsStr.toUpperCase() === 'N/A';
+        const isNumericOdds = /^[-+]?\d+$/.test(oddsStr);
+        if (!oddsStr || isNA || !isNumericOdds) {
+          console.warn('parseGaryAnalysis: Invalid or missing odds in AI output; rejecting pick.');
+          return null;
+        }
+      } catch {}
+      return out;
     }
     
     // If the analysisObject is itself the raw output
     if (typeof analysisObject === 'object' && analysisObject.pick) {
       console.log('Returning analysisObject directly as raw OpenAI data');
+      const oddsStr = String(analysisObject?.odds ?? '').trim();
+      const isNA = oddsStr.toUpperCase() === 'N/A';
+      const isNumericOdds = /^[-+]?\d+$/.test(oddsStr);
+      if (!oddsStr || isNA || !isNumericOdds) {
+        console.warn('parseGaryAnalysis: Invalid or missing odds on direct object; rejecting pick.');
+        return null;
+      }
       return analysisObject;
     }
     

@@ -300,9 +300,9 @@ ODDS LIMITS (APPLIES TO ALL SPORTS):
 - The goal is best value: choose between spread vs ML accordingly, and never output ML favorites below -200.
 
 FORMATTING REQUIREMENTS:
-- Pick field SHOULD follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
-- Extract odds ONLY from the provided odds data.
-- If odds are NOT provided for your chosen bet type, do NOT fabricate odds. Set the odds to "N/A". In that case, end the pick with "N/A" (e.g., "Miami Heat ML N/A").
+- Pick field MUST follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
+- Extract odds ONLY from the provided odds data (moneyline or spread).
+- If you cannot find real ML or spread odds in the provided data, do NOT return a pick. Never output placeholders like "N/A" or omit the odds.
 
 CONFIDENCE SCALE: 0.50 to 1.00 where higher numbers mean MORE CERTAINTY the pick will win.
 
@@ -764,10 +764,10 @@ Example: If provided with game time "7:30 PM EST", your JSON must include "time"
 
 EXTREMELY IMPORTANT - ABOUT ODDS:
 1. You MUST extract odds from the betting odds data provided above; never infer or invent odds.
-2. The "pick" field should include the odds at the end when available (e.g., "Lakers ML -150" or "Celtics -7.5 -110").
-3. The "odds" field should contain just the odds value when available (e.g., "-150" or "-110").
-4. If no odds are available for your chosen bet type, set both the "pick" trailing value and the "odds" field to "N/A".
-5. NEVER use default or placeholder odds values.
+2. The "pick" field MUST include the odds at the end (e.g., "Lakers ML -150" or "Celtics -7.5 -110").
+3. The "odds" field MUST contain just the odds value (e.g., "-150" or "-110").
+4. If no real ML or spread odds are available, do not return a pick for this game.
+5. NEVER use default or placeholder odds values (e.g., "N/A", "TBD", or blanks).
 
 This is CRITICALLY important for our system's integrity.
 
