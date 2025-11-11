@@ -1,10 +1,11 @@
 /**
- * Service for fetching data from The Odds API
+ * Service for fetching betting data (now using Ball Don't Lie for odds)
  */
 import axios from 'axios';
 import { configLoader } from './configLoader.js';
+import { ballDontLieService } from './ballDontLieService.js';
 
-const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
+const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4'; // kept for legacy props endpoints if needed
 
 // Track in-flight requests to prevent duplicates and cache API responses
 const inFlightRequests = new Map();
@@ -305,62 +306,89 @@ const dedupeRequest = async (key, fn) => {
   }
 };
 
-/**
- * Get odds with caching to prevent redundant API calls
- */
-const getCachedOdds = async (sport, { nocache = false } = {}) => {
-  const cacheKey = `odds_${sport}`;
-  const cached = oddsCache.get(cacheKey);
-  
-  if (!nocache) {
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-      console.log(`[Odds Service] Using cached odds for ${sport}`);
-      return cached.data;
+// Helpers to normalize BDL odds into the structure our pipeline expects
+const properCase = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : '');
+const toBookmakersFromV2 = (rows, homeTeam, awayTeam) => {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const byVendor = rows.reduce((acc, r) => {
+    if (!r || !r.vendor) return acc;
+    if (!acc[r.vendor]) acc[r.vendor] = [];
+    acc[r.vendor].push(r);
+    return acc;
+  }, {});
+  const mkOutcome = (name, price, point) => {
+    const out = { name, price };
+    if (typeof point !== 'undefined' && point !== null) out.point = typeof point === 'number' ? point : parseFloat(point);
+    return out;
+  };
+  const result = [];
+  for (const vendor of Object.keys(byVendor)) {
+    const vendorRows = byVendor[vendor];
+    // Use the latest row per vendor per game_id (already filtered per game)
+    const latest = vendorRows.sort((a, b) => String(a.updated_at || '').localeCompare(String(b.updated_at || ''))).slice(-1)[0] || vendorRows[0];
+    const markets = [];
+    // Moneyline
+    if (typeof latest.moneyline_home_odds === 'number' || typeof latest.moneyline_away_odds === 'number') {
+      markets.push({
+        key: 'h2h',
+        outcomes: [
+          mkOutcome(homeTeam, latest.moneyline_home_odds),
+          mkOutcome(awayTeam, latest.moneyline_away_odds)
+        ]
+      });
     }
-  } else {
-    console.log(`[Odds Service] nocache=1: bypassing cache for ${sport}`);
-  }
-  
-  console.log(`[Odds Service] Fetching fresh odds for ${sport}`);
-  const isBrowser = typeof window !== 'undefined';
-  let data;
-  if (isBrowser) {
-    // Use server proxy in browser so the key never reaches the client
-    const proxyResp = await axios.get('/api/odds-proxy', {
-      params: {
-        endpoint: `sports/${sport}/odds`,
-        regions: 'us',
-        markets: 'h2h,spreads,totals',
-        oddsFormat: 'american',
-        bookmakers: 'fanduel,draftkings,betmgm,caesars,pointsbetus,superbook'
-      }
-    });
-    data = proxyResp.data || [];
-  } else {
-    // Server environment: call vendor API directly with server key
-    const apiKey = await getApiKey();
-    if (!apiKey) {
-      throw new Error('Odds API key not configured');
+    // Spreads
+    if (latest.spread_home_value || latest.spread_away_value) {
+      const homePoint = latest.spread_home_value != null ? parseFloat(latest.spread_home_value) : null;
+      const awayPoint = latest.spread_away_value != null ? parseFloat(latest.spread_away_value) : null;
+      markets.push({
+        key: 'spreads',
+        outcomes: [
+          mkOutcome(homeTeam, latest.spread_home_odds, homePoint),
+          mkOutcome(awayTeam, latest.spread_away_odds, awayPoint)
+        ]
+      });
     }
-    const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
-    const response = await axios.get(url, {
-      params: {
-        apiKey,
-        regions: 'us',
-        markets: 'h2h,spreads,totals',
-        oddsFormat: 'american',
-        bookmakers: 'fanduel,draftkings,betmgm,caesars,pointsbetus,superbook'
-      }
+    // Totals (reference only)
+    if (latest.total_value != null && (typeof latest.total_over_odds === 'number' || typeof latest.total_under_odds === 'number')) {
+      const totPoint = parseFloat(latest.total_value);
+      markets.push({
+        key: 'totals',
+        outcomes: [
+          { name: 'Over', price: latest.total_over_odds, point: totPoint },
+          { name: 'Under', price: latest.total_under_odds, point: totPoint }
+        ]
+      });
+    }
+    result.push({
+      key: vendor,
+      title: properCase(vendor),
+      markets
     });
-    data = response.data || [];
   }
-  
-  // Only cache when nocache is false
-  if (!nocache) {
-    oddsCache.set(cacheKey, { data, timestamp: Date.now() });
-  }
-  
-  return data;
+  return result;
+};
+
+const normalizeTeamString = (teamObjOrStr) => {
+  if (!teamObjOrStr) return '';
+  if (typeof teamObjOrStr === 'string') return teamObjOrStr;
+  return teamObjOrStr.full_name || teamObjOrStr.display_name || teamObjOrStr.name || '';
+};
+
+const computeWindow = (sport) => {
+  const now = new Date();
+  const estOffset = -5;
+  const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const estDate = new Date(utcDate + (3600000 * estOffset));
+  const windowStart = new Date(estDate);
+  windowStart.setDate(windowStart.getDate() - 1);
+  windowStart.setHours(18, 0, 0, 0);
+  const windowEnd = new Date(estDate);
+  let addDays = 1;
+  if (sport === 'americanfootball_nfl') addDays = 5;
+  windowEnd.setDate(windowEnd.getDate() + addDays);
+  windowEnd.setHours(6, 0, 0, 0);
+  return { windowStart, windowEnd };
 };
 
 const analyzeLineMovement = (historicalData) => {
@@ -576,87 +604,75 @@ export const oddsService = {
   
   getUpcomingGames: async (sport = 'upcoming', options = {}) => {
     const cacheKey = `upcoming-games:${sport}:${JSON.stringify(options)}`;
-    
     return dedupeRequest(cacheKey, async () => {
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('Odds API key not configured');
+      // Time window in EST
+      const { windowStart, windowEnd } = computeWindow(sport);
+      console.log(`Expanded time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
+      const startStr = windowStart.toISOString().slice(0, 10);
+      const endStr = windowEnd.toISOString().slice(0, 10);
+
+      // Fetch games from Ball Don't Lie (regular season only by default)
+      let bdlGames = [];
+      try {
+        bdlGames = await ballDontLieService.getGames(sport, { start_date: startStr, end_date: endStr, postseason: false, per_page: 100 }, options.nocache ? 0 : 5);
+      } catch (e) {
+        console.error(`[Odds Service] BDL getGames error for ${sport}:`, e?.message || e);
+        bdlGames = [];
       }
-      
-      const params = {
-        apiKey,
-        regions: options.regions || 'us',
-        markets: options.markets || 'h2h,spreads,totals',
-        oddsFormat: options.oddsFormat || 'american',
-        dateFormat: 'iso',
-        sport: sport
-      };
-      
-      // Use nocache to force fresh odds when requested
-      const games = await getCachedOdds(sport, { nocache: options.nocache === true });
-      
-      if (games && games.length > 0) {
-        console.log(`Raw API response: Found ${games.length} total games for ${sport}`);
-        
-        const now = new Date();
-        const estOffset = -5;
-        const utcDate = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const estDate = new Date(utcDate + (3600000 * estOffset));
-        
-        const windowStart = new Date(estDate);
-        windowStart.setDate(windowStart.getDate() - 1);
-        windowStart.setHours(18, 0, 0, 0);
-        
-        const windowEnd = new Date(estDate);
-        // Default: today/tomorrow window
-        let addDays = 1;
-        // NFL: widen to next 5 days to cover Thu-Mon slate
-        if (sport === 'americanfootball_nfl') {
-          addDays = 5;
-        }
-        windowEnd.setDate(windowEnd.getDate() + addDays);
-        windowEnd.setHours(6, 0, 0, 0);
-        
-        console.log(`Expanded time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
-        
-        const relevantGames = games.filter(game => {
-          const gameTime = new Date(game.commence_time);
-          const includeGame = gameTime >= windowStart && gameTime <= windowEnd;
-          return includeGame;
-        });
-        
-        console.log(`[Odds Service] ${sport}: Found ${games.length} total games, filtered to ${relevantGames.length} for today`);
-        
-        const uniqueGames = [];
-        const gameMap = new Map();
-        
-        relevantGames.forEach(game => {
-          const gameKey = `${game.home_team}-${game.away_team}`;
-          if (!gameMap.has(gameKey)) {
-            gameMap.set(gameKey, true);
-            uniqueGames.push(game);
-          }
-        });
-        
-        if (relevantGames.length !== uniqueGames.length) {
-          console.log(`[Odds Service] ${sport}: Removed ${relevantGames.length - uniqueGames.length} duplicate games`);
-        }
-        
-        const processedGames = uniqueGames.map(game => {
-          const bestOpportunity = analyzeBettingMarkets(game);
-          
-          return {
-            ...game,
-            bestBet: bestOpportunity
-          };
-        });
-        
-        console.log(`[Odds Service] ${sport}: Final result - ${processedGames.length} games ready for analysis`);
-        
-        return processedGames;
+      if (!Array.isArray(bdlGames) || bdlGames.length === 0) {
+        console.log(`[Odds Service] ${sport}: No games found in window`);
+        return [];
       }
-      
-      return [];
+
+      // Map BDL games to legacy shape (home_team, away_team as strings, commence_time, bookmakers)
+      const gamesWithIds = bdlGames.map(g => {
+        const homeStr = normalizeTeamString(g.home_team);
+        const awayStr = normalizeTeamString(g.away_team);
+        const commence = g.start_time_utc || g.game_date || g.commence_time || g.time || null;
+        return {
+          __bdl: g, // keep original for id
+          id: g.id,
+          sport_key: sport,
+          home_team: homeStr,
+          away_team: awayStr,
+          commence_time: commence
+        };
+      });
+
+      // Fetch BDL v2 odds for these games (NBA is explicitly supported; for others, the endpoint may gradually expand)
+      let v2odds = [];
+      try {
+        const ids = gamesWithIds.map(g => g.id).filter(Boolean).slice(0, 100);
+        if (ids.length > 0) {
+          v2odds = await ballDontLieService.getOddsV2({ game_ids: ids, per_page: 100 });
+        } else {
+          v2odds = await ballDontLieService.getOddsV2({ dates: [startStr], per_page: 100 });
+        }
+      } catch (e) {
+        console.warn(`[Odds Service] BDL v2 odds unavailable for ${sport}:`, e?.message || e);
+        v2odds = [];
+      }
+
+      const byGameId = Array.isArray(v2odds) ? v2odds.reduce((acc, r) => {
+        if (!r || r.game_id == null) return acc;
+        if (!acc[r.game_id]) acc[r.game_id] = [];
+        acc[r.game_id].push(r);
+        return acc;
+      }, {}) : {};
+
+      const processedGames = gamesWithIds.map(game => {
+        const rows = byGameId[game.id] || [];
+        const bookmakers = toBookmakersFromV2(rows, game.home_team, game.away_team);
+        const bestBet = analyzeBettingMarkets({ bookmakers });
+        return {
+          ...game,
+          bookmakers,
+          bestBet
+        };
+      });
+
+      console.log(`[Odds Service] ${sport}: Final result - ${processedGames.length} games ready for analysis`);
+      return processedGames;
     });
   },
   
