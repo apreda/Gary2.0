@@ -254,7 +254,21 @@ Respond with ONLY a JSON array of your best prop picks.
 
       // CRITICAL: Limit the number of props to prevent rate limiting
       // Filter to most common prop types and limit total number
-      const priorityPropTypes = ['hits', 'strikeouts', 'home_runs', 'rbi', 'runs_scored', 'stolen_bases', 'total_bases'];
+      // Choose priority prop types per sport
+      const sportKey = gameData.sport;
+      let priorityPropTypes = [];
+      if (sportKey === 'baseball_mlb') {
+        priorityPropTypes = ['hits', 'strikeouts', 'home_runs', 'rbi', 'runs_scored', 'stolen_bases', 'total_bases'];
+      } else if (sportKey === 'basketball_nba') {
+        priorityPropTypes = ['points', 'rebounds', 'assists', 'threes', 'blocks', 'steals'];
+      } else if (sportKey === 'americanfootball_nfl') {
+        priorityPropTypes = ['pass_yds', 'pass_tds', 'interceptions', 'rush_yds', 'rush_att', 'receptions', 'rec_yds', 'anytime_td'];
+      } else if (sportKey === 'icehockey_nhl') {
+        priorityPropTypes = ['points', 'goals', 'assists', 'shots_on_goal'];
+      } else {
+        // Fallback to include everything moderately common
+        priorityPropTypes = ['points', 'rebounds', 'assists', 'threes', 'hits', 'strikeouts', 'total_bases', 'receptions', 'rec_yds', 'rush_yds'];
+      }
       let filteredProps = playerProps.filter(p => {
         // Filter out props with odds worse than -150
         const overOdds = p.over_odds || 0;
@@ -316,8 +330,13 @@ Respond with ONLY a JSON array of your best prop picks.
       // Get player stats but with comprehensive error handling
       let playerStatsText = '';
       try {
-        console.log('Fetching player stats for analysis...');
-        playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
+        console.log('Fetching player stats for analysis (sport-aware)...');
+        if (sportKey === 'baseball_mlb') {
+          playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
+        } else {
+          // For NBA/NFL, we currently rely on odds and recent context; keep stats brief to avoid token overflow
+          playerStatsText = `${gameData.awayTeam} at ${gameData.homeTeam} matchup context with current sportsbook prop lines. Focus on recent form and matchup tendencies implied by markets.`;
+        }
         
         // Ensure we have a string; guard against undefined/null returns
         if (typeof playerStatsText !== 'string') {
@@ -415,10 +434,13 @@ Respond with ONLY a JSON array of your best prop picks.
       const enhancedPicks = topFivePicks.map(pick => {
         // The pick already has all the fields we need from OpenAI
         // Just ensure we have all the required fields
+        const leagueLabel = sportKey === 'basketball_nba' ? 'NBA'
+          : sportKey === 'americanfootball_nfl' ? 'NFL'
+          : 'MLB';
         return {
           // Core fields from OpenAI
           player: pick.player || 'Unknown Player',
-          team: pick.team || playerTeamMap[pick.player] || 'MLB',
+          team: pick.team || playerTeamMap[pick.player] || leagueLabel,
           prop: pick.prop || 'unknown',
           line: pick.line || '',
           bet: pick.bet || 'over',
@@ -428,7 +450,7 @@ Respond with ONLY a JSON array of your best prop picks.
           rationale: pick.rationale || pick.reasoning || 'Analysis not available',
           
           // Additional fields
-          sport: 'MLB', // Default to MLB for now
+          sport: leagueLabel,
           time: propPicksService.formatGameTime(gameData.time || gameData.gameTime || gameData.commence_time),
           
           // Keep the original pick string for backwards compatibility

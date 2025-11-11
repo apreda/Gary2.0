@@ -86,154 +86,8 @@ export default function GaryProps() {
           }
         });
       } else {
-        showToast('Generating new prop picks... This may take a moment.', 'info');
-        console.log('No prop picks found - generating new ones');
-        
-        try {
-          // Import oddsService to get all games
-          const { oddsService } = await import('../services/oddsService');
-          
-          // Get all MLB games for today
-          const allGames = await oddsService.getUpcomingGames('baseball_mlb');
-          console.log(`Found ${allGames.length} MLB games for today`);
-          
-          // Convert games to the format we need
-          const mlbTeams = allGames.map(game => ({
-            homeTeam: game.home_team,
-            awayTeam: game.away_team,
-            gameTime: game.commence_time
-          }));
-          
-          // Limit to first 8 games to avoid overwhelming the system
-          const gamesToProcess = mlbTeams.slice(0, 8);
-          console.log(`Processing ${gamesToProcess.length} games for prop picks`);
-          
-          let allPropPicks = [];
-          
-          // Generate prop picks for each game with individual error handling
-          for (const game of gamesToProcess) {
-            try {
-              console.log(`Generating props for ${game.awayTeam} @ ${game.homeTeam}`);
-              const gamePropPicks = await propPicksService.generatePropBets({
-                sport: 'baseball_mlb',
-                homeTeam: game.homeTeam,
-                awayTeam: game.awayTeam,
-                time: game.gameTime
-              });
-              
-              if (Array.isArray(gamePropPicks) && gamePropPicks.length > 0) {
-                console.log(`Generated ${gamePropPicks.length} prop picks for ${game.awayTeam} @ ${game.homeTeam}`);
-                allPropPicks.push(...gamePropPicks);
-              } else {
-                console.log(`No prop picks generated for ${game.awayTeam} @ ${game.homeTeam}`);
-              }
-            } catch (gameError) {
-              console.error(`Error generating props for ${game.awayTeam} @ ${game.homeTeam}:`, gameError.message);
-              // Continue with other games even if one fails
-              continue;
-            }
-          }
-          
-          if (allPropPicks.length > 0) {
-            console.log(`Generated ${allPropPicks.length} total prop picks, storing in database`);
-            
-            // Sort all picks by confidence first, then by EV
-            const sortedPicks = allPropPicks.sort((a, b) => {
-              // Primary sort by confidence
-              if (b.confidence !== a.confidence) {
-                return b.confidence - a.confidence;
-              }
-              // Secondary sort by EV if confidence is equal
-              return (b.ev || 0) - (a.ev || 0);
-            });
-            
-            // Take top 10 picks across all games
-            const topPicks = sortedPicks.slice(0, 10);
-            console.log(`Selected top ${topPicks.length} picks from ${allPropPicks.length} total picks`);
-            
-            // Log team diversity
-            const teamCounts = {};
-            topPicks.forEach(pick => {
-              teamCounts[pick.team] = (teamCounts[pick.team] || 0) + 1;
-            });
-            console.log('Team distribution in top picks:', teamCounts);
-            
-            // Replace any existing records for today, then store the generated picks in Supabase
-            try {
-              await supabase
-                .from('prop_picks')
-                .delete()
-                .eq('date', today);
-            } catch (delErr) {
-              console.warn('Warning deleting existing prop_picks for today:', delErr?.message || delErr);
-            }
-
-            const { data: insertData, error: insertError } = await supabase
-              .from('prop_picks')
-              .insert({
-                date: today,
-                picks: topPicks
-              });
-            
-            if (insertError) {
-              console.error('Error storing prop picks:', insertError);
-              throw insertError;
-            }
-            
-            console.log('Successfully stored new prop picks in database');
-            
-            // Fetch the freshly stored picks
-            const freshData = await propPicksService.getTodayPropPicks();
-            freshData.forEach(record => {
-              if (Array.isArray(record.picks)) {
-                const picksWithIds = record.picks.map((pick, idx) => {
-                  // All fields should already be in the pick object from the database
-                  // No need to parse anything
-                  
-                  let parsedPick = {
-                    ...pick, // Spread all fields from the database
-                    id: `${record.id}-${idx}`,
-                    date: record.date,
-                    created_at: record.created_at,
-                    // Use existing fields or provide defaults
-                    player: pick.player || 'Unknown Player',
-                    team: pick.team || 'MLB',
-                    prop: pick.prop || 'unknown',
-                    line: pick.line || '',
-                    bet: pick.bet || 'over',
-                    odds: pick.odds || 'N/A',
-                    confidence: pick.confidence || 0.75,
-                    ev: pick.ev || null,
-                    rationale: pick.rationale || pick.reasoning || 'Analysis not available',
-                    league: pick.sport || 'MLB',
-                    time: pick.time || 'TBD'
-                  };
-                  
-                  // Ensure odds formatting
-                  if (typeof parsedPick.odds === 'number') {
-                    parsedPick.odds = parsedPick.odds > 0 ? `+${parsedPick.odds}` : `${parsedPick.odds}`;
-                  }
-                  
-                  return parsedPick;
-                });
-                processedPicks.push(...picksWithIds);
-              }
-            });
-            
-            // Sort and cap to top 10 for display
-            processedPicks = processedPicks
-              .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
-              .slice(0, 10);
-
-            showToast(`Generated ${processedPicks.length} new prop picks!`, 'success');
-          } else {
-            console.log('No prop picks could be generated');
-            showToast('Unable to generate prop picks at this time. Please try again later.', 'warning');
-          }
-        } catch (generationError) {
-          console.error('Error during prop pick generation:', generationError);
-          showToast('Error generating prop picks. Please try again later.', 'error');
-        }
+        // Do not auto-generate on client for security/log hygiene; picks are generated server-side via /api/generate-prop-picks
+        console.log('No prop picks found for today; awaiting server-side generation.');
       }
 
       // Always display only the top 10 picks across any records
@@ -310,7 +164,7 @@ export default function GaryProps() {
         {/* Sport limitations notice - always shown */}
         <div className="text-center mb-6">
           <span className="inline-block px-4 py-2 border border-[#b8953f]/50 rounded-full text-[#b8953f] text-sm">
-            Currently available for NBA & MLB only - NFL coming when season starts
+            Player props available for NBA, NFL & NHL — MLB returns in March
           </span>
         </div>
       </div>

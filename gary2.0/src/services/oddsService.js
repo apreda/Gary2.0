@@ -4,6 +4,7 @@
 import axios from 'axios';
 import { configLoader } from './configLoader.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4'; // kept for legacy props endpoints if needed
 
@@ -611,63 +612,39 @@ export const oddsService = {
       const startStr = windowStart.toISOString().slice(0, 10);
       const endStr = windowEnd.toISOString().slice(0, 10);
 
-      // Fetch games from Ball Don't Lie (regular season only by default)
-      let bdlGames = [];
+      // Fetch BDL games with odds via our adapter for start date,
+      // and optionally for end date if different (merge unique by id)
+      let gamesStart = [];
+      let gamesEnd = [];
       try {
-        bdlGames = await ballDontLieService.getGames(sport, { start_date: startStr, end_date: endStr, postseason: false, per_page: 100 }, options.nocache ? 0 : 5);
+        gamesStart = await ballDontLieOddsService.getGamesWithOddsForSport(sport, startStr);
+        if (endStr !== startStr) {
+          gamesEnd = await ballDontLieOddsService.getGamesWithOddsForSport(sport, endStr);
+        }
       } catch (e) {
-        console.error(`[Odds Service] BDL getGames error for ${sport}:`, e?.message || e);
-        bdlGames = [];
+        console.error(`[Odds Service] BallDontLieOdds adapter error for ${sport}:`, e?.message || e);
       }
-      if (!Array.isArray(bdlGames) || bdlGames.length === 0) {
-        console.log(`[Odds Service] ${sport}: No games found in window`);
+
+      const combined = [...(gamesStart || []), ...(gamesEnd || [])];
+      if (!Array.isArray(combined) || combined.length === 0) {
+        console.log(`[Odds Service] ${sport}: No odds available from Ball Don't Lie for dates ${startStr}${endStr !== startStr ? ' and ' + endStr : ''}`);
         return [];
       }
 
-      // Map BDL games to legacy shape (home_team, away_team as strings, commence_time, bookmakers)
-      const gamesWithIds = bdlGames.map(g => {
-        const homeStr = normalizeTeamString(g.home_team);
-        const awayStr = normalizeTeamString(g.away_team);
-        const commence = g.start_time_utc || g.game_date || g.commence_time || g.time || null;
-        return {
-          __bdl: g, // keep original for id
-          id: g.id,
-          sport_key: sport,
-          home_team: homeStr,
-          away_team: awayStr,
-          commence_time: commence
-        };
-      });
-
-      // Fetch BDL v2 odds for these games (NBA is explicitly supported; for others, the endpoint may gradually expand)
-      let v2odds = [];
-      try {
-        const ids = gamesWithIds.map(g => g.id).filter(Boolean).slice(0, 100);
-        if (ids.length > 0) {
-          v2odds = await ballDontLieService.getOddsV2({ game_ids: ids, per_page: 100 });
-        } else {
-          v2odds = await ballDontLieService.getOddsV2({ dates: [startStr], per_page: 100 });
-        }
-      } catch (e) {
-        console.warn(`[Odds Service] BDL v2 odds unavailable for ${sport}:`, e?.message || e);
-        v2odds = [];
+      const seen = new Set();
+      const unique = [];
+      for (const g of combined) {
+        if (!g || g.id == null) continue;
+        if (seen.has(g.id)) continue;
+        seen.add(g.id);
+        unique.push(g);
       }
 
-      const byGameId = Array.isArray(v2odds) ? v2odds.reduce((acc, r) => {
-        if (!r || r.game_id == null) return acc;
-        if (!acc[r.game_id]) acc[r.game_id] = [];
-        acc[r.game_id].push(r);
-        return acc;
-      }, {}) : {};
-
-      const processedGames = gamesWithIds.map(game => {
-        const rows = byGameId[game.id] || [];
-        const bookmakers = toBookmakersFromV2(rows, game.home_team, game.away_team);
-        const bestBet = analyzeBettingMarkets({ bookmakers });
+      const processedGames = unique.map(game => {
+        const bestOpportunity = analyzeBettingMarkets(game);
         return {
           ...game,
-          bookmakers,
-          bestBet
+          bestBet: bestOpportunity
         };
       });
 
