@@ -44,10 +44,12 @@ export async function generateNCAABPicks(options = {}) {
         return null;
       }
 
-      const [homeTeamStats, awayTeamStats, injuries] = await Promise.all([
+      const [homeTeamStats, awayTeamStats, injuries, homeSeasonAgg, awaySeasonAgg] = await Promise.all([
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [homeTeam.id] }),
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [awayTeam.id] }),
-        ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] })
+        ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] }),
+        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season }),
+        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season })
       ]);
 
       const hasHome = Array.isArray(homeTeamStats) && homeTeamStats.length > 0;
@@ -57,24 +59,84 @@ export async function generateNCAABPicks(options = {}) {
         return null;
       }
 
+      // Derive Four Factors (season aggregates)
+      const homeFour = Array.isArray(homeSeasonAgg) && homeSeasonAgg[0] ? ballDontLieService.deriveBasketballFourFactors(homeSeasonAgg[0]) : {};
+      const awayFour = Array.isArray(awaySeasonAgg) && awaySeasonAgg[0] ? ballDontLieService.deriveBasketballFourFactors(awaySeasonAgg[0]) : {};
+
+      // Identify top 3 players by points from season player stats (best-effort)
+      async function getTop3Players(teamId) {
+        try {
+          const rows = await ballDontLieService.getPlayerStats(SPORT_KEY, { seasons: [season], team_ids: [teamId], per_page: 100 });
+          const byPlayer = new Map();
+          for (const r of rows || []) {
+            const pid = r?.player?.id;
+            if (!pid) continue;
+            const name = r?.player?.full_name || `${r?.player?.first_name || ''} ${r?.player?.last_name || ''}`.trim();
+            const pts = Number(r?.points) || Number(r?.pts) || 0;
+            const reb = Number(r?.rebounds) || Number(r?.reb) || 0;
+            const ast = Number(r?.assists) || Number(r?.ast) || 0;
+            const min = Number(r?.minutes) || Number(r?.min) || 0;
+            const prev = byPlayer.get(pid) || { pid, name, pts: 0, reb: 0, ast: 0, min: 0, gp: 0 };
+            prev.pts += pts;
+            prev.reb += reb;
+            prev.ast += ast;
+            prev.min += min;
+            prev.gp += 1;
+            byPlayer.set(pid, prev);
+          }
+          const arr = Array.from(byPlayer.values()).map(p => ({
+            id: p.pid,
+            name: p.name,
+            ptsPerGame: p.gp ? +(p.pts / p.gp).toFixed(1) : 0,
+            rebPerGame: p.gp ? +(p.reb / p.gp).toFixed(1) : 0,
+            astPerGame: p.gp ? +(p.ast / p.gp).toFixed(1) : 0,
+            minPerGame: p.gp ? +(p.min / p.gp).toFixed(1) : 0
+          }));
+          arr.sort((a, b) => b.ptsPerGame - a.ptsPerGame);
+          return arr.slice(0, 3);
+        } catch {
+          return [];
+        }
+      }
+      const [homeTop3, awayTop3] = await Promise.all([getTop3Players(homeTeam.id), getTop3Players(awayTeam.id)]);
+
       const statsReport = {
         season,
         home: { team: homeTeam, sample: homeTeamStats.slice(0, 3) },
         away: { team: awayTeam, sample: awayTeamStats.slice(0, 3) },
-        injuriesSample: injuries?.slice?.(0, 6) || []
+        injuriesSample: injuries?.slice?.(0, 6) || [],
+        seasonSummary: {
+          home: homeFour,
+          away: awayFour
+        },
+        topPlayers: {
+          home: homeTop3,
+          away: awayTop3
+        }
       };
 
       const teamStats = {
         home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
         away: Array.isArray(awayTeamStats) ? awayTeamStats : []
       };
-      // Perplexity key findings
+      // Perplexity key findings and compact summary for prompt's REAL-TIME NEWS
       let richKeyFindings = [];
+      let realTimeNewsText = '';
       try {
         const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
         const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'ncaab', dateStr);
         if (Array.isArray(rich?.key_findings)) {
           richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+        if (Array.isArray(rich?.key_findings) && rich.key_findings.length > 0) {
+          const toLine = (k) => {
+            const title = k?.title || 'Finding';
+            const rationale = k?.rationale || k?.note || '';
+            return rationale ? `${title}: ${rationale}` : String(title);
+          };
+          realTimeNewsText = rich.key_findings.slice(0, 3).map(toLine).join('\n');
+        } else if (typeof rich?.summary === 'string' && rich.summary.trim().length > 0) {
+          realTimeNewsText = rich.summary.trim();
         }
       } catch {}
       const gameContext = {
@@ -99,6 +161,7 @@ export async function generateNCAABPicks(options = {}) {
         teamStats,
         gameContext,
         statsReport,
+        realTimeNews: realTimeNewsText || undefined,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time
