@@ -317,11 +317,23 @@ export async function generateNFLPicks(options = {}) {
 
       // Perplexity key findings (trim to 3-4)
       let richKeyFindings = [];
+      let realTimeNewsText = '';
       try {
         const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
         const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nfl', dateStr);
         if (Array.isArray(rich?.key_findings)) {
           richKeyFindings = rich.key_findings.slice(0, 4);
+        }
+        // Compose a concise, verifiable summary for REAL-TIME NEWS AND TRENDS
+        if (Array.isArray(rich?.key_findings) && rich.key_findings.length > 0) {
+          const toLine = (k) => {
+            const title = k?.title || 'Finding';
+            const rationale = k?.rationale || k?.note || '';
+            return rationale ? `${title}: ${rationale}` : String(title);
+          };
+          realTimeNewsText = rich.key_findings.slice(0, 3).map(toLine).join('\n');
+        } else if (typeof rich?.summary === 'string' && rich.summary.trim().length > 0) {
+          realTimeNewsText = rich.summary.trim();
         }
       } catch {}
 
@@ -383,6 +395,8 @@ export async function generateNFLPicks(options = {}) {
         teamStats,
         gameContext,
         statsReport,
+        // Pass Perplexity summary so OpenAI "REAL-TIME NEWS AND TRENDS" section is populated
+        realTimeNews: realTimeNewsText || undefined,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time
