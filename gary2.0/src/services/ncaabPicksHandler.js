@@ -44,12 +44,14 @@ export async function generateNCAABPicks(options = {}) {
         return null;
       }
 
-      const [homeTeamStats, awayTeamStats, injuries, homeSeasonAgg, awaySeasonAgg] = await Promise.all([
+      const [homeTeamStats, awayTeamStats, injuries, homeSeasonAgg, awaySeasonAgg, homeStandings, awayStandings] = await Promise.all([
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [homeTeam.id] }),
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [awayTeam.id] }),
         ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season }),
-        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season })
+        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season }),
+        ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, team_ids: [homeTeam.id] }),
+        ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, team_ids: [awayTeam.id] })
       ]);
 
       const hasHome = Array.isArray(homeTeamStats) && homeTeamStats.length > 0;
@@ -100,11 +102,26 @@ export async function generateNCAABPicks(options = {}) {
       }
       const [homeTop3, awayTop3] = await Promise.all([getTop3Players(homeTeam.id), getTop3Players(awayTeam.id)]);
 
+      const pickBasic = (row) => {
+        if (!row) return {};
+        const s = Array.isArray(row) ? row[0] : row;
+        const record = (s?.overall_wins != null && s?.overall_losses != null) ? `${s.overall_wins}-${s.overall_losses}` : (s?.overall_record || undefined);
+        const homeRec = (s?.home_wins != null && s?.home_losses != null) ? `${s.home_wins}-${s.home_losses}` : undefined;
+        const awayRec = (s?.away_wins != null && s?.away_losses != null) ? `${s.away_wins}-${s.away_losses}` : undefined;
+        const streak = s?.streak || s?.current_streak || undefined;
+        const ppg = s?.points_per_game || s?.ppg || undefined;
+        const oppg = s?.points_against_per_game || s?.opp_ppg || undefined;
+        return { record, homeRec, awayRec, streak, ppg, oppg };
+      };
       const statsReport = {
         season,
         home: { team: homeTeam, sample: homeTeamStats.slice(0, 3) },
         away: { team: awayTeam, sample: awayTeamStats.slice(0, 3) },
         injuriesSample: injuries?.slice?.(0, 6) || [],
+        basics: {
+          home: pickBasic(homeStandings?.[0] || homeStandings),
+          away: pickBasic(awayStandings?.[0] || awayStandings)
+        },
         seasonSummary: {
           home: homeFour,
           away: awayFour
@@ -147,9 +164,33 @@ export async function generateNCAABPicks(options = {}) {
         richKeyFindings
       };
 
+      // Merge odds across all available bookmakers to avoid false negatives
       let oddsData = null;
-      if (game.bookmakers?.length) {
-        oddsData = { bookmaker: game.bookmakers[0]?.title, markets: game.bookmakers[0]?.markets || [] };
+      if (Array.isArray(game.bookmakers) && game.bookmakers.length > 0) {
+        const marketKeyToOutcomes = new Map();
+        for (const b of game.bookmakers) {
+          const markets = Array.isArray(b?.markets) ? b.markets : [];
+          for (const m of markets) {
+            if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
+            if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
+            const outMap = marketKeyToOutcomes.get(m.key);
+            for (const o of m.outcomes) {
+              if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
+              const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
+              if (!outMap.has(key)) {
+                outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
+              }
+            }
+          }
+        }
+        const mergedMarkets = [];
+        for (const [key, outMap] of marketKeyToOutcomes.entries()) {
+          const outcomes = Array.from(outMap.values());
+          if (outcomes.length) mergedMarkets.push({ key, outcomes });
+        }
+        if (mergedMarkets.length) {
+          oddsData = { bookmaker: 'merged', markets: mergedMarkets };
+        }
       }
 
       const gameObj = {
