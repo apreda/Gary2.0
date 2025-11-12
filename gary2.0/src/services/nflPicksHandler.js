@@ -313,23 +313,7 @@ export async function generateNFLPicks(options = {}) {
         }
       }
 
-      // Compute a simple model-vs-market edge using season scoring/allowing rates
-      let modelEdge = null;
-      try {
-        const spreadsMarket = oddsData?.markets?.find?.(m => m.key === 'spreads');
-        const homeOutcome = spreadsMarket?.outcomes?.find?.(o => o.name === game.home_team);
-        const marketSpread = typeof homeOutcome?.point === 'number' ? homeOutcome.point : null;
-        if (marketSpread !== null &&
-            typeof homeRates.pointsPerGame === 'number' &&
-            typeof homeRates.oppPointsPerGame === 'number' &&
-            typeof awayRates.pointsPerGame === 'number' &&
-            typeof awayRates.oppPointsPerGame === 'number') {
-          const expectedMargin = (homeRates.pointsPerGame - awayRates.oppPointsPerGame) -
-                                 (awayRates.pointsPerGame - homeRates.oppPointsPerGame);
-          const edge = expectedMargin - marketSpread;
-          modelEdge = { expectedMargin: Number(expectedMargin.toFixed(2)), marketSpread, edge: Number(edge.toFixed(2)) };
-        }
-      } catch {}
+      // Note: no baseline model edge. Decisions are angle- and price-driven only.
 
       // Perplexity key findings (trim to 3-4)
       let richKeyFindings = [];
@@ -399,7 +383,6 @@ export async function generateNFLPicks(options = {}) {
         teamStats,
         gameContext,
         statsReport,
-        modelEdge,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time
