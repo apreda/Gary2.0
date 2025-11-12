@@ -47,6 +47,8 @@ function RealGaryPicks() {
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
+  const [selectedSport, setSelectedSport] = useState('NBA');
+  const sportsTabs = ['NBA', 'NFL', 'NCAAB', 'NCAAF', 'EPL', 'MLB', 'WNBA'];
 
   const checkUserDecisions = async () => {
     if (!user) return;
@@ -414,10 +416,10 @@ function RealGaryPicks() {
   };
 
   const nextPick = () => {
-    if (animating || picks.length <= 1) return;
+    if (animating || filteredPicks.length <= 1) return;
 
     setAnimating(true);
-    const newIndex = (currentIndex + 1) % picks.length;
+    const newIndex = (currentIndex + 1) % filteredPicks.length;
 
     setFlippedCards(prev => {
       const newState = { ...prev };
@@ -434,10 +436,10 @@ function RealGaryPicks() {
   };
 
   const prevPick = () => {
-    if (animating || picks.length <= 1) return;
+    if (animating || filteredPicks.length <= 1) return;
 
     setAnimating(true);
-    const newIndex = (currentIndex - 1 + picks.length) % picks.length;
+    const newIndex = (currentIndex - 1 + filteredPicks.length) % filteredPicks.length;
 
     setFlippedCards(prev => {
       const newState = { ...prev };
@@ -466,6 +468,28 @@ function RealGaryPicks() {
   }, []);
 
   const isMobile = useIsMobile();
+  const filteredPicks = React.useMemo(() => {
+    return picks.filter(p => (p.league || '').toUpperCase() === selectedSport);
+  }, [picks, selectedSport]);
+
+  useEffect(() => {
+    setCurrentIndex(0);
+    setFlippedCards({});
+  }, [selectedSport]);
+
+  const getSportAccentColor = (leagueRaw) => {
+    const league = (leagueRaw || '').toUpperCase();
+    switch (league) {
+      case 'NBA': return '#3B82F6';      // Blue
+      case 'WNBA': return '#F97316';     // Orange
+      case 'NFL': return '#22C55E';      // Green
+      case 'NCAAB': return '#8B5CF6';    // Purple
+      case 'NCAAF': return '#DC2626';    // Red
+      case 'EPL': return '#6366F1';      // Indigo
+      case 'MLB': return '#0EA5E9';      // Sky Blue
+      default: return '#bfa142';         // Fallback to original gold
+    }
+  };
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
@@ -575,6 +599,26 @@ function RealGaryPicks() {
                   <p className="text-center text-gray-400 mb-6 max-w-2xl mx-auto hidden sm:block">
                     Picks are generated everyday at 10am EST. If injuries or events occur between then and game time, users will be notified of scratch picks via email.
                   </p>
+                  {/* Sports Tabs */}
+                  <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-6">
+                    {sportsTabs.map(tab => {
+                      const isActive = selectedSport === tab;
+                      return (
+                        <button
+                          key={tab}
+                          onClick={() => setSelectedSport(tab)}
+                          className="px-3 sm:px-4 py-2 rounded-md text-sm sm:text-base transition-all"
+                          style={{
+                            background: isActive ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                            color: isActive ? '#ffffff' : 'rgba(255,255,255,0.8)',
+                            border: isActive ? '1px solid #b8953f' : '1px solid rgba(255,255,255,0.1)',
+                          }}
+                        >
+                          {tab}
+                        </button>
+                      );
+                    })}
+                  </div>
                   
                   {/* Card Stack Interface */}
                   <div className="flex justify-center items-center relative py-4 pt-2">
@@ -582,7 +626,7 @@ function RealGaryPicks() {
                     <button 
                       className={`absolute ${isMobile ? 'left-[-30px]' : 'left-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
                       onClick={prevPick}
-                      disabled={animating || picks.length <= 1}
+                      disabled={animating || filteredPicks.length <= 1}
                       style={{ transform: 'translateY(-50%)', top: '50%' }}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -594,7 +638,7 @@ function RealGaryPicks() {
                     <button 
                       className={`absolute ${isMobile ? 'right-[-30px]' : 'right-[-60px]'} z-50 text-[#d4af37] hover:text-white transition-all duration-300 bg-transparent`}
                       onClick={nextPick}
-                      disabled={animating || picks.length <= 1}
+                      disabled={animating || filteredPicks.length <= 1}
                       style={{ transform: 'translateY(-50%)', top: '50%' }}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "30" : "40"} height={isMobile ? "30" : "40"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -605,7 +649,7 @@ function RealGaryPicks() {
                     {/* Card counter - repositioned below the card */}
                     <div className="absolute bottom-[-50px] left-0 right-0 text-center z-50">
                       <span className="px-4 py-2 bg-transparent text-lg text-[#d4af37] font-medium">
-                        {picks.length > 0 ? `${currentIndex + 1} / ${picks.length}` : '0/0'}
+                        {filteredPicks.length > 0 ? `${currentIndex + 1} / ${filteredPicks.length}` : '0/0'}
                       </span>
                     </div>
                     
@@ -616,14 +660,18 @@ function RealGaryPicks() {
                       maxWidth: isMobile ? '500px' : 'none',
                       margin: isMobile ? '0 auto' : '0 0 0 48px'
                     }}>
-                      {picks.map((pick, index) => {
+                      {filteredPicks.length === 0 ? (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          No picks for {selectedSport} today.
+                        </div>
+                      ) : filteredPicks.map((pick, index) => {
                         // Calculate position in stack relative to current index
-                        const position = (index - currentIndex + picks.length) % picks.length;
+                        const position = (index - currentIndex + filteredPicks.length) % filteredPicks.length;
                         const isCurrentCard = index === currentIndex;
                         
                         // Style based on position in stack - simplified for mobile
                         const cardStyle = {
-                          zIndex: picks.length - position,
+                          zIndex: filteredPicks.length - position,
                           transform: position === 0 
                             ? 'translateX(0) scale(1)' 
                             : position === 1 
@@ -643,6 +691,7 @@ function RealGaryPicks() {
                         
                         // Get the flipped state for this card
                         const isFlipped = flippedCards[pick.id] || false;
+                        const accentColor = getSportAccentColor(pick.league);
                         
                         // Function to toggle the flipped state for this specific card
                         const toggleFlip = (e) => {
@@ -729,7 +778,7 @@ function RealGaryPicks() {
                                           fontSize: isMobile ? '1.75rem' : '2rem',
                                           fontWeight: 700,
                                           lineHeight: 1.1,
-                                          color: '#bfa142',
+                                          color: accentColor,
                                           wordBreak: 'break-word',
                                           maxHeight: isMobile ? '3rem' : '4.5rem',
                                           overflow: 'hidden',
@@ -767,7 +816,7 @@ function RealGaryPicks() {
                                           <div style={{
                                             fontSize: '1.25rem',
                                             fontWeight: 600,
-                                            color: '#bfa142'
+                                            color: accentColor
                                           }}>
                                             {(() => {
                                               // Extract odds from the pick string
@@ -799,7 +848,7 @@ function RealGaryPicks() {
                                           <div style={{
                                             fontSize: '1.5rem',
                                             fontWeight: 700,
-                                            color: '#bfa142'
+                                            color: accentColor
                                           }}>
                                             {typeof pick.confidence === 'number' ? 
                                               Math.round(pick.confidence * 100) + '%' : 
@@ -873,7 +922,7 @@ function RealGaryPicks() {
                                               <div style={{ 
                                                 fontSize: '1.25rem', 
                                                 fontWeight: 600,
-                                                color: '#bfa142'
+                                                color: accentColor
                                               }}>
                                                 {(() => {
                                                   // Extract odds from the pick string
@@ -924,7 +973,7 @@ function RealGaryPicks() {
                                               fontSize: isMobile ? '1.75rem' : '2rem', 
                                               fontWeight: 700, 
                                               lineHeight: 1.1,
-                                              color: '#bfa142',
+                                              color: accentColor,
                                               wordBreak: 'break-word',
                                               maxHeight: isMobile ? '3rem' : '4.5rem',
                                               overflow: 'hidden',
@@ -1126,7 +1175,7 @@ function RealGaryPicks() {
                                               fontSize: '1.2rem',
                                               fontWeight: 700,
                                               opacity: 0.95,
-                                              color: '#bfa142',
+                                              color: accentColor,
                                               marginBottom: '0.5rem'
                                             }}>
                                               {typeof pick.confidence === 'number' ? 
@@ -1272,7 +1321,7 @@ function RealGaryPicks() {
                                       }}>
                                         <div>
                                           <span style={{ opacity: 0.6 }}>Confidence: </span>
-                                          <span style={{ fontWeight: 700, color: '#bfa142' }}>
+                                          <span style={{ fontWeight: 700, color: accentColor }}>
                                             {typeof pick.confidence === 'number' ? 
                                               Math.round(pick.confidence * 100) + '%' : 
                                               (pick.confidence || '75%')}
