@@ -627,25 +627,39 @@ export const oddsService = {
       // Time window in EST
       const { windowStart, windowEnd } = computeWindow(sport);
       console.log(`Expanded time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
-      const startStr = windowStart.toISOString().slice(0, 10);
-      const endStr = windowEnd.toISOString().slice(0, 10);
-
-      // Fetch BDL games with odds via our adapter for start date,
-      // and optionally for end date if different (merge unique by id)
-      let gamesStart = [];
-      let gamesEnd = [];
+      // Build a list of YYYY-MM-DD strings for EVERY day in the window (inclusive)
+      const dayMs = 24 * 60 * 60 * 1000;
+      const dates = [];
+      const startOfDayUtc = new Date(Date.UTC(
+        windowStart.getUTCFullYear(),
+        windowStart.getUTCMonth(),
+        windowStart.getUTCDate(), 0, 0, 0, 0
+      )).getTime();
+      const endOfDayUtc = new Date(Date.UTC(
+        windowEnd.getUTCFullYear(),
+        windowEnd.getUTCMonth(),
+        windowEnd.getUTCDate(), 0, 0, 0, 0
+      )).getTime();
+      for (let t = startOfDayUtc; t <= endOfDayUtc; t += dayMs) {
+        dates.push(new Date(t).toISOString().slice(0, 10));
+      }
+      // Fetch games+odds for each day in parallel and merge
+      let combined = [];
       try {
-        gamesStart = await ballDontLieOddsService.getGamesWithOddsForSport(sport, startStr);
-        if (endStr !== startStr) {
-          gamesEnd = await ballDontLieOddsService.getGamesWithOddsForSport(sport, endStr);
-        }
+        const perDay = await Promise.all(dates.map(d => 
+          ballDontLieOddsService.getGamesWithOddsForSport(sport, d)
+            .catch(err => {
+              console.warn(`[Odds Service] ${sport}: Failed fetching odds for ${d}:`, err?.message || err);
+              return [];
+            })
+        ));
+        combined = perDay.flat();
       } catch (e) {
         console.error(`[Odds Service] BallDontLieOdds adapter error for ${sport}:`, e?.message || e);
       }
 
-      const combined = [...(gamesStart || []), ...(gamesEnd || [])];
       if (!Array.isArray(combined) || combined.length === 0) {
-        console.log(`[Odds Service] ${sport}: No odds available from Ball Don't Lie for dates ${startStr}${endStr !== startStr ? ' and ' + endStr : ''}`);
+        console.log(`[Odds Service] ${sport}: No odds available from Ball Don't Lie for dates ${dates.join(', ')}`);
         return [];
       }
 
