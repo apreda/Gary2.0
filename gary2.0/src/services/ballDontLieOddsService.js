@@ -246,6 +246,42 @@ export const ballDontLieOddsService = {
       gameIdToVendors.set(row.game_id, list);
     });
 
+    // NFL per-game fallback: if specific game rows exist but lack ML/spread, pull season/week odds and merge
+    if (sportKey === 'americanfootball_nfl' && Array.isArray(games)) {
+      for (const g of games) {
+        const rows = gameIdToVendors.get(g.id) || [];
+        const hasMlInRows = rows.some(r => {
+          const h = toNumber(r?.moneyline_home_odds);
+          const a = toNumber(r?.moneyline_away_odds);
+          return h !== null || a !== null;
+        });
+        const hasSpreadInRows = rows.some(r => {
+          const sh = toNumber(r?.spread_home_value);
+          const sa = toNumber(r?.spread_away_value);
+          return sh !== null || sa !== null;
+        });
+        if (!hasMlInRows && !hasSpreadInRows) {
+          try {
+            const season = g?.season;
+            const week = g?.week;
+            if (season && week != null) {
+              const v1Rows = await fetchNflOddsBySeasonWeek(season, week);
+              const forGame = (v1Rows || []).filter(r => r?.game_id === g.id);
+              if (forGame.length) {
+                const existing = gameIdToVendors.get(g.id) || [];
+                gameIdToVendors.set(g.id, existing.concat(forGame));
+                console.log(`[BallDonLieOdds][NFL] v1 fallback merged for game ${g.id} (${(g.visitor_team?.name || g.away_team?.name || '')} @ ${(g.home_team?.name || '')})`);
+              } else {
+                console.warn(`[BallDonLieOdds][NFL] v1 fallback returned no rows for game ${g.id} (season ${season}, week ${week})`);
+              }
+            }
+          } catch (e) {
+            console.warn('[BallDonLieOdds][NFL] per-game v1 fallback failed:', e?.message || e);
+          }
+        }
+      }
+    }
+
     const mapTeamName = (teamObjOrName) => {
       if (!teamObjOrName) return '';
       if (typeof teamObjOrName === 'string') return teamObjOrName;
