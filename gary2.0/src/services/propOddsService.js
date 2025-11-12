@@ -124,17 +124,18 @@ export const propOddsService = {
    */
   getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
     try {
-      // Get the API key from the config loader
-      const apiKey = await configLoader.getOddsApiKey();
-      
-      if (!apiKey) {
-        console.error('⚠️ ODDS API KEY IS MISSING - Cannot fetch player prop odds');
-        throw new Error('API key is required for The Odds API');
+      // Prefer non-OddsAPI sources. Attempt OddsAPI only if an API key is present.
+      let apiKey = null;
+      try {
+        apiKey = await configLoader.getOddsApiKey();
+      } catch (e) {
+        apiKey = null;
       }
+      const useOddsApi = Boolean(apiKey);
       
-      console.log(`🔍 Fetching player prop odds for ${sport} game: ${homeTeam} vs ${awayTeam}...`);
+      console.log(`🔍 Fetching player prop odds for ${sport} game: ${homeTeam} vs ${awayTeam}... (useOddsApi=${useOddsApi})`);
       
-      // Look up the game by team names
+      // Look up the game by team names (BDL-backed oddsService)
       const games = await oddsService.getUpcomingGames(sport);
       console.log(`Found ${games.length} upcoming ${sport} games.`);
       
@@ -170,6 +171,33 @@ export const propOddsService = {
       
       console.log(`✅ Found matching game with ID: ${game.id}, scheduled for ${new Date(game.commence_time).toLocaleString()}`);
       
+      // If no Odds API key, skip directly to Perplexity fallback (no hard failure)
+      if (!useOddsApi) {
+        console.log('🔄 No Odds API key configured. Using Perplexity fallback for player prop lines...');
+        try {
+          let sportShortName;
+          switch (sport) {
+            case 'basketball_nba': sportShortName = 'nba'; break;
+            case 'baseball_mlb': sportShortName = 'mlb'; break;
+            case 'icehockey_nhl': sportShortName = 'nhl'; break;
+            case 'americanfootball_nfl': sportShortName = 'nfl'; break;
+            default: sportShortName = sport.split('_').pop();
+          }
+          const matchup = `${homeTeam} vs ${awayTeam}`;
+          const perplexityProps = await propOddsService.getPlayerPropsFromSportsbooks(sportShortName, matchup);
+          if (perplexityProps && perplexityProps.length > 0) {
+            console.log(`✅ Successfully retrieved ${perplexityProps.length} props via Perplexity`);
+            return perplexityProps;
+          }
+          console.warn('⚠️ Perplexity prop extraction returned no results');
+          return [];
+        } catch (e) {
+          console.error('❌ Perplexity fallback failed:', e?.message || e);
+          return [];
+        }
+      }
+      
+      // Odds API path (only if key is available)
       // Get the appropriate prop markets for this sport
       const marketsList = PROP_MARKETS[sport] || ['player_points'];
       console.log(`Will fetch ${marketsList.length} markets individually for ${sport}`);
@@ -197,64 +225,35 @@ export const propOddsService = {
             }
           });
           
-          // If we got valid data, process it
           if (propResponse.data && 
               propResponse.data.bookmakers && 
               propResponse.data.bookmakers.length > 0) {
-                
-            // Process each bookmaker's data for this market
             const bookmakers = propResponse.data.bookmakers;
-            
-            // Look for bookmakers with this market
             for (const bookmaker of bookmakers) {
               for (const bkMarket of bookmaker.markets) {
-                // Skip if this isn't the market we're processing
                 if (bkMarket.key !== market) continue;
-                
-                // Clean up the market key for display (remove player_, batter_, pitcher_ prefixes)
                 const propType = bkMarket.key
                   .replace('player_', '')
                   .replace('batter_', '')
                   .replace('pitcher_', '');
                 
-                // Debug log for problematic markets
-                if (['batter_strikeouts', 'pitcher_outs', 'pitcher_record_a_win'].includes(market)) {
-                  console.log(`Processing problematic market: ${market}`);
-                  console.log(`Found ${bkMarket.outcomes.length} outcomes for ${market}`);
-                  console.log('Sample outcome:', bkMarket.outcomes[0]);
-                }
-                
-                // Process each outcome for this market
                 for (const outcome of bkMarket.outcomes) {
-                  // Check if this is a Yes/No prop like pitcher_record_a_win or batter_first_home_run
                   const isYesNoProp = ['Yes', 'No'].includes(outcome.name);
-                  
-                  // For Yes/No props, treat Yes like Over and No like Under
                   let overOdds = null;
                   let underOdds = null;
                   let lineValue = outcome.point;
                   
                   if (isYesNoProp) {
-                    // For Yes/No props, set the line to 0.5 for consistency with over/under
-                    // This way we can use the same filtering and display logic
                     lineValue = 0.5;
-                    
-                    if (outcome.name === 'Yes') {
-                      overOdds = outcome.price;
-                    } else if (outcome.name === 'No') {
-                      underOdds = outcome.price;
-                    }
+                    if (outcome.name === 'Yes') overOdds = outcome.price;
+                    else if (outcome.name === 'No') underOdds = outcome.price;
                   } else {
-                    // For regular Over/Under props
                     overOdds = outcome.name === 'Over' ? outcome.price : null;
                     underOdds = outcome.name === 'Under' ? outcome.price : null;
                   }
                   
-                  // Use the real odds values as provided by the odds API
-                  // No capping of extreme odds values
-                  
                   allPlayerProps.push({
-                    player: outcome.description, // Player name
+                    player: outcome.description,
                     team: outcome.team || (outcome.name?.includes(game.home_team) ? game.home_team : game.away_team),
                     prop_type: propType,
                     line: lineValue,
@@ -266,7 +265,6 @@ export const propOddsService = {
             }
           }
         } catch (err) {
-          // Handle 404 error for this specific market (just continue to next market)
           if (err.response && err.response.status === 404) {
             console.warn(`❌ No data available for ${market} in game ${game.id}, continuing to next market`);
             marketStats[market] = { success: false, count: 0, error: '404 Not Found' };
@@ -281,7 +279,6 @@ export const propOddsService = {
           }
         }
         
-        // Calculate stats for this market
         const endTime = Date.now();
         const propsAdded = allPlayerProps.length - startingPropsCount;
         marketStats[market] = {
@@ -289,7 +286,6 @@ export const propOddsService = {
           count: propsAdded,
           timeMs: endTime - startTime
         };
-        
         if (propsAdded > 0) {
           console.log(`✅ Successfully added ${propsAdded} props for market: ${market}`);
         } else {
@@ -297,7 +293,6 @@ export const propOddsService = {
         }
       }
       
-      // Print a summary of all markets attempted
       console.log('\n📊 MARKET RETRIEVAL SUMMARY:');
       for (const market in marketStats) {
         const stats = marketStats[market];
@@ -310,34 +305,9 @@ export const propOddsService = {
       console.log(`Total props retrieved: ${allPlayerProps.length}`);
       console.log(`==================================================`);
       
-      // If we didn't find any props after trying all markets
       if (allPlayerProps.length === 0) {
-        console.error('❌ No player prop data found from The Odds API after trying all markets');
-        
-        // We will now try to use perplexity integration as a fallback
-        console.log('🔄 Attempting to fall back to Perplexity for prop data...');
-        try {
-          let sportShortName;
-          switch(sport) {
-            case 'basketball_nba': sportShortName = 'nba'; break;
-            case 'baseball_mlb': sportShortName = 'mlb'; break;
-            case 'icehockey_nhl': sportShortName = 'nhl'; break;
-            default: sportShortName = sport.split('_').pop();
-          }
-          
-          const matchup = `${homeTeam} vs ${awayTeam}`;
-          const perplexityProps = await propOddsService.getPlayerPropsFromSportsbooks(sportShortName, matchup);
-          
-          if (perplexityProps && perplexityProps.length > 0) {
-            console.log(`✅ Successfully retrieved ${perplexityProps.length} props via Perplexity`);
-            return perplexityProps; // Return the Perplexity props instead
-          }
-        } catch (perplexityError) {
-          console.error('❌ Perplexity fallback also failed:', perplexityError.message);
-        }
-        
-        // If both methods fail, throw the error
-        throw new Error('No player prop data available for this game after trying all sources.');
+        console.log('❌ No player prop data found via Odds API. Returning empty.');
+        return [];
       }
       
       // Filter out any alternate props that might have been returned by the API
