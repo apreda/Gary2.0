@@ -333,7 +333,10 @@ Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addre
 === LEAGUE-FOCUSED METRICS (WEIGHT THESE HIGH) ===
 - Basketball (NBA/NCAAB/WNBA): eFG%, Turnover Rate, Offensive Rebound Rate, Free Throw Rate, Pace, recent 5–10 form and home/away splits.
 - Hockey (NHL): Power-play %, Penalty-kill %, Shots For/Against per game, Faceoff win %, Goals For/Against per game, last-10 form.
-- Football (NFL/NCAAF): Offense PPG, Defense PPG allowed, Yards/Play, 3rd/4th down conversion %, Red-zone efficiency (proxy), Turnover differential. Special attention to QB performance and opponent defensive profile.
+ - Football (NFL/NCAAF): Offense PPG, Defense PPG allowed, Yards/Play, 3rd/4th down conversion %, Red-zone efficiency (proxy), Turnover differential. Special attention to QB performance and opponent defensive profile.
+
+=== QUANTIFIED CALLOUTS (MANDATORY) ===
+In your 2–4 sentence paragraph, include at least TWO concrete, numeric metrics from the data above (e.g., "red‑zone TD rate 56%", "3rd‑down 46%", "5.8 yards per play", "TO differential +6"). Embed numbers naturally in the prose (no parenthetical stat lists). Use only values present in the provided data; never guess or infer.
 
 === MODEL VS MARKET EDGE (IF PROVIDED) ===
 When a "model edge" is provided, explicitly use it to decide between ML and spread. If the model’s expected margin exceeds the market spread by ≥ 0.5, prefer the spread when juice is standard. If the market spread exceeds the expected margin, consider dog ML or taking the points if odds justify. Never force it—use it as a weighting signal along with the rest of the data.
@@ -444,6 +447,26 @@ When a "model edge" is provided, explicitly use it to decide between ML and spre
       // 4. Include MLB-specific note if this is MLB data
       if (gameData?.sport === 'MLB' || gameData?.league === 'MLB' || gameData?.sport === 'baseball_mlb') {
         statsSection += '**NOTE: All MLB data is from the current 2025 season**\n\n';
+      }
+      
+      // 4.5. NFL-specific: inject quantified season metrics for both teams when available
+      if ((gameData?.league === 'NFL' || gameData?.sport === 'nfl' || gameData?.sport === 'americanfootball_nfl') 
+          && gameData?.statsReport?.seasonSummary) {
+        const sum = gameData.statsReport.seasonSummary || {};
+        const h = sum.home || {};
+        const a = sum.away || {};
+        const fmtNum = (v, d = 2) => (typeof v === 'number' && isFinite(v)) ? Number(v).toFixed(d) : 'N/A';
+        const fmtPct = (v) => {
+          if (typeof v !== 'number' || !isFinite(v)) return 'N/A';
+          // Handle values given as 0-1 or already in 0-100
+          const pct = v <= 1 ? v * 100 : v;
+          return `${pct.toFixed(1)}%`;
+        };
+        const fmtSigned = (v) => (typeof v === 'number' && isFinite(v)) ? (v > 0 ? `+${v}` : `${v}`) : 'N/A';
+        
+        statsSection += 'NFL TEAM SEASON METRICS (BDL):\n';
+        statsSection += `- ${gameData?.homeTeam || 'Home'} — PPG: ${fmtNum(h.pointsPerGame, 1)}, Yards/Play: ${fmtNum(h.yardsPerPlay, 2)}, 3rd Down: ${fmtPct(h.thirdDownPct)}, Red-zone TD (proxy): ${fmtPct(h.redZoneProxy)}, TO Diff: ${fmtSigned(h.turnoverDiff)}\n`;
+        statsSection += `- ${gameData?.awayTeam || 'Away'} — PPG: ${fmtNum(a.pointsPerGame, 1)}, Yards/Play: ${fmtNum(a.yardsPerPlay, 2)}, 3rd Down: ${fmtPct(a.thirdDownPct)}, Red-zone TD (proxy): ${fmtPct(a.redZoneProxy)}, TO Diff: ${fmtSigned(a.turnoverDiff)}\n\n`;
       }
         
       // 5. Process structured team stats from Ball Don't Lie API
