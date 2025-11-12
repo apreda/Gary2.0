@@ -167,6 +167,14 @@ export async function generateNCAABPicks(options = {}) {
         time: game.commence_time
       };
 
+      // Explicit log confirmation for debugging visibility
+      try {
+        const hasFourFactors = !!(statsReport?.seasonSummary && (Object.keys(statsReport.seasonSummary.home || {}).length || Object.keys(statsReport.seasonSummary.away || {}).length));
+        const hasTop3 = !!(Array.isArray(statsReport?.topPlayers?.home) && statsReport.topPlayers.home.length || Array.isArray(statsReport?.topPlayers?.away) && statsReport.topPlayers.away.length);
+        const hasNews = !!(realTimeNewsText && realTimeNewsText.length);
+        console.log(`NCAAB: Injected season metrics/top players into prompt (fourFactors=${hasFourFactors}, top3=${hasTop3}, news=${hasNews})`);
+      } catch {}
+
       const pick = await makeGaryPick(gameObj);
       if (!pick?.success) return null;
       // Recommended sportsbook
