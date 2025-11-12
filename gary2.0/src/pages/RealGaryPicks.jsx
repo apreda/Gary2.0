@@ -482,7 +482,7 @@ function RealGaryPicks() {
     switch (league) {
       case 'NBA': return '#3B82F6';      // Blue
       case 'WNBA': return '#F97316';     // Orange
-      case 'NFL': return '#22C55E';      // Green
+      case 'NFL': return '#bfa142';      // Original Gold
       case 'NCAAB': return '#8B5CF6';    // Purple
       case 'NCAAF': return '#DC2626';    // Red
       case 'EPL': return '#6366F1';      // Indigo
