@@ -337,6 +337,30 @@ export const ballDontLieOddsService = {
         const resp = await axios.get('https://api.balldontlie.io/epl/v1/odds', { params, headers: { Authorization: apiKey } });
         oddsRows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
       }
+      // Fallback per docs: try unique (season, week) pairs if game_ids yields no rows
+      if ((!Array.isArray(oddsRows) || oddsRows.length === 0) && Array.isArray(games)) {
+        const seenPairs = new Set();
+        for (const g of games) {
+          const season = g?.season;
+          const week = g?.week;
+          if (!season || week == null) continue;
+          const key = `${season}-${week}`;
+          if (seenPairs.has(key)) continue;
+          seenPairs.add(key);
+          try {
+            const respByWeek = await axios.get('https://api.balldontlie.io/epl/v1/odds', {
+              params: { season, week, per_page: 100 },
+              headers: { Authorization: apiKey }
+            });
+            const rows = Array.isArray(respByWeek?.data?.data) ? respByWeek.data.data : [];
+            if (rows.length) {
+              oddsRows = (oddsRows || []).concat(rows);
+            }
+          } catch (e) {
+            console.warn('[BallDonLieOdds][EPL] season/week v1 odds fetch failed:', e?.response?.data || e?.message || e);
+          }
+        }
+      }
       const byGame = oddsRows.reduce((acc, r) => {
         const list = acc.get(r.game_id) || [];
         list.push(r);
