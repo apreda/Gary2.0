@@ -335,8 +335,20 @@ Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addre
 - Hockey (NHL): Power-play %, Penalty-kill %, Shots For/Against per game, Faceoff win %, Goals For/Against per game, last-10 form.
  - Football (NFL/NCAAF): Offense PPG, Defense PPG allowed, Yards/Play, 3rd/4th down conversion %, Red-zone efficiency (proxy), Turnover differential. Special attention to QB performance and opponent defensive profile.
 
+=== EVIDENCE PRIORITY (ALL SPORTS; NFL EMPHASIS) ===
+1) Start with TEAM/SEASON edges and game context: home/away, rest, weather/venue, and team-season metrics (e.g., NFL PPG, yards/play, 3rd-down %, red-zone proxy, TO differential). This is your primary evidence.
+2) Then consult PLAYER-LEVEL data (QB/RB/WR advanced, recent venue or H2H samples) to corroborate or break ties. Use player stats to strengthen or differentiate when team edges are close.
+3) If the team-level read and odds value already align, keep the narrative concise; add only the 1–2 most persuasive player metrics.
+
 === QUANTIFIED CALLOUTS (PREFERRED) ===
 When it strengthens the argument, weave in 1–2 concrete numeric metrics from the data (e.g., "red‑zone TD rate 56%", "3rd‑down 46%", "5.8 yards per play", "TO differential +6"). Prioritize story and cause‑effect first—avoid stat dumping. Embed numbers naturally in the prose (no parenthetical lists). Use only values present in the provided data; never guess or infer.
+
+=== CONFIDENCE CALIBRATION ===
+- Calibrate 0.50–1.00 based on evidence QUALITY and ALIGNMENT (not hype).
+- If only 1–2 weakly aligned signals → ~0.55–0.59.
+- If team-season metrics AND odds value align; optionally 1 supporting player metric → ~0.60–0.67.
+- If multiple team metrics align, odds value is favorable, and player advanced stats support the thesis → ~0.68–0.75+.
+- Reduce confidence if key signals conflict or injuries/unknowns raise variance.
 
 === MODEL VS MARKET EDGE (IF PROVIDED) ===
 When a "model edge" is provided, explicitly use it to decide between ML and spread. If the model’s expected margin exceeds the market spread by ≥ 0.5, prefer the spread when juice is standard. If the market spread exceeds the expected margin, consider dog ML or taking the points if odds justify. Never force it—use it as a weighting signal along with the rest of the data.
