@@ -1015,14 +1015,40 @@ const ballDontLieService = {
     const yardsPerPlay = (map.net_total_offensive_yards && map.total_offensive_plays)
       ? map.net_total_offensive_yards / map.total_offensive_plays
       : undefined;
+    const oppYardsPerPlay = (map.opp_net_total_offensive_yards && map.opp_total_offensive_plays)
+      ? map.opp_net_total_offensive_yards / map.opp_total_offensive_plays
+      : undefined;
+    // Red-zone proxies if exposed by API
+    const redZoneOffProxy = (typeof map.red_zone_scores !== 'undefined')
+      ? (map.red_zone_scores / (map.red_zone_attempts || 1))
+      : undefined;
+    const redZoneDefProxy = (typeof map.opp_red_zone_scores !== 'undefined')
+      ? (map.opp_red_zone_scores / (map.opp_red_zone_attempts || 1))
+      : undefined;
+    // Very rough pass-proxy: sacks allowed per dropback ~ sacksAllowed / (passAttempts + sacksAllowed)
+    const sacksAllowed = map.misc_sacks_allowed ?? map.sacks_allowed ?? undefined;
+    const passAtt = map.passing_attempts ?? map.pass_attempts ?? undefined;
+    const sacksAllowedPerDropback = (typeof sacksAllowed === 'number' && typeof passAtt === 'number' && (passAtt + sacksAllowed) > 0)
+      ? sacksAllowed / (passAtt + sacksAllowed)
+      : undefined;
+    // Very rough defensive pressure proxy: team sacks per opp dropback ~ sacks / (opp pass att + sacks)
+    const defSacks = map.sacks ?? map.defensive_sacks ?? undefined;
+    const oppPassAtt = map.opp_passing_attempts ?? map.opp_pass_attempts ?? undefined;
+    const defSackRateProxy = (typeof defSacks === 'number' && typeof oppPassAtt === 'number' && (oppPassAtt + defSacks) > 0)
+      ? defSacks / (oppPassAtt + defSacks)
+      : undefined;
     return {
       pointsPerGame: map.total_points_per_game,
       oppPointsPerGame: map.opp_total_points_per_game,
       yardsPerPlay,
+      oppYardsPerPlay,
       thirdDownPct: map.misc_third_down_conv_pct,
       fourthDownPct: map.misc_fourth_down_conv_pct,
-      redZoneProxy: map.red_zone_scores ? map.red_zone_scores / (map.red_zone_attempts || 1) : undefined,
-      turnoverDiff: map.misc_turnover_differential
+      redZoneProxy: redZoneOffProxy,
+      redZoneDefProxy,
+      turnoverDiff: map.misc_turnover_differential,
+      sacksAllowedPerDropback,
+      defSackRateProxy
     };
   },
 
