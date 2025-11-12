@@ -459,12 +459,29 @@ PICK DECISION:
         const sum = gameData.statsReport.seasonSummary || {};
         const h = sum.home || {};
         const a = sum.away || {};
+        const basics = gameData.statsReport.basics || {};
+        const hb = basics.home || {};
+        const ab = basics.away || {};
         const fmtNum = (v, d = 2) => (typeof v === 'number' && isFinite(v)) ? Number(v).toFixed(d) : 'N/A';
         const fmtPct = (v) => {
           if (typeof v !== 'number' || !isFinite(v)) return 'N/A';
           const pct = v <= 1 ? v * 100 : v;
           return `${pct.toFixed(1)}%`;
         };
+        // Basics
+        statsSection += 'NCAAB TEAM BASICS:\n';
+        const basicsLine = (label, b) => {
+          const parts = [];
+          if (b.record) parts.push(`Record: ${b.record}`);
+          if (b.homeRec) parts.push(`Home: ${b.homeRec}`);
+          if (b.awayRec) parts.push(`Away: ${b.awayRec}`);
+          if (b.streak) parts.push(`Streak: ${b.streak}`);
+          if (typeof b.ppg === 'number') parts.push(`PPG: ${fmtNum(b.ppg, 1)}`);
+          if (typeof b.oppg === 'number') parts.push(`Opp PPG: ${fmtNum(b.oppg, 1)}`);
+          return `- ${label} — ${parts.join(', ')}`;
+        };
+        statsSection += basicsLine(gameData?.homeTeam || 'Home', hb) + '\n';
+        statsSection += basicsLine(gameData?.awayTeam || 'Away', ab) + '\n';
         statsSection += 'NCAAB TEAM SEASON METRICS (BDL - Four Factors proxies):\n';
         const composeNcaab = (label, m) => {
           const parts = [];
@@ -487,6 +504,73 @@ PICK DECISION:
         if (Array.isArray(tp.away) && tp.away.length) {
           statsSection += `Top Players (${gameData?.awayTeam || 'Away'}): ${tp.away.map(renderPlayer).join(' | ')}\n`;
         }
+        statsSection += '\n';
+      }
+
+      // 4.7. NCAAF-specific: inject simple season metrics and skill players (QB/RB1/WR1)
+      if ((gameData?.league === 'NCAAF' || gameData?.sport === 'ncaaf' || gameData?.sport === 'americanfootball_ncaaf')
+          && gameData?.statsReport) {
+        const sum = gameData.statsReport.seasonSummary || {};
+        const h = sum.home || {};
+        const a = sum.away || {};
+        const basics = gameData.statsReport.basics || {};
+        const hb = basics.home || {};
+        const ab = basics.away || {};
+        const fmtNum = (v, d = 2) => (typeof v === 'number' && isFinite(v)) ? Number(v).toFixed(d) : 'N/A';
+        const fmtPct = (v) => {
+          if (typeof v !== 'number' || !isFinite(v)) return 'N/A';
+          const pct = v <= 1 ? v * 100 : v;
+          return `${pct.toFixed(1)}%`;
+        };
+        // Basics
+        statsSection += 'NCAAF TEAM BASICS:\n';
+        const basicsLine = (label, b) => {
+          const parts = [];
+          if (b.record) parts.push(`Record: ${b.record}`);
+          if (b.homeRec) parts.push(`Home: ${b.homeRec}`);
+          if (b.awayRec) parts.push(`Away: ${b.awayRec}`);
+          if (b.streak) parts.push(`Streak: ${b.streak}`);
+          if (typeof b.ppg === 'number') parts.push(`PPG: ${fmtNum(b.ppg, 1)}`);
+          if (typeof b.oppg === 'number') parts.push(`Opp PPG: ${fmtNum(b.oppg, 1)}`);
+          return `- ${label} — ${parts.join(', ')}`;
+        };
+        statsSection += basicsLine(gameData?.homeTeam || 'Home', hb) + '\n';
+        statsSection += basicsLine(gameData?.awayTeam || 'Away', ab) + '\n';
+        const composeNcaaf = (label, m) => {
+          const parts = [];
+          if (typeof m.totalYdsPerGame === 'number') parts.push(`Total Yds/G: ${fmtNum(m.totalYdsPerGame, 1)}`);
+          if (typeof m.passYdsPerGame === 'number') parts.push(`Pass Yds/G: ${fmtNum(m.passYdsPerGame, 1)}`);
+          if (typeof m.rushYdsPerGame === 'number') parts.push(`Rush Yds/G: ${fmtNum(m.rushYdsPerGame, 1)}`);
+          if (typeof m.thirdDownPct === 'number') parts.push(`3rd Down: ${fmtPct(m.thirdDownPct)}`);
+          if (typeof m.fourthDownPct === 'number') parts.push(`4th Down: ${fmtPct(m.fourthDownPct)}`);
+          if (typeof m.turnoversPerGame === 'number') parts.push(`TO/G: ${fmtNum(m.turnoversPerGame, 2)}`);
+          return `- ${label} — ${parts.join(', ')}`;
+        };
+        statsSection += 'NCAAF TEAM SEASON METRICS (BDL - derived from team_stats):\n';
+        statsSection += composeNcaaf(gameData?.homeTeam || 'Home', h) + '\n';
+        statsSection += composeNcaaf(gameData?.awayTeam || 'Away', a) + '\n';
+        // Skill players (season per-game)
+        const sp = gameData.statsReport.skillPlayers || {};
+        const renderQB = (p) => `${p.name}: ${p.passYdsG ?? 'N/A'} PY/G`
+          + (p.compRate != null ? `, Cmp% ${fmtPct(p.compRate)}` : '')
+          + (p.passTDG != null ? `, TD/G ${fmtNum(p.passTDG, 2)}` : '')
+          + (p.intsG != null ? `, INT/G ${fmtNum(p.intsG, 2)}` : '');
+        const renderRB = (p) => `${p.name}: ${p.rushYdsG ?? 'N/A'} RY/G`
+          + (p.rushTDG != null ? `, TD/G ${fmtNum(p.rushTDG, 2)}` : '');
+        const renderWR = (p) => `${p.name}: ${p.recYdsG ?? 'N/A'} RecY/G`
+          + (p.recG != null ? `, Rec/G ${fmtNum(p.recG, 2)}` : '')
+          + (p.recTDG != null ? `, TD/G ${fmtNum(p.recTDG, 2)}` : '');
+        const addLine = (label, obj) => {
+          const parts = [];
+          if (obj?.qb) parts.push(`QB ${renderQB(obj.qb)}`);
+          if (obj?.rb1) parts.push(`RB1 ${renderRB(obj.rb1)}`);
+          if (obj?.wr1) parts.push(`WR1 ${renderWR(obj.wr1)}`);
+          return parts.length ? `${label}: ${parts.join(' | ')}` : '';
+        };
+        const homeLine = addLine(`Key Players (${gameData?.homeTeam || 'Home'})`, sp.home);
+        const awayLine = addLine(`Key Players (${gameData?.awayTeam || 'Away'})`, sp.away);
+        if (homeLine) statsSection += homeLine + '\n';
+        if (awayLine) statsSection += awayLine + '\n';
         statsSection += '\n';
       }
         

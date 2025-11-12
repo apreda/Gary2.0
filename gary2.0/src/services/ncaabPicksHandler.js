@@ -65,36 +65,60 @@ export async function generateNCAABPicks(options = {}) {
       const homeFour = Array.isArray(homeSeasonAgg) && homeSeasonAgg[0] ? ballDontLieService.deriveBasketballFourFactors(homeSeasonAgg[0]) : {};
       const awayFour = Array.isArray(awaySeasonAgg) && awaySeasonAgg[0] ? ballDontLieService.deriveBasketballFourFactors(awaySeasonAgg[0]) : {};
 
-      // Identify top 3 players by points from season player stats (best-effort)
+      // Identify top 3 players by points from player SEASON stats (prefer season endpoint; fallback to per-game aggregation)
       async function getTop3Players(teamId) {
         try {
-          const rows = await ballDontLieService.getPlayerStats(SPORT_KEY, { seasons: [season], team_ids: [teamId], per_page: 100 });
-          const byPlayer = new Map();
-          for (const r of rows || []) {
-            const pid = r?.player?.id;
-            if (!pid) continue;
-            const name = r?.player?.full_name || `${r?.player?.first_name || ''} ${r?.player?.last_name || ''}`.trim();
-            const pts = Number(r?.points) || Number(r?.pts) || 0;
-            const reb = Number(r?.rebounds) || Number(r?.reb) || 0;
-            const ast = Number(r?.assists) || Number(r?.ast) || 0;
-            const min = Number(r?.minutes) || Number(r?.min) || 0;
-            const prev = byPlayer.get(pid) || { pid, name, pts: 0, reb: 0, ast: 0, min: 0, gp: 0 };
-            prev.pts += pts;
-            prev.reb += reb;
-            prev.ast += ast;
-            prev.min += min;
-            prev.gp += 1;
-            byPlayer.set(pid, prev);
+          // Try player SEASON stats first
+          const seasonRows = await ballDontLieService.getNcaabPlayerSeasonStats({ teamId, season });
+          let arr = [];
+          if (Array.isArray(seasonRows) && seasonRows.length) {
+            arr = seasonRows.map(r => {
+              const gp = Number(r?.games_played) || 0;
+              const name =
+                r?.player?.full_name ||
+                `${r?.player?.first_name || ''} ${r?.player?.last_name || ''}`.trim();
+              const ppg = gp ? (Number(r?.pts) || 0) / gp : undefined;
+              const rpg = gp ? (Number(r?.reb) || 0) / gp : undefined;
+              const apg = gp ? (Number(r?.ast) || 0) / gp : undefined;
+              return {
+                id: r?.player?.id,
+                name,
+                ptsPerGame: ppg != null ? +ppg.toFixed(1) : undefined,
+                rebPerGame: rpg != null ? +rpg.toFixed(1) : undefined,
+                astPerGame: apg != null ? +apg.toFixed(1) : undefined,
+                minPerGame: r?.min != null ? +Number(r.min).toFixed(1) : undefined
+              };
+            });
+          } else {
+            // Fallback: aggregate from per-game player_stats
+            const rows = await ballDontLieService.getPlayerStats(SPORT_KEY, { seasons: [season], team_ids: [teamId], per_page: 100 });
+            const byPlayer = new Map();
+            for (const r of rows || []) {
+              const pid = r?.player?.id;
+              if (!pid) continue;
+              const name = r?.player?.full_name || `${r?.player?.first_name || ''} ${r?.player?.last_name || ''}`.trim();
+              const pts = Number(r?.points) || Number(r?.pts) || 0;
+              const reb = Number(r?.rebounds) || Number(r?.reb) || 0;
+              const ast = Number(r?.assists) || Number(r?.ast) || 0;
+              const min = Number(r?.minutes) || Number(r?.min) || 0;
+              const prev = byPlayer.get(pid) || { pid, name, pts: 0, reb: 0, ast: 0, min: 0, gp: 0 };
+              prev.pts += pts;
+              prev.reb += reb;
+              prev.ast += ast;
+              prev.min += min;
+              prev.gp += 1;
+              byPlayer.set(pid, prev);
+            }
+            arr = Array.from(byPlayer.values()).map(p => ({
+              id: p.pid,
+              name: p.name,
+              ptsPerGame: p.gp ? +(p.pts / p.gp).toFixed(1) : 0,
+              rebPerGame: p.gp ? +(p.reb / p.gp).toFixed(1) : 0,
+              astPerGame: p.gp ? +(p.ast / p.gp).toFixed(1) : 0,
+              minPerGame: p.gp ? +(p.min / p.gp).toFixed(1) : 0
+            }));
           }
-          const arr = Array.from(byPlayer.values()).map(p => ({
-            id: p.pid,
-            name: p.name,
-            ptsPerGame: p.gp ? +(p.pts / p.gp).toFixed(1) : 0,
-            rebPerGame: p.gp ? +(p.reb / p.gp).toFixed(1) : 0,
-            astPerGame: p.gp ? +(p.ast / p.gp).toFixed(1) : 0,
-            minPerGame: p.gp ? +(p.min / p.gp).toFixed(1) : 0
-          }));
-          arr.sort((a, b) => b.ptsPerGame - a.ptsPerGame);
+          arr.sort((a, b) => (b.ptsPerGame || 0) - (a.ptsPerGame || 0));
           return arr.slice(0, 3);
         } catch {
           return [];

@@ -44,10 +44,12 @@ export async function generateNCAAFPicks(options = {}) {
         return null;
       }
 
-      const [homeTeamStats, awayTeamStats, injuries] = await Promise.all([
+      const [homeTeamStats, awayTeamStats, injuries, homeSeasonRows, awaySeasonRows] = await Promise.all([
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [homeTeam.id], per_page: 100 }),
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [awayTeam.id], per_page: 100 }),
-        ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] })
+        ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] }),
+        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season }),
+        ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season })
       ]);
 
       const hasHome = Array.isArray(homeTeamStats) && homeTeamStats.length > 0;
@@ -57,8 +59,8 @@ export async function generateNCAAFPicks(options = {}) {
         return null;
       }
 
-      // Aggregate simple season metrics from game-level team_stats
-      const aggregateSeason = (rows) => {
+      // Prefer team_season_stats; fall back to aggregated team_stats when season stats are missing
+      const aggregateSeasonFromTeamStats = (rows) => {
         if (!Array.isArray(rows) || rows.length === 0) return {};
         let games = 0;
         let passY = 0, rushY = 0, totalY = 0, tovs = 0;
@@ -83,33 +85,68 @@ export async function generateNCAAFPicks(options = {}) {
         }
         const safePct = (num, den) => den > 0 ? num / den : undefined;
         return {
-          passYdsPerGame: games ? passY / games : undefined,
-          rushYdsPerGame: games ? rushY / games : undefined,
-          totalYdsPerGame: games ? totalY / games : undefined,
+          passingYardsPerGame: games ? passY / games : undefined,
+          rushingYardsPerGame: games ? rushY / games : undefined,
+          totalYardsPerGame: games ? totalY / games : undefined,
           turnoversPerGame: games ? tovs / games : undefined,
           thirdDownPct: safePct(tdConv, tdAtt),
           fourthDownPct: safePct(fdConv, fdAtt)
         };
       };
-      const homeSeason = aggregateSeason(homeTeamStats);
-      const awaySeason = aggregateSeason(awayTeamStats);
-
-      // Identify QB, RB1, WR1 and get season per-game aggregates via player_stats
-      const selectPlayers = async (teamId) => {
-        const isPos = (abbr) => (p) => {
-          const pos = (p?.position || '').toLowerCase();
-          const pa = (p?.position_abbreviation || '').toLowerCase();
-          return pa === abbr || pos.includes(abbr === 'qb' ? 'quarterback' : abbr === 'rb' ? 'running back' : 'wide receiver');
+      const mapSeasonRows = (rows) => {
+        // rows from /ncaaf/v1/team_season_stats (array)
+        if (!Array.isArray(rows) || rows.length === 0) return {};
+        const r = rows[0] || {};
+        const toNum = (v) => (typeof v === 'number' && isFinite(v)) ? v : undefined;
+        const passingY = toNum(r.passing_yards_per_game);
+        const rushingY = toNum(r.rushing_yards_per_game);
+        return {
+          passingYardsPerGame: passingY,
+          rushingYardsPerGame: rushingY,
+          totalYardsPerGame: (typeof passingY === 'number' && typeof rushingY === 'number') ? passingY + rushingY : undefined,
+          turnoversPerGame: toNum(r.turnovers_per_game),
+          thirdDownPct: toNum(r.third_down_conversion_percentage)
         };
-        let qbs = await ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [teamId], position: 'QB', per_page: 10 });
-        let rbs = await ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [teamId], position: 'RB', per_page: 10 });
-        let wrs = await ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [teamId], position: 'WR', per_page: 10 });
-        qbs = Array.isArray(qbs) ? qbs.filter(isPos('qb')) : [];
-        rbs = Array.isArray(rbs) ? rbs.filter(isPos('rb')) : [];
-        wrs = Array.isArray(wrs) ? wrs.filter(isPos('wr')) : [];
-        const qb = qbs[0] || null;
-        const rb = rbs[0] || null;
-        const wr = wrs[0] || null;
+      };
+      let homeSeason = mapSeasonRows(homeSeasonRows);
+      let awaySeason = mapSeasonRows(awaySeasonRows);
+      if (!homeSeason?.passingYardsPerGame || !homeSeason?.rushingYardsPerGame) {
+        const agg = aggregateSeasonFromTeamStats(homeTeamStats);
+        homeSeason = { ...agg, ...homeSeason };
+      }
+      if (!awaySeason?.passingYardsPerGame || !awaySeason?.rushingYardsPerGame) {
+        const agg = aggregateSeasonFromTeamStats(awayTeamStats);
+        awaySeason = { ...agg, ...awaySeason };
+      }
+
+      // Identify QB, RB1, WR1 and get season per-game aggregates via player season stats (fallback to per-game)
+      const selectPlayers = async (teamId) => {
+        const roster = await ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [teamId], per_page: 100 });
+        const players = Array.isArray(roster) ? roster : [];
+        const isQB = (p) => (String(p?.position_abbreviation || '').toUpperCase() === 'QB') || /quarterback/i.test(String(p?.position || ''));
+        const isRB = (p) => (String(p?.position_abbreviation || '').toUpperCase() === 'RB') || /running back/i.test(String(p?.position || ''));
+        const isWR = (p) => (String(p?.position_abbreviation || '').toUpperCase() === 'WR') || /wide receiver/i.test(String(p?.position || ''));
+        const qbs = players.filter(isQB);
+        const rbs = players.filter(isRB);
+        const wrs = players.filter(isWR);
+        const pickTopBy = async (list, metricKey) => {
+          if (!Array.isArray(list) || list.length === 0) return null;
+          let best = null;
+          let bestVal = -Infinity;
+          for (const p of list) {
+            const seasonRows = await ballDontLieService.getNcaafPlayerSeasonStats({ playerId: p.id, season });
+            const r = Array.isArray(seasonRows) && seasonRows.length ? seasonRows[0] : null;
+            const val = r ? Number(r[metricKey]) : NaN;
+            if (Number.isFinite(val) && val > bestVal) {
+              bestVal = val;
+              best = { p, r };
+            }
+          }
+          return best ? best.p : list[0] || null;
+        };
+        const qb = await pickTopBy(qbs, 'passing_yards_per_game');
+        const rb = await pickTopBy(rbs, 'rushing_yards_per_game');
+        const wr = await pickTopBy(wrs, 'receiving_yards_per_game');
 
         const aggregatePlayer = async (player) => {
           if (!player?.id) return null;
@@ -123,15 +160,15 @@ export async function generateNCAAFPicks(options = {}) {
               return {
                 id: player.id,
                 name,
-                passYdsG: s?.passing_yards_per_game != null ? toFixed(s.passing_yards_per_game) : undefined,
-                passTDG: undefined, // per-game TDs may not be provided; keep undefined if absent
-                intsG: undefined,
-                compRate: undefined, // season endpoint may not expose attempts/completions for rate; omit if missing
-                rushYdsG: s?.rushing_yards_per_game != null ? toFixed(s.rushing_yards_per_game) : undefined,
-                rushTDG: undefined,
-                recYdsG: s?.receiving_yards_per_game != null ? toFixed(s.receiving_yards_per_game) : undefined,
-                recTDG: undefined,
-                recG: undefined
+                passingYardsPerGame: s?.passing_yards_per_game != null ? toFixed(s.passing_yards_per_game) : undefined,
+                passingTouchdowns: s?.passing_touchdowns != null ? toFixed(s.passing_touchdowns) : undefined,
+                passingInterceptions: s?.passing_interceptions != null ? toFixed(s.passing_interceptions) : undefined,
+                passingCompletionPct: s?.passing_completion_percentage != null ? toFixed(s.passing_completion_percentage, 3) : undefined,
+                rushingYardsPerGame: s?.rushing_yards_per_game != null ? toFixed(s.rushing_yards_per_game) : undefined,
+                rushingTouchdowns: s?.rushing_touchdowns != null ? toFixed(s.rushing_touchdowns) : undefined,
+                receivingYardsPerGame: s?.receiving_yards_per_game != null ? toFixed(s.receiving_yards_per_game) : undefined,
+                receivingTouchdowns: s?.receiving_touchdowns != null ? toFixed(s.receiving_touchdowns) : undefined,
+                receptionsPerGame: s?.receptions_per_game != null ? toFixed(s.receptions_per_game, 2) : undefined
               };
             }
             // Fallback: aggregate from per-game player_stats
@@ -156,15 +193,15 @@ export async function generateNCAAFPicks(options = {}) {
             return {
               id: player.id,
               name,
-              passYdsG: games ? toFixed(passY / games) : undefined,
-              passTDG: games ? toFixed(passTD / games) : undefined,
-              intsG: games ? toFixed(ints / games) : undefined,
-              compRate: att > 0 ? toFixed(cmp / att, 3) : undefined,
-              rushYdsG: games ? toFixed(rushY / games) : undefined,
-              rushTDG: games ? toFixed(rushTD / games) : undefined,
-              recYdsG: games ? toFixed(recY / games) : undefined,
-              recTDG: games ? toFixed(recTD / games) : undefined,
-              recG: games ? toFixed(rec / games) : undefined
+              passingYardsPerGame: games ? toFixed(passY / games) : undefined,
+              passingTouchdowns: games ? toFixed(passTD / games) : undefined,
+              passingInterceptions: games ? toFixed(ints / games) : undefined,
+              passingCompletionPct: att > 0 ? toFixed(cmp / att, 3) : undefined,
+              rushingYardsPerGame: games ? toFixed(rushY / games) : undefined,
+              rushingTouchdowns: games ? toFixed(rushTD / games) : undefined,
+              receivingYardsPerGame: games ? toFixed(recY / games) : undefined,
+              receivingTouchdowns: games ? toFixed(recTD / games) : undefined,
+              receptionsPerGame: games ? toFixed(rec / games, 2) : undefined
             };
           } catch {
             return null;
@@ -175,12 +212,18 @@ export async function generateNCAAFPicks(options = {}) {
       };
       const [homeSkills, awaySkills] = await Promise.all([selectPlayers(homeTeam.id), selectPlayers(awayTeam.id)]);
 
-      // Try to load standings for basics if available
+      // Try to load standings for basics if available (NCAAF requires conference_id)
       let homeStandings = [];
       let awayStandings = [];
       try {
-        homeStandings = await ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, team_ids: [homeTeam.id] });
-        awayStandings = await ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, team_ids: [awayTeam.id] });
+        const homeConfId = homeTeam?.conference || homeTeam?.conference_id || homeTeam?.conferenceId;
+        const awayConfId = awayTeam?.conference || awayTeam?.conference_id || awayTeam?.conferenceId;
+        const [hs, as] = await Promise.all([
+          homeConfId ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: homeConfId }) : Promise.resolve([]),
+          awayConfId ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: awayConfId }) : Promise.resolve([])
+        ]);
+        homeStandings = hs;
+        awayStandings = as;
       } catch {}
       const pickBasic = (row) => {
         if (!row) return {};
@@ -200,14 +243,14 @@ export async function generateNCAAFPicks(options = {}) {
         away: { team: awayTeam, sample: awayTeamStats.slice(0, 3) },
         injuriesSample: injuries?.slice?.(0, 6) || [],
         basics: {
-          home: pickBasic(homeStandings?.[0] || homeStandings),
-          away: pickBasic(awayStandings?.[0] || awayStandings)
+          home: pickBasic(Array.isArray(homeStandings) ? homeStandings.find(r => r?.team?.id === homeTeam.id) : null),
+          away: pickBasic(Array.isArray(awayStandings) ? awayStandings.find(r => r?.team?.id === awayTeam.id) : null)
         },
         seasonSummary: {
           home: homeSeason,
           away: awaySeason
         },
-        skillPlayers: {
+        keyPlayers: {
           home: homeSkills,
           away: awaySkills
         }
