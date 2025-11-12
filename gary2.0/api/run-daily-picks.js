@@ -75,6 +75,9 @@ export default async function handler(req, res) {
           }
         } catch (e) {
           console.error(`[run-daily-picks] Error processing ${sport} at index ${index}:`, e?.message || e);
+          if (e?.code === 'MISSING_ODDS') {
+            throw e;
+          }
         }
       }
       picks = collected;
