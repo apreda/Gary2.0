@@ -244,6 +244,8 @@ export async function generateNHLPicks(options = {}) {
     }
   }
   
-  console.log(`Total NHL picks generated: ${sportPicks.length}`);
+  if (sportPicks.length > 0) {
+    console.log(`Total NHL picks generated: ${sportPicks.length}`);
+  }
   return sportPicks;
 } 

@@ -142,6 +142,8 @@ export async function generateMLBPicks() {
     console.error('Error generating MLB prop picks:', e);
   }
   
-  console.log(`Total MLB picks generated: ${sportPicks.length}`);
+  if (sportPicks.length > 0) {
+    console.log(`Total MLB picks generated: ${sportPicks.length}`);
+  }
   return sportPicks;
 } 
