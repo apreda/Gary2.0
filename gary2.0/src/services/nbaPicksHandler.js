@@ -232,6 +232,8 @@ export async function generateNBAPicks(options = {}) {
     }
   }
   
-  console.log(`Total NBA picks generated: ${sportPicks.length}`);
+  if (sportPicks.length > 0) {
+    console.log(`Total NBA picks generated: ${sportPicks.length}`);
+  }
   return sportPicks;
 } 

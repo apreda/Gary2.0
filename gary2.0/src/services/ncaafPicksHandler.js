@@ -136,7 +136,9 @@ export async function generateNCAAFPicks(options = {}) {
     if (result && result.success) picks.push(result);
   }
 
-  console.log(`Total NCAAF picks generated: ${picks.length}`);
+  if (picks.length > 0) {
+    console.log(`Total NCAAF picks generated: ${picks.length}`);
+  }
   return picks;
 }
 

@@ -125,7 +125,9 @@ export async function generateEPLPicks(options = {}) {
     if (result && result.success) picks.push(result);
   }
 
-  console.log(`Total EPL picks generated: ${picks.length}`);
+  if (picks.length > 0) {
+    console.log(`Total EPL picks generated: ${picks.length}`);
+  }
   return picks;
 }
 

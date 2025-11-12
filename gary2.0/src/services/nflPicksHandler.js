@@ -378,7 +378,9 @@ export async function generateNFLPicks(options = {}) {
     if (result && result.success) picks.push(result);
   }
 
-  console.log(`Total NFL picks generated: ${picks.length}`);
+  if (picks.length > 0) {
+    console.log(`Total NFL picks generated: ${picks.length}`);
+  }
   return picks;
 }
 

@@ -136,7 +136,9 @@ export async function generateNCAABPicks(options = {}) {
     if (result && result.success) picks.push(result);
   }
 
-  console.log(`Total NCAAB picks generated: ${picks.length}`);
+  if (picks.length > 0) {
+    console.log(`Total NCAAB picks generated: ${picks.length}`);
+  }
   return picks;
 }
 
