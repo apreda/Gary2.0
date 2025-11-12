@@ -306,27 +306,14 @@ FORMATTING REQUIREMENTS:
 
 CONFIDENCE SCALE: 0.50 to 1.00 where higher numbers mean MORE CERTAINTY the pick will win.
 
-=== NARRATIVE-FIRST RATIONALE (3–5 sentences) ===
-PRIMARY → SECONDARY → (optional) TERTIARY → RISK
-1) Primary (required): Set the game script in one sentence (how this will play out and why). Choose ONE angle that best explains THIS matchup:
-   - Trenches (pass rush vs pass pro; run success vs run stops)
-   - Explosiveness (explosive play rate, yards/play, air yards vs coverage)
-   - Pace/Control (tempo, plays per game, drive length, 4th‑down aggression)
-   - Red‑Zone Leverage (RZ TD% O vs D, goal‑to‑go TD%)
-   - Matchup Asymmetry (WR1 vs CB, OL absences vs opponent rush front)
-   - Weather/Venue (wind/rain; surface; travel)
-   - Market Context (number lags injuries/news/context)
-   Support with 1–2 precise stats that DIRECTLY explain this angle.
-2) Secondary (optional): Add ONE reinforcing factor (named injury/health, venue split, rest/schedule, or unit mismatch) with 1 stat/status that strengthens the SAME thesis.
-3) Tertiary (optional): Add ONE distinct mechanism with 1 stat only if it clearly adds new causality; otherwise omit.
-4) Risk (1 line): Name a specific counter or injury with a concrete stat/status.
+=== NARRATIVE GUIDANCE (keep it natural) ===
+- Build a compelling, expert case for ONE side using the best evidence in the data. Trust your betting judgment and sports knowledge.
+- Choose the angle(s) that actually decide THIS matchup. You are not required to use any specific metric—use whatever is most persuasive and available.
+- Weave 2–4 precise numbers naturally into cause→effect sentences. Avoid lists or templates. If you mention injuries, name at least one player and status only when it truly matters.
+- Be concise (3–5 sentences), matchup‑specific, and decisive. No clichés; never mention missing data.
 
-STYLE & EVIDENCE:
-- Storytelling > listing; write like a sharp capper who knows these teams.
-- Use 2–4 numbers total across Primary+Secondary+Tertiary. No stat dumping.
-- Name at least one injured/sidelined player if injuries are mentioned.
-- Standard stats (PPG, 3rd‑down, turnover diff, record/standings) are allowed ONLY when they serve your chosen angles.
-- Never reference any “model” or “edge.” Choose spread vs ML strictly on price/value and your angles (never totals).
+PICK DECISION:
+- Choose moneyline vs spread strictly on price and your read of the game flow. Do not select totals. Use only real odds provided.
 
 === RESPONSE FORMAT (STRICT JSON) ===
 
@@ -343,36 +330,10 @@ STYLE & EVIDENCE:
   "awayTeam": "Full away team name", 
   "league": "NBA" or "MLB" or "NHL" or "EPL",
   "time": "COPY EXACTLY the game time provided - never use 'TBD' unless no time was given",
-  "rationale": "A 2-4 sentence paragraph explaining your pick using expert-level analysis."
+  "rationale": "A 3–5 sentence paragraph explaining your pick using expert-level analysis."
 }
 
                 REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-NEGOTIABLE.
-
-=== LEAGUE-FOCUSED METRICS (WEIGHT THESE HIGH) ===
-- Basketball (NBA/NCAAB/WNBA): eFG%, Turnover Rate, Offensive Rebound Rate, Free Throw Rate, Pace, recent 5–10 form and home/away splits.
-- Hockey (NHL): Power-play %, Penalty-kill %, Shots For/Against per game, Faceoff win %, Goals For/Against per game, last-10 form.
- - Football (NFL/NCAAF): Offense PPG, Defense PPG allowed, Yards/Play, 3rd/4th down conversion %, Red-zone efficiency (proxy), Turnover differential. Special attention to QB performance and opponent defensive profile.
-
-=== EVIDENCE PRIORITY (ALL SPORTS; NFL EMPHASIS) ===
-1) Start with TEAM/SEASON edges and game context: home/away, rest, weather/venue, and team-season metrics (e.g., NFL PPG, yards/play, 3rd-down %, red-zone proxy, TO differential). This is your primary evidence.
-2) Then consult PLAYER-LEVEL data (QB/RB/WR advanced, recent venue or H2H samples) to corroborate or break ties. Use player stats to strengthen or differentiate when team edges are close.
-3) If the team-level read and odds value already align, keep the narrative concise; add only the 1–2 most persuasive player metrics.
-
-=== QUANTIFIED CALLOUTS (PREFERRED) ===
-When it strengthens the argument, weave in 1–2 concrete numeric metrics from the data (e.g., "red‑zone TD rate 56%", "3rd‑down 46%", "5.8 yards per play", "TO differential +6"). Prioritize story and cause‑effect first—avoid stat dumping. Embed numbers naturally in the prose (no parenthetical lists). Use only values present in the provided data; never guess or infer.
-
-RULES FOR NUMERIC EVIDENCE AND INJURIES:
-- If you make a qualitative claim about a team ("road offense can punch", "pass rush heats up"), attach ONE precise stat for that claim when available (e.g., road PPG, overall PPG, yards/play, sacks/game). Keep it inline with the sentence.
-- If you reference injuries, NAME at least one relevant injured player with status from the injuries list (e.g., "LT Cam Jurgens — Questionable"), but only if such a player exists in the provided data. Never speculate.
-- Do NOT fabricate splits (e.g., second‑half only) unless the split exists in the provided data. Prefer season metrics; fall back to recent games if explicitly provided.
-- Always favor team/season metrics first; use player advanced metrics as supporting proof or tie‑breakers.
-
-=== CONFIDENCE CALIBRATION ===
-- Calibrate 0.50–1.00 based on evidence QUALITY and ALIGNMENT (not hype).
-- If only 1–2 weakly aligned signals → ~0.55–0.59.
-- If team-season metrics AND odds value align; optionally 1 supporting player metric → ~0.60–0.67.
-- If multiple team metrics align, odds value is favorable, and player advanced stats support the thesis → ~0.68–0.75+.
-- Reduce confidence if key signals conflict or injuries/unknowns raise variance.
 
 `
       };
@@ -499,8 +460,21 @@ RULES FOR NUMERIC EVIDENCE AND INJURIES:
         const fmtSigned = (v) => (typeof v === 'number' && isFinite(v)) ? (v > 0 ? `+${v}` : `${v}`) : 'N/A';
         
         statsSection += 'NFL TEAM SEASON METRICS (BDL):\n';
-        statsSection += `- ${gameData?.homeTeam || 'Home'} — PPG: ${fmtNum(h.pointsPerGame, 1)}, Yards/Play: ${fmtNum(h.yardsPerPlay, 2)}, 3rd Down: ${fmtPct(h.thirdDownPct)}, Red-zone TD (proxy): ${fmtPct(h.redZoneProxy)}, TO Diff: ${fmtSigned(h.turnoverDiff)}\n`;
-        statsSection += `- ${gameData?.awayTeam || 'Away'} — PPG: ${fmtNum(a.pointsPerGame, 1)}, Yards/Play: ${fmtNum(a.yardsPerPlay, 2)}, 3rd Down: ${fmtPct(a.thirdDownPct)}, Red-zone TD (proxy): ${fmtPct(a.redZoneProxy)}, TO Diff: ${fmtSigned(a.turnoverDiff)}\n\n`;
+        const composeLine = (label, m) => {
+          const parts = [];
+          parts.push(`PPG: ${fmtNum(m.pointsPerGame, 1)}`);
+          parts.push(`Yards/Play: ${fmtNum(m.yardsPerPlay, 2)}`);
+          if (typeof m.oppYardsPerPlay === 'number') parts.push(`Opp Yards/Play: ${fmtNum(m.oppYardsPerPlay, 2)}`);
+          parts.push(`3rd Down: ${fmtPct(m.thirdDownPct)}`);
+          if (typeof m.redZoneProxy === 'number') parts.push(`RZ Off (proxy): ${fmtPct(m.redZoneProxy)}`);
+          if (typeof m.redZoneDefProxy === 'number') parts.push(`RZ Def (proxy): ${fmtPct(m.redZoneDefProxy)}`);
+          if (typeof m.sacksAllowedPerDropback === 'number') parts.push(`Sacks Allowed/DB: ${fmtPct(m.sacksAllowedPerDropback)}`);
+          if (typeof m.defSackRateProxy === 'number') parts.push(`Def Sack Rate: ${fmtPct(m.defSackRateProxy)}`);
+          parts.push(`TO Diff: ${fmtSigned(m.turnoverDiff)}`);
+          return `- ${label} — ${parts.join(', ')}`;
+        };
+        statsSection += composeLine(gameData?.homeTeam || 'Home', h) + '\n';
+        statsSection += composeLine(gameData?.awayTeam || 'Away', a) + '\n\n';
       }
         
       // 5. Process structured team stats from Ball Don't Lie API
