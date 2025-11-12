@@ -160,6 +160,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     const sport = gameData?.league || gameData?.sport || '';
     const isBaseball = sport.toLowerCase().includes('mlb') || sport.toLowerCase().includes('baseball');
     const isBasketball = sport.toLowerCase().includes('nba') || sport.toLowerCase().includes('basketball');
+    const isFootball = sport.toLowerCase().includes('nfl') || sport.toLowerCase().includes('americanfootball');
     const isHockey = sport.toLowerCase().includes('nhl') || sport.toLowerCase().includes('hockey');
     
     const formattedData = {
@@ -248,6 +249,10 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       formattedData.homeTeamStats = gameData?.homeTeamStats || null;
       formattedData.awayTeamStats = gameData?.awayTeamStats || null;
       formattedData.statsReport = gameData?.statsReport || null;
+    } else if (isFootball) {
+      // NFL-specific: ensure team-season summary and modelEdge flow through
+      formattedData.statsReport = gameData?.statsReport || null;
+      formattedData.modelEdge = gameData?.modelEdge || null;
     }
     
     // Format odds data for better OpenAI understanding
