@@ -226,17 +226,77 @@ export async function generateNBAPicks(options = {}) {
         report += '\n';
       }
 
-      // Format odds data for OpenAI
+      // Merge odds across all bookmakers; fallback to v2 odds by game_ids when missing ML/spread
       let oddsData = null;
-      if (game.bookmakers && game.bookmakers.length > 0) {
-        const bookmaker = game.bookmakers[0];
-        oddsData = {
-          bookmaker: bookmaker.title,
-          markets: bookmaker.markets
-        };
-        console.log(`Odds data available for ${game.home_team} vs ${game.away_team}:`, JSON.stringify(oddsData, null, 2));
-      } else {
-        console.log(`No odds data available for ${game.home_team} vs ${game.away_team}`);
+      const mergeBookmakers = (bookmakersArr = []) => {
+        const marketKeyToOutcomes = new Map();
+        for (const b of bookmakersArr) {
+          const markets = Array.isArray(b?.markets) ? b.markets : [];
+          for (const m of markets) {
+            if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
+            if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
+            const outMap = marketKeyToOutcomes.get(m.key);
+            for (const o of m.outcomes) {
+              if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
+              const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
+              if (!outMap.has(key)) {
+                outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
+              }
+            }
+          }
+        }
+        const mergedMarkets = [];
+        for (const [mkey, outMap] of marketKeyToOutcomes.entries()) {
+          const outcomes = Array.from(outMap.values());
+          if (outcomes.length) mergedMarkets.push({ key: mkey, outcomes });
+        }
+        return mergedMarkets.length ? { bookmaker: 'merged', markets: mergedMarkets } : null;
+      };
+      oddsData = mergeBookmakers(Array.isArray(game.bookmakers) ? game.bookmakers : []);
+      const hasMlOrSpread = (data) =>
+        Array.isArray(data?.markets) && data.markets.some(
+          (m) => (m.key === 'h2h' || m.key === 'spreads') && Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number')
+        );
+      if (!hasMlOrSpread(oddsData)) {
+        try {
+          const dt = new Date(game.commence_time);
+          const dateStr = isNaN(dt.getTime()) ? new Date().toISOString().slice(0,10) : dt.toISOString().slice(0,10);
+          const dayGames = await ballDontLieService.getGames('basketball_nba', { dates: [dateStr], per_page: 100 }, options.nocache ? 0 : 5);
+          const match = Array.isArray(dayGames) ? dayGames.find(g =>
+            (String(g?.home_team?.full_name || g?.home_team || '').toLowerCase().includes(String(game.home_team).toLowerCase())) &&
+            (String(g?.away_team?.full_name || g?.away_team || '').toLowerCase().includes(String(game.away_team).toLowerCase()))
+          ) : null;
+          if (match?.id != null) {
+            const rows = await ballDontLieService.getOddsV2({ game_ids: [match.id], per_page: 100 });
+            if (Array.isArray(rows) && rows.length) {
+              // Convert rows to bookmakers-like shape
+              const vendors = {};
+              for (const r of rows) {
+                const vendor = r?.vendor || 'vendor';
+                if (!vendors[vendor]) vendors[vendor] = { title: vendor, markets: [] };
+                // h2h
+                const h2hOutcomes = [];
+                if (typeof r.moneyline_home_odds === 'number') h2hOutcomes.push({ name: game.home_team, price: r.moneyline_home_odds });
+                if (typeof r.moneyline_away_odds === 'number') h2hOutcomes.push({ name: game.away_team, price: r.moneyline_away_odds });
+                if (h2hOutcomes.length) vendors[vendor].markets.push({ key: 'h2h', outcomes: h2hOutcomes });
+                // spreads
+                const spreadsOutcomes = [];
+                if (typeof r.spread_home_value === 'string' && typeof r.spread_home_odds === 'number') {
+                  spreadsOutcomes.push({ name: game.home_team, point: Number(r.spread_home_value), price: r.spread_home_odds });
+                }
+                if (typeof r.spread_away_value === 'string' && typeof r.spread_away_odds === 'number') {
+                  spreadsOutcomes.push({ name: game.away_team, point: Number(r.spread_away_value), price: r.spread_away_odds });
+                }
+                if (spreadsOutcomes.length) vendors[vendor].markets.push({ key: 'spreads', outcomes: spreadsOutcomes });
+              }
+              const bookmakers = Object.values(vendors);
+              const merged = mergeBookmakers(bookmakers);
+              if (hasMlOrSpread(merged)) oddsData = merged;
+            }
+          }
+        } catch (e) {
+          console.warn('NBA odds v2 fallback failed:', e?.message || e);
+        }
       }
 
       // Removed "model" logic per user guidance

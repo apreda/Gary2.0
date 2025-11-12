@@ -1386,14 +1386,14 @@ const ballDontLieService = {
    * @param {Array} teamIds - Array of team IDs to get averages for
    * @returns {Promise<Object>} - Season averages by team
    */
-  async getNbaSeasonAverages(season = new Date().getFullYear(), teamIds = []) {
+  async getNbaSeasonAveragesSDKLegacy(season = new Date().getFullYear(), teamIds = []) {
     const currentMonth = new Date().getMonth() + 1;
     const actualSeason = currentMonth <= 6 ? season - 1 : season;
     
     try {
-      const cacheKey = `nba_season_averages_${actualSeason}_${teamIds.join('_')}`;
+      const cacheKey = `nba_season_averages_sdk_legacy_${actualSeason}_${teamIds.join('_')}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`🏀 Fetching NBA season averages for ${actualSeason} season`);
+        console.log(`🏀 [LEGACY SDK] Fetching NBA season averages for ${actualSeason} season`);
         const client = initApi();
         
         // Get general base stats for the season
