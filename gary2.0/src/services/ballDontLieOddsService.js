@@ -375,6 +375,27 @@ export const ballDontLieOddsService = {
     const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
     let odds = await fetchOddsByDates([dateStr]);
 
+    // NBA: If date-based v2 odds are sparse, try v2 odds by game_ids for precision
+    if (sportKey === 'basketball_nba') {
+      try {
+        const apiKey = getApiKey();
+        const uniqueGameIds = (games || []).map(g => g?.id).filter(id => id != null);
+        const hasVendors = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
+        if (uniqueGameIds.length && !hasVendors) {
+          const resp = await axios.get(`${BDL_V2_BASE}/odds`, {
+            params: { 'game_ids[]': uniqueGameIds.slice(0, 100), per_page: 100 },
+            headers: { Authorization: apiKey }
+          });
+          const byIds = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+          if (byIds.length) {
+            odds = byIds;
+          }
+        }
+      } catch (e) {
+        console.warn('[BallDonLieOdds][NBA] v2 odds by game_ids fallback failed:', e?.response?.data || e?.message || e);
+      }
+    }
+
     // NFL: if date-based odds are sparse, fall back to querying by game_ids (covers season/week cases)
     if (sportKey === 'americanfootball_nfl') {
       try {
