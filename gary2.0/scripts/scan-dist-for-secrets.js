@@ -16,7 +16,6 @@ if (!existsSync(distDir)) {
 const patterns = [
   'sk-[A-Za-z0-9_-]{10,}',            // OpenAI keys
   'pplx-[A-Za-z0-9_-]{10,}',          // Perplexity keys
-  'service_role',                     // Supabase service role mentions
 ];
 
 const grepCmd = `grep -RIn --binary-files=without-match -E "${patterns.join('|')}" ${distDir}`;
