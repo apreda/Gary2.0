@@ -250,9 +250,8 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       formattedData.awayTeamStats = gameData?.awayTeamStats || null;
       formattedData.statsReport = gameData?.statsReport || null;
     } else if (isFootball) {
-      // NFL-specific: ensure team-season summary and modelEdge flow through
+      // NFL-specific: ensure team-season summary flows through (no baseline model)
       formattedData.statsReport = gameData?.statsReport || null;
-      formattedData.modelEdge = gameData?.modelEdge || null;
     }
     
     // Format odds data for better OpenAI understanding

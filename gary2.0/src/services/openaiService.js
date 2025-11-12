@@ -306,9 +306,27 @@ FORMATTING REQUIREMENTS:
 
 CONFIDENCE SCALE: 0.50 to 1.00 where higher numbers mean MORE CERTAINTY the pick will win.
 
-=== RATIONALE FORMAT ===
+=== NARRATIVE-FIRST RATIONALE (3–5 sentences) ===
+PRIMARY → SECONDARY → (optional) TERTIARY → RISK
+1) Primary (required): Set the game script in one sentence (how this will play out and why). Choose ONE angle that best explains THIS matchup:
+   - Trenches (pass rush vs pass pro; run success vs run stops)
+   - Explosiveness (explosive play rate, yards/play, air yards vs coverage)
+   - Pace/Control (tempo, plays per game, drive length, 4th‑down aggression)
+   - Red‑Zone Leverage (RZ TD% O vs D, goal‑to‑go TD%)
+   - Matchup Asymmetry (WR1 vs CB, OL absences vs opponent rush front)
+   - Weather/Venue (wind/rain; surface; travel)
+   - Market Context (number lags injuries/news/context)
+   Support with 1–2 precise stats that DIRECTLY explain this angle.
+2) Secondary (optional): Add ONE reinforcing factor (named injury/health, venue split, rest/schedule, or unit mismatch) with 1 stat/status that strengthens the SAME thesis.
+3) Tertiary (optional): Add ONE distinct mechanism with 1 stat only if it clearly adds new causality; otherwise omit.
+4) Risk (1 line): Name a specific counter or injury with a concrete stat/status.
 
-Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addressing the user. Make the numbers tell the story—tie your team's strengths to the opponent's weaknesses (strikeout rate vs contact, splits vs ballpark, bullpen fatigue vs patient lineup). Include one sentence that acknowledges a potential weakness for your side and then explains—using the provided MLB data—why it likely won’t flip the result today. Avoid parentheses; embed numbers inline and keep the flow confident and conversational.
+STYLE & EVIDENCE:
+- Storytelling > listing; write like a sharp capper who knows these teams.
+- Use 2–4 numbers total across Primary+Secondary+Tertiary. No stat dumping.
+- Name at least one injured/sidelined player if injuries are mentioned.
+- Standard stats (PPG, 3rd‑down, turnover diff, record/standings) are allowed ONLY when they serve your chosen angles.
+- Never reference any “model” or “edge.” Choose spread vs ML strictly on price/value and your angles (never totals).
 
 === RESPONSE FORMAT (STRICT JSON) ===
 
@@ -356,8 +374,6 @@ RULES FOR NUMERIC EVIDENCE AND INJURIES:
 - If multiple team metrics align, odds value is favorable, and player advanced stats support the thesis → ~0.68–0.75+.
 - Reduce confidence if key signals conflict or injuries/unknowns raise variance.
 
-=== MODEL VS MARKET EDGE (IF PROVIDED) ===
-When a "model edge" is provided, explicitly use it to decide between ML and spread. If the model’s expected margin exceeds the market spread by ≥ 0.5, prefer the spread when juice is standard. If the market spread exceeds the expected margin, consider dog ML or taking the points if odds justify. Never force it—use it as a weighting signal along with the rest of the data.
 `
       };
       
@@ -787,7 +803,7 @@ ${gameData?.oddsText || (gameData?.odds ? `Odds Data: ${JSON.stringify(gameData.
 
 ${gameData?.lineMovement ? `Line Movement: ${JSON.stringify(gameData.lineMovement, null, 2)}` : 'No line movement data available'}
 
-${gameData?.modelEdge ? `MODEL EDGE:\n- Expected Margin: ${gameData.modelEdge.expectedMargin}\n- Market Spread (home): ${gameData.modelEdge.marketSpread}\n- Edge (Model - Market): ${gameData.modelEdge.edge}\n` : 'MODEL EDGE: Not computed'}
+/* No baseline model injected */
 
 ${Array.isArray(gameData?.gameContext?.richKeyFindings) && gameData.gameContext.richKeyFindings.length > 0 ? `KEY FINDINGS (Most predictive, verified):\n- ${gameData.gameContext.richKeyFindings.map(k => (k?.rationale ? `${k?.title || 'Finding'} — ${k.rationale}` : (k?.title || JSON.stringify(k)))).join('\n- ')}\n` : ''}
 
