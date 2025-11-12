@@ -622,6 +622,24 @@ const ballDontLieService = {
   },
 
   /**
+   * NCAAF player season stats (single season, optional player filter)
+   */
+  async getNcaafPlayerSeasonStats({ playerId, season } = {}, ttlMinutes = 10) {
+    try {
+      if (!playerId || !season) return [];
+      const cacheKey = `ncaaf_player_season_stats_${playerId}_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_season_stats${buildQuery({ player_ids: [playerId], season, per_page: 100 })}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerSeasonStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * Generic helpers (multi-sport)
    */
   async getTeams(sportKey, params = {}) {
@@ -844,7 +862,10 @@ const ballDontLieService = {
           basketball_nba: 'nba/v1/standings',
           basketball_ncaab: 'ncaab/v1/standings',
           icehockey_nhl: 'nhl/v1/standings',
-          americanfootball_nfl: 'nfl/v1/standings'
+          americanfootball_nfl: 'nfl/v1/standings',
+          americanfootball_ncaaf: 'ncaaf/v1/standings',
+          basketball_wnba: 'wnba/v1/standings',
+          soccer_epl: 'epl/v1/standings'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getStandings not supported');
@@ -932,11 +953,11 @@ const ballDontLieService = {
           const json = await resp.json().catch(() => ({}));
           return Array.isArray(json?.data) ? json.data : [];
         }
-        // NBA/NCAAF: fall back to standings/leaders or team_stats by season
+        // NBA/NCAAF: fall back to standings/leaders or dedicated season stats
         // NBA: no direct team season stats; caller should use getStandingsGeneric + leaders
-        // NCAAF: use team_stats by season + standings
+        // NCAAF: use dedicated team_season_stats per dev docs
         if (sportKey === 'americanfootball_ncaaf') {
-          const url = `https://api.balldontlie.io/ncaaf/v1/team_stats${buildQuery({ seasons: [season], team_ids: [teamId], per_page: 100 })}`;
+          const url = `https://api.balldontlie.io/ncaaf/v1/team_season_stats${buildQuery({ season, team_ids: [teamId], per_page: 100 })}`;
           const resp = await fetch(url, { headers: { Authorization: API_KEY } });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
