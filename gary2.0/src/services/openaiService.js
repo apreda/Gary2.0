@@ -335,8 +335,8 @@ Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addre
 - Hockey (NHL): Power-play %, Penalty-kill %, Shots For/Against per game, Faceoff win %, Goals For/Against per game, last-10 form.
  - Football (NFL/NCAAF): Offense PPG, Defense PPG allowed, Yards/Play, 3rd/4th down conversion %, Red-zone efficiency (proxy), Turnover differential. Special attention to QB performance and opponent defensive profile.
 
-=== QUANTIFIED CALLOUTS (MANDATORY) ===
-In your 2–4 sentence paragraph, include at least TWO concrete, numeric metrics from the data above (e.g., "red‑zone TD rate 56%", "3rd‑down 46%", "5.8 yards per play", "TO differential +6"). Embed numbers naturally in the prose (no parenthetical stat lists). Use only values present in the provided data; never guess or infer.
+=== QUANTIFIED CALLOUTS (PREFERRED) ===
+When it strengthens the argument, weave in 1–2 concrete numeric metrics from the data (e.g., "red‑zone TD rate 56%", "3rd‑down 46%", "5.8 yards per play", "TO differential +6"). Prioritize story and cause‑effect first—avoid stat dumping. Embed numbers naturally in the prose (no parenthetical lists). Use only values present in the provided data; never guess or infer.
 
 === MODEL VS MARKET EDGE (IF PROVIDED) ===
 When a "model edge" is provided, explicitly use it to decide between ML and spread. If the model’s expected margin exceeds the market spread by ≥ 0.5, prefer the spread when juice is standard. If the market spread exceeds the expected margin, consider dog ML or taking the points if odds justify. Never force it—use it as a weighting signal along with the rest of the data.
