@@ -103,7 +103,114 @@ export async function generateNBAPicks(options = {}) {
         ballDontLieService.getInjuriesGeneric('basketball_nba', { team_ids: teamIds }, options.nocache ? 0 : 5)
       ]);
 
-      // Build simple regular-season report
+      // Build structured season report blocks (standings, season averages, top players)
+      const standingsAll = await ballDontLieService.getStandingsGeneric('basketball_nba', { season });
+      const findStand = (team) => Array.isArray(standingsAll) ? standingsAll.find(r => r?.team?.id === team?.id) : null;
+      const pickBasic = (s) => {
+        if (!s) return {};
+        const record = (s?.wins != null && s?.losses != null) ? `${s.wins}-${s.losses}` : undefined;
+        const homeRec = s?.home_record;
+        const awayRec = s?.road_record;
+        const streak = s?.streak || s?.current_streak || undefined;
+        // PPG/OPPG not directly in standings; leave undefined
+        return { record, homeRec, awayRec, streak };
+      };
+      const basics = {
+        home: pickBasic(findStand(homeTeam)),
+        away: pickBasic(findStand(awayTeam))
+      };
+
+      // Pull player season averages to compute four-factor proxies and top-3 players
+      const loadTeamAverages = async (team) => {
+        if (!team?.id) return { base: [], scoring: [], players: [] };
+        const roster = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 100 });
+        const ids = (Array.isArray(roster) ? roster : []).map(p => p.id).filter(Boolean).slice(0, 100);
+        const [base, scoring, advanced, usage] = await Promise.all([
+          ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'base', season, season_type: 'regular', player_ids: ids }),
+          ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'scoring', season, season_type: 'regular', player_ids: ids }),
+          ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'advanced', season, season_type: 'regular', player_ids: ids }),
+          ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'usage', season, season_type: 'regular', player_ids: ids })
+        ]);
+        return { 
+          base: Array.isArray(base) ? base : [], 
+          scoring: Array.isArray(scoring) ? scoring : [], 
+          advanced: Array.isArray(advanced) ? advanced : [],
+          usage: Array.isArray(usage) ? usage : [],
+          players: Array.isArray(roster) ? roster : [] 
+        };
+      };
+      const [homeAvg, awayAvg] = await Promise.all([loadTeamAverages(homeTeam), loadTeamAverages(awayTeam)]);
+
+      const aggFourFactors = (baseList) => {
+        if (!Array.isArray(baseList) || baseList.length === 0) return {};
+        let fgm = 0, fg3m = 0, fga = 0, ftm = 0, fta = 0, oreb = 0, tov = 0;
+        baseList.forEach(e => {
+          const s = e?.stats || {};
+          fgm += Number(s.fgm || s.field_goals_made || 0);
+          fga += Number(s.fga || s.field_goals_attempted || 0);
+          fg3m += Number(s.fg3m || s.three_point_field_goals_made || 0);
+          ftm += Number(s.ftm || s.free_throws_made || 0);
+          fta += Number(s.fta || s.free_throws_attempted || 0);
+          oreb += Number(s.oreb || s.offensive_rebounds || 0);
+          tov += Number(s.tov || s.turnovers || 0);
+        });
+        const efg = fga > 0 ? (fgm + 0.5 * fg3m) / fga : undefined;
+        const tovRateDen = (fga + 0.44 * fta + tov);
+        const tovRate = tovRateDen > 0 ? (tov / tovRateDen) : undefined;
+        const ftRate = fga > 0 ? (ftm / fga) : undefined;
+        return {
+          effectiveFgPct: efg,
+          turnoverRate: tovRate,
+          offensiveRebRate: oreb, // proxy: ORB per-game (sum of per-player avgs)
+          freeThrowRate: ftRate
+        };
+      };
+      const aggAdvanced = (advList, usageList) => {
+        if (!Array.isArray(advList) || advList.length === 0) return {};
+        const safeVals = (arr, key) => {
+          const vals = arr.map(e => Number(e?.stats?.[key])).filter(v => Number.isFinite(v));
+          if (!vals.length) return undefined;
+          const sum = vals.reduce((a, b) => a + b, 0);
+          return sum / vals.length;
+        };
+        const ts = safeVals(advList, 'true_shooting_percentage');
+        const efg = safeVals(advList, 'effective_field_goal_percentage');
+        const ortg = safeVals(advList, 'offensive_rating');
+        const drtg = safeVals(advList, 'defensive_rating');
+        const net = (typeof ortg === 'number' && typeof drtg === 'number') ? (ortg - drtg) : safeVals(advList, 'net_rating');
+        const usg = Array.isArray(usageList) && usageList.length ? safeVals(usageList, 'usage_percentage') : undefined;
+        return { trueShootingPct: ts, effectiveFgPctAdv: efg, offensiveRating: ortg, defensiveRating: drtg, netRating: net, usagePct: usg };
+      };
+
+      const pickTop3 = (baseList, scoringList, rosterList) => {
+        const byId = new Map();
+        scoringList.forEach(row => {
+          const pid = row?.player?.id;
+          const pts = Number(row?.stats?.points_per_game || row?.stats?.pts || 0);
+          if (pid) byId.set(pid, { pid, pts });
+        });
+        const entries = Array.from(byId.values()).sort((a, b) => b.pts - a.pts).slice(0, 3);
+        return entries.map(({ pid }) => {
+          const base = baseList.find(x => x?.player?.id === pid)?.stats || {};
+          const plyr = rosterList.find(x => x?.id === pid) || {};
+          const name = (plyr.first_name && plyr.last_name) ? `${plyr.first_name} ${plyr.last_name}` : (plyr.full_name || '');
+          const pts = Number((base.points_per_game ?? base.pts) || 0);
+          const reb = Number((base.rebounds_per_game ?? base.reb) || 0);
+          const ast = Number((base.assists_per_game ?? base.ast) || 0);
+          return { id: pid, name, ptsPerGame: pts, rebPerGame: reb, astPerGame: ast };
+        });
+      };
+
+      const seasonSummary = {
+        home: { ...aggFourFactors(homeAvg.base), adv: aggAdvanced(homeAvg.advanced, homeAvg.usage) },
+        away: { ...aggFourFactors(awayAvg.base), adv: aggAdvanced(awayAvg.advanced, awayAvg.usage) }
+      };
+      const topPlayers = {
+        home: pickTop3(homeAvg.base, homeAvg.scoring, homeAvg.players),
+        away: pickTop3(awayAvg.base, awayAvg.scoring, awayAvg.players)
+      };
+
+      // Keep a human-readable notes block for debugging
       let report = '\n## REGULAR SEASON CONTEXT:\n\n';
       report += `Season: ${season}-${season + 1}\n\n`;
       report += `Recent window: ${startStr} to ${endStr}\n\n`;
@@ -132,35 +239,7 @@ export async function generateNBAPicks(options = {}) {
         console.log(`No odds data available for ${game.home_team} vs ${game.away_team}`);
       }
 
-      // Simple model-vs-market edge from recent scoring differential
-      let modelEdge = null;
-      try {
-        const spreadsMarket = oddsData?.markets?.find?.(m => m.key === 'spreads');
-        const homeOutcome = spreadsMarket?.outcomes?.find?.(o => o.name === game.home_team);
-        const marketSpread = typeof homeOutcome?.point === 'number' ? homeOutcome.point : null;
-        const computeDiff = (recentList, teamObj) => {
-          if (!Array.isArray(recentList) || !teamObj?.id) return null;
-          let forPts = 0, againstPts = 0, n = 0;
-          for (const g of recentList) {
-            const hId = g?.home_team?.id || g?.home_team_id;
-            const aId = g?.away_team?.id || g?.away_team_id;
-            const hs = g?.home_score;
-            const as = g?.away_score;
-            if (typeof hs !== 'number' || typeof as !== 'number') continue;
-            if (hId === teamObj.id) { forPts += hs; againstPts += as; n++; }
-            else if (aId === teamObj.id) { forPts += as; againstPts += hs; n++; }
-          }
-          if (n === 0) return null;
-          return (forPts / n) - (againstPts / n);
-        };
-        const homeDiff = homeTeam ? computeDiff(homeRecent, homeTeam) : null;
-        const awayDiff = awayTeam ? computeDiff(awayRecent, awayTeam) : null;
-        if (marketSpread !== null && homeDiff !== null && awayDiff !== null) {
-          const expectedMargin = homeDiff - awayDiff;
-          const edge = expectedMargin - marketSpread;
-          modelEdge = { expectedMargin: Number(expectedMargin.toFixed(2)), marketSpread, edge: Number(edge.toFixed(2)) };
-        }
-      } catch {}
+      // Removed "model" logic per user guidance
 
       // Perplexity key findings (trim to 3–4)
       let richKeyFindings = [];
@@ -181,10 +260,14 @@ export async function generateNBAPicks(options = {}) {
         gameContext: { season, postseason: false, notes: 'Regular season context from BDL NBA', richKeyFindings },
         homeTeamStats: homeTeamInfo,
         awayTeamStats: awayTeamInfo,
-        statsReport: report,
+        statsReport: {
+          basics,
+          seasonSummary,
+          topPlayers,
+          rawNotes: report
+        },
         playoffPlayerStats: null,
         seriesData: null,
-        modelEdge,
         odds: oddsData,
         gameTime: game.commence_time,
         time: game.commence_time

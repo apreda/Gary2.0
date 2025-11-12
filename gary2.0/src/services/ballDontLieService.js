@@ -604,6 +604,30 @@ const ballDontLieService = {
   },
 
   /**
+   * NBA Season Averages by category/type (players)
+   * Example path: /nba/v1/season_averages/{category}?type=base|advanced|...
+   */
+  async getNbaSeasonAverages({ category = 'general', type = 'base', season, season_type = 'regular', player_ids } = {}, ttlMinutes = 10) {
+    try {
+      if (!season) return [];
+      const cacheKey = `nba_season_averages_${category}_${type}_${season}_${season_type}_${Array.isArray(player_ids) ? player_ids.join('-') : 'all'}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const path = `nba/v1/season_averages/${encodeURIComponent(category)}`;
+        const params = { season, season_type, type, per_page: 100 };
+        if (Array.isArray(player_ids) && player_ids.length) {
+          params['player_ids[]'] = player_ids.slice(0, 100);
+        }
+        const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
+        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] nba getNbaSeasonAverages error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * NFL player season stats (offense focus)
    */
   async getNflPlayerSeasonStats({ playerId, season, postseason = false } = {}, ttlMinutes = 10) {
@@ -617,6 +641,29 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] nfl getNflPlayerSeasonStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * NCAAB player season stats (single season; filterable by player or team)
+   */
+  async getNcaabPlayerSeasonStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 10) {
+    try {
+      if (!season) return [];
+      const pidArr = playerIds || (playerId ? [playerId] : undefined);
+      const tidArr = teamIds || (teamId ? [teamId] : undefined);
+      const cacheKey = `ncaab_player_season_stats_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const query = { season, per_page: 100 };
+        if (Array.isArray(pidArr) && pidArr.length) query['player_ids[]'] = pidArr.slice(0, 100);
+        if (Array.isArray(tidArr) && tidArr.length) query['team_ids[]'] = tidArr.slice(0, 100);
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/player_season_stats${buildQuery(query)}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] ncaab getNcaabPlayerSeasonStats error:', e.message);
       return [];
     }
   },
@@ -759,7 +806,8 @@ const ballDontLieService = {
           basketball_ncaab: 'ncaab/v1/games',
           basketball_wnba: 'wnba/v1/games',
           basketball_nba: 'nba/v1/games',
-          soccer_epl: 'epl/v1/games'
+          soccer_epl: 'epl/v1/games',
+          baseball_mlb: 'mlb/v1/games'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getGames not supported');
@@ -1050,28 +1098,40 @@ const ballDontLieService = {
       Object.assign(map, first);
     }
     // Derived
-    const yardsPerPlay = (map.net_total_offensive_yards && map.total_offensive_plays)
-      ? map.net_total_offensive_yards / map.total_offensive_plays
-      : undefined;
-    const oppYardsPerPlay = (map.opp_net_total_offensive_yards && map.opp_total_offensive_plays)
-      ? map.opp_net_total_offensive_yards / map.opp_total_offensive_plays
-      : undefined;
+    // Yards per play with robust fallbacks
+    const yppDirect = map.yards_per_play ?? map.offensive_yards_per_play ?? undefined;
+    const yppNum = (num) => (typeof num === 'number' && isFinite(num)) ? num : undefined;
+    let yardsPerPlay = yppNum(yppDirect);
+    if (yardsPerPlay == null) {
+      const totalY = map.net_total_offensive_yards ?? map.total_offensive_yards ?? map.total_yards;
+      const plays = map.total_offensive_plays ?? map.offensive_plays ?? map.total_plays;
+      yardsPerPlay = (typeof totalY === 'number' && typeof plays === 'number' && plays > 0) ? (totalY / plays) : undefined;
+    }
+    // Opponent yards per play
+    const oppYppDirect = map.opp_yards_per_play ?? map.defensive_yards_per_play ?? undefined;
+    let oppYardsPerPlay = yppNum(oppYppDirect);
+    if (oppYardsPerPlay == null) {
+      const oTotalY = map.opp_net_total_offensive_yards ?? map.opp_total_offensive_yards ?? map.opp_total_yards;
+      const oPlays = map.opp_total_offensive_plays ?? map.opp_offensive_plays ?? map.opp_total_plays;
+      oppYardsPerPlay = (typeof oTotalY === 'number' && typeof oPlays === 'number' && oPlays > 0) ? (oTotalY / oPlays) : undefined;
+    }
     // Red-zone proxies if exposed by API
-    const redZoneOffProxy = (typeof map.red_zone_scores !== 'undefined')
-      ? (map.red_zone_scores / (map.red_zone_attempts || 1))
-      : undefined;
-    const redZoneDefProxy = (typeof map.opp_red_zone_scores !== 'undefined')
-      ? (map.opp_red_zone_scores / (map.opp_red_zone_attempts || 1))
-      : undefined;
+    // Red zone proxies (favor scoring percentage if provided)
+    let redZoneOffProxy = undefined;
+    if (typeof map.red_zone_scoring_percentage === 'number') redZoneOffProxy = map.red_zone_scoring_percentage;
+    else if (typeof map.red_zone_scores !== 'undefined') redZoneOffProxy = (map.red_zone_scores / (map.red_zone_attempts || 1));
+    let redZoneDefProxy = undefined;
+    if (typeof map.opp_red_zone_scoring_percentage === 'number') redZoneDefProxy = map.opp_red_zone_scoring_percentage;
+    else if (typeof map.opp_red_zone_scores !== 'undefined') redZoneDefProxy = (map.opp_red_zone_scores / (map.opp_red_zone_attempts || 1));
     // Very rough pass-proxy: sacks allowed per dropback ~ sacksAllowed / (passAttempts + sacksAllowed)
-    const sacksAllowed = map.misc_sacks_allowed ?? map.sacks_allowed ?? undefined;
-    const passAtt = map.passing_attempts ?? map.pass_attempts ?? undefined;
+    const sacksAllowed = map.misc_sacks_allowed ?? map.sacks_allowed ?? map.offensive_sacks_allowed ?? undefined;
+    const passAtt = map.passing_attempts ?? map.pass_attempts ?? map.offensive_pass_attempts ?? undefined;
     const sacksAllowedPerDropback = (typeof sacksAllowed === 'number' && typeof passAtt === 'number' && (passAtt + sacksAllowed) > 0)
       ? sacksAllowed / (passAtt + sacksAllowed)
       : undefined;
     // Very rough defensive pressure proxy: team sacks per opp dropback ~ sacks / (opp pass att + sacks)
-    const defSacks = map.sacks ?? map.defensive_sacks ?? undefined;
-    const oppPassAtt = map.opp_passing_attempts ?? map.opp_pass_attempts ?? undefined;
+    const defSacks = map.sacks ?? map.defensive_sacks ?? map.team_sacks ?? undefined;
+    const oppPassAtt = map.opp_passing_attempts ?? map.opp_pass_attempts ?? map.defensive_opponent_pass_attempts ?? undefined;
     const defSackRateProxy = (typeof defSacks === 'number' && typeof oppPassAtt === 'number' && (oppPassAtt + defSacks) > 0)
       ? defSacks / (oppPassAtt + defSacks)
       : undefined;
@@ -1080,8 +1140,8 @@ const ballDontLieService = {
       oppPointsPerGame: map.opp_total_points_per_game,
       yardsPerPlay,
       oppYardsPerPlay,
-      thirdDownPct: map.misc_third_down_conv_pct,
-      fourthDownPct: map.misc_fourth_down_conv_pct,
+      thirdDownPct: map.misc_third_down_conv_pct ?? map.third_down_conversion_percentage ?? map.third_down_pct,
+      fourthDownPct: map.misc_fourth_down_conv_pct ?? map.fourth_down_conversion_percentage ?? map.fourth_down_pct,
       redZoneProxy: redZoneOffProxy,
       redZoneDefProxy,
       turnoverDiff: map.misc_turnover_differential,

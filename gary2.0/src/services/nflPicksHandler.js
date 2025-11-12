@@ -121,8 +121,83 @@ export async function generateNFLPicks(options = {}) {
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season, postseason: false }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season, postseason: false })
       ]);
-      const homeRates = ballDontLieService.deriveNflTeamRates(homeSeason);
-      const awayRates = ballDontLieService.deriveNflTeamRates(awaySeason);
+      let homeRates = ballDontLieService.deriveNflTeamRates(homeSeason);
+      let awayRates = ballDontLieService.deriveNflTeamRates(awaySeason);
+
+      // Fallbacks: derive missing yards/play and red-zone proxies from aggregated team game_stats
+      const deriveFromGameStats = (rows = []) => {
+        if (!Array.isArray(rows) || rows.length === 0) return {};
+        const toNum = (v) => (typeof v === 'number' && isFinite(v)) ? v : undefined;
+        let yppVals = [];
+        let rzMade = 0, rzAtt = 0;
+        let oppRzMade = 0, oppRzAtt = 0;
+        let totalY = 0, totalPlays = 0;
+        let passAttSum = 0, rushAttSum = 0, sacksAllowedSum = 0;
+        for (const r of rows) {
+          const ypp = toNum(r?.yards_per_play ?? r?.ypp);
+          if (typeof ypp === 'number') yppVals.push(ypp);
+          const ty = toNum(r?.total_yards);
+          const plays = toNum(r?.total_plays ?? r?.plays);
+          if (typeof ty === 'number' && typeof plays === 'number') {
+            totalY += ty;
+            totalPlays += plays;
+          }
+          passAttSum += Number(r?.passing_attempts ?? r?.pass_attempts ?? 0);
+          rushAttSum += Number(r?.rushing_attempts ?? r?.rush_attempts ?? 0);
+          sacksAllowedSum += Number(r?.sacks_allowed ?? r?.misc_sacks_allowed ?? 0);
+          // Red zone (offense)
+          if (typeof r?.red_zone_scores === 'number' && typeof r?.red_zone_attempts === 'number') {
+            rzMade += r.red_zone_scores;
+            rzAtt += r.red_zone_attempts;
+          } else if (typeof r?.red_zone_efficiency === 'string') {
+            const parts = r.red_zone_efficiency.split('-').map(n => Number(n));
+            if (parts.length === 2 && parts.every(n => Number.isFinite(n))) {
+              rzMade += parts[0];
+              rzAtt += parts[1];
+            }
+          }
+          // Red zone (defense / opponent)
+          if (typeof r?.opp_red_zone_scores === 'number' && typeof r?.opp_red_zone_attempts === 'number') {
+            oppRzMade += r.opp_red_zone_scores;
+            oppRzAtt += r.opp_red_zone_attempts;
+          } else if (typeof r?.opp_red_zone_efficiency === 'string' || typeof r?.opponent_red_zone_efficiency === 'string') {
+            const s = r?.opp_red_zone_efficiency || r?.opponent_red_zone_efficiency || '';
+            const parts = s.split('-').map(n => Number(n));
+            if (parts.length === 2 && parts.every(n => Number.isFinite(n))) {
+              oppRzMade += parts[0];
+              oppRzAtt += parts[1];
+            }
+          }
+        }
+        let yardsPerPlay = undefined;
+        if (yppVals.length) {
+          yardsPerPlay = yppVals.reduce((a, b) => a + b, 0) / yppVals.length;
+        } else {
+          const approxPlays = totalPlays || (passAttSum + rushAttSum + sacksAllowedSum);
+          yardsPerPlay = approxPlays > 0 ? totalY / approxPlays : undefined;
+        }
+        const redZoneProxy = rzAtt > 0 ? (rzMade / rzAtt) : undefined;
+        const redZoneDefProxy = oppRzAtt > 0 ? (oppRzMade / oppRzAtt) : undefined;
+        return { yardsPerPlay, redZoneProxy, redZoneDefProxy };
+      };
+      if (homeRates?.yardsPerPlay == null || homeRates?.redZoneProxy == null || homeRates?.redZoneDefProxy == null) {
+        const fall = deriveFromGameStats(finalHomeTeamStats);
+        homeRates = {
+          ...homeRates,
+          yardsPerPlay: homeRates?.yardsPerPlay ?? fall.yardsPerPlay,
+          redZoneProxy: homeRates?.redZoneProxy ?? fall.redZoneProxy,
+          redZoneDefProxy: homeRates?.redZoneDefProxy ?? fall.redZoneDefProxy
+        };
+      }
+      if (awayRates?.yardsPerPlay == null || awayRates?.redZoneProxy == null || awayRates?.redZoneDefProxy == null) {
+        const fall = deriveFromGameStats(finalAwayTeamStats);
+        awayRates = {
+          ...awayRates,
+          yardsPerPlay: awayRates?.yardsPerPlay ?? fall.yardsPerPlay,
+          redZoneProxy: awayRates?.redZoneProxy ?? fall.redZoneProxy,
+          redZoneDefProxy: awayRates?.redZoneDefProxy ?? fall.redZoneDefProxy
+        };
+      }
 
       // Require season-level stats (per-game team_stats may be empty on some weeks)
       const hasHomeSeason = Array.isArray(homeSeason) && homeSeason.length > 0;
@@ -315,7 +390,7 @@ export async function generateNFLPicks(options = {}) {
 
       // Note: no baseline model edge. Decisions are angle- and price-driven only.
 
-      // Perplexity key findings (trim to 3-4)
+      // Perplexity key findings (trim to 3-4) and optional red-zone extraction fallback
       let richKeyFindings = [];
       let realTimeNewsText = '';
       try {
@@ -334,6 +409,29 @@ export async function generateNFLPicks(options = {}) {
           realTimeNewsText = rich.key_findings.slice(0, 3).map(toLine).join('\n');
         } else if (typeof rich?.summary === 'string' && rich.summary.trim().length > 0) {
           realTimeNewsText = rich.summary.trim();
+        }
+        // If red-zone proxies still missing, try to parse percent from key findings mentioning each team and "red zone"
+        const parsePct = (s = '') => {
+          const m = String(s).match(/(\d{1,3}(?:\.\d+)?)\s*%/);
+          return m ? (Number(m[1]) / 100) : undefined;
+        };
+        const scanFindings = (teamName) => {
+          for (const k of (rich?.key_findings || [])) {
+            const blob = `${k?.title || ''} ${k?.rationale || k?.note || ''}`.toLowerCase();
+            if (blob.includes('red zone') && blob.includes(String(teamName).toLowerCase())) {
+              const pct = parsePct(`${k?.title || ''} ${k?.rationale || k?.note || ''}`);
+              if (typeof pct === 'number' && isFinite(pct)) return pct;
+            }
+          }
+          return undefined;
+        };
+        if (homeRates?.redZoneProxy == null) {
+          const pct = scanFindings(game.home_team);
+          if (typeof pct === 'number') homeRates.redZoneProxy = pct;
+        }
+        if (awayRates?.redZoneProxy == null) {
+          const pct = scanFindings(game.away_team);
+          if (typeof pct === 'number') awayRates.redZoneProxy = pct;
         }
       } catch {}
 
