@@ -452,6 +452,43 @@ PICK DECISION:
         statsSection += composeLine(gameData?.homeTeam || 'Home', h) + '\n';
         statsSection += composeLine(gameData?.awayTeam || 'Away', a) + '\n\n';
       }
+      
+      // 4.6. NCAAB-specific: inject Four Factors and top players (season)
+      if ((gameData?.league === 'NCAAB' || gameData?.sport === 'ncaab' || gameData?.sport === 'basketball_ncaab')
+          && gameData?.statsReport) {
+        const sum = gameData.statsReport.seasonSummary || {};
+        const h = sum.home || {};
+        const a = sum.away || {};
+        const fmtNum = (v, d = 2) => (typeof v === 'number' && isFinite(v)) ? Number(v).toFixed(d) : 'N/A';
+        const fmtPct = (v) => {
+          if (typeof v !== 'number' || !isFinite(v)) return 'N/A';
+          const pct = v <= 1 ? v * 100 : v;
+          return `${pct.toFixed(1)}%`;
+        };
+        statsSection += 'NCAAB TEAM SEASON METRICS (BDL - Four Factors proxies):\n';
+        const composeNcaab = (label, m) => {
+          const parts = [];
+          if (typeof m.effectiveFgPct === 'number') parts.push(`eFG%: ${fmtPct(m.effectiveFgPct)}`);
+          if (typeof m.turnoverRate === 'number') parts.push(`TOV Rate: ${fmtNum(m.turnoverRate, 2)}`);
+          if (typeof m.offensiveRebRate === 'number') parts.push(`ORB Rate: ${fmtNum(m.offensiveRebRate, 2)}`);
+          if (typeof m.freeThrowRate === 'number') parts.push(`FT Rate: ${fmtNum(m.freeThrowRate, 3)}`);
+          return `- ${label} — ${parts.join(', ')}`;
+        };
+        statsSection += composeNcaab(gameData?.homeTeam || 'Home', h) + '\n';
+        statsSection += composeNcaab(gameData?.awayTeam || 'Away', a) + '\n';
+        // Top players (season)
+        const tp = gameData.statsReport.topPlayers || {};
+        const renderPlayer = (p) => `${p.name}: ${typeof p.ptsPerGame === 'number' ? `${p.ptsPerGame} PPG` : 'PPG N/A'}`
+          + (typeof p.rebPerGame === 'number' ? `, ${p.rebPerGame} RPG` : '')
+          + (typeof p.astPerGame === 'number' ? `, ${p.astPerGame} APG` : '');
+        if (Array.isArray(tp.home) && tp.home.length) {
+          statsSection += `Top Players (${gameData?.homeTeam || 'Home'}): ${tp.home.map(renderPlayer).join(' | ')}\n`;
+        }
+        if (Array.isArray(tp.away) && tp.away.length) {
+          statsSection += `Top Players (${gameData?.awayTeam || 'Away'}): ${tp.away.map(renderPlayer).join(' | ')}\n`;
+        }
+        statsSection += '\n';
+      }
         
       // 5. Process structured team stats from Ball Don't Lie API
       if (gameData?.teamStats) {
