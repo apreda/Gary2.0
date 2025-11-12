@@ -118,6 +118,15 @@ export async function generateNCAAFPicks(options = {}) {
         const agg = aggregateSeasonFromTeamStats(awayTeamStats);
         awaySeason = { ...agg, ...awaySeason };
       }
+      // Duplicate keys to match prompt expectations: totalYdsPerGame, passYdsPerGame, rushYdsPerGame
+      const normalizeSeasonKeys = (m = {}) => ({
+        ...m,
+        totalYdsPerGame: m.totalYardsPerGame ?? m.totalYdsPerGame,
+        passYdsPerGame: m.passingYardsPerGame ?? m.passYdsPerGame,
+        rushYdsPerGame: m.rushingYardsPerGame ?? m.rushYdsPerGame
+      });
+      homeSeason = normalizeSeasonKeys(homeSeason);
+      awaySeason = normalizeSeasonKeys(awaySeason);
 
       // Identify QB, RB1, WR1 and get season per-game aggregates via player season stats (fallback to per-game)
       const selectPlayers = async (teamId) => {
@@ -251,6 +260,11 @@ export async function generateNCAAFPicks(options = {}) {
           away: awaySeason
         },
         keyPlayers: {
+          home: homeSkills,
+          away: awaySkills
+        },
+        // Back-compat for prompt sections expecting 'skillPlayers'
+        skillPlayers: {
           home: homeSkills,
           away: awaySkills
         }

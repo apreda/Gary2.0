@@ -50,8 +50,9 @@ export async function generateNCAABPicks(options = {}) {
         ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season }),
-        ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, team_ids: [homeTeam.id] }),
-        ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, team_ids: [awayTeam.id] })
+        // NCAAB standings require conference_id; map from team object
+        (homeTeam?.conference || homeTeam?.conference_id) ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: homeTeam.conference || homeTeam.conference_id }) : Promise.resolve([]),
+        (awayTeam?.conference || awayTeam?.conference_id) ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: awayTeam.conference || awayTeam.conference_id }) : Promise.resolve([])
       ]);
 
       const hasHome = Array.isArray(homeTeamStats) && homeTeamStats.length > 0;
@@ -143,8 +144,8 @@ export async function generateNCAABPicks(options = {}) {
         away: { team: awayTeam, sample: awayTeamStats.slice(0, 3) },
         injuriesSample: injuries?.slice?.(0, 6) || [],
         basics: {
-          home: pickBasic(homeStandings?.[0] || homeStandings),
-          away: pickBasic(awayStandings?.[0] || awayStandings)
+          home: pickBasic(Array.isArray(homeStandings) ? homeStandings.find(r => r?.team?.id === homeTeam.id) : null),
+          away: pickBasic(Array.isArray(awayStandings) ? awayStandings.find(r => r?.team?.id === awayTeam.id) : null)
         },
         seasonSummary: {
           home: homeFour,
