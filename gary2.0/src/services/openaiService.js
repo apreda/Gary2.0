@@ -343,6 +343,12 @@ Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addre
 === QUANTIFIED CALLOUTS (PREFERRED) ===
 When it strengthens the argument, weave in 1–2 concrete numeric metrics from the data (e.g., "red‑zone TD rate 56%", "3rd‑down 46%", "5.8 yards per play", "TO differential +6"). Prioritize story and cause‑effect first—avoid stat dumping. Embed numbers naturally in the prose (no parenthetical lists). Use only values present in the provided data; never guess or infer.
 
+RULES FOR NUMERIC EVIDENCE AND INJURIES:
+- If you make a qualitative claim about a team ("road offense can punch", "pass rush heats up"), attach ONE precise stat for that claim when available (e.g., road PPG, overall PPG, yards/play, sacks/game). Keep it inline with the sentence.
+- If you reference injuries, NAME at least one relevant injured player with status from the injuries list (e.g., "LT Cam Jurgens — Questionable"), but only if such a player exists in the provided data. Never speculate.
+- Do NOT fabricate splits (e.g., second‑half only) unless the split exists in the provided data. Prefer season metrics; fall back to recent games if explicitly provided.
+- Always favor team/season metrics first; use player advanced metrics as supporting proof or tie‑breakers.
+
 === CONFIDENCE CALIBRATION ===
 - Calibrate 0.50–1.00 based on evidence QUALITY and ALIGNMENT (not hype).
 - If only 1–2 weakly aligned signals → ~0.55–0.59.
