@@ -209,25 +209,33 @@ export async function generateNFLPicks(options = {}) {
         }
       };
 
-      // Odds payload: choose a bookmaker that actually has ML or spreads with numeric prices
+      // Odds payload: merge markets across all bookmakers to avoid missing ML/spread
       let oddsData = null;
       if (Array.isArray(game.bookmakers) && game.bookmakers.length > 0) {
-        const preferWithBoth = game.bookmakers.find(b => {
-          const hasMl = Array.isArray(b?.markets) && b.markets.some(m => m.key === 'h2h' && Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number'));
-          const hasSpread = Array.isArray(b?.markets) && b.markets.some(m => m.key === 'spreads' && Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number'));
-          return hasMl && hasSpread;
-        });
-        const fallbackOne = preferWithBoth || game.bookmakers.find(b => {
-          return Array.isArray(b?.markets) && b.markets.some(m =>
-            (m.key === 'h2h' || m.key === 'spreads') &&
-            Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number')
-          );
-        });
-        if (fallbackOne) {
-          oddsData = {
-            bookmaker: fallbackOne.title,
-            markets: fallbackOne.markets || []
-          };
+        const marketKeyToOutcomes = new Map();
+        for (const b of game.bookmakers) {
+          const markets = Array.isArray(b?.markets) ? b.markets : [];
+          for (const m of markets) {
+            if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
+            if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
+            const outMap = marketKeyToOutcomes.get(m.key);
+            for (const o of m.outcomes) {
+              if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
+              const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
+              // Keep the best (most favorable) price seen; simple override
+              if (!outMap.has(key)) {
+                outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
+              }
+            }
+          }
+        }
+        const mergedMarkets = [];
+        for (const [key, outMap] of marketKeyToOutcomes.entries()) {
+          const outcomes = Array.from(outMap.values());
+          if (outcomes.length) mergedMarkets.push({ key, outcomes });
+        }
+        if (mergedMarkets.length) {
+          oddsData = { bookmaker: 'merged', markets: mergedMarkets };
         }
       }
 
