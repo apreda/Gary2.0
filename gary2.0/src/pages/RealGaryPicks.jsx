@@ -490,6 +490,18 @@ function RealGaryPicks() {
       default: return '#bfa142';         // Fallback to original gold
     }
   };
+  const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(0,0,0,${alpha ?? 1})`;
+    let h = hex.replace('#', '');
+    if (h.length === 3) {
+      h = h.split('').map(ch => ch + ch).join('');
+    }
+    const r = parseInt(h.substring(0, 2), 16) || 0;
+    const g = parseInt(h.substring(2, 4), 16) || 0;
+    const b = parseInt(h.substring(4, 6), 16) || 0;
+    const a = typeof alpha === 'number' ? alpha : 1;
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  };
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100vw' }}>
@@ -831,10 +843,10 @@ function RealGaryPicks() {
 
                                         {/* Confidence Score */}
                                         <div style={{
-                                          background: 'rgba(191, 161, 66, 0.15)',
+                                          background: hexToRgba(accentColor, 0.15),
                                           padding: '0.75rem 1.5rem',
                                           borderRadius: '8px',
-                                          border: '1px solid rgba(191, 161, 66, 0.3)'
+                                          border: `1px solid ${hexToRgba(accentColor, 0.3)}`
                                         }}>
                                           <div style={{ 
                                             fontSize: '0.7rem', 
@@ -1028,16 +1040,14 @@ function RealGaryPicks() {
                                             }}>
                                               <button 
                                                 style={{
-                                                  background: userDecisions[pick.id] === 'bet' 
-                                                    ? 'rgba(191, 161, 66, 0.5)'
-                                                    : 'rgba(191, 161, 66, 0.15)',
-                                                  color: userDecisions[pick.id] === 'bet' 
-                                                    ? '#ffdf7e'
-                                                    : '#bfa142',
+                                              background: userDecisions[pick.id] === 'bet' 
+                                                ? hexToRgba(accentColor, 0.5)
+                                                : hexToRgba(accentColor, 0.15),
+                                              color: accentColor,
                                                   fontWeight: '600',
                                                   padding: '0.5rem 1rem',
                                                   borderRadius: '8px',
-                                                  border: '1px solid rgba(191, 161, 66, 0.3)',
+                                              border: `1px solid ${hexToRgba(accentColor, 0.3)}`,
                                                   cursor: userDecisions[pick.id] ? 'default' : 'pointer',
                                                   flex: 1,
                                                   fontSize: '0.8rem',
@@ -1095,7 +1105,7 @@ function RealGaryPicks() {
                                             top: 0,
                                             bottom: 0,
                                             width: '30%',
-                                            borderLeft: '2.25px solid #bfa142',
+                                            borderLeft: `2.25px solid ${accentColor}`,
                                             padding: '1.5rem',
                                             display: 'flex',
                                             flexDirection: 'column',
@@ -1188,8 +1198,8 @@ function RealGaryPicks() {
                                               marginTop: '1rem',
                                               fontSize: '0.75rem',
                                               padding: '0.5rem 1rem',
-                                              background: 'rgba(191, 161, 66, 0.15)',
-                                              color: '#bfa142',
+                                              background: hexToRgba(accentColor, 0.15),
+                                              color: accentColor,
                                               border: 'none',
                                               borderRadius: '4px',
                                               cursor: 'pointer',
@@ -1234,7 +1244,7 @@ function RealGaryPicks() {
                                       {/* Back header - minimal height (MATCHING FREE PICK) */}
                                       <div style={{ marginBottom: '0.5rem', flex: '0 0 auto' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#bfa142', margin: 0 }}>Gary's Analysis</h3>
+                                           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: accentColor, margin: 0 }}>Gary's Analysis</h3>
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -1244,8 +1254,8 @@ function RealGaryPicks() {
                                               }));
                                             }}
                                             style={{
-                                              background: 'rgba(191, 161, 66, 0.15)',
-                                              color: '#bfa142',
+                                              background: hexToRgba(accentColor, 0.15),
+                                              color: accentColor,
                                               border: 'none',
                                               borderRadius: '4px',
                                               padding: '0.3rem 0.6rem',
