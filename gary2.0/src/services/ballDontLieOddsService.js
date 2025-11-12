@@ -6,6 +6,7 @@ import axios from 'axios';
 import { ballDontLieService } from './ballDontLieService.js';
 
 const BDL_V2_BASE = 'https://api.balldontlie.io/v2';
+const BDL_NFL_ODDS_V1 = 'https://api.balldontlie.io/nfl/v1/odds';
 
 function getApiKey() {
   try {
@@ -20,6 +21,13 @@ function getApiKey() {
     return '';
   }
 }
+
+const toNumber = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 /**
  * Fetch V2 odds by dates (array of YYYY-MM-DD)
@@ -38,6 +46,22 @@ async function fetchOddsByDates(dates = []) {
     headers: { Authorization: apiKey }
   });
   return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+}
+
+async function fetchNflOddsBySeasonWeek(season, week) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key for odds');
+  if (!season || week == null) return [];
+  try {
+    const resp = await axios.get(BDL_NFL_ODDS_V1, {
+      params: { season, week, per_page: 100 },
+      headers: { Authorization: apiKey }
+    });
+    return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+  } catch (e) {
+    console.warn('[BallDonLieOdds] NFL season/week odds fetch failed:', e?.response?.data || e?.message || e);
+    return [];
+  }
 }
 
 /**
@@ -64,25 +88,34 @@ async function getNbaGamesWithOdds(dateStr) {
     const bookmakers = vendors.map(v => {
       // Build a bookmaker-like structure with minimal markets
       const totalsOutcomes = [];
-      if (v.total_value != null) {
-        if (typeof v.total_value !== 'undefined') {
-          totalsOutcomes.push({ name: 'Over', point: Number(v.total_value), price: v.total_over_odds });
-          totalsOutcomes.push({ name: 'Under', point: Number(v.total_value), price: v.total_under_odds });
-        }
+      const totalPoint = toNumber(v.total_value);
+      const totalOver = toNumber(v.total_over_odds);
+      const totalUnder = toNumber(v.total_under_odds);
+      if (totalPoint !== null && totalOver !== null) {
+        totalsOutcomes.push({ name: 'Over', point: totalPoint, price: totalOver });
+      }
+      if (totalPoint !== null && totalUnder !== null) {
+        totalsOutcomes.push({ name: 'Under', point: totalPoint, price: totalUnder });
       }
       const spreadsOutcomes = [];
-      if (v.spread_home_value != null) {
-        spreadsOutcomes.push({ name: g.home_team?.full_name || g.home_team?.name, point: Number(v.spread_home_value), price: v.spread_home_odds });
+      const homeSpreadPoint = toNumber(v.spread_home_value);
+      const homeSpreadPrice = toNumber(v.spread_home_odds);
+      if (homeSpreadPoint !== null && homeSpreadPrice !== null) {
+        spreadsOutcomes.push({ name: g.home_team?.full_name || g.home_team?.name, point: homeSpreadPoint, price: homeSpreadPrice });
       }
-      if (v.spread_away_value != null) {
-        spreadsOutcomes.push({ name: g.visitor_team?.full_name || g.visitor_team?.name, point: Number(v.spread_away_value), price: v.spread_away_odds });
+      const awaySpreadPoint = toNumber(v.spread_away_value);
+      const awaySpreadPrice = toNumber(v.spread_away_odds);
+      if (awaySpreadPoint !== null && awaySpreadPrice !== null) {
+        spreadsOutcomes.push({ name: g.visitor_team?.full_name || g.visitor_team?.name, point: awaySpreadPoint, price: awaySpreadPrice });
       }
       const h2hOutcomes = [];
-      if (typeof v.moneyline_home_odds !== 'undefined') {
-        h2hOutcomes.push({ name: g.home_team?.full_name || g.home_team?.name, price: v.moneyline_home_odds });
+      const homeMl = toNumber(v.moneyline_home_odds);
+      if (homeMl !== null) {
+        h2hOutcomes.push({ name: g.home_team?.full_name || g.home_team?.name, price: homeMl });
       }
-      if (typeof v.moneyline_away_odds !== 'undefined') {
-        h2hOutcomes.push({ name: g.visitor_team?.full_name || g.visitor_team?.name, price: v.moneyline_away_odds });
+      const awayMl = toNumber(v.moneyline_away_odds);
+      if (awayMl !== null) {
+        h2hOutcomes.push({ name: g.visitor_team?.full_name || g.visitor_team?.name, price: awayMl });
       }
 
       const markets = [];
@@ -181,6 +214,25 @@ export const ballDontLieOddsService = {
             odds = byIds;
           }
         }
+        if (!Array.isArray(odds) || odds.length === 0) {
+          const seasonWeekPairs = [];
+          for (const g of games || []) {
+            const season = g?.season;
+            const week = g?.week;
+            if (season && week != null) {
+              const key = `${season}-${week}`;
+              if (!seasonWeekPairs.find(p => p.key === key)) {
+                seasonWeekPairs.push({ key, season, week });
+              }
+            }
+          }
+          for (const pair of seasonWeekPairs) {
+            const seasonWeekOdds = await fetchNflOddsBySeasonWeek(pair.season, pair.week);
+            if (Array.isArray(seasonWeekOdds) && seasonWeekOdds.length) {
+              odds = (odds || []).concat(seasonWeekOdds);
+            }
+          }
+        }
       } catch (e) {
         console.warn('[OddsService][NFL] Fallback by game_ids failed:', e?.message || e);
       }
@@ -204,23 +256,34 @@ export const ballDontLieOddsService = {
       const vendors = gameIdToVendors.get(g.id) || [];
       const bookmakers = vendors.map(v => {
         const totalsOutcomes = [];
-        if (v.total_value != null) {
-          totalsOutcomes.push({ name: 'Over', point: Number(v.total_value), price: v.total_over_odds });
-          totalsOutcomes.push({ name: 'Under', point: Number(v.total_value), price: v.total_under_odds });
+        const totalPoint = toNumber(v.total_value);
+        const totalOver = toNumber(v.total_over_odds);
+        const totalUnder = toNumber(v.total_under_odds);
+        if (totalPoint !== null && totalOver !== null) {
+          totalsOutcomes.push({ name: 'Over', point: totalPoint, price: totalOver });
+        }
+        if (totalPoint !== null && totalUnder !== null) {
+          totalsOutcomes.push({ name: 'Under', point: totalPoint, price: totalUnder });
         }
         const spreadsOutcomes = [];
-        if (v.spread_home_value != null) {
-          spreadsOutcomes.push({ name: mapTeamName(g.home_team), point: Number(v.spread_home_value), price: v.spread_home_odds });
+        const homeSpreadPoint = toNumber(v.spread_home_value);
+        const homeSpreadPrice = toNumber(v.spread_home_odds);
+        if (homeSpreadPoint !== null && homeSpreadPrice !== null) {
+          spreadsOutcomes.push({ name: mapTeamName(g.home_team), point: homeSpreadPoint, price: homeSpreadPrice });
         }
-        if (v.spread_away_value != null) {
-          spreadsOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), point: Number(v.spread_away_value), price: v.spread_away_odds });
+        const awaySpreadPoint = toNumber(v.spread_away_value);
+        const awaySpreadPrice = toNumber(v.spread_away_odds);
+        if (awaySpreadPoint !== null && awaySpreadPrice !== null) {
+          spreadsOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), point: awaySpreadPoint, price: awaySpreadPrice });
         }
         const h2hOutcomes = [];
-        if (typeof v.moneyline_home_odds !== 'undefined') {
-          h2hOutcomes.push({ name: mapTeamName(g.home_team), price: v.moneyline_home_odds });
+        const mlHome = toNumber(v.moneyline_home_odds);
+        if (mlHome !== null) {
+          h2hOutcomes.push({ name: mapTeamName(g.home_team), price: mlHome });
         }
-        if (typeof v.moneyline_away_odds !== 'undefined') {
-          h2hOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), price: v.moneyline_away_odds });
+        const mlAway = toNumber(v.moneyline_away_odds);
+        if (mlAway !== null) {
+          h2hOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), price: mlAway });
         }
       if (typeof v.moneyline_draw_odds !== 'undefined') {
         h2hOutcomes.push({ name: 'Draw', price: v.moneyline_draw_odds });
@@ -243,7 +306,7 @@ export const ballDontLieOddsService = {
       const homeTeamName = mapTeamName(g.home_team);
       const commenceTime = g.date || g.commence_time || g.game_time || new Date().toISOString();
 
-      return {
+      const result = {
         id: g.id,
         sport_key: sportKey,
         home_team: homeTeamName,
@@ -251,6 +314,14 @@ export const ballDontLieOddsService = {
         commence_time: commenceTime,
         bookmakers
       };
+      if (sportKey === 'americanfootball_nfl') {
+        const hasMl = bookmakers.some(b => (b.markets || []).some(m => m.key === 'h2h' && m.outcomes?.some(o => typeof o.price === 'number')));
+        const hasSpread = bookmakers.some(b => (b.markets || []).some(m => m.key === 'spreads' && m.outcomes?.some(o => typeof o.price === 'number' && typeof o.point === 'number')));
+        if (!hasMl || !hasSpread) {
+          console.warn(`[OddsService][NFL] Missing odds data for ${awayTeamName} @ ${homeTeamName} (ML=${hasMl}, spread=${hasSpread})`);
+        }
+      }
+      return result;
     });
   }
 };
