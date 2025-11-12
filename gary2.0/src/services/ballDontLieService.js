@@ -767,9 +767,26 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
         const fn = sport?.getPlayerStats || sport?.getStats;
-        if (!fn) throw new Error('player stats not supported');
-        const resp = await fn.call(sport, params);
-        return resp?.data || [];
+        if (fn) {
+          const resp = await fn.call(sport, params);
+          return resp?.data || [];
+        }
+        // HTTP fallback for sports with documented player_stats endpoints
+        const endpointMap = {
+          basketball_nba: 'nba/v1/player_stats',
+          basketball_wnba: 'wnba/v1/player_stats',
+          basketball_ncaab: 'ncaab/v1/player_stats',
+          americanfootball_nfl: 'nfl/v1/player_stats',
+          americanfootball_ncaaf: 'ncaaf/v1/player_stats',
+          icehockey_nhl: 'nhl/v1/player_stats'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) {
+          throw new Error('player stats not supported');
+        }
+        const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getPlayerStats error:`, e.message);
