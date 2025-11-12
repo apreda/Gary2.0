@@ -391,10 +391,10 @@ const computeWindow = (sport) => {
     const windowEnd = new Date(now.getTime() + SIXTEEN_HOURS_MS);
     return { windowStart, windowEnd };
   }
-  // NFL weekly window stays 5 days
+  // NFL weekly window stays 6 days (Thu–Tue coverage)
   if (sport === 'americanfootball_nfl') {
     const windowStart = new Date(now.getTime());
-    const windowEnd = new Date(now.getTime() + (5 * 24 * 60 * 60 * 1000));
+    const windowEnd = new Date(now.getTime() + (6 * 24 * 60 * 60 * 1000));
     return { windowStart, windowEnd };
   }
   // Default behavior: 36-hour spanning window (legacy)

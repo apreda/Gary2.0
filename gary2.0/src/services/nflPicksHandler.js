@@ -16,16 +16,16 @@ export async function generateNFLPicks(options = {}) {
   const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache: options.nocache === true });
   console.log(`Found ${games.length} NFL games from odds service`);
 
-  // Weekly window: include games in the next 5 days (Thu-Mon cadence supported)
+  // Weekly window: include games in the next 6 days (Thu–Tue coverage)
   const now = new Date();
-  const end = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
-  console.log(`NFL 5-day window: ${now.toISOString()} to ${end.toISOString()}`);
+  const end = new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000);
+  console.log(`NFL 6-day window: ${now.toISOString()} to ${end.toISOString()}`);
 
   let todayGames = games.filter(g => {
     const t = new Date(g.commence_time);
     return t >= now && t <= end;
   });
-  console.log(`After date filtering: ${todayGames.length} NFL games in next 5 days`);
+  console.log(`After date filtering: ${todayGames.length} NFL games in next 6 days`);
 
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;
@@ -142,6 +142,16 @@ export async function generateNFLPicks(options = {}) {
           const abbr = (p?.position_abbreviation || '').toLowerCase();
           return abbr === 'qb' || pos.includes('quarterback');
         };
+        const isRB = (p) => {
+          const pos = (p?.position || '').toLowerCase();
+          const abbr = (p?.position_abbreviation || '').toLowerCase();
+          return abbr === 'rb' || pos.includes('running back');
+        };
+        const isWR = (p) => {
+          const pos = (p?.position || '').toLowerCase();
+          const abbr = (p?.position_abbreviation || '').toLowerCase();
+          return abbr === 'wr' || pos.includes('wide receiver');
+        };
         if (Array.isArray(homeQbs)) homeQbs = homeQbs.filter(isQB);
         if (Array.isArray(awayQbs)) awayQbs = awayQbs.filter(isQB);
         homeQb = Array.isArray(homeQbs) && homeQbs[0] ? homeQbs[0] : null;
@@ -158,12 +168,16 @@ export async function generateNFLPicks(options = {}) {
         awayQbAdvanced = awayQbAdvRes;
 
         // Try to identify a lead RB and WR per team, then pull advanced rushing/receiving (season-level)
-        const [homeRbs, awayRbs, homeWrs, awayWrs] = await Promise.all([
+        let [homeRbs, awayRbs, homeWrs, awayWrs] = await Promise.all([
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'RB', per_page: 5 }),
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'RB', per_page: 5 }),
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'WR', per_page: 5 }),
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'WR', per_page: 5 })
         ]);
+        if (Array.isArray(homeRbs)) homeRbs = homeRbs.filter(isRB);
+        if (Array.isArray(awayRbs)) awayRbs = awayRbs.filter(isRB);
+        if (Array.isArray(homeWrs)) homeWrs = homeWrs.filter(isWR);
+        if (Array.isArray(awayWrs)) awayWrs = awayWrs.filter(isWR);
         homeLeadRb = Array.isArray(homeRbs) && homeRbs[0] ? homeRbs[0] : null;
         awayLeadRb = Array.isArray(awayRbs) && awayRbs[0] ? awayRbs[0] : null;
         homeLeadWr = Array.isArray(homeWrs) && homeWrs[0] ? homeWrs[0] : null;
