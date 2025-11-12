@@ -40,14 +40,6 @@
     <priority>0.7</priority>
   </url>
   
-  <!-- Leaderboard -->
-  <url>
-    <loc>https://betwithgary.ai/leaderboard</loc>
-    <lastmod>2025-05-08</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.7</priority>
-  </url>
-  
   <!-- How It Works -->
   <url>
     <loc>https://betwithgary.ai/how-it-works</loc>
