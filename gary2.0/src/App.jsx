@@ -14,14 +14,12 @@ import RealGaryPicks from "./pages/RealGaryPicks";
 import GaryProps from "./pages/GaryProps";
 import { Pricing } from "./pages/Pricing";
 import { Billfold } from "./pages/Billfold";
-import { Leaderboard } from "./pages/Leaderboard";
 import { HowItWorks } from "./pages/HowItWorks";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import LearnMore from "./pages/LearnMore";
 import { CheckoutSuccess } from "./pages/CheckoutSuccess";
 import { CheckoutCancel } from "./pages/CheckoutCancel";
-import WhatGaryThinks from "./pages/WhatGaryThinks";
 import TeamProps from './pages/TeamProps';
 
 // Admin components - dynamically loaded
@@ -128,7 +126,7 @@ function AppContent() {
               <Route path="/gary-props" element={<GaryProps />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/billfold" element={<Billfold />} />
-              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/leaderboard" element={<Navigate to="/real-gary-picks" replace />} />
               <Route path="/how-it-works" element={<HowItWorks />} />
               <Route path="/learn-more" element={<LearnMore />} />
               <Route path="/terms" element={<TermsOfService />} />
@@ -152,7 +150,6 @@ function AppContent() {
               {/* Admin routes */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
               <Route path="/admin/results" element={<ResultsAdmin />} />
-              <Route path="/what-gary-thinks" element={<WhatGaryThinks />} />
             </Routes>
           </Suspense>
         </div>
