@@ -7,6 +7,7 @@ import { ballDontLieService } from './ballDontLieService.js';
 
 const BDL_V2_BASE = 'https://api.balldontlie.io/v2';
 const BDL_NFL_ODDS_V1 = 'https://api.balldontlie.io/nfl/v1/odds';
+const BDL_NCAAB_ODDS_V1 = 'https://api.balldontlie.io/ncaab/v1/odds';
 
 function getApiKey() {
   try {
@@ -153,6 +154,85 @@ export const ballDontLieOddsService = {
    * @returns {Promise<Array>} games with bookmakers/markets in a unified shape
    */
   async getGamesWithOddsForSport(sportKey, dateStr) {
+    // NCAAB: use sport-specific v1 odds endpoint; odds start 2025-26 and not guaranteed per docs
+    if (sportKey === 'basketball_ncaab') {
+      const apiKey = getApiKey();
+      const games = await ballDontLieService.getGames('basketball_ncaab', { dates: [dateStr], per_page: 100 }, 10);
+      const ids = (games || []).map(g => g.id).filter(Boolean);
+      let oddsRows = [];
+      try {
+        // Try by date first
+        const respByDate = await axios.get(BDL_NCAAB_ODDS_V1, {
+          params: { 'dates[]': [dateStr], per_page: 100 },
+          headers: { Authorization: apiKey }
+        });
+        const rowsByDate = Array.isArray(respByDate?.data?.data) ? respByDate.data.data : [];
+        oddsRows = rowsByDate;
+      } catch (e) {
+        console.warn('[BallDonLieOdds][NCAAB] date-based v1 odds fetch failed:', e?.response?.data || e?.message || e);
+      }
+      // If none by date, try by game_ids
+      if ((!Array.isArray(oddsRows) || oddsRows.length === 0) && ids.length > 0) {
+        try {
+          const respByIds = await axios.get(BDL_NCAAB_ODDS_V1, {
+            params: { 'game_ids[]': ids.slice(0, 100), per_page: 100 },
+            headers: { Authorization: apiKey }
+          });
+          const rowsByIds = Array.isArray(respByIds?.data?.data) ? respByIds.data.data : [];
+          oddsRows = rowsByIds;
+        } catch (e) {
+          console.warn('[BallDonLieOdds][NCAAB] game_ids v1 odds fetch failed:', e?.response?.data || e?.message || e);
+        }
+      }
+      // Index odds by game
+      const byGame = oddsRows.reduce((acc, r) => {
+        const list = acc.get(r.game_id) || [];
+        list.push(r);
+        acc.set(r.game_id, list);
+        return acc;
+      }, new Map());
+      const mapTeamName = (t) => (typeof t === 'string' ? t : (t?.full_name || t?.name || t?.short_name || ''));
+      return (games || []).map(g => {
+        const vendors = byGame.get(g.id) || [];
+        const bookmakers = vendors.map(v => {
+          const totalsOutcomes = [];
+          const totalPoint = toNumber(v.total_value);
+          const totalOver = toNumber(v.total_over_odds);
+          const totalUnder = toNumber(v.total_under_odds);
+          if (totalPoint !== null && totalOver !== null) totalsOutcomes.push({ name: 'Over', point: totalPoint, price: totalOver });
+          if (totalPoint !== null && totalUnder !== null) totalsOutcomes.push({ name: 'Under', point: totalPoint, price: totalUnder });
+          const spreadsOutcomes = [];
+          const homeSpreadPoint = toNumber(v.spread_home_value);
+          const homeSpreadPrice = toNumber(v.spread_home_odds);
+          if (homeSpreadPoint !== null && homeSpreadPrice !== null) {
+            spreadsOutcomes.push({ name: mapTeamName(g.home_team), point: homeSpreadPoint, price: homeSpreadPrice });
+          }
+          const awaySpreadPoint = toNumber(v.spread_away_value);
+          const awaySpreadPrice = toNumber(v.spread_away_odds);
+          if (awaySpreadPoint !== null && awaySpreadPrice !== null) {
+            spreadsOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), point: awaySpreadPoint, price: awaySpreadPrice });
+          }
+          const h2hOutcomes = [];
+          const homeMl = toNumber(v.moneyline_home_odds);
+          if (homeMl !== null) h2hOutcomes.push({ name: mapTeamName(g.home_team), price: homeMl });
+          const awayMl = toNumber(v.moneyline_away_odds);
+          if (awayMl !== null) h2hOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), price: awayMl });
+          const markets = [];
+          if (h2hOutcomes.length) markets.push({ key: 'h2h', outcomes: h2hOutcomes });
+          if (spreadsOutcomes.length) markets.push({ key: 'spreads', outcomes: spreadsOutcomes });
+          if (totalsOutcomes.length) markets.push({ key: 'totals', outcomes: totalsOutcomes });
+          return { key: v.vendor, title: v.vendor, markets };
+        });
+        return {
+          id: g.id,
+          sport_key: sportKey,
+          home_team: mapTeamName(g.home_team),
+          away_team: mapTeamName(g.visitor_team || g.away_team),
+          commence_time: g.date || g.commence_time || new Date().toISOString(),
+          bookmakers
+        };
+      });
+    }
     // EPL: use sport-specific v1 odds endpoint with moneyline including draw
     if (sportKey === 'soccer_epl') {
       const apiKey = getApiKey();
