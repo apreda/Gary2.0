@@ -313,6 +313,55 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     console.log(`Team Stats Available: ${!!gameData?.teamStats}`);
     console.log(`Game Context Available: ${!!gameData?.gameContext}`);
     
+    // Light-weight visibility: warn if expected sections are missing so we know what Gary actually saw
+    try {
+      const miss = [];
+      const sr = formattedData?.statsReport || {};
+      const sportKey = (formattedData?.sport || '').toLowerCase();
+      if (sportKey.includes('nfl')) {
+        const h = sr?.seasonSummary?.home || {};
+        const a = sr?.seasonSummary?.away || {};
+        if (Object.keys(h).length === 0 || Object.keys(a).length === 0) miss.push('NFL seasonSummary');
+        if (h.yardsPerPlay == null || a.yardsPerPlay == null) miss.push('NFL yardsPerPlay');
+        if (h.thirdDownPct == null || a.thirdDownPct == null) miss.push('NFL 3rdDown%');
+        if (h.redZoneProxy == null && h.redZoneDefProxy == null) miss.push('NFL red-zone proxies (home)');
+        if (a.redZoneProxy == null && a.redZoneDefProxy == null) miss.push('NFL red-zone proxies (away)');
+      } else if (sportKey.includes('ncaaf')) {
+        const h = sr?.seasonSummary?.home || {};
+        const a = sr?.seasonSummary?.away || {};
+        if (Object.keys(h).length === 0 || Object.keys(a).length === 0) miss.push('NCAAF seasonSummary');
+        const spHome = sr?.skillPlayers?.home || {};
+        const spAway = sr?.skillPlayers?.away || {};
+        if (!spHome?.qb) miss.push('NCAAF home QB');
+        if (!spHome?.rb1) miss.push('NCAAF home RB1');
+        if (!spHome?.wr1) miss.push('NCAAF home WR1');
+        if (!spAway?.qb) miss.push('NCAAF away QB');
+        if (!spAway?.rb1) miss.push('NCAAF away RB1');
+        if (!spAway?.wr1) miss.push('NCAAF away WR1');
+      } else if (sportKey.includes('ncaab')) {
+        const h = sr?.seasonSummary?.home || {};
+        const a = sr?.seasonSummary?.away || {};
+        if (Object.keys(h).length === 0 || Object.keys(a).length === 0) miss.push('NCAAB season Four-Factors');
+        const tpHome = sr?.topPlayers?.home || [];
+        const tpAway = sr?.topPlayers?.away || [];
+        if (!Array.isArray(tpHome) || tpHome.length === 0) miss.push('NCAAB top-3 players (home)');
+        if (!Array.isArray(tpAway) || tpAway.length === 0) miss.push('NCAAB top-3 players (away)');
+      } else if (sportKey.includes('nba') || sportKey.includes('wnba')) {
+        // We don't yet inject an explicit basics block for these; warn if missing to surface gaps
+        if (!sr?.basics) miss.push('Basketball basics (record/streak/PPG/Opp PPG)');
+      } else if (sportKey.includes('epl')) {
+        // EPL has season stats + 3-way ML; warn if odds lack draw side
+        const hasDraw = Array.isArray(formattedData?.odds?.markets)
+          && formattedData.odds.markets.some(m => m.key === 'h2h' && m.outcomes?.some(o => String(o?.name).toLowerCase() === 'draw'));
+        if (!hasDraw) miss.push('EPL draw moneyline');
+      }
+      if (miss.length) {
+        console.warn(`Stats visibility: missing → ${miss.join(', ')}`);
+      } else {
+        console.log('Stats visibility: all expected sections present for this sport');
+      }
+    } catch {}
+    
     if (isBaseball) {
       console.log(`Pitcher Data Available: ${!!gameData?.pitchers}`);
       console.log(`Hitter Stats Available: ${!!gameData?.hitterStats}`);
