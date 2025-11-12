@@ -93,6 +93,23 @@ export async function generateNFLPicks(options = {}) {
           if (finalAwayTeamStats.length === 0 && scopedAwayByGames.length > 0) finalAwayTeamStats = scopedAwayByGames;
           if (finalHomeTeamStats.length === 0 || finalAwayTeamStats.length === 0) {
             console.warn(`NFL fallback by game_ids still empty for ${game.away_team} @ ${game.home_team}`);
+            // Final fallback: derive samples from player game stats over recent games
+            try {
+              if (finalHomeTeamStats.length === 0 && homeGameIds.length) {
+                const derivedHome = await ballDontLieService.getPlayerStats(SPORT_KEY, { game_ids: homeGameIds, team_ids: [homeTeam.id], per_page: 100 });
+                if (Array.isArray(derivedHome) && derivedHome.length) {
+                  finalHomeTeamStats = derivedHome.slice(0, 3);
+                }
+              }
+              if (finalAwayTeamStats.length === 0 && awayGameIds.length) {
+                const derivedAway = await ballDontLieService.getPlayerStats(SPORT_KEY, { game_ids: awayGameIds, team_ids: [awayTeam.id], per_page: 100 });
+                if (Array.isArray(derivedAway) && derivedAway.length) {
+                  finalAwayTeamStats = derivedAway.slice(0, 3);
+                }
+              }
+            } catch (dErr) {
+              console.warn('NFL derived team stats fallback failed:', dErr?.message || dErr);
+            }
           }
         } catch (e) {
           console.warn('NFL team_stats fallback failed:', e?.message || e);
@@ -115,6 +132,62 @@ export async function generateNFLPicks(options = {}) {
         return null;
       }
 
+      // Helper: pick likely starting QB using attempts (advanced > season > fallback)
+      const selectStartingQb = async (teamId) => {
+        let qbs = await ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [teamId], position: 'QB', per_page: 10 });
+        const isQB = (p) => {
+          const pos = (p?.position || '').toLowerCase();
+          const abbr = (p?.position_abbreviation || '').toLowerCase();
+          return abbr === 'qb' || pos.includes('quarterback');
+        };
+        qbs = Array.isArray(qbs) ? qbs.filter(isQB) : [];
+        if (qbs.length === 0) return null;
+        const scored = await Promise.all(qbs.map(async (qb) => {
+          let adv = [];
+          let seasonAgg = [];
+          try { adv = await ballDontLieService.getNflAdvancedPassingStats({ season, playerId: qb.id, week: 0 }); } catch {}
+          try { seasonAgg = await ballDontLieService.getNflPlayerSeasonStats({ playerId: qb.id, season, postseason: false }); } catch {}
+          const advAttempts = Array.isArray(adv) && adv[0]?.attempts ? Number(adv[0].attempts) : 0;
+          const seasonAttempts = Array.isArray(seasonAgg) && seasonAgg[0]?.passing_attempts ? Number(seasonAgg[0].passing_attempts) : 0;
+          return { qb, score: advAttempts || seasonAttempts || 0 };
+        }));
+        scored.sort((a, b) => b.score - a.score);
+        return scored[0]?.qb || qbs[0];
+      };
+
+      // Helper: choose a WR with available advanced receiving; fallback to top season receptions/yards
+      const selectLeadReceiver = async (teamId) => {
+        const isWR = (p) => {
+          const pos = (p?.position || '').toLowerCase();
+          const abbr = (p?.position_abbreviation || '').toLowerCase();
+          return abbr === 'wr' || pos.includes('wide receiver');
+        };
+        let wrs = await ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [teamId], position: 'WR', per_page: 10 });
+        wrs = Array.isArray(wrs) ? wrs.filter(isWR) : [];
+        if (wrs.length === 0) return { player: null, adv: [] };
+        for (const wr of wrs) {
+          try {
+            const adv = await ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: wr.id, week: 0 });
+            if (Array.isArray(adv) && adv.length) return { player: wr, adv };
+          } catch {}
+        }
+        let best = null;
+        for (const wr of wrs) {
+          try {
+            const ss = await ballDontLieService.getNflPlayerSeasonStats({ playerId: wr.id, season, postseason: false });
+            const rec = Array.isArray(ss) && ss[0]?.receptions ? Number(ss[0].receptions) : 0;
+            const yards = Array.isArray(ss) && ss[0]?.receiving_yards ? Number(ss[0].receiving_yards) : 0;
+            const score = rec * 1000 + yards;
+            if (!best || score > best.score) best = { wr, score };
+          } catch {}
+        }
+        if (best?.wr) {
+          const adv = await ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: best.wr.id, week: 0 }).catch(() => []);
+          return { player: best.wr, adv: Array.isArray(adv) ? adv : [] };
+        }
+        return { player: wrs[0], adv: [] };
+      };
+
       // Identify probable QBs and fetch season stats
       let homeQb = null;
       let awayQb = null;
@@ -132,30 +205,17 @@ export async function generateNFLPicks(options = {}) {
       let homeWrAdvanced = [];
       let awayWrAdvanced = [];
       try {
-        let [homeQbs, awayQbs] = await Promise.all([
-          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'QB', per_page: 5 }),
-          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'QB', per_page: 5 })
+        const [homeQbChosen, awayQbChosen] = await Promise.all([
+          selectStartingQb(homeTeam.id),
+          selectStartingQb(awayTeam.id)
         ]);
-        // Some backends ignore the 'position' filter; enforce locally
-        const isQB = (p) => {
-          const pos = (p?.position || '').toLowerCase();
-          const abbr = (p?.position_abbreviation || '').toLowerCase();
-          return abbr === 'qb' || pos.includes('quarterback');
-        };
+        homeQb = homeQbChosen;
+        awayQb = awayQbChosen;
         const isRB = (p) => {
           const pos = (p?.position || '').toLowerCase();
           const abbr = (p?.position_abbreviation || '').toLowerCase();
           return abbr === 'rb' || pos.includes('running back');
         };
-        const isWR = (p) => {
-          const pos = (p?.position || '').toLowerCase();
-          const abbr = (p?.position_abbreviation || '').toLowerCase();
-          return abbr === 'wr' || pos.includes('wide receiver');
-        };
-        if (Array.isArray(homeQbs)) homeQbs = homeQbs.filter(isQB);
-        if (Array.isArray(awayQbs)) awayQbs = awayQbs.filter(isQB);
-        homeQb = Array.isArray(homeQbs) && homeQbs[0] ? homeQbs[0] : null;
-        awayQb = Array.isArray(awayQbs) && awayQbs[0] ? awayQbs[0] : null;
         const [homeQbSeasonRes, awayQbSeasonRes, homeQbAdvRes, awayQbAdvRes] = await Promise.all([
           homeQb ? ballDontLieService.getNflPlayerSeasonStats({ playerId: homeQb.id, season, postseason: false }) : Promise.resolve([]),
           awayQb ? ballDontLieService.getNflPlayerSeasonStats({ playerId: awayQb.id, season, postseason: false }) : Promise.resolve([]),
@@ -168,25 +228,25 @@ export async function generateNFLPicks(options = {}) {
         awayQbAdvanced = awayQbAdvRes;
 
         // Try to identify a lead RB and WR per team, then pull advanced rushing/receiving (season-level)
-        let [homeRbs, awayRbs, homeWrs, awayWrs] = await Promise.all([
+        let [homeRbs, awayRbs] = await Promise.all([
           ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'RB', per_page: 5 }),
-          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'RB', per_page: 5 }),
-          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [homeTeam.id], position: 'WR', per_page: 5 }),
-          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'WR', per_page: 5 })
+          ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [awayTeam.id], position: 'RB', per_page: 5 })
         ]);
         if (Array.isArray(homeRbs)) homeRbs = homeRbs.filter(isRB);
         if (Array.isArray(awayRbs)) awayRbs = awayRbs.filter(isRB);
-        if (Array.isArray(homeWrs)) homeWrs = homeWrs.filter(isWR);
-        if (Array.isArray(awayWrs)) awayWrs = awayWrs.filter(isWR);
         homeLeadRb = Array.isArray(homeRbs) && homeRbs[0] ? homeRbs[0] : null;
         awayLeadRb = Array.isArray(awayRbs) && awayRbs[0] ? awayRbs[0] : null;
-        homeLeadWr = Array.isArray(homeWrs) && homeWrs[0] ? homeWrs[0] : null;
-        awayLeadWr = Array.isArray(awayWrs) && awayWrs[0] ? awayWrs[0] : null;
+        const [{ player: homeWrSel, adv: homeWrAdv }, { player: awayWrSel, adv: awayWrAdv }] = await Promise.all([
+          selectLeadReceiver(homeTeam.id),
+          selectLeadReceiver(awayTeam.id)
+        ]);
+        homeLeadWr = homeWrSel;
+        awayLeadWr = awayWrSel;
         const [homeRbAdvRes, awayRbAdvRes, homeWrAdvRes, awayWrAdvRes] = await Promise.all([
           homeLeadRb ? ballDontLieService.getNflAdvancedRushingStats({ season, playerId: homeLeadRb.id, postseason: false, week: 0 }) : Promise.resolve([]),
           awayLeadRb ? ballDontLieService.getNflAdvancedRushingStats({ season, playerId: awayLeadRb.id, postseason: false, week: 0 }) : Promise.resolve([]),
-          homeLeadWr ? ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: homeLeadWr.id, postseason: false, week: 0 }) : Promise.resolve([]),
-          awayLeadWr ? ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: awayLeadWr.id, postseason: false, week: 0 }) : Promise.resolve([])
+          homeLeadWr ? (homeWrAdv?.length ? Promise.resolve(homeWrAdv) : ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: homeLeadWr.id, postseason: false, week: 0 })) : Promise.resolve([]),
+          awayLeadWr ? (awayWrAdv?.length ? Promise.resolve(awayWrAdv) : ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: awayLeadWr.id, postseason: false, week: 0 })) : Promise.resolve([])
         ]);
         homeRbAdvanced = homeRbAdvRes;
         awayRbAdvanced = awayRbAdvRes;
