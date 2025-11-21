@@ -816,13 +816,15 @@ export const oddsService = {
                   dayGames = fallbackGames.filter(g => toEstDate(g.commence_time) === d);
                 } else {
                   // Merge fallback odds into BDL games where missing
-                  // We match by team names (Mascot) to handle LA/Los Angeles differences
-                  const getMascot = (name) => {
-                    if (!name) return '';
-                    const parts = name.trim().split(' ');
-                    return parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, '');
+                  // Robust team matching logic
+                  const normalizeTeamForMatch = (name) => {
+                    if (!name || typeof name !== 'string') return '';
+                    return name.toLowerCase()
+                      .replace(/\./g, '') // remove dots (L.A. -> LA)
+                      .replace(/'/g, '')  // remove apostrophes (76ers -> 76ers)
+                      .replace(/[^a-z0-9]/g, ''); // remove spaces and other chars
                   };
-                  
+
                   dayGames = dayGames.map(bdlGame => {
                     // If we already have valid markets, keep it
                     if (bdlGame.bookmakers && bdlGame.bookmakers.length > 0 && bdlGame.bookmakers.some(b => b.markets && b.markets.length > 0)) {
@@ -831,16 +833,40 @@ export const oddsService = {
                     
                     // Find matching game in fallback
                     const match = fallbackGames.find(fb => {
-                       const h1 = getMascot(bdlGame.home_team);
-                       const a1 = getMascot(bdlGame.away_team);
-                       const h2 = getMascot(fb.home_team);
-                       const a2 = getMascot(fb.away_team);
-                       // Check direct or swapped
-                       const isMatch = (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2);
+                       // Normalization 1: Simple remove non-alphanumeric
+                       const h1 = normalizeTeamForMatch(bdlGame.home_team);
+                       const a1 = normalizeTeamForMatch(bdlGame.away_team);
+                       const h2 = normalizeTeamForMatch(fb.home_team);
+                       const a2 = normalizeTeamForMatch(fb.away_team);
                        
-                       // Debug log for specific game to see why it fails
+                       // Check 1: Direct match of normalized strings
+                       let isMatch = (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2);
+                       
+                       // Check 2: Inclusion (handles "LA Clippers" vs "Los Angeles Clippers")
+                       if (!isMatch) {
+                         // Check if the shorter one is contained in the longer one (e.g. "laclippers" in "losangelesclippers" is FALSE)
+                         // But "clippers" in "losangelesclippers" is TRUE.
+                         // Let's try matching just the last significant part (mascot)
+                         const getMascotClean = (n) => {
+                           const parts = n.trim().split(' ');
+                           return parts[parts.length-1].toLowerCase().replace(/[^a-z]/g, '');
+                         };
+                         const mH1 = getMascotClean(bdlGame.home_team);
+                         const mA1 = getMascotClean(bdlGame.away_team);
+                         const mH2 = getMascotClean(fb.home_team);
+                         const mA2 = getMascotClean(fb.away_team);
+                         
+                         isMatch = (mH1 === mH2 && mA1 === mA2) || (mH1 === mA2 && mA1 === mH2);
+                       }
+                       
+                       // Check 3: Specific hardcoded fixes for known issues
+                       if (!isMatch) {
+                          const fix = (n) => n.replace('losangeles', 'la').replace('trailblazers', 'blazers');
+                          if ((fix(h1) === fix(h2) && fix(a1) === fix(a2))) isMatch = true;
+                       }
+
                        if (!isMatch && (bdlGame.home_team.includes('Clippers') || bdlGame.away_team.includes('Clippers'))) {
-                          console.log(`[Merge Debug] Comparing BDL '${bdlGame.home_team}' vs OddsAPI '${fb.home_team}' -> Mascots: ${h1} vs ${h2}`);
+                          // console.log(`[Merge Debug] Comparing BDL '${bdlGame.home_team}' vs OddsAPI '${fb.home_team}'`);
                        }
                        
                        return isMatch;
