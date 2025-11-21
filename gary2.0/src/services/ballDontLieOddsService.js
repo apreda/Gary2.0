@@ -409,7 +409,8 @@ export const ballDontLieOddsService = {
         const apiKey = getApiKey();
         const uniqueGameIds = (games || []).map(g => g?.id).filter(id => id != null);
         const hasAnyRowsForGames = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
-        // Determine which games are missing ML/Spreads in current date-based odds
+        
+        // Check specifically for missing ML/Spreads in the odds we got back
         const rowsByGame = new Map();
         for (const r of Array.isArray(odds) ? odds : []) {
           if (r?.game_id == null) continue;
@@ -417,21 +418,31 @@ export const ballDontLieOddsService = {
           list.push(r);
           rowsByGame.set(r.game_id, list);
         }
+
         const missingMlOrSpreadIds = uniqueGameIds.filter(gid => {
           const rows = rowsByGame.get(gid) || [];
+          if (rows.length === 0) return true; // No odds at all
+          
+          // Check if any row has ML OR Spread
           const hasMl = rows.some(x => toNumber(x?.moneyline_home_odds) !== null || toNumber(x?.moneyline_away_odds) !== null);
           const hasSpread = rows.some(x => toNumber(x?.spread_home_value) !== null || toNumber(x?.spread_away_value) !== null);
           return !(hasMl || hasSpread);
         });
-        // If we have no rows at all OR some games are missing ML/Spreads, fetch by game_ids
-        if (uniqueGameIds.length && (!hasAnyRowsForGames || missingMlOrSpreadIds.length)) {
-          const targetIds = missingMlOrSpreadIds.length ? missingMlOrSpreadIds : uniqueGameIds;
+
+        // If we have missing odds, try fetching by game_ids
+        if (uniqueGameIds.length && missingMlOrSpreadIds.length > 0) {
+          console.log(`[NBA] Found ${missingMlOrSpreadIds.length} games missing odds. Fetching by game_ids...`);
+          const targetIds = missingMlOrSpreadIds; // fetch for all missing
           const byIds = await ballDontLieService.getOddsV2({ game_ids: targetIds.slice(0, 100), per_page: 100 }, 'nba');
+          
           if (byIds.length) {
+            console.log(`[NBA] Recovered odds for ${byIds.length} games via game_ids fallback.`);
             // Merge: prefer new rows for the targeted game_ids
             const targeted = new Set(targetIds);
             const retained = (Array.isArray(odds) ? odds : []).filter(x => !targeted.has(x?.game_id));
             odds = retained.concat(byIds);
+          } else {
+             console.log(`[NBA] game_ids fallback returned 0 rows for ${targetIds.length} games.`);
           }
         }
       } catch (e) {
