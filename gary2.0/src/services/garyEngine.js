@@ -100,9 +100,6 @@ export async function makeGaryPick(gameData, options = {}) {
     };
   } catch (error) {
     console.error('Error making Gary pick:', error);
-    if (error?.code === 'MISSING_ODDS') {
-      throw error;
-    }
     return {
       success: false,
       pick: null,
@@ -217,15 +214,17 @@ export async function generateGaryAnalysis(gameData, options = {}) {
           m.outcomes.some((o) => typeof o?.price === 'number')
       );
     if (!hasMlOrSpread) {
-      const error = new Error('Missing required moneyline/spread odds');
-      error.code = 'MISSING_ODDS';
-      error.context = {
+      // Gracefully signal to caller to skip this game; do not throw
+      console.warn('Gary Engine: No ML/Spread odds available, returning skip result');
+      return {
+        success: false,
+        code: 'MISSING_ODDS',
+        message: 'Missing required moneyline/spread odds',
+        rawOpenAIOutput: null,
         game: formattedData.game,
         sport: formattedData.sport,
-        homeTeam: formattedData.homeTeam,
-        awayTeam: formattedData.awayTeam
+        timestamp: new Date().toISOString()
       };
-      throw error;
     }
     
     // Add sport-specific data

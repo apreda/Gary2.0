@@ -50,7 +50,8 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const processGameOnce = async (gameId, processingFunction, opts = {}) => {
   // Allow repeated runs any time; only prevent simultaneous in-flight duplicate work
   const sessionKey = `${gameId}-${getESTDate()}`;
-  if (processingLocks.has(sessionKey)) {
+  const force = opts && opts.force === true;
+  if (processingLocks.has(sessionKey) && !force) {
     console.log(`🔄 Game ${gameId} currently being processed, waiting...`);
     return processingLocks.get(sessionKey);
   }
@@ -60,7 +61,9 @@ const processGameOnce = async (gameId, processingFunction, opts = {}) => {
     const result = await processingFunction();
     return result;
   })();
-  processingLocks.set(sessionKey, processingPromise);
+  if (!force) {
+    processingLocks.set(sessionKey, processingPromise);
+  }
   
   try {
     const result = await processingPromise;
@@ -70,7 +73,9 @@ const processGameOnce = async (gameId, processingFunction, opts = {}) => {
     console.error(`❌ Error processing game ${gameId}:`, error);
     throw error;
   } finally {
-    processingLocks.delete(sessionKey);
+    if (!force) {
+      processingLocks.delete(sessionKey);
+    }
   }
 };
 
