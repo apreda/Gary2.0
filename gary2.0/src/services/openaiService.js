@@ -44,7 +44,7 @@ const openaiServiceInstance = {
   /**
    * Default model for OpenAI
    */
-  DEFAULT_MODEL: (typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5',
+  DEFAULT_MODEL: (typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5.1',
   
   /**
    * Generate a response from OpenAI using secure proxy

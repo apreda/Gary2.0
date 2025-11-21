@@ -69,12 +69,12 @@ export default async function handler(req, res) {
     // Do not log key fragments
     
     // Prepare request to OpenAI API with optimized parameters
-    // Resolve model and hard-enforce gpt-5 unless explicitly allowed
-    let resolvedModel = model || process.env.OPENAI_MODEL || 'gpt-5';
-    if (!/^gpt-5/i.test(resolvedModel)) {
-      console.warn(`[OPENAI PROXY] Overriding requested model '${resolvedModel}' -> 'gpt-5' (set ALLOW_LEGACY_MODELS=true to bypass)`);
+    // Resolve model and hard-enforce gpt-5.1 unless explicitly allowed
+    let resolvedModel = model || process.env.OPENAI_MODEL || 'gpt-5.1';
+    if (!/^gpt-5\.1/i.test(resolvedModel)) {
+      console.warn(`[OPENAI PROXY] Overriding requested model '${resolvedModel}' -> 'gpt-5.1' (set ALLOW_LEGACY_MODELS=true to bypass)`);
       if (process.env.ALLOW_LEGACY_MODELS !== 'true') {
-        resolvedModel = 'gpt-5';
+        resolvedModel = 'gpt-5.1';
       }
     }
 
@@ -98,17 +98,17 @@ export default async function handler(req, res) {
     const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
     
     try {
-      const models = Array.from(new Set([requestData.model, 'gpt-5-mini', 'gpt-5-nano']))
+      const models = Array.from(new Set([requestData.model, 'gpt-5.1-mini', 'gpt-5.1-nano', 'gpt-5-mini', 'gpt-5-nano']))
       let lastErr = null;
       for (const m of models) {
         // Generous caps per model to avoid finish_reason: "length"
         let capped;
-        if (m === 'gpt-5-nano') {
+        if (m === 'gpt-5-nano' || m === 'gpt-5.1-nano' || /nano$/i.test(m)) {
           capped = Math.max(1024, Math.min(baseMax, 2048));
-        } else if (m === 'gpt-5-mini') {
+        } else if (m === 'gpt-5-mini' || m === 'gpt-5.1-mini' || /mini$/i.test(m)) {
           capped = Math.max(2048, Math.min(baseMax, 4096));
         } else {
-          // gpt-5 default
+          // gpt-5.1 default
           capped = Math.max(4096, Math.min(baseMax, 8192));
         }
         let payload = { ...requestData, model: m, max_completion_tokens: capped, response_format: { type: 'json_object' } };

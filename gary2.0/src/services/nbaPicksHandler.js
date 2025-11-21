@@ -23,18 +23,18 @@ export async function generateNBAPicks(options = {}) {
   
   console.log(`NBA filtering: Today in EST is ${estFormattedDate}`);
   
-  // Narrow filtering - include games within next 16 hours
-  const nowTime = today.getTime();
-  const sixteenHoursLater = nowTime + (16 * 60 * 60 * 1000);
-  
+  // Filter to REST OF TODAY in EST (exclude past games; include all remaining today)
+  const nowUtcMs = Date.now();
+  const todayEstStr = today.toLocaleDateString('en-US', estOptions);
   let todayGames = games.filter(game => {
-    const gameTime = new Date(game.commence_time).getTime();
-    const includeGame = gameTime >= nowTime && gameTime <= sixteenHoursLater;
-    console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Time: ${new Date(game.commence_time).toLocaleString('en-US', estOptions)}, Include: ${includeGame}`);
+    const gameDateEstStr = new Date(game.commence_time).toLocaleDateString('en-US', estOptions);
+    const gameTimeMs = new Date(game.commence_time).getTime();
+    const includeGame = (gameDateEstStr === todayEstStr) && gameTimeMs >= nowUtcMs;
+    console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Time (EST): ${new Date(game.commence_time).toLocaleString('en-US', estOptions)}, Include (rest of today): ${includeGame}`);
     return includeGame;
   });
 
-  console.log(`After date filtering: ${todayGames.length} NBA games within next 16 hours`);
+  console.log(`After EST rest-of-day filtering: ${todayGames.length} NBA games remaining today`);
 
   // If options.onlyAtIndex is provided, process only that game
   if (typeof options.onlyAtIndex === 'number') {
@@ -257,7 +257,9 @@ export async function generateNBAPicks(options = {}) {
         Array.isArray(data?.markets) && data.markets.some(
           (m) => (m.key === 'h2h' || m.key === 'spreads') && Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number')
         );
+
       if (!hasMlOrSpread(oddsData)) {
+        console.log(`[NBA] No initial ML/spread odds for ${game.away_team} @ ${game.home_team}. Attempting fallback...`);
         try {
           const dt = new Date(game.commence_time);
           const dateStr = isNaN(dt.getTime()) ? new Date().toISOString().slice(0,10) : dt.toISOString().slice(0,10);
@@ -266,8 +268,11 @@ export async function generateNBAPicks(options = {}) {
             (String(g?.home_team?.full_name || g?.home_team || '').toLowerCase().includes(String(game.home_team).toLowerCase())) &&
             (String(g?.away_team?.full_name || g?.away_team || '').toLowerCase().includes(String(game.away_team).toLowerCase()))
           ) : null;
+          
           if (match?.id != null) {
-            const rows = await ballDontLieService.getOddsV2({ game_ids: [match.id], per_page: 100 });
+            console.log(`[NBA] Found matching BDL game ID: ${match.id} for fallback odds.`);
+            const rows = await ballDontLieService.getOddsV2({ game_ids: [match.id], per_page: 100 }, 'nba');
+            console.log(`[NBA] getOddsV2 returned ${Array.isArray(rows) ? rows.length : 0} rows.`);
             if (Array.isArray(rows) && rows.length) {
               // Convert rows to bookmakers-like shape
               const vendors = {};
@@ -291,8 +296,17 @@ export async function generateNBAPicks(options = {}) {
               }
               const bookmakers = Object.values(vendors);
               const merged = mergeBookmakers(bookmakers);
-              if (hasMlOrSpread(merged)) oddsData = merged;
+              if (hasMlOrSpread(merged)) {
+                 console.log(`[NBA] Successfully recovered odds via fallback.`);
+                 oddsData = merged;
+              } else {
+                 console.log(`[NBA] Fallback odds found but still missing ML/spread.`);
+              }
+            } else {
+               console.log(`[NBA] No odds rows returned from getOddsV2.`);
             }
+          } else {
+             console.log(`[NBA] Could not find matching BDL game for fallback.`);
           }
         } catch (e) {
           console.warn('NBA odds v2 fallback failed:', e?.message || e);
@@ -367,7 +381,7 @@ export async function generateNBAPicks(options = {}) {
         console.log(`Failed to generate NBA pick for ${game.away_team} @ ${game.home_team}:`, result.error);
         return null;
       }
-    });
+    }, { force: options.force === true });
     
     // Only add successful results to sportPicks (avoiding duplication)
     if (result && result.success) {

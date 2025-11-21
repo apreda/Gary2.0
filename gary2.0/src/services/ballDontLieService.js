@@ -125,16 +125,32 @@ const ballDontLieService = {
    * V2 Odds endpoint (currently documented for NBA). Accepts dates[] or game_ids[].
    * Example params: { dates: ['2025-01-15'], game_ids: [18446819], per_page: 100, cursor }
    */
-  async getOddsV2(params = {}, ttlMinutes = 1) {
+  async getOddsV2(params = {}, sport = 'nba', ttlMinutes = 1) {
     try {
+      // Normalize sport key (e.g. 'basketball_nba' -> 'nba')
+      let sportKey = 'nba';
+      const s = String(sport).toLowerCase();
+      if (s.includes('nfl')) sportKey = 'nfl';
+      else if (s.includes('mlb')) sportKey = 'mlb';
+      else if (s.includes('nhl')) sportKey = 'nhl';
+      else if (s.includes('ncaaf')) sportKey = 'ncaaf';
+      else if (s.includes('ncaab')) sportKey = 'ncaab';
+      else if (s.includes('wnba')) sportKey = 'wnba';
+      else if (s.includes('epl')) sportKey = 'epl';
+      else if (s.includes('nba')) sportKey = 'nba'; // Default fallback if 'basketball_nba' passed
+
       const norm = {};
       if (Array.isArray(params.dates) && params.dates.length) norm['dates[]'] = params.dates;
       if (Array.isArray(params.game_ids) && params.game_ids.length) norm['game_ids[]'] = params.game_ids;
       if (params.per_page) norm.per_page = params.per_page;
       if (params.cursor) norm.cursor = params.cursor;
-      const cacheKey = `v2_odds_${JSON.stringify(norm)}`;
+      if (params.season) norm.season = params.season;
+      if (params.week) norm.week = params.week;
+
+      const cacheKey = `v2_odds_${sportKey}_${JSON.stringify(norm)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `https://api.balldontlie.io/v2/odds`;
+        // Use correct endpoint pattern: /{sport}/v1/odds
+        const url = `${BALLDONTLIE_API_BASE_URL}/${sportKey}/v1/odds`;
         const response = await axios.get(url, {
           headers: { 'Authorization': API_KEY },
           params: norm
@@ -142,7 +158,7 @@ const ballDontLieService = {
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
-      console.error(`[Ball Don't Lie] v2 getOdds error:`, e.message);
+      console.error(`[Ball Don't Lie] v2 getOdds error (${sport}):`, e.message);
       return [];
     }
   },
