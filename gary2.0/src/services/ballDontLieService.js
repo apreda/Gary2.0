@@ -152,10 +152,13 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         // NBA uses V2 endpoint per latest docs; fallback to V1 if needed
         const tryRequest = async (url) => {
-          const resp = await axios.get(url, {
-            headers: { Authorization: API_KEY },
-            params: norm,
-            paramsSerializer: { indexes: null } // emits dates[]=...&game_ids[]=...
+          const qs = buildQuery(norm); // ensures dates[]=... & game_ids[]=...
+          const fullUrl = `${url}${qs}`;
+          try {
+            console.log(`[Ball Don't Lie] GET ${fullUrl}`);
+          } catch {}
+          const resp = await axios.get(fullUrl, {
+            headers: { Authorization: API_KEY }
           });
           const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
           return rows;
@@ -168,7 +171,9 @@ const ballDontLieService = {
             if (data && data.length) return data;
             console.log(`[Ball Don't Lie] NBA v2/odds returned 0 rows for`, norm);
           } catch (v2err) {
-            console.warn(`[Ball Don't Lie] NBA v2/odds failed:`, v2err?.response?.status || v2err?.message);
+            const status = v2err?.response?.status || '';
+            const data = v2err?.response?.data ? JSON.stringify(v2err.response.data).slice(0, 400) : '';
+            console.warn(`[Ball Don't Lie] NBA v2/odds failed: ${status} ${data}`);
           }
           // Do NOT fallback to V1; per latest docs NBA odds are V2-only
           return [];
