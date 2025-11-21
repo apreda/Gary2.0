@@ -259,19 +259,12 @@ export async function generateNBAPicks(options = {}) {
         );
 
       if (!hasMlOrSpread(oddsData)) {
-        console.log(`[NBA] No initial ML/spread odds for ${game.away_team} @ ${game.home_team}. Attempting fallback...`);
+        console.log(`[NBA] No initial ML/spread odds for ${game.away_team} @ ${game.home_team}. Attempting game_id fallback...`);
         try {
-          const dt = new Date(game.commence_time);
-          const dateStr = isNaN(dt.getTime()) ? new Date().toISOString().slice(0,10) : dt.toISOString().slice(0,10);
-          const dayGames = await ballDontLieService.getGames('basketball_nba', { dates: [dateStr], per_page: 100 }, options.nocache ? 0 : 5);
-          const match = Array.isArray(dayGames) ? dayGames.find(g =>
-            (String(g?.home_team?.full_name || g?.home_team || '').toLowerCase().includes(String(game.home_team).toLowerCase())) &&
-            (String(g?.away_team?.full_name || g?.away_team || '').toLowerCase().includes(String(game.away_team).toLowerCase()))
-          ) : null;
-          
-          if (match?.id != null) {
-            console.log(`[NBA] Found matching BDL game ID: ${match.id} for fallback odds.`);
-            const rows = await ballDontLieService.getOddsV2({ game_ids: [match.id], per_page: 100 }, 'nba');
+          const matchId = Number(game?.id);
+          if (Number.isFinite(matchId)) {
+            console.log(`[NBA] Using current game.id=${matchId} for odds v2 fallback`);
+            const rows = await ballDontLieService.getOddsV2({ game_ids: [matchId], per_page: 100 }, 'nba');
             console.log(`[NBA] getOddsV2 returned ${Array.isArray(rows) ? rows.length : 0} rows.`);
             if (Array.isArray(rows) && rows.length) {
               // Convert rows to bookmakers-like shape
@@ -297,16 +290,16 @@ export async function generateNBAPicks(options = {}) {
               const bookmakers = Object.values(vendors);
               const merged = mergeBookmakers(bookmakers);
               if (hasMlOrSpread(merged)) {
-                 console.log(`[NBA] Successfully recovered odds via fallback.`);
-                 oddsData = merged;
+                console.log(`[NBA] Successfully recovered odds via game_id fallback.`);
+                oddsData = merged;
               } else {
-                 console.log(`[NBA] Fallback odds found but still missing ML/spread.`);
+                console.log(`[NBA] Fallback odds found but still missing ML/spread.`);
               }
             } else {
-               console.log(`[NBA] No odds rows returned from getOddsV2.`);
+              console.log(`[NBA] No v2 odds rows for game_id=${matchId}`);
             }
           } else {
-             console.log(`[NBA] Could not find matching BDL game for fallback.`);
+            console.log(`[NBA] Invalid game.id (${game?.id}), skipping fallback.`);
           }
         } catch (e) {
           console.warn('NBA odds v2 fallback failed:', e?.message || e);
