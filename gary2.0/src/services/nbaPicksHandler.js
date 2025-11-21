@@ -226,7 +226,7 @@ export async function generateNBAPicks(options = {}) {
         report += '\n';
       }
 
-      // Merge odds across all bookmakers; fallback to v2 odds by game_ids when missing ML/spread
+      // Merge odds across all bookmakers; for NBA use The Odds API-only path (BDL odds fallback disabled)
       let oddsData = null;
       const mergeBookmakers = (bookmakersArr = []) => {
         const marketKeyToOutcomes = new Map();
@@ -259,50 +259,38 @@ export async function generateNBAPicks(options = {}) {
         );
 
       if (!hasMlOrSpread(oddsData)) {
-        console.log(`[NBA] No initial ML/spread odds for ${game.away_team} @ ${game.home_team}. Attempting game_id fallback...`);
+        console.log(`[NBA] No ML/spread odds present from upstream list. Using The Odds API directly for ${game.away_team} @ ${game.home_team}.`);
         try {
-          const matchId = Number(game?.id);
-          if (Number.isFinite(matchId)) {
-            console.log(`[NBA] Using current game.id=${matchId} for odds v2 fallback`);
-            const rows = await ballDontLieService.getOddsV2({ game_ids: [matchId], per_page: 100 }, 'nba');
-            console.log(`[NBA] getOddsV2 returned ${Array.isArray(rows) ? rows.length : 0} rows.`);
-            if (Array.isArray(rows) && rows.length) {
-              // Convert rows to bookmakers-like shape
-              const vendors = {};
-              for (const r of rows) {
-                const vendor = r?.vendor || 'vendor';
-                if (!vendors[vendor]) vendors[vendor] = { title: vendor, markets: [] };
-                // h2h
-                const h2hOutcomes = [];
-                if (typeof r.moneyline_home_odds === 'number') h2hOutcomes.push({ name: game.home_team, price: r.moneyline_home_odds });
-                if (typeof r.moneyline_away_odds === 'number') h2hOutcomes.push({ name: game.away_team, price: r.moneyline_away_odds });
-                if (h2hOutcomes.length) vendors[vendor].markets.push({ key: 'h2h', outcomes: h2hOutcomes });
-                // spreads
-                const spreadsOutcomes = [];
-                if (typeof r.spread_home_value === 'string' && typeof r.spread_home_odds === 'number') {
-                  spreadsOutcomes.push({ name: game.home_team, point: Number(r.spread_home_value), price: r.spread_home_odds });
-                }
-                if (typeof r.spread_away_value === 'string' && typeof r.spread_away_odds === 'number') {
-                  spreadsOutcomes.push({ name: game.away_team, point: Number(r.spread_away_value), price: r.spread_away_odds });
-                }
-                if (spreadsOutcomes.length) vendors[vendor].markets.push({ key: 'spreads', outcomes: spreadsOutcomes });
-              }
-              const bookmakers = Object.values(vendors);
-              const merged = mergeBookmakers(bookmakers);
-              if (hasMlOrSpread(merged)) {
-                console.log(`[NBA] Successfully recovered odds via game_id fallback.`);
-                oddsData = merged;
-              } else {
-                console.log(`[NBA] Fallback odds found but still missing ML/spread.`);
-              }
+          const upcoming = await oddsService.getOdds('basketball_nba');
+          const normalize = (s) => String(s || '').toLowerCase().replace(/\\./g, '').replace(/[^a-z0-9]/g, '');
+          const mascot = (s) => {
+            const parts = String(s || '').trim().split(' ');
+            return parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, '');
+          };
+          const h1 = normalize(game.home_team);
+          const a1 = normalize(game.away_team);
+          const mH1 = mascot(game.home_team);
+          const mA1 = mascot(game.away_team);
+          const match = Array.isArray(upcoming) ? upcoming.find(evt => {
+            const h2 = normalize(evt.home_team);
+            const a2 = normalize(evt.away_team);
+            const mH2 = mascot(evt.home_team);
+            const mA2 = mascot(evt.away_team);
+            return (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2) || ((mH1 === mH2 && mA1 === mA2) || (mH1 === mA2 && mA1 === mH2));
+          }) : null;
+          if (match && Array.isArray(match.bookmakers) && match.bookmakers.length > 0) {
+            const merged = mergeBookmakers(match.bookmakers);
+            if (hasMlOrSpread(merged)) {
+              console.log('[NBA] Successfully attached Odds API markets to game.');
+              oddsData = merged;
             } else {
-              console.log(`[NBA] No v2 odds rows for game_id=${matchId}`);
+              console.log('[NBA] Odds API returned bookmakers but missing ML/spread.');
             }
           } else {
-            console.log(`[NBA] Invalid game.id (${game?.id}), skipping fallback.`);
+            console.log('[NBA] Odds API did not return a matching event for this game.');
           }
         } catch (e) {
-          console.warn('NBA odds v2 fallback failed:', e?.message || e);
+          console.warn('[NBA] Odds API direct fetch failed:', e?.message || e);
         }
       }
 

@@ -735,6 +735,36 @@ export const oddsService = {
   getUpcomingGames: async (sport = 'upcoming', options = {}) => {
     const cacheKey = `upcoming-games:${sport}:${JSON.stringify(options)}`;
     return dedupeRequest(cacheKey, async () => {
+      // NBA: Use The Odds API exclusively for odds (skip BDL odds entirely)
+      if (sport === 'basketball_nba') {
+        try {
+          console.log('[Odds Service] basketball_nba: Using The Odds API exclusively for odds.');
+          const upcoming = await fetchUpcomingOddsFallback('basketball_nba');
+          if (!Array.isArray(upcoming) || upcoming.length === 0) {
+            console.log('[Odds Service] basketball_nba: The Odds API returned 0 upcoming games.');
+            return [];
+          }
+          // Deduplicate by id and attach bestBet snapshot
+          const seenIds = new Set();
+          const uniqueGames = [];
+          for (const g of upcoming) {
+            if (!g || g.id == null) continue;
+            if (seenIds.has(g.id)) continue;
+            seenIds.add(g.id);
+            uniqueGames.push(g);
+          }
+          const processed = uniqueGames.map(game => {
+            const bestOpportunity = analyzeBettingMarkets(game);
+            return { ...game, bestBet: bestOpportunity };
+          });
+          console.log(`[Odds Service] basketball_nba: Final result - ${processed.length} games ready for analysis (Odds API only)`);
+          return processed;
+        } catch (e) {
+          console.error('[Odds Service] basketball_nba: Odds API-only path failed:', e?.message || e);
+          return [];
+        }
+      }
+
       let dates = [];
       const isNfl = sport === 'americanfootball_nfl';
 
