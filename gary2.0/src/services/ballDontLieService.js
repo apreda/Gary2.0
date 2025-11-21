@@ -161,17 +161,12 @@ const ballDontLieService = {
             const v2Url = `${BALLDONTLIE_API_BASE_URL}/v2/odds`;
             const data = await tryRequest(v2Url);
             if (data && data.length) return data;
+            console.log(`[Ball Don't Lie] NBA v2/odds returned 0 rows for`, norm);
           } catch (v2err) {
-            // fall back to V1
-            console.warn(`[Ball Don't Lie] NBA v2/odds failed, falling back to /nba/v1/odds:`, v2err?.response?.status || v2err?.message);
+            console.warn(`[Ball Don't Lie] NBA v2/odds failed:`, v2err?.response?.status || v2err?.message);
           }
-          try {
-            const v1Url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/odds`;
-            return await tryRequest(v1Url);
-          } catch (v1err) {
-            console.error(`[Ball Don't Lie] NBA odds v1 fallback failed:`, v1err?.response?.status || v1err?.message);
-            return [];
-          }
+          // Do NOT fallback to V1; per latest docs NBA odds are V2-only
+          return [];
         } else {
           // Non-NBA sports: use V1 sport-scoped endpoint
           const v1Url = `${BALLDONTLIE_API_BASE_URL}/${sportKey}/v1/odds`;
