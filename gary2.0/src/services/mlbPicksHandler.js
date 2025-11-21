@@ -78,7 +78,7 @@ export async function generateMLBPicks() {
           return (h.includes(home) || home.includes(h)) && (a.includes(away) || away.includes(a));
         }) : null;
         if (bdlGame && bdlGame.id != null) {
-          const rows = await ballDontLieService.getOddsV2({ game_ids: [bdlGame.id], per_page: 100 });
+          const rows = await ballDontLieService.getOddsV2({ game_ids: [bdlGame.id], per_page: 100 }, 'mlb');
           if (Array.isArray(rows) && rows.length) {
             const pickStr = structuredPick.pick || '';
             const type = (structuredPick.type || '').toLowerCase();

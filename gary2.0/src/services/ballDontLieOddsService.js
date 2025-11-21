@@ -399,20 +399,35 @@ export const ballDontLieOddsService = {
     const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
     let odds = await fetchOddsByDates([dateStr]);
 
-    // NBA: If date-based v2 odds are sparse, try v2 odds by game_ids for precision
+    // NBA: If date-based v2 odds are sparse or missing ML/Spreads, fetch v2 odds by game_ids for precision
     if (sportKey === 'basketball_nba') {
       try {
         const apiKey = getApiKey();
         const uniqueGameIds = (games || []).map(g => g?.id).filter(id => id != null);
-        const hasVendors = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
-        if (uniqueGameIds.length && !hasVendors) {
-          const resp = await axios.get(`${BDL_V2_BASE}/odds`, {
-            params: { 'game_ids[]': uniqueGameIds.slice(0, 100), per_page: 100 },
-            headers: { Authorization: apiKey }
-          });
-          const byIds = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+        const hasAnyRowsForGames = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
+        // Determine which games are missing ML/Spreads in current date-based odds
+        const rowsByGame = new Map();
+        for (const r of Array.isArray(odds) ? odds : []) {
+          if (r?.game_id == null) continue;
+          const list = rowsByGame.get(r.game_id) || [];
+          list.push(r);
+          rowsByGame.set(r.game_id, list);
+        }
+        const missingMlOrSpreadIds = uniqueGameIds.filter(gid => {
+          const rows = rowsByGame.get(gid) || [];
+          const hasMl = rows.some(x => toNumber(x?.moneyline_home_odds) !== null || toNumber(x?.moneyline_away_odds) !== null);
+          const hasSpread = rows.some(x => toNumber(x?.spread_home_value) !== null || toNumber(x?.spread_away_value) !== null);
+          return !(hasMl || hasSpread);
+        });
+        // If we have no rows at all OR some games are missing ML/Spreads, fetch by game_ids
+        if (uniqueGameIds.length && (!hasAnyRowsForGames || missingMlOrSpreadIds.length)) {
+          const targetIds = missingMlOrSpreadIds.length ? missingMlOrSpreadIds : uniqueGameIds;
+          const byIds = await ballDontLieService.getOddsV2({ game_ids: targetIds.slice(0, 100), per_page: 100 }, 'nba');
           if (byIds.length) {
-            odds = byIds;
+            // Merge: prefer new rows for the targeted game_ids
+            const targeted = new Set(targetIds);
+            const retained = (Array.isArray(odds) ? odds : []).filter(x => !targeted.has(x?.game_id));
+            odds = retained.concat(byIds);
           }
         }
       } catch (e) {
@@ -426,7 +441,7 @@ export const ballDontLieOddsService = {
         const uniqueGameIds = (games || []).map(g => g?.id).filter(id => id != null);
         const hasVendors = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
         if (uniqueGameIds.length && !hasVendors) {
-          const byIds = await ballDontLieService.getOddsV2({ game_ids: uniqueGameIds, per_page: 100 });
+          const byIds = await ballDontLieService.getOddsV2({ game_ids: uniqueGameIds, per_page: 100 }, 'nfl');
           if (Array.isArray(byIds) && byIds.length) {
             odds = byIds;
           }

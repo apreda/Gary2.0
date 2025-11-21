@@ -50,6 +50,7 @@ export default async function handler(req, res) {
     const autoNext = params.autonext === '1' || params.autonext === 'true' || params.autonext === true;
     // Default to fresh data (nocache=true) unless explicitly disabled
     const noCache = !(params.nocache === '0' || params.nocache === 'false');
+    const forceReprocess = params.force === '1' || params.force === 'true' || params.force === true;
 
     const handlerMap = {
       baseball_mlb: generateMLBPicks,
@@ -69,7 +70,7 @@ export default async function handler(req, res) {
       for (let i = 0; i < batch; i++) {
         const index = cursor + i;
         try {
-          const one = await handlerMap[sport]({ onlyAtIndex: index, nocache: noCache });
+          const one = await handlerMap[sport]({ onlyAtIndex: index, nocache: noCache, force: forceReprocess });
           if (Array.isArray(one) && one.length > 0) {
             collected.push(...one);
           }

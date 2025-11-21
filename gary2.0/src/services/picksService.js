@@ -36,8 +36,7 @@ let isStoringPicks = false;
 let lastGenerationTime = 0;
 const GENERATION_COOLDOWN = 30 * 1000; // 30 seconds
 
-// Add deduplication and processing locks to prevent repetitive processing
-const processedGames = new Set();
+// Lightweight in-flight locks only (no daily dedupe so repeated runs are allowed)
 const processingLocks = new Map();
 const apiCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -48,31 +47,23 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * @param {Function} processingFunction - Function to process the game
  * @returns {Promise} - Processing result or null if already processed
  */
-const processGameOnce = async (gameId, processingFunction) => {
-  // Create a unique session key to prevent cross-session duplicates (using EST date)
+const processGameOnce = async (gameId, processingFunction, opts = {}) => {
+  // Allow repeated runs any time; only prevent simultaneous in-flight duplicate work
   const sessionKey = `${gameId}-${getESTDate()}`;
-  
-  if (processedGames.has(sessionKey)) {
-    console.log(`🔄 Game ${gameId} skipped (already processed today)`);
-    return null;
-  }
-  
   if (processingLocks.has(sessionKey)) {
     console.log(`🔄 Game ${gameId} currently being processed, waiting...`);
     return processingLocks.get(sessionKey);
   }
   
   const processingPromise = (async () => {
-    console.log(`🎯 Processing game ${gameId} for the first time today`);
+    console.log(`🎯 Processing game ${gameId} (no daily dedupe)`);
     const result = await processingFunction();
     return result;
   })();
-  
   processingLocks.set(sessionKey, processingPromise);
   
   try {
     const result = await processingPromise;
-    processedGames.add(sessionKey);
     console.log(`✅ Successfully processed game ${gameId}`);
     return result;
   } catch (error) {
