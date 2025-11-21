@@ -816,8 +816,12 @@ export const oddsService = {
                   dayGames = fallbackGames.filter(g => toEstDate(g.commence_time) === d);
                 } else {
                   // Merge fallback odds into BDL games where missing
-                  // We match by team names roughly
-                  const normalize = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+                  // We match by team names (Mascot) to handle LA/Los Angeles differences
+                  const getMascot = (name) => {
+                    if (!name) return '';
+                    const parts = name.trim().split(' ');
+                    return parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, '');
+                  };
                   
                   dayGames = dayGames.map(bdlGame => {
                     // If we already have valid markets, keep it
@@ -827,16 +831,16 @@ export const oddsService = {
                     
                     // Find matching game in fallback
                     const match = fallbackGames.find(fb => {
-                       const h1 = normalize(bdlGame.home_team);
-                       const a1 = normalize(bdlGame.away_team);
-                       const h2 = normalize(fb.home_team);
-                       const a2 = normalize(fb.away_team);
+                       const h1 = getMascot(bdlGame.home_team);
+                       const a1 = getMascot(bdlGame.away_team);
+                       const h2 = getMascot(fb.home_team);
+                       const a2 = getMascot(fb.away_team);
                        // Check direct or swapped
-                       return (h1.includes(h2) || h2.includes(h1)) && (a1.includes(a2) || a2.includes(a1));
+                       return (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2);
                     });
 
                     if (match && match.bookmakers && match.bookmakers.length > 0) {
-                       console.log(`[Odds Service] Merged Odds API odds into BDL game: ${bdlGame.home_team} vs ${bdlGame.away_team}`);
+                       console.log(`[Odds Service] Merged Odds API odds into BDL game: ${bdlGame.home_team} vs ${bdlGame.away_team} (Matched via mascot)`);
                        return {
                          ...bdlGame,
                          bookmakers: match.bookmakers,
