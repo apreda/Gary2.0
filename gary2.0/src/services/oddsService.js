@@ -173,11 +173,10 @@ const normalizeOddsApiGame = (event, sportKey) => {
   };
 };
 
-const fetchOddsFromOddsApiByDate = async (sport, dateStr) => {
+const fetchUpcomingOddsFallback = async (sport) => {
   const apiKey = await getApiKey();
-  if (!apiKey) {
-    return [];
-  }
+  if (!apiKey) return [];
+  
   try {
     const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
     const response = await axios.get(url, {
@@ -191,23 +190,42 @@ const fetchOddsFromOddsApiByDate = async (sport, dateStr) => {
       timeout: 10000
     });
     const events = Array.isArray(response?.data) ? response.data : [];
-    // Filter by EST date to match the requested dateStr (which is EST)
-    // events have UTC commence_time
+    console.log(`[Odds Service] ${sport}: Generic Odds API fallback returned ${events.length} upcoming games.`);
+    return events.map(event => normalizeOddsApiGame(event, sport));
+  } catch (error) {
+    console.warn(`[Odds Service] ${sport}: Generic Odds API fallback failed:`, error?.message || error);
+    return [];
+  }
+};
+
+const fetchOddsFromOddsApiByDate = async (sport, dateStr) => {
+  // Legacy strict-date fetcher kept if needed, but upcoming is preferred for fallbacks
+  const apiKey = await getApiKey();
+  if (!apiKey) return [];
+  // ... (rest of existing function if needed)
+  // But we'll replace usage in getUpcomingGames with the new helper
+  try {
+    // ...
+    const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
+    const response = await axios.get(url, {
+      params: {
+        apiKey,
+        regions: 'us',
+        markets: 'h2h,spreads,totals',
+        oddsFormat: 'american',
+        dateFormat: 'iso'
+      },
+      timeout: 10000
+    });
+    const events = Array.isArray(response?.data) ? response.data : [];
     const toEstDate = (iso) => {
       try {
         return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(iso));
       } catch (e) { return ''; }
     };
     const filtered = events.filter(event => toEstDate(event.commence_time) === dateStr);
-    
-    if (filtered.length) {
-      console.log(`[Odds Service] ${sport}: Odds API fallback returned ${filtered.length} games for ${dateStr}`);
-    }
     return filtered.map(event => normalizeOddsApiGame(event, sport));
-  } catch (error) {
-    console.warn(`[Odds Service] ${sport}: Odds API fallback failed for ${dateStr}:`, error?.response?.status || error?.message || error);
-    return [];
-  }
+  } catch (e) { return []; }
 };
 
 // Bet analysis helper functions
@@ -781,13 +799,21 @@ export const oddsService = {
                  console.log(`[Odds Service] ${sport}: No games/odds from BDL. Attempting Odds API fallback for ${d}.`);
               }
 
-              const fallbackGames = await fetchOddsFromOddsApiByDate(sport, d);
+              // Use the generic upcoming fallback instead of strict date matching
+              // This allows us to find games that might have slightly different dates in different APIs
+              const fallbackGames = await fetchUpcomingOddsFallback(sport);
               
               if (fallbackGames.length) {
-                console.log(`[Odds Service] ${sport}: Odds API fallback returned ${fallbackGames.length} games for ${d}`);
+                // console.log(`[Odds Service] ${sport}: Odds API fallback returned ${fallbackGames.length} games for ${d}`);
                 
                 if (!Array.isArray(dayGames) || dayGames.length === 0) {
-                  dayGames = fallbackGames;
+                  // Filter fallback games to match the requested date 'd' (EST)
+                  // Only if we are replacing the entire list.
+                  // But if BDL returned nothing, we should trust the fallback's list for that day.
+                  const toEstDate = (iso) => {
+                    try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(iso)); } catch (e) { return ''; }
+                  };
+                  dayGames = fallbackGames.filter(g => toEstDate(g.commence_time) === d);
                 } else {
                   // Merge fallback odds into BDL games where missing
                   // We match by team names roughly
@@ -821,7 +847,7 @@ export const oddsService = {
                   });
                 }
               } else {
-                 console.log(`[Odds Service] ${sport}: Odds API fallback returned 0 games for ${d}. Cannot fill gaps.`);
+                 console.log(`[Odds Service] ${sport}: Odds API fallback returned 0 upcoming games. Cannot fill gaps.`);
               }
             }
 
