@@ -32,22 +32,24 @@ const toNumber = (value) => {
 };
 
 /**
- * Fetch V2 odds by dates (array of YYYY-MM-DD)
+ * Legacy helper (kept for reference). Prefer ballDontLieService.getOddsV2 which
+ * routes NBA to /v2/odds and other sports to /{sport}/v1/odds with fallbacks.
  */
 async function fetchOddsByDates(dates = []) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error('Missing Ball Don\'t Lie API key for odds');
+  try {
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key for odds');
+    const params = {};
+    if (Array.isArray(dates) && dates.length > 0) params['dates[]'] = dates;
+    const resp = await axios.get(`${BDL_V2_BASE}/odds`, {
+      params,
+      headers: { Authorization: apiKey }
+    });
+    return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+  } catch (e) {
+    // Let callers decide their own fallback; return empty on failure
+    return [];
   }
-  const params = {};
-  if (Array.isArray(dates) && dates.length > 0) {
-    params['dates[]'] = dates;
-  }
-  const resp = await axios.get(`${BDL_V2_BASE}/odds`, {
-    params,
-    headers: { Authorization: apiKey }
-  });
-  return Array.isArray(resp?.data?.data) ? resp.data.data : [];
 }
 
 async function fetchNflOddsBySeasonWeek(season, week) {
@@ -73,8 +75,8 @@ async function fetchNflOddsBySeasonWeek(season, week) {
 async function getNbaGamesWithOdds(dateStr) {
   // Fetch games for date via v1 client
   const games = await ballDontLieService.getGames('basketball_nba', { dates: [dateStr], per_page: 100 }, 10);
-  // Fetch odds via v2 endpoint
-  const odds = await fetchOddsByDates([dateStr]);
+  // Fetch odds via unified helper (routes NBA -> /v2/odds, otherwise sport v1)
+  let odds = await ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 }, 'basketball_nba');
 
   // Index odds by game_id and vendor
   const gameIdToVendors = new Map();
@@ -397,7 +399,8 @@ export const ballDontLieOddsService = {
     }
     // Fetch games (v1 multi-sport wrapper) and v2 odds (date-based)
     const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
-    let odds = await fetchOddsByDates([dateStr]);
+    // Use unified helper to get odds appropriate for sport
+    let odds = await ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 }, sportKey);
 
     // NBA: If date-based v2 odds are sparse or missing ML/Spreads, fetch v2 odds by game_ids for precision
     if (sportKey === 'basketball_nba') {
