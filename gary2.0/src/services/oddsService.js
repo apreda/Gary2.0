@@ -739,9 +739,18 @@ export const oddsService = {
         }
       } else {
         // Use the strict EST date string from computeWindow or regenerate
-        const todayEst = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
-        dates = [todayEst];
-        console.log(`[Odds Service] ${sport}: Restricting odds fetch to EST date ${todayEst} (Next 16h window)`);
+        const estFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+        const todayEst = estFormatter.format(new Date());
+        
+        // We MUST ask for today AND tomorrow to handle UTC drift.
+        // BDL stores times in UTC. 7pm EST on Nov 21 is 00:00 UTC on Nov 22.
+        // So if we only ask for Nov 21, we miss the evening games!
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowEst = estFormatter.format(tomorrow);
+
+        dates = [todayEst, tomorrowEst];
+        console.log(`[Odds Service] ${sport}: Fetching [${dates.join(', ')}] to handle UTC offsets (will filter strictly to EST today)`);
       }
       // Fetch games+odds for each day in parallel and merge
       let combined = [];
