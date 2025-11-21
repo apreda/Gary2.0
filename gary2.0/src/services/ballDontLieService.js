@@ -75,10 +75,9 @@ function buildQuery(params = {}) {
     if (Array.isArray(value)) {
       value.forEach(v => {
         if (v == null) return;
-        // Note: API expects literal brackets key[]=value. 
-        // We use encodeURIComponent ONLY on key name (usually safe) and value.
-        // BUT we append [] literally.
-        parts.push(`${encodeURIComponent(key)}[]=${encodeURIComponent(String(v))}`);
+        // Use encoded brackets %5B%5D instead of literal [] to avoid 400 Bad Request
+        // from strict servers/firewalls.
+        parts.push(`${encodeURIComponent(key)}%5B%5D=${encodeURIComponent(String(v))}`);
       });
     } else if (typeof value === 'object') {
       // Basic JSON encode for nested objects
