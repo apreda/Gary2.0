@@ -75,9 +75,10 @@ function buildQuery(params = {}) {
     if (Array.isArray(value)) {
       value.forEach(v => {
         if (v == null) return;
-        // Use encoded brackets %5B%5D instead of literal [] to avoid 400 Bad Request
-        // from strict servers/firewalls.
-        parts.push(`${encodeURIComponent(key)}%5B%5D=${encodeURIComponent(String(v))}`);
+        // Note: API expects literal brackets key[]=value. 
+        // We use encodeURIComponent ONLY on key name (usually safe) and value.
+        // BUT we append [] literally.
+        parts.push(`${encodeURIComponent(key)}[]=${encodeURIComponent(String(v))}`);
       });
     } else if (typeof value === 'object') {
       // Basic JSON encode for nested objects
@@ -128,6 +129,7 @@ const ballDontLieService = {
    * - NBA: primary at /v2/odds (V2 docs), fallback to /nba/v1/odds
    * - Other sports: use /{sport}/v1/odds
    * Accepts dates[] or game_ids[] (arrays)
+   * Handles pagination automatically to ensure all odds rows are retrieved.
    */
   async getOddsV2(params = {}, sport = 'nba', ttlMinutes = 1) {
     try {
@@ -153,24 +155,48 @@ const ballDontLieService = {
 
       const cacheKey = `odds_${sportKey}_${JSON.stringify(norm)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // NBA uses V2 endpoint per latest docs; fallback to V1 if needed
-        const tryRequest = async (url) => {
-          const qs = buildQuery(norm); // ensures dates[]=... & game_ids[]=...
-          const fullUrl = `${url}${qs}`;
-          try {
-            console.log(`[Ball Don't Lie] GET ${fullUrl}`);
-          } catch {}
-          const resp = await axios.get(fullUrl, {
-            headers: { Authorization: API_KEY }
-          });
-          const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-          return rows;
+        // Helper to fetch ALL pages if pagination is present
+        const fetchAllPages = async (baseUrl, baseParams) => {
+          let allRows = [];
+          let nextCursor = baseParams.cursor || undefined;
+          let pageCount = 0;
+          const maxPages = 10; // Safety limit
+
+          do {
+            const currentParams = { ...baseParams };
+            if (nextCursor) currentParams.cursor = nextCursor;
+            // Ensure we ask for max per page to minimize requests
+            if (!currentParams.per_page) currentParams.per_page = 100;
+
+            const qs = buildQuery(currentParams); 
+            const fullUrl = `${baseUrl}${qs}`;
+            
+            try {
+              console.log(`[Ball Don't Lie] GET ${fullUrl} (Page ${pageCount + 1})`);
+              const resp = await axios.get(fullUrl, {
+                headers: { Authorization: API_KEY }
+              });
+              
+              const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+              allRows = allRows.concat(rows);
+              
+              // Check for next cursor
+              nextCursor = resp?.data?.meta?.next_cursor;
+              pageCount++;
+            } catch (err) {
+              console.warn(`[Ball Don't Lie] Error fetching page ${pageCount + 1}: ${err.message}`);
+              if (pageCount === 0) throw err; // Throw if first page fails
+              break; // Stop on error for subsequent pages
+            }
+          } while (nextCursor && pageCount < maxPages);
+
+          return allRows;
         };
 
         if (sportKey === 'nba') {
           try {
             const v2Url = `${BALLDONTLIE_API_BASE_URL}/v2/odds`;
-            const data = await tryRequest(v2Url);
+            const data = await fetchAllPages(v2Url, norm);
             if (data && data.length) return data;
             console.log(`[Ball Don't Lie] NBA v2/odds returned 0 rows for`, norm);
           } catch (v2err) {
@@ -183,7 +209,13 @@ const ballDontLieService = {
         } else {
           // Non-NBA sports: use V1 sport-scoped endpoint
           const v1Url = `${BALLDONTLIE_API_BASE_URL}/${sportKey}/v1/odds`;
-          return await tryRequest(v1Url);
+          // Reuse fetchAllPages for consistency
+          try {
+             return await fetchAllPages(v1Url, norm);
+          } catch (err) {
+             console.warn(`[Ball Don't Lie] ${sportKey} v1/odds failed: ${err.message}`);
+             return [];
+          }
         }
       }, ttlMinutes);
     } catch (e) {
