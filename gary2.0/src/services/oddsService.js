@@ -836,7 +836,14 @@ export const oddsService = {
                        const h2 = getMascot(fb.home_team);
                        const a2 = getMascot(fb.away_team);
                        // Check direct or swapped
-                       return (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2);
+                       const isMatch = (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2);
+                       
+                       // Debug log for specific game to see why it fails
+                       if (!isMatch && (bdlGame.home_team.includes('Clippers') || bdlGame.away_team.includes('Clippers'))) {
+                          console.log(`[Merge Debug] Comparing BDL '${bdlGame.home_team}' vs OddsAPI '${fb.home_team}' -> Mascots: ${h1} vs ${h2}`);
+                       }
+                       
+                       return isMatch;
                     });
 
                     if (match && match.bookmakers && match.bookmakers.length > 0) {
