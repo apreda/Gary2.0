@@ -122,8 +122,10 @@ const ballDontLieService = {
   },
 
   /**
-   * V2 Odds endpoint (currently documented for NBA). Accepts dates[] or game_ids[].
-   * Example params: { dates: ['2025-01-15'], game_ids: [18446819], per_page: 100, cursor }
+   * Odds endpoint helper
+   * - NBA: primary at /v2/odds (V2 docs), fallback to /nba/v1/odds
+   * - Other sports: use /{sport}/v1/odds
+   * Accepts dates[] or game_ids[] (arrays)
    */
   async getOddsV2(params = {}, sport = 'nba', ttlMinutes = 1) {
     try {
@@ -137,28 +139,47 @@ const ballDontLieService = {
       else if (s.includes('ncaab')) sportKey = 'ncaab';
       else if (s.includes('wnba')) sportKey = 'wnba';
       else if (s.includes('epl')) sportKey = 'epl';
-      else if (s.includes('nba')) sportKey = 'nba'; // Default fallback if 'basketball_nba' passed
+      else if (s.includes('nba')) sportKey = 'nba';
 
       const norm = {};
       if (Array.isArray(params.dates) && params.dates.length) norm['dates[]'] = params.dates;
       if (Array.isArray(params.game_ids) && params.game_ids.length) norm['game_ids[]'] = params.game_ids;
       if (params.per_page) norm.per_page = params.per_page;
       if (params.cursor) norm.cursor = params.cursor;
-      if (params.season) norm.season = params.season;
-      if (params.week) norm.week = params.week;
 
-      const cacheKey = `v2_odds_${sportKey}_${JSON.stringify(norm)}`;
+      const cacheKey = `odds_${sportKey}_${JSON.stringify(norm)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // Use correct endpoint pattern: /{sport}/v1/odds
-        const url = `${BALLDONTLIE_API_BASE_URL}/${sportKey}/v1/odds`;
-        const response = await axios.get(url, {
-          headers: { 'Authorization': API_KEY },
-          params: norm
-        });
-        return response.data?.data || [];
+        // NBA uses V2 endpoint per latest docs; fallback to V1 if needed
+        const tryRequest = async (url) => {
+          const resp = await axios.get(url, { headers: { Authorization: API_KEY }, params: norm });
+          const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+          return rows;
+        };
+
+        if (sportKey === 'nba') {
+          try {
+            const v2Url = `${BALLDONTLIE_API_BASE_URL}/v2/odds`;
+            const data = await tryRequest(v2Url);
+            if (data && data.length) return data;
+          } catch (v2err) {
+            // fall back to V1
+            console.warn(`[Ball Don't Lie] NBA v2/odds failed, falling back to /nba/v1/odds:`, v2err?.response?.status || v2err?.message);
+          }
+          try {
+            const v1Url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/odds`;
+            return await tryRequest(v1Url);
+          } catch (v1err) {
+            console.error(`[Ball Don't Lie] NBA odds v1 fallback failed:`, v1err?.response?.status || v1err?.message);
+            return [];
+          }
+        } else {
+          // Non-NBA sports: use V1 sport-scoped endpoint
+          const v1Url = `${BALLDONTLIE_API_BASE_URL}/${sportKey}/v1/odds`;
+          return await tryRequest(v1Url);
+        }
       }, ttlMinutes);
     } catch (e) {
-      console.error(`[Ball Don't Lie] v2 getOdds error (${sport}):`, e.message);
+      console.error(`[Ball Don't Lie] getOdds error (${sport}):`, e?.response?.status || e?.message);
       return [];
     }
   },
