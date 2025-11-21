@@ -40,10 +40,11 @@ async function fetchOddsByDates(dates = []) {
     const apiKey = getApiKey();
     if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key for odds');
     const params = {};
-    if (Array.isArray(dates) && dates.length > 0) params['dates[]'] = dates;
+    if (Array.isArray(dates) && dates.length > 0) params.dates = dates; // axios adds [] for arrays
     const resp = await axios.get(`${BDL_V2_BASE}/odds`, {
       params,
-      headers: { Authorization: apiKey }
+      headers: { Authorization: apiKey },
+      paramsSerializer: { indexes: null }
     });
     return Array.isArray(resp?.data?.data) ? resp.data.data : [];
   } catch (e) {
