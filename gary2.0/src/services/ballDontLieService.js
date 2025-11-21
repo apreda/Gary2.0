@@ -142,8 +142,9 @@ const ballDontLieService = {
       else if (s.includes('nba')) sportKey = 'nba';
 
       const norm = {};
-      if (Array.isArray(params.dates) && params.dates.length) norm['dates[]'] = params.dates;
-      if (Array.isArray(params.game_ids) && params.game_ids.length) norm['game_ids[]'] = params.game_ids;
+      // Use plain keys; let axios add [] for arrays
+      if (Array.isArray(params.dates) && params.dates.length) norm.dates = params.dates;
+      if (Array.isArray(params.game_ids) && params.game_ids.length) norm.game_ids = params.game_ids;
       if (params.per_page) norm.per_page = params.per_page;
       if (params.cursor) norm.cursor = params.cursor;
 
@@ -151,7 +152,11 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         // NBA uses V2 endpoint per latest docs; fallback to V1 if needed
         const tryRequest = async (url) => {
-          const resp = await axios.get(url, { headers: { Authorization: API_KEY }, params: norm });
+          const resp = await axios.get(url, {
+            headers: { Authorization: API_KEY },
+            params: norm,
+            paramsSerializer: { indexes: null } // emits dates[]=...&game_ids[]=...
+          });
           const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
           return rows;
         };
