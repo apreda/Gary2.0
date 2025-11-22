@@ -81,6 +81,14 @@ export async function generateNBAPicks(options = {}) {
     );
   };
 
+  const filterPlayersByTeam = (players = [], teamId) => {
+    if (!Array.isArray(players) || !teamId) return [];
+    return players.filter((player) => {
+      const idFromObj = player?.team?.id ?? player?.team_id ?? player?.teamId;
+      return idFromObj === teamId;
+    });
+  };
+
   const sportPicks = [];
   for (const game of todayGames) {
     const gameId = `nba-${game.id}`;
@@ -163,8 +171,9 @@ export async function generateNBAPicks(options = {}) {
       // Pull player season averages to compute four-factor proxies and top-3 players
       const loadTeamAverages = async (team) => {
         if (!team?.id) return { base: [], scoring: [], players: [] };
-        const roster = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 100 });
-        const ids = (Array.isArray(roster) ? roster : []).map(p => p.id).filter(Boolean).slice(0, 100);
+        const rawRoster = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 100 });
+        const roster = filterPlayersByTeam(rawRoster, team.id);
+        const ids = roster.map(p => p.id).filter(Boolean).slice(0, 100);
         const [base, scoring, advanced, usage] = await Promise.all([
           ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'base', season, season_type: 'regular', player_ids: ids }),
           ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'scoring', season, season_type: 'regular', player_ids: ids }),
@@ -176,7 +185,7 @@ export async function generateNBAPicks(options = {}) {
           scoring: Array.isArray(scoring) ? scoring : [], 
           advanced: Array.isArray(advanced) ? advanced : [],
           usage: Array.isArray(usage) ? usage : [],
-          players: Array.isArray(roster) ? roster : [] 
+          players: roster 
         };
       };
       const [homeAvg, awayAvg] = await Promise.all([loadTeamAverages(homeTeam), loadTeamAverages(awayTeam)]);
