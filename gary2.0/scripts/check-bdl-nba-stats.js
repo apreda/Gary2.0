@@ -96,9 +96,11 @@ async function run() {
 
       console.log(`Season averages pulled for ${seasonAvgs.length} players`);
       seasonAvgs.slice(0, 2).forEach((row) => {
-        console.log(
-          `   • Player ${row?.player?.id}: PPG ${row?.stats?.points_per_game}, RPG ${row?.stats?.rebounds_per_game}, APG ${row?.stats?.assists_per_game}`
-        );
+        const stats = row?.stats || {};
+        const ppg = stats.points_per_game ?? stats.points ?? stats.pts ?? 'n/a';
+        const rpg = stats.rebounds_per_game ?? stats.rebounds ?? stats.reb ?? 'n/a';
+        const apg = stats.assists_per_game ?? stats.assists ?? stats.ast ?? 'n/a';
+        console.log(`   • Player ${row?.player?.id}: PPG ${ppg}, RPG ${rpg}, APG ${apg}`);
       });
     }
 
