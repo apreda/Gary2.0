@@ -73,12 +73,16 @@ function buildQuery(params = {}) {
   Object.entries(params).forEach(([key, value]) => {
     if (value == null) return;
     if (Array.isArray(value)) {
+      // Ensure array keys use literal [] exactly once and keep brackets unencoded
+      const hasBrackets = /\[\]$/.test(key);
+      const keyWithBrackets = hasBrackets ? key : `${key}[]`;
+      // Encode the key but restore brackets to literal form
+      const encodedKey = encodeURIComponent(keyWithBrackets)
+        .replace(/%5B/g, '[')
+        .replace(/%5D/g, ']');
       value.forEach(v => {
         if (v == null) return;
-        // Note: API expects literal brackets key[]=value. 
-        // We use encodeURIComponent ONLY on key name (usually safe) and value.
-        // BUT we append [] literally.
-        parts.push(`${encodeURIComponent(key)}[]=${encodeURIComponent(String(v))}`);
+        parts.push(`${encodedKey}=${encodeURIComponent(String(v))}`);
       });
     } else if (typeof value === 'object') {
       // Basic JSON encode for nested objects
