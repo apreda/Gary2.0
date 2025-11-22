@@ -89,6 +89,59 @@ export async function generateNBAPicks(options = {}) {
     });
   };
 
+  const makeStatsMap = (rows = []) => {
+    const map = new Map();
+    (rows || []).forEach((row) => {
+      const pid = row?.player?.id;
+      if (pid) {
+        map.set(pid, row);
+      }
+    });
+    return map;
+  };
+
+  const buildTopPlayers = (roster = [], baseRows = [], advancedRows = [], maxPlayers = 10) => {
+    if (!Array.isArray(roster) || roster.length === 0) return [];
+    const baseMap = makeStatsMap(baseRows);
+    const advMap = makeStatsMap(advancedRows);
+
+    const enriched = roster
+      .map((player) => {
+        const stats = baseMap.get(player.id)?.stats || {};
+        const advStats = advMap.get(player.id)?.stats || {};
+        const minutes =
+          Number(stats.minutes_per_game ?? stats.min ?? stats.minutes ?? 0);
+        const pts =
+          Number(stats.points_per_game ?? stats.points ?? stats.pts ?? 0);
+        const reb =
+          Number(stats.rebounds_per_game ?? stats.rebounds ?? stats.reb ?? 0);
+        const ast =
+          Number(stats.assists_per_game ?? stats.assists ?? stats.ast ?? 0);
+
+        return {
+          id: player.id,
+          name: `${player.first_name || ''} ${player.last_name || ''}`.trim(),
+          position: player.position || '',
+          ptsPerGame: pts,
+          rebPerGame: reb,
+          astPerGame: ast,
+          minutesPerGame: minutes,
+          advanced: {
+            usagePct: advStats.usage_percentage ?? null,
+            trueShootingPct: advStats.true_shooting_percentage ?? null,
+            offensiveRating: advStats.offensive_rating ?? null,
+            defensiveRating: advStats.defensive_rating ?? null,
+            netRating: advStats.net_rating ?? null,
+            pie: advStats.player_impact_estimate ?? advStats.pie ?? null
+          }
+        };
+      })
+      .filter((entry) => Number.isFinite(entry.minutesPerGame) && entry.minutesPerGame > 0);
+
+    enriched.sort((a, b) => b.minutesPerGame - a.minutesPerGame || b.ptsPerGame - a.ptsPerGame);
+    return enriched.slice(0, maxPlayers);
+  };
+
   const sportPicks = [];
   for (const game of todayGames) {
     const gameId = `nba-${game.id}`;
@@ -190,12 +243,14 @@ export async function generateNBAPicks(options = {}) {
           ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'advanced', season, season_type: 'regular', player_ids: ids }),
           ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'usage', season, season_type: 'regular', player_ids: ids })
         ]);
+        const baseMap = makeStatsMap(base);
+        const filteredRoster = roster.filter(player => baseMap.has(player.id));
         return { 
           base: Array.isArray(base) ? base : [], 
           scoring: Array.isArray(scoring) ? scoring : [], 
           advanced: Array.isArray(advanced) ? advanced : [],
           usage: Array.isArray(usage) ? usage : [],
-          players: roster 
+          players: filteredRoster 
         };
       };
       const [homeAvg, awayAvg] = await Promise.all([loadTeamAverages(homeTeam), loadTeamAverages(awayTeam)]);
@@ -241,32 +296,13 @@ export async function generateNBAPicks(options = {}) {
         return { trueShootingPct: ts, effectiveFgPctAdv: efg, offensiveRating: ortg, defensiveRating: drtg, netRating: net, usagePct: usg };
       };
 
-      const pickTop3 = (baseList, scoringList, rosterList) => {
-        const byId = new Map();
-        scoringList.forEach(row => {
-          const pid = row?.player?.id;
-          const pts = Number(row?.stats?.points_per_game || row?.stats?.pts || 0);
-          if (pid) byId.set(pid, { pid, pts });
-        });
-        const entries = Array.from(byId.values()).sort((a, b) => b.pts - a.pts).slice(0, 3);
-        return entries.map(({ pid }) => {
-          const base = baseList.find(x => x?.player?.id === pid)?.stats || {};
-          const plyr = rosterList.find(x => x?.id === pid) || {};
-          const name = (plyr.first_name && plyr.last_name) ? `${plyr.first_name} ${plyr.last_name}` : (plyr.full_name || '');
-          const pts = Number((base.points_per_game ?? base.pts) || 0);
-          const reb = Number((base.rebounds_per_game ?? base.reb) || 0);
-          const ast = Number((base.assists_per_game ?? base.ast) || 0);
-          return { id: pid, name, ptsPerGame: pts, rebPerGame: reb, astPerGame: ast };
-        });
-      };
-
       const seasonSummary = {
         home: { ...aggFourFactors(homeAvg.base), adv: aggAdvanced(homeAvg.advanced, homeAvg.usage) },
         away: { ...aggFourFactors(awayAvg.base), adv: aggAdvanced(awayAvg.advanced, awayAvg.usage) }
       };
       const topPlayers = {
-        home: pickTop3(homeAvg.base, homeAvg.scoring, homeAvg.players),
-        away: pickTop3(awayAvg.base, awayAvg.scoring, awayAvg.players)
+        home: buildTopPlayers(homeAvg.players, homeAvg.base, homeAvg.advanced, 10),
+        away: buildTopPlayers(awayAvg.players, awayAvg.base, awayAvg.advanced, 10)
       };
 
       // Keep a human-readable notes block for debugging
