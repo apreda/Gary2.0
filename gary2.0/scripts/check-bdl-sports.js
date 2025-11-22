@@ -9,7 +9,8 @@ const sportsConfig = [
     startDate: '2025-11-01',
     endDate: '2025-11-22',
     includeSeasonAverages: true,
-    sampleTeams: 2
+    sampleTeams: 2,
+    includeStandings: true
   },
   {
     key: 'basketball_ncaab',
@@ -18,7 +19,8 @@ const sportsConfig = [
     startDate: '2025-11-01',
     endDate: '2025-11-22',
     includeSeasonAverages: false,
-    sampleTeams: 2
+    sampleTeams: 2,
+    includeStandings: false
   },
   {
     key: 'americanfootball_ncaaf',
@@ -27,7 +29,8 @@ const sportsConfig = [
     startDate: '2025-10-15',
     endDate: '2025-11-22',
     includeSeasonAverages: false,
-    sampleTeams: 2
+    sampleTeams: 2,
+    includeStandings: false
   },
   {
     key: 'americanfootball_nfl',
@@ -36,7 +39,8 @@ const sportsConfig = [
     startDate: '2025-10-01',
     endDate: '2025-11-22',
     includeSeasonAverages: false,
-    sampleTeams: 2
+    sampleTeams: 2,
+    includeStandings: true
   },
   {
     key: 'baseball_mlb',
@@ -45,7 +49,10 @@ const sportsConfig = [
     startDate: '2025-06-01',
     endDate: '2025-09-30',
     includeSeasonAverages: false,
-    sampleTeams: 2
+    sampleTeams: 2,
+    includeStandings: true,
+    teamParams: { season: 2025 },
+    standingsParams: { season: 2025 }
   },
   {
     key: 'basketball_wnba',
@@ -54,7 +61,8 @@ const sportsConfig = [
     startDate: '2025-07-01',
     endDate: '2025-09-15',
     includeSeasonAverages: false,
-    sampleTeams: 2
+    sampleTeams: 2,
+    includeStandings: true
   },
   {
     key: 'soccer_epl',
@@ -63,7 +71,10 @@ const sportsConfig = [
     startDate: '2025-09-01',
     endDate: '2025-11-22',
     includeSeasonAverages: false,
-    sampleTeams: 2
+    sampleTeams: 2,
+    includeStandings: true,
+    teamParams: { season: 2025 },
+    standingsParams: { season: 2025 }
   }
 ];
 
@@ -108,19 +119,22 @@ async function inspectSport(config) {
   console.log(`Checking ${config.label} (${config.key})`);
   console.log('----------------------------------------------------');
   try {
-    const teams = await ballDontLieService.getTeams(config.key, {});
+    const teams = await ballDontLieService.getTeams(config.key, config.teamParams || {});
     console.log(`Teams available: ${teams.length}`);
     if (!Array.isArray(teams) || teams.length === 0) {
       console.warn('⚠️ No teams returned. Skipping sport.');
       return;
     }
 
-    const standings = await ballDontLieService.getStandingsGeneric(config.key, { season: config.season });
-    if (Array.isArray(standings) && standings.length) {
-      const sampleStanding = standings[0];
-      console.log(`Sample standing: team=${sampleStanding?.team?.full_name || 'n/a'} record=${sampleStanding?.wins || '?'}-${sampleStanding?.losses || '?'}`);
-    } else {
-      console.warn('⚠️ Standings not returned for this sport/season.');
+    if (config.includeStandings !== false) {
+      const standingsParams = config.standingsParams || { season: config.season };
+      const standings = await ballDontLieService.getStandingsGeneric(config.key, standingsParams);
+      if (Array.isArray(standings) && standings.length) {
+        const sampleStanding = standings[0];
+        console.log(`Sample standing: team=${sampleStanding?.team?.full_name || 'n/a'} record=${sampleStanding?.wins || '?'}-${sampleStanding?.losses || '?'}`);
+      } else {
+        console.warn('⚠️ Standings not returned for this sport/season.');
+      }
     }
 
     const sampleTeams = teams.slice(0, config.sampleTeams || 2);

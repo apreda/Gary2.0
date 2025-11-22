@@ -787,7 +787,8 @@ const ballDontLieService = {
           icehockey_nhl: 'nhl/v1/teams',
           americanfootball_nfl: 'nfl/v1/teams',
           basketball_wnba: 'wnba/v1/teams',
-          soccer_epl: 'epl/v1/teams'
+          soccer_epl: 'epl/v1/teams',
+          baseball_mlb: 'mlb/v1/teams'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getTeams not supported');
@@ -823,7 +824,8 @@ const ballDontLieService = {
           americanfootball_nfl: 'nfl/v1/teams',
           basketball_wnba: 'wnba/v1/teams',
           basketball_nba: 'nba/v1/teams',
-          soccer_epl: 'epl/v1/teams'
+          soccer_epl: 'epl/v1/teams',
+          baseball_mlb: 'mlb/v1/teams'
         };
         const path = endpointMap[sportKey];
         if (path) {
@@ -994,7 +996,8 @@ const ballDontLieService = {
           americanfootball_nfl: 'nfl/v1/standings',
           americanfootball_ncaaf: 'ncaaf/v1/standings',
           basketball_wnba: 'wnba/v1/standings',
-          soccer_epl: 'epl/v1/standings'
+          soccer_epl: 'epl/v1/standings',
+          baseball_mlb: 'mlb/v1/standings'
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getStandings not supported');
