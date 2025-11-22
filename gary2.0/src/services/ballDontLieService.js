@@ -685,6 +685,45 @@ const ballDontLieService = {
   },
 
   /**
+   * Active players (per sport)
+   */
+  async getPlayersActive(sportKey, params = {}, ttlMinutes = 5) {
+    try {
+      const cacheKey = `${sportKey}_players_active_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        if (sport?.getActivePlayers) {
+          const resp = await sport.getActivePlayers(params);
+          return resp?.data || [];
+        }
+        const endpointMap = {
+          basketball_nba: 'nba/v1/players/active',
+          basketball_ncaab: 'ncaab/v1/players/active',
+          basketball_wnba: 'wnba/v1/players/active',
+          americanfootball_nfl: 'nfl/v1/players/active',
+          americanfootball_ncaaf: 'ncaaf/v1/players/active',
+          icehockey_nhl: 'nhl/v1/players/active',
+          baseball_mlb: 'mlb/v1/players/active',
+          soccer_epl: 'epl/v1/players/active'
+        };
+        const path = endpointMap[sportKey];
+        if (!path) throw new Error('getPlayersActive not supported');
+        const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getPlayersActive error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
    * NBA Season Averages by category/type (players)
    * Example path: /nba/v1/season_averages/{category}?type=base|advanced|...
    */

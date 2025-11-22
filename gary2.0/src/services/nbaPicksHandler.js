@@ -171,8 +171,18 @@ export async function generateNBAPicks(options = {}) {
       // Pull player season averages to compute four-factor proxies and top-3 players
       const loadTeamAverages = async (team) => {
         if (!team?.id) return { base: [], scoring: [], players: [] };
-        const rawRoster = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 100 });
-        const roster = filterPlayersByTeam(rawRoster, team.id);
+        let rosterSource = [];
+        if (typeof ballDontLieService.getPlayersActive === 'function') {
+          try {
+            rosterSource = await ballDontLieService.getPlayersActive('basketball_nba', { team_ids: [team.id], per_page: 100 }, options.nocache ? 0 : 10);
+          } catch (err) {
+            console.warn(`[NBA] getPlayersActive failed for team ${team.id}:`, err?.message || err);
+          }
+        }
+        if (!Array.isArray(rosterSource) || rosterSource.length === 0) {
+          rosterSource = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 100 });
+        }
+        const roster = filterPlayersByTeam(rosterSource, team.id);
         const ids = roster.map(p => p.id).filter(Boolean).slice(0, 100);
         const [base, scoring, advanced, usage] = await Promise.all([
           ballDontLieService.getNbaSeasonAverages({ category: 'general', type: 'base', season, season_type: 'regular', player_ids: ids }),

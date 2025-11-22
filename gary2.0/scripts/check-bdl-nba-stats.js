@@ -78,8 +78,14 @@ async function run() {
         console.log(` - ${game.visitor_team?.full_name} @ ${game.home_team?.full_name} (${game.date})`);
       });
 
-      const rosterRaw = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 10 }, 0);
-      const roster = rosterRaw.filter((player) => player?.team?.id === team.id);
+      let rosterActive = [];
+      try {
+        rosterActive = await ballDontLieService.getPlayersActive('basketball_nba', { team_ids: [team.id], per_page: 25 }, 0);
+      } catch {}
+      if (!Array.isArray(rosterActive) || rosterActive.length === 0) {
+        rosterActive = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 25 }, 0);
+      }
+      const roster = rosterActive.filter((player) => player?.team?.id === team.id);
       console.log(`Roster Entries (filtered): ${roster.length}`);
       roster.slice(0, 3).forEach((player) => {
         console.log(`   • ${player.first_name} ${player.last_name} (id: ${player.id})`);
