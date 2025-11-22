@@ -572,34 +572,7 @@ function Home() {
         let queryDate = dateString;
         console.log(`Home: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour}`);
         
-        // Before 10am EST, always use yesterday's picks if available
-        if (easternHour < 10) {
-          console.log("Home: It's before 10am Eastern Time - looking for yesterday's picks");
-          
-          // Calculate yesterday's date properly using the date parts we already have
-          const yesterdayDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-          yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-          
-          // Format yesterday's date as YYYY-MM-DD
-          const yesterdayYear = yesterdayDate.getFullYear();
-          const yesterdayMonth = (yesterdayDate.getMonth() + 1).toString().padStart(2, '0');
-          const yesterdayDay = yesterdayDate.getDate().toString().padStart(2, '0');
-          const yesterdayString = `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
-          
-          // Check if yesterday's picks exist
-          const { data: yesterdayData, error: yesterdayError } = await supabase
-            .from("daily_picks")
-            .select("picks, date")
-            .eq("date", yesterdayString)
-            .maybeSingle();
-            
-          if (!yesterdayError && yesterdayData && yesterdayData.picks) {
-            console.log(`Home: Using picks from previous day (${yesterdayString}) since it's before 10am`);
-            queryDate = yesterdayString;
-          } else {
-            console.log(`Home: No picks found for previous day ${yesterdayString}, will try today's picks`); 
-          }
-        }
+        // Always show today's picks (EST), no fallback to yesterday
         
         // Query Supabase for picks using the determined date
         console.log(`Home: Querying picks for date: ${queryDate}`);

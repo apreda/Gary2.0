@@ -100,21 +100,7 @@ function RealGaryPicks() {
 
     try {
       const eastern = getEasternDate();
-      let queryDate = eastern.dateString;
-
-      if (eastern.easternHour < 10) {
-        const yesterdayString = getYesterdayDate(eastern.year, eastern.month, eastern.day);
-
-        const { data: yesterdayData, error: yesterdayError } = await supabase
-          .from("daily_picks")
-          .select("picks, date")
-          .eq("date", yesterdayString)
-          .maybeSingle();
-
-        if (!yesterdayError && yesterdayData && yesterdayData.picks) {
-          queryDate = yesterdayString;
-        }
-      }
+      let queryDate = eastern.dateString; // Always use today's EST date
 
       const { data, error: fetchError } = await supabase
         .from('daily_picks')
