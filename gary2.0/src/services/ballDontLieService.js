@@ -724,6 +724,31 @@ const ballDontLieService = {
   },
 
   /**
+   * League leaders (per stat type/season)
+   */
+  async getLeaders(params = {}, ttlMinutes = 10) {
+    try {
+      if (!params?.stat_type || !params?.season) {
+        throw new Error('stat_type and season are required for getLeaders');
+      }
+      const cacheKey = `leaders_${params.stat_type}_${params.season}_${JSON.stringify({ ...params, stat_type: undefined, season: undefined })}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/v1/leaders${buildQuery(params)}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getLeaders error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * NBA Season Averages by category/type (players)
    * Example path: /nba/v1/season_averages/{category}?type=base|advanced|...
    */

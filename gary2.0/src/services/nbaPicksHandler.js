@@ -81,6 +81,8 @@ export async function generateNBAPicks(options = {}) {
     );
   };
 
+  const LEADER_STAT_TYPES = ['pts', 'ast', 'reb', 'stl', 'blk', 'min'];
+
   const filterPlayersByTeam = (players = [], teamId) => {
     if (!Array.isArray(players) || !teamId) return [];
     return players.filter((player) => {
@@ -100,7 +102,14 @@ export async function generateNBAPicks(options = {}) {
     return map;
   };
 
-  const buildTopPlayers = (roster = [], baseRows = [], advancedRows = [], maxPlayers = 10) => {
+  const buildTopPlayers = (
+    roster = [],
+    baseRows = [],
+    advancedRows = [],
+    injuryMap = new Map(),
+    leaderMap = new Map(),
+    maxPlayers = 10
+  ) => {
     if (!Array.isArray(roster) || roster.length === 0) return [];
     const baseMap = makeStatsMap(baseRows);
     const advMap = makeStatsMap(advancedRows);
@@ -109,6 +118,8 @@ export async function generateNBAPicks(options = {}) {
       .map((player) => {
         const stats = baseMap.get(player.id)?.stats || {};
         const advStats = advMap.get(player.id)?.stats || {};
+        const injury = injuryMap.get(player.id);
+        const leaderInfo = leaderMap.get(player.id);
         const minutes =
           Number(stats.minutes_per_game ?? stats.min ?? stats.minutes ?? 0);
         const pts =
@@ -126,6 +137,10 @@ export async function generateNBAPicks(options = {}) {
           rebPerGame: reb,
           astPerGame: ast,
           minutesPerGame: minutes,
+          leagueLeader: leaderInfo || null,
+          injuryStatus: injury?.status || null,
+          injuryDescription: injury?.description || null,
+          injuryReturnDate: injury?.return_date || null,
           advanced: {
             usagePct: advStats.usage_percentage ?? null,
             trueShootingPct: advStats.true_shooting_percentage ?? null,
@@ -141,6 +156,41 @@ export async function generateNBAPicks(options = {}) {
     enriched.sort((a, b) => b.minutesPerGame - a.minutesPerGame || b.ptsPerGame - a.ptsPerGame);
     return enriched.slice(0, maxPlayers);
   };
+
+  const fetchLeagueLeaderMap = async (season) => {
+    const leaderMap = new Map();
+    await Promise.all(
+      LEADER_STAT_TYPES.map(async (stat) => {
+        try {
+          const rows = await ballDontLieService.getLeaders({ stat_type: stat, season });
+          (Array.isArray(rows) ? rows : []).forEach((entry) => {
+            const pid = entry?.player?.id;
+            if (!pid) return;
+            if (!leaderMap.has(pid)) leaderMap.set(pid, {});
+            leaderMap.get(pid)[stat] = {
+              rank: entry?.rank ?? null,
+              value: entry?.value ?? null,
+              gamesPlayed: entry?.games_played ?? null
+            };
+          });
+        } catch (err) {
+          console.warn(`[NBA] Failed to load league leaders for ${stat}:`, err?.message || err);
+        }
+      })
+    );
+    return leaderMap;
+  };
+
+  const runTimestamp = new Date();
+  const season =
+    (runTimestamp.getMonth() + 1) <= 6
+      ? runTimestamp.getFullYear() - 1
+      : runTimestamp.getFullYear();
+  const windowStart = new Date(runTimestamp);
+  windowStart.setDate(windowStart.getDate() - 21);
+  const defaultStartStr = windowStart.toISOString().slice(0, 10);
+  const defaultEndStr = runTimestamp.toISOString().slice(0, 10);
+  const leagueLeaderMap = await fetchLeagueLeaderMap(season);
 
   const sportPicks = [];
   for (const game of todayGames) {
@@ -184,14 +234,8 @@ export async function generateNBAPicks(options = {}) {
       } catch {}
 
       // Regular season context (no playoffs)
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-      const season = month <= 6 ? year - 1 : year; // NBA season year label
-      const startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 21);
-      const startStr = startDate.toISOString().slice(0, 10);
-      const endStr = now.toISOString().slice(0, 10);
+      const startStr = defaultStartStr;
+      const endStr = defaultEndStr;
 
       const teamIds = [];
       if (homeTeam) teamIds.push(homeTeam.id);
@@ -203,6 +247,19 @@ export async function generateNBAPicks(options = {}) {
         awayTeam ? ballDontLieService.getGames('basketball_nba', { seasons: [season], team_ids: [awayTeam.id], postseason: false, start_date: startStr, end_date: endStr, per_page: 50 }, options.nocache ? 0 : 10) : Promise.resolve([]),
         ballDontLieService.getInjuriesGeneric('basketball_nba', { team_ids: teamIds }, options.nocache ? 0 : 5)
       ]);
+
+      // Map injuries by player for quick lookup
+      const injuryMap = new Map();
+      (injuries || []).forEach((inj) => {
+        const pid = inj?.player?.id;
+        if (pid) {
+          injuryMap.set(pid, {
+            status: inj?.status || null,
+            description: inj?.description || null,
+            return_date: inj?.return_date || null
+          });
+        }
+      });
 
       // Build structured season report blocks (standings, season averages, top players)
       const standingsAll = await ballDontLieService.getStandingsGeneric('basketball_nba', { season });
@@ -301,8 +358,8 @@ export async function generateNBAPicks(options = {}) {
         away: { ...aggFourFactors(awayAvg.base), adv: aggAdvanced(awayAvg.advanced, awayAvg.usage) }
       };
       const topPlayers = {
-        home: buildTopPlayers(homeAvg.players, homeAvg.base, homeAvg.advanced, 10),
-        away: buildTopPlayers(awayAvg.players, awayAvg.base, awayAvg.advanced, 10)
+        home: buildTopPlayers(homeAvg.players, homeAvg.base, homeAvg.advanced, injuryMap, leagueLeaderMap, 10),
+        away: buildTopPlayers(awayAvg.players, awayAvg.base, awayAvg.advanced, injuryMap, leagueLeaderMap, 10)
       };
 
       // Keep a human-readable notes block for debugging
