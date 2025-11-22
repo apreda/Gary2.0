@@ -42,6 +42,45 @@ export async function generateNBAPicks(options = {}) {
     todayGames = idx >= 0 && idx < todayGames.length ? [todayGames[idx]] : [];
   }
 
+  const normalizeTeamName = (name = '') => {
+    let str = name.toLowerCase();
+    const replacements = [
+      { from: /\blos angeles\b/g, to: 'la' },
+      { from: /\bnew york\b/g, to: 'ny' },
+      { from: /\bsan antonio\b/g, to: 'sa' },
+      { from: /\bnew orleans\b/g, to: 'no' },
+      { from: /\boklahoma city\b/g, to: 'okc' },
+      { from: /\bgolden state\b/g, to: 'gs' }
+    ];
+    replacements.forEach(({ from, to }) => {
+      str = str.replace(from, to);
+    });
+    return str.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  };
+
+  const mascotToken = (name = '') => {
+    const parts = name.trim().split(/\s+/);
+    return parts.length ? parts[parts.length - 1].toLowerCase() : '';
+  };
+
+  const resolveTeamByName = (teamName = '', teams = []) => {
+    if (!teamName || !Array.isArray(teams)) return null;
+    const targetCanonical = normalizeTeamName(teamName);
+    const targetMascot = mascotToken(teamName);
+
+    return (
+      teams.find((team) => {
+        const fullCanonical = normalizeTeamName(team.full_name || '');
+        if (!fullCanonical) return false;
+        if (fullCanonical === targetCanonical) return true;
+        if (fullCanonical.includes(targetCanonical) || targetCanonical.includes(fullCanonical)) return true;
+        const teamMascot = mascotToken(team.full_name);
+        if (teamMascot && targetMascot && teamMascot === targetMascot) return true;
+        return false;
+      }) || null
+    );
+  };
+
   const sportPicks = [];
   for (const game of todayGames) {
     const gameId = `nba-${game.id}`;
@@ -50,16 +89,17 @@ export async function generateNBAPicks(options = {}) {
       console.log(`🔄 PICK GENERATION STARTED: ${new Date().toISOString()}`);
       console.log(`Processing NBA game: ${game.away_team} @ ${game.home_team}`);
 
-      // Resolve teams
+      // Resolve teams with canonical/mascot matching
       const nbaTeams = await ballDontLieService.getNbaTeams();
-      const homeTeam = nbaTeams.find(t =>
-        t.full_name.toLowerCase().includes(game.home_team.toLowerCase()) ||
-        game.home_team.toLowerCase().includes(t.full_name.toLowerCase())
-      );
-      const awayTeam = nbaTeams.find(t =>
-        t.full_name.toLowerCase().includes(game.away_team.toLowerCase()) ||
-        game.away_team.toLowerCase().includes(t.full_name.toLowerCase())
-      );
+      const homeTeam = resolveTeamByName(game.home_team, nbaTeams);
+      const awayTeam = resolveTeamByName(game.away_team, nbaTeams);
+
+      if (!homeTeam) {
+        console.warn(`[NBA] Unable to resolve home team for ${game.home_team}`);
+      }
+      if (!awayTeam) {
+        console.warn(`[NBA] Unable to resolve away team for ${game.away_team}`);
+      }
 
       let homeTeamInfo = null;
       let awayTeamInfo = null;
@@ -306,12 +346,15 @@ export async function generateNBAPicks(options = {}) {
         }
       } catch {}
 
+      const teamStatsCombined = homeTeamInfo || awayTeamInfo ? { home: homeTeamInfo, away: awayTeamInfo } : null;
+
       const gameObj = {
         id: gameId,
         sport: 'nba',
         league: 'NBA',
         homeTeam: game.home_team,
         awayTeam: game.away_team,
+        teamStats: teamStatsCombined,
         gameContext: { season, postseason: false, notes: 'Regular season context from BDL NBA', richKeyFindings },
         homeTeamStats: homeTeamInfo,
         awayTeamStats: awayTeamInfo,
