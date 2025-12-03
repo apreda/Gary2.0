@@ -5,7 +5,6 @@
 import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService.js';
 import { supabase, storeDailyPicks } from '../supabaseClient.js';
-import { apiSportsService } from './apiSportsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { nhlPlayoffService } from './nhlPlayoffService.js';
 import { picksService as enhancedPicksService } from './picksService.enhanced.js';
@@ -142,6 +141,60 @@ async function checkForExistingPicks(dateString) {
   }
   
   return false;
+}
+
+/**
+ * Check if a specific game already has a pick in today's database
+ * This prevents picking both sides of a game (e.g., Cowboys +3 AND Lions ML)
+ * @param {string} league - Sport league (e.g., 'NFL', 'NBA')
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @returns {Promise<{exists: boolean, existingPick: string|null}>}
+ */
+async function gameAlreadyHasPick(league, homeTeam, awayTeam) {
+  // EST date for today
+  const now = new Date();
+  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+  const [month, day, year] = estDate.split('/');
+  const currentDateString = `${year}-${month}-${day}`;
+
+  await ensureValidSupabaseSession();
+  const { data, error } = await supabase
+    .from('daily_picks')
+    .select('picks')
+    .eq('date', currentDateString)
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return { exists: false, existingPick: null };
+  }
+
+  const existingPicks = Array.isArray(data[0].picks)
+    ? data[0].picks
+    : (() => { try { return JSON.parse(data[0].picks || '[]'); } catch { return []; } })();
+
+  // Normalize team names for comparison (lowercase, trim)
+  const normalize = (str) => (str || '').toLowerCase().trim();
+  const targetHome = normalize(homeTeam);
+  const targetAway = normalize(awayTeam);
+  const targetLeague = normalize(league);
+
+  // Find any existing pick for this game (non-prop picks only)
+  const existingGamePick = existingPicks.find(p => {
+    if (p?.type === 'prop' || p?.pickType === 'prop') return false;
+    const pickLeague = normalize(p?.league);
+    const pickHome = normalize(p?.homeTeam);
+    const pickAway = normalize(p?.awayTeam);
+    return pickLeague === targetLeague && pickHome === targetHome && pickAway === targetAway;
+  });
+
+  if (existingGamePick) {
+    console.log(`🚫 GAME ALREADY HAS PICK: ${league} ${awayTeam} @ ${homeTeam} → "${existingGamePick.pick}"`);
+    return { exists: true, existingPick: existingGamePick.pick };
+  }
+
+  return { exists: false, existingPick: null };
 }
 
 // Helper: Store picks in database
@@ -301,12 +354,28 @@ async function storeDailyPicksInDatabase(picks) {
         ? existing.picks
         : (() => { try { return JSON.parse(existing.picks || '[]'); } catch { return []; } })();
 
-      // Deduplicate by pick_id if present, else by tuple (league, homeTeam, awayTeam, pick)
-      const dedupeKey = (p) => p.pick_id || `${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}|${p.pick || ''}`;
-      const seen = new Set(existingPicks.map(dedupeKey));
+      // GAME-LEVEL DEDUPE: Only ONE pick per game, regardless of pick type (spread/ML/etc)
+      // This prevents Gary from picking both sides of a game (e.g., Cowboys +3 AND Lions ML)
+      const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
+      
+      // For game picks: dedupe by game matchup only (not by the specific pick)
+      // For prop picks: dedupe by player + prop to allow multiple player props per game
+      const gameKey = (p) => {
+        if (isPropPick(p)) {
+          // Props: allow multiple per game but dedupe by player+prop
+          return `prop|${p.league || ''}|${p.player || ''}|${p.prop || p.statType || ''}`;
+        }
+        // Game picks: ONE per game - use homeTeam/awayTeam regardless of pick direction
+        return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}`;
+      };
+      
+      const seen = new Set(existingPicks.map(gameKey));
       const toAppend = validPicks.filter(p => {
-        const key = dedupeKey(p);
-        if (seen.has(key)) return false;
+        const key = gameKey(p);
+        if (seen.has(key)) {
+          console.log(`⚠️ BLOCKED DUPLICATE: Already have pick for this game - ${key}`);
+          return false;
+        }
         seen.add(key);
         return true;
       });
@@ -393,6 +462,37 @@ async function storeDailyPicksInDatabase(picks) {
   } finally {
     isStoringPicks = false;
     console.log('🔓 Storage lock released');
+  }
+}
+
+async function logAgenticRun(run) {
+  if (!run || !run.gameId) return;
+  try {
+    await ensureValidSupabaseSession();
+    const payload = {
+      sport: run.sport || 'basketball_nba',
+      game_id: run.gameId,
+      home_team: run.homeTeam,
+      away_team: run.awayTeam,
+      game_time: run.gameTime ? new Date(run.gameTime).toISOString() : null,
+      odds_snapshot: run.oddsSnapshot || null,
+      stage1_summary: run.stage1Summary || null,
+      stage2_summary: run.stage2Summary || null,
+      final_pick: run.finalPick || null,
+      convergence_score:
+        typeof run.convergence === 'number'
+          ? run.convergence
+          : (typeof run.finalPick?.confidence === 'number' ? run.finalPick.confidence : null),
+      red_team_note: run.redTeamNote || null,
+      elapsed_ms: run.elapsedMs || null,
+      runner_version: run.runnerVersion || null
+    };
+    const { error } = await supabase.from('gary_agentic_runs').insert(payload);
+    if (error) {
+      console.error('[Agentic] Failed to log run:', error.message);
+    }
+  } catch (err) {
+    console.error('[Agentic] Unexpected error logging run:', err.message);
   }
 }
 
@@ -838,9 +938,10 @@ const picksService = {
   checkForExistingPicks,
   ensureValidSupabaseSession,
   validatePickConsistency,
-  _teamNameMatch
+  _teamNameMatch,
+  logAgenticRun
 };
 
-export { processGameOnce, cachedApiCall, _teamNameMatch };
-export { picksService, generateDailyPicks };
+export { processGameOnce, cachedApiCall, _teamNameMatch, gameAlreadyHasPick };
+export { picksService, generateDailyPicks, logAgenticRun };
 export default picksService;
