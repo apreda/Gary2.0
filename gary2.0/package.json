@@ -10,7 +10,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "api": "node api/stripe-api.js",
-    "api:prod": "NODE_ENV=production node api/stripe-api.js"
+    "api:prod": "NODE_ENV=production node api/stripe-api.js",
+    "picks": "node scripts/generate-picks-local.js",
+    "picks:nba": "node scripts/generate-picks-local.js --nba",
+    "picks:nfl": "node scripts/generate-picks-local.js --nfl",
+    "picks:ncaab": "node scripts/generate-picks-local.js --ncaab",
+    "picks:ncaaf": "node scripts/generate-picks-local.js --ncaaf",
+    "picks:all": "node scripts/generate-picks-local.js"
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",
