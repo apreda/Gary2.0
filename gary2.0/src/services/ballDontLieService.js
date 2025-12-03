@@ -816,12 +816,24 @@ const ballDontLieService = {
   /**
    * NCAAF player season stats (single season, optional player filter)
    */
-  async getNcaafPlayerSeasonStats({ playerId, season } = {}, ttlMinutes = 10) {
+  async getNcaafPlayerSeasonStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 10) {
     try {
-      if (!playerId || !season) return [];
-      const cacheKey = `ncaaf_player_season_stats_${playerId}_${season}`;
+      if (!season) return [];
+      const pidArr = playerIds || (playerId ? [playerId] : undefined);
+      const tidArr = teamIds || (teamId ? [teamId] : undefined);
+      if ((!pidArr || pidArr.length === 0) && (!tidArr || tidArr.length === 0)) {
+        return [];
+      }
+      const cacheKey = `ncaaf_player_season_stats_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_season_stats${buildQuery({ player_ids: [playerId], season, per_page: 100 })}`;
+        const query = { season, per_page: 100 };
+        if (Array.isArray(pidArr) && pidArr.length) {
+          query['player_ids[]'] = pidArr.slice(0, 100);
+        }
+        if (Array.isArray(tidArr) && tidArr.length) {
+          query['team_ids[]'] = tidArr.slice(0, 100);
+        }
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_season_stats${buildQuery(query)}`;
         const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);

@@ -259,6 +259,15 @@ PITCHER DATA RULE (MLB only): ONLY mention pitcher names that are explicitly pro
 NEVER mention missing or limited stats in your analysis. Users should never know if data is missing.
 Never reference any "model" or "edge"; your reasoning is expert judgment supported by the data.
 
+=== INTERNAL THINKING FLOW (MANDATORY) ===
+You must work through these four steps every time. They happen mentally, but the final "rationale" string must surface the results verbatim using the format described below.
+1) HYPOTHESIS — Outline the most likely game script (who dictates pace, key matchup lever, how the line is covered). Keep it to 1 punchy sentence.
+2) EVIDENCE — Cite 2–3 concrete stats from the provided data that prove the hypothesis. Each stat must include the value and why it matters.
+3) CONVERGENCE — Briefly state how tightly the data and line agree (e.g., "High convergence (0.78) because..."). Include the numeric convergence score you are using (0.50–1.00).
+4) IF WRONG — Describe the single most realistic failure mode (injury, matchup, market misread) in one sentence.
+
+The rationale field is where you expose these four sections. The JSON schema itself must remain unchanged.
+
 === BETTING PICK RULES ===
 
 SPREAD vs MONEYLINE DECISION:
@@ -286,7 +295,7 @@ CONFIDENCE SCALE: 0.50 to 1.00 where higher numbers mean MORE CERTAINTY the pick
 - Build a compelling, expert case for ONE side using the best evidence in the data. Trust your betting judgment and sports knowledge.
 - Choose the angle(s) that actually decide THIS matchup. You are not required to use any specific metric—use whatever is most persuasive and available.
 - Weave 2–4 precise numbers naturally into cause→effect sentences. Avoid lists or templates. If you mention injuries, name at least one player and status only when it truly matters.
-- Be concise (3–5 sentences), matchup‑specific, and decisive. No clichés; never mention missing data.
+- Keep each rationale section (HYPOTHESIS, EVIDENCE, CONVERGENCE, IF WRONG) to one or two punchy sentences so the full string stays concise. No clichés; never mention missing data.
 
 PICK DECISION:
 - Choose moneyline vs spread strictly on price and your read of the game flow. Do not select totals. Use only real odds provided.
@@ -306,7 +315,7 @@ PICK DECISION:
   "awayTeam": "Full away team name", 
   "league": "NFL" or "NBA" or "MLB" or "WNBA" or "NCAAF" or "NCAAB" or "EPL",
   "time": "COPY EXACTLY the game time provided - never use 'TBD' unless no time was given",
-  "rationale": "A 3–5 sentence paragraph explaining your pick using expert-level analysis."
+  "rationale": "HYPOTHESIS: ...\\nEVIDENCE: ...\\nCONVERGENCE (0.74): ...\\nIF WRONG: ..."
 }
 
                 REMEMBER: The "pick" field MUST ALWAYS include the odds at the end. This is NON-NEGOTIABLE.
@@ -549,28 +558,67 @@ PICK DECISION:
         statsSection += 'NCAAF TEAM SEASON METRICS (BDL - derived from team_stats):\n';
         statsSection += composeNcaaf(gameData?.homeTeam || 'Home', h) + '\n';
         statsSection += composeNcaaf(gameData?.awayTeam || 'Away', a) + '\n';
-        // Skill players (season per-game)
+        // Skill players / top players
         const sp = gameData.statsReport.skillPlayers || {};
-        const renderQB = (p) => `${p.name}: ${p.passYdsG ?? 'N/A'} PY/G`
-          + (p.compRate != null ? `, Cmp% ${fmtPct(p.compRate)}` : '')
-          + (p.passTDG != null ? `, TD/G ${fmtNum(p.passTDG, 2)}` : '')
-          + (p.intsG != null ? `, INT/G ${fmtNum(p.intsG, 2)}` : '');
-        const renderRB = (p) => `${p.name}: ${p.rushYdsG ?? 'N/A'} RY/G`
-          + (p.rushTDG != null ? `, TD/G ${fmtNum(p.rushTDG, 2)}` : '');
-        const renderWR = (p) => `${p.name}: ${p.recYdsG ?? 'N/A'} RecY/G`
-          + (p.recG != null ? `, Rec/G ${fmtNum(p.recG, 2)}` : '')
-          + (p.recTDG != null ? `, TD/G ${fmtNum(p.recTDG, 2)}` : '');
-        const addLine = (label, obj) => {
-          const parts = [];
-          if (obj?.qb) parts.push(`QB ${renderQB(obj.qb)}`);
-          if (obj?.rb1) parts.push(`RB1 ${renderRB(obj.rb1)}`);
-          if (obj?.wr1) parts.push(`WR1 ${renderWR(obj.wr1)}`);
-          return parts.length ? `${label}: ${parts.join(' | ')}` : '';
+        const topPlayersMap = gameData.statsReport.topPlayers || {};
+        const resolveTopList = (side) => {
+          if (Array.isArray(topPlayersMap?.[side]) && topPlayersMap[side].length) return topPlayersMap[side];
+          if (Array.isArray(sp?.[side]?.topPlayers) && sp[side].topPlayers.length) return sp[side].topPlayers;
+          return null;
         };
-        const homeLine = addLine(`Key Players (${gameData?.homeTeam || 'Home'})`, sp.home);
-        const awayLine = addLine(`Key Players (${gameData?.awayTeam || 'Away'})`, sp.away);
-        if (homeLine) statsSection += homeLine + '\n';
-        if (awayLine) statsSection += awayLine + '\n';
+        const formatTopPlayers = (label, list) => {
+          if (!Array.isArray(list) || !list.length) return '';
+          const line = (player, idx) => {
+            const parts = [];
+            if (typeof player.totalYardsPerGame === 'number') parts.push(`${fmtNum(player.totalYardsPerGame, 1)} total yds/G`);
+            if (typeof player.passYdsPerGame === 'number') parts.push(`${fmtNum(player.passYdsPerGame, 1)} pass yds/G`);
+            if (typeof player.rushYdsPerGame === 'number') parts.push(`${fmtNum(player.rushYdsPerGame, 1)} rush yds/G`);
+            if (typeof player.recYdsPerGame === 'number') parts.push(`${fmtNum(player.recYdsPerGame, 1)} rec yds/G`);
+            if (typeof player.touchdownsPerGame === 'number') parts.push(`${fmtNum(player.touchdownsPerGame, 2)} TD/G`);
+            if (typeof player.passingTouchdownsPerGame === 'number' && (player.position === 'QB' || player.passYdsPerGame)) {
+              parts.push(`${fmtNum(player.passingTouchdownsPerGame, 2)} pass TD/G`);
+            }
+            if (typeof player.rushingTouchdownsPerGame === 'number' && player.rushYdsPerGame) {
+              parts.push(`${fmtNum(player.rushingTouchdownsPerGame, 2)} rush TD/G`);
+            }
+            if (typeof player.receivingTouchdownsPerGame === 'number' && player.recYdsPerGame) {
+              parts.push(`${fmtNum(player.receivingTouchdownsPerGame, 2)} rec TD/G`);
+            }
+            if (typeof player.receptionsPerGame === 'number') parts.push(`${fmtNum(player.receptionsPerGame, 2)} rec/G`);
+            const descriptor = parts.length ? parts.join(', ') : 'Usage data unavailable';
+            const pos = player.position ? ` (${player.position})` : '';
+            return `  ${idx + 1}. ${player.name}${pos} — ${descriptor}`;
+          };
+          const lines = list.slice(0, 3).map(line).join('\n');
+          return `Top Players (${label}):\n${lines}`;
+        };
+        const homeTop = formatTopPlayers(gameData?.homeTeam || 'Home', resolveTopList('home'));
+        const awayTop = formatTopPlayers(gameData?.awayTeam || 'Away', resolveTopList('away'));
+        if (homeTop) statsSection += homeTop + '\n';
+        if (awayTop) statsSection += awayTop + '\n';
+        if (!homeTop && !awayTop) {
+          // Legacy QB/RB/WR fallback
+          const renderQB = (p) => `${p.name}: ${p.passYdsG ?? 'N/A'} PY/G`
+            + (p.compRate != null ? `, Cmp% ${fmtPct(p.compRate)}` : '')
+            + (p.passTDG != null ? `, TD/G ${fmtNum(p.passTDG, 2)}` : '')
+            + (p.intsG != null ? `, INT/G ${fmtNum(p.intsG, 2)}` : '');
+          const renderRB = (p) => `${p.name}: ${p.rushYdsG ?? 'N/A'} RY/G`
+            + (p.rushTDG != null ? `, TD/G ${fmtNum(p.rushTDG, 2)}` : '');
+          const renderWR = (p) => `${p.name}: ${p.recYdsG ?? 'N/A'} RecY/G`
+            + (p.recG != null ? `, Rec/G ${fmtNum(p.recG, 2)}` : '')
+            + (p.recTDG != null ? `, TD/G ${fmtNum(p.recTDG, 2)}` : '');
+          const addLine = (label, obj) => {
+            const parts = [];
+            if (obj?.qb) parts.push(`QB ${renderQB(obj.qb)}`);
+            if (obj?.rb1) parts.push(`RB1 ${renderRB(obj.rb1)}`);
+            if (obj?.wr1) parts.push(`WR1 ${renderWR(obj.wr1)}`);
+            return parts.length ? `${label}: ${parts.join(' | ')}` : '';
+          };
+          const homeLine = addLine(`Key Players (${gameData?.homeTeam || 'Home'})`, sp.home);
+          const awayLine = addLine(`Key Players (${gameData?.awayTeam || 'Away'})`, sp.away);
+          if (homeLine) statsSection += homeLine + '\n';
+          if (awayLine) statsSection += awayLine + '\n';
+        }
         statsSection += '\n';
       }
         

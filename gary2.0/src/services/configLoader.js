@@ -29,7 +29,6 @@ export const configLoader = {
   openai_base_url: 'https://api.openai.com/v1',
   // Never expose Perplexity key in browser; proxy uses server-side PERPLEXITY_API_KEY only
   perplexity_api_key: '',
-  sports_db_api_key: getEnvVar('VITE_SPORTS_DB_API_KEY', '3'), // Default to free tier
   loaded: false,
 
   /**
@@ -37,7 +36,7 @@ export const configLoader = {
    */
   load: async function() {
     // Don't reload if already loaded
-    if (this.loaded && this.odds_api_key && this.openai_api_key) {
+    if (this.loaded && this.odds_api_key) {
       return;
     }
 
@@ -48,7 +47,6 @@ export const configLoader = {
       this.odds_api_key = oddsApiKey;
       // Do not load Perplexity key in the browser
       this.perplexity_api_key = '';
-      this.sports_db_api_key = getEnvVar('VITE_SPORTS_DB_API_KEY', '3'); // Default to free tier
       
       this.loaded = true;
       console.log('Using environment variables for non-sensitive API keys');
@@ -61,10 +59,6 @@ export const configLoader = {
       const response = await axios.get('/api/config');
       if (response.data) {
         this.odds_api_key = response.data.odds_api_key || this.odds_api_key;
-        // Never hydrate OpenAI keys client-side
-        this.openai_base_url = this.openai_base_url;
-        this.perplexity_api_key = response.data.perplexity_api_key || this.perplexity_api_key;
-        this.sports_db_api_key = response.data.sports_db_api_key || this.sports_db_api_key || '3';
         
         // All providers loaded
         this.loaded = true;
@@ -85,37 +79,12 @@ export const configLoader = {
   },
 
   /**
-   * COMPATIBILITY FUNCTION - Routes all DeepSeek requests to OpenAI
-   * @returns {Promise<string>} OpenAI API key
-   */
-  getDeepseekApiKey: async function() {
-    return this.getOpenaiApiKey();
-  },
-  
-  /**
-   * COMPATIBILITY FUNCTION - Routes all DeepSeek requests to OpenAI
-   * @returns {Promise<string>} OpenAI base URL
-   */
-  getDeepseekBaseUrl: async function() {
-    return this.getOpenaiBaseUrl();
-  },
-
-  /**
    * Get the OpenAI API key - primary AI provider
    * @returns {Promise<string>} - The OpenAI API key
    */
   getOpenaiApiKey: async function() {
     // Intentionally return empty on client; server should read process.env.OPENAI_API_KEY
     return '';
-  },
-
-  /**
-   * Get TheSportsDB API key
-   * @returns {Promise<string>} - TheSportsDB API key (defaults to free tier '3')
-   */
-  getSportsDBApiKey: async function() {
-    await this.load();
-    return this.sports_db_api_key;
   },
 
   /**
