@@ -117,11 +117,20 @@ export default async function handler(req, res) {
       }
     }
 
-    // Auto-redirect to next step to avoid manual URL changes
+    // Auto-chain: fire-and-forget to next step (server-side, don't rely on client following redirects)
+    let chained = false;
     if (autoNext && nextUrl) {
-      res.statusCode = 302;
-      res.setHeader('Location', nextUrl);
-      return res.end();
+      try {
+        // Fire-and-forget: trigger next batch without waiting
+        fetch(nextUrl, { 
+          method: 'GET', 
+          headers: { 'x-self-chain': '1' } 
+        }).catch(() => {});
+        console.log(`[run-daily-picks] Chained next batch → ${nextUrl}`);
+        chained = true;
+      } catch (chainErr) {
+        console.warn('[run-daily-picks] self-chain failed:', chainErr.message);
+      }
     }
 
     return res.status(200).json({
@@ -135,7 +144,8 @@ export default async function handler(req, res) {
       batch,
       nextCursor,
       nextSport,
-      nextUrl
+      nextUrl,
+      chained
     });
   } catch (error) {
     console.error('[run-daily-picks] Error:', error);
