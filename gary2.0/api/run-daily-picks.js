@@ -64,15 +64,34 @@ export default async function handler(req, res) {
 
     let picks;
     let processedCount = 0;
+    let noMoreGamesForSport = false;
+    let totalGamesInSport = null;
+    
     if (sport && handlerMap[sport]) {
       console.log(`[run-daily-picks] Batched processing for sport=${sport}, cursor=${cursor}, batch=${batch}`);
       const collected = [];
       for (let i = 0; i < batch; i++) {
         const index = cursor + i;
         try {
-          const one = await handlerMap[sport]({ onlyAtIndex: index, nocache: noCache, force: forceReprocess });
-          if (Array.isArray(one) && one.length > 0) {
-            collected.push(...one);
+          const result = await handlerMap[sport]({ onlyAtIndex: index, nocache: noCache, force: forceReprocess });
+          
+          // Handle new metadata format from handlers
+          if (result && typeof result === 'object' && 'picks' in result) {
+            // New format: { picks, noMoreGames, totalGames, processedIndex }
+            const { picks: handlerPicks, noMoreGames, totalGames } = result;
+            if (Array.isArray(handlerPicks) && handlerPicks.length > 0) {
+              collected.push(...handlerPicks);
+            }
+            if (noMoreGames === true) {
+              noMoreGamesForSport = true;
+              console.log(`[run-daily-picks] ${sport}: No more games (cursor ${index} >= ${totalGames} total games)`);
+            }
+            if (typeof totalGames === 'number') {
+              totalGamesInSport = totalGames;
+            }
+          } else if (Array.isArray(result) && result.length > 0) {
+            // Legacy format: direct array of picks
+            collected.push(...result);
           }
         } catch (e) {
           console.error(`[run-daily-picks] Error processing ${sport} at index ${index}:`, e?.message || e);
@@ -100,22 +119,33 @@ export default async function handler(req, res) {
       ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host']}`
       : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://www.betwithgary.com');
     
-    // Determine nextUrl considering all-sports mode and whether this batch produced picks
+    // Determine nextUrl considering all-sports mode
+    // CRITICAL FIX: Only advance to next sport when noMoreGamesForSport is TRUE
+    // Do NOT advance just because processedCount === 0 (could be a skipped game)
     let nextSport = sport || null;
     let nextUrl = null;
     if (sport) {
-      if (allMode && processedCount === 0) {
-        // Advance to next sport when current sport returns no more picks
-        const idx = sportsOrder.indexOf(sport);
-        const nextIdx = idx >= 0 && idx + 1 < sportsOrder.length ? idx + 1 : -1;
-        nextSport = nextIdx >= 0 ? sportsOrder[nextIdx] : null;
-        if (nextSport) {
-          nextUrl = `${baseUrl}/api/run-daily-picks?all=1&sport=${encodeURIComponent(nextSport)}&cursor=0&batch=${batch}${autoNext ? '&autonext=1' : ''}`;
+      if (noMoreGamesForSport) {
+        // No more games for this sport - advance to next sport (if in all mode) or stop
+        if (allMode) {
+          const idx = sportsOrder.indexOf(sport);
+          const nextIdx = idx >= 0 && idx + 1 < sportsOrder.length ? idx + 1 : -1;
+          nextSport = nextIdx >= 0 ? sportsOrder[nextIdx] : null;
+          if (nextSport) {
+            console.log(`[run-daily-picks] Advancing from ${sport} to ${nextSport}`);
+            nextUrl = `${baseUrl}/api/run-daily-picks?all=1&sport=${encodeURIComponent(nextSport)}&cursor=0&batch=${batch}${autoNext ? '&autonext=1' : ''}`;
+          } else {
+            console.log(`[run-daily-picks] All sports complete!`);
+            nextUrl = null; // All done
+          }
         } else {
-          nextUrl = null; // All done
+          // Single sport mode and no more games - we're done
+          console.log(`[run-daily-picks] ${sport} complete - no more games`);
+          nextUrl = null;
         }
       } else {
-        // Continue within same sport
+        // Continue within same sport (even if processedCount was 0 due to skip)
+        console.log(`[run-daily-picks] Continuing ${sport} at cursor ${nextCursor}${totalGamesInSport ? ` (${totalGamesInSport} total games)` : ''}`);
         nextUrl = `${baseUrl}/api/run-daily-picks?${allMode ? 'all=1&' : ''}sport=${encodeURIComponent(sport)}&cursor=${nextCursor}&batch=1${autoNext ? '&autonext=1' : ''}`;
       }
     }
@@ -155,7 +185,10 @@ export default async function handler(req, res) {
       nextCursor,
       nextSport,
       nextUrl,
-      chained
+      chained,
+      // New metadata for debugging
+      noMoreGamesForSport,
+      totalGamesInSport
     });
   } catch (error) {
     console.error('[run-daily-picks] Error:', error);

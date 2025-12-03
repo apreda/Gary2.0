@@ -3,9 +3,139 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { perplexityService } from './perplexityService.js';
-import { processGameOnce } from './picksService.js';
+import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 
 const SPORT_KEY = 'americanfootball_ncaaf';
+
+const roundNumber = (value, decimals = 2) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const factor = Math.pow(10, decimals);
+  return Math.round(value * factor) / factor;
+};
+
+const pickPerGameValue = (row = {}, statKey, decimals = 2) => {
+  if (!statKey) return undefined;
+  const perGameKey = `${statKey}_per_game`;
+  const direct = row[perGameKey];
+  if (typeof direct === 'number' && Number.isFinite(direct)) {
+    return roundNumber(direct, decimals);
+  }
+  const games = Number(row?.games_played || row?.games || row?.season_games);
+  const totalVal = row[statKey];
+  if (games && games > 0 && typeof totalVal === 'number' && Number.isFinite(totalVal)) {
+    return roundNumber(totalVal / games, decimals);
+  }
+  return undefined;
+};
+
+const formatSeasonPlayerRow = (row) => {
+  if (!row || !row.player) return null;
+  const player = row.player;
+  const teamName = row.team?.full_name || row.team?.name || player.team?.full_name || player.team?.name || '';
+  const position = (player.position_abbreviation || player.position || '').toUpperCase();
+  const passY = pickPerGameValue(row, 'passing_yards', 1);
+  const rushY = pickPerGameValue(row, 'rushing_yards', 1);
+  const recY = pickPerGameValue(row, 'receiving_yards', 1);
+  const scrimmageYards = (rushY || 0) + (recY || 0);
+  const qbOffense = (passY || 0) + (rushY || 0);
+  const totalYardsPerGame = position === 'QB'
+    ? qbOffense
+    : (scrimmageYards || passY || 0);
+  const passTDG = pickPerGameValue(row, 'passing_touchdowns', 2);
+  const rushTDG = pickPerGameValue(row, 'rushing_touchdowns', 2);
+  const recTDG = pickPerGameValue(row, 'receiving_touchdowns', 2);
+  const totalTDG = [passTDG, rushTDG, recTDG].reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
+
+  return {
+    id: player.id,
+    name: player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim(),
+    position: position || null,
+    team: teamName || null,
+    class: player.class || player.class_year || null,
+    height: player.height || null,
+    weight: player.weight || null,
+    totalYardsPerGame: totalYardsPerGame ? roundNumber(totalYardsPerGame, 1) : undefined,
+    passYdsPerGame: passY,
+    rushYdsPerGame: rushY,
+    recYdsPerGame: recY,
+    passingTouchdownsPerGame: passTDG,
+    rushingTouchdownsPerGame: rushTDG,
+    receivingTouchdownsPerGame: recTDG,
+    touchdownsPerGame: totalTDG ? roundNumber(totalTDG, 2) : undefined,
+    interceptionsPerGame: pickPerGameValue(row, 'passing_interceptions', 2),
+    completionPct: typeof row?.passing_completion_percentage === 'number'
+      ? roundNumber(row.passing_completion_percentage, 1)
+      : undefined,
+    receptionsPerGame: pickPerGameValue(row, 'receptions', 2),
+    rushingAttemptsPerGame: pickPerGameValue(row, 'rushing_attempts', 2),
+    rankingScore: totalYardsPerGame || 0
+  };
+};
+
+const aggregatePlayerStatsFromGames = async (teamId, season) => {
+  try {
+    const rows = await ballDontLieService.getPlayerStats(SPORT_KEY, {
+      team_ids: [teamId],
+      seasons: [season],
+      per_page: 100
+    });
+    const grouped = new Map();
+    for (const entry of rows || []) {
+      const pid = entry?.player?.id;
+      if (!pid) continue;
+      if (!grouped.has(pid)) {
+        grouped.set(pid, {
+          player: entry.player,
+          team: entry.team,
+          games_played: 0,
+          passing_yards: 0,
+          passing_touchdowns: 0,
+          passing_interceptions: 0,
+          rushing_yards: 0,
+          rushing_attempts: 0,
+          rushing_touchdowns: 0,
+          receiving_yards: 0,
+          receptions: 0,
+          receiving_touchdowns: 0
+        });
+      }
+      const bucket = grouped.get(pid);
+      bucket.games_played += 1;
+      bucket.passing_yards += Number(entry?.passing_yards) || 0;
+      bucket.passing_touchdowns += Number(entry?.passing_touchdowns) || 0;
+      bucket.passing_interceptions += Number(entry?.passing_interceptions) || 0;
+      bucket.rushing_yards += Number(entry?.rushing_yards) || 0;
+      bucket.rushing_attempts += Number(entry?.rushing_attempts) || 0;
+      bucket.rushing_touchdowns += Number(entry?.rushing_touchdowns) || 0;
+      bucket.receiving_yards += Number(entry?.receiving_yards) || 0;
+      bucket.receptions += Number(entry?.receptions) || 0;
+      bucket.receiving_touchdowns += Number(entry?.receiving_touchdowns) || 0;
+    }
+    return Array.from(grouped.values());
+  } catch (e) {
+    console.warn(`[NCAAF] Failed aggregating player_stats for team ${teamId}:`, e?.message || e);
+    return [];
+  }
+};
+
+const buildTeamTopPlayers = async (teamId, season) => {
+  if (!teamId || !season) return [];
+  let seasonRows = await ballDontLieService.getNcaafPlayerSeasonStats({ teamId, season });
+  if (!Array.isArray(seasonRows) || seasonRows.length === 0) {
+    const aggregated = await aggregatePlayerStatsFromGames(teamId, season);
+    seasonRows = aggregated;
+  }
+  if (!Array.isArray(seasonRows) || seasonRows.length === 0) return [];
+  const formatted = seasonRows
+    .map(formatSeasonPlayerRow)
+    .filter((p) => p && typeof p.rankingScore === 'number' && p.rankingScore > 0);
+  if (!formatted.length) return [];
+  formatted.sort((a, b) => {
+    if (b.rankingScore !== a.rankingScore) return b.rankingScore - a.rankingScore;
+    return (b.rushYdsPerGame || 0) - (a.rushYdsPerGame || 0);
+  });
+  return formatted.slice(0, 3).map(({ rankingScore, ...rest }) => rest);
+};
 
 export async function generateNCAAFPicks(options = {}) {
   console.log('Processing NCAAF games');
@@ -24,9 +154,17 @@ export async function generateNCAAFPicks(options = {}) {
   });
   console.log(`After date filtering: ${windowed.length} NCAAF games in next 16h`);
 
+  // Track total games for cursor logic
+  const totalGamesCount = windowed.length;
+
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;
-    windowed = idx >= 0 && idx < windowed.length ? [windowed[idx]] : [];
+    // If cursor is beyond available games, return early with metadata
+    if (idx >= windowed.length) {
+      console.log(`[NCAAF] Cursor ${idx} exceeds available games (${windowed.length}) - no more games`);
+      return { picks: [], noMoreGames: true, totalGames: totalGamesCount };
+    }
+    windowed = [windowed[idx]];
   }
 
   const season = new Date().getFullYear();
@@ -34,6 +172,14 @@ export async function generateNCAAFPicks(options = {}) {
 
   for (const game of windowed) {
     const gameId = `ncaaf-${game.id}`;
+
+    // EARLY CHECK: Skip if this game already has a pick (prevents both sides being picked)
+    const { exists: alreadyPicked, existingPick } = await gameAlreadyHasPick('NCAAF', game.home_team, game.away_team);
+    if (alreadyPicked) {
+      console.log(`⏭️ SKIPPING ${game.away_team} @ ${game.home_team} - already have pick: "${existingPick}"`);
+      continue;
+    }
+
     const result = await processGameOnce(gameId, async () => {
       console.log(`Processing NCAAF game: ${game.away_team} @ ${game.home_team}`);
 
@@ -128,98 +274,14 @@ export async function generateNCAAFPicks(options = {}) {
       homeSeason = normalizeSeasonKeys(homeSeason);
       awaySeason = normalizeSeasonKeys(awaySeason);
 
-      // Identify QB, RB1, WR1 and get season per-game aggregates via player season stats (fallback to per-game)
-      const selectPlayers = async (teamId) => {
-        const roster = await ballDontLieService.getPlayersGeneric(SPORT_KEY, { team_ids: [teamId], per_page: 100 });
-        const players = Array.isArray(roster) ? roster : [];
-        const isQB = (p) => (String(p?.position_abbreviation || '').toUpperCase() === 'QB') || /quarterback/i.test(String(p?.position || ''));
-        const isRB = (p) => (String(p?.position_abbreviation || '').toUpperCase() === 'RB') || /running back/i.test(String(p?.position || ''));
-        const isWR = (p) => (String(p?.position_abbreviation || '').toUpperCase() === 'WR') || /wide receiver/i.test(String(p?.position || ''));
-        const qbs = players.filter(isQB);
-        const rbs = players.filter(isRB);
-        const wrs = players.filter(isWR);
-        const pickTopBy = async (list, metricKey) => {
-          if (!Array.isArray(list) || list.length === 0) return null;
-          let best = null;
-          let bestVal = -Infinity;
-          for (const p of list) {
-            const seasonRows = await ballDontLieService.getNcaafPlayerSeasonStats({ playerId: p.id, season });
-            const r = Array.isArray(seasonRows) && seasonRows.length ? seasonRows[0] : null;
-            const val = r ? Number(r[metricKey]) : NaN;
-            if (Number.isFinite(val) && val > bestVal) {
-              bestVal = val;
-              best = { p, r };
-            }
-          }
-          return best ? best.p : list[0] || null;
-        };
-        const qb = await pickTopBy(qbs, 'passing_yards_per_game');
-        const rb = await pickTopBy(rbs, 'rushing_yards_per_game');
-        const wr = await pickTopBy(wrs, 'receiving_yards_per_game');
-
-        const aggregatePlayer = async (player) => {
-          if (!player?.id) return null;
-          try {
-            // Prefer season stats endpoint when available
-            const seasonRows = await ballDontLieService.getNcaafPlayerSeasonStats({ playerId: player.id, season });
-            if (Array.isArray(seasonRows) && seasonRows.length > 0) {
-              const s = seasonRows[0];
-              const name = player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim();
-              const toFixed = (v, d = 1) => (typeof v === 'number' && isFinite(v)) ? +v.toFixed(d) : v;
-              return {
-                id: player.id,
-                name,
-                passingYardsPerGame: s?.passing_yards_per_game != null ? toFixed(s.passing_yards_per_game) : undefined,
-                passingTouchdowns: s?.passing_touchdowns != null ? toFixed(s.passing_touchdowns) : undefined,
-                passingInterceptions: s?.passing_interceptions != null ? toFixed(s.passing_interceptions) : undefined,
-                passingCompletionPct: s?.passing_completion_percentage != null ? toFixed(s.passing_completion_percentage, 3) : undefined,
-                rushingYardsPerGame: s?.rushing_yards_per_game != null ? toFixed(s.rushing_yards_per_game) : undefined,
-                rushingTouchdowns: s?.rushing_touchdowns != null ? toFixed(s.rushing_touchdowns) : undefined,
-                receivingYardsPerGame: s?.receiving_yards_per_game != null ? toFixed(s.receiving_yards_per_game) : undefined,
-                receivingTouchdowns: s?.receiving_touchdowns != null ? toFixed(s.receiving_touchdowns) : undefined,
-                receptionsPerGame: s?.receptions_per_game != null ? toFixed(s.receptions_per_game, 2) : undefined
-              };
-            }
-            // Fallback: aggregate from per-game player_stats
-            const rows = await ballDontLieService.getPlayerStats(SPORT_KEY, { seasons: [season], player_ids: [player.id], per_page: 100 });
-            let games = 0;
-            let passY = 0, passTD = 0, ints = 0, rushY = 0, rushTD = 0, recY = 0, recTD = 0, rec = 0, att = 0, cmp = 0;
-            for (const r of rows || []) {
-              games += 1;
-              passY += Number(r?.passing_yards) || 0;
-              passTD += Number(r?.passing_touchdowns) || 0;
-              ints += Number(r?.interceptions) || 0;
-              cmp += Number(r?.completions) || 0;
-              att += Number(r?.attempts) || 0;
-              rushY += Number(r?.rushing_yards) || 0;
-              rushTD += Number(r?.rushing_touchdowns) || 0;
-              recY += Number(r?.receiving_yards) || 0;
-              recTD += Number(r?.receiving_touchdowns) || 0;
-              rec += Number(r?.receptions) || 0;
-            }
-            const name = player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim();
-            const toFixed = (v, d = 1) => (typeof v === 'number' && isFinite(v)) ? +v.toFixed(d) : v;
-            return {
-              id: player.id,
-              name,
-              passingYardsPerGame: games ? toFixed(passY / games) : undefined,
-              passingTouchdowns: games ? toFixed(passTD / games) : undefined,
-              passingInterceptions: games ? toFixed(ints / games) : undefined,
-              passingCompletionPct: att > 0 ? toFixed(cmp / att, 3) : undefined,
-              rushingYardsPerGame: games ? toFixed(rushY / games) : undefined,
-              rushingTouchdowns: games ? toFixed(rushTD / games) : undefined,
-              receivingYardsPerGame: games ? toFixed(recY / games) : undefined,
-              receivingTouchdowns: games ? toFixed(recTD / games) : undefined,
-              receptionsPerGame: games ? toFixed(rec / games, 2) : undefined
-            };
-          } catch {
-            return null;
-          }
-        };
-        const [qbStats, rbStats, wrStats] = await Promise.all([aggregatePlayer(qb), aggregatePlayer(rb), aggregatePlayer(wr)]);
-        return { qb: qbStats, rb1: rbStats, wr1: wrStats };
+      const [homeTopPlayers, awayTopPlayers] = await Promise.all([
+        buildTeamTopPlayers(homeTeam.id, season),
+        buildTeamTopPlayers(awayTeam.id, season)
+      ]);
+      const playerBlocks = {
+        home: homeTopPlayers,
+        away: awayTopPlayers
       };
-      const [homeSkills, awaySkills] = await Promise.all([selectPlayers(homeTeam.id), selectPlayers(awayTeam.id)]);
 
       // Try to load standings for basics if available (NCAAF requires conference_id)
       let homeStandings = [];
@@ -259,14 +321,15 @@ export async function generateNCAAFPicks(options = {}) {
           home: homeSeason,
           away: awaySeason
         },
+        topPlayers: playerBlocks,
         keyPlayers: {
-          home: homeSkills,
-          away: awaySkills
+          home: { topPlayers: homeTopPlayers },
+          away: { topPlayers: awayTopPlayers }
         },
         // Back-compat for prompt sections expecting 'skillPlayers'
         skillPlayers: {
-          home: homeSkills,
-          away: awaySkills
+          home: { topPlayers: homeTopPlayers },
+          away: { topPlayers: awayTopPlayers }
         }
       };
 
@@ -357,7 +420,13 @@ export async function generateNCAAFPicks(options = {}) {
   if (picks.length > 0) {
     console.log(`Total NCAAF picks generated: ${picks.length}`);
   }
-  return picks;
+  // Return with metadata for cursor logic
+  return { 
+    picks, 
+    noMoreGames: false, 
+    totalGames: totalGamesCount,
+    processedIndex: typeof options.onlyAtIndex === 'number' ? options.onlyAtIndex : null
+  };
 }
 
 

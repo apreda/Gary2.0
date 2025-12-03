@@ -3,7 +3,7 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { perplexityService } from './perplexityService.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { makeGaryPick } from './garyEngine.js';
-import { processGameOnce } from './picksService.js'; // Import shared helper
+import { processGameOnce, gameAlreadyHasPick } from './picksService.js'; // Import shared helper
 
 export async function generateNBAPicks(options = {}) {
   console.log('Processing NBA games');
@@ -36,10 +36,18 @@ export async function generateNBAPicks(options = {}) {
 
   console.log(`After EST rest-of-day filtering: ${todayGames.length} NBA games remaining today`);
 
+  // Track total games for cursor logic
+  const totalGamesCount = todayGames.length;
+
   // If options.onlyAtIndex is provided, process only that game
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;
-    todayGames = idx >= 0 && idx < todayGames.length ? [todayGames[idx]] : [];
+    // If cursor is beyond available games, return early with metadata
+    if (idx >= todayGames.length) {
+      console.log(`[NBA] Cursor ${idx} exceeds available games (${todayGames.length}) - no more games`);
+      return { picks: [], noMoreGames: true, totalGames: totalGamesCount };
+    }
+    todayGames = [todayGames[idx]];
   }
 
   const normalizeTeamName = (name = '') => {
@@ -195,6 +203,13 @@ export async function generateNBAPicks(options = {}) {
   const sportPicks = [];
   for (const game of todayGames) {
     const gameId = `nba-${game.id}`;
+
+    // EARLY CHECK: Skip if this game already has a pick (prevents both sides being picked)
+    const { exists: alreadyPicked, existingPick } = await gameAlreadyHasPick('NBA', game.home_team, game.away_team);
+    if (alreadyPicked) {
+      console.log(`⏭️ SKIPPING ${game.away_team} @ ${game.home_team} - already have pick: "${existingPick}"`);
+      continue;
+    }
 
     const result = await processGameOnce(gameId, async () => {
       console.log(`🔄 PICK GENERATION STARTED: ${new Date().toISOString()}`);
@@ -528,5 +543,11 @@ export async function generateNBAPicks(options = {}) {
   if (sportPicks.length > 0) {
     console.log(`Total NBA picks generated: ${sportPicks.length}`);
   }
-  return sportPicks;
+  // Return with metadata for cursor logic
+  return { 
+    picks: sportPicks, 
+    noMoreGames: false, 
+    totalGames: totalGamesCount,
+    processedIndex: typeof options.onlyAtIndex === 'number' ? options.onlyAtIndex : null
+  };
 } 

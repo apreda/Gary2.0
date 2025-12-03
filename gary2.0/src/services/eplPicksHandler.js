@@ -2,7 +2,7 @@ import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
-import { processGameOnce } from './picksService.js';
+import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 
 const SPORT_KEY = 'soccer_epl';
@@ -25,9 +25,17 @@ export async function generateEPLPicks(options = {}) {
   });
   console.log(`After date filtering: ${windowed.length} EPL matches in next 36h`);
 
+  // Track total games for cursor logic
+  const totalGamesCount = windowed.length;
+
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;
-    windowed = idx >= 0 && idx < windowed.length ? [windowed[idx]] : [];
+    // If cursor is beyond available games, return early with metadata
+    if (idx >= windowed.length) {
+      console.log(`[EPL] Cursor ${idx} exceeds available games (${windowed.length}) - no more games`);
+      return { picks: [], noMoreGames: true, totalGames: totalGamesCount };
+    }
+    windowed = [windowed[idx]];
   }
 
   const picks = [];
@@ -35,6 +43,14 @@ export async function generateEPLPicks(options = {}) {
 
   for (const game of windowed) {
     const gameId = `epl-${game.id}`;
+
+    // EARLY CHECK: Skip if this game already has a pick (prevents both sides being picked)
+    const { exists: alreadyPicked, existingPick } = await gameAlreadyHasPick('EPL', game.home_team, game.away_team);
+    if (alreadyPicked) {
+      console.log(`⏭️ SKIPPING ${game.away_team} @ ${game.home_team} - already have pick: "${existingPick}"`);
+      continue;
+    }
+
     const result = await processGameOnce(gameId, async () => {
       console.log(`Processing EPL match: ${game.away_team} @ ${game.home_team}`);
 
@@ -128,7 +144,13 @@ export async function generateEPLPicks(options = {}) {
   if (picks.length > 0) {
     console.log(`Total EPL picks generated: ${picks.length}`);
   }
-  return picks;
+  // Return with metadata for cursor logic
+  return { 
+    picks, 
+    noMoreGames: false, 
+    totalGames: totalGamesCount,
+    processedIndex: typeof options.onlyAtIndex === 'number' ? options.onlyAtIndex : null
+  };
 }
 
 
