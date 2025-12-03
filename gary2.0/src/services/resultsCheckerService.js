@@ -4,7 +4,6 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { perplexityService } from './perplexityService.js';
 import { pickResultsAnalyzer } from './pickResultsAnalyzer.js';
 import { oddsService } from './oddsService.js';
-import { apiSportsService } from './apiSportsService.js';
 import { garyPerformanceService } from './garyPerformanceService.js';
 
 const VALID_RESULTS = new Set(['won', 'lost', 'push']);
@@ -172,38 +171,38 @@ export const resultsCheckerService = {
     console.log(`Fetching final score for ${league} game: ${awayTeam} @ ${homeTeam} on ${date}`);
     
     try {
-      // 1. Try TheSportsDB API first (most reliable for historical data)
-      const leagueMap = { 'MLB': 'MLB', 'NBA': 'NBA', 'NHL': 'NHL', 'NFL': 'NFL' };
-      const formattedLeague = leagueMap[league] || league;
-      
-      const response = await fetch(
-        `https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${date}&s=${formattedLeague}`
-      );
-      const data = await response.json();
-      
-      if (data?.events && Array.isArray(data.events)) {
-        // Try to find the game with fuzzy matching on team names
-        const game = data.events.find(e => {
-          return (
-            (e.strHomeTeam?.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) ||
-             homeTeam.toLowerCase().includes(e.strHomeTeam?.toLowerCase().split(' ')[0])) &&
-            (e.strAwayTeam?.toLowerCase().includes(awayTeam.toLowerCase().split(' ')[0]) ||
-             awayTeam.toLowerCase().includes(e.strAwayTeam?.toLowerCase().split(' ')[0]))
-          );
-        });
-        
-        if (game && game.intHomeScore && game.intAwayScore) {
-          return {
-            homeScore: Number(game.intHomeScore),
-            awayScore: Number(game.intAwayScore),
-            winner:
-              Number(game.intHomeScore) > Number(game.intAwayScore)
-                ? homeTeam
-                : awayTeam,
-            final_score: `${game.intHomeScore}-${game.intAwayScore}`,
-            source: 'TheSportsDB'
-          };
+      // 1. Try The Odds API via the shared oddsService helper
+      try {
+        const completedGames = await oddsService.getCompletedGamesByDate(league, date);
+        if (Array.isArray(completedGames) && completedGames.length > 0) {
+          const normalize = (team) => (team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normalizedHome = normalize(homeTeam);
+          const normalizedAway = normalize(awayTeam);
+          
+          const matchedGame = completedGames.find(game => {
+            const gameHome = normalize(game.home_team);
+            const gameAway = normalize(game.away_team);
+            return (
+              (gameHome.includes(normalizedHome) || normalizedHome.includes(gameHome)) &&
+              (gameAway.includes(normalizedAway) || normalizedAway.includes(gameAway))
+            );
+          });
+          
+          if (matchedGame) {
+            const homeScore = Number(matchedGame.scores?.home ?? 0);
+            const awayScore = Number(matchedGame.scores?.away ?? 0);
+            
+            return {
+              homeScore,
+              awayScore,
+              winner: homeScore > awayScore ? homeTeam : awayTeam,
+              final_score: `${homeScore}-${awayScore}`,
+              source: 'TheOddsAPI'
+            };
+          }
         }
+      } catch (oddsError) {
+        console.error('Odds API helper error:', oddsError);
       }
       
       // 2. Try Ball Don't Lie for NBA games
@@ -234,40 +233,7 @@ export const resultsCheckerService = {
         }
       }
       
-      // 3. Try API Sports as another option
-      try {
-        // Format for API-Sports
-        if (league.toUpperCase() === 'MLB') {
-          const games = await apiSportsService.apiRequest('/games', { date, league: 1 }, 'MLB');
-          if (games?.response) {
-            const game = games.response.find(g => {
-              return (
-                (g.teams?.home?.name?.toLowerCase().includes(homeTeam.toLowerCase()) ||
-                 homeTeam.toLowerCase().includes(g.teams?.home?.name?.toLowerCase())) &&
-                (g.teams?.away?.name?.toLowerCase().includes(awayTeam.toLowerCase()) ||
-                 awayTeam.toLowerCase().includes(g.teams?.away?.name?.toLowerCase()))
-              );
-            });
-            
-            if (game?.scores) {
-              return {
-                homeScore: Number(game.scores.home?.total || 0),
-                awayScore: Number(game.scores.away?.total || 0),
-                winner:
-                  Number(game.scores.home?.total) > Number(game.scores.away?.total)
-                    ? homeTeam
-                    : awayTeam,
-                final_score: `${game.scores.home?.total || 0}-${game.scores.away?.total || 0}`,
-                source: 'API-Sports'
-              };
-            }
-          }
-        }
-      } catch (error) {
-        console.error('API Sports error:', error);
-      }
-
-      // 4. Use Perplexity as last resort
+      // 3. Use Perplexity as last resort
       try {
         console.log('Using Perplexity as fallback for game result');
         const formattedDate = new Date(date).toLocaleDateString('en-US', {
@@ -626,26 +592,7 @@ export const resultsCheckerService = {
         }
       }
 
-      // 3. SportsDB for others
-      if (missingGames.length > 0) {
-        const remainingGames = [];
-        for (const pick of missingGames) {
-          const pickStr = pick.pick || pick.originalPick || '';
-          const teamMatch = pickStr.match(/^([A-Za-z. ]+?)(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?(?: [\-+]?\d+(\.\d+)?(?: [\-+\-]?\d+)?)?$/);
-          if (!teamMatch?.[1]) {
-            remainingGames.push(pick);
-            continue;
-          }
-          const teamName = teamMatch[1].trim();
-          const league = (pick.league || 'NBA').toUpperCase();
-          // No longer using SportsDB API for results
-          // We'll use The Odds API as primary source and Perplexity as fallback
-          remainingGames.push(pick);
-        }
-        missingGames = remainingGames;
-      }
-
-      // 4. Final Perplexity pass if still missing
+      // 3. Final Perplexity pass if still missing
       if (missingGames.length > 0) {
         try {
           console.log('Making final attempt with Perplexity for remaining games...');
@@ -926,7 +873,7 @@ export const resultsCheckerService = {
     // Try getting scores from The Odds API first
     console.log('Getting scores from The Odds API...');
     let oddsApiScores = {};
-    // We no longer use sportsDbScores since we've moved away from TheSportsDB
+    // Scores are now sourced from The Odds API helper; no additional caches needed
     
     try {
       // Try fetching from The Odds API first
@@ -1014,7 +961,7 @@ export const resultsCheckerService = {
         const awayTeam = teams[0].trim();
         console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
         
-        // No longer using TheSportsDB for scores
+        // If we can't find scores via the helper, fall back to Perplexity
         // Just defining matchupKey for logging purposes
         const matchupKey = `${awayTeam} @ ${homeTeam}`;
         
@@ -1117,7 +1064,7 @@ export const resultsCheckerService = {
           
         console.log(`Extracted team name "${teamName}" from pick: ${pickText}`);
         
-        // We no longer use TheSportsDB for scores
+        // Odds API helper did not find a match; defer to Perplexity
         // We use The Odds API as primary source and Perplexity as fallback
         
         // If we still don't have a match, use Perplexity as a fallback

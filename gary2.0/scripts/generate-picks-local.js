@@ -14,23 +14,35 @@
  *   node scripts/generate-picks-local.js --nba --nfl # Run multiple sports
  */
 
-import 'dotenv/config';
+// CRITICAL: Load env vars BEFORE any other imports
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Check for required environment variables
-const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'OPENAI_API_KEY', 'PERPLEXITY_API_KEY'];
-const missing = requiredEnvVars.filter(v => !process.env[v]);
-if (missing.length > 0) {
-  console.error('\n❌ Missing required environment variables:');
-  missing.forEach(v => console.error(`   - ${v}`));
-  console.error('\nMake sure you have a .env file with these variables set.\n');
-  process.exit(1);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(__dirname, '..');
+
+// Load .env.local first (has the most complete config), then .env as fallback
+dotenv.config({ path: path.join(rootDir, '.env.local') });
+dotenv.config({ path: path.join(rootDir, '.env') });
+
+// Map env var aliases for compatibility
+if (!process.env.SUPABASE_ANON_KEY && process.env.VITE_SUPABASE_ANON_KEY) {
+  process.env.SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+}
+if (!process.env.SUPABASE_URL && process.env.VITE_SUPABASE_URL) {
+  process.env.SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+}
+if (!process.env.PERPLEXITY_API_KEY && process.env.VITE_PERPLEXITY_API_KEY) {
+  process.env.PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
 }
 
-import { generateNBAPicks } from '../src/services/nbaPicksHandler.js';
-import { generateNFLPicks } from '../src/services/nflPicksHandler.js';
-import { generateNCAABPicks } from '../src/services/ncaabPicksHandler.js';
-import { generateNCAAFPicks } from '../src/services/ncaafPicksHandler.js';
-import { picksService } from '../src/services/picksService.js';
+// NOW import the services (after env vars are set)
+const { generateNBAPicks } = await import('../src/services/nbaPicksHandler.js');
+const { generateNFLPicks } = await import('../src/services/nflPicksHandler.js');
+const { generateNCAABPicks } = await import('../src/services/ncaabPicksHandler.js');
+const { generateNCAAFPicks } = await import('../src/services/ncaafPicksHandler.js');
+const { picksService } = await import('../src/services/picksService.js');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -180,4 +192,3 @@ main().catch(err => {
   console.error('Fatal error:', err);
   process.exit(1);
 });
-

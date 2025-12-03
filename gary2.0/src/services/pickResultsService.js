@@ -5,10 +5,9 @@
  * Uses data from sports APIs to determine winners and automatically records results in Supabase
  */
 import { supabase } from '../supabaseClient.js';
-import { sportsDbApiService } from './sportsDbApiService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { perplexityService } from './perplexityService.js';
-import { apiSportsService } from './apiSportsService.js';
+import { oddsService } from './oddsService.js';
 
 // Constants for validation
 const VALID_RESULTS = new Set(['won', 'lost', 'push']);
@@ -131,90 +130,41 @@ const pickResultsService = {
    */
   fetchFinalScore: async function(league, homeTeam, awayTeam, date) {
     console.log(`Fetching final score for ${league} game: ${awayTeam} @ ${homeTeam} on ${date}`);
-    const ODDS_API_KEY = process.env.ODDS_API_KEY;
     
     try {
-      // 1. Try The Odds API first (most reliable for scores)
-      if (ODDS_API_KEY) {
-        try {
-          console.log(`Using The Odds API for ${league} scores`);
+      // 1. Try The Odds API via the shared oddsService helper
+      try {
+        const completedGames = await oddsService.getCompletedGamesByDate(league, date);
+        if (Array.isArray(completedGames) && completedGames.length > 0) {
+          const normalize = (team) => (team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normalizedHome = normalize(homeTeam);
+          const normalizedAway = normalize(awayTeam);
           
-          // Convert our league names to The Odds API sport keys
-          const sportKeyMap = {
-            'MLB': 'baseball_mlb',
-            'NBA': 'basketball_nba',
-            'NHL': 'icehockey_nhl',
-            'NFL': 'americanfootball_nfl'
-          };
+          const matchedGame = completedGames.find(game => {
+            const gameHome = normalize(game.home_team);
+            const gameAway = normalize(game.away_team);
+            return (
+              (gameHome.includes(normalizedHome) || normalizedHome.includes(gameHome)) &&
+              (gameAway.includes(normalizedAway) || normalizedAway.includes(gameAway))
+            );
+          });
           
-          const sportKey = sportKeyMap[league.toUpperCase()];
-          if (!sportKey) {
-            console.log(`No sport key mapping for league: ${league}`);
-          } else {
-            // Calculate daysFrom parameter (The Odds API can look back up to 3 days)
-            const gameDate = new Date(date);
-            const currentDate = new Date();
-            const diffTime = Math.abs(currentDate - gameDate);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (matchedGame) {
+            const homeScore = Number(matchedGame.scores?.home ?? 0);
+            const awayScore = Number(matchedGame.scores?.away ?? 0);
             
-            // Only fetch if within the 3-day window
-            if (diffDays <= 3) {
-              const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/scores/?apiKey=${ODDS_API_KEY}&daysFrom=${diffDays}`;
-              console.log(`Querying The Odds API: ${url.replace(ODDS_API_KEY, 'API_KEY')}`);
-              
-              const response = await fetch(url);
-              if (response.ok) {
-                const data = await response.json();
-                console.log(`Found ${data.length} games from The Odds API`);
-                
-                // Find the matching game using team name fuzzy matching
-                const game = data.find(g => {
-                  if (!g.completed) return false; // Skip games that haven't finished
-                  
-                  const homeMatch = g.home_team.toLowerCase().includes(homeTeam.toLowerCase()) || 
-                                  homeTeam.toLowerCase().includes(g.home_team.toLowerCase());
-                                  
-                  const awayMatch = g.away_team.toLowerCase().includes(awayTeam.toLowerCase()) || 
-                                  awayTeam.toLowerCase().includes(g.away_team.toLowerCase());
-                                  
-                  return homeMatch && awayMatch;
-                });
-                
-                if (game && game.scores) {
-                  const homeScoreObj = game.scores.find(s => 
-                    s.name.toLowerCase().includes(game.home_team.toLowerCase()) ||
-                    game.home_team.toLowerCase().includes(s.name.toLowerCase()));
-                    
-                  const awayScoreObj = game.scores.find(s => 
-                    s.name.toLowerCase().includes(game.away_team.toLowerCase()) ||
-                    game.away_team.toLowerCase().includes(s.name.toLowerCase()));
-                  
-                  if (homeScoreObj && awayScoreObj) {
-                    const homeScore = parseInt(homeScoreObj.score);
-                    const awayScore = parseInt(awayScoreObj.score);
-                    
-                    console.log(`Found score from The Odds API: ${awayTeam} ${awayScore}, ${homeTeam} ${homeScore}`);
-                    return {
-                      homeScore,
-                      awayScore,
-                      winner: homeScore > awayScore ? homeTeam : awayTeam,
-                      final_score: `${awayScore}-${homeScore}`,
-                      source: 'TheOddsAPI'
-                    };
-                  }
-                }
-              } else {
-                console.error(`The Odds API returned status ${response.status}: ${await response.text()}`);
-              }
-            } else {
-              console.log(`Game date is more than 3 days old, can't use The Odds API`);
-            }
+            console.log(`Found score from The Odds API helper: ${awayTeam} ${awayScore}, ${homeTeam} ${homeScore}`);
+            return {
+              homeScore,
+              awayScore,
+              winner: homeScore > awayScore ? homeTeam : awayTeam,
+              final_score: `${homeScore}-${awayScore}`,
+              source: 'TheOddsAPI'
+            };
           }
-        } catch (error) {
-          console.error(`Error with The Odds API: ${error.message}`);
         }
-      } else {
-        console.log('No Odds API key found in environment variables');
+      } catch (oddsError) {
+        console.error('Error fetching scores from oddsService:', oddsError);
       }
       
       // 2. Try Ball Don't Lie for NBA games
@@ -246,41 +196,7 @@ const pickResultsService = {
         }
       }
       
-      // 3. Try API Sports as another option
-      try {
-        // Format for API-Sports
-        if (league.toUpperCase() === 'MLB') {
-          console.log('Trying API Sports for MLB scores');
-          const games = await apiSportsService.apiRequest('/games', { date, league: 1 }, 'MLB');
-          if (games?.response) {
-            const game = games.response.find(g => {
-              return (
-                (g.teams?.home?.name?.toLowerCase().includes(homeTeam.toLowerCase()) ||
-                 homeTeam.toLowerCase().includes(g.teams?.home?.name?.toLowerCase())) &&
-                (g.teams?.away?.name?.toLowerCase().includes(awayTeam.toLowerCase()) ||
-                 awayTeam.toLowerCase().includes(g.teams?.away?.name?.toLowerCase()))
-              );
-            });
-            
-            if (game?.scores) {
-              return {
-                homeScore: Number(game.scores.home?.total || 0),
-                awayScore: Number(game.scores.away?.total || 0),
-                winner:
-                  Number(game.scores.home?.total) > Number(game.scores.away?.total)
-                    ? homeTeam
-                    : awayTeam,
-                final_score: `${game.scores.away?.total || 0}-${game.scores.home?.total || 0}`,
-                source: 'API-Sports'
-              };
-            }
-          }
-        }
-      } catch (error) {
-        console.error('API Sports error:', error);
-      }
-
-      // 4. Use Perplexity as last resort
+      // 3. Use Perplexity as last resort
       try {
         console.log('Using Perplexity as fallback for game result');
         const formattedDate = new Date(date).toLocaleDateString('en-US', {

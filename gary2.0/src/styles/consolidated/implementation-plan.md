@@ -56,9 +56,9 @@ In accordance with Gary 2.0 development guidelines:
 3. **Functionality First**: Verify pick generation logic works with styling changes
 4. **Performance**: Measure and optimize CSS loading/rendering times
 
-## Integration with TheSportsDB API
+## Live Data Integration
 
-Ensure UI styling properly displays team statistics from TheSportsDB API:
+Ensure UI styling properly displays team statistics pulled from Ball Don’t Lie and The Odds API:
 - Verify team logos render correctly with gold/black theme
 - Ensure stat displays maintain premium appearance
 - Test with actual API responses, not mock data

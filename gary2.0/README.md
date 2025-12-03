@@ -5,7 +5,7 @@ Gary 2.0 is a sophisticated sports betting analysis platform powered by AI. The 
 ## Key Features
 
 - Daily automated picks generation for NBA, NFL, MLB, NHL, and Soccer leagues
-- Real-time sports statistics integration via TheSportsDB API
+- Real-time sports statistics integration via Ball Don't Lie & The Odds API
 - AI-powered analysis using OpenAI GPT models
 - User-friendly interface with detailed pick cards
 - Comprehensive bet tracking capabilities

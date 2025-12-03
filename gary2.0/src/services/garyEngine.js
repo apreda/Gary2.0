@@ -329,14 +329,14 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         const h = sr?.seasonSummary?.home || {};
         const a = sr?.seasonSummary?.away || {};
         if (Object.keys(h).length === 0 || Object.keys(a).length === 0) miss.push('NCAAF seasonSummary');
-        const spHome = sr?.skillPlayers?.home || {};
-        const spAway = sr?.skillPlayers?.away || {};
-        if (!spHome?.qb) miss.push('NCAAF home QB');
-        if (!spHome?.rb1) miss.push('NCAAF home RB1');
-        if (!spHome?.wr1) miss.push('NCAAF home WR1');
-        if (!spAway?.qb) miss.push('NCAAF away QB');
-        if (!spAway?.rb1) miss.push('NCAAF away RB1');
-        if (!spAway?.wr1) miss.push('NCAAF away WR1');
+        const homeTop =
+          (Array.isArray(sr?.topPlayers?.home) && sr.topPlayers.home.length ? sr.topPlayers.home : null)
+          || (Array.isArray(sr?.skillPlayers?.home?.topPlayers) && sr.skillPlayers.home.topPlayers.length ? sr.skillPlayers.home.topPlayers : null);
+        const awayTop =
+          (Array.isArray(sr?.topPlayers?.away) && sr.topPlayers.away.length ? sr.topPlayers.away : null)
+          || (Array.isArray(sr?.skillPlayers?.away?.topPlayers) && sr.skillPlayers.away.topPlayers.length ? sr.skillPlayers.away.topPlayers : null);
+        if (!homeTop) miss.push('NCAAF top players (home)');
+        if (!awayTop) miss.push('NCAAF top players (away)');
       } else if (sportKey.includes('ncaab')) {
         const h = sr?.seasonSummary?.home || {};
         const a = sr?.seasonSummary?.away || {};

@@ -12,7 +12,7 @@ This document outlines the end-to-end process of how Gary 2.0 generates, stores,
 ### 1.2 Data Collection
 1. **Upcoming Games**
    - Fetches scheduled games for the target date
-   - Uses `sportsDataService` to retrieve game data
+   - Leverages `ballDontLieService`, MLB Stats API, and in-house odds data to retrieve game info
    - Filters out games that don't meet minimum criteria
 
 2. **Team and Player Statistics**

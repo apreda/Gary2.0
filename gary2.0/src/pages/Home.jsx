@@ -716,19 +716,6 @@ function Home() {
                     Odds API
                   </div>
                   
-                  {/* SportsDB badge */}
-                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
-                    style={{
-                      background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
-                      color: '#111',
-                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
-                      border: '1px solid rgba(184, 149, 63, 0.5)',
-                      minWidth: '120px',
-                    }}>
-                    SportsDB
-                  </div>
-                  
                   {/* Turbo 3.5 Mini badge */}
                   <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
                     style={{
