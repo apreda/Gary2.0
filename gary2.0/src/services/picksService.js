@@ -356,12 +356,13 @@ async function storeDailyPicksInDatabase(picks) {
 
       // GAME-LEVEL DEDUPE: Only ONE pick per game, regardless of pick type (spread/ML/etc)
       // This prevents Gary from picking both sides of a game (e.g., Cowboys +3 AND Lions ML)
-      const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
+      // Helper to check if a pick is a prop pick (defined once, used throughout)
+      const checkIsProp = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
       
       // For game picks: dedupe by game matchup only (not by the specific pick)
       // For prop picks: dedupe by player + prop to allow multiple player props per game
       const gameKey = (p) => {
-        if (isPropPick(p)) {
+        if (checkIsProp(p)) {
           // Props: allow multiple per game but dedupe by player+prop
           return `prop|${p.league || ''}|${p.player || ''}|${p.prop || p.statType || ''}`;
         }
@@ -382,9 +383,8 @@ async function storeDailyPicksInDatabase(picks) {
 
       // Apply cap for props only on the combined set (keep existing first)
       const combined = [...existingPicks, ...toAppend];
-      const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
-      const props = combined.filter(isPropPick);
-      const nonProps = combined.filter(p => !isPropPick(p));
+      const props = combined.filter(checkIsProp);
+      const nonProps = combined.filter(p => !checkIsProp(p));
       const cappedProps = props.slice(0, 10);
       mergedPicks = [...nonProps, ...cappedProps];
       fallbackPicksRef = mergedPicks;
@@ -413,9 +413,9 @@ async function storeDailyPicksInDatabase(picks) {
     } else {
       // No existing row: insert new
       // Cap total prop picks to 10 without changing existing filters
-      const isPropPick = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
-      const propOnly = validPicks.filter(isPropPick);
-      const nonProps = validPicks.filter(p => !isPropPick(p));
+      const checkIsPropNew = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
+      const propOnly = validPicks.filter(checkIsPropNew);
+      const nonProps = validPicks.filter(p => !checkIsPropNew(p));
       const cappedProps = propOnly.slice(0, 10);
       const finalPicks = [...nonProps, ...cappedProps];
       fallbackPicksRef = finalPicks;
