@@ -3,7 +3,7 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
-import { processGameOnce } from './picksService.js'; // Import shared helper
+import { processGameOnce, gameAlreadyHasPick } from './picksService.js'; // Import shared helper
 
 export async function generateNHLPicks(options = {}) {
   console.log('Processing NHL games');
@@ -35,15 +35,30 @@ export async function generateNHLPicks(options = {}) {
 
   console.log(`After date filtering: ${todayGames.length} NHL games for today`);
 
+  // Track total games for cursor logic
+  const totalGamesCount = todayGames.length;
+
   // If options.onlyAtIndex is provided, process only that game
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;
-    todayGames = idx >= 0 && idx < todayGames.length ? [todayGames[idx]] : [];
+    // If cursor is beyond available games, return early with metadata
+    if (idx >= todayGames.length) {
+      console.log(`[NHL] Cursor ${idx} exceeds available games (${todayGames.length}) - no more games`);
+      return { picks: [], noMoreGames: true, totalGames: totalGamesCount };
+    }
+    todayGames = [todayGames[idx]];
   }
 
   const sportPicks = [];
   for (const game of todayGames) {
     const gameId = `nhl-${game.id}`;
+
+    // EARLY CHECK: Skip if this game already has a pick (prevents both sides being picked)
+    const { exists: alreadyPicked, existingPick } = await gameAlreadyHasPick('NHL', game.home_team, game.away_team);
+    if (alreadyPicked) {
+      console.log(`⏭️ SKIPPING ${game.away_team} @ ${game.home_team} - already have pick: "${existingPick}"`);
+      continue;
+    }
 
     const result = await processGameOnce(gameId, async () => {
       console.log(`Processing NHL game: ${game.away_team} @ ${game.home_team}`);
@@ -247,5 +262,11 @@ export async function generateNHLPicks(options = {}) {
   if (sportPicks.length > 0) {
     console.log(`Total NHL picks generated: ${sportPicks.length}`);
   }
-  return sportPicks;
+  // Return with metadata for cursor logic
+  return { 
+    picks: sportPicks, 
+    noMoreGames: false, 
+    totalGames: totalGamesCount,
+    processedIndex: typeof options.onlyAtIndex === 'number' ? options.onlyAtIndex : null
+  };
 } 

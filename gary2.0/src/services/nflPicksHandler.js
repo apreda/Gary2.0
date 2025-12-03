@@ -3,7 +3,7 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
-import { processGameOnce } from './picksService.js';
+import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -27,9 +27,17 @@ export async function generateNFLPicks(options = {}) {
   });
   console.log(`After date filtering: ${todayGames.length} NFL games in next 6 days`);
 
+  // Track total games for cursor logic
+  const totalGamesCount = todayGames.length;
+  
   if (typeof options.onlyAtIndex === 'number') {
     const idx = options.onlyAtIndex;
-    todayGames = idx >= 0 && idx < todayGames.length ? [todayGames[idx]] : [];
+    // If cursor is beyond available games, return early with metadata
+    if (idx >= todayGames.length) {
+      console.log(`[NFL] Cursor ${idx} exceeds available games (${todayGames.length}) - no more games`);
+      return { picks: [], noMoreGames: true, totalGames: totalGamesCount };
+    }
+    todayGames = [todayGames[idx]];
   }
 
   const season = new Date().getFullYear();
@@ -37,6 +45,13 @@ export async function generateNFLPicks(options = {}) {
 
   for (const game of todayGames) {
     const gameId = `nfl-${game.id}`;
+
+    // EARLY CHECK: Skip if this game already has a pick (prevents both sides being picked)
+    const { exists: alreadyPicked, existingPick } = await gameAlreadyHasPick('NFL', game.home_team, game.away_team);
+    if (alreadyPicked) {
+      console.log(`⏭️ SKIPPING ${game.away_team} @ ${game.home_team} - already have pick: "${existingPick}"`);
+      continue;
+    }
 
     const result = await processGameOnce(gameId, async () => {
       console.log(`Processing NFL game: ${game.away_team} @ ${game.home_team}`);
@@ -536,7 +551,13 @@ export async function generateNFLPicks(options = {}) {
   if (picks.length > 0) {
     console.log(`Total NFL picks generated: ${picks.length}`);
   }
-  return picks;
+  // Return with metadata for cursor logic
+  return { 
+    picks, 
+    noMoreGames: false, 
+    totalGames: totalGamesCount,
+    processedIndex: typeof options.onlyAtIndex === 'number' ? options.onlyAtIndex : null
+  };
 }
 
 
