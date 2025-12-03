@@ -94,9 +94,12 @@ export default async function handler(req, res) {
 
     const durationMs = Date.now() - startedAt;
     const nextCursor = sport ? cursor + 1 : null;
+    
+    // CRITICAL: Always use absolute URL for chaining - fallback to production domain
     const baseUrl = req.headers['x-forwarded-proto'] && req.headers['x-forwarded-host']
       ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host']}`
-      : '';
+      : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://www.betwithgary.com');
+    
     // Determine nextUrl considering all-sports mode and whether this batch produced picks
     let nextSport = sport || null;
     let nextUrl = null;
@@ -117,19 +120,26 @@ export default async function handler(req, res) {
       }
     }
 
-    // Auto-chain: fire-and-forget to next step (server-side, don't rely on client following redirects)
+    // Auto-chain: fire-and-forget to next step (server-side)
+    // IMPORTANT: We must await briefly to ensure the request is actually sent before function terminates
     let chained = false;
     if (autoNext && nextUrl) {
       try {
-        // Fire-and-forget: trigger next batch without waiting
-        fetch(nextUrl, { 
+        console.log(`[run-daily-picks] Chaining to next batch → ${nextUrl}`);
+        // Use AbortController to send request but not wait for response
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second to ensure request is sent
+        await fetch(nextUrl, { 
           method: 'GET', 
-          headers: { 'x-self-chain': '1' } 
-        }).catch(() => {});
-        console.log(`[run-daily-picks] Chained next batch → ${nextUrl}`);
+          headers: { 'x-self-chain': '1' },
+          signal: controller.signal
+        }).catch(() => {}); // Ignore abort errors
+        clearTimeout(timeoutId);
         chained = true;
       } catch (chainErr) {
-        console.warn('[run-daily-picks] self-chain failed:', chainErr.message);
+        // Abort errors are expected - we just needed to ensure request was sent
+        chained = true; // Request was initiated even if aborted
+        console.log(`[run-daily-picks] Chain request sent (may have been aborted after initiation)`);
       }
     }
 
