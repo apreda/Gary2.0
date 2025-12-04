@@ -35,6 +35,14 @@ const SPORT_CONFIG = {
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈' }
 };
 
+// In-memory tracking to prevent duplicate processing in same run session
+// This prevents race conditions where DB check passes but pick is already being generated
+const processedGamesThisSession = new Set();
+
+function getGameKey(homeTeam, awayTeam) {
+  return `${homeTeam}|${awayTeam}`.toLowerCase().trim();
+}
+
 // Parse arguments
 const args = process.argv.slice(2);
 const runAll = args.includes('--all');
@@ -167,12 +175,25 @@ async function main() {
         const game = finalGames[i];
         console.log(`\n[${i + 1}/${finalGames.length}] ${game.away_team} @ ${game.home_team}`);
         
-        // Check if we already have a pick for this game
+        // Create game key for deduplication
+        const gameKey = getGameKey(game.home_team, game.away_team);
+        
+        // FIRST: Check in-memory set (prevents race conditions within same run)
+        if (processedGamesThisSession.has(gameKey)) {
+          console.log(`⏭️  Already processed in this session: "${gameKey}"`);
+          continue;
+        }
+        
+        // SECOND: Check database for existing pick
         const existingPick = await checkExistingPick(config.name, game.home_team, game.away_team);
         if (existingPick) {
           console.log(`⏭️  Already have pick for this game: "${existingPick}"`);
+          processedGamesThisSession.add(gameKey); // Mark as processed
           continue;
         }
+        
+        // Mark as being processed BEFORE we start (prevents race condition)
+        processedGamesThisSession.add(gameKey);
         
         // Run agentic analysis
         const result = await analyzeGame(game, config.key);

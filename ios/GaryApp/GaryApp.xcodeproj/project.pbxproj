@@ -73,7 +73,7 @@
 			);
 			sourceTree = "<group>";
 		};
-		EEF3D9CB2EE1EDF1002F22E2 /* Products */ = {
+		EEF3D9CD2EE1F027002F22E2 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -127,7 +127,7 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = EEF3D9CB2EE1EDF1002F22E2 /* Products */;
+					ProductGroup = EEF3D9CD2EE1F027002F22E2 /* Products */;
 					ProjectRef = 1B9167CC59873FC53FDBE8A5 /* GaryApp.xcodeproj */;
 				},
 			);
