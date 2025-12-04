@@ -312,10 +312,25 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
             </div>
             
             {/* Stats - use statsData if available (has values), otherwise fall back to parsed rationale */}
-            {(allStatsData.length > 0 ? allStatsData : data.stats).map((stat, i) => {
+            {/* Sort stats to put RECORD at top */}
+            {(() => {
+              const statsToRender = allStatsData.length > 0 ? [...allStatsData] : [...data.stats];
+              // Move PACE_HOME_AWAY (Record) to the top
+              const recordIndex = statsToRender.findIndex(s => s.token === 'PACE_HOME_AWAY' || s.token === 'HOME_AWAY_SPLITS');
+              if (recordIndex > 0) {
+                const [recordStat] = statsToRender.splice(recordIndex, 1);
+                statsToRender.unshift(recordStat);
+              }
+              return statsToRender;
+            })().map((stat, i) => {
               // Handle both statsData format {name, token, home, away} and parsed format {name, left, right, advantage}
               const isStatsData = stat.token !== undefined;
-              const statName = isStatsData ? stat.name : stat.name;
+              
+              // Rename PACE_HOME_AWAY to RECORD
+              let statName = isStatsData ? stat.name : stat.name;
+              if (stat.token === 'PACE_HOME_AWAY' || stat.token === 'HOME_AWAY_SPLITS') {
+                statName = 'RECORD';
+              }
               
               // Skip TOP_PLAYERS - not a displayable stat
               if (stat.token === 'TOP_PLAYERS') return null;
