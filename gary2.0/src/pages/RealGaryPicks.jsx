@@ -33,10 +33,8 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Tale of the Tape Component - Beautiful stat comparison table
+// Tale of the Tape Component - Clean inline format
 const TaleOfTheTape = ({ rationale, accentColor }) => {
-  const [activeSection, setActiveSection] = useState('edge'); // 'edge' or 'verdict'
-  
   // Parse the Tale of the Tape format
   const parseTaleOfTape = (text) => {
     if (!text || !text.includes('TALE OF THE TAPE')) {
@@ -58,13 +56,11 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
       const line = lines[i];
       const trimmedLine = line.trim();
       
-      // Start of Tale of the Tape
       if (trimmedLine.includes('TALE OF THE TAPE')) {
         inTape = true;
         continue;
       }
       
-      // Detect section headers
       if (trimmedLine.match(/^The Edge$/i) || trimmedLine.match(/^THE EDGE$/i)) {
         currentSection = 'edge';
         inTape = false;
@@ -75,9 +71,8 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         continue;
       }
       
-      // Extract team names (line with two multi-word names, no arrows)
+      // Extract team names
       if (inTape && !trimmedLine.includes('←') && !trimmedLine.includes('→') && trimmedLine.length > 10) {
-        // Team names line: "Boston Celtics          Washington Wizards"
         const teamMatches = trimmedLine.match(/([A-Z][a-zA-Z\s]+?)\s{2,}([A-Z][a-zA-Z\s]+)/);
         if (teamMatches && !result.teams.home) {
           result.teams.home = teamMatches[1].trim();
@@ -86,9 +81,8 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         }
       }
       
-      // Parse stats lines (contain ← or → arrows) - improved regex to handle +/- values
+      // Parse stats lines with arrows
       if (inTape && (trimmedLine.includes('←') || trimmedLine.includes('→'))) {
-        // Pattern handles: "Net Rating              +4.1           ←        -10.3"
         const arrowMatch = trimmedLine.match(/^([A-Za-z\s]+?)\s{2,}([+\-]?[\d.]+|None|N\/A)\s*(←|→)\s*([+\-]?[\d.]+|None|N\/A)/);
         if (arrowMatch) {
           const [, statName, leftVal, arrow, rightVal] = arrowMatch;
@@ -97,27 +91,6 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
             home: leftVal.trim(),
             away: rightVal.trim(),
             advantage: arrow === '←' ? 'home' : 'away'
-          });
-        }
-      }
-      
-      // Parse Key Injuries line (no arrow, flexible spacing)
-      if (inTape && trimmedLine.toLowerCase().startsWith('key injuries')) {
-        const injuryMatch = trimmedLine.match(/Key Injuries\s+(None|[^\s].*?)\s{2,}(None|[^\s].*?)$/i);
-        if (injuryMatch) {
-          result.stats.push({
-            name: 'Injuries',
-            home: injuryMatch[1].trim(),
-            away: injuryMatch[2].trim(),
-            advantage: 'neutral'
-          });
-        } else {
-          // Fallback: just show "None" for both if can't parse
-          result.stats.push({
-            name: 'Injuries',
-            home: 'None',
-            away: 'None',
-            advantage: 'neutral'
           });
         }
       }
@@ -131,23 +104,9 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
       }
     }
     
-    // If no explicit verdict section, split the edge content at conclusion phrases
+    // Combine edge and verdict for full analysis
     if (!result.verdict && result.edge) {
-      const verdictSplit = result.edge.match(/(.*?)((?:In conclusion|Bottom line|That's why|So in conclusion|I'm riding|I'm taking|Lock it in).*)/i);
-      if (verdictSplit) {
-        result.edge = verdictSplit[1].trim();
-        result.verdict = verdictSplit[2].trim();
-      } else {
-        // Use last 2 sentences as verdict
-        const sentences = result.edge.split(/(?<=[.!])\s+/);
-        if (sentences.length > 3) {
-          result.verdict = sentences.slice(-2).join(' ');
-          result.edge = sentences.slice(0, -2).join(' ');
-        } else if (sentences.length > 1) {
-          result.verdict = sentences.pop();
-          result.edge = sentences.join(' ');
-        }
-      }
+      result.verdict = '';
     }
     
     return result.stats.length > 0 ? result : null;
@@ -158,184 +117,52 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
   // If no Tale of the Tape format, fall back to regular display
   if (!tapeData) {
     return (
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
         {rationale}
       </div>
     );
   }
   
+  const homeShort = tapeData.teams.home?.split(' ').pop() || 'Home';
+  const awayShort = tapeData.teams.away?.split(' ').pop() || 'Away';
+  
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.6rem' }}>
-      {/* Tale of the Tape Header */}
-      <div style={{
-        textAlign: 'center',
-        fontSize: '0.65rem',
-        letterSpacing: '0.25em',
-        textTransform: 'uppercase',
-        opacity: 0.4,
-        fontWeight: 600
-      }}>
-        Tale of the Tape
-      </div>
-      
-      {/* Stats Table */}
-      <div style={{
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 100%)',
-        borderRadius: '10px',
-        border: '1px solid rgba(255,255,255,0.1)',
-        overflow: 'hidden'
-      }}>
-        {/* Team Headers */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 85px 85px',
-          padding: '0.5rem 0.6rem',
-          background: 'rgba(255,255,255,0.05)',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          fontSize: '0.68rem',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em'
-        }}>
-          <div style={{ opacity: 0.4 }}>Stat</div>
-          <div style={{ textAlign: 'center', color: accentColor }}>
-            {tapeData.teams.home?.split(' ').pop() || 'HOME'}
-          </div>
-          <div style={{ textAlign: 'center', opacity: 0.7 }}>
-            {tapeData.teams.away?.split(' ').pop() || 'AWAY'}
-          </div>
-        </div>
-        
-        {/* Stat Rows */}
+    <div style={{ lineHeight: 1.7, fontSize: '0.9rem' }}>
+      {/* Stats as inline text */}
+      <div style={{ marginBottom: '1rem' }}>
         {tapeData.stats.map((stat, idx) => (
-          <div 
-            key={idx}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 85px 85px',
-              padding: '0.45rem 0.6rem',
-              borderBottom: idx < tapeData.stats.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-              fontSize: '0.82rem',
-              alignItems: 'center'
-            }}
-          >
-            <div style={{ opacity: 0.6, fontSize: '0.72rem' }}>{stat.name}</div>
-            <div style={{ 
-              textAlign: 'center',
-              fontWeight: stat.advantage === 'home' ? 700 : 400,
-              color: stat.advantage === 'home' ? '#4ade80' : (stat.advantage === 'away' ? '#ef4444' : 'inherit'),
-              opacity: stat.advantage === 'neutral' ? 0.7 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.2rem',
-              fontSize: '0.85rem'
+          <div key={idx} style={{ marginBottom: '0.4rem' }}>
+            <span style={{ opacity: 0.6 }}>{stat.name}: </span>
+            <span style={{ 
+              color: stat.advantage === 'home' ? '#4ade80' : (stat.advantage === 'away' ? 'rgba(255,255,255,0.7)' : 'inherit'),
+              fontWeight: stat.advantage === 'home' ? 600 : 400
             }}>
-              {stat.advantage === 'home' && <span style={{ fontSize: '0.6rem' }}>▲</span>}
-              {stat.advantage === 'away' && <span style={{ fontSize: '0.6rem' }}>▼</span>}
-              {stat.home}
-            </div>
-            <div style={{ 
-              textAlign: 'center',
-              fontWeight: stat.advantage === 'away' ? 700 : 400,
-              color: stat.advantage === 'away' ? '#4ade80' : (stat.advantage === 'home' ? '#ef4444' : 'inherit'),
-              opacity: stat.advantage === 'neutral' ? 0.7 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.2rem',
-              fontSize: '0.85rem'
+              {homeShort} {stat.home}
+            </span>
+            <span style={{ opacity: 0.4, margin: '0 0.4rem' }}>vs</span>
+            <span style={{ 
+              color: stat.advantage === 'away' ? '#4ade80' : (stat.advantage === 'home' ? 'rgba(255,255,255,0.7)' : 'inherit'),
+              fontWeight: stat.advantage === 'away' ? 600 : 400
             }}>
-              {stat.advantage === 'away' && <span style={{ fontSize: '0.6rem' }}>▲</span>}
-              {stat.advantage === 'home' && <span style={{ fontSize: '0.6rem' }}>▼</span>}
-              {stat.away}
-            </div>
+              {awayShort} {stat.away}
+            </span>
           </div>
         ))}
       </div>
       
-      {/* Section Toggle Buttons */}
-      <div style={{
-        display: 'flex',
-        gap: '0.5rem',
-        marginTop: '0.25rem'
-      }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setActiveSection('edge'); }}
-          style={{
-            flex: 1,
-            padding: '0.5rem',
-            borderRadius: '8px',
-            border: 'none',
-            background: activeSection === 'edge' ? accentColor : 'rgba(255,255,255,0.08)',
-            color: activeSection === 'edge' ? '#000' : '#fff',
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          The Edge
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); setActiveSection('verdict'); }}
-          style={{
-            flex: 1,
-            padding: '0.5rem',
-            borderRadius: '8px',
-            border: 'none',
-            background: activeSection === 'verdict' ? accentColor : 'rgba(255,255,255,0.08)',
-            color: activeSection === 'verdict' ? '#000' : '#fff',
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          The Verdict
-        </button>
-      </div>
+      {/* Divider */}
+      <div style={{ 
+        height: '1px', 
+        background: 'rgba(255,255,255,0.1)', 
+        margin: '0.75rem 0' 
+      }} />
       
-      {/* Content Area with scroll fade */}
-      <div style={{
-        flex: 1,
-        position: 'relative',
-        minHeight: '70px',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          height: '100%',
-          overflowY: 'auto',
-          padding: '0.65rem 0.75rem',
-          paddingBottom: '1.5rem',
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.15) 100%)',
-          borderRadius: '10px',
-          border: '1px solid rgba(255,255,255,0.06)',
-          fontSize: '0.84rem',
-          lineHeight: 1.65,
-          color: 'rgba(255,255,255,0.9)'
-        }}>
-          {activeSection === 'edge' ? (
-            tapeData.edge || 'Analysis loading...'
-          ) : (
-            tapeData.verdict || 'Verdict loading...'
-          )}
-        </div>
-        {/* Scroll fade indicator */}
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '30px',
-          background: 'linear-gradient(transparent, rgba(20,20,20,0.95))',
-          borderRadius: '0 0 10px 10px',
-          pointerEvents: 'none'
-        }} />
+      {/* Analysis text */}
+      <div style={{ opacity: 0.95 }}>
+        {tapeData.edge}
+        {tapeData.verdict && (
+          <span> {tapeData.verdict}</span>
+        )}
       </div>
     </div>
   );
