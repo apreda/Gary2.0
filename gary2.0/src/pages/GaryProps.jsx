@@ -179,37 +179,25 @@ export default function GaryProps() {
           </p>
         </div>
         
-        {/* Sport Tabs */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex rounded-lg p-1 bg-[#1a1a1a] border border-[#b8953f]/20">
-            <button
-              onClick={() => setSelectedSport('NBA')}
-              className={`px-6 py-2.5 rounded-md text-sm font-semibold transition-all duration-200 ${
-                selectedSport === 'NBA'
-                  ? 'bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              🏀 NBA
-            </button>
-            <button
-              onClick={() => setSelectedSport('NFL')}
-              className={`px-6 py-2.5 rounded-md text-sm font-semibold transition-all duration-200 ${
-                selectedSport === 'NFL'
-                  ? 'bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              🏈 NFL
-            </button>
-          </div>
-        </div>
-        
-        {/* Sport info notice */}
-        <div className="text-center mb-6">
-          <span className="inline-block px-4 py-2 border border-[#b8953f]/30 rounded-full text-gray-400 text-sm">
-            {selectedSport === 'NBA' ? 'NBA player props updated daily' : 'NFL player props updated weekly (Thu-Mon)'}
-          </span>
+        {/* Sports Tabs - matching RealGaryPicks style */}
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-6">
+          {['NBA', 'NFL'].map(tab => {
+            const isActive = selectedSport === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => setSelectedSport(tab)}
+                className="px-3 sm:px-4 py-2 rounded-md text-sm sm:text-base transition-all"
+                style={{
+                  background: isActive ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                  color: isActive ? '#ffffff' : 'rgba(255,255,255,0.8)',
+                  border: isActive ? '1px solid #b8953f' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              >
+                {tab}
+              </button>
+            );
+          })}
         </div>
       </div>
 
