@@ -756,6 +756,158 @@ export const perplexityService = {
         picks: []
       };
     }
+  },
+
+  /**
+   * Search for current injuries using Perplexity's Search API
+   * Uses the new /search endpoint for structured, real-time results
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name  
+   * @param {string} sport - Sport (NBA, NFL, etc.)
+   * @returns {Promise<object>} - Structured injury data
+   */
+  searchInjuries: async function(homeTeam, awayTeam, sport) {
+    try {
+      const apiKey = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
+      if (!apiKey) {
+        console.warn('[Perplexity] No API key for injury search');
+        return { home: [], away: [], raw: null };
+      }
+
+      const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const query = `${sport} injury report ${awayTeam} vs ${homeTeam} ${today} who is OUT DOUBTFUL QUESTIONABLE`;
+
+      console.log(`[Perplexity Search API] Querying injuries: ${homeTeam} vs ${awayTeam}`);
+
+      const response = await axios.post(
+        'https://api.perplexity.ai/search',
+        {
+          query: query,
+          max_results: 10,
+          search_recency_filter: 'day' // Only get results from past 24 hours
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        }
+      );
+
+      if (!response.data?.results || response.data.results.length === 0) {
+        console.log('[Perplexity Search API] No injury results found');
+        return { home: [], away: [], raw: null };
+      }
+
+      // Parse the search results for injury information
+      const injuries = this.parseInjurySearchResults(response.data.results, homeTeam, awayTeam);
+      injuries.raw = response.data.results; // Keep raw for debugging
+
+      console.log(`[Perplexity Search API] Found ${injuries.home.length} injuries for ${homeTeam}, ${injuries.away.length} for ${awayTeam}`);
+      
+      return injuries;
+
+    } catch (error) {
+      console.warn(`[Perplexity Search API] Injury search failed: ${error.message}`);
+      return { home: [], away: [], raw: null };
+    }
+  },
+
+  /**
+   * Parse Perplexity Search API results for injury information
+   */
+  parseInjurySearchResults: function(results, homeTeam, awayTeam) {
+    const injuries = { home: [], away: [] };
+    const foundPlayers = new Set();
+
+    // Common injury status patterns
+    const statusPatterns = [
+      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*(?:is|has been|remains|was)\s*(ruled out|out|doubtful|questionable|day-to-day|GTD)/gi,
+      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\((out|doubtful|questionable|GTD)\)/gi,
+      /(out|doubtful|questionable):\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/gi
+    ];
+
+    const normalizeStatus = (status) => {
+      const s = status.toLowerCase();
+      if (s.includes('out') || s.includes('ruled out')) return 'Out';
+      if (s.includes('doubtful')) return 'Doubtful';
+      if (s.includes('questionable') || s.includes('gtd') || s.includes('day-to-day')) return 'Questionable';
+      return 'Questionable';
+    };
+
+    const isHomeTeam = (text) => {
+      const textLower = text.toLowerCase();
+      return textLower.includes(homeTeam.toLowerCase()) || 
+             textLower.includes(homeTeam.split(' ').pop().toLowerCase());
+    };
+
+    const isAwayTeam = (text) => {
+      const textLower = text.toLowerCase();
+      return textLower.includes(awayTeam.toLowerCase()) ||
+             textLower.includes(awayTeam.split(' ').pop().toLowerCase());
+    };
+
+    for (const result of results) {
+      const text = `${result.title || ''} ${result.snippet || ''}`;
+      
+      for (const pattern of statusPatterns) {
+        let match;
+        pattern.lastIndex = 0; // Reset regex
+        
+        while ((match = pattern.exec(text)) !== null) {
+          let playerName, status;
+          
+          // Different capture group orders based on pattern
+          if (match[1] && (match[2]?.toLowerCase().includes('out') || 
+                          match[2]?.toLowerCase().includes('doubtful') || 
+                          match[2]?.toLowerCase().includes('questionable'))) {
+            playerName = match[1];
+            status = match[2];
+          } else if (match[2] && match[1]) {
+            // Reverse pattern (status: player)
+            playerName = match[2];
+            status = match[1];
+          }
+          
+          if (playerName && status && !foundPlayers.has(playerName.toLowerCase())) {
+            foundPlayers.add(playerName.toLowerCase());
+            
+            const injury = {
+              player: {
+                first_name: playerName.split(' ')[0],
+                last_name: playerName.split(' ').slice(1).join(' '),
+                position: ''
+              },
+              status: normalizeStatus(status),
+              source: 'perplexity_search',
+              sourceUrl: result.url,
+              date: result.date
+            };
+            
+            // Determine which team based on context
+            const contextStart = Math.max(0, match.index - 100);
+            const contextEnd = Math.min(text.length, match.index + 100);
+            const context = text.substring(contextStart, contextEnd);
+            
+            if (isHomeTeam(context)) {
+              injuries.home.push(injury);
+            } else if (isAwayTeam(context)) {
+              injuries.away.push(injury);
+            }
+          }
+        }
+      }
+    }
+
+    return injuries;
+  },
+
+  /**
+   * Simple query method for backwards compatibility
+   */
+  queryPerplexity: async function(query, options = {}) {
+    return this.search(query, options);
   }
 };
 

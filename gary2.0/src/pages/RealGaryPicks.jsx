@@ -33,6 +33,286 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+// Tale of the Tape Component - Beautiful stat comparison table
+const TaleOfTheTape = ({ rationale, accentColor }) => {
+  const [activeSection, setActiveSection] = useState('edge'); // 'edge' or 'verdict'
+  
+  // Parse the Tale of the Tape format
+  const parseTaleOfTape = (text) => {
+    if (!text || !text.includes('TALE OF THE TAPE')) {
+      return null;
+    }
+    
+    const result = {
+      teams: { home: '', away: '' },
+      stats: [],
+      edge: '',
+      verdict: ''
+    };
+    
+    const lines = text.split('\n');
+    let inTape = false;
+    let currentSection = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+      
+      // Start of Tale of the Tape
+      if (trimmedLine.includes('TALE OF THE TAPE')) {
+        inTape = true;
+        continue;
+      }
+      
+      // Detect section headers
+      if (trimmedLine.match(/^The Edge$/i) || trimmedLine.match(/^THE EDGE$/i)) {
+        currentSection = 'edge';
+        inTape = false;
+        continue;
+      }
+      if (trimmedLine.match(/^The Verdict$/i) || trimmedLine.match(/^THE VERDICT$/i)) {
+        currentSection = 'verdict';
+        continue;
+      }
+      
+      // Extract team names (line with two multi-word names, no arrows)
+      if (inTape && !trimmedLine.includes('←') && !trimmedLine.includes('→') && trimmedLine.length > 10) {
+        // Team names line: "Boston Celtics          Washington Wizards"
+        const teamMatches = trimmedLine.match(/([A-Z][a-zA-Z\s]+?)\s{2,}([A-Z][a-zA-Z\s]+)/);
+        if (teamMatches && !result.teams.home) {
+          result.teams.home = teamMatches[1].trim();
+          result.teams.away = teamMatches[2].trim();
+          continue;
+        }
+      }
+      
+      // Parse stats lines (contain ← or → arrows)
+      if (inTape && (trimmedLine.includes('←') || trimmedLine.includes('→'))) {
+        // Pattern: "Record                  12-9           ←          3-17"
+        // Or: "Off Rating             119.1           ←        109.4"
+        const arrowMatch = trimmedLine.match(/^([A-Za-z\s]+?)\s{2,}([\d.+\-]+|None|N\/A)\s*(←|→)\s*([\d.+\-]+|None|N\/A)/);
+        if (arrowMatch) {
+          const [, statName, leftVal, arrow, rightVal] = arrowMatch;
+          result.stats.push({
+            name: statName.trim(),
+            home: leftVal.trim(),
+            away: rightVal.trim(),
+            advantage: arrow === '←' ? 'home' : 'away'
+          });
+        }
+      }
+      
+      // Parse Key Injuries line (no arrow, just two "None" values)
+      if (inTape && trimmedLine.startsWith('Key Injuries') && !trimmedLine.includes('←') && !trimmedLine.includes('→')) {
+        const injuryMatch = trimmedLine.match(/Key Injuries\s+(None|[\w\s,]+)\s+(None|[\w\s,]+)/i);
+        if (injuryMatch) {
+          result.stats.push({
+            name: 'Key Injuries',
+            home: injuryMatch[1].trim(),
+            away: injuryMatch[2].trim(),
+            advantage: 'neutral'
+          });
+        }
+      }
+      
+      // Collect section content
+      if (currentSection === 'edge' && trimmedLine && !trimmedLine.match(/^The (Edge|Verdict)$/i)) {
+        result.edge += (result.edge ? ' ' : '') + trimmedLine;
+      }
+      if (currentSection === 'verdict' && trimmedLine && !trimmedLine.match(/^The (Edge|Verdict)$/i)) {
+        result.verdict += (result.verdict ? ' ' : '') + trimmedLine;
+      }
+    }
+    
+    // If no explicit verdict section, split the edge content at conclusion phrases
+    if (!result.verdict && result.edge) {
+      const verdictSplit = result.edge.match(/(.*?)((?:In conclusion|Bottom line|That's why|So in conclusion|I'm riding|I'm taking|Lock it in).*)/i);
+      if (verdictSplit) {
+        result.edge = verdictSplit[1].trim();
+        result.verdict = verdictSplit[2].trim();
+      } else {
+        // Use last sentence as verdict
+        const sentences = result.edge.split(/(?<=[.!])\s+/);
+        if (sentences.length > 2) {
+          result.verdict = sentences.pop();
+          result.edge = sentences.join(' ');
+        }
+      }
+    }
+    
+    return result.stats.length > 0 ? result : null;
+  };
+  
+  const tapeData = parseTaleOfTape(rationale);
+  
+  // If no Tale of the Tape format, fall back to regular display
+  if (!tapeData) {
+    return (
+      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+        {rationale}
+      </div>
+    );
+  }
+  
+  const hexToRgba = (hex, alpha) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+  
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.75rem' }}>
+      {/* Tale of the Tape Header */}
+      <div style={{
+        textAlign: 'center',
+        fontSize: '0.7rem',
+        letterSpacing: '0.2em',
+        textTransform: 'uppercase',
+        opacity: 0.5,
+        fontWeight: 600
+      }}>
+        Tale of the Tape
+      </div>
+      
+      {/* Stats Table */}
+      <div style={{
+        background: 'rgba(0,0,0,0.3)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.08)',
+        overflow: 'hidden'
+      }}>
+        {/* Team Headers */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 90px 90px',
+          padding: '0.6rem 0.75rem',
+          background: 'rgba(255,255,255,0.03)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em'
+        }}>
+          <div style={{ opacity: 0.5 }}>Stat</div>
+          <div style={{ textAlign: 'center', color: accentColor }}>
+            {tapeData.teams.home?.split(' ').pop() || 'HOME'}
+          </div>
+          <div style={{ textAlign: 'center', color: '#888' }}>
+            {tapeData.teams.away?.split(' ').pop() || 'AWAY'}
+          </div>
+        </div>
+        
+        {/* Stat Rows */}
+        {tapeData.stats.map((stat, idx) => (
+          <div 
+            key={idx}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 90px 90px',
+              padding: '0.5rem 0.75rem',
+              borderBottom: idx < tapeData.stats.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+              fontSize: '0.78rem',
+              alignItems: 'center'
+            }}
+          >
+            <div style={{ opacity: 0.7, fontSize: '0.72rem' }}>{stat.name}</div>
+            <div style={{ 
+              textAlign: 'center',
+              fontWeight: stat.advantage === 'home' ? 700 : 400,
+              color: stat.advantage === 'home' ? '#4ade80' : 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.25rem'
+            }}>
+              {stat.advantage === 'home' && <span style={{ color: '#4ade80', fontSize: '0.65rem' }}>▲</span>}
+              {stat.home}
+            </div>
+            <div style={{ 
+              textAlign: 'center',
+              fontWeight: stat.advantage === 'away' ? 700 : 400,
+              color: stat.advantage === 'away' ? '#f87171' : 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.25rem'
+            }}>
+              {stat.advantage === 'away' && <span style={{ color: '#f87171', fontSize: '0.65rem' }}>▲</span>}
+              {stat.away}
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {/* Section Toggle Buttons */}
+      <div style={{
+        display: 'flex',
+        gap: '0.5rem',
+        marginTop: '0.25rem'
+      }}>
+        <button
+          onClick={() => setActiveSection('edge')}
+          style={{
+            flex: 1,
+            padding: '0.5rem',
+            borderRadius: '8px',
+            border: 'none',
+            background: activeSection === 'edge' ? accentColor : 'rgba(255,255,255,0.08)',
+            color: activeSection === 'edge' ? '#000' : '#fff',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          The Edge
+        </button>
+        <button
+          onClick={() => setActiveSection('verdict')}
+          style={{
+            flex: 1,
+            padding: '0.5rem',
+            borderRadius: '8px',
+            border: 'none',
+            background: activeSection === 'verdict' ? accentColor : 'rgba(255,255,255,0.08)',
+            color: activeSection === 'verdict' ? '#000' : '#fff',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          The Verdict
+        </button>
+      </div>
+      
+      {/* Content Area */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '0.75rem',
+        background: 'rgba(0,0,0,0.2)',
+        borderRadius: '10px',
+        border: '1px solid rgba(255,255,255,0.05)',
+        fontSize: '0.85rem',
+        lineHeight: 1.6,
+        minHeight: '80px'
+      }}>
+        {activeSection === 'edge' ? (
+          tapeData.edge || 'Analysis loading...'
+        ) : (
+          tapeData.verdict || 'Verdict loading...'
+        )}
+      </div>
+    </div>
+  );
+};
+
 function RealGaryPicks() {
   const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
@@ -1287,7 +1567,7 @@ function RealGaryPicks() {
                                         </div>
                                       </div>
                                       
-                                      {/* Full analysis - takes up 85% of remaining space (MATCHING FREE PICK) */}
+                                      {/* Full analysis - takes up 85% of remaining space */}
                                       <div style={{ 
                                         flex: '1 1 85%',
                                         overflowY: 'auto',
@@ -1298,8 +1578,10 @@ function RealGaryPicks() {
                                         marginBottom: '0.5rem'
                                       }}>
                                         {pick.rationale ? (
-                                          // Check if rationale is already formatted or needs formatting (MATCHING FREE PICK)
-                                          pick.rationale.includes('•') ? (
+                                          // Use Tale of the Tape component for new format
+                                          pick.rationale.includes('TALE OF THE TAPE') ? (
+                                            <TaleOfTheTape rationale={pick.rationale} accentColor={accentColor} />
+                                          ) : pick.rationale.includes('•') ? (
                                             // Already has bullets, just display
                                             <div style={{ whiteSpace: 'pre-wrap' }}>{pick.rationale}</div>
                                           ) : pick.rationale.includes('. ') && pick.rationale.length > 150 ? (

@@ -7,6 +7,7 @@
 
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { formatTokenMenu } from '../tools/toolDefinitions.js';
+import { perplexityService } from '../../perplexityService.js';
 
 /**
  * Build a scout report for a game
@@ -281,33 +282,182 @@ function formatRecentForm(teamName, recentGames) {
 }
 
 /**
- * Fetch injuries for both teams
+ * Fetch injuries for both teams - uses BDL + Perplexity verification
  */
 async function fetchInjuries(homeTeam, awayTeam, sport) {
   try {
     const bdlSport = sportToBdlKey(sport);
-    if (!bdlSport) return { home: [], away: [] };
     
-    const teams = await ballDontLieService.getTeams(bdlSport);
-    const home = findTeam(teams, homeTeam);
-    const away = findTeam(teams, awayTeam);
+    // Fetch from BDL
+    let bdlInjuries = { home: [], away: [] };
+    if (bdlSport) {
+      const teams = await ballDontLieService.getTeams(bdlSport);
+      const home = findTeam(teams, homeTeam);
+      const away = findTeam(teams, awayTeam);
+      
+      const teamIds = [];
+      if (home) teamIds.push(home.id);
+      if (away) teamIds.push(away.id);
+      
+      if (teamIds.length > 0) {
+        const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
+        bdlInjuries = {
+          home: injuries?.filter(i => i.player?.team?.id === home?.id || i.team_id === home?.id) || [],
+          away: injuries?.filter(i => i.player?.team?.id === away?.id || i.team_id === away?.id) || []
+        };
+      }
+    }
     
-    const teamIds = [];
-    if (home) teamIds.push(home.id);
-    if (away) teamIds.push(away.id);
+    // CRITICAL: Also fetch from Perplexity as verification (injuries are too important to miss)
+    const perplexityInjuries = await fetchPerplexityInjuries(homeTeam, awayTeam, sport);
     
-    if (teamIds.length === 0) return { home: [], away: [] };
+    // Merge injuries - Perplexity fills in gaps
+    return mergeInjuries(bdlInjuries, perplexityInjuries);
     
-    const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
-    
-    return {
-      home: injuries?.filter(i => i.player?.team?.id === home?.id || i.team_id === home?.id) || [],
-      away: injuries?.filter(i => i.player?.team?.id === away?.id || i.team_id === away?.id) || []
-    };
   } catch (error) {
     console.warn(`[Scout Report] Error fetching injuries:`, error.message);
     return { home: [], away: [] };
   }
+}
+
+/**
+ * Fetch injuries from Perplexity as a verification/backup source
+ */
+async function fetchPerplexityInjuries(homeTeam, awayTeam, sport) {
+  try {
+    // First try the new Search API (more reliable, structured results)
+    if (perplexityService?.searchInjuries) {
+      console.log(`[Scout Report] Using Perplexity Search API for injury verification: ${homeTeam} vs ${awayTeam}`);
+      const searchResult = await perplexityService.searchInjuries(homeTeam, awayTeam, sport);
+      
+      if (searchResult.home.length > 0 || searchResult.away.length > 0) {
+        console.log(`[Scout Report] Perplexity Search API found injuries: ${searchResult.home.length} for ${homeTeam}, ${searchResult.away.length} for ${awayTeam}`);
+        return searchResult;
+      }
+    }
+    
+    // Fallback to chat completions API if Search API didn't find anything
+    if (!perplexityService?.queryPerplexity) {
+      console.log('[Scout Report] Perplexity service not available for injury check');
+      return { home: [], away: [], perplexityRaw: null };
+    }
+    
+    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const query = `What are the current injuries and player availability for tonight's ${sport} game between ${awayTeam} and ${homeTeam}? Include all players who are OUT, DOUBTFUL, or QUESTIONABLE. Only include injuries confirmed as of ${today}. Be specific with player names, their status (Out/Doubtful/Questionable), and injury type.`;
+    
+    console.log(`[Scout Report] Querying Perplexity Chat API for injury verification: ${homeTeam} vs ${awayTeam}`);
+    
+    const response = await perplexityService.queryPerplexity(query, { timeout: 15000 });
+    
+    if (!response?.content) {
+      return { home: [], away: [], perplexityRaw: null };
+    }
+    
+    // Parse the Perplexity response to extract injuries
+    const parsed = parsePerplexityInjuries(response.content, homeTeam, awayTeam);
+    parsed.perplexityRaw = response.content; // Keep raw for display
+    
+    console.log(`[Scout Report] Perplexity injuries: ${parsed.home.length} for ${homeTeam}, ${parsed.away.length} for ${awayTeam}`);
+    
+    return parsed;
+    
+  } catch (error) {
+    console.warn(`[Scout Report] Perplexity injury check failed:`, error.message);
+    return { home: [], away: [], perplexityRaw: null };
+  }
+}
+
+/**
+ * Parse Perplexity response to extract injury information
+ */
+function parsePerplexityInjuries(content, homeTeam, awayTeam) {
+  const injuries = { home: [], away: [] };
+  
+  // Look for common injury status patterns
+  const patterns = [
+    /(\w+[\w\s\.]+)\s*(?:is|remains|listed as|ruled)\s*(out|doubtful|questionable)/gi,
+    /(out|doubtful|questionable)[:\s]+([^,\.\n]+)/gi,
+    /(\w+[\w\s\.]+)\s*\((out|doubtful|questionable)\)/gi
+  ];
+  
+  const contentLower = content.toLowerCase();
+  const homeTeamLower = homeTeam.toLowerCase();
+  const awayTeamLower = awayTeam.toLowerCase();
+  
+  // Split content into sections by team (rough heuristic)
+  const homeSection = extractTeamSection(content, homeTeam);
+  const awaySection = extractTeamSection(content, awayTeam);
+  
+  // Extract injuries from each section
+  const extractFromSection = (section, team) => {
+    const found = [];
+    const statusRegex = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*[-–:]\s*(Out|Doubtful|Questionable|OUT|DOUBTFUL|QUESTIONABLE)/g;
+    const altRegex = /(Out|Doubtful|Questionable|OUT|DOUBTFUL|QUESTIONABLE)\s*[-–:]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g;
+    
+    let match;
+    while ((match = statusRegex.exec(section)) !== null) {
+      found.push({
+        player: { first_name: match[1].split(' ')[0], last_name: match[1].split(' ').slice(1).join(' '), position: '' },
+        status: match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase(),
+        source: 'perplexity'
+      });
+    }
+    while ((match = altRegex.exec(section)) !== null) {
+      found.push({
+        player: { first_name: match[2].split(' ')[0], last_name: match[2].split(' ').slice(1).join(' '), position: '' },
+        status: match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase(),
+        source: 'perplexity'
+      });
+    }
+    return found;
+  };
+  
+  injuries.home = extractFromSection(homeSection, homeTeam);
+  injuries.away = extractFromSection(awaySection, awayTeam);
+  
+  return injuries;
+}
+
+/**
+ * Extract section of text related to a team
+ */
+function extractTeamSection(content, teamName) {
+  // Try to find the team name and extract surrounding context
+  const teamLower = teamName.toLowerCase();
+  const idx = content.toLowerCase().indexOf(teamLower);
+  if (idx === -1) return content; // Return full content if team not found
+  
+  // Get 500 chars after team mention
+  return content.substring(Math.max(0, idx - 50), idx + 500);
+}
+
+/**
+ * Merge BDL and Perplexity injuries, deduping by player name
+ */
+function mergeInjuries(bdlInjuries, perplexityInjuries) {
+  const mergeTeam = (bdl, perp) => {
+    const merged = [...bdl];
+    const existingNames = new Set(bdl.map(i => 
+      `${i.player?.first_name} ${i.player?.last_name}`.toLowerCase()
+    ));
+    
+    // Add Perplexity injuries that aren't in BDL
+    for (const injury of perp) {
+      const name = `${injury.player?.first_name} ${injury.player?.last_name}`.toLowerCase();
+      if (!existingNames.has(name)) {
+        merged.push(injury);
+        console.log(`[Scout Report] Added injury from Perplexity: ${name} (${injury.status})`);
+      }
+    }
+    
+    return merged;
+  };
+  
+  return {
+    home: mergeTeam(bdlInjuries.home || [], perplexityInjuries.home || []),
+    away: mergeTeam(bdlInjuries.away || [], perplexityInjuries.away || []),
+    perplexityRaw: perplexityInjuries.perplexityRaw
+  };
 }
 
 /**
