@@ -33,9 +33,9 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Tabbed Analysis Component - Stats tab and Gary's Take tab
+// Overlay Analysis Component - Gary's Take main, Stats in overlay popup
 const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
-  const [activeTab, setActiveTab] = useState('take'); // 'stats' or 'take'
+  const [showStatsOverlay, setShowStatsOverlay] = useState(false);
   
   // Parse the rationale
   const parseRationale = (text) => {
@@ -152,58 +152,114 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
   const allStats = pick?.statsUsed || [];
   
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Tab Bar */}
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* View Stats Button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); setShowStatsOverlay(true); }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          padding: '0.35rem 0.7rem',
+          fontSize: '0.65rem',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          border: '1px solid rgba(74, 222, 128, 0.3)',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          background: 'rgba(74, 222, 128, 0.1)',
+          color: '#4ade80',
+          transition: 'all 0.2s'
+        }}
+      >
+        View Stats ({allStats.length || data.stats.length})
+      </button>
+      
+      {/* Main Content - Gary's Take */}
       <div style={{ 
-        display: 'flex', 
-        gap: '0.5rem', 
-        marginBottom: '0.75rem',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        paddingBottom: '0.5rem'
+        flex: 1, 
+        overflowY: 'auto',
+        paddingTop: '2rem' // Space for button
       }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setActiveTab('stats'); }}
-          style={{
-            padding: '0.4rem 0.8rem',
-            fontSize: '0.7rem',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            background: activeTab === 'stats' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'stats' ? '#4ade80' : 'rgba(255,255,255,0.5)'
-          }}
-        >
-          📊 Stats ({allStats.length || data.stats.length})
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); setActiveTab('take'); }}
-          style={{
-            padding: '0.4rem 0.8rem',
-            fontSize: '0.7rem',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            background: activeTab === 'take' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'take' ? '#4ade80' : 'rgba(255,255,255,0.5)'
-          }}
-        >
-          💬 Gary's Take
-        </button>
+        <div style={{ 
+          fontSize: '0.7rem', 
+          fontWeight: 700, 
+          letterSpacing: '0.1em', 
+          textTransform: 'uppercase', 
+          color: '#4ade80', 
+          opacity: 0.6,
+          marginBottom: '0.5rem'
+        }}>Gary's Take</div>
+        
+        <div style={{ fontSize: '0.85rem', lineHeight: 1.65, opacity: 0.92 }}>
+          {data.narrative || rationale}
+        </div>
+        
+        {data.lockLine && (
+          <div style={{ 
+            marginTop: '0.8rem', 
+            paddingTop: '0.6rem',
+            borderTop: '1px solid rgba(74, 222, 128, 0.15)'
+          }}>
+            <span style={{ color: '#4ade80', fontWeight: 600, fontSize: '0.9rem' }}>
+              {data.lockLine}
+            </span>
+          </div>
+        )}
       </div>
       
-      {/* Tab Content */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {activeTab === 'stats' ? (
-          /* STATS TAB - Full Tale of the Tape */
-          <div style={{ fontSize: '0.82rem', lineHeight: 1.5 }}>
+      {/* Stats Overlay */}
+      {showStatsOverlay && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(15, 15, 15, 0.98)',
+            borderRadius: '12px',
+            padding: '1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 10,
+            animation: 'fadeIn 0.2s ease'
+          }}
+        >
+          {/* Overlay Header */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '0.75rem',
+            paddingBottom: '0.5rem',
+            borderBottom: '1px solid rgba(255,255,255,0.1)'
+          }}>
+            <span style={{ 
+              fontSize: '0.7rem', 
+              fontWeight: 700, 
+              letterSpacing: '0.1em', 
+              textTransform: 'uppercase',
+              color: '#4ade80'
+            }}>Tale of the Tape</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowStatsOverlay(false); }}
+              style={{
+                padding: '0.3rem 0.6rem',
+                fontSize: '0.65rem',
+                fontWeight: 500,
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                background: 'rgba(255,255,255,0.1)',
+                color: 'rgba(255,255,255,0.7)'
+              }}
+            >
+              Close
+            </button>
+          </div>
+          
+          {/* Overlay Content */}
+          <div style={{ flex: 1, overflowY: 'auto', fontSize: '0.82rem', lineHeight: 1.5 }}>
             {/* Team Header */}
             <div style={{ 
               display: 'flex', 
@@ -254,16 +310,16 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               <span style={{ 
                 flex: 1, 
                 color: injLeft === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171' 
-              }}>{injLeft === 'None' ? '✓ Healthy' : injLeft}</span>
+              }}>{injLeft === 'None' ? 'Healthy' : injLeft}</span>
               <span style={{ width: '90px', textAlign: 'center', opacity: 0.35, fontSize: '0.68rem' }}>Injuries</span>
               <span style={{ 
                 flex: 1, 
                 textAlign: 'right',
                 color: injRight === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
-              }}>{injRight === 'None' ? '✓ Healthy' : injRight}</span>
+              }}>{injRight === 'None' ? 'Healthy' : injRight}</span>
             </div>
             
-            {/* Stats Gary Requested (from agentic system) */}
+            {/* Stats Gary Analyzed */}
             {allStats.length > 0 && (
               <div style={{ 
                 marginTop: '0.8rem', 
@@ -286,7 +342,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 }}>
                   {allStats.map((stat, i) => (
                     <span key={i} style={{
-                      fontSize: '0.6rem',
+                      fontSize: '0.58rem',
                       padding: '0.2rem 0.4rem',
                       background: 'rgba(74, 222, 128, 0.1)',
                       color: 'rgba(74, 222, 128, 0.8)',
@@ -298,26 +354,8 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               </div>
             )}
           </div>
-        ) : (
-          /* GARY'S TAKE TAB - Full narrative */
-          <div style={{ fontSize: '0.85rem', lineHeight: 1.65 }}>
-            <div style={{ opacity: 0.92 }}>
-              {data.narrative || rationale}
-            </div>
-            {data.lockLine && (
-              <div style={{ 
-                marginTop: '0.8rem', 
-                paddingTop: '0.6rem',
-                borderTop: '1px solid rgba(74, 222, 128, 0.15)'
-              }}>
-                <span style={{ color: '#4ade80', fontWeight: 600, fontSize: '0.9rem' }}>
-                  {data.lockLine}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
