@@ -252,7 +252,7 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         marginTop: '0.25rem'
       }}>
         <button
-          onClick={() => setActiveSection('edge')}
+          onClick={(e) => { e.stopPropagation(); setActiveSection('edge'); }}
           style={{
             flex: 1,
             padding: '0.5rem',
@@ -271,7 +271,7 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
           The Edge
         </button>
         <button
-          onClick={() => setActiveSection('verdict')}
+          onClick={(e) => { e.stopPropagation(); setActiveSection('verdict'); }}
           style={{
             flex: 1,
             padding: '0.5rem',
