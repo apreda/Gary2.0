@@ -11,6 +11,8 @@ import { debugUtils } from '../utils/debugUtils.js';
 import { supabase } from '../supabaseClient.js';
 import { propUtils } from './propUtils.js';
 import { generatePropBets } from './propGenerator.js';
+// NBA player props service for fetching NBA player stats
+import { formatNBAPlayerStats } from './nbaPlayerPropsService.js';
 
 /**
  * Service for generating prop picks based on MLB Stats API data
@@ -55,30 +57,93 @@ export const propPicksService = {
 
   /**
    * Create prompt for the OpenAI API to generate prop picks
+   * @param {string} props - Formatted prop lines
+   * @param {string} playerStats - Formatted player statistics
+   * @param {string} sport - Sport key (basketball_nba, baseball_mlb, americanfootball_nfl)
    */
-  createPropPicksPrompt: (props, playerStats) => {
+  createPropPicksPrompt: (props, playerStats, sport = 'baseball_mlb') => {
+    // Sport-specific guidance
+    let sportGuidance = '';
+    let propTypes = '';
+    
+    if (sport === 'basketball_nba') {
+      sportGuidance = `
+## NBA-Specific Analysis Guidelines:
+- **Points**: Compare player's PPG average to the line. Consider pace of play, defensive matchups, and back-to-back situations.
+- **Rebounds**: Focus on centers and power forwards. Consider opponent's rebounding rate and pace.
+- **Assists**: Point guards and primary ball handlers. Consider team's offensive system and opponent's turnover forcing ability.
+- **3-Pointers Made**: Check 3PA (attempts) and 3P%. Volume shooters on high-paced teams are key.
+- **Blocks**: Big men against teams with high paint scoring attempts.
+- **Steals**: Guards against turnover-prone teams.
+- **Minutes context**: Players averaging 30+ MPG have more stable props.
+- **Recent form**: Last 5-10 games matter more than season averages.`;
+      propTypes = 'points, rebounds, assists, threes (3-pointers made), blocks, steals';
+    } else if (sport === 'americanfootball_nfl') {
+      sportGuidance = `
+## NFL-Specific Analysis Guidelines:
+- **Passing Yards**: Consider opponent pass defense DVOA, weather, and game script projections.
+- **Passing TDs**: Red zone opportunities and opponent's red zone defense.
+- **Rush Yards**: Focus on RB workload, offensive line quality, and opponent run defense.
+- **Receiving Yards**: Target share, air yards, and matchup against specific corners.
+- **Receptions**: PPR considerations, check down tendencies, and slot receiver advantages.
+- **Anytime TD**: Red zone usage and goal-line work for RBs.`;
+      propTypes = 'passing yards, passing TDs, rush yards, receiving yards, receptions, anytime TD';
+    } else {
+      sportGuidance = `
+## MLB-Specific Analysis Guidelines:
+- **Hits**: Consider batting average, at-bat opportunities, and pitcher matchup.
+- **Home Runs**: Power metrics, park factors, and pitcher home run rate.
+- **Total Bases**: Power + extra base hit potential.
+- **Strikeouts (Pitcher)**: K rate, opponent strikeout rate, and pitch count expectations.
+- **RBIs/Runs**: Lineup position and run-scoring environment.`;
+      propTypes = 'hits, home runs, total bases, strikeouts, RBIs, runs';
+    }
+
     return `You are Gary, an expert sports analyst specialized in player prop betting.
 
 Your job is to analyze player props for today's games and identify value bets based on the provided player statistics and prop odds.
 
-Here are the available props for today:
+${sportGuidance}
+
+## Available Props:
 ${props}
 
-Here are the player statistics to consider in your analysis:
+## Player Statistics:
 ${playerStats}
 
-For each prop, analyze the player's performance metrics, recent form, matchup advantages, and betting odds to determine if there's value.
+## Analysis Requirements:
+For each prop, analyze:
+1. Player's season average vs. the prop line
+2. Recent performance trends (hot/cold streaks)
+3. Matchup advantages/disadvantages
+4. Betting odds value (implied probability vs. your estimated probability)
 
+## Output Requirements:
 Give me your TOP 5 picks only, focusing on value bets with favorable odds (prefer +100 or better when possible).
 
-IMPORTANT: Assign high confidence scores (0.8-1.0) to your strongest picks where the statistical edge is clear and significant. Use moderate confidence (0.6-0.79) for solid picks with good value but some uncertainty. Only use lower confidence (below 0.6) for speculative picks. Do not artificially limit your confidence scores - if a pick deserves a 0.9 or higher based on your analysis, assign it accordingly.
+For prop types, focus on: ${propTypes}
 
-Your confidence score should be based primarily on:
-- Winning probability (50% weight)
-- Return on investment potential (30% weight)
-- Size of the edge you've identified (20% weight)
+IMPORTANT: The confidence score should represent your ESTIMATED WIN PROBABILITY for the bet (0.0 to 1.0).
+- 0.85 = you estimate 85% chance this bet wins
+- This is used to calculate Expected Value (EV)
+- Only recommend picks where your estimated probability exceeds the implied probability from the odds
+- Be realistic - most bets should be in the 0.55-0.75 range unless you have strong evidence
 
-Respond with ONLY a JSON array of your best prop picks.
+Example: If odds are -110 (implied probability ~52.4%), you should only recommend if your estimated probability is higher (e.g., 0.60 = 60%).
+
+Respond with ONLY a JSON array of your best prop picks in this format:
+[
+  {
+    "player": "Player Name",
+    "team": "Team Name",
+    "prop": "prop_type line" (e.g., "points 24.5"),
+    "line": 24.5,
+    "bet": "over" or "under",
+    "odds": -110,
+    "confidence": 0.65,
+    "rationale": "Brief explanation of why this is a value bet"
+  }
+]
 `;
   },
 
@@ -89,19 +154,55 @@ Respond with ONLY a JSON array of your best prop picks.
     try {
       // First, try direct JSON parsing
       let parsed = null;
+      let cleanedResponse = String(response || '');
+      
+      // Strip markdown code blocks if present
+      if (cleanedResponse.includes('```')) {
+        cleanedResponse = cleanedResponse
+          .replace(/```json\s*/gi, '')
+          .replace(/```\s*/g, '')
+          .trim();
+      }
       
       try {
-        parsed = JSON.parse(response);
+        parsed = JSON.parse(cleanedResponse);
         if (Array.isArray(parsed)) {
           console.log(`Successfully parsed JSON response with ${parsed.length} picks`);
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          // Handle wrapped responses like {"picks": [...]} or {"bets": [...]}
+          const possibleKeys = ['picks', 'bets', 'recommendations', 'props', 'data'];
+          for (const key of possibleKeys) {
+            if (Array.isArray(parsed[key])) {
+              console.log(`Found ${parsed[key].length} picks in response.${key}`);
+              parsed = parsed[key];
+              break;
+            }
+          }
+          // If still not an array after checking known keys, look for any array property
+          if (!Array.isArray(parsed)) {
+            const arrayKey = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+            if (arrayKey) {
+              console.log(`Found ${parsed[arrayKey].length} picks in response.${arrayKey}`);
+              parsed = parsed[arrayKey];
+            }
+          }
         }
       } catch (jsonError) {
-        // Not direct JSON, try to extract JSON array
+        // Not direct JSON, try to extract JSON array using a more robust approach
         console.log('Response is not direct JSON, trying to extract JSON blocks');
-        const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-        if (jsonMatch && jsonMatch[0]) {
-          parsed = JSON.parse(jsonMatch[0]);
-          console.log(`Successfully extracted JSON with ${parsed.length} picks`);
+        
+        // Try to find JSON array by looking for [ ... ] that contains objects
+        const startIdx = cleanedResponse.indexOf('[');
+        const endIdx = cleanedResponse.lastIndexOf(']');
+        
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          const jsonStr = cleanedResponse.slice(startIdx, endIdx + 1);
+          try {
+            parsed = JSON.parse(jsonStr);
+            console.log(`Successfully extracted JSON with ${parsed.length} picks`);
+          } catch (innerError) {
+            console.warn('Failed to parse extracted JSON:', innerError.message);
+          }
         }
       }
       
@@ -252,6 +353,29 @@ Respond with ONLY a JSON array of your best prop picks.
         return [];
       }
 
+      // 1.5. Get the correct game time from The Odds API (more accurate than BDL)
+      let actualGameTime = gameData.time || gameData.commence_time;
+      try {
+        const upcomingGames = await oddsService.getUpcomingGames(gameData.sport);
+        const normalizeTeam = (name) => (name || '').toLowerCase().replace(/[^a-z]/g, '');
+        const homeNorm = normalizeTeam(gameData.homeTeam);
+        const awayNorm = normalizeTeam(gameData.awayTeam);
+        
+        const matchedGame = upcomingGames.find(g => {
+          const gHome = normalizeTeam(g.home_team);
+          const gAway = normalizeTeam(g.away_team);
+          return (gHome.includes(homeNorm) || homeNorm.includes(gHome)) &&
+                 (gAway.includes(awayNorm) || awayNorm.includes(gAway));
+        });
+        
+        if (matchedGame?.commence_time) {
+          actualGameTime = matchedGame.commence_time;
+          console.log(`[Props] Found accurate game time: ${new Date(actualGameTime).toLocaleString('en-US', { timeZone: 'America/New_York' })} EST`);
+        }
+      } catch (timeError) {
+        console.warn('[Props] Could not fetch accurate game time, using provided time');
+      }
+
       // CRITICAL: Limit the number of props to prevent rate limiting
       // Filter to most common prop types and limit total number
       // Choose priority prop types per sport
@@ -333,8 +457,12 @@ Respond with ONLY a JSON array of your best prop picks.
         console.log('Fetching player stats for analysis (sport-aware)...');
         if (sportKey === 'baseball_mlb') {
           playerStatsText = await propPicksService.formatMLBPlayerStats(gameData.homeTeam, gameData.awayTeam);
+        } else if (sportKey === 'basketball_nba') {
+          // Fetch NBA player stats from Ball Don't Lie API
+          console.log('[Props] Fetching NBA player stats from Ball Don\'t Lie...');
+          playerStatsText = await formatNBAPlayerStats(gameData.homeTeam, gameData.awayTeam);
         } else {
-          // For NBA/NFL, we currently rely on odds and recent context; keep stats brief to avoid token overflow
+          // For NFL, we currently rely on odds and recent context; keep stats brief to avoid token overflow
           playerStatsText = `${gameData.awayTeam} at ${gameData.homeTeam} matchup context with current sportsbook prop lines. Focus on recent form and matchup tendencies implied by markets.`;
         }
         
@@ -359,8 +487,8 @@ Respond with ONLY a JSON array of your best prop picks.
         playerStatsText = `Analyzing ${gameData.homeTeam} vs ${gameData.awayTeam} matchup. Using available prop data for analysis.`;
       }
 
-      // 3. Create the prompt for OpenAI
-      const prompt = propPicksService.createPropPicksPrompt(formattedProps, playerStatsText);
+      // 3. Create the prompt for OpenAI (sport-aware)
+      const prompt = propPicksService.createPropPicksPrompt(formattedProps, playerStatsText, sportKey);
 
       // 4. Call the OpenAI API with retry logic for rate limits
       console.log('Calling OpenAI to generate prop picks...');
@@ -423,8 +551,9 @@ Respond with ONLY a JSON array of your best prop picks.
         return oddsOK;
       });
 
-      // Further filter by high confidence threshold - standard 0.7 confidence threshold
-      const highConf = validOdds.filter(p => p.confidence >= 0.7);
+      // Filter by confidence threshold - lowered to 0.55 since confidence now represents true win probability
+      // A 55% win probability on a -110 line still has positive EV
+      const highConf = validOdds.filter(p => p.confidence >= 0.55);
 
       // Sort by confidence (highest first) and take only the top 5 per game
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
@@ -437,6 +566,23 @@ Respond with ONLY a JSON array of your best prop picks.
         const leagueLabel = sportKey === 'basketball_nba' ? 'NBA'
           : sportKey === 'americanfootball_nfl' ? 'NFL'
           : 'MLB';
+        
+        // Calculate EV properly using confidence as estimated win probability
+        // EV% = (TrueProbability × DecimalOdds) - 1
+        const odds = pick.odds || 100;
+        const confidence = pick.confidence || 0.7;
+        
+        // Convert American odds to decimal odds
+        let decimalOdds;
+        if (odds < 0) {
+          decimalOdds = 1 + (100 / Math.abs(odds));
+        } else {
+          decimalOdds = 1 + (odds / 100);
+        }
+        
+        // Calculate EV as percentage
+        const calculatedEV = ((confidence * decimalOdds) - 1) * 100;
+        
         return {
           // Core fields from OpenAI
           player: pick.player || 'Unknown Player',
@@ -444,14 +590,14 @@ Respond with ONLY a JSON array of your best prop picks.
           prop: pick.prop || 'unknown',
           line: pick.line || '',
           bet: pick.bet || 'over',
-          odds: pick.odds || 100,
-          confidence: pick.confidence || 0.7,
-          ev: pick.ev || null,
+          odds: odds,
+          confidence: confidence,
+          ev: Math.round(calculatedEV * 10) / 10, // Round to 1 decimal place
           rationale: pick.rationale || pick.reasoning || 'Analysis not available',
           
           // Additional fields
           sport: leagueLabel,
-          time: propPicksService.formatGameTime(gameData.time || gameData.gameTime || gameData.commence_time),
+          time: propPicksService.formatGameTime(actualGameTime),
           
           // Keep the original pick string for backwards compatibility
           pick: pick.pick || `${pick.player} ${(pick.bet || 'OVER').toUpperCase()} ${pick.prop} ${pick.odds}`
@@ -493,16 +639,16 @@ Respond with ONLY a JSON array of your best prop picks.
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Filter the picks by confidence threshold (0.7), then cap each record's picks to 10 by confidence
+      // Filter the picks by confidence threshold (0.55 since confidence = win probability), then cap each record's picks to 10 by confidence
       const filteredData = data.map(record => {
-        const filtered = record.picks.filter(pick => pick.confidence >= 0.7);
+        const filtered = record.picks.filter(pick => pick.confidence >= 0.55);
         record.picks = filtered
           .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
           .slice(0, 10);
         return record;
       }).filter(record => record.picks.length > 0);
       
-      console.log(`After filtering for confidence >= 0.7, ${filteredData.length} records remain`);
+      console.log(`After filtering for confidence >= 0.55, ${filteredData.length} records remain`);
       
       return filteredData || [];
     } catch (error) {
