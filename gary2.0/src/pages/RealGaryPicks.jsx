@@ -33,91 +33,107 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Shared display component for Tale of the Tape
+// Shared display component for Tale of the Tape - Clean side-by-side format
 const TaleOfTapeDisplay = ({ homeShort, awayShort, statsData, injuries, narrative, accentColor }) => {
-  const sectionBox = {
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: '6px',
-    padding: '0.55rem 0.7rem',
-    marginBottom: '0.45rem'
-  };
-  
-  const sectionLabel = {
-    fontSize: '0.58rem',
-    fontWeight: 700,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    opacity: 0.4,
-    marginBottom: '0.3rem'
-  };
-  
   return (
-    <div style={{ lineHeight: 1.55, fontSize: '0.82rem' }}>
-      {/* Tale of the Tape Header */}
-      <div style={{ ...sectionLabel, marginBottom: '0.4rem' }}>Tale of the Tape</div>
-      
-      {/* Stats Grid */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr',
-        gap: '0.1rem 1rem',
-        marginBottom: '0.5rem',
-        padding: '0.3rem 0',
-        borderBottom: '1px solid rgba(255,255,255,0.08)'
-      }}>
-        {/* Headers */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', opacity: 0.5, fontWeight: 600, marginBottom: '0.1rem' }}>
-          <span style={{ minWidth: '55px' }}></span>
-          <span style={{ minWidth: '40px', textAlign: 'right', color: accentColor }}>{homeShort}</span>
-          <span style={{ width: '20px', textAlign: 'center', opacity: 0 }}>-</span>
-          <span style={{ minWidth: '40px', textAlign: 'left' }}>{awayShort}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', opacity: 0.5, fontWeight: 600, marginBottom: '0.1rem' }}>
-          <span style={{ minWidth: '55px' }}></span>
-          <span style={{ minWidth: '40px', textAlign: 'right', color: accentColor }}>{homeShort}</span>
-          <span style={{ width: '20px', textAlign: 'center', opacity: 0 }}>-</span>
-          <span style={{ minWidth: '40px', textAlign: 'left' }}>{awayShort}</span>
+    <div style={{ fontSize: '0.85rem', lineHeight: 1.6 }}>
+      {/* Tale of the Tape - Simple side by side */}
+      <div style={{ marginBottom: '0.8rem' }}>
+        {/* Team header row */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          marginBottom: '0.5rem',
+          paddingBottom: '0.4rem',
+          borderBottom: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <span style={{ flex: 1, color: accentColor, fontWeight: 600 }}>{homeShort}</span>
+          <span style={{ width: '70px', textAlign: 'center', opacity: 0.4, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>vs</span>
+          <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, opacity: 0.8 }}>{awayShort}</span>
         </div>
         
-        {/* Stats - split into two columns */}
+        {/* Stats rows */}
         {statsData.map((stat, idx) => (
-          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem', fontSize: '0.78rem' }}>
-            <span style={{ opacity: 0.4, minWidth: '55px' }}>{stat.name}</span>
+          <div key={idx} style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between',
+            marginBottom: '0.35rem',
+            alignItems: 'center'
+          }}>
             <span style={{ 
-              color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.5)',
-              fontWeight: stat.advantage === 'home' ? 600 : 400,
-              minWidth: '40px',
-              textAlign: 'right'
-            }}>{stat.home}</span>
-            <span style={{ width: '20px', textAlign: 'center', opacity: 0.25 }}>-</span>
+              flex: 1, 
+              color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.6)',
+              fontWeight: stat.advantage === 'home' ? 600 : 400
+            }}>
+              {stat.home}
+            </span>
             <span style={{ 
-              color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.5)',
-              fontWeight: stat.advantage === 'away' ? 600 : 400,
-              minWidth: '40px',
-              textAlign: 'left'
-            }}>{stat.away}</span>
+              width: '70px', 
+              textAlign: 'center', 
+              opacity: 0.4, 
+              fontSize: '0.75rem' 
+            }}>
+              {stat.name}
+            </span>
+            <span style={{ 
+              flex: 1, 
+              textAlign: 'right',
+              color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.6)',
+              fontWeight: stat.advantage === 'away' ? 600 : 400
+            }}>
+              {stat.away}
+            </span>
           </div>
         ))}
-      </div>
-      
-      {/* Injuries Row */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem', fontSize: '0.73rem' }}>
-        <div>
-          <span style={{ opacity: 0.4 }}>Injuries • </span>
-          <span style={{ color: accentColor, opacity: 0.9 }}>{homeShort}: </span>
-          <span style={{ color: injuries.home === 'None' ? 'rgba(255,255,255,0.6)' : '#f87171', fontWeight: 500 }}>{injuries.home}</span>
-        </div>
-        <div>
-          <span style={{ opacity: 0.6 }}>{awayShort}: </span>
-          <span style={{ color: injuries.away === 'None' ? 'rgba(255,255,255,0.6)' : '#f87171', fontWeight: 500 }}>{injuries.away}</span>
+        
+        {/* Injuries row */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          marginTop: '0.4rem',
+          paddingTop: '0.4rem',
+          borderTop: '1px solid rgba(255,255,255,0.06)'
+        }}>
+          <span style={{ 
+            flex: 1, 
+            fontSize: '0.78rem',
+            color: injuries.home === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
+          }}>
+            {injuries.home === 'None' ? '✓ Healthy' : injuries.home}
+          </span>
+          <span style={{ width: '70px', textAlign: 'center', opacity: 0.4, fontSize: '0.72rem' }}>Injuries</span>
+          <span style={{ 
+            flex: 1, 
+            textAlign: 'right',
+            fontSize: '0.78rem',
+            color: injuries.away === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
+          }}>
+            {injuries.away === 'None' ? '✓ Healthy' : injuries.away}
+          </span>
         </div>
       </div>
       
       {/* Gary's Take */}
       {narrative && (
-        <div style={{ ...sectionBox, borderColor: 'rgba(74, 222, 128, 0.15)', marginBottom: 0 }}>
-          <div style={{ ...sectionLabel, color: '#4ade80', opacity: 0.6 }}>Gary's Take</div>
-          <div style={{ opacity: 0.88, lineHeight: 1.55, fontSize: '0.82rem' }}>{narrative}</div>
+        <div style={{ 
+          border: '1px solid rgba(74, 222, 128, 0.15)',
+          borderRadius: '6px',
+          padding: '0.6rem 0.75rem'
+        }}>
+          <div style={{ 
+            fontSize: '0.6rem', 
+            fontWeight: 700, 
+            letterSpacing: '0.1em', 
+            textTransform: 'uppercase', 
+            color: '#4ade80', 
+            opacity: 0.6,
+            marginBottom: '0.35rem'
+          }}>
+            Gary's Take
+          </div>
+          <div style={{ opacity: 0.9, lineHeight: 1.6, fontSize: '0.82rem' }}>
+            {narrative}
+          </div>
         </div>
       )}
     </div>
