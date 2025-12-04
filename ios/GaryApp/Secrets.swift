@@ -1,10 +1,14 @@
 import Foundation
 
+// MARK: - App Secrets & Configuration
+
 enum Secrets {
+    /// Supabase project URL
     static let supabaseURL = URL(string: "https://***REMOVED***.supabase.co")!
+    
+    /// Supabase anonymous key (public, safe for client)
     static let supabaseAnonKey = "***REMOVED***"
-    // Public site base for web endpoints (privacy, terms, delete-account API)
+    
+    /// Website base URL for web endpoints
     static let siteBase = URL(string: "https://www.betwithgary.ai")!
 }
-
-

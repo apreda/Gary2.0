@@ -1,185 +1,308 @@
 import Foundation
 
-struct SupabaseAPI {
-    private static var baseURL: URL { Secrets.supabaseURL.appendingPathComponent("/rest/v1") }
+// MARK: - Supabase API Client
+
+enum SupabaseAPI {
+    
+    // MARK: - Configuration
+    
+    private static var baseURL: URL {
+        Secrets.supabaseURL.appendingPathComponent("/rest/v1")
+    }
+    
     private static var headers: [String: String] {
         [
             "apikey": Secrets.supabaseAnonKey,
             "Authorization": "Bearer \(Secrets.supabaseAnonKey)",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         ]
     }
-
+    
+    // MARK: - Date Utilities
+    
+    /// Current date in EST timezone (YYYY-MM-DD format)
     static func todayEST() -> String {
+        formatDateEST(Date())
+    }
+    
+    private static func yesterdayEST() -> String {
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        return formatDateEST(yesterday)
+    }
+    
+    private static func formatDateEST(_ date: Date) -> String {
         let tz = TimeZone(identifier: "America/New_York")!
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
-        let now = Date()
-        let comps = cal.dateComponents([.year, .month, .day], from: now)
-        let y = comps.year!, m = comps.month!, d = comps.day!
-        return String(format: "%04d-%02d-%02d", y, m, d)
+        let comps = cal.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", comps.year!, comps.month!, comps.day!)
     }
-
-    private static func yesterdayESTString() -> String {
-        let tz = TimeZone(identifier: "America/New_York")!
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = tz
-        let now = Date()
-        guard let yday = cal.date(byAdding: .day, value: -1, to: now) else { return todayEST() }
-        let c = cal.dateComponents([.year,.month,.day], from: yday)
-        return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
-    }
-
+    
     private static func isBefore10amEST() -> Bool {
         let tz = TimeZone(identifier: "America/New_York")!
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
-        let hour = cal.component(.hour, from: Date())
-        return hour < 10
+        return cal.component(.hour, from: Date()) < 10
     }
-
+    
+    /// Get NFL week start date (Monday) for a given date
+    private static func getNFLWeekStart(for date: Date = Date()) -> String {
+        let tz = TimeZone(identifier: "America/New_York")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        
+        let weekday = cal.component(.weekday, from: date)
+        // Sunday = 1, Monday = 2, etc. Find previous Monday.
+        let daysToSubtract = (weekday == 1) ? 6 : (weekday - 2)
+        
+        guard let monday = cal.date(byAdding: .day, value: -daysToSubtract, to: date) else {
+            return todayEST()
+        }
+        return formatDateEST(monday)
+    }
+    
+    // MARK: - Network Helpers
+    
+    private static func makeRequest(url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        return request
+    }
+    
+    private static func buildURL(table: String, query: [URLQueryItem]) -> URL {
+        let url = baseURL.appendingPathComponent(table)
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        components.queryItems = query
+        return components.url!
+    }
+    
+    // MARK: - Daily Picks (Non-NFL sports)
+    
+    /// Fetch daily picks for a specific date (excludes NFL)
     static func fetchDailyPicks(date: String) async throws -> [GaryPick] {
-        let url = baseURL.appendingPathComponent("daily_picks")
-        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-        comps.queryItems = [
-            .init(name: "select", value: "picks::text,date"),
-            .init(name: "date", value: "eq.\(date)")
-        ]
-        var req = URLRequest(url: comps.url!)
-        headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, res) = try await URLSession.shared.data(for: req)
-        guard let http = res as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        let url = buildURL(table: "daily_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "date", value: "eq.\(date)")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
-        guard let row = rows.first else { return [] }
-
-        if let arr = row.picksArray { return arr }
-        if let s = row.picksString, let json = s.data(using: .utf8) {
-            let any = try JSONSerialization.jsonObject(with: json) as? [[String: Any]] ?? []
-            return any.compactMap { GaryPick.from(dict: $0) }
+        guard let row = rows.first else {
+            // Fallback to yesterday before 10am EST
+            if isBefore10amEST() {
+                return try await fetchDailyPicks(date: yesterdayEST())
+            }
+            return []
         }
-        // Fallback to yesterday before 10am EST if no picks
-        if isBefore10amEST() {
-            return try await fetchDailyPicks(date: yesterdayESTString())
-        }
-        return []
+        
+        return parsePicksRow(row.picks)
     }
-
+    
+    // MARK: - Weekly NFL Picks
+    
+    /// Fetch NFL picks for the current week
+    static func fetchWeeklyNFLPicks() async throws -> [GaryPick] {
+        let weekStart = getNFLWeekStart()
+        let url = buildURL(table: "weekly_nfl_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,week_start,week_number,season"),
+            URLQueryItem(name: "week_start", value: "eq.\(weekStart)")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        
+        let rows = try JSONDecoder().decode([WeeklyNFLPicksRow].self, from: data)
+        
+        if let row = rows.first {
+            return parsePicksRow(row.picks)
+        }
+        
+        // Fallback: try previous week on Sunday/Monday
+        return try await fetchPreviousWeekNFLPicks()
+    }
+    
+    private static func fetchPreviousWeekNFLPicks() async throws -> [GaryPick] {
+        let tz = TimeZone(identifier: "America/New_York")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        
+        let weekday = cal.component(.weekday, from: Date())
+        guard weekday <= 2, // Sunday or Monday
+              let lastWeek = cal.date(byAdding: .day, value: -7, to: Date()) else {
+            return []
+        }
+        
+        let prevWeekStart = getNFLWeekStart(for: lastWeek)
+        let url = buildURL(table: "weekly_nfl_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,week_start,week_number,season"),
+            URLQueryItem(name: "week_start", value: "eq.\(prevWeekStart)")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        
+        let rows = try JSONDecoder().decode([WeeklyNFLPicksRow].self, from: data)
+        return rows.first.map { parsePicksRow($0.picks) } ?? []
+    }
+    
+    // MARK: - Combined Picks
+    
+    /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks
+    static func fetchAllPicks(date: String) async throws -> [GaryPick] {
+        async let dailyTask = fetchDailyPicks(date: date)
+        async let nflTask = fetchWeeklyNFLPicks()
+        
+        let dailyPicks = (try? await dailyTask) ?? []
+        let nflPicks = (try? await nflTask) ?? []
+        
+        // Filter out NFL from daily picks (they come from weekly_nfl_picks)
+        let nonNFLPicks = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" }
+        
+        return nonNFLPicks + nflPicks
+    }
+    
+    // MARK: - Prop Picks
+    
+    /// Fetch prop picks for a specific date
     static func fetchPropPicks(date: String) async throws -> [PropPick] {
-        let url = baseURL.appendingPathComponent("prop_picks")
-        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-        comps.queryItems = [
-            .init(name: "select", value: "picks,date"),
-            .init(name: "date", value: "eq.\(date)")
-        ]
-        var req = URLRequest(url: comps.url!)
-        headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        // Attempt exact date
-        do {
-            let (data, res) = try await URLSession.shared.data(for: req)
-            if let http = res as? HTTPURLResponse, http.statusCode == 200 {
-                let rows = try JSONDecoder().decode([PropPicksRow].self, from: data)
-                if let row = rows.first {
-                    if let arr = row.picksArray, !arr.isEmpty { return arr }
-                    if let s = row.picksString, !s.isEmpty, let json = s.data(using: .utf8) {
-                        let any = try JSONSerialization.jsonObject(with: json) as? [[String: Any]] ?? []
-                        let parsed = any.compactMap { PropPick.from(dict: $0) }
-                        if !parsed.isEmpty { return parsed }
-                    }
-                }
+        let url = buildURL(table: "prop_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "date", value: "eq.\(date)")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        
+        if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+            let rows = try JSONDecoder().decode([PropPicksRow].self, from: data)
+            if let row = rows.first, let picks = parsePropPicksRow(row.picks), !picks.isEmpty {
+                return picks
             }
-        } catch {}
-
-        // Fallback to yesterday (before 10am EST)
-        if isBefore10amEST() {
-            if let y = try? await fetchPropPicks(date: yesterdayESTString()), !y.isEmpty { return y }
         }
-
-        // Fallback to latest non-empty row (fetch a few and pick the first with content)
-        var latest = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-        latest.queryItems = [
-            .init(name: "select", value: "picks::text,date"),
-            .init(name: "order", value: "date.desc"),
-            .init(name: "limit", value: "5")
-        ]
-        var lreq = URLRequest(url: latest.url!)
-        headers.forEach { lreq.setValue($1, forHTTPHeaderField: $0) }
-        lreq.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (d2, r2) = try await URLSession.shared.data(for: lreq)
-        guard let http2 = r2 as? HTTPURLResponse, http2.statusCode == 200 else { return [] }
-        let rows2 = try JSONDecoder().decode([PropPicksRow].self, from: d2)
-        for row in rows2 {
-            if let arr = row.picksArray, !arr.isEmpty { return arr }
-            if let s = row.picksString, !s.isEmpty, let json = s.data(using: .utf8) {
-                let any = try JSONSerialization.jsonObject(with: json) as? [[String: Any]] ?? []
-                let parsed = any.compactMap { PropPick.from(dict: $0) }
-                if !parsed.isEmpty { return parsed }
+        
+        // Fallback to yesterday before 10am EST
+        if isBefore10amEST() {
+            if let yesterday = try? await fetchPropPicks(date: yesterdayEST()), !yesterday.isEmpty {
+                return yesterday
+            }
+        }
+        
+        // Fallback to latest non-empty row
+        return try await fetchLatestPropPicks()
+    }
+    
+    private static func fetchLatestPropPicks() async throws -> [PropPick] {
+        let url = buildURL(table: "prop_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "order", value: "date.desc"),
+            URLQueryItem(name: "limit", value: "5")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        
+        let rows = try JSONDecoder().decode([PropPicksRow].self, from: data)
+        for row in rows {
+            if let picks = parsePropPicksRow(row.picks), !picks.isEmpty {
+                return picks
             }
         }
         return []
     }
-
-    // MARK: - Billfold data (mirror website Billfold.jsx)
+    
+    // MARK: - Billfold (Results)
+    
+    /// Fetch game results with optional date filter
     static func fetchGameResults(since dateFilter: String?) async throws -> [GameResult] {
-        let url = baseURL.appendingPathComponent("game_results")
-        var reqURL: URL
+        var query = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "limit", value: "500")
+        ]
+        
         if let since = dateFilter, !since.isEmpty {
-            var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            comps.queryItems = [
-                .init(name: "select", value: "game_date,league,matchup,pick_text,result,odds,final_score"),
-                .init(name: "game_date", value: "gte.\(since)"),
-                .init(name: "order", value: "game_date.desc"),
-                .init(name: "limit", value: "500")
-            ]
-            reqURL = comps.url!
-        } else {
-            var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            comps.queryItems = [
-                .init(name: "select", value: "game_date,league,matchup,pick_text,result,odds,final_score"),
-                .init(name: "order", value: "game_date.desc"),
-                .init(name: "limit", value: "500")
-            ]
-            reqURL = comps.url!
+            query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
-        var req = URLRequest(url: reqURL)
-        headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, res) = try await URLSession.shared.data(for: req)
-        guard let http = res as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        return try JSONDecoder().decode([GameResult].self, from: data)
+        
+        let url = buildURL(table: "game_results", query: query)
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            print("GameResults fetch failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+        
+        // Debug: print raw response
+        if let jsonStr = String(data: data, encoding: .utf8) {
+            print("GameResults raw response (first 500 chars): \(String(jsonStr.prefix(500)))")
+        }
+        
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode([GameResult].self, from: data)
+        } catch {
+            print("GameResults decode error: \(error)")
+            return []
+        }
     }
-
+    
+    /// Fetch prop results with optional date filter
     static func fetchPropResults(since dateFilter: String?) async throws -> [PropResult] {
-        let url = baseURL.appendingPathComponent("prop_results")
-        var reqURL: URL
+        var query = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "limit", value: "500")
+        ]
+        
         if let since = dateFilter, !since.isEmpty {
-            var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            comps.queryItems = [
-                .init(name: "select", value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value,confidence"),
-                .init(name: "game_date", value: "gte.\(since)"),
-                .init(name: "order", value: "game_date.desc"),
-                .init(name: "limit", value: "500")
-            ]
-            reqURL = comps.url!
-        } else {
-            var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            comps.queryItems = [
-                .init(name: "select", value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value,confidence"),
-                .init(name: "order", value: "game_date.desc"),
-                .init(name: "limit", value: "500")
-            ]
-            reqURL = comps.url!
+            query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
-        var req = URLRequest(url: reqURL)
-        headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, res) = try await URLSession.shared.data(for: req)
-        guard let http = res as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        return try JSONDecoder().decode([PropResult].self, from: data)
+        
+        let url = buildURL(table: "prop_results", query: query)
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            print("PropResults fetch failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+        
+        // Debug: print raw response
+        if let jsonStr = String(data: data, encoding: .utf8) {
+            print("PropResults raw response (first 500 chars): \(String(jsonStr.prefix(500)))")
+        }
+        
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode([PropResult].self, from: data)
+        } catch {
+            print("PropResults decode error: \(error)")
+            return []
+        }
+    }
+    
+    // MARK: - Parsing Helpers
+    
+    private static func parsePicksRow(_ picks: PicksValue<GaryPick>?) -> [GaryPick] {
+        guard let picks = picks else { return [] }
+        
+        if let arr = picks.asArray { return arr }
+        if let str = picks.asString, let data = str.data(using: .utf8) {
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+            return json.compactMap { GaryPick.from(dict: $0) }
+        }
+        return []
+    }
+    
+    private static func parsePropPicksRow(_ picks: PicksValue<PropPick>?) -> [PropPick]? {
+        guard let picks = picks else { return nil }
+        
+        if let arr = picks.asArray { return arr }
+        if let str = picks.asString, !str.isEmpty, let data = str.data(using: .utf8) {
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+            return json.compactMap { PropPick.from(dict: $0) }
+        }
+        return nil
     }
 }
-
-

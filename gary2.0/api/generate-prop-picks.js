@@ -58,12 +58,12 @@ export default async function handler(req, res) {
     const dateParam = (req.query.date || estToday());
     const limit = Math.max(1, Math.min(25, parseInt(req.query.limit ?? '10', 10) || 10));
 
-    // Sports to process (default all)
-    const defaultSports = ['basketball_nba', 'americanfootball_nfl', 'icehockey_nhl'];
+    // Sports to process (default NBA and NFL)
+    const defaultSports = ['basketball_nba', 'americanfootball_nfl'];
     let sports = (req.query.sports
       ? String(req.query.sports).split(',').map(s => s.trim()).filter(Boolean)
       : defaultSports);
-    // Enforce: no NHL/MLB player props at this time
+    // Enforce: only NBA and NFL player props are supported
     const supportedPropSports = new Set(['basketball_nba', 'americanfootball_nfl']);
     const filteredSports = sports.filter(s => supportedPropSports.has(s));
     if (filteredSports.length !== sports.length) {

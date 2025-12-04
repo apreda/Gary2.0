@@ -462,6 +462,100 @@ PICK DECISION:
         statsSection += composeLine(gameData?.awayTeam || 'Away', a) + '\n\n';
       }
       
+      // 4.55. NBA-specific: inject Four Factors, standings, and top players
+      if ((gameData?.league === 'NBA' || gameData?.sport === 'nba' || gameData?.sport === 'basketball_nba')
+          && gameData?.statsReport) {
+        const sr = gameData.statsReport;
+        const sum = sr.seasonSummary || {};
+        const h = sum.home || {};
+        const a = sum.away || {};
+        const hAdv = h.adv || {};
+        const aAdv = a.adv || {};
+        const basics = sr.basics || {};
+        const hb = basics.home || {};
+        const ab = basics.away || {};
+        const fmtNum = (v, d = 2) => (typeof v === 'number' && isFinite(v)) ? Number(v).toFixed(d) : 'N/A';
+        const fmtPct = (v) => {
+          if (typeof v !== 'number' || !isFinite(v)) return 'N/A';
+          const pct = v <= 1 ? v * 100 : v;
+          return `${pct.toFixed(1)}%`;
+        };
+        
+        // Team Basics (Record, Streak, etc.)
+        statsSection += 'NBA TEAM BASICS:\n';
+        const basicsLine = (label, b) => {
+          const parts = [];
+          if (b.record) parts.push(`Record: ${b.record}`);
+          if (b.homeRec) parts.push(`Home: ${b.homeRec}`);
+          if (b.awayRec) parts.push(`Away: ${b.awayRec}`);
+          if (b.streak) parts.push(`Streak: ${b.streak}`);
+          return parts.length ? `- ${label} — ${parts.join(', ')}` : '';
+        };
+        const homeLine = basicsLine(gameData?.homeTeam || 'Home', hb);
+        const awayLine = basicsLine(gameData?.awayTeam || 'Away', ab);
+        if (homeLine) statsSection += homeLine + '\n';
+        if (awayLine) statsSection += awayLine + '\n';
+        
+        // Four Factors proxies
+        statsSection += 'NBA TEAM SEASON METRICS (Four Factors):\n';
+        const composeNba = (label, m, adv) => {
+          const parts = [];
+          if (typeof m.effectiveFgPct === 'number') parts.push(`eFG%: ${fmtPct(m.effectiveFgPct)}`);
+          if (typeof m.turnoverRate === 'number') parts.push(`TOV Rate: ${fmtPct(m.turnoverRate)}`);
+          if (typeof m.offensiveRebRate === 'number') parts.push(`ORB: ${fmtNum(m.offensiveRebRate, 1)}`);
+          if (typeof m.freeThrowRate === 'number') parts.push(`FT Rate: ${fmtPct(m.freeThrowRate)}`);
+          // Advanced metrics from nested adv object
+          if (typeof adv.trueShootingPct === 'number') parts.push(`TS%: ${fmtPct(adv.trueShootingPct)}`);
+          if (typeof adv.offensiveRating === 'number') parts.push(`ORtg: ${fmtNum(adv.offensiveRating, 1)}`);
+          if (typeof adv.defensiveRating === 'number') parts.push(`DRtg: ${fmtNum(adv.defensiveRating, 1)}`);
+          if (typeof adv.netRating === 'number') parts.push(`NetRtg: ${fmtNum(adv.netRating, 1)}`);
+          return `- ${label} — ${parts.join(', ')}`;
+        };
+        statsSection += composeNba(gameData?.homeTeam || 'Home', h, hAdv) + '\n';
+        statsSection += composeNba(gameData?.awayTeam || 'Away', a, aAdv) + '\n';
+        
+        // Top Players with season averages
+        const tp = sr.topPlayers || {};
+        const renderPlayer = (p) => {
+          const parts = [`${p.name}`];
+          if (p.position) parts[0] += ` (${p.position})`;
+          const stats = [];
+          if (typeof p.ptsPerGame === 'number') stats.push(`${fmtNum(p.ptsPerGame, 1)} PPG`);
+          if (typeof p.rebPerGame === 'number') stats.push(`${fmtNum(p.rebPerGame, 1)} RPG`);
+          if (typeof p.astPerGame === 'number') stats.push(`${fmtNum(p.astPerGame, 1)} APG`);
+          if (typeof p.minutesPerGame === 'number') stats.push(`${fmtNum(p.minutesPerGame, 1)} MPG`);
+          // Advanced metrics
+          if (p.advanced) {
+            if (typeof p.advanced.usagePct === 'number') stats.push(`USG%: ${fmtPct(p.advanced.usagePct)}`);
+            if (typeof p.advanced.netRating === 'number') stats.push(`NetRtg: ${fmtNum(p.advanced.netRating, 1)}`);
+          }
+          // Injuries
+          if (p.injuryStatus) stats.push(`INJURY: ${p.injuryStatus}`);
+          // League leader info
+          if (p.leagueLeader) {
+            const leaderStats = Object.entries(p.leagueLeader)
+              .filter(([k, v]) => v?.rank && v.rank <= 30)
+              .map(([k, v]) => `#${v.rank} ${k.toUpperCase()}`)
+              .slice(0, 2);
+            if (leaderStats.length) stats.push(`(${leaderStats.join(', ')})`);
+          }
+          return `${parts[0]}: ${stats.join(', ')}`;
+        };
+        if (Array.isArray(tp.home) && tp.home.length) {
+          statsSection += `Top Players (${gameData?.homeTeam || 'Home'}):\n`;
+          tp.home.slice(0, 5).forEach((p, i) => {
+            statsSection += `  ${i + 1}. ${renderPlayer(p)}\n`;
+          });
+        }
+        if (Array.isArray(tp.away) && tp.away.length) {
+          statsSection += `Top Players (${gameData?.awayTeam || 'Away'}):\n`;
+          tp.away.slice(0, 5).forEach((p, i) => {
+            statsSection += `  ${i + 1}. ${renderPlayer(p)}\n`;
+          });
+        }
+        statsSection += '\n';
+      }
+      
       // 4.6. NCAAB-specific: inject Four Factors and top players (season)
       if ((gameData?.league === 'NCAAB' || gameData?.sport === 'ncaab' || gameData?.sport === 'basketball_ncaab')
           && gameData?.statsReport) {
