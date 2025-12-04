@@ -743,29 +743,66 @@ const FETCHERS = {
 
   // ===== RECENT FORM =====
   RECENT_FORM: async (bdlSport, home, away, season) => {
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const dateParams = {
-      start_date: thirtyDaysAgo.toISOString().split('T')[0],
-      end_date: today.toISOString().split('T')[0],
-      per_page: 10
-    };
-    const [homeGames, awayGames] = await Promise.all([
-      ballDontLieService.getGames(bdlSport, { team_ids: [home.id], ...dateParams }),
-      ballDontLieService.getGames(bdlSport, { team_ids: [away.id], ...dateParams })
-    ]);
+    console.log(`[Stat Router] Fetching RECENT_FORM for ${away.name} @ ${home.name} (${bdlSport})`);
     
-    return {
-      category: 'Recent Form',
-      home: {
-        team: home.full_name || home.name,
-        last_10: formatRecentGames(homeGames, home.name)
-      },
-      away: {
-        team: away.full_name || away.name,
-        last_10: formatRecentGames(awayGames, away.name)
-      }
-    };
+    // NFL uses seasons[] and team_ids[], not date ranges
+    const isNFL = bdlSport === 'americanfootball_nfl';
+    const isNCAA = bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab';
+    
+    let params;
+    if (isNFL || isNCAA) {
+      // For football, use season filter - get all games this season
+      params = {
+        seasons: [season],
+        per_page: 20 // Get more games to ensure we have enough
+      };
+    } else {
+      // For other sports, use date range
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      params = {
+        start_date: thirtyDaysAgo.toISOString().split('T')[0],
+        end_date: today.toISOString().split('T')[0],
+        per_page: 20
+      };
+    }
+    
+    try {
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], ...params }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], ...params })
+      ]);
+      
+      console.log(`[Stat Router] Got ${homeGames?.length || 0} games for ${home.name}, ${awayGames?.length || 0} for ${away.name}`);
+      
+      // Sort by date descending (most recent first)
+      const sortByDate = (a, b) => new Date(b.date) - new Date(a.date);
+      const sortedHomeGames = (homeGames || []).sort(sortByDate);
+      const sortedAwayGames = (awayGames || []).sort(sortByDate);
+      
+      const homeForm = formatRecentGames(sortedHomeGames, home.name);
+      const awayForm = formatRecentGames(sortedAwayGames, away.name);
+      
+      return {
+        category: 'Recent Form (Last 5 Games)',
+        home: {
+          team: home.full_name || home.name,
+          ...homeForm
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awayForm
+        },
+        note: 'These are REAL game results from this season. Use them in your analysis.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching recent form:`, error.message);
+      return {
+        category: 'Recent Form',
+        home: { team: home.full_name || home.name, record: 'N/A', note: 'Data unavailable' },
+        away: { team: away.full_name || away.name, record: 'N/A', note: 'Data unavailable' }
+      };
+    }
   },
 
   // ===== NFL SPECIFIC =====
@@ -1064,22 +1101,70 @@ async function fetchTopPlayersForTeam(bdlSport, team, season) {
 
 function formatRecentGames(games, teamName) {
   if (!games || games.length === 0) {
-    return { record: 'N/A', games: [] };
+    return { record: 'N/A', games: [], note: 'No recent game data available' };
   }
   
-  let wins = 0, losses = 0;
-  const results = games.slice(0, 10).map(g => {
-    const isHome = g.home_team?.name === teamName || g.home_team === teamName;
+  // Filter to only completed games (status = 'Final')
+  const completedGames = games.filter(g => 
+    g.status === 'Final' || 
+    g.home_team_score !== null || 
+    g.visitor_team_score !== null
+  );
+  
+  if (completedGames.length === 0) {
+    return { record: 'N/A', games: [], note: 'No completed games found' };
+  }
+  
+  let wins = 0, losses = 0, ties = 0;
+  const gameDetails = completedGames.slice(0, 5).map(g => {
+    // Handle both nested object and string team names
+    const homeTeamName = g.home_team?.name || g.home_team?.full_name || g.home_team;
+    const awayTeamName = g.visitor_team?.name || g.visitor_team?.full_name || g.away_team?.name || g.away_team;
+    
+    // Normalize for comparison
+    const normalizedTeamName = String(teamName).toLowerCase();
+    const normalizedHome = String(homeTeamName).toLowerCase();
+    const normalizedAway = String(awayTeamName).toLowerCase();
+    
+    const isHome = normalizedHome.includes(normalizedTeamName) || normalizedTeamName.includes(normalizedHome);
+    
     const teamScore = isHome ? g.home_team_score : g.visitor_team_score;
     const oppScore = isHome ? g.visitor_team_score : g.home_team_score;
-    const won = teamScore > oppScore;
-    if (won) wins++; else losses++;
-    return won ? 'W' : 'L';
+    const opponent = isHome ? awayTeamName : homeTeamName;
+    
+    let result = 'T';
+    if (teamScore > oppScore) {
+      wins++;
+      result = 'W';
+    } else if (oppScore > teamScore) {
+      losses++;
+      result = 'L';
+    } else {
+      ties++;
+    }
+    
+    // Format date
+    const gameDate = g.date ? new Date(g.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    
+    return {
+      result,
+      score: `${teamScore}-${oppScore}`,
+      opponent: opponent || 'Unknown',
+      location: isHome ? 'Home' : 'Away',
+      date: gameDate,
+      week: g.week || null,
+      display: `${result} ${teamScore}-${oppScore} ${isHome ? 'vs' : '@'} ${opponent}${gameDate ? ` (${gameDate})` : ''}`
+    };
   });
   
+  const record = ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
+  const streak = gameDetails.slice(0, 5).map(g => g.result).join('');
+  
   return {
-    record: `${wins}-${losses}`,
-    last_10: results.join('')
+    record,
+    last_5: streak,
+    games: gameDetails,
+    summary: gameDetails.map(g => g.display).join(', ')
   };
 }
 
