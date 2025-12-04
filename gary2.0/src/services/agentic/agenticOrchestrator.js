@@ -493,24 +493,18 @@ Key Injuries           [names]              [names]
 
 The arrow (← or →) shows which side has the advantage for that stat.
 
-The Edge
-🚨 **STORY MODE - NO STAT VALUES** 🚨
-Since the stats are displayed above in Tale of the Tape, REFERENCE stats by NAME but DON'T repeat values.
+Gary's Take
+🚨 **ONE UNIFIED SECTION - STORY MODE** 🚨
+Since stats are displayed above in Tale of the Tape, write ONE concise narrative section.
+
+RULES:
+- Reference stats by NAME not values (users see the numbers above)
+- Keep it SHORT: 2-3 paragraphs max, ~100-150 words total
+- Name key players and explain the matchup
+- End with a confident closing sentence that includes the pick
 
 ❌ DON'T: "Boston's +4.1 net rating (119.1 offense, 115.0 defense) vs Washington's -10.3..."
-✅ DO: "Boston's net rating edge is massive here - we're talking a double-digit gap in overall efficiency."
-
-❌ DON'T: "The Celtics shoot 51.3% eFG while Washington shoots 56.3%..."
-✅ DO: "Washington can shoot it when hot, but their defensive woes cancel out any offensive edge."
-
-Write 2-3 paragraphs of pure storytelling:
-- Name players and their roles
-- Explain game flow and matchup dynamics  
-- Paint the picture of HOW this game unfolds
-- Use phrases like "their offensive edge", "the net rating gap", "look at the records" - users can see the numbers above
-
-The Verdict
-[1-2 confident closing sentences. End with "Lock it in: [Pick]"]
+✅ DO: "The efficiency gap here is enormous - Boston's net rating edge tells the whole story."
 
 ═══════════════════════════════════════════════════════════════════════
 EXAMPLE OUTPUT:
@@ -525,15 +519,12 @@ Def Rating           115.0      ←          119.8
 Net Rating            +4.1      ←          -10.3
 Key Injuries      Tatum (OUT)               None
 
-The Edge
-Everyone's chasing the "Celtics without Tatum" narrative, but that's exactly where the value lives. Washington's record tells you everything - this team hasn't beaten anyone good all season.
+Gary's Take
+Everyone's chasing the "Celtics without Tatum" angle, but that's exactly where the value hides. Look at Washington's record - this team hasn't beaten anyone good all season, and their defensive rating shows why.
 
-With Tatum sidelined, Derrick White and Payton Pritchard step into expanded roles. But here's the thing - Boston's defensive identity doesn't change when one guy sits. This is a system team that grinds opponents into dust through discipline and length. Washington's offense, meanwhile, lives and dies by Poole and Kuzma getting hot. When the shots fall, you see those random wins over Milwaukee and Atlanta. When they don't? Blowouts.
+With Tatum out, Derrick White and Payton Pritchard step up. But Boston's identity is defensive discipline, and that doesn't change when one star sits. Meanwhile, Washington lives and dies by Poole and Kuzma getting hot. The net rating gap isn't an accident - it's a massive efficiency mismatch that compounds over 48 minutes.
 
-The pace mismatch seals it. Washington wants to run and gun, but Boston controls tempo. Fewer possessions, more half-court grinding, and the Celtics' defensive edge compounds over 48 minutes. That net rating gap isn't an accident.
-
-The Verdict
-The market is overreacting to Tatum's absence. Washington can't guard and can't execute under pressure. Lock it in: Celtics -10.
+The market is overreacting. Washington can't guard and can't execute under pressure. Lock it in: Celtics -10.
 
 ═══════════════════════════════════════════════════════════════════════
 
