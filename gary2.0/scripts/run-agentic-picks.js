@@ -29,7 +29,7 @@ const { picksService } = await import('../src/services/picksService.js');
 
 // Configuration
 const SPORT_CONFIG = {
-  nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', maxGames: 5 }, // Testing: 1 game
+  nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', maxGames: 10 }, // Testing: 1 game
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈' }
@@ -175,7 +175,7 @@ async function main() {
         const game = finalGames[i];
         
         // Skip specific teams if configured (for testing)
-        const SKIP_TEAMS = ['Celtics', 'Wizards', '76ers', 'Warriors']; // Skip already-picked games
+        const SKIP_TEAMS = []; // Empty - let deduplication handle existing picks
         const shouldSkip = SKIP_TEAMS.some(team => 
           game.home_team?.toLowerCase().includes(team.toLowerCase()) ||
           game.away_team?.toLowerCase().includes(team.toLowerCase())

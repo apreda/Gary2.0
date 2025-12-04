@@ -823,7 +823,10 @@ function RealGaryPicks() {
               type: pick.type || 'Moneyline',
               trapAlert: pick.trapAlert || false,
               revenge: pick.revenge || false,
-              momentum: pick.momentum || 0
+              momentum: pick.momentum || 0,
+              // CRITICAL: Include agentic system fields
+              statsUsed: pick.statsUsed || [],
+              commence_time: pick.commence_time || null
             };
 
             return simplePick;
