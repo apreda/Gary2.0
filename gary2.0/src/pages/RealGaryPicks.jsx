@@ -86,11 +86,10 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         }
       }
       
-      // Parse stats lines (contain ← or → arrows)
+      // Parse stats lines (contain ← or → arrows) - improved regex to handle +/- values
       if (inTape && (trimmedLine.includes('←') || trimmedLine.includes('→'))) {
-        // Pattern: "Record                  12-9           ←          3-17"
-        // Or: "Off Rating             119.1           ←        109.4"
-        const arrowMatch = trimmedLine.match(/^([A-Za-z\s]+?)\s{2,}([\d.+\-]+|None|N\/A)\s*(←|→)\s*([\d.+\-]+|None|N\/A)/);
+        // Pattern handles: "Net Rating              +4.1           ←        -10.3"
+        const arrowMatch = trimmedLine.match(/^([A-Za-z\s]+?)\s{2,}([+\-]?[\d.]+|None|N\/A)\s*(←|→)\s*([+\-]?[\d.]+|None|N\/A)/);
         if (arrowMatch) {
           const [, statName, leftVal, arrow, rightVal] = arrowMatch;
           result.stats.push({
@@ -102,14 +101,22 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         }
       }
       
-      // Parse Key Injuries line (no arrow, just two "None" values)
-      if (inTape && trimmedLine.startsWith('Key Injuries') && !trimmedLine.includes('←') && !trimmedLine.includes('→')) {
-        const injuryMatch = trimmedLine.match(/Key Injuries\s+(None|[\w\s,]+)\s+(None|[\w\s,]+)/i);
+      // Parse Key Injuries line (no arrow, flexible spacing)
+      if (inTape && trimmedLine.toLowerCase().startsWith('key injuries')) {
+        const injuryMatch = trimmedLine.match(/Key Injuries\s+(None|[^\s].*?)\s{2,}(None|[^\s].*?)$/i);
         if (injuryMatch) {
           result.stats.push({
-            name: 'Key Injuries',
+            name: 'Injuries',
             home: injuryMatch[1].trim(),
             away: injuryMatch[2].trim(),
+            advantage: 'neutral'
+          });
+        } else {
+          // Fallback: just show "None" for both if can't parse
+          result.stats.push({
+            name: 'Injuries',
+            home: 'None',
+            away: 'None',
             advantage: 'neutral'
           });
         }
@@ -131,9 +138,12 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         result.edge = verdictSplit[1].trim();
         result.verdict = verdictSplit[2].trim();
       } else {
-        // Use last sentence as verdict
+        // Use last 2 sentences as verdict
         const sentences = result.edge.split(/(?<=[.!])\s+/);
-        if (sentences.length > 2) {
+        if (sentences.length > 3) {
+          result.verdict = sentences.slice(-2).join(' ');
+          result.edge = sentences.slice(0, -2).join(' ');
+        } else if (sentences.length > 1) {
           result.verdict = sentences.pop();
           result.edge = sentences.join(' ');
         }
@@ -154,22 +164,15 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
     );
   }
   
-  const hexToRgba = (hex, alpha) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-  
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.75rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.6rem' }}>
       {/* Tale of the Tape Header */}
       <div style={{
         textAlign: 'center',
-        fontSize: '0.7rem',
-        letterSpacing: '0.2em',
+        fontSize: '0.65rem',
+        letterSpacing: '0.25em',
         textTransform: 'uppercase',
-        opacity: 0.5,
+        opacity: 0.4,
         fontWeight: 600
       }}>
         Tale of the Tape
@@ -177,28 +180,28 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
       
       {/* Stats Table */}
       <div style={{
-        background: 'rgba(0,0,0,0.3)',
-        borderRadius: '12px',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 100%)',
+        borderRadius: '10px',
+        border: '1px solid rgba(255,255,255,0.1)',
         overflow: 'hidden'
       }}>
         {/* Team Headers */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 90px 90px',
-          padding: '0.6rem 0.75rem',
-          background: 'rgba(255,255,255,0.03)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          fontSize: '0.7rem',
+          gridTemplateColumns: '1fr 85px 85px',
+          padding: '0.5rem 0.6rem',
+          background: 'rgba(255,255,255,0.05)',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          fontSize: '0.68rem',
           fontWeight: 700,
           textTransform: 'uppercase',
-          letterSpacing: '0.05em'
+          letterSpacing: '0.08em'
         }}>
-          <div style={{ opacity: 0.5 }}>Stat</div>
+          <div style={{ opacity: 0.4 }}>Stat</div>
           <div style={{ textAlign: 'center', color: accentColor }}>
             {tapeData.teams.home?.split(' ').pop() || 'HOME'}
           </div>
-          <div style={{ textAlign: 'center', color: '#888' }}>
+          <div style={{ textAlign: 'center', opacity: 0.7 }}>
             {tapeData.teams.away?.split(' ').pop() || 'AWAY'}
           </div>
         </div>
@@ -209,36 +212,42 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
             key={idx}
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 90px 90px',
-              padding: '0.5rem 0.75rem',
-              borderBottom: idx < tapeData.stats.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-              fontSize: '0.78rem',
+              gridTemplateColumns: '1fr 85px 85px',
+              padding: '0.45rem 0.6rem',
+              borderBottom: idx < tapeData.stats.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+              fontSize: '0.82rem',
               alignItems: 'center'
             }}
           >
-            <div style={{ opacity: 0.7, fontSize: '0.72rem' }}>{stat.name}</div>
+            <div style={{ opacity: 0.6, fontSize: '0.72rem' }}>{stat.name}</div>
             <div style={{ 
               textAlign: 'center',
               fontWeight: stat.advantage === 'home' ? 700 : 400,
-              color: stat.advantage === 'home' ? '#4ade80' : 'inherit',
+              color: stat.advantage === 'home' ? '#4ade80' : (stat.advantage === 'away' ? '#ef4444' : 'inherit'),
+              opacity: stat.advantage === 'neutral' ? 0.7 : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '0.25rem'
+              gap: '0.2rem',
+              fontSize: '0.85rem'
             }}>
-              {stat.advantage === 'home' && <span style={{ color: '#4ade80', fontSize: '0.65rem' }}>▲</span>}
+              {stat.advantage === 'home' && <span style={{ fontSize: '0.6rem' }}>▲</span>}
+              {stat.advantage === 'away' && <span style={{ fontSize: '0.6rem' }}>▼</span>}
               {stat.home}
             </div>
             <div style={{ 
               textAlign: 'center',
               fontWeight: stat.advantage === 'away' ? 700 : 400,
-              color: stat.advantage === 'away' ? '#f87171' : 'inherit',
+              color: stat.advantage === 'away' ? '#4ade80' : (stat.advantage === 'home' ? '#ef4444' : 'inherit'),
+              opacity: stat.advantage === 'neutral' ? 0.7 : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '0.25rem'
+              gap: '0.2rem',
+              fontSize: '0.85rem'
             }}>
-              {stat.advantage === 'away' && <span style={{ color: '#f87171', fontSize: '0.65rem' }}>▲</span>}
+              {stat.advantage === 'away' && <span style={{ fontSize: '0.6rem' }}>▲</span>}
+              {stat.advantage === 'home' && <span style={{ fontSize: '0.6rem' }}>▼</span>}
               {stat.away}
             </div>
           </div>
@@ -291,23 +300,42 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         </button>
       </div>
       
-      {/* Content Area */}
+      {/* Content Area with scroll fade */}
       <div style={{
         flex: 1,
-        overflowY: 'auto',
-        padding: '0.75rem',
-        background: 'rgba(0,0,0,0.2)',
-        borderRadius: '10px',
-        border: '1px solid rgba(255,255,255,0.05)',
-        fontSize: '0.85rem',
-        lineHeight: 1.6,
-        minHeight: '80px'
+        position: 'relative',
+        minHeight: '70px',
+        overflow: 'hidden'
       }}>
-        {activeSection === 'edge' ? (
-          tapeData.edge || 'Analysis loading...'
-        ) : (
-          tapeData.verdict || 'Verdict loading...'
-        )}
+        <div style={{
+          height: '100%',
+          overflowY: 'auto',
+          padding: '0.65rem 0.75rem',
+          paddingBottom: '1.5rem',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.15) 100%)',
+          borderRadius: '10px',
+          border: '1px solid rgba(255,255,255,0.06)',
+          fontSize: '0.84rem',
+          lineHeight: 1.65,
+          color: 'rgba(255,255,255,0.9)'
+        }}>
+          {activeSection === 'edge' ? (
+            tapeData.edge || 'Analysis loading...'
+          ) : (
+            tapeData.verdict || 'Verdict loading...'
+          )}
+        </div>
+        {/* Scroll fade indicator */}
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '30px',
+          background: 'linear-gradient(transparent, rgba(20,20,20,0.95))',
+          borderRadius: '0 0 10px 10px',
+          pointerEvents: 'none'
+        }} />
       </div>
     </div>
   );
