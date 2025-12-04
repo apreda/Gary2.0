@@ -274,7 +274,10 @@ async function storeDailyPicksInDatabase(picks) {
         confidence: openAIOutput.confidence || pick.confidence,
         superstition: openAIOutput.superstition || false,
         // Include sport for filtering
-        sport: pick.sport
+        sport: pick.sport,
+        // Include agentic system fields (CRITICAL - was missing!)
+        statsUsed: pick.statsUsed || [],
+        commence_time: pick.commence_time || null
       };
       
       // Add the generated pick ID

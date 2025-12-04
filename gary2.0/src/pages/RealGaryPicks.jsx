@@ -41,8 +41,12 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
   const parseRationale = (text) => {
     if (!text) return null;
     
+    // Use team names from pick object (more reliable than parsing)
     const result = {
-      teams: { left: '', right: '' },
+      teams: { 
+        left: pick?.homeTeam || '', 
+        right: pick?.awayTeam || '' 
+      },
       stats: [],
       injuries: { left: 'None', right: 'None' },
       narrative: '',
@@ -66,16 +70,6 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
         inTape = false;
         inNarrative = true;
         continue;
-      }
-      
-      // Extract team names
-      if (inTape && !trimmed.includes('→') && !trimmed.includes('←') && trimmed.length > 5 && !trimmed.toLowerCase().includes('injur') && !trimmed.toLowerCase().includes('record') && !trimmed.toLowerCase().includes('rating')) {
-        const teamMatch = trimmed.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s{2,}([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/);
-        if (teamMatch && !result.teams.left) {
-          result.teams.left = teamMatch[1].trim();
-          result.teams.right = teamMatch[2].trim();
-          continue;
-        }
       }
       
       // Parse stats
