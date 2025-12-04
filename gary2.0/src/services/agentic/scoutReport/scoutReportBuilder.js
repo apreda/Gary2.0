@@ -295,16 +295,37 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       const home = findTeam(teams, homeTeam);
       const away = findTeam(teams, awayTeam);
       
+      console.log(`[Scout Report] Looking for injuries - Home: ${homeTeam} (ID: ${home?.id}), Away: ${awayTeam} (ID: ${away?.id})`);
+      
       const teamIds = [];
       if (home) teamIds.push(home.id);
       if (away) teamIds.push(away.id);
       
       if (teamIds.length > 0) {
         const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
+        console.log(`[Scout Report] BDL returned ${injuries?.length || 0} total injuries for teams ${teamIds.join(', ')}`);
+        
+        // Filter by team - check multiple possible team ID locations
         bdlInjuries = {
-          home: injuries?.filter(i => i.player?.team?.id === home?.id || i.team_id === home?.id) || [],
-          away: injuries?.filter(i => i.player?.team?.id === away?.id || i.team_id === away?.id) || []
+          home: injuries?.filter(i => 
+            i.player?.team?.id === home?.id || 
+            i.player?.team_id === home?.id || 
+            i.team_id === home?.id
+          ) || [],
+          away: injuries?.filter(i => 
+            i.player?.team?.id === away?.id || 
+            i.player?.team_id === away?.id || 
+            i.team_id === away?.id
+          ) || []
         };
+        
+        console.log(`[Scout Report] BDL injuries filtered - Home: ${bdlInjuries.home.length}, Away: ${bdlInjuries.away.length}`);
+        if (bdlInjuries.home.length > 0) {
+          console.log(`[Scout Report] Home injuries:`, bdlInjuries.home.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`));
+        }
+        if (bdlInjuries.away.length > 0) {
+          console.log(`[Scout Report] Away injuries:`, bdlInjuries.away.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`));
+        }
       }
     }
     
@@ -476,10 +497,12 @@ function formatInjuryReport(homeTeam, awayTeam, injuries) {
   const awayQuestionable = injuries.away?.filter(i => i.status === 'Questionable') || [];
   
   const formatPlayer = (i) => {
-    const name = `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim() || 'Unknown';
-    const pos = i.player?.position_abbreviation || i.player?.position || '';
-    const reason = i.comment ? ` - ${i.comment.split('.')[0]}` : '';
-    return `  • ${name} (${pos})${reason}`;
+    const name = `${i.player?.first_name || i.firstName || ''} ${i.player?.last_name || i.lastName || ''}`.trim() || i.name || 'Unknown';
+    const pos = i.player?.position_abbreviation || i.player?.position || i.position || '';
+    // BDL uses 'description', Perplexity may use 'comment' or 'injury'
+    const reason = i.description || i.comment || i.injury || '';
+    const shortReason = reason ? ` - ${reason.split('.')[0].substring(0, 50)}` : '';
+    return `  • ${name}${pos ? ` (${pos})` : ''}${shortReason}`;
   };
   
   // Home team injuries
