@@ -219,12 +219,12 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
           borderTop: '1px solid rgba(74, 222, 128, 0.12)'
         }}>
           <div style={{ 
-            fontSize: '0.55rem', 
+            fontSize: '0.7rem', 
             fontWeight: 700, 
             letterSpacing: '0.1em', 
             textTransform: 'uppercase', 
             color: '#4ade80', 
-            opacity: 0.5,
+            opacity: 0.6,
             marginBottom: '0.25rem'
           }}>Gary's Take</div>
           <div style={{ opacity: 0.88, lineHeight: 1.55, fontSize: '0.8rem' }}>{data.narrative}</div>
@@ -1457,10 +1457,9 @@ function RealGaryPicks() {
                                       display: 'flex',
                                       flexDirection: 'column'
                                     }}>
-                                      {/* Back header - minimal height (MATCHING FREE PICK) */}
-                                      <div style={{ marginBottom: '0.5rem', flex: '0 0 auto' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: accentColor, margin: 0 }}>Gary's Analysis</h3>
+                                      {/* Back header - just Back button, no title for more space */}
+                                      <div style={{ marginBottom: '0.3rem', flex: '0 0 auto' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
