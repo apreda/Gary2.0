@@ -143,30 +143,47 @@ const TaleOfTapeDisplay = ({ homeShort, awayShort, statsData, injuries, narrativ
 // Tale of the Tape Component - Clean inline format
 const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
   
-  // If pick has structured stats field, use that directly (new format)
-  if (pick?.stats?.home && pick?.stats?.away) {
+  // If pick has structured stats array (new format), use that directly
+  if (pick?.stats && Array.isArray(pick.stats) && pick.stats.length > 0) {
     const homeShort = pick.homeTeam?.split(' ').pop() || 'Home';
     const awayShort = pick.awayTeam?.split(' ').pop() || 'Away';
-    const home = pick.stats.home;
-    const away = pick.stats.away;
     
-    // Build stats array from structured data
-    const statsData = [];
-    if (home.record) statsData.push({ name: 'Record', home: home.record, away: away.record, advantage: 'compare' });
-    if (home.offRtg) statsData.push({ name: 'Off Rtg', home: home.offRtg, away: away.offRtg, advantage: home.offRtg > away.offRtg ? 'home' : 'away' });
-    if (home.defRtg) statsData.push({ name: 'Def Rtg', home: home.defRtg, away: away.defRtg, advantage: home.defRtg < away.defRtg ? 'home' : 'away' }); // Lower is better
-    if (home.netRtg !== undefined) statsData.push({ name: 'Net Rtg', home: home.netRtg > 0 ? `+${home.netRtg}` : home.netRtg, away: away.netRtg > 0 ? `+${away.netRtg}` : away.netRtg, advantage: home.netRtg > away.netRtg ? 'home' : 'away' });
-    if (home.pace) statsData.push({ name: 'Pace', home: home.pace, away: away.pace, advantage: 'neutral' });
-    if (home.ppg) statsData.push({ name: 'PPG', home: home.ppg, away: away.ppg, advantage: home.ppg > away.ppg ? 'home' : 'away' });
-    if (home.oppPpg) statsData.push({ name: 'Opp PPG', home: home.oppPpg, away: away.oppPpg, advantage: home.oppPpg < away.oppPpg ? 'home' : 'away' }); // Lower is better
+    // Determine advantage for each stat
+    const statsData = pick.stats.map(stat => {
+      let advantage = 'neutral';
+      const name = stat.name?.toLowerCase() || '';
+      const homeVal = parseFloat(stat.home) || 0;
+      const awayVal = parseFloat(stat.away) || 0;
+      
+      if (name.includes('def') || name.includes('opp')) {
+        // Lower is better for defensive stats
+        advantage = homeVal < awayVal ? 'home' : (awayVal < homeVal ? 'away' : 'neutral');
+      } else if (name.includes('record') || name.includes('injur')) {
+        advantage = 'neutral'; // Don't highlight these
+      } else {
+        // Higher is better for offensive stats
+        advantage = homeVal > awayVal ? 'home' : (awayVal > homeVal ? 'away' : 'neutral');
+      }
+      
+      return { name: stat.name, home: stat.home, away: stat.away, advantage };
+    });
     
-    // Extract narrative from rationale (everything after TALE OF THE TAPE section)
+    // Find injuries
+    const injuryStat = pick.stats.find(s => s.name?.toLowerCase().includes('injur'));
+    const injuries = { 
+      home: injuryStat?.home || 'None', 
+      away: injuryStat?.away || 'None' 
+    };
+    
+    // Filter out injuries from main stats (show separately)
+    const mainStats = statsData.filter(s => !s.name?.toLowerCase().includes('injur'));
+    
+    // Extract narrative from rationale
     let narrative = rationale || '';
     const takeMatch = narrative.match(/(?:Gary's Take|The Edge|The Verdict)\s*([\s\S]*)/i);
     if (takeMatch) {
       narrative = takeMatch[1].replace(/(?:The Edge|The Verdict|Gary's Take)/gi, '').trim();
     } else if (narrative.includes('TALE OF THE TAPE')) {
-      // Remove the Tale of the Tape section from narrative
       narrative = narrative.replace(/TALE OF THE TAPE[\s\S]*?(?=Gary's Take|The Edge|$)/i, '').trim();
     }
     
@@ -174,8 +191,8 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
       <TaleOfTapeDisplay 
         homeShort={homeShort}
         awayShort={awayShort}
-        statsData={statsData}
-        injuries={{ home: home.injuries || 'None', away: away.injuries || 'None' }}
+        statsData={mainStats}
+        injuries={injuries}
         narrative={narrative}
         accentColor={accentColor}
       />
