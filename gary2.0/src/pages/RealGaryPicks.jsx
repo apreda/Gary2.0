@@ -33,7 +33,296 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Tale of the Tape Component - Wide format with vs in middle, Gary's pick on RIGHT
+// Tabbed Analysis Component - Stats tab and Gary's Take tab
+const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
+  const [activeTab, setActiveTab] = useState('take'); // 'stats' or 'take'
+  
+  // Parse the rationale
+  const parseRationale = (text) => {
+    if (!text) return null;
+    
+    const result = {
+      teams: { left: '', right: '' },
+      stats: [],
+      injuries: { left: 'None', right: 'None' },
+      narrative: '',
+      lockLine: ''
+    };
+    
+    const lines = text.split('\n');
+    let inTape = false;
+    let inNarrative = false;
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      if (trimmed.includes('TALE OF THE TAPE')) {
+        inTape = true;
+        continue;
+      }
+      
+      if (trimmed.match(/^(Gary's Take|The Edge|The Verdict)$/i)) {
+        inTape = false;
+        inNarrative = true;
+        continue;
+      }
+      
+      // Extract team names
+      if (inTape && !trimmed.includes('→') && !trimmed.includes('←') && trimmed.length > 5 && !trimmed.toLowerCase().includes('injur') && !trimmed.toLowerCase().includes('record') && !trimmed.toLowerCase().includes('rating')) {
+        const teamMatch = trimmed.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s{2,}([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/);
+        if (teamMatch && !result.teams.left) {
+          result.teams.left = teamMatch[1].trim();
+          result.teams.right = teamMatch[2].trim();
+          continue;
+        }
+      }
+      
+      // Parse stats
+      if (inTape && (trimmed.includes('→') || trimmed.includes('←'))) {
+        const statMatch = trimmed.match(/^([A-Za-z\s]+?)\s{2,}([^\s→←]+)\s*(→|←)\s*([^\s]+)/);
+        if (statMatch) {
+          const [, name, leftVal, arrow, rightVal] = statMatch;
+          result.stats.push({
+            name: name.trim(),
+            left: leftVal.trim(),
+            right: rightVal.trim(),
+            advantage: arrow === '→' ? 'right' : 'left'
+          });
+        }
+      }
+      
+      // Parse injuries
+      if (inTape && trimmed.toLowerCase().includes('injur')) {
+        const injMatch = trimmed.match(/(?:Key\s+)?Injuries?\s+(.+?)\s{2,}(.+)/i);
+        if (injMatch) {
+          result.injuries.left = injMatch[1].trim() || 'None';
+          result.injuries.right = injMatch[2].trim() || 'None';
+        }
+      }
+      
+      if (inNarrative && trimmed) {
+        result.narrative += (result.narrative ? ' ' : '') + trimmed;
+      }
+    }
+    
+    // Extract lock line
+    const lockMatch = result.narrative.match(/(Lock[^.!]*[.!])\s*$/i);
+    if (lockMatch) {
+      result.lockLine = lockMatch[1];
+      result.narrative = result.narrative.replace(lockMatch[0], '').trim();
+    }
+    
+    return result;
+  };
+  
+  const data = parseRationale(rationale);
+  
+  if (!data) {
+    return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{rationale}</div>;
+  }
+  
+  // Determine team display order (Gary's pick on left)
+  const pickStr = pick?.pick?.toLowerCase() || '';
+  const leftTeam = data.teams.left || 'Team 1';
+  const rightTeam = data.teams.right || 'Team 2';
+  const garyPickedRight = pickStr.includes(rightTeam.toLowerCase()) || 
+                          pickStr.includes(rightTeam.split(' ').pop()?.toLowerCase());
+  
+  const displayLeft = garyPickedRight ? rightTeam : leftTeam;
+  const displayRight = garyPickedRight ? leftTeam : rightTeam;
+  
+  const getStatVal = (stat, side) => {
+    if (garyPickedRight) return side === 'left' ? stat.right : stat.left;
+    return side === 'left' ? stat.left : stat.right;
+  };
+  
+  const getAdvantage = (stat, side) => {
+    const origAdv = stat.advantage;
+    if (garyPickedRight) {
+      const swapped = origAdv === 'right' ? 'left' : 'right';
+      return swapped === side;
+    }
+    return origAdv === side;
+  };
+  
+  const injLeft = garyPickedRight ? data.injuries.right : data.injuries.left;
+  const injRight = garyPickedRight ? data.injuries.left : data.injuries.right;
+  
+  // Get all stats Gary used (from statsUsed field or parsed)
+  const allStats = pick?.statsUsed || [];
+  
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Tab Bar */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '0.5rem', 
+        marginBottom: '0.75rem',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        paddingBottom: '0.5rem'
+      }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveTab('stats'); }}
+          style={{
+            padding: '0.4rem 0.8rem',
+            fontSize: '0.7rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            background: activeTab === 'stats' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255,255,255,0.05)',
+            color: activeTab === 'stats' ? '#4ade80' : 'rgba(255,255,255,0.5)'
+          }}
+        >
+          📊 Stats ({allStats.length || data.stats.length})
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveTab('take'); }}
+          style={{
+            padding: '0.4rem 0.8rem',
+            fontSize: '0.7rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            background: activeTab === 'take' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255,255,255,0.05)',
+            color: activeTab === 'take' ? '#4ade80' : 'rgba(255,255,255,0.5)'
+          }}
+        >
+          💬 Gary's Take
+        </button>
+      </div>
+      
+      {/* Tab Content */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {activeTab === 'stats' ? (
+          /* STATS TAB - Full Tale of the Tape */
+          <div style={{ fontSize: '0.82rem', lineHeight: 1.5 }}>
+            {/* Team Header */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              marginBottom: '0.5rem',
+              paddingBottom: '0.3rem',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              fontSize: '0.75rem',
+              fontWeight: 600
+            }}>
+              <span style={{ flex: 1, color: '#4ade80' }}>{displayLeft}</span>
+              <span style={{ width: '90px', textAlign: 'center', opacity: 0.35, fontSize: '0.65rem' }}>VS</span>
+              <span style={{ flex: 1, textAlign: 'right', opacity: 0.7 }}>{displayRight}</span>
+            </div>
+            
+            {/* Stats from rationale */}
+            {data.stats.map((stat, i) => (
+              <div key={i} style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                marginBottom: '0.3rem',
+                fontSize: '0.8rem'
+              }}>
+                <span style={{ 
+                  flex: 1,
+                  color: getAdvantage(stat, 'left') ? '#4ade80' : 'rgba(255,255,255,0.55)',
+                  fontWeight: getAdvantage(stat, 'left') ? 600 : 400
+                }}>{getStatVal(stat, 'left')}</span>
+                <span style={{ width: '90px', textAlign: 'center', opacity: 0.4, fontSize: '0.7rem' }}>{stat.name}</span>
+                <span style={{ 
+                  flex: 1, 
+                  textAlign: 'right',
+                  color: getAdvantage(stat, 'right') ? '#4ade80' : 'rgba(255,255,255,0.55)',
+                  fontWeight: getAdvantage(stat, 'right') ? 600 : 400
+                }}>{getStatVal(stat, 'right')}</span>
+              </div>
+            ))}
+            
+            {/* Injuries */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              marginTop: '0.4rem',
+              paddingTop: '0.4rem',
+              borderTop: '1px solid rgba(255,255,255,0.08)',
+              fontSize: '0.75rem'
+            }}>
+              <span style={{ 
+                flex: 1, 
+                color: injLeft === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171' 
+              }}>{injLeft === 'None' ? '✓ Healthy' : injLeft}</span>
+              <span style={{ width: '90px', textAlign: 'center', opacity: 0.35, fontSize: '0.68rem' }}>Injuries</span>
+              <span style={{ 
+                flex: 1, 
+                textAlign: 'right',
+                color: injRight === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
+              }}>{injRight === 'None' ? '✓ Healthy' : injRight}</span>
+            </div>
+            
+            {/* Stats Gary Requested (from agentic system) */}
+            {allStats.length > 0 && (
+              <div style={{ 
+                marginTop: '0.8rem', 
+                paddingTop: '0.6rem', 
+                borderTop: '1px solid rgba(74, 222, 128, 0.15)'
+              }}>
+                <div style={{ 
+                  fontSize: '0.6rem', 
+                  fontWeight: 600, 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.08em',
+                  color: '#4ade80',
+                  opacity: 0.6,
+                  marginBottom: '0.4rem'
+                }}>Stats Gary Analyzed</div>
+                <div style={{ 
+                  display: 'flex', 
+                  flexWrap: 'wrap', 
+                  gap: '0.3rem'
+                }}>
+                  {allStats.map((stat, i) => (
+                    <span key={i} style={{
+                      fontSize: '0.6rem',
+                      padding: '0.2rem 0.4rem',
+                      background: 'rgba(74, 222, 128, 0.1)',
+                      color: 'rgba(74, 222, 128, 0.8)',
+                      borderRadius: '3px',
+                      fontWeight: 500
+                    }}>{stat.replace(/_/g, ' ')}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* GARY'S TAKE TAB - Full narrative */
+          <div style={{ fontSize: '0.85rem', lineHeight: 1.65 }}>
+            <div style={{ opacity: 0.92 }}>
+              {data.narrative || rationale}
+            </div>
+            {data.lockLine && (
+              <div style={{ 
+                marginTop: '0.8rem', 
+                paddingTop: '0.6rem',
+                borderTop: '1px solid rgba(74, 222, 128, 0.15)'
+              }}>
+                <span style={{ color: '#4ade80', fontWeight: 600, fontSize: '0.9rem' }}>
+                  {data.lockLine}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Tale of the Tape Component - Wide format with vs in middle (LEGACY - kept for fallback)
 const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
   
   // Parse stats and narrative from rationale
@@ -1478,9 +1767,9 @@ function RealGaryPicks() {
                                         marginBottom: '0.5rem'
                                       }}>
                                         {pick.rationale ? (
-                                          // Use Tale of the Tape component for new format (or if pick has stats field)
-                                          (pick.stats || pick.rationale.includes('TALE OF THE TAPE')) ? (
-                                            <TaleOfTheTape rationale={pick.rationale} accentColor={accentColor} pick={pick} />
+                                          // Use Tabbed Analysis component for new format
+                                          (pick.statsUsed || pick.rationale.includes('TALE OF THE TAPE')) ? (
+                                            <TabbedAnalysis rationale={pick.rationale} accentColor={accentColor} pick={pick} />
                                           ) : pick.rationale.includes('•') ? (
                                             // Already has bullets, just display
                                             <div style={{ whiteSpace: 'pre-wrap' }}>{pick.rationale}</div>
