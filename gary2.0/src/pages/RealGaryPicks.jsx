@@ -295,7 +295,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
           </div>
           
           {/* Overlay Content */}
-          <div style={{ flex: 1, overflowY: 'auto', fontSize: '0.82rem', lineHeight: 1.5 }}>
+          <div style={{ flex: 1, overflowY: 'auto', fontSize: '0.82rem', lineHeight: 1.5, paddingBottom: '1rem' }}>
             {/* Team Header */}
             <div style={{ 
               display: 'flex', 
