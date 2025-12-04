@@ -21,10 +21,12 @@ export default function GaryProps() {
   const navigate = useNavigate();
 
   // State for prop picks and UI state
-  const [picks, setPicks] = useState([]);
+  const [allPicks, setAllPicks] = useState([]); // All picks from database
+  const [picks, setPicks] = useState([]); // Filtered picks for display
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [flippedCards, setFlippedCards] = useState({});
+  const [selectedSport, setSelectedSport] = useState('NBA'); // Default to NBA
 
   useEffect(() => {
     if (user) console.log('GaryProps: User subscription status:', subscriptionStatus);
@@ -33,6 +35,16 @@ export default function GaryProps() {
   useEffect(() => {
     if (!planLoading) loadPicks();
   }, [planLoading, subscriptionStatus, reloadKey]);
+
+  // Re-filter picks when sport selection changes
+  useEffect(() => {
+    if (allPicks.length > 0) {
+      const filteredPicks = allPicks
+        .filter(p => (p.sport || p.league || 'NBA').toUpperCase() === selectedSport)
+        .slice(0, 10);
+      setPicks(filteredPicks);
+    }
+  }, [selectedSport, allPicks]);
 
   const loadPicks = async () => {
     setLoading(true);
@@ -90,12 +102,18 @@ export default function GaryProps() {
         console.log('No prop picks found for today; awaiting server-side generation.');
       }
 
-      // Always display only the top 10 picks across any records
-      const cappedForDisplay = processedPicks
-        .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
-        .slice(0, 10);
+      // Store all picks, sorted by confidence
+      const sortedPicks = processedPicks
+        .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)));
 
-      setPicks(cappedForDisplay);
+      setAllPicks(sortedPicks);
+      
+      // Filter by selected sport and cap at 10
+      const filteredPicks = sortedPicks
+        .filter(p => (p.sport || p.league || 'NBA').toUpperCase() === selectedSport)
+        .slice(0, 10);
+      
+      setPicks(filteredPicks);
     } catch (err) {
       console.error('Error in loadPicks:', err);
       setError('Unable to load prop picks. Please try refreshing the page.');
@@ -161,10 +179,36 @@ export default function GaryProps() {
           </p>
         </div>
         
-        {/* Sport limitations notice - always shown */}
+        {/* Sport Tabs */}
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex rounded-lg p-1 bg-[#1a1a1a] border border-[#b8953f]/20">
+            <button
+              onClick={() => setSelectedSport('NBA')}
+              className={`px-6 py-2.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                selectedSport === 'NBA'
+                  ? 'bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black shadow-lg'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              🏀 NBA
+            </button>
+            <button
+              onClick={() => setSelectedSport('NFL')}
+              className={`px-6 py-2.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                selectedSport === 'NFL'
+                  ? 'bg-gradient-to-r from-[#b8953f] to-[#d4af37] text-black shadow-lg'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              🏈 NFL
+            </button>
+          </div>
+        </div>
+        
+        {/* Sport info notice */}
         <div className="text-center mb-6">
-          <span className="inline-block px-4 py-2 border border-[#b8953f]/50 rounded-full text-[#b8953f] text-sm">
-            Player props available for NBA, NFL & NHL — MLB returns in March
+          <span className="inline-block px-4 py-2 border border-[#b8953f]/30 rounded-full text-gray-400 text-sm">
+            {selectedSport === 'NBA' ? 'NBA player props updated daily' : 'NFL player props updated weekly (Thu-Mon)'}
           </span>
         </div>
       </div>
@@ -199,7 +243,14 @@ export default function GaryProps() {
               </div>
             ) : picks.length === 0 ? (
               <div className="flex justify-center items-center min-h-[30vh]">
-                <div className="text-gray-300 text-xl">No prop picks available for today.</div>
+                <div className="text-center">
+                  <div className="text-gray-300 text-xl mb-2">No {selectedSport} prop picks available.</div>
+                  <p className="text-gray-500 text-sm">
+                    {selectedSport === 'NFL' 
+                      ? 'NFL props are generated for Thursday-Monday games.' 
+                      : 'Check back later for today\'s NBA props.'}
+                  </p>
+                </div>
               </div>
             ) : (
               <>
