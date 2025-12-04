@@ -50,7 +50,11 @@ export async function analyzeGame(game, sport, options = {}) {
   try {
     // Step 1: Build the scout report (Level 1 context)
     console.log('[Orchestrator] Building scout report...');
-    const scoutReport = await buildScoutReport(game, sport);
+    const scoutReportData = await buildScoutReport(game, sport);
+    
+    // Handle both old (string) and new (object) formats
+    const scoutReport = typeof scoutReportData === 'string' ? scoutReportData : scoutReportData.text;
+    const injuries = typeof scoutReportData === 'object' ? scoutReportData.injuries : null;
     
     // Step 2: Get the constitution for this sport
     const constitution = getConstitution(sport);
@@ -63,6 +67,11 @@ export async function analyzeGame(game, sport, options = {}) {
     
     // Step 5: Run the agent loop
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options);
+    
+    // Add injuries to result for storage
+    if (injuries) {
+      result.injuries = injuries;
+    }
     
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`\n[Orchestrator] Analysis complete in ${elapsed}s`);
