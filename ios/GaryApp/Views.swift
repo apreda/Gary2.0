@@ -1071,22 +1071,51 @@ enum Formatters {
         return words.count > 1 ? String(words.last!) : team
     }
     
-    /// Split pick text into (team/spread, odds) - e.g., "Boston Celtics -10 -110" → ("Boston Celtics -10", "-110")
+    /// Split pick text into (team/spread, odds) and shorten team name
+    /// e.g., "Dallas Cowboys ML +145" → ("Cowboys ML", "+145")
     static func splitPickAndOdds(_ pick: String?) -> (String, String) {
         guard let pick = pick, !pick.isEmpty else { return ("", "") }
         
-        // Look for odds pattern at the end: -110, +150, etc.
-        let pattern = #"(.+?)\s+([-+]\d{3})$"#
+        // Look for odds pattern at the end: -110, +150, -7.5, etc.
+        let pattern = #"(.+?)\s+([-+]\d+\.?\d*)$"#
+        var pickPart = pick
+        var oddsPart = ""
+        
         if let regex = try? NSRegularExpression(pattern: pattern),
            let match = regex.firstMatch(in: pick, range: NSRange(pick.startIndex..., in: pick)) {
             if let pickRange = Range(match.range(at: 1), in: pick),
                let oddsRange = Range(match.range(at: 2), in: pick) {
-                return (String(pick[pickRange]).trimmingCharacters(in: .whitespaces), 
-                        String(pick[oddsRange]))
+                pickPart = String(pick[pickRange]).trimmingCharacters(in: .whitespaces)
+                oddsPart = String(pick[oddsRange])
             }
         }
         
-        // Fallback: no odds found, return full pick
-        return (pick, "")
+        // Shorten team names in the pick part (e.g., "Dallas Cowboys" → "Cowboys")
+        let shortenedPick = shortenTeamNamesInPick(pickPart)
+        
+        return (shortenedPick, oddsPart)
+    }
+    
+    /// Shorten team names within a pick string
+    private static func shortenTeamNamesInPick(_ pick: String) -> String {
+        // Common city names to remove
+        let cities = ["Dallas", "Detroit", "Los Angeles", "LA", "New York", "NY", "Boston", "Washington", 
+                      "Golden State", "San Francisco", "San Antonio", "New Orleans", "Oklahoma City", "OKC",
+                      "Minnesota", "Milwaukee", "Miami", "Memphis", "Indiana", "Houston", "Denver", 
+                      "Cleveland", "Chicago", "Charlotte", "Brooklyn", "Atlanta", "Phoenix", "Portland",
+                      "Sacramento", "Toronto", "Utah", "Orlando", "Philadelphia", "Cincinnati", "Baltimore",
+                      "Pittsburgh", "Kansas City", "Las Vegas", "Seattle", "Tampa Bay", "Green Bay",
+                      "New England", "Jacksonville", "Tennessee", "Arizona", "Carolina", "Buffalo"]
+        
+        var result = pick
+        for city in cities {
+            // Remove city name if followed by a space and more text
+            let pattern = "\\b\(city)\\s+"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
+            }
+        }
+        return result.trimmingCharacters(in: .whitespaces)
     }
 }
+
