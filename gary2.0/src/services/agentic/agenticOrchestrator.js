@@ -696,22 +696,44 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
   // Try to find JSON in the response
   const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonMatch) {
+    let jsonStr = jsonMatch[1];
     try {
-      const parsed = JSON.parse(jsonMatch[1]);
+      const parsed = JSON.parse(jsonStr);
       return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
     } catch (e) {
       console.warn('[Orchestrator] Failed to parse JSON from code block:', e.message);
+      // Try to fix common issues - remove stats array if it's causing problems
+      try {
+        const withoutStats = jsonStr.replace(/"stats"\s*:\s*\[[\s\S]*?\],?/g, '');
+        const parsed = JSON.parse(withoutStats);
+        console.log('[Orchestrator] Parsed JSON after removing stats field');
+        return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
+      } catch (e2) {
+        console.warn('[Orchestrator] Still failed after removing stats:', e2.message);
+      }
     }
   }
   
   // Try to find raw JSON object
   const rawJsonMatch = content.match(/\{[\s\S]*?"pick"[\s\S]*?\}/);
   if (rawJsonMatch) {
+    let jsonStr = rawJsonMatch[0];
     try {
-      const parsed = JSON.parse(rawJsonMatch[0]);
+      const parsed = JSON.parse(jsonStr);
       return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
     } catch (e) {
       console.warn('[Orchestrator] Failed to parse raw JSON:', e.message);
+      // Try to fix common issues
+      try {
+        const withoutStats = jsonStr.replace(/"stats"\s*:\s*\[[\s\S]*?\],?/g, '');
+        const parsed = JSON.parse(withoutStats);
+        console.log('[Orchestrator] Parsed JSON after removing stats field');
+        return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
+      } catch (e2) {
+        console.warn('[Orchestrator] Still failed after removing stats:', e2.message);
+        // Log a snippet of the problematic JSON
+        console.log('[Orchestrator] JSON snippet:', jsonStr.substring(0, 500));
+      }
     }
   }
   
