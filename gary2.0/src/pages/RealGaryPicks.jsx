@@ -102,18 +102,47 @@ function RealGaryPicks() {
       const eastern = getEasternDate();
       let queryDate = eastern.dateString; // Always use today's EST date
 
+      // Fetch daily picks (NBA, NCAAB, etc.)
       const { data, error: fetchError } = await supabase
         .from('daily_picks')
         .select('*')
         .eq('date', queryDate)
         .maybeSingle();
 
+      // Fetch weekly NFL picks (persists all week)
+      const getNFLWeekStart = () => {
+        const d = new Date();
+        const day = d.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        d.setDate(d.getDate() + diff);
+        return d.toISOString().split('T')[0];
+      };
+      
+      const { data: nflData } = await supabase
+        .from('weekly_nfl_picks')
+        .select('picks')
+        .eq('week_start', getNFLWeekStart())
+        .eq('season', new Date().getFullYear())
+        .maybeSingle();
+
       const currentDate = queryDate;
 
       let picksArray = [];
+      
+      // Add daily picks
       if (data && data.picks) {
-        picksArray = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
-
+        const dailyPicks = typeof data.picks === 'string' ? JSON.parse(data.picks) : data.picks;
+        // Filter out NFL from daily picks (we get NFL from weekly table)
+        picksArray = dailyPicks.filter(p => p.league !== 'NFL');
+      }
+      
+      // Add NFL picks from weekly table
+      if (nflData && nflData.picks) {
+        const nflPicks = typeof nflData.picks === 'string' ? JSON.parse(nflData.picks) : nflData.picks;
+        picksArray = [...picksArray, ...nflPicks];
+      }
+      
+      if (picksArray.length > 0) {
         picksArray = picksArray
           .filter(pick => {
             if (pick.id && pick.id.includes('emergency')) return false;

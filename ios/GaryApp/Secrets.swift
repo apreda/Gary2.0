@@ -1,10 +1,14 @@
 import Foundation
 
+// MARK: - App Secrets & Configuration
+
 enum Secrets {
+    /// Supabase project URL
     static let supabaseURL = URL(string: "https://xuttubsfgdcjfgmskcol.supabase.co")!
+    
+    /// Supabase anonymous key (public, safe for client)
     static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1dHR1YnNmZ2RjamZnbXNrY29sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4OTY4MDQsImV4cCI6MjA1OTQ3MjgwNH0.wppXQAUHQXoD0z5wbjy93_0KYMREPufl_BCtb4Ugd40"
-    // Public site base for web endpoints (privacy, terms, delete-account API)
+    
+    /// Website base URL for web endpoints
     static let siteBase = URL(string: "https://www.betwithgary.ai")!
 }
-
-

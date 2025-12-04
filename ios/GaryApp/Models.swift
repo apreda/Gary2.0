@@ -1,53 +1,56 @@
 import Foundation
 
-struct DailyPicksRow: Decodable {
-    let date: String
-    let picks: PicksValue?
+// MARK: - Generic Picks Value Decoder
+// Handles both JSON array and stringified JSON from Supabase
 
-    enum PicksValue: Decodable {
-        case array([GaryPick])
-        case string(String)
-        init(from decoder: Decoder) throws {
-            let c = try decoder.singleValueContainer()
-            if let arr = try? c.decode([GaryPick].self) {
-                self = .array(arr)
-            } else if let str = try? c.decode(String.self) {
-                self = .string(str)
-            } else {
-                self = .string("[]")
-            }
+enum PicksValue<T: Decodable>: Decodable {
+    case array([T])
+    case string(String)
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let arr = try? container.decode([T].self) {
+            self = .array(arr)
+        } else if let str = try? container.decode(String.self) {
+            self = .string(str)
+        } else {
+            self = .string("[]")
         }
     }
+    
+    var asArray: [T]? {
+        if case let .array(arr) = self { return arr }
+        return nil
+    }
+    
+    var asString: String? {
+        if case let .string(str) = self { return str }
+        return nil
+    }
+}
 
-    var picksArray: [GaryPick]? { if case let .array(a) = picks { a } else { nil } }
-    var picksString: String? { if case let .string(s) = picks { s } else { nil } }
+// MARK: - Database Row Models
+
+struct DailyPicksRow: Decodable {
+    let date: String
+    let picks: PicksValue<GaryPick>?
 }
 
 struct PropPicksRow: Decodable {
     let date: String
-    let picks: PicksValue?
-
-    enum PicksValue: Decodable {
-        case array([PropPick])
-        case string(String)
-        init(from decoder: Decoder) throws {
-            let c = try decoder.singleValueContainer()
-            if let arr = try? c.decode([PropPick].self) {
-                self = .array(arr)
-            } else if let str = try? c.decode(String.self) {
-                self = .string(str)
-            } else {
-                self = .string("[]")
-            }
-        }
-    }
-
-    var picksArray: [PropPick]? { if case let .array(a) = picks { a } else { nil } }
-    var picksString: String? { if case let .string(s) = picks { s } else { nil } }
+    let picks: PicksValue<PropPick>?
 }
 
+struct WeeklyNFLPicksRow: Decodable {
+    let week_start: String
+    let week_number: Int?
+    let season: Int?
+    let picks: PicksValue<GaryPick>?
+}
+
+// MARK: - Pick Models
+
 struct GaryPick: Identifiable, Codable {
-    var id: String { pick_id ?? UUID().uuidString }
     let pick_id: String?
     let pick: String?
     let rationale: String?
@@ -58,7 +61,10 @@ struct GaryPick: Identifiable, Codable {
     let awayTeam: String?
     let type: String?
     let trapAlert: Bool?
-
+    
+    var id: String { pick_id ?? UUID().uuidString }
+    
+    /// Parse from dictionary (for manual JSON parsing)
     static func from(dict: [String: Any]) -> GaryPick? {
         GaryPick(
             pick_id: dict["pick_id"] as? String,
@@ -76,7 +82,6 @@ struct GaryPick: Identifiable, Codable {
 }
 
 struct PropPick: Identifiable, Codable {
-    var id: String { "\(team ?? player ?? "prop")-\(prop ?? "")-\(odds ?? "")" }
     let player: String?
     let team: String?
     let prop: String?
@@ -84,20 +89,24 @@ struct PropPick: Identifiable, Codable {
     let odds: String?
     let confidence: Double?
     let analysis: String?
-
+    
+    var id: String {
+        "\(team ?? player ?? "prop")-\(prop ?? "")-\(odds ?? "")"
+    }
+    
+    /// Parse from dictionary (for manual JSON parsing)
     static func from(dict: [String: Any]) -> PropPick? {
         PropPick(
             player: dict["player"] as? String,
             team: dict["team"] as? String,
             prop: dict["prop"] as? String,
             bet: dict["bet"] as? String,
-            odds: (dict["odds"] as? String) ?? (dict["odds"] as? NSNumber).map { $0.stringValue },
+            odds: (dict["odds"] as? String) ?? (dict["odds"] as? NSNumber)?.stringValue,
             confidence: (dict["confidence"] as? NSNumber)?.doubleValue,
             analysis: (dict["analysis"] as? String) ?? (dict["rationale"] as? String)
         )
     }
 }
-
 
 // MARK: - Billfold (Results) Models
 
@@ -107,8 +116,12 @@ struct GameResult: Decodable {
     let matchup: String?
     let pick_text: String?
     let result: String?
-    let odds: String?
+    let odds: StringOrNumber?
     let final_score: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case game_date, league, matchup, pick_text, result, odds, final_score
+    }
 }
 
 struct PropResult: Decodable {
@@ -118,10 +131,32 @@ struct PropResult: Decodable {
     let pick_text: String?
     let prop_type: String?
     let bet: String?
-    let line_value: String?
+    let line_value: StringOrNumber?
     let result: String?
-    let odds: String?
-    let actual_value: String?
+    let odds: StringOrNumber?
+    let actual_value: StringOrNumber?
     let confidence: Double?
+    
+    enum CodingKeys: String, CodingKey {
+        case game_date, matchup, player_name, pick_text, prop_type, bet
+        case line_value, result, odds, actual_value, confidence
+    }
 }
 
+/// Helper to decode values that could be String or Number in JSON
+struct StringOrNumber: Decodable {
+    let value: String
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let str = try? container.decode(String.self) {
+            value = str
+        } else if let int = try? container.decode(Int.self) {
+            value = String(int)
+        } else if let double = try? container.decode(Double.self) {
+            value = String(double)
+        } else {
+            value = ""
+        }
+    }
+}

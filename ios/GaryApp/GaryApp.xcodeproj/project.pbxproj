@@ -3,23 +3,31 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		11082D2682BC0FFD484F133E /* AccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04419532DA2B9AE61A7A7B47 /* AccessView.swift */; };
 		40771064325B4E728A735AEA /* GaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49489C7FC0ABE55881B19E13 /* GaryApp.swift */; };
 		58D29FB9AFB19F9CFD8CF6A7 /* project.yml in Resources */ = {isa = PBXBuildFile; fileRef = 17A1CD2816DFF25FD7820FF8 /* project.yml */; };
 		5A432D05492831EB727B31A7 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE32BA2E5208CC9E994A26A /* Models.swift */; };
+		7C068A0EEC05871F6FAAB6C1 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C504806B5E95AE4FB10675 /* AuthService.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
 		B313EC36BDDDB18E9F687643 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D1E52AFB4EED7E97F55C36 /* Views.swift */; };
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
+		CC1439820B31410D0D7259AA /* GaryApp.xcodeproj in Resources */ = {isa = PBXBuildFile; fileRef = 1B9167CC59873FC53FDBE8A5 /* GaryApp.xcodeproj */; };
 		D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58C162EF98D65308171329E2 /* SupabaseAPI.swift */; };
+		F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26AE11992E449EB95857D6E3 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		04419532DA2B9AE61A7A7B47 /* AccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessView.swift; sourceTree = "<group>"; };
 		17A1CD2816DFF25FD7820FF8 /* project.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = project.yml; sourceTree = "<group>"; };
+		1B9167CC59873FC53FDBE8A5 /* GaryApp.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = GaryApp.xcodeproj; sourceTree = "<group>"; };
+		26AE11992E449EB95857D6E3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		44D1E52AFB4EED7E97F55C36 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		49489C7FC0ABE55881B19E13 /* GaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryApp.swift; sourceTree = "<group>"; };
+		52C504806B5E95AE4FB10675 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		58C162EF98D65308171329E2 /* SupabaseAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAPI.swift; sourceTree = "<group>"; };
 		A6B153703E9F452BFFC5A392 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C76D962853397848F9631A85 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -40,12 +48,16 @@
 		6CFD3216AB39252D9E52D645 /* GaryApp */ = {
 			isa = PBXGroup;
 			children = (
+				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
+				52C504806B5E95AE4FB10675 /* AuthService.swift */,
 				C76D962853397848F9631A85 /* ContentView.swift */,
 				49489C7FC0ABE55881B19E13 /* GaryApp.swift */,
+				1B9167CC59873FC53FDBE8A5 /* GaryApp.xcodeproj */,
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
 				ECE32BA2E5208CC9E994A26A /* Models.swift */,
 				17A1CD2816DFF25FD7820FF8 /* project.yml */,
 				F0616A3C8A2F0268B8A05C4D /* Secrets.swift */,
+				26AE11992E449EB95857D6E3 /* SettingsView.swift */,
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				44D1E52AFB4EED7E97F55C36 /* Views.swift */,
 			);
@@ -59,6 +71,11 @@
 				6CFD3216AB39252D9E52D645 /* GaryApp */,
 				02F13D03245A29657A46163C /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		EEF3D9CB2EE1EDF1002F22E2 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -107,8 +124,13 @@
 			);
 			mainGroup = 91E7769BD9DC37D8974535EF;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = EEF3D9CB2EE1EDF1002F22E2 /* Products */;
+					ProjectRef = 1B9167CC59873FC53FDBE8A5 /* GaryApp.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				75398D566F3FB74B46B3657E /* GaryApp */,
@@ -121,6 +143,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC1439820B31410D0D7259AA /* GaryApp.xcodeproj in Resources */,
 				58D29FB9AFB19F9CFD8CF6A7 /* project.yml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -132,10 +155,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
+				7C068A0EEC05871F6FAAB6C1 /* AuthService.swift in Sources */,
 				CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */,
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
 				5A432D05492831EB727B31A7 /* Models.swift in Sources */,
 				8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */,
+				F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */,
 				D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */,
 				B313EC36BDDDB18E9F687643 /* Views.swift in Sources */,
 			);

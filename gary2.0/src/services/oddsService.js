@@ -179,15 +179,92 @@ const normalizeOddsApiGame = (event, sportKey) => {
     event?.event_id ||
     `${sportKey}-${event?.commence_time || Date.now()}-${event?.home_team || 'home'}-${event?.away_team || 'away'}`;
 
+  const bookmakers = normalizeOddsApiBookmakers(event?.bookmakers);
+  
+  // Extract odds values from the first bookmaker for easy access
+  const extractedOdds = extractOddsFromBookmakers(bookmakers, event?.home_team, event?.away_team);
+
   return {
     id,
     sport_key: event?.sport_key || sportKey,
     home_team: event?.home_team || event?.teams?.[0] || '',
     away_team: event?.away_team || event?.teams?.[1] || '',
     commence_time: event?.commence_time,
-    bookmakers: normalizeOddsApiBookmakers(event?.bookmakers),
+    bookmakers,
+    // Extracted odds for easy access
+    spread_home: extractedOdds.spread_home,
+    spread_away: extractedOdds.spread_away,
+    spread_home_odds: extractedOdds.spread_home_odds,
+    spread_away_odds: extractedOdds.spread_away_odds,
+    moneyline_home: extractedOdds.moneyline_home,
+    moneyline_away: extractedOdds.moneyline_away,
+    total: extractedOdds.total,
+    total_over_odds: extractedOdds.total_over_odds,
+    total_under_odds: extractedOdds.total_under_odds,
     source: 'odds_api_fallback'
   };
+};
+
+// Helper to extract odds from bookmakers array
+const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
+  const result = {
+    spread_home: null,
+    spread_away: null,
+    spread_home_odds: -110,
+    spread_away_odds: -110,
+    moneyline_home: null,
+    moneyline_away: null,
+    total: null,
+    total_over_odds: -110,
+    total_under_odds: -110
+  };
+
+  if (!bookmakers || !bookmakers.length) return result;
+
+  // Use first available bookmaker
+  const bookmaker = bookmakers[0];
+  if (!bookmaker?.markets) return result;
+
+  // Extract spreads
+  const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
+  if (spreadsMarket?.outcomes) {
+    for (const outcome of spreadsMarket.outcomes) {
+      if (outcome.name === homeTeam) {
+        result.spread_home = outcome.point;
+        result.spread_home_odds = outcome.price || -110;
+      } else if (outcome.name === awayTeam) {
+        result.spread_away = outcome.point;
+        result.spread_away_odds = outcome.price || -110;
+      }
+    }
+  }
+
+  // Extract moneyline (h2h)
+  const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
+  if (h2hMarket?.outcomes) {
+    for (const outcome of h2hMarket.outcomes) {
+      if (outcome.name === homeTeam) {
+        result.moneyline_home = outcome.price;
+      } else if (outcome.name === awayTeam) {
+        result.moneyline_away = outcome.price;
+      }
+    }
+  }
+
+  // Extract totals
+  const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
+  if (totalsMarket?.outcomes) {
+    for (const outcome of totalsMarket.outcomes) {
+      if (outcome.name === 'Over') {
+        result.total = outcome.point;
+        result.total_over_odds = outcome.price || -110;
+      } else if (outcome.name === 'Under') {
+        result.total_under_odds = outcome.price || -110;
+      }
+    }
+  }
+
+  return result;
 };
 
 const fetchUpcomingOddsFallback = async (sport) => {
@@ -907,6 +984,16 @@ export const oddsService = {
                       return {
                         ...bdlGame,
                         bookmakers: match.bookmakers,
+                        // Copy extracted odds fields from the Odds API game
+                        moneyline_home: match.moneyline_home,
+                        moneyline_away: match.moneyline_away,
+                        spread_home: match.spread_home,
+                        spread_away: match.spread_away,
+                        spread_home_odds: match.spread_home_odds,
+                        spread_away_odds: match.spread_away_odds,
+                        total: match.total,
+                        total_over_odds: match.total_over_odds,
+                        total_under_odds: match.total_under_odds,
                         source: 'merged_odds_api'
                       };
                     }
@@ -950,8 +1037,25 @@ export const oddsService = {
 
       const processedGames = unique.map(game => {
         const bestOpportunity = analyzeBettingMarkets(game);
+        
+        // Extract odds from bookmakers if not already present
+        let extractedOdds = {};
+        if (game.moneyline_home === undefined && game.bookmakers?.length > 0) {
+          extractedOdds = extractOddsFromBookmakers(game.bookmakers, game.home_team, game.away_team);
+        }
+        
         return {
           ...game,
+          // Include extracted odds if they weren't already set
+          moneyline_home: game.moneyline_home ?? extractedOdds.moneyline_home,
+          moneyline_away: game.moneyline_away ?? extractedOdds.moneyline_away,
+          spread_home: game.spread_home ?? extractedOdds.spread_home,
+          spread_away: game.spread_away ?? extractedOdds.spread_away,
+          spread_home_odds: game.spread_home_odds ?? extractedOdds.spread_home_odds,
+          spread_away_odds: game.spread_away_odds ?? extractedOdds.spread_away_odds,
+          total: game.total ?? extractedOdds.total,
+          total_over_odds: game.total_over_odds ?? extractedOdds.total_over_odds,
+          total_under_odds: game.total_under_odds ?? extractedOdds.total_under_odds,
           bestBet: bestOpportunity
         };
       });

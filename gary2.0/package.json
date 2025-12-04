@@ -16,7 +16,12 @@
     "picks:nfl": "node scripts/generate-picks-local.js --nfl",
     "picks:ncaab": "node scripts/generate-picks-local.js --ncaab",
     "picks:ncaaf": "node scripts/generate-picks-local.js --ncaaf",
-    "picks:all": "node scripts/generate-picks-local.js"
+    "picks:all": "node scripts/generate-picks-local.js",
+    "gary": "node scripts/run-agentic-picks.js --all",
+    "gary:nba": "node scripts/run-agentic-picks.js --nba",
+    "gary:nfl": "node scripts/run-agentic-picks.js --nfl",
+    "gary:ncaab": "node scripts/run-agentic-picks.js --ncaab",
+    "gary:ncaaf": "node scripts/run-agentic-picks.js --ncaaf"
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",

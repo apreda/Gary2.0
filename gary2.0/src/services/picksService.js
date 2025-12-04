@@ -930,11 +930,165 @@ function formatGameTime(timeString) {
   }
 }
 
+// ==========================================
+// WEEKLY NFL PICKS (persist all week)
+// ==========================================
+
+/**
+ * Get the Monday of the current NFL week
+ * NFL weeks run Tuesday-Monday
+ */
+function getNFLWeekStart(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun, 1=Mon, etc.
+  // Get previous Monday (or today if Monday)
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+/**
+ * Get current NFL week number (approximate)
+ */
+function getNFLWeekNumber(date = new Date()) {
+  // NFL 2025 season starts Sep 4, 2025 (Week 1)
+  const seasonStart = new Date('2025-09-01');
+  const diffTime = date.getTime() - seasonStart.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(1, Math.min(18, Math.ceil(diffDays / 7)));
+}
+
+/**
+ * Store NFL picks in the weekly table (persists all week)
+ */
+async function storeWeeklyNFLPicks(picks) {
+  if (!picks || !Array.isArray(picks) || picks.length === 0) {
+    return { success: false, message: 'No NFL picks provided' };
+  }
+  
+  await ensureValidSupabaseSession();
+  
+  const weekStart = getNFLWeekStart();
+  const weekNumber = getNFLWeekNumber();
+  const season = new Date().getFullYear();
+  
+  console.log(`🏈 Storing ${picks.length} NFL picks for Week ${weekNumber} (${weekStart})`);
+  
+  try {
+    // Check if we have existing picks for this week
+    const { data: existingData, error: fetchError } = await supabase
+      .from('weekly_nfl_picks')
+      .select('picks')
+      .eq('week_start', weekStart)
+      .eq('season', season)
+      .limit(1);
+    
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error fetching existing NFL picks:', fetchError);
+      return { success: false, error: fetchError.message };
+    }
+    
+    let existingPicks = existingData?.[0]?.picks || [];
+    
+    // Dedupe by game (homeTeam + awayTeam)
+    const gameKey = (p) => `${p.homeTeam || ''}|${p.awayTeam || ''}`.toLowerCase();
+    const existingGames = new Set(existingPicks.map(gameKey));
+    
+    const newPicks = picks.filter(p => !existingGames.has(gameKey(p)));
+    
+    if (newPicks.length === 0) {
+      console.log('🏈 All NFL games already have picks for this week');
+      return { success: true, message: 'No new picks to add', count: 0 };
+    }
+    
+    const mergedPicks = [...existingPicks, ...newPicks];
+    
+    // Upsert the picks
+    const { error: upsertError } = await supabase
+      .from('weekly_nfl_picks')
+      .upsert({
+        week_start: weekStart,
+        week_number: weekNumber,
+        season: season,
+        picks: mergedPicks,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'week_start,season'
+      });
+    
+    if (upsertError) {
+      console.error('Error storing NFL picks:', upsertError);
+      return { success: false, error: upsertError.message };
+    }
+    
+    console.log(`✅ Stored ${newPicks.length} new NFL picks (${mergedPicks.length} total for week)`);
+    return { success: true, count: newPicks.length, total: mergedPicks.length };
+    
+  } catch (error) {
+    console.error('Error in storeWeeklyNFLPicks:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Fetch NFL picks for the current week
+ */
+async function getWeeklyNFLPicks(weekStart = null) {
+  await ensureValidSupabaseSession();
+  
+  const targetWeek = weekStart || getNFLWeekStart();
+  const season = new Date().getFullYear();
+  
+  try {
+    const { data, error } = await supabase
+      .from('weekly_nfl_picks')
+      .select('picks, week_number, week_start')
+      .eq('week_start', targetWeek)
+      .eq('season', season)
+      .limit(1);
+    
+    if (error) {
+      console.error('Error fetching NFL picks:', error);
+      return [];
+    }
+    
+    return data?.[0]?.picks || [];
+    
+  } catch (error) {
+    console.error('Error in getWeeklyNFLPicks:', error);
+    return [];
+  }
+}
+
+/**
+ * Check if an NFL game already has a pick this week
+ */
+async function nflGameAlreadyHasPick(homeTeam, awayTeam) {
+  const picks = await getWeeklyNFLPicks();
+  const gameKey = `${homeTeam}|${awayTeam}`.toLowerCase();
+  
+  const existing = picks.find(p => {
+    const pKey = `${p.homeTeam || ''}|${p.awayTeam || ''}`.toLowerCase();
+    return pKey === gameKey;
+  });
+  
+  if (existing) {
+    return { exists: true, existingPick: existing.pick };
+  }
+  return { exists: false };
+}
+
 // Export both styles!
 const picksService = {
   generateDailyPicks,
   generateWhatGaryThinks,
   storeDailyPicksInDatabase,
+  storeWeeklyNFLPicks,
+  getWeeklyNFLPicks,
+  nflGameAlreadyHasPick,
+  getNFLWeekStart,
+  getNFLWeekNumber,
   checkForExistingPicks,
   ensureValidSupabaseSession,
   validatePickConsistency,
@@ -942,6 +1096,6 @@ const picksService = {
   logAgenticRun
 };
 
-export { processGameOnce, cachedApiCall, _teamNameMatch, gameAlreadyHasPick };
-export { picksService, generateDailyPicks, logAgenticRun };
+export { processGameOnce, cachedApiCall, _teamNameMatch, gameAlreadyHasPick, nflGameAlreadyHasPick };
+export { picksService, generateDailyPicks, logAgenticRun, storeWeeklyNFLPicks, getWeeklyNFLPicks };
 export default picksService;
