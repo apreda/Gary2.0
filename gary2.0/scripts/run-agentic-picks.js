@@ -218,14 +218,34 @@ async function main() {
             }
           }
           
-          // Add to picks
-          sportPicks.push({
-            ...result,
+          // Extract just the stat token names for storage
+          const statsUsed = result.toolCallHistory 
+            ? result.toolCallHistory.map(t => t.token) 
+            : [];
+          
+          // Create clean pick object without large/unnecessary fields
+          const cleanPick = {
+            pick: result.pick,
+            type: result.type,
+            odds: result.odds,
+            confidence: result.confidence,
+            homeTeam: result.homeTeam,
+            awayTeam: result.awayTeam,
+            spread: result.spread,
+            spreadOdds: result.spreadOdds,
+            moneylineHome: result.moneylineHome,
+            moneylineAway: result.moneylineAway,
+            total: result.total,
+            rationale: result.rationale,
             league: config.name,
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
-            commence_time: game.commence_time
-          });
+            commence_time: game.commence_time,
+            statsUsed: statsUsed // Clean array of stat names Gary used
+          };
+          
+          // Add to picks
+          sportPicks.push(cleanPick);
         } else if (result.error) {
           console.log(`\n⚠️  Error: ${result.error}`);
         } else {
