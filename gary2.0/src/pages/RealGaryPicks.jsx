@@ -120,21 +120,21 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
     return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{rationale}</div>;
   }
   
-  // Determine which team Gary picked - put Gary's pick on the RIGHT
+  // Determine which team Gary picked - put Gary's pick on the LEFT
   const pickStr = pick?.pick?.toLowerCase() || '';
   const leftTeam = data.teams.left || 'Team 1';
   const rightTeam = data.teams.right || 'Team 2';
   
-  // Check if Gary picked the left team - if so, swap so his pick is on the right
-  const garyPickedLeft = pickStr.includes(leftTeam.toLowerCase()) || 
-                         pickStr.includes(leftTeam.split(' ').pop()?.toLowerCase());
+  // Check if Gary picked the right team - if so, swap so his pick is on the left
+  const garyPickedRight = pickStr.includes(rightTeam.toLowerCase()) || 
+                          pickStr.includes(rightTeam.split(' ').pop()?.toLowerCase());
   
-  // Display teams - Gary's pick should be on RIGHT
-  const displayLeft = garyPickedLeft ? rightTeam : leftTeam;
-  const displayRight = garyPickedLeft ? leftTeam : rightTeam;
+  // Display teams - Gary's pick should be on LEFT (green)
+  const displayLeft = garyPickedRight ? rightTeam : leftTeam;
+  const displayRight = garyPickedRight ? leftTeam : rightTeam;
   
   const getStatVal = (stat, side) => {
-    if (garyPickedLeft) {
+    if (garyPickedRight) {
       return side === 'left' ? stat.right : stat.left;
     }
     return side === 'left' ? stat.left : stat.right;
@@ -142,19 +142,19 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
   
   const getAdvantage = (stat, side) => {
     const origAdv = stat.advantage;
-    if (garyPickedLeft) {
+    if (garyPickedRight) {
       const swapped = origAdv === 'right' ? 'left' : 'right';
       return swapped === side;
     }
     return origAdv === side;
   };
   
-  const injLeft = garyPickedLeft ? data.injuries.right : data.injuries.left;
-  const injRight = garyPickedLeft ? data.injuries.left : data.injuries.right;
+  const injLeft = garyPickedRight ? data.injuries.right : data.injuries.left;
+  const injRight = garyPickedRight ? data.injuries.left : data.injuries.right;
   
   return (
     <div style={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
-      {/* Header row - wide format, Gary's pick on RIGHT */}
+      {/* Header row - wide format, Gary's pick on LEFT (green) */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between',
@@ -164,9 +164,9 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
         fontSize: '0.75rem',
         fontWeight: 600
       }}>
-        <span style={{ flex: 1, opacity: 0.7 }}>{displayLeft}</span>
+        <span style={{ flex: 1, color: '#4ade80' }}>{displayLeft}</span>
         <span style={{ width: '80px', textAlign: 'center', opacity: 0.35, fontSize: '0.65rem', textTransform: 'uppercase' }}>vs</span>
-        <span style={{ flex: 1, textAlign: 'right', color: accentColor }}>{displayRight}</span>
+        <span style={{ flex: 1, textAlign: 'right', opacity: 0.7 }}>{displayRight}</span>
       </div>
       
       {/* Stats rows - wide format with stat name in middle */}
@@ -1467,37 +1467,7 @@ function RealGaryPicks() {
                                       display: 'flex',
                                       flexDirection: 'column'
                                     }}>
-                                      {/* Back header - just Back button, no title for more space */}
-                                      <div style={{ marginBottom: '0.3rem', flex: '0 0 auto' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setFlippedCards(prev => ({
-                                                ...prev,
-                                                [pick.id]: false
-                                              }));
-                                            }}
-                                            style={{
-                                              background: hexToRgba(accentColor, 0.15),
-                                              color: accentColor,
-                                              border: 'none',
-                                              borderRadius: '4px',
-                                              padding: '0.3rem 0.6rem',
-                                              cursor: 'pointer',
-                                              fontSize: '0.65rem',
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em',
-                                              fontWeight: 500,
-                                              transition: 'all 0.2s ease'
-                                            }}
-                                          >
-                                            Back
-                                          </button>
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Full analysis - takes up 85% of remaining space */}
+                                      {/* Full analysis - takes up all available space */}
                                       <div style={{ 
                                         flex: '1 1 85%',
                                         overflowY: 'auto',
@@ -1546,7 +1516,7 @@ function RealGaryPicks() {
                                         )}
                                       </div>
                                       
-                                      {/* Bottom info - minimal space (MATCHING FREE PICK) */}
+                                      {/* Bottom info with BACK button in middle */}
                                       <div style={{ 
                                         flex: '0 0 auto',
                                         paddingTop: '0.5rem', 
@@ -1558,16 +1528,40 @@ function RealGaryPicks() {
                                       }}>
                                         <div>
                                           <span style={{ opacity: 0.6 }}>Confidence: </span>
-                                          <span style={{ fontWeight: 700, color: accentColor }}>
+                                          <span style={{ fontWeight: 700, color: '#4ade80' }}>
                                             {typeof pick.confidence === 'number' ? 
                                               Math.round(pick.confidence * 100) + '%' : 
                                               (pick.confidence || '75%')}
                                           </span>
                                         </div>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFlippedCards(prev => ({
+                                              ...prev,
+                                              [pick.id]: false
+                                            }));
+                                          }}
+                                          style={{
+                                            background: hexToRgba(accentColor, 0.15),
+                                            color: accentColor,
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            padding: '0.3rem 0.8rem',
+                                            cursor: 'pointer',
+                                            fontSize: '0.65rem',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            fontWeight: 500,
+                                            transition: 'all 0.2s ease'
+                                          }}
+                                        >
+                                          Back
+                                        </button>
                                         <div>
                                           <span style={{ opacity: 0.6 }}>Time: </span>
                                           <span style={{ fontWeight: 600 }}>
-                                            {pick.time || 'TBD'}
+                                            {pick.gameTime || pick.time || formatGameTime(pick.commence_time) || 'TBD'}
                                           </span>
                                         </div>
                                       </div>
