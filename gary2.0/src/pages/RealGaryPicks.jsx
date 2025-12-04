@@ -33,9 +33,140 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+// Shared display component for Tale of the Tape
+const TaleOfTapeDisplay = ({ homeShort, awayShort, statsData, injuries, narrative, accentColor }) => {
+  const sectionBox = {
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: '6px',
+    padding: '0.55rem 0.7rem',
+    marginBottom: '0.45rem'
+  };
+  
+  const sectionLabel = {
+    fontSize: '0.58rem',
+    fontWeight: 700,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    opacity: 0.4,
+    marginBottom: '0.3rem'
+  };
+  
+  return (
+    <div style={{ lineHeight: 1.55, fontSize: '0.82rem' }}>
+      {/* Tale of the Tape Header */}
+      <div style={{ ...sectionLabel, marginBottom: '0.4rem' }}>Tale of the Tape</div>
+      
+      {/* Stats Grid */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '1fr 1fr',
+        gap: '0.1rem 1rem',
+        marginBottom: '0.5rem',
+        padding: '0.3rem 0',
+        borderBottom: '1px solid rgba(255,255,255,0.08)'
+      }}>
+        {/* Headers */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', opacity: 0.5, fontWeight: 600, marginBottom: '0.1rem' }}>
+          <span style={{ minWidth: '55px' }}></span>
+          <span style={{ minWidth: '40px', textAlign: 'right', color: accentColor }}>{homeShort}</span>
+          <span style={{ width: '20px', textAlign: 'center', opacity: 0 }}>-</span>
+          <span style={{ minWidth: '40px', textAlign: 'left' }}>{awayShort}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', opacity: 0.5, fontWeight: 600, marginBottom: '0.1rem' }}>
+          <span style={{ minWidth: '55px' }}></span>
+          <span style={{ minWidth: '40px', textAlign: 'right', color: accentColor }}>{homeShort}</span>
+          <span style={{ width: '20px', textAlign: 'center', opacity: 0 }}>-</span>
+          <span style={{ minWidth: '40px', textAlign: 'left' }}>{awayShort}</span>
+        </div>
+        
+        {/* Stats - split into two columns */}
+        {statsData.map((stat, idx) => (
+          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem', fontSize: '0.78rem' }}>
+            <span style={{ opacity: 0.4, minWidth: '55px' }}>{stat.name}</span>
+            <span style={{ 
+              color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.5)',
+              fontWeight: stat.advantage === 'home' ? 600 : 400,
+              minWidth: '40px',
+              textAlign: 'right'
+            }}>{stat.home}</span>
+            <span style={{ width: '20px', textAlign: 'center', opacity: 0.25 }}>-</span>
+            <span style={{ 
+              color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.5)',
+              fontWeight: stat.advantage === 'away' ? 600 : 400,
+              minWidth: '40px',
+              textAlign: 'left'
+            }}>{stat.away}</span>
+          </div>
+        ))}
+      </div>
+      
+      {/* Injuries Row */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem', fontSize: '0.73rem' }}>
+        <div>
+          <span style={{ opacity: 0.4 }}>Injuries • </span>
+          <span style={{ color: accentColor, opacity: 0.9 }}>{homeShort}: </span>
+          <span style={{ color: injuries.home === 'None' ? 'rgba(255,255,255,0.6)' : '#f87171', fontWeight: 500 }}>{injuries.home}</span>
+        </div>
+        <div>
+          <span style={{ opacity: 0.6 }}>{awayShort}: </span>
+          <span style={{ color: injuries.away === 'None' ? 'rgba(255,255,255,0.6)' : '#f87171', fontWeight: 500 }}>{injuries.away}</span>
+        </div>
+      </div>
+      
+      {/* Gary's Take */}
+      {narrative && (
+        <div style={{ ...sectionBox, borderColor: 'rgba(74, 222, 128, 0.15)', marginBottom: 0 }}>
+          <div style={{ ...sectionLabel, color: '#4ade80', opacity: 0.6 }}>Gary's Take</div>
+          <div style={{ opacity: 0.88, lineHeight: 1.55, fontSize: '0.82rem' }}>{narrative}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Tale of the Tape Component - Clean inline format
-const TaleOfTheTape = ({ rationale, accentColor }) => {
-  // Parse the Tale of the Tape format
+const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
+  
+  // If pick has structured stats field, use that directly (new format)
+  if (pick?.stats?.home && pick?.stats?.away) {
+    const homeShort = pick.homeTeam?.split(' ').pop() || 'Home';
+    const awayShort = pick.awayTeam?.split(' ').pop() || 'Away';
+    const home = pick.stats.home;
+    const away = pick.stats.away;
+    
+    // Build stats array from structured data
+    const statsData = [];
+    if (home.record) statsData.push({ name: 'Record', home: home.record, away: away.record, advantage: 'compare' });
+    if (home.offRtg) statsData.push({ name: 'Off Rtg', home: home.offRtg, away: away.offRtg, advantage: home.offRtg > away.offRtg ? 'home' : 'away' });
+    if (home.defRtg) statsData.push({ name: 'Def Rtg', home: home.defRtg, away: away.defRtg, advantage: home.defRtg < away.defRtg ? 'home' : 'away' }); // Lower is better
+    if (home.netRtg !== undefined) statsData.push({ name: 'Net Rtg', home: home.netRtg > 0 ? `+${home.netRtg}` : home.netRtg, away: away.netRtg > 0 ? `+${away.netRtg}` : away.netRtg, advantage: home.netRtg > away.netRtg ? 'home' : 'away' });
+    if (home.pace) statsData.push({ name: 'Pace', home: home.pace, away: away.pace, advantage: 'neutral' });
+    if (home.ppg) statsData.push({ name: 'PPG', home: home.ppg, away: away.ppg, advantage: home.ppg > away.ppg ? 'home' : 'away' });
+    if (home.oppPpg) statsData.push({ name: 'Opp PPG', home: home.oppPpg, away: away.oppPpg, advantage: home.oppPpg < away.oppPpg ? 'home' : 'away' }); // Lower is better
+    
+    // Extract narrative from rationale (everything after TALE OF THE TAPE section)
+    let narrative = rationale || '';
+    const takeMatch = narrative.match(/(?:Gary's Take|The Edge|The Verdict)\s*([\s\S]*)/i);
+    if (takeMatch) {
+      narrative = takeMatch[1].replace(/(?:The Edge|The Verdict|Gary's Take)/gi, '').trim();
+    } else if (narrative.includes('TALE OF THE TAPE')) {
+      // Remove the Tale of the Tape section from narrative
+      narrative = narrative.replace(/TALE OF THE TAPE[\s\S]*?(?=Gary's Take|The Edge|$)/i, '').trim();
+    }
+    
+    return (
+      <TaleOfTapeDisplay 
+        homeShort={homeShort}
+        awayShort={awayShort}
+        statsData={statsData}
+        injuries={{ home: home.injuries || 'None', away: away.injuries || 'None' }}
+        narrative={narrative}
+        accentColor={accentColor}
+      />
+    );
+  }
+  
+  // Fallback: Parse from rationale text (old format)
   const parseTaleOfTape = (text) => {
     if (!text || !text.includes('TALE OF THE TAPE')) {
       return null;
@@ -1551,9 +1682,9 @@ function RealGaryPicks() {
                                         marginBottom: '0.5rem'
                                       }}>
                                         {pick.rationale ? (
-                                          // Use Tale of the Tape component for new format
-                                          pick.rationale.includes('TALE OF THE TAPE') ? (
-                                            <TaleOfTheTape rationale={pick.rationale} accentColor={accentColor} />
+                                          // Use Tale of the Tape component for new format (or if pick has stats field)
+                                          (pick.stats || pick.rationale.includes('TALE OF THE TAPE')) ? (
+                                            <TaleOfTheTape rationale={pick.rationale} accentColor={accentColor} pick={pick} />
                                           ) : pick.rationale.includes('•') ? (
                                             // Already has bullets, just display
                                             <div style={{ whiteSpace: 'pre-wrap' }}>{pick.rationale}</div>
