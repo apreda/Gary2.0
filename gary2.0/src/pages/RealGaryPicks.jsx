@@ -130,65 +130,143 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
   const sectionBox = {
     border: '1px solid rgba(255,255,255,0.12)',
     borderRadius: '6px',
-    padding: '0.6rem 0.75rem',
-    marginBottom: '0.5rem'
+    padding: '0.55rem 0.7rem',
+    marginBottom: '0.45rem'
   };
   
   const sectionLabel = {
-    fontSize: '0.6rem',
+    fontSize: '0.58rem',
     fontWeight: 700,
     letterSpacing: '0.12em',
     textTransform: 'uppercase',
-    opacity: 0.45,
-    marginBottom: '0.35rem'
+    opacity: 0.4,
+    marginBottom: '0.3rem'
   };
   
-  // Find injuries from stats if available
-  const injuryStat = tapeData.stats.find(s => s.name.toLowerCase().includes('injur'));
-  const mainStats = tapeData.stats.filter(s => !s.name.toLowerCase().includes('injur'));
+  // Organize stats by type
+  const getStatValue = (name) => tapeData.stats.find(s => s.name.toLowerCase().includes(name.toLowerCase()));
+  
+  const record = getStatValue('record');
+  const offRating = getStatValue('off');
+  const defRating = getStatValue('def');
+  const netRating = getStatValue('net');
+  const injuries = getStatValue('injur');
+  
+  // Stat row component for consistent formatting
+  const StatRow = ({ label, stat, width = '100%' }) => {
+    if (!stat) return null;
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between',
+        marginBottom: '0.2rem',
+        fontSize: '0.78rem',
+        width
+      }}>
+        <span style={{ opacity: 0.4, minWidth: '65px' }}>{label}</span>
+        <span style={{ 
+          color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.5)',
+          fontWeight: stat.advantage === 'home' ? 600 : 400,
+          minWidth: '45px',
+          textAlign: 'right'
+        }}>
+          {stat.home}
+        </span>
+        <span style={{ opacity: 0.25, margin: '0 0.2rem' }}>-</span>
+        <span style={{ 
+          color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.5)',
+          fontWeight: stat.advantage === 'away' ? 600 : 400,
+          minWidth: '45px',
+          textAlign: 'left'
+        }}>
+          {stat.away}
+        </span>
+      </div>
+    );
+  };
   
   return (
-    <div style={{ lineHeight: 1.6, fontSize: '0.85rem' }}>
-      {/* Two column layout: Stats + Injuries */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.7rem' }}>
-        {/* Left: Tale of the Tape Stats */}
-        <div style={{ flex: 1 }}>
-          <div style={{ ...sectionLabel, marginBottom: '0.4rem' }}>Tale of the Tape</div>
-          {mainStats.map((stat, idx) => (
-            <div key={idx} style={{ marginBottom: '0.3rem', fontSize: '0.82rem' }}>
-              <span style={{ opacity: 0.45 }}>{stat.name}: </span>
-              <span style={{ 
-                color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.55)',
-                fontWeight: stat.advantage === 'home' ? 600 : 400
-              }}>
-                {homeShort} {stat.home}
-              </span>
-              <span style={{ opacity: 0.3, margin: '0 0.3rem' }}>vs</span>
-              <span style={{ 
-                color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.55)',
-                fontWeight: stat.advantage === 'away' ? 600 : 400
-              }}>
-                {awayShort} {stat.away}
-              </span>
-            </div>
-          ))}
+    <div style={{ lineHeight: 1.55, fontSize: '0.82rem' }}>
+      {/* Tale of the Tape Header */}
+      <div style={{ ...sectionLabel, marginBottom: '0.4rem' }}>Tale of the Tape</div>
+      
+      {/* Stats Grid - Two Columns */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '1fr 1fr',
+        gap: '0.1rem 1.2rem',
+        marginBottom: '0.6rem',
+        padding: '0.4rem 0',
+        borderBottom: '1px solid rgba(255,255,255,0.08)'
+      }}>
+        {/* Column Headers */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          fontSize: '0.65rem',
+          opacity: 0.5,
+          fontWeight: 600,
+          marginBottom: '0.15rem',
+          paddingRight: '0.5rem'
+        }}>
+          <span style={{ minWidth: '65px' }}></span>
+          <span style={{ minWidth: '45px', textAlign: 'right', color: '#4ade80' }}>{homeShort}</span>
+          <span style={{ margin: '0 0.2rem', opacity: 0 }}>-</span>
+          <span style={{ minWidth: '45px', textAlign: 'left' }}>{awayShort}</span>
+        </div>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          fontSize: '0.65rem',
+          opacity: 0.5,
+          fontWeight: 600,
+          marginBottom: '0.15rem'
+        }}>
+          <span style={{ minWidth: '65px' }}></span>
+          <span style={{ minWidth: '45px', textAlign: 'right', color: '#4ade80' }}>{homeShort}</span>
+          <span style={{ margin: '0 0.2rem', opacity: 0 }}>-</span>
+          <span style={{ minWidth: '45px', textAlign: 'left' }}>{awayShort}</span>
         </div>
         
-        {/* Right: Injuries & Record */}
-        <div style={{ width: '110px', fontSize: '0.78rem' }}>
-          <div style={{ ...sectionLabel, marginBottom: '0.4rem' }}>Injuries</div>
-          <div style={{ marginBottom: '0.25rem' }}>
-            <span style={{ opacity: 0.45 }}>{homeShort}: </span>
-            <span style={{ color: injuryStat?.home === 'None' ? '#4ade80' : '#f87171', fontWeight: 500 }}>
-              {injuryStat?.home || 'None'}
-            </span>
-          </div>
-          <div>
-            <span style={{ opacity: 0.45 }}>{awayShort}: </span>
-            <span style={{ color: injuryStat?.away === 'None' ? '#4ade80' : '#f87171', fontWeight: 500 }}>
-              {injuryStat?.away || 'None'}
-            </span>
-          </div>
+        {/* Left Column Stats */}
+        <div>
+          <StatRow label="Record" stat={record} />
+          <StatRow label="Off Rtg" stat={offRating} />
+        </div>
+        
+        {/* Right Column Stats */}
+        <div>
+          <StatRow label="Def Rtg" stat={defRating} />
+          <StatRow label="Net Rtg" stat={netRating} />
+        </div>
+      </div>
+      
+      {/* Injuries Row */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '1.5rem', 
+        marginBottom: '0.6rem',
+        fontSize: '0.75rem'
+      }}>
+        <div>
+          <span style={{ opacity: 0.4 }}>Injuries </span>
+          <span style={{ opacity: 0.35 }}>• </span>
+          <span style={{ color: '#4ade80', opacity: 0.9 }}>{homeShort}: </span>
+          <span style={{ 
+            color: injuries?.home === 'None' || !injuries?.home ? 'rgba(255,255,255,0.6)' : '#f87171',
+            fontWeight: 500 
+          }}>
+            {injuries?.home || 'None'}
+          </span>
+        </div>
+        <div>
+          <span style={{ color: '#4ade80', opacity: 0 }}>{awayShort}: </span>
+          <span style={{ 
+            color: injuries?.away === 'None' || !injuries?.away ? 'rgba(255,255,255,0.6)' : '#f87171',
+            fontWeight: 500 
+          }}>
+            {awayShort}: {injuries?.away || 'None'}
+          </span>
         </div>
       </div>
       
@@ -196,7 +274,7 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
       {tapeData.edge && (
         <div style={sectionBox}>
           <div style={sectionLabel}>The Edge</div>
-          <div style={{ opacity: 0.88, lineHeight: 1.55, fontSize: '0.84rem' }}>
+          <div style={{ opacity: 0.85, lineHeight: 1.5, fontSize: '0.8rem' }}>
             {tapeData.edge}
           </div>
         </div>
@@ -204,9 +282,9 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
       
       {/* The Verdict - green border */}
       {tapeData.verdict && (
-        <div style={{ ...sectionBox, borderColor: 'rgba(74, 222, 128, 0.25)', marginBottom: 0 }}>
-          <div style={{ ...sectionLabel, color: '#4ade80', opacity: 0.7 }}>The Verdict</div>
-          <div style={{ opacity: 0.92, lineHeight: 1.55, fontSize: '0.84rem' }}>
+        <div style={{ ...sectionBox, borderColor: 'rgba(74, 222, 128, 0.2)', marginBottom: 0 }}>
+          <div style={{ ...sectionLabel, color: '#4ade80', opacity: 0.65 }}>The Verdict</div>
+          <div style={{ opacity: 0.9, lineHeight: 1.5, fontSize: '0.8rem' }}>
             {tapeData.verdict}
           </div>
         </div>
