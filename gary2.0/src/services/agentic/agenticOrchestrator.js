@@ -246,9 +246,32 @@ When you have sufficient evidence and are ready to finalize, output this JSON:
   "moneylineHome": -150,
   "moneylineAway": +130,
   "total": 45.5,
+  "stats": {
+    "home": {
+      "record": "12-9",
+      "offRtg": 119.1,
+      "defRtg": 115.0,
+      "netRtg": 4.1,
+      "injuries": "None"
+    },
+    "away": {
+      "record": "3-17", 
+      "offRtg": 109.4,
+      "defRtg": 119.8,
+      "netRtg": -10.3,
+      "injuries": "None"
+    }
+  },
   "rationale": "Your GARY-STYLE analysis - see requirements below"
 }
 \`\`\`
+
+**STATS FIELD RULES:**
+- Include the KEY stats you used to make your decision
+- Use actual values from the data (do NOT make up numbers)
+- This populates the "Tale of the Tape" in the UI - users see these BEFORE your rationale
+- Common stats: record, offRtg, defRtg, netRtg, pace, injuries
+- For NFL: record, ppg, oppPpg, yardsDiff, injuries
 
 ⚠️ CRITICAL ODDS RULES:
 1. **LOOK AT THE "RAW ODDS VALUES" SECTION** in your scout report - it has the EXACT odds:
