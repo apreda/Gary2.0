@@ -316,22 +316,68 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               // Handle both statsData format {name, token, home, away} and parsed format {name, left, right, advantage}
               const isStatsData = stat.token !== undefined;
               const statName = isStatsData ? stat.name : stat.name;
-              const homeVal = isStatsData ? stat.home : stat.left;
-              const awayVal = isStatsData ? stat.away : stat.right;
               
-              // For statsData, we need to swap if Gary picked the right team
+              // Extract key value from nested stat objects
+              const extractValue = (obj, token) => {
+                if (!obj || typeof obj !== 'object') return obj || 'N/A';
+                
+                // Map token to the key field we want to display
+                const keyMap = {
+                  'OFFENSIVE_RATING': 'offensive_rating',
+                  'DEFENSIVE_RATING': 'defensive_rating',
+                  'NET_RATING': 'net_rating',
+                  'PACE': 'pace',
+                  'PACE_HOME_AWAY': 'overall', // Record
+                  'PACE_LAST_10': 'pace',
+                  'EFG_PCT': 'efg_pct',
+                  'OPP_EFG_PCT': 'efg_pct',
+                  'TURNOVER_RATE': 'tov_rate',
+                  'THREE_PT_SHOOTING': 'three_pct',
+                  'PAINT_DEFENSE': 'defensive_rating',
+                  'PERIMETER_DEFENSE': 'three_pct',
+                  'RECENT_FORM': 'last_5',
+                  'HOME_AWAY_SPLITS': 'overall',
+                  'OREB_RATE': 'oreb_rate',
+                  'FT_RATE': 'ft_rate'
+                };
+                
+                const key = keyMap[token] || Object.keys(obj).find(k => 
+                  typeof obj[k] === 'string' || typeof obj[k] === 'number'
+                );
+                
+                if (key && obj[key] !== undefined) return obj[key];
+                
+                // Fallback: find first string/number value that's not 'team'
+                for (const [k, v] of Object.entries(obj)) {
+                  if (k !== 'team' && k !== 'games' && k !== 'players' && (typeof v === 'string' || typeof v === 'number')) {
+                    return v;
+                  }
+                }
+                return 'N/A';
+              };
+              
+              let homeVal, awayVal;
+              if (isStatsData) {
+                homeVal = extractValue(stat.home, stat.token);
+                awayVal = extractValue(stat.away, stat.token);
+              } else {
+                homeVal = stat.left;
+                awayVal = stat.right;
+              }
+              
+              // For statsData, we need to swap if Gary picked the right team (away team)
               const displayLeft = garyPickedRight ? awayVal : homeVal;
               const displayRight = garyPickedRight ? homeVal : awayVal;
               
               // Determine advantage (higher is usually better, except for defensive stats)
               const isDefensiveStat = statName.toLowerCase().includes('def') || statName.toLowerCase().includes('turnover');
-              const leftNum = parseFloat(displayLeft) || 0;
-              const rightNum = parseFloat(displayRight) || 0;
+              const leftNum = parseFloat(String(displayLeft).replace('%', '')) || 0;
+              const rightNum = parseFloat(String(displayRight).replace('%', '')) || 0;
               const leftWins = isDefensiveStat ? leftNum < rightNum : leftNum > rightNum;
               const rightWins = isDefensiveStat ? rightNum < leftNum : rightNum > leftNum;
               
-              // Skip N/A stats
-              if (displayLeft === 'N/A' && displayRight === 'N/A') return null;
+              // Skip N/A stats or empty values
+              if ((displayLeft === 'N/A' || displayLeft === '') && (displayRight === 'N/A' || displayRight === '')) return null;
               
               return (
                 <div key={i} style={{ 
@@ -345,7 +391,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                     color: leftWins ? '#4ade80' : 'rgba(255,255,255,0.55)',
                     fontWeight: leftWins ? 600 : 400
                   }}>{displayLeft}</span>
-                  <span style={{ width: '100px', textAlign: 'center', opacity: 0.4, fontSize: '0.65rem' }}>{statName}</span>
+                  <span style={{ width: '110px', textAlign: 'center', opacity: 0.4, fontSize: '0.62rem' }}>{statName}</span>
                   <span style={{ 
                     flex: 1, 
                     textAlign: 'right',
