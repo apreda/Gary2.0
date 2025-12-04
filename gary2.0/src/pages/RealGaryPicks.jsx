@@ -126,22 +126,41 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
   const homeShort = tapeData.teams.home?.split(' ').pop() || 'Home';
   const awayShort = tapeData.teams.away?.split(' ').pop() || 'Away';
   
+  // Box style for sections
+  const sectionBox = {
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '8px',
+    padding: '0.7rem 0.85rem',
+    marginBottom: '0.6rem',
+    background: 'rgba(0,0,0,0.2)'
+  };
+  
+  const sectionLabel = {
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    opacity: 0.5,
+    marginBottom: '0.4rem'
+  };
+  
   return (
-    <div style={{ lineHeight: 1.7, fontSize: '0.9rem' }}>
-      {/* Stats as inline text */}
-      <div style={{ marginBottom: '1rem' }}>
+    <div style={{ lineHeight: 1.65, fontSize: '0.88rem' }}>
+      {/* Tale of the Tape - Stats */}
+      <div style={{ marginBottom: '0.8rem' }}>
+        <div style={{ ...sectionLabel, marginBottom: '0.5rem' }}>Tale of the Tape</div>
         {tapeData.stats.map((stat, idx) => (
-          <div key={idx} style={{ marginBottom: '0.4rem' }}>
-            <span style={{ opacity: 0.6 }}>{stat.name}: </span>
+          <div key={idx} style={{ marginBottom: '0.35rem', fontSize: '0.85rem' }}>
+            <span style={{ opacity: 0.5 }}>{stat.name}: </span>
             <span style={{ 
-              color: stat.advantage === 'home' ? '#4ade80' : (stat.advantage === 'away' ? 'rgba(255,255,255,0.7)' : 'inherit'),
+              color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.6)',
               fontWeight: stat.advantage === 'home' ? 600 : 400
             }}>
               {homeShort} {stat.home}
             </span>
-            <span style={{ opacity: 0.4, margin: '0 0.4rem' }}>vs</span>
+            <span style={{ opacity: 0.35, margin: '0 0.35rem' }}>vs</span>
             <span style={{ 
-              color: stat.advantage === 'away' ? '#4ade80' : (stat.advantage === 'home' ? 'rgba(255,255,255,0.7)' : 'inherit'),
+              color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.6)',
               fontWeight: stat.advantage === 'away' ? 600 : 400
             }}>
               {awayShort} {stat.away}
@@ -150,20 +169,25 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         ))}
       </div>
       
-      {/* Divider */}
-      <div style={{ 
-        height: '1px', 
-        background: 'rgba(255,255,255,0.1)', 
-        margin: '0.75rem 0' 
-      }} />
+      {/* The Edge Box */}
+      {tapeData.edge && (
+        <div style={sectionBox}>
+          <div style={sectionLabel}>The Edge</div>
+          <div style={{ opacity: 0.9, lineHeight: 1.6 }}>
+            {tapeData.edge}
+          </div>
+        </div>
+      )}
       
-      {/* Analysis text */}
-      <div style={{ opacity: 0.95 }}>
-        {tapeData.edge}
-        {tapeData.verdict && (
-          <span> {tapeData.verdict}</span>
-        )}
-      </div>
+      {/* The Verdict Box */}
+      {tapeData.verdict && (
+        <div style={{ ...sectionBox, borderColor: 'rgba(74, 222, 128, 0.3)', marginBottom: 0 }}>
+          <div style={{ ...sectionLabel, color: '#4ade80', opacity: 0.8 }}>The Verdict</div>
+          <div style={{ opacity: 0.95, lineHeight: 1.6, fontWeight: 500 }}>
+            {tapeData.verdict}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
