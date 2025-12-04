@@ -33,291 +33,176 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Shared display component for Tale of the Tape - Clean side-by-side format
-const TaleOfTapeDisplay = ({ homeShort, awayShort, statsData, injuries, narrative, accentColor }) => {
-  return (
-    <div style={{ fontSize: '0.85rem', lineHeight: 1.6 }}>
-      {/* Tale of the Tape - Simple side by side */}
-      <div style={{ marginBottom: '0.8rem' }}>
-        {/* Team header row */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between',
-          marginBottom: '0.5rem',
-          paddingBottom: '0.4rem',
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          <span style={{ flex: 1, color: accentColor, fontWeight: 600 }}>{homeShort}</span>
-          <span style={{ width: '70px', textAlign: 'center', opacity: 0.4, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>vs</span>
-          <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, opacity: 0.8 }}>{awayShort}</span>
-        </div>
-        
-        {/* Stats rows */}
-        {statsData.map((stat, idx) => (
-          <div key={idx} style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between',
-            marginBottom: '0.35rem',
-            alignItems: 'center'
-          }}>
-            <span style={{ 
-              flex: 1, 
-              color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.6)',
-              fontWeight: stat.advantage === 'home' ? 600 : 400
-            }}>
-              {stat.home}
-            </span>
-            <span style={{ 
-              width: '70px', 
-              textAlign: 'center', 
-              opacity: 0.4, 
-              fontSize: '0.75rem' 
-            }}>
-              {stat.name}
-            </span>
-            <span style={{ 
-              flex: 1, 
-              textAlign: 'right',
-              color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.6)',
-              fontWeight: stat.advantage === 'away' ? 600 : 400
-            }}>
-              {stat.away}
-            </span>
-          </div>
-        ))}
-        
-        {/* Injuries row */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between',
-          marginTop: '0.4rem',
-          paddingTop: '0.4rem',
-          borderTop: '1px solid rgba(255,255,255,0.06)'
-        }}>
-          <span style={{ 
-            flex: 1, 
-            fontSize: '0.78rem',
-            color: injuries.home === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
-          }}>
-            {injuries.home === 'None' ? '✓ Healthy' : injuries.home}
-          </span>
-          <span style={{ width: '70px', textAlign: 'center', opacity: 0.4, fontSize: '0.72rem' }}>Injuries</span>
-          <span style={{ 
-            flex: 1, 
-            textAlign: 'right',
-            fontSize: '0.78rem',
-            color: injuries.away === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
-          }}>
-            {injuries.away === 'None' ? '✓ Healthy' : injuries.away}
-          </span>
-        </div>
-      </div>
-      
-      {/* Gary's Take */}
-      {narrative && (
-        <div style={{ 
-          border: '1px solid rgba(74, 222, 128, 0.15)',
-          borderRadius: '6px',
-          padding: '0.6rem 0.75rem'
-        }}>
-          <div style={{ 
-            fontSize: '0.6rem', 
-            fontWeight: 700, 
-            letterSpacing: '0.1em', 
-            textTransform: 'uppercase', 
-            color: '#4ade80', 
-            opacity: 0.6,
-            marginBottom: '0.35rem'
-          }}>
-            Gary's Take
-          </div>
-          <div style={{ opacity: 0.9, lineHeight: 1.6, fontSize: '0.82rem' }}>
-            {narrative}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Tale of the Tape Component - Clean inline format
+// Tale of the Tape Component - Clean simple format
 const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
   
-  // If pick has structured stats array (new format), use that directly
-  if (pick?.stats && Array.isArray(pick.stats) && pick.stats.length > 0) {
-    const homeShort = pick.homeTeam?.split(' ').pop() || 'Home';
-    const awayShort = pick.awayTeam?.split(' ').pop() || 'Away';
-    
-    // Determine advantage for each stat
-    const statsData = pick.stats.map(stat => {
-      let advantage = 'neutral';
-      const name = stat.name?.toLowerCase() || '';
-      const homeVal = parseFloat(stat.home) || 0;
-      const awayVal = parseFloat(stat.away) || 0;
-      
-      if (name.includes('def') || name.includes('opp')) {
-        // Lower is better for defensive stats
-        advantage = homeVal < awayVal ? 'home' : (awayVal < homeVal ? 'away' : 'neutral');
-      } else if (name.includes('record') || name.includes('injur')) {
-        advantage = 'neutral'; // Don't highlight these
-      } else {
-        // Higher is better for offensive stats
-        advantage = homeVal > awayVal ? 'home' : (awayVal > homeVal ? 'away' : 'neutral');
-      }
-      
-      return { name: stat.name, home: stat.home, away: stat.away, advantage };
-    });
-    
-    // Find injuries
-    const injuryStat = pick.stats.find(s => s.name?.toLowerCase().includes('injur'));
-    const injuries = { 
-      home: injuryStat?.home || 'None', 
-      away: injuryStat?.away || 'None' 
-    };
-    
-    // Filter out injuries from main stats (show separately)
-    const mainStats = statsData.filter(s => !s.name?.toLowerCase().includes('injur'));
-    
-    // Extract narrative from rationale
-    let narrative = rationale || '';
-    const takeMatch = narrative.match(/(?:Gary's Take|The Edge|The Verdict)\s*([\s\S]*)/i);
-    if (takeMatch) {
-      narrative = takeMatch[1].replace(/(?:The Edge|The Verdict|Gary's Take)/gi, '').trim();
-    } else if (narrative.includes('TALE OF THE TAPE')) {
-      narrative = narrative.replace(/TALE OF THE TAPE[\s\S]*?(?=Gary's Take|The Edge|$)/i, '').trim();
-    }
-    
-    return (
-      <TaleOfTapeDisplay 
-        homeShort={homeShort}
-        awayShort={awayShort}
-        statsData={mainStats}
-        injuries={injuries}
-        narrative={narrative}
-        accentColor={accentColor}
-      />
-    );
-  }
-  
-  // Fallback: Parse from rationale text (old format)
-  const parseTaleOfTape = (text) => {
-    if (!text || !text.includes('TALE OF THE TAPE')) {
-      return null;
-    }
+  // Parse stats and narrative from rationale
+  const parseRationale = (text) => {
+    if (!text) return null;
     
     const result = {
       teams: { home: '', away: '' },
       stats: [],
-      edge: '',
-      verdict: ''
+      injuries: { home: 'None', away: 'None' },
+      narrative: ''
     };
     
     const lines = text.split('\n');
     let inTape = false;
-    let currentSection = '';
+    let inNarrative = false;
     
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
+    for (const line of lines) {
+      const trimmed = line.trim();
       
-      if (trimmedLine.includes('TALE OF THE TAPE')) {
+      // Start/end of Tale of the Tape
+      if (trimmed.includes('TALE OF THE TAPE')) {
         inTape = true;
         continue;
       }
       
-      if (trimmedLine.match(/^The Edge$/i) || trimmedLine.match(/^THE EDGE$/i)) {
-        currentSection = 'edge';
+      // Start of narrative section
+      if (trimmed.match(/^(Gary's Take|The Edge|The Verdict)$/i)) {
         inTape = false;
-        continue;
-      }
-      if (trimmedLine.match(/^The Verdict$/i) || trimmedLine.match(/^THE VERDICT$/i)) {
-        currentSection = 'verdict';
+        inNarrative = true;
         continue;
       }
       
-      // Extract team names
-      if (inTape && !trimmedLine.includes('←') && !trimmedLine.includes('→') && trimmedLine.length > 10) {
-        const teamMatches = trimmedLine.match(/([A-Z][a-zA-Z\s]+?)\s{2,}([A-Z][a-zA-Z\s]+)/);
-        if (teamMatches && !result.teams.home) {
-          result.teams.home = teamMatches[1].trim();
-          result.teams.away = teamMatches[2].trim();
+      // Extract team names from header row (e.g. "Washington Wizards          Boston Celtics")
+      if (inTape && !trimmed.includes('→') && !trimmed.includes('←') && trimmed.length > 5 && !trimmed.toLowerCase().includes('injur') && !trimmed.toLowerCase().includes('record') && !trimmed.toLowerCase().includes('rating')) {
+        const teamMatch = trimmed.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s{2,}([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/);
+        if (teamMatch && !result.teams.home) {
+          result.teams.home = teamMatch[1].trim();
+          result.teams.away = teamMatch[2].trim();
           continue;
         }
       }
       
-      // Parse stats lines with arrows
-      if (inTape && (trimmedLine.includes('←') || trimmedLine.includes('→'))) {
-        const arrowMatch = trimmedLine.match(/^([A-Za-z\s]+?)\s{2,}([+\-]?[\d.]+|None|N\/A)\s*(←|→)\s*([+\-]?[\d.]+|None|N\/A)/);
-        if (arrowMatch) {
-          const [, statName, leftVal, arrow, rightVal] = arrowMatch;
+      // Parse stat rows with arrows (→ or ←)
+      if (inTape && (trimmed.includes('→') || trimmed.includes('←'))) {
+        // Pattern: "Record                3-17       →        12-9"
+        const statMatch = trimmed.match(/^([A-Za-z\s]+?)\s{2,}([^\s→←]+)\s*(→|←)\s*([^\s]+)/);
+        if (statMatch) {
+          const [, name, leftVal, arrow, rightVal] = statMatch;
           result.stats.push({
-            name: statName.trim(),
+            name: name.trim(),
             home: leftVal.trim(),
             away: rightVal.trim(),
-            advantage: arrow === '←' ? 'home' : 'away'
+            advantage: arrow === '→' ? 'away' : 'home' // → points to better team (away), ← points to home
           });
         }
       }
       
-      // Collect section content - combine everything into one "take"
-      if (currentSection === 'edge' && trimmedLine && !trimmedLine.match(/^(The Edge|The Verdict|Gary's Take)$/i)) {
-        result.edge += (result.edge ? ' ' : '') + trimmedLine;
+      // Parse Key Injuries row (no arrow, or with arrow)
+      if (inTape && trimmed.toLowerCase().includes('injur')) {
+        // Format: "Key Injuries      None                   None" or with arrow
+        const injMatch = trimmed.match(/(?:Key\s+)?Injuries?\s+(.+?)\s{2,}(.+)/i);
+        if (injMatch) {
+          result.injuries.home = injMatch[1].trim() || 'None';
+          result.injuries.away = injMatch[2].trim() || 'None';
+        }
       }
-      if (currentSection === 'verdict' && trimmedLine && !trimmedLine.match(/^(The Edge|The Verdict|Gary's Take)$/i)) {
-        result.verdict += (result.verdict ? ' ' : '') + trimmedLine;
-      }
-      // Also capture "Gary's Take" as a unified section
-      if (trimmedLine.match(/^Gary's Take$/i)) {
-        currentSection = 'edge'; // Put it all in edge
-        continue;
+      
+      // Collect narrative
+      if (inNarrative && trimmed) {
+        result.narrative += (result.narrative ? ' ' : '') + trimmed;
       }
     }
     
-    // Combine edge and verdict into one narrative
-    result.narrative = [result.edge, result.verdict].filter(Boolean).join(' ');
-    
-    return result.stats.length > 0 ? result : null;
+    return result;
   };
   
-  const tapeData = parseTaleOfTape(rationale);
+  const data = parseRationale(rationale);
   
-  // If no Tale of the Tape format, fall back to regular display
-  if (!tapeData) {
-    return (
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
-        {rationale}
-      </div>
-    );
+  if (!data || data.stats.length === 0) {
+    // Fallback - just show rationale as text
+    return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{rationale}</div>;
   }
   
-  const homeShort = tapeData.teams.home?.split(' ').pop() || 'Home';
-  const awayShort = tapeData.teams.away?.split(' ').pop() || 'Away';
+  const homeShort = data.teams.home || pick?.homeTeam?.split(' ').pop() || 'Home';
+  const awayShort = data.teams.away || pick?.awayTeam?.split(' ').pop() || 'Away';
   
-  // Border-only box style for sections
-  const sectionBox = {
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: '6px',
-    padding: '0.55rem 0.7rem',
-    marginBottom: '0.45rem'
-  };
-  
-  const sectionLabel = {
-    fontSize: '0.58rem',
-    fontWeight: 700,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    opacity: 0.4,
-    marginBottom: '0.3rem'
-  };
-  
-  // Organize stats by type
-  const getStatValue = (name) => tapeData.stats.find(s => s.name.toLowerCase().includes(name.toLowerCase()));
-  
-  const record = getStatValue('record');
-  const offRating = getStatValue('off');
-  const defRating = getStatValue('def');
-  const netRating = getStatValue('net');
-  const injuries = getStatValue('injur');
+  return (
+    <div style={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
+      {/* Header row */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between',
+        marginBottom: '0.4rem',
+        paddingBottom: '0.3rem',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        fontSize: '0.75rem',
+        fontWeight: 600
+      }}>
+        <span style={{ flex: 1, color: accentColor }}>{homeShort}</span>
+        <span style={{ width: '80px', textAlign: 'center', opacity: 0.35, fontSize: '0.65rem', textTransform: 'uppercase' }}>vs</span>
+        <span style={{ flex: 1, textAlign: 'right', opacity: 0.7 }}>{awayShort}</span>
+      </div>
+      
+      {/* Stats rows */}
+      {data.stats.map((stat, i) => (
+        <div key={i} style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          marginBottom: '0.25rem',
+          fontSize: '0.82rem'
+        }}>
+          <span style={{ 
+            flex: 1,
+            color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.55)',
+            fontWeight: stat.advantage === 'home' ? 600 : 400
+          }}>{stat.home}</span>
+          <span style={{ width: '80px', textAlign: 'center', opacity: 0.4, fontSize: '0.72rem' }}>{stat.name}</span>
+          <span style={{ 
+            flex: 1, 
+            textAlign: 'right',
+            color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.55)',
+            fontWeight: stat.advantage === 'away' ? 600 : 400
+          }}>{stat.away}</span>
+        </div>
+      ))}
+      
+      {/* Injuries row */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between',
+        marginTop: '0.3rem',
+        paddingTop: '0.3rem',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        fontSize: '0.75rem'
+      }}>
+        <span style={{ 
+          flex: 1, 
+          color: data.injuries.home === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171' 
+        }}>{data.injuries.home === 'None' ? '✓ Healthy' : data.injuries.home}</span>
+        <span style={{ width: '80px', textAlign: 'center', opacity: 0.35, fontSize: '0.68rem' }}>Injuries</span>
+        <span style={{ 
+          flex: 1, 
+          textAlign: 'right',
+          color: data.injuries.away === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
+        }}>{data.injuries.away === 'None' ? '✓ Healthy' : data.injuries.away}</span>
+      </div>
+      
+      {/* Gary's Take */}
+      {data.narrative && (
+        <div style={{ 
+          marginTop: '0.6rem',
+          paddingTop: '0.5rem',
+          borderTop: '1px solid rgba(74, 222, 128, 0.15)'
+        }}>
+          <div style={{ 
+            fontSize: '0.58rem', 
+            fontWeight: 700, 
+            letterSpacing: '0.1em', 
+            textTransform: 'uppercase', 
+            color: '#4ade80', 
+            opacity: 0.5,
+            marginBottom: '0.3rem'
+          }}>Gary's Take</div>
+          <div style={{ opacity: 0.88, lineHeight: 1.55, fontSize: '0.8rem' }}>{data.narrative}</div>
+        </div>
+      )}
+    </div>
+  );
   
   // Stat row component for consistent formatting
   const StatRow = ({ label, stat, width = '100%' }) => {
