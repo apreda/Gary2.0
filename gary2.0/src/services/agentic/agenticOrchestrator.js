@@ -602,11 +602,6 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
         const args = JSON.parse(toolCall.function.arguments);
         console.log(`  → [${args.token}] for ${sport}`);
         
-        toolCallHistory.push({
-          token: args.token,
-          timestamp: Date.now()
-        });
-        
         // Fetch the stats
         const statResult = await fetchStats(
           args.sport || sport,
@@ -615,6 +610,45 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           awayTeam,
           options
         );
+        
+        // Extract key values from stat result for structured storage
+        const extractStatValues = (result, token) => {
+          if (!result) return { home: 'N/A', away: 'N/A' };
+          
+          // Try common field patterns
+          const homeVal = result.home_value ?? result.homeValue ?? result.home ?? 
+                          result[homeTeam] ?? result.home_team ?? 'N/A';
+          const awayVal = result.away_value ?? result.awayValue ?? result.away ?? 
+                          result[awayTeam] ?? result.away_team ?? 'N/A';
+          
+          // For complex results, try to extract meaningful values
+          if (homeVal === 'N/A' && typeof result === 'object') {
+            // Look for home/away in nested structure
+            if (result.data) {
+              return extractStatValues(result.data, token);
+            }
+            // For ratings/efficiency stats, look for numeric values
+            const keys = Object.keys(result);
+            for (const key of keys) {
+              if (key.toLowerCase().includes('home') && typeof result[key] === 'number') {
+                return { home: result[key], away: result[keys.find(k => k.toLowerCase().includes('away'))] || 'N/A' };
+              }
+            }
+          }
+          
+          return { home: homeVal, away: awayVal };
+        };
+        
+        const values = extractStatValues(statResult, args.token);
+        
+        // Store with values for structured display
+        toolCallHistory.push({
+          token: args.token,
+          timestamp: Date.now(),
+          homeValue: values.home,
+          awayValue: values.away,
+          rawResult: statResult // Keep raw result for debugging
+        });
         
         // Add tool result to conversation
         messages.push({

@@ -153,6 +153,9 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
   // Get all stats Gary used (from statsUsed field or parsed)
   const allStats = pick?.statsUsed || [];
   
+  // Get full stat data with values (from statsData field)
+  const allStatsData = pick?.statsData || [];
+  
   // Get risks from pick object or parsed
   const risks = pick?.risks || data.riskLine || null;
   
@@ -308,62 +311,50 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               <span style={{ flex: 1, textAlign: 'right', opacity: 0.7 }}>{displayRight}</span>
             </div>
             
-            {/* Stats from rationale */}
-            {data.stats.map((stat, i) => (
-              <div key={i} style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                marginBottom: '0.3rem',
-                fontSize: '0.8rem'
-              }}>
-                <span style={{ 
-                  flex: 1,
-                  color: getAdvantage(stat, 'left') ? '#4ade80' : 'rgba(255,255,255,0.55)',
-                  fontWeight: getAdvantage(stat, 'left') ? 600 : 400
-                }}>{getStatVal(stat, 'left')}</span>
-                <span style={{ width: '90px', textAlign: 'center', opacity: 0.4, fontSize: '0.7rem' }}>{stat.name}</span>
-                <span style={{ 
-                  flex: 1, 
-                  textAlign: 'right',
-                  color: getAdvantage(stat, 'right') ? '#4ade80' : 'rgba(255,255,255,0.55)',
-                  fontWeight: getAdvantage(stat, 'right') ? 600 : 400
-                }}>{getStatVal(stat, 'right')}</span>
-              </div>
-            ))}
-            
-            {/* Net Rating Edge - calculated from the individual net ratings */}
-            {(() => {
-              const netRatingStat = data.stats.find(s => s.name.toLowerCase().includes('net'));
-              if (netRatingStat) {
-                const leftVal = parseFloat(getStatVal(netRatingStat, 'left')) || 0;
-                const rightVal = parseFloat(getStatVal(netRatingStat, 'right')) || 0;
-                const edge = Math.abs(leftVal - rightVal).toFixed(1);
-                const leftWins = leftVal > rightVal;
-                return (
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    marginTop: '0.4rem',
-                    paddingTop: '0.4rem',
-                    borderTop: '1px solid rgba(74, 222, 128, 0.2)',
-                    fontSize: '0.8rem',
-                    fontWeight: 600
-                  }}>
-                    <span style={{ 
-                      flex: 1,
-                      color: leftWins ? '#4ade80' : 'rgba(255,255,255,0.4)'
-                    }}>{leftWins ? `+${edge}` : ''}</span>
-                    <span style={{ width: '90px', textAlign: 'center', color: '#4ade80', fontSize: '0.7rem' }}>Edge</span>
-                    <span style={{ 
-                      flex: 1, 
-                      textAlign: 'right',
-                      color: !leftWins ? '#4ade80' : 'rgba(255,255,255,0.4)'
-                    }}>{!leftWins ? `+${edge}` : ''}</span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
+            {/* Stats - use statsData if available (has values), otherwise fall back to parsed rationale */}
+            {(allStatsData.length > 0 ? allStatsData : data.stats).map((stat, i) => {
+              // Handle both statsData format {name, token, home, away} and parsed format {name, left, right, advantage}
+              const isStatsData = stat.token !== undefined;
+              const statName = isStatsData ? stat.name : stat.name;
+              const homeVal = isStatsData ? stat.home : stat.left;
+              const awayVal = isStatsData ? stat.away : stat.right;
+              
+              // For statsData, we need to swap if Gary picked the right team
+              const displayLeft = garyPickedRight ? awayVal : homeVal;
+              const displayRight = garyPickedRight ? homeVal : awayVal;
+              
+              // Determine advantage (higher is usually better, except for defensive stats)
+              const isDefensiveStat = statName.toLowerCase().includes('def') || statName.toLowerCase().includes('turnover');
+              const leftNum = parseFloat(displayLeft) || 0;
+              const rightNum = parseFloat(displayRight) || 0;
+              const leftWins = isDefensiveStat ? leftNum < rightNum : leftNum > rightNum;
+              const rightWins = isDefensiveStat ? rightNum < leftNum : rightNum > leftNum;
+              
+              // Skip N/A stats
+              if (displayLeft === 'N/A' && displayRight === 'N/A') return null;
+              
+              return (
+                <div key={i} style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  marginBottom: '0.3rem',
+                  fontSize: '0.8rem'
+                }}>
+                  <span style={{ 
+                    flex: 1,
+                    color: leftWins ? '#4ade80' : 'rgba(255,255,255,0.55)',
+                    fontWeight: leftWins ? 600 : 400
+                  }}>{displayLeft}</span>
+                  <span style={{ width: '100px', textAlign: 'center', opacity: 0.4, fontSize: '0.65rem' }}>{statName}</span>
+                  <span style={{ 
+                    flex: 1, 
+                    textAlign: 'right',
+                    color: rightWins ? '#4ade80' : 'rgba(255,255,255,0.55)',
+                    fontWeight: rightWins ? 600 : 400
+                  }}>{displayRight}</span>
+                </div>
+              );
+            })}
             
             {/* Injuries */}
             <div style={{ 
@@ -386,8 +377,8 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               }}>{injRight === 'None' ? 'Healthy' : injRight}</span>
             </div>
             
-            {/* Stats Gary Researched - simple inline list */}
-            {allStats.length > 0 && (
+            {/* Only show Research list if we don't have statsData with values */}
+            {allStatsData.length === 0 && allStats.length > 0 && (
               <div style={{ 
                 marginTop: '0.8rem', 
                 paddingTop: '0.6rem', 
@@ -845,6 +836,7 @@ function RealGaryPicks() {
               momentum: pick.momentum || 0,
               // CRITICAL: Include agentic system fields
               statsUsed: pick.statsUsed || [],
+              statsData: pick.statsData || [], // Full stat values for Tale of the Tape
               commence_time: pick.commence_time || null
             };
 

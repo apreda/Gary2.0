@@ -277,6 +277,7 @@ async function storeDailyPicksInDatabase(picks) {
         sport: pick.sport,
         // Include agentic system fields (CRITICAL - was missing!)
         statsUsed: pick.statsUsed || [],
+        statsData: pick.statsData || [], // Full stat values for Tale of the Tape
         commence_time: pick.commence_time || null
       };
       
@@ -304,6 +305,7 @@ async function storeDailyPicksInDatabase(picks) {
       sport: pick.sport,
       // Include agentic system fields
       statsUsed: pick.statsUsed || [],
+      statsData: pick.statsData || [], // Full stat values for Tale of the Tape
       commence_time: pick.commence_time || null,
       gameTime: pick.gameTime || null
     };

@@ -230,7 +230,17 @@ async function main() {
             }
           }
           
-          // Extract just the stat token names for storage
+          // Extract stat data with values for structured Tale of the Tape display
+          const statsData = result.toolCallHistory 
+            ? result.toolCallHistory.map(t => ({
+                name: t.token.replace(/_/g, ' '),
+                token: t.token,
+                home: t.homeValue ?? 'N/A',
+                away: t.awayValue ?? 'N/A'
+              }))
+            : [];
+          
+          // Also keep simple token list for backwards compatibility
           const statsUsed = result.toolCallHistory 
             ? result.toolCallHistory.map(t => t.token) 
             : [];
@@ -253,7 +263,8 @@ async function main() {
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
             commence_time: game.commence_time,
-            statsUsed: statsUsed // Clean array of stat names Gary used
+            statsUsed: statsUsed, // Token names for backwards compatibility
+            statsData: statsData // Full stat data with values for Tale of the Tape
           };
           
           // Add to picks
