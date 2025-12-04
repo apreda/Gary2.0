@@ -173,6 +173,18 @@ async function main() {
       const sportPicks = [];
       for (let i = 0; i < finalGames.length; i++) {
         const game = finalGames[i];
+        
+        // Skip specific teams if configured (for testing)
+        const SKIP_TEAMS = ['Celtics', 'Wizards']; // Skip Celtics vs Wizards for now
+        const shouldSkip = SKIP_TEAMS.some(team => 
+          game.home_team?.toLowerCase().includes(team.toLowerCase()) ||
+          game.away_team?.toLowerCase().includes(team.toLowerCase())
+        );
+        if (shouldSkip) {
+          console.log(`\n⏭️  Skipping: ${game.away_team} @ ${game.home_team} (in skip list)`);
+          continue;
+        }
+        
         console.log(`\n[${i + 1}/${finalGames.length}] ${game.away_team} @ ${game.home_team}`);
         
         // Create game key for deduplication
