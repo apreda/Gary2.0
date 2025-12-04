@@ -33,7 +33,7 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Overlay Analysis Component - Gary's Take main, Stats in overlay popup
+// Integrated Analysis Component - Gary's Take main, Risks at bottom, Stats overlay
 const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
   const [showStatsOverlay, setShowStatsOverlay] = useState(false);
   
@@ -46,7 +46,8 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
       stats: [],
       injuries: { left: 'None', right: 'None' },
       narrative: '',
-      lockLine: ''
+      lockLine: '',
+      riskLine: ''
     };
     
     const lines = text.split('\n');
@@ -112,6 +113,13 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
       result.narrative = result.narrative.replace(lockMatch[0], '').trim();
     }
     
+    // Extract risk/danger line (sentences mentioning "only way", "danger", "risk", "miss")
+    const riskMatch = result.narrative.match(/([^.]*(?:only way|danger|risk|miss(?:es)?|backdoor)[^.]*\.)/i);
+    if (riskMatch) {
+      result.riskLine = riskMatch[1].trim();
+      result.narrative = result.narrative.replace(riskMatch[0], '').trim();
+    }
+    
     return result;
   };
   
@@ -151,6 +159,9 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
   // Get all stats Gary used (from statsUsed field or parsed)
   const allStats = pick?.statsUsed || [];
   
+  // Get risks from pick object or parsed
+  const risks = pick?.risks || data.riskLine || null;
+  
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* View Stats Button */}
@@ -176,12 +187,15 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
         View Stats ({allStats.length || data.stats.length})
       </button>
       
-      {/* Main Content - Gary's Take */}
+      {/* Main Content */}
       <div style={{ 
         flex: 1, 
         overflowY: 'auto',
-        paddingTop: '2rem' // Space for button
+        paddingTop: '2rem',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
+        {/* Gary's Take Header */}
         <div style={{ 
           fontSize: '0.7rem', 
           fontWeight: 700, 
@@ -192,19 +206,45 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
           marginBottom: '0.5rem'
         }}>Gary's Take</div>
         
-        <div style={{ fontSize: '0.85rem', lineHeight: 1.65, opacity: 0.92 }}>
+        {/* Main Narrative */}
+        <div style={{ fontSize: '0.85rem', lineHeight: 1.65, opacity: 0.92, flex: 1 }}>
           {data.narrative || rationale}
         </div>
         
+        {/* Lock Line - Green */}
         {data.lockLine && (
           <div style={{ 
-            marginTop: '0.8rem', 
-            paddingTop: '0.6rem',
+            marginTop: '0.6rem', 
+            paddingTop: '0.5rem',
             borderTop: '1px solid rgba(74, 222, 128, 0.15)'
           }}>
-            <span style={{ color: '#4ade80', fontWeight: 600, fontSize: '0.9rem' }}>
+            <span style={{ color: '#4ade80', fontWeight: 600, fontSize: '0.88rem' }}>
               {data.lockLine}
             </span>
+          </div>
+        )}
+        
+        {/* Risks Section - Amber */}
+        {risks && (
+          <div style={{ 
+            marginTop: '0.6rem', 
+            padding: '0.5rem 0.6rem',
+            background: 'rgba(251, 191, 36, 0.08)',
+            borderLeft: '2px solid rgba(251, 191, 36, 0.5)',
+            borderRadius: '0 4px 4px 0'
+          }}>
+            <div style={{ 
+              fontSize: '0.6rem', 
+              fontWeight: 700, 
+              letterSpacing: '0.08em', 
+              textTransform: 'uppercase',
+              color: '#fbbf24',
+              opacity: 0.8,
+              marginBottom: '0.25rem'
+            }}>Risk Factor</div>
+            <div style={{ fontSize: '0.78rem', lineHeight: 1.5, color: 'rgba(251, 191, 36, 0.9)' }}>
+              {risks}
+            </div>
           </div>
         )}
       </div>
@@ -221,8 +261,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
             padding: '1rem',
             display: 'flex',
             flexDirection: 'column',
-            zIndex: 10,
-            animation: 'fadeIn 0.2s ease'
+            zIndex: 10
           }}
         >
           {/* Overlay Header */}

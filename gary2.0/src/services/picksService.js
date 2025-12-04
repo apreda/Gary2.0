@@ -298,7 +298,11 @@ async function storeDailyPicksInDatabase(picks) {
       trapAlert: false,
       confidence: pick.confidence || 0,
       superstition: false,
-      sport: pick.sport
+      sport: pick.sport,
+      // Include agentic system fields
+      statsUsed: pick.statsUsed || [],
+      commence_time: pick.commence_time || null,
+      gameTime: pick.gameTime || null
     };
     
     // Add the generated pick ID
