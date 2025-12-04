@@ -33,7 +33,7 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Tale of the Tape Component - Clean compact format with Gary's pick on left
+// Tale of the Tape Component - Wide format with vs in middle
 const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
   
   // Parse stats and narrative from rationale
@@ -41,9 +41,9 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
     if (!text) return null;
     
     const result = {
-      teams: { left: '', right: '' },
+      teams: { home: '', away: '' },
       stats: [],
-      injuries: { left: 'None', right: 'None' },
+      injuries: { home: 'None', away: 'None' },
       narrative: ''
     };
     
@@ -68,9 +68,9 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
       // Extract team names from header row
       if (inTape && !trimmed.includes('→') && !trimmed.includes('←') && trimmed.length > 5 && !trimmed.toLowerCase().includes('injur') && !trimmed.toLowerCase().includes('record') && !trimmed.toLowerCase().includes('rating')) {
         const teamMatch = trimmed.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s{2,}([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/);
-        if (teamMatch && !result.teams.left) {
-          result.teams.left = teamMatch[1].trim();
-          result.teams.right = teamMatch[2].trim();
+        if (teamMatch && !result.teams.home) {
+          result.teams.home = teamMatch[1].trim();
+          result.teams.away = teamMatch[2].trim();
           continue;
         }
       }
@@ -82,9 +82,9 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
           const [, name, leftVal, arrow, rightVal] = statMatch;
           result.stats.push({
             name: name.trim(),
-            left: leftVal.trim(),
-            right: rightVal.trim(),
-            advantage: arrow === '→' ? 'right' : 'left'
+            home: leftVal.trim(),
+            away: rightVal.trim(),
+            advantage: arrow === '→' ? 'away' : 'home'
           });
         }
       }
@@ -93,8 +93,8 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
       if (inTape && trimmed.toLowerCase().includes('injur')) {
         const injMatch = trimmed.match(/(?:Key\s+)?Injuries?\s+(.+?)\s{2,}(.+)/i);
         if (injMatch) {
-          result.injuries.left = injMatch[1].trim() || 'None';
-          result.injuries.right = injMatch[2].trim() || 'None';
+          result.injuries.home = injMatch[1].trim() || 'None';
+          result.injuries.away = injMatch[2].trim() || 'None';
         }
       }
       
@@ -112,111 +112,76 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
     return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{rationale}</div>;
   }
   
-  // Determine which team Gary picked
-  const pickStr = pick?.pick?.toLowerCase() || '';
-  const leftTeam = data.teams.left || pick?.homeTeam?.split(' ').pop() || 'Home';
-  const rightTeam = data.teams.right || pick?.awayTeam?.split(' ').pop() || 'Away';
-  
-  // Check if Gary picked the right team - if so, swap everything
-  const garyPickedRight = pickStr.includes(rightTeam.toLowerCase()) || 
-                          pickStr.includes(rightTeam.split(' ').pop()?.toLowerCase());
-  
-  // Swap if Gary picked the right team (so his pick is always on left)
-  const team1 = garyPickedRight ? rightTeam : leftTeam;
-  const team2 = garyPickedRight ? leftTeam : rightTeam;
-  
-  const getStatVal = (stat, side) => {
-    if (garyPickedRight) {
-      return side === 'left' ? stat.right : stat.left;
-    }
-    return side === 'left' ? stat.left : stat.right;
-  };
-  
-  const getAdvantage = (stat, side) => {
-    const adv = garyPickedRight ? (stat.advantage === 'right' ? 'left' : 'right') : stat.advantage;
-    return adv === side;
-  };
-  
-  const inj1 = garyPickedRight ? data.injuries.right : data.injuries.left;
-  const inj2 = garyPickedRight ? data.injuries.left : data.injuries.right;
-  
-  // Split stats into two columns for more space
-  const halfIdx = Math.ceil(data.stats.length / 2);
-  const statsCol1 = data.stats.slice(0, halfIdx);
-  const statsCol2 = data.stats.slice(halfIdx);
-  
-  // Stat row component - compact
-  const StatRow = ({ stat }) => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.2rem', fontSize: '0.78rem' }}>
-      <span style={{ 
-        width: '42px',
-        color: getAdvantage(stat, 'left') ? '#4ade80' : 'rgba(255,255,255,0.5)',
-        fontWeight: getAdvantage(stat, 'left') ? 600 : 400
-      }}>{getStatVal(stat, 'left')}</span>
-      <span style={{ width: '55px', textAlign: 'center', opacity: 0.35, fontSize: '0.65rem' }}>{stat.name}</span>
-      <span style={{ 
-        width: '42px', 
-        textAlign: 'right',
-        color: getAdvantage(stat, 'right') ? '#4ade80' : 'rgba(255,255,255,0.5)',
-        fontWeight: getAdvantage(stat, 'right') ? 600 : 400
-      }}>{getStatVal(stat, 'right')}</span>
-    </div>
-  );
+  const homeShort = data.teams.home || pick?.homeTeam?.split(' ').pop() || 'Home';
+  const awayShort = data.teams.away || pick?.awayTeam?.split(' ').pop() || 'Away';
   
   return (
-    <div style={{ fontSize: '0.82rem', lineHeight: 1.4 }}>
-      {/* Compact header */}
+    <div style={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
+      {/* Header row - wide format */}
       <div style={{ 
         display: 'flex', 
-        gap: '1.5rem',
-        marginBottom: '0.35rem',
-        paddingBottom: '0.25rem',
-        borderBottom: '1px solid rgba(255,255,255,0.08)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-          <span style={{ color: accentColor, fontWeight: 600, fontSize: '0.72rem' }}>{team1}</span>
-          <span style={{ opacity: 0.3, fontSize: '0.6rem' }}>vs</span>
-          <span style={{ opacity: 0.6, fontSize: '0.72rem' }}>{team2}</span>
-        </div>
-      </div>
-      
-      {/* Two-column stats layout */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.3rem' }}>
-        {/* Column 1 */}
-        <div style={{ flex: 1 }}>
-          {statsCol1.map((stat, i) => <StatRow key={i} stat={stat} />)}
-        </div>
-        {/* Column 2 */}
-        <div style={{ flex: 1 }}>
-          {statsCol2.map((stat, i) => <StatRow key={i} stat={stat} />)}
-        </div>
-      </div>
-      
-      {/* Injuries - inline */}
-      <div style={{ 
-        fontSize: '0.7rem', 
-        opacity: 0.6,
+        justifyContent: 'space-between',
         marginBottom: '0.4rem',
-        display: 'flex',
-        gap: '0.8rem'
+        paddingBottom: '0.3rem',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        fontSize: '0.75rem',
+        fontWeight: 600
       }}>
-        <span>
-          <span style={{ opacity: 0.5 }}>Injuries: </span>
-          <span style={{ color: inj1 === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171' }}>
-            {inj1 === 'None' ? '✓' : inj1}
-          </span>
-        </span>
-        <span style={{ opacity: 0.3 }}>|</span>
-        <span style={{ color: inj2 === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171' }}>
-          {inj2 === 'None' ? '✓' : inj2}
-        </span>
+        <span style={{ flex: 1, color: accentColor }}>{homeShort}</span>
+        <span style={{ width: '80px', textAlign: 'center', opacity: 0.35, fontSize: '0.65rem', textTransform: 'uppercase' }}>vs</span>
+        <span style={{ flex: 1, textAlign: 'right', opacity: 0.7 }}>{awayShort}</span>
+      </div>
+      
+      {/* Stats rows - wide format with vs in middle */}
+      {data.stats.map((stat, i) => (
+        <div key={i} style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          marginBottom: '0.25rem',
+          fontSize: '0.82rem'
+        }}>
+          <span style={{ 
+            flex: 1,
+            color: stat.advantage === 'home' ? '#4ade80' : 'rgba(255,255,255,0.55)',
+            fontWeight: stat.advantage === 'home' ? 600 : 400
+          }}>{stat.home}</span>
+          <span style={{ width: '80px', textAlign: 'center', opacity: 0.4, fontSize: '0.72rem' }}>{stat.name}</span>
+          <span style={{ 
+            flex: 1, 
+            textAlign: 'right',
+            color: stat.advantage === 'away' ? '#4ade80' : 'rgba(255,255,255,0.55)',
+            fontWeight: stat.advantage === 'away' ? 600 : 400
+          }}>{stat.away}</span>
+        </div>
+      ))}
+      
+      {/* Injuries row */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between',
+        marginTop: '0.3rem',
+        paddingTop: '0.3rem',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        fontSize: '0.75rem'
+      }}>
+        <span style={{ 
+          flex: 1, 
+          color: data.injuries.home === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171' 
+        }}>{data.injuries.home === 'None' ? '✓ Healthy' : data.injuries.home}</span>
+        <span style={{ width: '80px', textAlign: 'center', opacity: 0.35, fontSize: '0.68rem' }}>Injuries</span>
+        <span style={{ 
+          flex: 1, 
+          textAlign: 'right',
+          color: data.injuries.away === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
+        }}>{data.injuries.away === 'None' ? '✓ Healthy' : data.injuries.away}</span>
       </div>
       
       {/* Gary's Take */}
       {data.narrative && (
         <div style={{ 
-          paddingTop: '0.4rem',
-          borderTop: '1px solid rgba(74, 222, 128, 0.12)'
+          marginTop: '0.6rem',
+          paddingTop: '0.5rem',
+          borderTop: '1px solid rgba(74, 222, 128, 0.15)'
         }}>
           <div style={{ 
             fontSize: '0.7rem', 
@@ -225,9 +190,9 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
             textTransform: 'uppercase', 
             color: '#4ade80', 
             opacity: 0.6,
-            marginBottom: '0.25rem'
+            marginBottom: '0.3rem'
           }}>Gary's Take</div>
-          <div style={{ opacity: 0.88, lineHeight: 1.55, fontSize: '0.8rem' }}>{data.narrative}</div>
+          <div style={{ opacity: 0.9, lineHeight: 1.6, fontSize: '0.82rem' }}>{data.narrative}</div>
         </div>
       )}
     </div>
