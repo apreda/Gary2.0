@@ -95,19 +95,22 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         }
       }
       
-      // Collect section content
-      if (currentSection === 'edge' && trimmedLine && !trimmedLine.match(/^The (Edge|Verdict)$/i)) {
+      // Collect section content - combine everything into one "take"
+      if (currentSection === 'edge' && trimmedLine && !trimmedLine.match(/^(The Edge|The Verdict|Gary's Take)$/i)) {
         result.edge += (result.edge ? ' ' : '') + trimmedLine;
       }
-      if (currentSection === 'verdict' && trimmedLine && !trimmedLine.match(/^The (Edge|Verdict)$/i)) {
+      if (currentSection === 'verdict' && trimmedLine && !trimmedLine.match(/^(The Edge|The Verdict|Gary's Take)$/i)) {
         result.verdict += (result.verdict ? ' ' : '') + trimmedLine;
+      }
+      // Also capture "Gary's Take" as a unified section
+      if (trimmedLine.match(/^Gary's Take$/i)) {
+        currentSection = 'edge'; // Put it all in edge
+        continue;
       }
     }
     
-    // Combine edge and verdict for full analysis
-    if (!result.verdict && result.edge) {
-      result.verdict = '';
-    }
+    // Combine edge and verdict into one narrative
+    result.narrative = [result.edge, result.verdict].filter(Boolean).join(' ');
     
     return result.stats.length > 0 ? result : null;
   };
@@ -270,22 +273,12 @@ const TaleOfTheTape = ({ rationale, accentColor }) => {
         </div>
       </div>
       
-      {/* The Edge - border only */}
-      {tapeData.edge && (
-        <div style={sectionBox}>
-          <div style={sectionLabel}>The Edge</div>
-          <div style={{ opacity: 0.85, lineHeight: 1.5, fontSize: '0.8rem' }}>
-            {tapeData.edge}
-          </div>
-        </div>
-      )}
-      
-      {/* The Verdict - green border */}
-      {tapeData.verdict && (
-        <div style={{ ...sectionBox, borderColor: 'rgba(74, 222, 128, 0.2)', marginBottom: 0 }}>
-          <div style={{ ...sectionLabel, color: '#4ade80', opacity: 0.65 }}>The Verdict</div>
-          <div style={{ opacity: 0.9, lineHeight: 1.5, fontSize: '0.8rem' }}>
-            {tapeData.verdict}
+      {/* Gary's Take - one unified section */}
+      {(tapeData.narrative || tapeData.edge) && (
+        <div style={{ ...sectionBox, borderColor: 'rgba(74, 222, 128, 0.15)', marginBottom: 0 }}>
+          <div style={{ ...sectionLabel, color: '#4ade80', opacity: 0.6 }}>Gary's Take</div>
+          <div style={{ opacity: 0.88, lineHeight: 1.55, fontSize: '0.82rem' }}>
+            {tapeData.narrative || tapeData.edge}
           </div>
         </div>
       )}
