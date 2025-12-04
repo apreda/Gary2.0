@@ -27,6 +27,22 @@ export async function buildScoutReport(game, sport) {
     fetchRecentGames(awayTeam, sportKey, 5)
   ]);
   
+  // Format injuries for display
+  const formatInjuriesForStorage = (injuries) => {
+    const formatList = (list) => list.map(i => ({
+      name: `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim() || i.name || 'Unknown',
+      status: i.status || 'Unknown',
+      description: i.description || i.comment || i.injury || ''
+    }));
+    
+    return {
+      home: formatList(injuries.home || []),
+      away: formatList(injuries.away || [])
+    };
+  };
+  
+  const injuriesForStorage = formatInjuriesForStorage(injuries);
+  
   // Build the scout report
   const report = `
 ══════════════════════════════════════════════════════════════════════
@@ -71,7 +87,11 @@ ${formatTokenMenu(sportKey)}
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 
-  return report;
+  // Return both the report text and structured injuries data
+  return {
+    text: report,
+    injuries: injuriesForStorage
+  };
 }
 
 /**

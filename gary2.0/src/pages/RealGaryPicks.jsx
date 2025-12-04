@@ -147,8 +147,32 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
     return origAdv === side;
   };
   
-  const injLeft = garyPickedRight ? data.injuries.right : data.injuries.left;
-  const injRight = garyPickedRight ? data.injuries.left : data.injuries.right;
+  // Get injuries - prefer structured data from BDL, fallback to parsed rationale
+  const getInjuryDisplay = (teamInjuries) => {
+    if (!teamInjuries || teamInjuries.length === 0) return 'Healthy';
+    return teamInjuries
+      .filter(i => i.status === 'Out' || i.status === 'Doubtful')
+      .map(i => `${i.name} (${i.status})`)
+      .join(', ') || 'Healthy';
+  };
+  
+  // Use structured injuries if available, otherwise fall back to parsed
+  const structuredInjuries = pick?.injuries;
+  let injLeft, injRight;
+  
+  if (structuredInjuries) {
+    // Swap based on Gary's pick position
+    injLeft = garyPickedRight 
+      ? getInjuryDisplay(structuredInjuries.away) 
+      : getInjuryDisplay(structuredInjuries.home);
+    injRight = garyPickedRight 
+      ? getInjuryDisplay(structuredInjuries.home) 
+      : getInjuryDisplay(structuredInjuries.away);
+  } else {
+    // Fallback to parsed rationale
+    injLeft = garyPickedRight ? data.injuries.right : data.injuries.left;
+    injRight = garyPickedRight ? data.injuries.left : data.injuries.right;
+  }
   
   // Get all stats Gary used (from statsUsed field or parsed)
   const allStats = pick?.statsUsed || [];
@@ -913,6 +937,7 @@ function RealGaryPicks() {
               // CRITICAL: Include agentic system fields
               statsUsed: pick.statsUsed || [],
               statsData: pick.statsData || [], // Full stat values for Tale of the Tape
+              injuries: pick.injuries || null, // Structured injury data from BDL
               commence_time: pick.commence_time || null
             };
 

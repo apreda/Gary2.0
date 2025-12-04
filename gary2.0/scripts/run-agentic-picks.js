@@ -264,7 +264,8 @@ async function main() {
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
             commence_time: game.commence_time,
             statsUsed: statsUsed, // Token names for backwards compatibility
-            statsData: statsData // Full stat data with values for Tale of the Tape
+            statsData: statsData, // Full stat data with values for Tale of the Tape
+            injuries: result.injuries || null // Structured injury data from BDL
           };
           
           // Add to picks
