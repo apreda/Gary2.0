@@ -103,6 +103,17 @@ export const propPicksService = {
 
 Your job is to analyze player props for today's games and identify value bets based on the provided player statistics and prop odds.
 
+🚨 CRITICAL RULE: USE ONLY THE STATS PROVIDED 🚨
+- You can ONLY cite statistics that appear in the "Player Statistics" section below
+- If a stat is not provided, DO NOT make one up or estimate it
+- NEVER invent a player's average, recent game stats, or matchup data
+- If you don't have enough data on a player, skip that player entirely
+- Every number in your rationale MUST come from the data provided
+
+❌ BAD: "LeBron is averaging 27.3 PPG" (if that exact number isn't in the data)
+❌ BAD: "In his last game he had 32 points" (if recent games aren't provided)
+✅ GOOD: Only cite stats you can see in the Player Statistics section
+
 ${sportGuidance}
 
 ## Available Props:
@@ -112,11 +123,13 @@ ${props}
 ${playerStats}
 
 ## Analysis Requirements:
-For each prop, analyze:
-1. Player's season average vs. the prop line
-2. Recent performance trends (hot/cold streaks)
-3. Matchup advantages/disadvantages
+For each prop, analyze USING ONLY THE DATA PROVIDED:
+1. Player's season average vs. the prop line (ONLY if average is in the data)
+2. Recent performance trends (ONLY if recent game data is provided)
+3. Matchup advantages/disadvantages (ONLY if matchup data is provided)
 4. Betting odds value (implied probability vs. your estimated probability)
+
+If you don't have a specific stat, DO NOT mention it. Focus on what you DO have.
 
 ## Output Requirements:
 Give me your TOP 5 picks only, focusing on value bets with favorable odds (prefer +100 or better when possible).
@@ -141,7 +154,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
     "bet": "over" or "under",
     "odds": -110,
     "confidence": 0.65,
-    "rationale": "Brief explanation of why this is a value bet"
+    "rationale": "Brief explanation citing ONLY stats from the data provided"
   }
 ]
 `;
