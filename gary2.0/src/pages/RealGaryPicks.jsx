@@ -352,38 +352,23 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               }}>{injRight === 'None' ? 'Healthy' : injRight}</span>
             </div>
             
-            {/* Stats Gary Analyzed */}
+            {/* Stats Gary Researched - simple inline list */}
             {allStats.length > 0 && (
               <div style={{ 
                 marginTop: '0.8rem', 
                 paddingTop: '0.6rem', 
-                borderTop: '1px solid rgba(74, 222, 128, 0.15)'
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                fontSize: '0.65rem',
+                color: 'rgba(255, 255, 255, 0.45)',
+                lineHeight: 1.5
               }}>
-                <div style={{ 
-                  fontSize: '0.6rem', 
-                  fontWeight: 600, 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '0.08em',
-                  color: '#4ade80',
-                  opacity: 0.6,
-                  marginBottom: '0.4rem'
-                }}>Stats Gary Analyzed</div>
-                <div style={{ 
-                  display: 'flex', 
-                  flexWrap: 'wrap', 
-                  gap: '0.3rem'
-                }}>
-                  {allStats.map((stat, i) => (
-                    <span key={i} style={{
-                      fontSize: '0.58rem',
-                      padding: '0.2rem 0.4rem',
-                      background: 'rgba(74, 222, 128, 0.1)',
-                      color: 'rgba(74, 222, 128, 0.8)',
-                      borderRadius: '3px',
-                      fontWeight: 500
-                    }}>{stat.replace(/_/g, ' ')}</span>
-                  ))}
-                </div>
+                <span style={{ fontWeight: 500, opacity: 0.7 }}>Research: </span>
+                {allStats.map((stat, i) => (
+                  <span key={i}>
+                    {stat.replace(/_/g, ' ').toLowerCase()}
+                    {i < allStats.length - 1 ? ' · ' : ''}
+                  </span>
+                ))}
               </div>
             )}
           </div>
