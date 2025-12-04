@@ -331,6 +331,40 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               </div>
             ))}
             
+            {/* Net Rating Edge - calculated from the individual net ratings */}
+            {(() => {
+              const netRatingStat = data.stats.find(s => s.name.toLowerCase().includes('net'));
+              if (netRatingStat) {
+                const leftVal = parseFloat(getStatVal(netRatingStat, 'left')) || 0;
+                const rightVal = parseFloat(getStatVal(netRatingStat, 'right')) || 0;
+                const edge = Math.abs(leftVal - rightVal).toFixed(1);
+                const leftWins = leftVal > rightVal;
+                return (
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between',
+                    marginTop: '0.4rem',
+                    paddingTop: '0.4rem',
+                    borderTop: '1px solid rgba(74, 222, 128, 0.2)',
+                    fontSize: '0.8rem',
+                    fontWeight: 600
+                  }}>
+                    <span style={{ 
+                      flex: 1,
+                      color: leftWins ? '#4ade80' : 'rgba(255,255,255,0.4)'
+                    }}>{leftWins ? `+${edge}` : ''}</span>
+                    <span style={{ width: '90px', textAlign: 'center', color: '#4ade80', fontSize: '0.7rem' }}>Edge</span>
+                    <span style={{ 
+                      flex: 1, 
+                      textAlign: 'right',
+                      color: !leftWins ? '#4ade80' : 'rgba(255,255,255,0.4)'
+                    }}>{!leftWins ? `+${edge}` : ''}</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            
             {/* Injuries */}
             <div style={{ 
               display: 'flex', 
