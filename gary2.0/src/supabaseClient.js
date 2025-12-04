@@ -1,10 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import axios from 'axios';
 
-// Properly resolve environment variables for both browser (Vite) and serverless (Vercel Functions)
-// In Vite, import.meta.env is always available - don't use optional chaining on it
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Properly resolve environment variables for both browser (Vite) and Node.js scripts
+const supabaseUrl = typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL
+  ? import.meta.env.VITE_SUPABASE_URL
+  : process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+
+const supabaseKey = typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY
+  ? import.meta.env.VITE_SUPABASE_ANON_KEY
+  : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
 // Prefer service role key for server-side admin operations
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
