@@ -317,6 +317,9 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               const isStatsData = stat.token !== undefined;
               const statName = isStatsData ? stat.name : stat.name;
               
+              // Skip TOP_PLAYERS - not a displayable stat
+              if (stat.token === 'TOP_PLAYERS') return null;
+              
               // Extract key value from nested stat objects
               const extractValue = (obj, token) => {
                 if (!obj || typeof obj !== 'object') return obj || 'N/A';
@@ -369,6 +372,17 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               const displayLeft = garyPickedRight ? awayVal : homeVal;
               const displayRight = garyPickedRight ? homeVal : awayVal;
               
+              // Special rendering for RECENT_FORM - color code W/L
+              const isRecentForm = stat.token === 'RECENT_FORM';
+              const renderFormValue = (val) => {
+                if (!val || typeof val !== 'string') return val;
+                return val.split('').map((char, idx) => {
+                  if (char === 'W') return <span key={idx} style={{ color: '#4ade80', fontWeight: 600 }}>W</span>;
+                  if (char === 'L') return <span key={idx} style={{ color: '#f87171', fontWeight: 600 }}>L</span>;
+                  return <span key={idx} style={{ opacity: 0.5 }}>{char}</span>;
+                });
+              };
+              
               // Determine advantage (higher is usually better, except for defensive stats)
               const isDefensiveStat = statName.toLowerCase().includes('def') || statName.toLowerCase().includes('turnover');
               const leftNum = parseFloat(String(displayLeft).replace('%', '')) || 0;
@@ -388,40 +402,41 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 }}>
                   <span style={{ 
                     flex: 1,
-                    color: leftWins ? '#4ade80' : 'rgba(255,255,255,0.55)',
-                    fontWeight: leftWins ? 600 : 400
-                  }}>{displayLeft}</span>
+                    color: isRecentForm ? 'inherit' : (leftWins ? '#4ade80' : 'rgba(255,255,255,0.55)'),
+                    fontWeight: leftWins && !isRecentForm ? 600 : 400
+                  }}>{isRecentForm ? renderFormValue(displayLeft) : displayLeft}</span>
                   <span style={{ width: '110px', textAlign: 'center', opacity: 0.4, fontSize: '0.62rem' }}>{statName}</span>
                   <span style={{ 
                     flex: 1, 
                     textAlign: 'right',
-                    color: rightWins ? '#4ade80' : 'rgba(255,255,255,0.55)',
-                    fontWeight: rightWins ? 600 : 400
-                  }}>{displayRight}</span>
+                    color: isRecentForm ? 'inherit' : (rightWins ? '#4ade80' : 'rgba(255,255,255,0.55)'),
+                    fontWeight: rightWins && !isRecentForm ? 600 : 400
+                  }}>{isRecentForm ? renderFormValue(displayRight) : displayRight}</span>
                 </div>
               );
             })}
             
-            {/* Injuries */}
+            {/* Injuries row */}
             <div style={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              marginTop: '0.4rem',
-              paddingTop: '0.4rem',
-              borderTop: '1px solid rgba(255,255,255,0.08)',
+              marginTop: '0.5rem',
+              paddingTop: '0.5rem',
+              borderTop: '1px solid rgba(255,255,255,0.1)',
               fontSize: '0.75rem'
             }}>
               <span style={{ 
                 flex: 1, 
-                color: injLeft === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171' 
+                color: injLeft === 'None' || injLeft === 'Healthy' ? 'rgba(255,255,255,0.5)' : '#f87171' 
               }}>{injLeft === 'None' ? 'Healthy' : injLeft}</span>
-              <span style={{ width: '90px', textAlign: 'center', opacity: 0.35, fontSize: '0.68rem' }}>Injuries</span>
+              <span style={{ width: '110px', textAlign: 'center', opacity: 0.35, fontSize: '0.62rem' }}>INJURIES</span>
               <span style={{ 
                 flex: 1, 
                 textAlign: 'right',
-                color: injRight === 'None' ? 'rgba(255,255,255,0.5)' : '#f87171'
+                color: injRight === 'None' || injRight === 'Healthy' ? 'rgba(255,255,255,0.5)' : '#f87171'
               }}>{injRight === 'None' ? 'Healthy' : injRight}</span>
             </div>
+            
             
             {/* Only show Research list if we don't have statsData with values */}
             {allStatsData.length === 0 && allStats.length > 0 && (
