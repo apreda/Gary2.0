@@ -381,6 +381,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 
                 // Map token to the key field we want to display
                 const keyMap = {
+                  // === NBA STATS ===
                   'OFFENSIVE_RATING': 'offensive_rating',
                   'DEFENSIVE_RATING': 'defensive_rating',
                   'NET_RATING': 'net_rating',
@@ -397,7 +398,53 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'HOME_AWAY_SPLITS': 'overall',
                   'OREB_RATE': 'oreb_rate',
                   'FT_RATE': 'ft_rate',
-                  'CLUTCH_STATS': 'close_record' // Close game record (≤5 points)
+                  'CLUTCH_STATS': 'close_record',
+                  'EFFICIENCY_LAST_10': 'net_rating',
+                  'PAINT_SCORING': 'efg_pct',
+                  'LINEUP_DATA': 'offensive_rating',
+                  'USAGE_RATES': 'usage',
+                  
+                  // === NFL STATS ===
+                  'OFFENSIVE_EPA': 'points_per_game',
+                  'DEFENSIVE_EPA': 'opp_points_per_game',
+                  'EPA_LAST_5': 'points_per_game',
+                  'SUCCESS_RATE_OFFENSE': 'points_per_game',
+                  'SUCCESS_RATE_DEFENSE': 'opp_points_per_game',
+                  'SUCCESS_RATE': 'points_per_game',
+                  'TURNOVER_MARGIN': 'turnover_diff',
+                  'TURNOVER_LUCK': 'turnover_diff',
+                  'FUMBLE_LUCK': 'turnover_diff',
+                  'HAVOC_RATE': 'turnover_diff',
+                  'HAVOC_ALLOWED': 'turnover_diff',
+                  'QB_STATS': 'qb_rating',
+                  'PRESSURE_RATE': 'qb_rating',
+                  'TIME_TO_THROW': 'qb_rating',
+                  'TWO_MINUTE_DRILL': 'qb_rating',
+                  'RED_ZONE_OFFENSE': 'third_down_pct',
+                  'RED_ZONE_DEFENSE': 'third_down_pct',
+                  'THIRD_DOWN': 'third_down_pct',
+                  'FOURTH_DOWN': 'fourth_down_pct',
+                  'EARLY_DOWN_SUCCESS': 'points_per_game',
+                  'LATE_DOWN_EFFICIENCY': 'third_down_pct',
+                  'EXPLOSIVE_PLAYS': 'yards_per_game',
+                  'EXPLOSIVE_ALLOWED': 'opp_yards_per_game',
+                  'EXPLOSIVENESS': 'yards_per_game',
+                  'OL_RANKINGS': 'rushing_yards_per_game',
+                  'DL_RANKINGS': 'opp_yards_per_game',
+                  'RB_STATS': 'rushing_yards_per_game',
+                  'WR_STATS': 'receiving_yards_per_game',
+                  'WR_TE_STATS': 'receiving_yards_per_game',
+                  'DEFENSIVE_PLAYMAKERS': 'opp_points_per_game',
+                  'DEFENSIVE_STARS': 'opp_points_per_game',
+                  'SPECIAL_TEAMS': 'overall',
+                  'SPECIAL_TEAMS_RATING': 'overall',
+                  'KICKING': 'overall',
+                  'FIELD_POSITION': 'overall',
+                  'DIVISION_RECORD': 'overall',
+                  'CONFERENCE_RECORD': 'overall',
+                  'PRIMETIME_RECORD': 'overall',
+                  'HOME_FIELD': 'overall',
+                  'NIGHT_GAME': 'overall'
                 };
                 
                 const key = keyMap[token] || Object.keys(obj).find(k => 
