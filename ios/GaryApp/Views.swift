@@ -239,12 +239,13 @@ struct GaryPropsView: View {
     @State private var loading = true
     @State private var selectedSport: Sport = .all
     
-    // Props typically have team info that can indicate the sport
-    // We'll need to infer sport from team names or add sport field to PropPick
     private var filteredProps: [PropPick] {
-        // For now, show all props (prop picks don't have league field)
-        // In future, could filter by team name patterns
-        return allProps
+        guard selectedSport != .all else { return allProps }
+        return allProps.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
+    }
+    
+    private var availableSports: Set<String> {
+        Set(allProps.compactMap { $0.league?.uppercased() })
     }
     
     var body: some View {
@@ -264,6 +265,10 @@ struct GaryPropsView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
                 
+                // Sport Filter
+                SportFilterBar(selected: $selectedSport, availableSports: availableSports)
+                    .padding(.bottom, 12)
+                
                 // Content
                 if loading {
                     Spacer()
@@ -275,7 +280,7 @@ struct GaryPropsView: View {
                         Image(systemName: "person.fill.questionmark")
                             .font(.system(size: 40))
                             .foregroundColor(.gray)
-                        Text("No prop picks yet.")
+                        Text(selectedSport == .all ? "No prop picks yet." : "No \(selectedSport.rawValue) props today.")
                             .foregroundColor(.gray)
                     }
                     Spacer()

@@ -89,6 +89,7 @@ struct PropPick: Identifiable, Codable {
     let odds: String?
     let confidence: Double?
     let analysis: String?
+    let league: String?
     
     var id: String {
         "\(team ?? player ?? "prop")-\(prop ?? "")-\(odds ?? "")"
@@ -103,7 +104,8 @@ struct PropPick: Identifiable, Codable {
             bet: dict["bet"] as? String,
             odds: (dict["odds"] as? String) ?? (dict["odds"] as? NSNumber)?.stringValue,
             confidence: (dict["confidence"] as? NSNumber)?.doubleValue,
-            analysis: (dict["analysis"] as? String) ?? (dict["rationale"] as? String)
+            analysis: (dict["analysis"] as? String) ?? (dict["rationale"] as? String),
+            league: dict["league"] as? String
         )
     }
 }
