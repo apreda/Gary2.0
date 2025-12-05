@@ -293,7 +293,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'rgba(15, 15, 15, 0.98)',
+            background: '#0a0a0a', // Solid dark background - no transparency
             borderRadius: '12px',
             padding: '1rem',
             display: 'flex',
@@ -374,7 +374,6 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               
               // Skip non-displayable stats
               if (stat.token === 'TOP_PLAYERS') return null;
-              if (stat.token === 'CLUTCH_STATS') return null; // Currently returns same data as RECENT_FORM
               
               // Extract key value from nested stat objects
               const extractValue = (obj, token) => {
@@ -397,7 +396,8 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'RECENT_FORM': 'last_5',
                   'HOME_AWAY_SPLITS': 'overall',
                   'OREB_RATE': 'oreb_rate',
-                  'FT_RATE': 'ft_rate'
+                  'FT_RATE': 'ft_rate',
+                  'CLUTCH_STATS': 'close_record' // Close game record (≤5 points)
                 };
                 
                 const key = keyMap[token] || Object.keys(obj).find(k => 
