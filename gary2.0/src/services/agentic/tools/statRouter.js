@@ -805,6 +805,83 @@ const FETCHERS = {
     }
   },
 
+  // ===== CLUTCH STATS (Close Game Record) =====
+  CLUTCH_STATS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching CLUTCH_STATS (close game record) for ${away.name} @ ${home.name}`);
+    
+    try {
+      // Get recent games to calculate close game record
+      const today = new Date();
+      const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const params = {
+        start_date: ninetyDaysAgo.toISOString().split('T')[0],
+        end_date: today.toISOString().split('T')[0],
+        per_page: 50
+      };
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], ...params }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], ...params })
+      ]);
+      
+      // Calculate close game record (games decided by 5 points or less)
+      const calcClutchRecord = (games, teamName) => {
+        let closeWins = 0;
+        let closeLosses = 0;
+        const closeGameMargin = 5;
+        
+        for (const game of games || []) {
+          const homeScore = game.home_team_score || game.home_score || 0;
+          const awayScore = game.visitor_team_score || game.away_score || game.away_team_score || 0;
+          const margin = Math.abs(homeScore - awayScore);
+          
+          // Skip unplayed games
+          if (homeScore === 0 && awayScore === 0) continue;
+          
+          if (margin <= closeGameMargin) {
+            const isHomeTeam = game.home_team?.name?.includes(teamName.split(' ').pop()) || 
+                               game.home_team?.full_name?.includes(teamName);
+            const won = isHomeTeam ? homeScore > awayScore : awayScore > homeScore;
+            if (won) closeWins++;
+            else closeLosses++;
+          }
+        }
+        
+        const total = closeWins + closeLosses;
+        const pct = total > 0 ? ((closeWins / total) * 100).toFixed(0) : 'N/A';
+        
+        return {
+          close_record: `${closeWins}-${closeLosses}`,
+          close_win_pct: total > 0 ? `${pct}%` : 'N/A',
+          close_games: total
+        };
+      };
+      
+      const homeClutch = calcClutchRecord(homeGames, home.name);
+      const awayClutch = calcClutchRecord(awayGames, away.name);
+      
+      return {
+        category: 'Clutch Stats (Games Decided by ≤5 Points)',
+        home: {
+          team: home.full_name || home.name,
+          ...homeClutch
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awayClutch
+        },
+        interpretation: `Close game records indicate which team performs better in tight situations`
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching clutch stats:`, error.message);
+      return {
+        category: 'Clutch Stats',
+        home: { team: home.full_name || home.name, close_record: 'N/A' },
+        away: { team: away.full_name || away.name, close_record: 'N/A' }
+      };
+    }
+  },
+
   // ===== NFL SPECIFIC =====
   OFFENSIVE_EPA: async (bdlSport, home, away, season) => {
     const [homeStats, awayStats] = await Promise.all([
@@ -980,7 +1057,7 @@ const ALIASES = {
   PAINT_DEFENSE: 'DEFENSIVE_RATING',
   PERIMETER_DEFENSE: 'THREE_PT_SHOOTING',
   TRANSITION_DEFENSE: 'DEFENSIVE_RATING',
-  CLUTCH_STATS: 'RECENT_FORM',
+  // CLUTCH_STATS now has its own fetcher - calculates close game record
   QUARTER_SPLITS: 'RECENT_FORM',
   LINEUP_DATA: 'TOP_PLAYERS',
   USAGE_RATES: 'TOP_PLAYERS',
