@@ -883,11 +883,20 @@ const FETCHERS = {
   },
 
   // ===== NFL SPECIFIC =====
+  // Helper to extract first element from BDL team_season_stats array response
+  _extractNflStats: (statsArray) => {
+    if (Array.isArray(statsArray) && statsArray.length > 0) return statsArray[0];
+    return statsArray || {};
+  },
+
   OFFENSIVE_EPA: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
     ]);
+    // Extract first element from array response
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
     return {
       category: 'Offensive EPA (Points Per Game / Yards Per Play proxies)',
@@ -909,10 +918,12 @@ const FETCHERS = {
   },
   
   DEFENSIVE_EPA: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
     ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
     return {
       category: 'Defensive EPA (Points Allowed / Yards Allowed proxies)',
@@ -930,10 +941,12 @@ const FETCHERS = {
   },
   
   TURNOVER_MARGIN: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
     ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
     return {
       category: 'Turnover Margin',
@@ -954,10 +967,12 @@ const FETCHERS = {
   },
   
   RED_ZONE_OFFENSE: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
     ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
     return {
       category: 'Red Zone Offense',
@@ -975,10 +990,12 @@ const FETCHERS = {
   },
   
   QB_STATS: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
     ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
     return {
       category: 'Quarterback/Passing Stats',
@@ -1002,10 +1019,12 @@ const FETCHERS = {
   },
   
   RB_STATS: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
     ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
     return {
       category: 'Rushing Stats',

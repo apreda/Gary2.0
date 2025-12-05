@@ -28,19 +28,19 @@ struct AccessView: View {
                     
                     LazyVGrid(
                         columns: [
-                            GridItem(.flexible(), spacing: 8),
-                            GridItem(.flexible(), spacing: 8),
-                            GridItem(.flexible(), spacing: 8)
+                            GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10)
                         ],
-                        spacing: 8
+                        spacing: 10
                     ) {
+                        TechChip(icon: "brain.head.profile", text: "GPT-5.1")
+                        TechChip(icon: "arrow.triangle.2.circlepath", text: "Agentic AI")
                         TechChip(icon: "chart.line.uptrend.xyaxis", text: "Odds API")
-                        TechChip(icon: "globe", text: "Sports DB")
-                        TechChip(icon: "bolt.horizontal", text: "Turbo 3.5 Mini")
-                        TechChip(icon: "brain.head.profile", text: "Perplexity")
-                        TechChip(icon: "chart.bar.xaxis", text: "StatCast API")
+                        TechChip(icon: "magnifyingglass", text: "Perplexity")
+                        TechChip(icon: "doc.text.magnifyingglass", text: "Scout Reports")
+                        TechChip(icon: "chart.bar.xaxis", text: "Stat APIs")
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 24)
                 }
                 
                 // Action Buttons
