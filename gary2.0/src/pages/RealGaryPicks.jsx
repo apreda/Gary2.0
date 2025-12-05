@@ -227,9 +227,25 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
           marginBottom: '0.5rem'
         }}>Gary's Take</div>
         
-        {/* Main Narrative */}
+        {/* Main Narrative - split into 2 paragraphs for readability */}
         <div style={{ fontSize: '0.85rem', lineHeight: 1.65, opacity: 0.92, flex: 1 }}>
-          {data.narrative || rationale}
+          {(() => {
+            const text = data.narrative || rationale || '';
+            // Find a good split point (after ~40-60% of sentences)
+            const sentences = text.split(/(?<=[.!?])\s+/);
+            if (sentences.length <= 2) return text;
+            
+            const splitIndex = Math.ceil(sentences.length / 2);
+            const para1 = sentences.slice(0, splitIndex).join(' ');
+            const para2 = sentences.slice(splitIndex).join(' ');
+            
+            return (
+              <>
+                <p style={{ marginBottom: '0.8rem' }}>{para1}</p>
+                <p>{para2}</p>
+              </>
+            );
+          })()}
         </div>
         
         {/* Lock Line - Green */}
@@ -700,7 +716,22 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
             marginBottom: '0.3rem'
           }}>Gary's Take</div>
           <div style={{ opacity: 0.9, lineHeight: 1.6, fontSize: '0.82rem' }}>
-            {data.narrative}
+            {(() => {
+              const text = data.narrative || '';
+              const sentences = text.split(/(?<=[.!?])\s+/);
+              if (sentences.length <= 2) return text;
+              
+              const splitIndex = Math.ceil(sentences.length / 2);
+              const para1 = sentences.slice(0, splitIndex).join(' ');
+              const para2 = sentences.slice(splitIndex).join(' ');
+              
+              return (
+                <>
+                  <p style={{ marginBottom: '0.6rem' }}>{para1}</p>
+                  <p>{para2}</p>
+                </>
+              );
+            })()}
             {data.lockLine && (
               <>
                 <div style={{ marginTop: '0.6rem' }}></div>
