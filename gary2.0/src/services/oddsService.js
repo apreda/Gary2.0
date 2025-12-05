@@ -831,10 +831,10 @@ export const oddsService = {
     return dedupeRequest(cacheKey, async () => {
       console.log(`[Odds Service] Fetching upcoming games for ${sport}...`);
 
-      // NBA EXEMPTION: Per user request, use The Odds API directly for NBA (legacy behavior)
+      // NBA & NFL EXEMPTION: Use The Odds API directly for correct game IDs (needed for player props)
       // This bypasses the BDL -> Fallback logic used for other sports.
-      if (sport === 'basketball_nba') {
-        console.log('[Odds Service] NBA: Using The Odds API directly (Exempt from BDL logic).');
+      if (sport === 'basketball_nba' || sport === 'americanfootball_nfl') {
+        console.log(`[Odds Service] ${sport}: Using The Odds API directly for correct game IDs.`);
         return fetchUpcomingOddsFallback(sport);
       }
 
