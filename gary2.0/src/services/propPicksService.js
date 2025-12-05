@@ -657,16 +657,22 @@ Respond with ONLY a JSON array of your best prop picks in this format:
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Filter the picks by confidence threshold (0.55 since confidence = win probability), then cap each record's picks to 10 by confidence
+      // Filter the picks by confidence threshold (0.55 since confidence = win probability)
+      // DON'T slice here - let frontend handle per-sport slicing
       const filteredData = data.map(record => {
         const filtered = record.picks.filter(pick => pick.confidence >= 0.55);
         record.picks = filtered
-          .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)))
-          .slice(0, 10);
+          .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)));
         return record;
       }).filter(record => record.picks.length > 0);
       
-      console.log(`After filtering for confidence >= 0.55, ${filteredData.length} records remain`);
+      // Log sport distribution
+      const allPicks = filteredData.flatMap(r => r.picks);
+      const sportCounts = allPicks.reduce((acc, p) => {
+        acc[p.sport || 'unknown'] = (acc[p.sport || 'unknown'] || 0) + 1;
+        return acc;
+      }, {});
+      console.log(`After filtering for confidence >= 0.55: ${allPicks.length} picks by sport:`, sportCounts);
       
       return filteredData || [];
     } catch (error) {
