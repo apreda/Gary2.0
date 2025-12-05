@@ -75,7 +75,7 @@ export default function GaryProps() {
                 created_at: record.created_at,
                 // Use existing fields or provide defaults
                 player: pick.player || 'Unknown Player',
-                team: pick.team || 'MLB',
+                team: pick.team || 'Unknown',
                 prop: pick.prop || 'unknown',
                 line: pick.line || '',
                 bet: pick.bet || 'over',
@@ -83,7 +83,8 @@ export default function GaryProps() {
                 confidence: pick.confidence || 0.75,
                 ev: pick.ev || null,
                 rationale: pick.rationale || pick.reasoning || 'Analysis not available',
-                league: pick.sport || 'MLB',
+                sport: pick.sport || 'NBA', // Explicitly preserve sport field
+                league: pick.sport || 'NBA', // Also set league from sport
                 time: pick.time || 'TBD'
               };
               
@@ -108,11 +109,20 @@ export default function GaryProps() {
 
       setAllPicks(sortedPicks);
       
+      // Log sport distribution for debugging
+      const sportCounts = sortedPicks.reduce((acc, p) => {
+        const sport = (p.sport || 'unknown').toUpperCase();
+        acc[sport] = (acc[sport] || 0) + 1;
+        return acc;
+      }, {});
+      console.log('Prop picks by sport:', sportCounts);
+      
       // Filter by selected sport and cap at 10
       const filteredPicks = sortedPicks
         .filter(p => (p.sport || p.league || 'NBA').toUpperCase() === selectedSport)
         .slice(0, 10);
       
+      console.log(`Filtered to ${filteredPicks.length} ${selectedSport} picks`);
       setPicks(filteredPicks);
     } catch (err) {
       console.error('Error in loadPicks:', err);
