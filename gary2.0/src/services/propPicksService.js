@@ -81,12 +81,15 @@ export const propPicksService = {
     } else if (sport === 'americanfootball_nfl') {
       sportGuidance = `
 ## NFL-Specific Analysis Guidelines:
-- **Passing Yards**: Consider opponent pass defense DVOA, weather, and game script projections.
+- **Passing Yards**: Consider opponent pass defense ranking, weather, and game script projections.
 - **Passing TDs**: Red zone opportunities and opponent's red zone defense.
 - **Rush Yards**: Focus on RB workload, offensive line quality, and opponent run defense.
 - **Receiving Yards**: Target share, air yards, and matchup against specific corners.
 - **Receptions**: PPR considerations, check down tendencies, and slot receiver advantages.
-- **Anytime TD**: Red zone usage and goal-line work for RBs.`;
+- **Anytime TD**: Red zone usage and goal-line work for RBs.
+
+⚠️ NOTE FOR NFL: Use your general NFL knowledge and the prop lines provided to make picks.
+You may reference well-known player tendencies and team matchups from the current season.`;
       propTypes = 'passing yards, passing TDs, rush yards, receiving yards, receptions, anytime TD';
     } else {
       sportGuidance = `
@@ -103,7 +106,7 @@ export const propPicksService = {
 
 Your job is to analyze player props for today's games and identify value bets based on the provided player statistics and prop odds.
 
-🚨 CRITICAL RULE: USE ONLY THE STATS PROVIDED 🚨
+🚨 CRITICAL RULE FOR NBA/MLB: USE ONLY THE STATS PROVIDED 🚨
 - You can ONLY cite statistics that appear in the "Player Statistics" section below
 - If a stat is not provided, DO NOT make one up or estimate it
 - NEVER invent a player's average, recent game stats, or matchup data
@@ -113,6 +116,8 @@ Your job is to analyze player props for today's games and identify value bets ba
 ❌ BAD: "LeBron is averaging 27.3 PPG" (if that exact number isn't in the data)
 ❌ BAD: "In his last game he had 32 points" (if recent games aren't provided)
 ✅ GOOD: Only cite stats you can see in the Player Statistics section
+
+📋 EXCEPTION FOR NFL: Since detailed stats may not be provided, you may use your general NFL knowledge about current season player performance, team tendencies, and matchup context.
 
 ${sportGuidance}
 
