@@ -372,8 +372,9 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 statName = 'RECORD';
               }
               
-              // Skip TOP_PLAYERS - not a displayable stat
+              // Skip non-displayable stats
               if (stat.token === 'TOP_PLAYERS') return null;
+              if (stat.token === 'CLUTCH_STATS') return null; // Currently returns same data as RECENT_FORM
               
               // Extract key value from nested stat objects
               const extractValue = (obj, token) => {
@@ -427,11 +428,13 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               const displayLeft = garyPickedRight ? awayVal : homeVal;
               const displayRight = garyPickedRight ? homeVal : awayVal;
               
-              // Special rendering for RECENT_FORM - color code W/L
+              // Special rendering for RECENT_FORM - color code W/L, filter out T (unplayed games)
               const isRecentForm = stat.token === 'RECENT_FORM';
               const renderFormValue = (val) => {
                 if (!val || typeof val !== 'string') return val;
-                return val.split('').map((char, idx) => {
+                // Filter out 'T' (ties/unplayed games - no ties in NBA)
+                const filtered = val.replace(/T/g, '');
+                return filtered.split('').map((char, idx) => {
                   if (char === 'W') return <span key={idx} style={{ color: '#4ade80', fontWeight: 600 }}>W</span>;
                   if (char === 'L') return <span key={idx} style={{ color: '#f87171', fontWeight: 600 }}>L</span>;
                   return <span key={idx} style={{ opacity: 0.5 }}>{char}</span>;
