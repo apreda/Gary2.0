@@ -227,7 +227,7 @@ async function fetchNBATeamBaseStats(teamId, season = 2024) {
       totalFta += (s.fta || 0) * gp;
       totalOreb += (s.oreb || 0) * gp;
       totalDreb += (s.dreb || 0) * gp;
-      totalTov += (s.turnover || 0) * gp;
+      totalTov += (s.tov || s.turnover || 0) * gp;
     }
     
     if (totalGames === 0) return null;
