@@ -422,7 +422,13 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'SP_PLUS_RATINGS': 'Net Rating',
                 'EXPLOSIVENESS': 'Big Plays',
                 'HAVOC_RATE': 'Havoc Rate',
-                'HAVOC_ALLOWED': 'Opp Havoc'
+                'HAVOC_ALLOWED': 'Opp Havoc',
+                // Derived stats
+                'PASSING_TDS': 'Pass TDs',
+                'INTERCEPTIONS': 'INTs',
+                'RUSHING_TDS': 'Rush TDs',
+                'TOTAL_TDS': 'Total TDs',
+                'PASSING_YPG': 'Pass YPG'
               };
               
               let statName = displayNameMap[stat.token] || stat.name || stat.token;
@@ -482,7 +488,13 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   // NCAAF/NCAAB specific
                   'SP_PLUS_RATINGS': 'net_rating',
                   'SUCCESS_RATE': 'total_yards_per_game',
-                  'DL_RANKINGS': 'opp_rushing_yards'
+                  'DL_RANKINGS': 'opp_rushing_yards',
+                  // New derived stats for cleaner display
+                  'PASSING_TDS': 'passing_tds',
+                  'INTERCEPTIONS': 'interceptions',
+                  'RUSHING_TDS': 'rushing_tds',
+                  'TOTAL_TDS': 'total_tds',
+                  'PASSING_YPG': 'passing_ypg'
                 };
                 
                 const key = keyMap[token] || Object.keys(obj).find(k => 

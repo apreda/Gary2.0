@@ -1394,6 +1394,115 @@ const FETCHERS = {
       }
     };
   },
+  
+  // ===== DERIVED STATS (single-value for clean display) =====
+  PASSING_TDS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    return {
+      category: 'Passing Touchdowns',
+      home: {
+        team: home.full_name || home.name,
+        passing_tds: fmtNum(homeStats?.passing_touchdowns, 0)
+      },
+      away: {
+        team: away.full_name || away.name,
+        passing_tds: fmtNum(awayStats?.passing_touchdowns, 0)
+      }
+    };
+  },
+  
+  INTERCEPTIONS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    return {
+      category: 'Interceptions Thrown',
+      home: {
+        team: home.full_name || home.name,
+        interceptions: fmtNum(homeStats?.passing_interceptions, 0)
+      },
+      away: {
+        team: away.full_name || away.name,
+        interceptions: fmtNum(awayStats?.passing_interceptions, 0)
+      }
+    };
+  },
+  
+  RUSHING_TDS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    return {
+      category: 'Rushing Touchdowns',
+      home: {
+        team: home.full_name || home.name,
+        rushing_tds: fmtNum(homeStats?.rushing_touchdowns, 0)
+      },
+      away: {
+        team: away.full_name || away.name,
+        rushing_tds: fmtNum(awayStats?.rushing_touchdowns, 0)
+      }
+    };
+  },
+  
+  TOTAL_TDS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    const homeTotalTds = (homeStats?.passing_touchdowns || 0) + (homeStats?.rushing_touchdowns || 0);
+    const awayTotalTds = (awayStats?.passing_touchdowns || 0) + (awayStats?.rushing_touchdowns || 0);
+    
+    return {
+      category: 'Total Touchdowns',
+      home: {
+        team: home.full_name || home.name,
+        total_tds: homeTotalTds.toString()
+      },
+      away: {
+        team: away.full_name || away.name,
+        total_tds: awayTotalTds.toString()
+      }
+    };
+  },
+  
+  PASSING_YPG: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    return {
+      category: 'Passing Yards Per Game',
+      home: {
+        team: home.full_name || home.name,
+        passing_ypg: fmtNum(homeStats?.passing_yards_per_game)
+      },
+      away: {
+        team: away.full_name || away.name,
+        passing_ypg: fmtNum(awayStats?.passing_yards_per_game)
+      }
+    };
+  },
 
   // ===== SITUATIONAL =====
   REST_SITUATION: async (bdlSport, home, away) => {
