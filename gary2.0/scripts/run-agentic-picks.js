@@ -231,13 +231,44 @@ async function main() {
           }
           
           // Extract stat data with values for structured Tale of the Tape display
+          // FILTER OUT stats with N/A values and duplicates - only store real, unique data
+          const seenDataKeys = new Set();
           const statsData = result.toolCallHistory 
-            ? result.toolCallHistory.map(t => ({
-                name: t.token.replace(/_/g, ' '),
-                token: t.token,
-                home: t.homeValue ?? 'N/A',
-                away: t.awayValue ?? 'N/A'
-              }))
+            ? result.toolCallHistory
+                .map(t => ({
+                  name: t.token.replace(/_/g, ' '),
+                  token: t.token,
+                  home: t.homeValue ?? 'N/A',
+                  away: t.awayValue ?? 'N/A'
+                }))
+                .filter(stat => {
+                  // Skip if home or away is just 'N/A' string
+                  if (stat.home === 'N/A' || stat.away === 'N/A') return false;
+                  
+                  // Skip if home/away objects have all N/A or empty values
+                  const hasRealHomeData = typeof stat.home === 'object' && stat.home !== null
+                    ? Object.entries(stat.home).some(([k, v]) => 
+                        k !== 'team' && v !== 'N/A' && v !== '' && v !== null && 
+                        !(Array.isArray(v) && v.length === 0) &&
+                        !String(v).includes('Check scout'))
+                    : true; // primitives are fine
+                    
+                  const hasRealAwayData = typeof stat.away === 'object' && stat.away !== null
+                    ? Object.entries(stat.away).some(([k, v]) => 
+                        k !== 'team' && v !== 'N/A' && v !== '' && v !== null && 
+                        !(Array.isArray(v) && v.length === 0) &&
+                        !String(v).includes('Check scout'))
+                    : true; // primitives are fine
+                    
+                  if (!hasRealHomeData || !hasRealAwayData) return false;
+                  
+                  // DEDUP: Skip if we've seen identical data (aliases to same fetcher)
+                  const dataKey = JSON.stringify({ h: stat.home, a: stat.away });
+                  if (seenDataKeys.has(dataKey)) return false;
+                  seenDataKeys.add(dataKey);
+                  
+                  return true;
+                })
             : [];
           
           // Also keep simple token list for backwards compatibility
