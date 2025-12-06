@@ -6,25 +6,54 @@ struct AccessView: View {
     @State private var showDisclaimer = true
     @AppStorage("hasEntered") private var hasEntered: Bool = false
     @AppStorage("selectedTab") private var selectedTab: Int = 0
+    @State private var animateIn = false
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [.black, .black.opacity(0.92)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            LiquidGlassBackground()
             
             VStack(spacing: 28) {
                 Spacer(minLength: 40)
                 
-                // Logo
-                GaryLogo(size: 320)
+                // Logo with glow
+                GaryLogo(size: 200)
+                    .shadow(color: GaryColors.gold.opacity(0.5), radius: 30, y: 10)
+                    .opacity(animateIn ? 1 : 0)
+                    .scaleEffect(animateIn ? 1 : 0.8)
                 
-                // Intro & Tech Chips
-                VStack(spacing: 10) {
-                    Pill(text: "NEW  Introducing Gary AI: Intelligent Sports Bets", compact: true)
+                // Title
+                VStack(spacing: 8) {
+                    Text("GARY A.I.")
+                        .font(.system(size: 36, weight: .black, design: .rounded))
+                        .foregroundStyle(GaryColors.goldGradient)
+                    
+                    Text("Intelligent Sports Analysis")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .opacity(animateIn ? 1 : 0)
+                .offset(y: animateIn ? 0 : 20)
+                .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+                
+                // Tech Chips
+                VStack(spacing: 12) {
+                    // NEW Badge
+                    HStack(spacing: 8) {
+                        Text("NEW")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(GaryColors.gold)
+                            .clipShape(Capsule())
+                        
+                        Text("Introducing Gary AI")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(GaryColors.lightGold)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .liquidGlass(cornerRadius: 20)
                     
                     LazyVGrid(
                         columns: [
@@ -33,7 +62,7 @@ struct AccessView: View {
                         ],
                         spacing: 10
                     ) {
-                        TechChip(icon: "brain.head.profile", text: "GPT-5.1")
+                        TechChip(icon: "brain.head.profile", text: "GPT-4o")
                         TechChip(icon: "arrow.triangle.2.circlepath", text: "Agentic AI")
                         TechChip(icon: "chart.line.uptrend.xyaxis", text: "Odds API")
                         TechChip(icon: "magnifyingglass", text: "Perplexity")
@@ -42,30 +71,59 @@ struct AccessView: View {
                     }
                     .padding(.horizontal, 24)
                 }
+                .opacity(animateIn ? 1 : 0)
+                .offset(y: animateIn ? 0 : 30)
+                .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
+                
+                Spacer()
                 
                 // Action Buttons
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     Button {
-                        hasEntered = true
-                        selectedTab = 0
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            hasEntered = true
+                            selectedTab = 0
+                        }
                     } label: {
-                        Text("Access Picks")
-                            .frame(maxWidth: .infinity)
+                        HStack(spacing: 10) {
+                            Image(systemName: "star.fill")
+                            Text("Access Picks")
+                                .font(.headline.bold())
+                        }
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(GaryColors.goldGradient)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .shadow(color: GaryColors.gold.opacity(0.4), radius: 12, y: 6)
                     }
-                    .buttonStyle(GoldButtonStyle())
                     
                     Button {
-                        hasEntered = true
-                        selectedTab = 1
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            hasEntered = true
+                            selectedTab = 1
+                        }
                     } label: {
-                        Text("See Free Pick of the Day")
-                            .font(.footnote.bold())
-                            .foregroundColor(GaryColors.gold)
+                        HStack(spacing: 8) {
+                            Image(systemName: "gift.fill")
+                                .font(.caption)
+                            Text("See Free Pick of the Day")
+                                .font(.subheadline.bold())
+                        }
+                        .foregroundStyle(GaryColors.gold)
+                        .padding(.vertical, 12)
                     }
                 }
                 .padding(.horizontal, 24)
-                
-                Spacer()
+                .padding(.bottom, 40)
+                .opacity(animateIn ? 1 : 0)
+                .offset(y: animateIn ? 0 : 40)
+                .animation(.easeOut(duration: 0.6).delay(0.6), value: animateIn)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.8)) {
+                animateIn = true
             }
         }
         .sheet(isPresented: $showDisclaimer) {
@@ -76,26 +134,23 @@ struct AccessView: View {
 
 // MARK: - Tech Chip
 
-private struct TechChip: View {
+struct TechChip: View {
     let icon: String
     let text: String
     
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: icon)
-                .foregroundColor(GaryColors.gold)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(GaryColors.gold)
             Text(text)
-                .foregroundColor(.white)
-                .font(.footnote.bold())
+                .font(.caption.bold())
+                .foregroundStyle(.primary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(0.06))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(GaryColors.gold.opacity(0.6), lineWidth: 1)
-        )
-        .cornerRadius(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .liquidGlass(cornerRadius: 12)
     }
 }
 
@@ -105,37 +160,66 @@ struct DisclaimerSheet: View {
     @Binding var isPresented: Bool
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Important Disclaimer")
-                .font(.headline)
-                .foregroundColor(GaryColors.gold)
+        ZStack {
+            LiquidGlassBackground(accentColor: .red.opacity(0.5))
             
-            ScrollView {
-                Text(disclaimerText)
-                    .foregroundColor(.white)
-                    .font(.subheadline)
-            }
-            
-            HStack {
-                Spacer()
-                Button("I Understand") {
-                    isPresented = false
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.title2)
+                    Text("Important Disclaimer")
+                        .font(.title2.bold())
+                        .foregroundStyle(GaryColors.goldGradient)
                 }
-                .buttonStyle(GoldButtonStyle())
+                
+                ScrollView(showsIndicators: false) {
+                    Text(disclaimerText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(4)
+                        .padding()
+                        .liquidGlass(cornerRadius: 16)
+                }
+                
+                Button {
+                    isPresented = false
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("I Understand")
+                            .font(.headline.bold())
+                    }
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(GaryColors.goldGradient)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .shadow(color: GaryColors.gold.opacity(0.4), radius: 12, y: 6)
+                }
             }
+            .padding(24)
         }
-        .padding()
-        .background(Color.black)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
     
     private var disclaimerText: String {
         """
-        Gary AI provides informational sports betting analysis only. No wagers are placed within this app. Odds and picks are not a guarantee of results. Users must comply with all applicable laws and must be of legal age in their jurisdiction. This app does not facilitate real-money gambling, deposits, or withdrawals. If you or someone you know has a gambling problem, call the National Problem Gambling Helpline at 1-800-522-4700. By tapping 'I Understand', you acknowledge these terms.
+        Gary AI provides informational sports betting analysis only. No wagers are placed within this app.
+        
+        Odds and picks are not a guarantee of results. Users must comply with all applicable laws and must be of legal age in their jurisdiction.
+        
+        This app does not facilitate real-money gambling, deposits, or withdrawals.
+        
+        If you or someone you know has a gambling problem, call the National Problem Gambling Helpline at 1-800-522-4700.
+        
+        By tapping 'I Understand', you acknowledge these terms.
         """
     }
 }
 
 #Preview {
     AccessView()
+        .preferredColorScheme(.dark)
 }

@@ -382,6 +382,55 @@ async function main() {
             statsData.push(...derivedStats);
           }
           
+          // For NCAAB: Filter out stats that BDL doesn't provide for college basketball
+          if (config.key === 'basketball_ncaab') {
+            // Remove stats with 0.0 net ratings - BDL doesn't have efficiency ratings for NCAAB
+            const efficiencyTokens = ['ADJ_EFFICIENCY_MARGIN', 'NET_RATING', 'ADJ_OFFENSIVE_EFF', 'ADJ_DEFENSIVE_EFF'];
+            for (let i = statsData.length - 1; i >= 0; i--) {
+              const stat = statsData[i];
+              if (efficiencyTokens.includes(stat.token)) {
+                const home = stat.home || {};
+                const away = stat.away || {};
+                // Check if net_rating is 0.0 or all values are N/A
+                const netRatingZero = home.net_rating === '0.0' || home.net_rating === 0 || 
+                                      away.net_rating === '0.0' || away.net_rating === 0;
+                const allNA = Object.entries(home).filter(([k]) => k !== 'team').every(([,v]) => v === 'N/A') &&
+                             Object.entries(away).filter(([k]) => k !== 'team').every(([,v]) => v === 'N/A');
+                if (netRatingZero || allNA) {
+                  statsData.splice(i, 1);
+                }
+              }
+              
+              // For TURNOVER_RATE and OREB_RATE - remove N/A rate fields, keep only per_game
+              if (stat.token === 'TURNOVER_RATE' && stat.home && stat.away) {
+                // Remove tov_rate if N/A, keep turnovers_per_game
+                if (stat.home.tov_rate === 'N/A') delete stat.home.tov_rate;
+                if (stat.away.tov_rate === 'N/A') delete stat.away.tov_rate;
+                // Rename token for cleaner display
+                stat.name = 'TURNOVERS PER GAME';
+              }
+              
+              if (stat.token === 'OREB_RATE' && stat.home && stat.away) {
+                // Remove oreb_rate if N/A, keep oreb_per_game
+                if (stat.home.oreb_rate === 'N/A') delete stat.home.oreb_rate;
+                if (stat.away.oreb_rate === 'N/A') delete stat.away.oreb_rate;
+                // Rename token for cleaner display
+                stat.name = 'OFFENSIVE REBOUNDS PER GAME';
+              }
+              
+              // Filter out RECENT_FORM if it has undefined scores (means no completed games)
+              if (stat.token === 'RECENT_FORM' && stat.home && stat.away) {
+                const hasUndefinedScores = (stat.home.summary && stat.home.summary.includes('undefined-undefined')) ||
+                                           (stat.away.summary && stat.away.summary.includes('undefined-undefined'));
+                const allTies = (stat.home.last_5 && stat.home.last_5.match(/^T+$/)) ||
+                               (stat.away.last_5 && stat.away.last_5.match(/^T+$/));
+                if (hasUndefinedScores || allTies) {
+                  statsData.splice(i, 1);
+                }
+              }
+            }
+          }
+          
           // Also keep simple token list for backwards compatibility
           const statsUsed = result.toolCallHistory 
             ? result.toolCallHistory.map(t => t.token) 
