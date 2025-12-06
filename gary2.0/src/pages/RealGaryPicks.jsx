@@ -352,41 +352,74 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
             </div>
             
             {/* Stats - use statsData if available (has values), otherwise fall back to parsed rationale */}
-            {/* Sort stats to put RECORD at top */}
+            {/* Sort stats to put RECORD at top, filter duplicates, use friendly names */}
             {(() => {
               const statsToRender = allStatsData.length > 0 ? [...allStatsData] : [...data.stats];
               // Move PACE_HOME_AWAY (Record) to the top
-              const recordIndex = statsToRender.findIndex(s => s.token === 'PACE_HOME_AWAY' || s.token === 'HOME_AWAY_SPLITS');
+              const recordIndex = statsToRender.findIndex(s => s.token === 'PACE_HOME_AWAY' || s.token === 'HOME_AWAY_SPLITS' || s.token === 'SPECIAL_TEAMS');
               if (recordIndex > 0) {
                 const [recordStat] = statsToRender.splice(recordIndex, 1);
                 statsToRender.unshift(recordStat);
               }
               return statsToRender;
-            })().map((stat, i) => {
+            })().map((stat, i, arr) => {
               // Handle both statsData format {name, token, home, away} and parsed format {name, left, right, advantage}
               const isStatsData = stat.token !== undefined;
               
-              // Rename PACE_HOME_AWAY to RECORD
-              let statName = isStatsData ? stat.name : stat.name;
-              if (stat.token === 'PACE_HOME_AWAY' || stat.token === 'HOME_AWAY_SPLITS') {
-                statName = 'RECORD';
-              }
+              // Skip tokens that don't have real data or are aliases
+              const skipTokens = ['TOP_PLAYERS', 'WEATHER', 'REST_SITUATION', 'PASSING_EPA', 'RUSHING_EPA'];
+              if (skipTokens.includes(stat.token)) return null;
               
-              // Skip non-displayable stats
-              if (stat.token === 'TOP_PLAYERS') return null;
+              // Map tokens to user-friendly display names
+              const displayNameMap = {
+                'PACE_HOME_AWAY': 'Record',
+                'HOME_AWAY_SPLITS': 'Record',
+                'SPECIAL_TEAMS': 'Record',
+                'OFFENSIVE_EPA': 'Points/Game',
+                'DEFENSIVE_EPA': 'Points Allowed',
+                'SUCCESS_RATE_OFFENSE': 'Yards/Game',
+                'SUCCESS_RATE_DEFENSE': 'Yards Allowed',
+                'EPA_LAST_5': 'Recent PPG',
+                'EARLY_DOWN_SUCCESS': 'Scoring Efficiency',
+                'QB_STATS': 'QB Rating',
+                'PRESSURE_RATE': 'Completion %',
+                'RED_ZONE_OFFENSE': '3rd Down %',
+                'RED_ZONE_DEFENSE': 'Opp 3rd Down %',
+                'TURNOVER_MARGIN': 'Turnover +/-',
+                'OL_RANKINGS': 'Rush YPG',
+                'RB_STATS': 'Rush Yards/Carry',
+                'EXPLOSIVE_PLAYS': 'Total Yards',
+                'EXPLOSIVE_ALLOWED': 'Yards Allowed',
+                'WR_TE_STATS': 'Pass Yards',
+                'DEFENSIVE_PLAYMAKERS': 'Def Points Allowed',
+                // NBA
+                'OFFENSIVE_RATING': 'Off Rating',
+                'DEFENSIVE_RATING': 'Def Rating',
+                'NET_RATING': 'Net Rating',
+                'EFG_PCT': 'eFG%',
+                'OPP_EFG_PCT': 'Opp eFG%',
+                'THREE_PT_SHOOTING': '3PT%',
+                'RECENT_FORM': 'Last 5',
+                'CLUTCH_STATS': 'Close Games',
+                'PACE': 'Pace',
+                'PAINT_SCORING': 'Paint Scoring',
+                'PAINT_DEFENSE': 'Paint Defense'
+              };
               
-              // Extract key value from nested stat objects
+              let statName = displayNameMap[stat.token] || stat.name || stat.token;
+              
+              // Extract key value from nested stat objects - use different keys to avoid duplicates
               const extractValue = (obj, token) => {
                 if (!obj || typeof obj !== 'object') return obj || 'N/A';
                 
-                // Map token to the key field we want to display
+                // Map token to the SPECIFIC key field we want (avoiding duplicates)
                 const keyMap = {
                   // === NBA STATS ===
                   'OFFENSIVE_RATING': 'offensive_rating',
                   'DEFENSIVE_RATING': 'defensive_rating',
                   'NET_RATING': 'net_rating',
                   'PACE': 'pace',
-                  'PACE_HOME_AWAY': 'overall', // Record
+                  'PACE_HOME_AWAY': 'overall',
                   'PACE_LAST_10': 'pace',
                   'EFG_PCT': 'efg_pct',
                   'OPP_EFG_PCT': 'efg_pct',
@@ -404,47 +437,28 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'LINEUP_DATA': 'offensive_rating',
                   'USAGE_RATES': 'usage',
                   
-                  // === NFL STATS ===
+                  // === NFL STATS - Each token extracts DIFFERENT field ===
                   'OFFENSIVE_EPA': 'points_per_game',
                   'DEFENSIVE_EPA': 'opp_points_per_game',
+                  'SUCCESS_RATE_OFFENSE': 'yards_per_game', // Different from OFFENSIVE_EPA
+                  'SUCCESS_RATE_DEFENSE': 'opp_yards_per_game', // Different from DEFENSIVE_EPA
                   'EPA_LAST_5': 'points_per_game',
-                  'SUCCESS_RATE_OFFENSE': 'points_per_game',
-                  'SUCCESS_RATE_DEFENSE': 'opp_points_per_game',
-                  'SUCCESS_RATE': 'points_per_game',
+                  'EARLY_DOWN_SUCCESS': 'points_per_game',
                   'TURNOVER_MARGIN': 'turnover_diff',
-                  'TURNOVER_LUCK': 'turnover_diff',
-                  'FUMBLE_LUCK': 'turnover_diff',
-                  'HAVOC_RATE': 'turnover_diff',
-                  'HAVOC_ALLOWED': 'turnover_diff',
                   'QB_STATS': 'qb_rating',
-                  'PRESSURE_RATE': 'qb_rating',
-                  'TIME_TO_THROW': 'qb_rating',
-                  'TWO_MINUTE_DRILL': 'qb_rating',
+                  'PRESSURE_RATE': 'completion_pct', // Different from QB_STATS
                   'RED_ZONE_OFFENSE': 'third_down_pct',
                   'RED_ZONE_DEFENSE': 'third_down_pct',
                   'THIRD_DOWN': 'third_down_pct',
                   'FOURTH_DOWN': 'fourth_down_pct',
-                  'EARLY_DOWN_SUCCESS': 'points_per_game',
-                  'LATE_DOWN_EFFICIENCY': 'third_down_pct',
                   'EXPLOSIVE_PLAYS': 'yards_per_game',
                   'EXPLOSIVE_ALLOWED': 'opp_yards_per_game',
-                  'EXPLOSIVENESS': 'yards_per_game',
                   'OL_RANKINGS': 'rushing_yards_per_game',
-                  'DL_RANKINGS': 'opp_yards_per_game',
-                  'RB_STATS': 'rushing_yards_per_game',
-                  'WR_STATS': 'receiving_yards_per_game',
-                  'WR_TE_STATS': 'receiving_yards_per_game',
+                  'RB_STATS': 'yards_per_carry', // Different from OL_RANKINGS
+                  'WR_TE_STATS': 'yards_per_game',
                   'DEFENSIVE_PLAYMAKERS': 'opp_points_per_game',
-                  'DEFENSIVE_STARS': 'opp_points_per_game',
                   'SPECIAL_TEAMS': 'overall',
-                  'SPECIAL_TEAMS_RATING': 'overall',
-                  'KICKING': 'overall',
-                  'FIELD_POSITION': 'overall',
-                  'DIVISION_RECORD': 'overall',
-                  'CONFERENCE_RECORD': 'overall',
-                  'PRIMETIME_RECORD': 'overall',
-                  'HOME_FIELD': 'overall',
-                  'NIGHT_GAME': 'overall'
+                  'FIELD_POSITION': 'overall'
                 };
                 
                 const key = keyMap[token] || Object.keys(obj).find(k => 
@@ -470,6 +484,25 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 homeVal = stat.left;
                 awayVal = stat.right;
               }
+              
+              // Skip if values are team names (indicates no real data)
+              const homeTeam = pick?.homeTeam || '';
+              const awayTeam = pick?.awayTeam || '';
+              if (String(homeVal).includes(homeTeam) || String(homeVal).includes(awayTeam) ||
+                  String(awayVal).includes(homeTeam) || String(awayVal).includes(awayTeam)) {
+                return null;
+              }
+              
+              // Skip if this exact value pair was already shown (dedup)
+              const valueKey = `${homeVal}-${awayVal}`;
+              const prevStats = arr.slice(0, i);
+              const isDuplicate = prevStats.some(prevStat => {
+                if (!prevStat.token) return false;
+                const prevHome = extractValue(prevStat.home, prevStat.token);
+                const prevAway = extractValue(prevStat.away, prevStat.token);
+                return `${prevHome}-${prevAway}` === valueKey;
+              });
+              if (isDuplicate) return null;
               
               // For statsData, we need to swap if Gary picked the right team (away team)
               const displayLeft = garyPickedRight ? awayVal : homeVal;
