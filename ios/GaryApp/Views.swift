@@ -834,36 +834,50 @@ struct KPICard: View {
 
 struct GaryLogo: View {
     var size: CGFloat = 120
+    var useLocalAsset: Bool = true
     
     var body: some View {
-        AsyncImage(url: URL(string: "https://www.betwithgary.ai/coin2.png")) { phase in
-            switch phase {
-            case .empty:
-                ProgressView().tint(GaryColors.gold)
-            case .success(let img):
-                img.resizable()
-                    .scaledToFit()
-                    .frame(width: size, height: size)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [GaryColors.lightGold, GaryColors.gold.opacity(0.3)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 2
-                            )
-                    )
-            case .failure:
-                Image(systemName: "seal.fill")
+        Group {
+            if useLocalAsset {
+                // Use local asset (the bear logo)
+                Image("GaryBear")
                     .resizable()
                     .scaledToFit()
                     .frame(width: size, height: size)
-                    .foregroundStyle(GaryColors.goldGradient)
-            @unknown default:
-                EmptyView()
+                    .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: size * 0.22)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                    .shadow(color: GaryColors.gold.opacity(0.3), radius: 16, y: 8)
+            } else {
+                // Fallback to remote image
+                AsyncImage(url: URL(string: "https://www.betwithgary.ai/coin2.png")) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView().tint(GaryColors.gold)
+                    case .success(let img):
+                        img.resizable()
+                            .scaledToFit()
+                            .frame(width: size, height: size)
+                            .clipShape(Circle())
+                    case .failure:
+                        Image(systemName: "seal.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: size, height: size)
+                            .foregroundStyle(GaryColors.goldGradient)
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
             }
         }
     }

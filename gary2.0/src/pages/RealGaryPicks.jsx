@@ -583,12 +583,22 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 });
               };
               
-              // Determine advantage (higher is usually better, except for defensive stats)
-              const isDefensiveStat = statName.toLowerCase().includes('def') || statName.toLowerCase().includes('turnover');
+              // Determine advantage - some stats: LOWER is better (defensive/opponent stats)
+              // Stats where LOWER is better (you want to give up fewer to opponents, have fewer turnovers, etc.)
+              const statNameLower = statName.toLowerCase();
+              const lowerIsBetter = 
+                statNameLower.includes('opp') ||           // Opponent stats (opp yards, opp ppg, etc.)
+                statNameLower.includes('allowed') ||       // Points/yards allowed
+                statNameLower.includes('against') ||       // Stats against
+                (statNameLower.includes('turnover') && !statNameLower.includes('+') && !statNameLower.includes('margin')) || // Turnovers (not differential)
+                statNameLower.includes('interception') ||  // INTs thrown (fewer is better)
+                statNameLower.includes('sack') ||          // Sacks taken (fewer is better)
+                statNameLower.includes('penalty');         // Penalties (fewer is better)
+              
               const leftNum = parseFloat(String(displayLeft).replace('%', '')) || 0;
               const rightNum = parseFloat(String(displayRight).replace('%', '')) || 0;
-              const leftWins = isDefensiveStat ? leftNum < rightNum : leftNum > rightNum;
-              const rightWins = isDefensiveStat ? rightNum < leftNum : rightNum > leftNum;
+              const leftWins = lowerIsBetter ? leftNum < rightNum : leftNum > rightNum;
+              const rightWins = lowerIsBetter ? rightNum < leftNum : rightNum > leftNum;
               
               // Skip N/A stats or empty values
               if ((displayLeft === 'N/A' || displayLeft === '') && (displayRight === 'N/A' || displayRight === '')) return null;
