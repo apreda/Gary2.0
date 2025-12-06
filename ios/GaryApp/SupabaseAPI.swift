@@ -169,47 +169,100 @@ enum SupabaseAPI {
     /// Fetch prop picks for a specific date
     static func fetchPropPicks(date: String) async throws -> [PropPick] {
         let url = buildURL(table: "prop_picks", query: [
-            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "date", value: "eq.\(date)")
         ])
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         
-        if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-            let rows = try JSONDecoder().decode([PropPicksRow].self, from: data)
-            if let row = rows.first, let picks = parsePropPicksRow(row.picks), !picks.isEmpty {
-                return picks
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        
+        // Parse as array of dictionaries
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        
+        var allPicks: [PropPick] = []
+        
+        for row in jsonArray {
+            let rowLeague = row["league"] as? String
+            
+            // Get picks from the row
+            var picksData: [[String: Any]] = []
+            if let picksArray = row["picks"] as? [[String: Any]] {
+                picksData = picksArray
+            } else if let picksString = row["picks"] as? String,
+                      let pData = picksString.data(using: .utf8),
+                      let parsed = try? JSONSerialization.jsonObject(with: pData) as? [[String: Any]] {
+                picksData = parsed
+            }
+            
+            // Parse each pick
+            for var pickDict in picksData {
+                if pickDict["league"] == nil && pickDict["sport"] == nil {
+                    pickDict["league"] = rowLeague
+                }
+                if let pick = PropPick.from(dict: pickDict) {
+                    allPicks.append(pick)
+                }
             }
         }
         
-        // Fallback to yesterday before 10am EST
-        if isBefore10amEST() {
-            if let yesterday = try? await fetchPropPicks(date: yesterdayEST()), !yesterday.isEmpty {
-                return yesterday
+        // If no picks for today, try fallback
+        if allPicks.isEmpty {
+            if isBefore10amEST() {
+                return try await fetchPropPicks(date: yesterdayEST())
             }
+            return try await fetchLatestPropPicks()
         }
         
-        // Fallback to latest non-empty row
-        return try await fetchLatestPropPicks()
+        print("PropPicks: Loaded \(allPicks.count) picks for \(date)")
+        return allPicks
     }
     
     private static func fetchLatestPropPicks() async throws -> [PropPick] {
         let url = buildURL(table: "prop_picks", query: [
-            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "order", value: "date.desc"),
-            URLQueryItem(name: "limit", value: "5")
+            URLQueryItem(name: "limit", value: "10")
         ])
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
         
-        let rows = try JSONDecoder().decode([PropPicksRow].self, from: data)
-        for row in rows {
-            if let picks = parsePropPicksRow(row.picks), !picks.isEmpty {
-                return picks
+        // Parse as array of dictionaries to get row-level league
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        
+        var allPicks: [PropPick] = []
+        
+        for row in jsonArray {
+            let rowLeague = row["league"] as? String
+            
+            // Get picks from the row
+            var picksData: [[String: Any]] = []
+            if let picksArray = row["picks"] as? [[String: Any]] {
+                picksData = picksArray
+            } else if let picksString = row["picks"] as? String,
+                      let data = picksString.data(using: .utf8),
+                      let parsed = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                picksData = parsed
+            }
+            
+            // Parse each pick, inheriting league from row if not in pick
+            for var pickDict in picksData {
+                if pickDict["league"] == nil && pickDict["sport"] == nil {
+                    pickDict["league"] = rowLeague
+                }
+                if let pick = PropPick.from(dict: pickDict) {
+                    allPicks.append(pick)
+                }
+            }
+            
+            // Return as soon as we have picks
+            if !allPicks.isEmpty {
+                return allPicks
             }
         }
-        return []
+        
+        return allPicks
     }
     
     // MARK: - Billfold (Results)

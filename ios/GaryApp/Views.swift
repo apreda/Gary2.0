@@ -241,11 +241,11 @@ struct GaryPropsView: View {
     
     private var filteredProps: [PropPick] {
         guard selectedSport != .all else { return allProps }
-        return allProps.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
+        return allProps.filter { ($0.effectiveLeague ?? "").uppercased() == selectedSport.rawValue }
     }
     
     private var availableSports: Set<String> {
-        Set(allProps.compactMap { $0.league?.uppercased() })
+        Set(allProps.compactMap { $0.effectiveLeague?.uppercased() })
     }
     
     var body: some View {

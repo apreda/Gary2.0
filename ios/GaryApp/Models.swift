@@ -90,9 +90,17 @@ struct PropPick: Identifiable, Codable {
     let confidence: Double?
     let analysis: String?
     let league: String?
+    let sport: String?  // Web app uses "sport" field
+    let line: String?
+    let time: String?
     
     var id: String {
         "\(team ?? player ?? "prop")-\(prop ?? "")-\(odds ?? "")"
+    }
+    
+    /// Get the sport/league (checks both fields)
+    var effectiveLeague: String? {
+        league ?? sport
     }
     
     /// Parse from dictionary (for manual JSON parsing)
@@ -105,7 +113,10 @@ struct PropPick: Identifiable, Codable {
             odds: (dict["odds"] as? String) ?? (dict["odds"] as? NSNumber)?.stringValue,
             confidence: (dict["confidence"] as? NSNumber)?.doubleValue,
             analysis: (dict["analysis"] as? String) ?? (dict["rationale"] as? String),
-            league: dict["league"] as? String
+            league: dict["league"] as? String,
+            sport: dict["sport"] as? String,
+            line: dict["line"] as? String,
+            time: dict["time"] as? String
         )
     }
 }
