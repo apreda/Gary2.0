@@ -32,8 +32,23 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀' }, // Full games - stats now working!
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
-  ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈' } // Full NCAAF picks
+  ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true } // FBS only (no FCS)
 };
+
+// FBS Conference IDs from BDL (excludes FCS conferences like Big Sky, SWAC, MEAC, etc.)
+const FBS_CONFERENCE_IDS = [
+  1,   // ACC
+  2,   // American Athletic
+  3,   // Big 12
+  4,   // Big Ten
+  5,   // Conference USA
+  6,   // FBS Independents
+  7,   // MAC (Mid-American)
+  8,   // Mountain West
+  9,   // Pac-12 (mostly defunct, teams moved)
+  10,  // SEC
+  11,  // Sun Belt
+];
 
 // In-memory tracking to prevent duplicate processing in same run session
 // This prevents race conditions where DB check passes but pick is already being generated
@@ -146,11 +161,32 @@ async function main() {
       const now = new Date();
       const daysAhead = config.daysAhead || 1;
       const endTime = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-      const games = allGames?.filter(g => {
+      let games = allGames?.filter(g => {
         const gameTime = new Date(g.commence_time);
         return gameTime >= now && gameTime <= endTime;
       }) || [];
       const timeLabel = daysAhead === 7 ? 'this week' : 'within 24h';
+      
+      // NCAAF: Filter to FBS only (exclude FCS games)
+      if (config.fbsOnly && config.key === 'americanfootball_ncaaf') {
+        console.log(`[${config.name}] Filtering to FBS games only (excluding FCS)...`);
+        const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
+        const ncaafTeams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+        
+        const fbsTeamNames = new Set(
+          ncaafTeams
+            .filter(t => FBS_CONFERENCE_IDS.includes(t.conference))
+            .map(t => t.full_name?.toLowerCase())
+        );
+        
+        const beforeCount = games.length;
+        games = games.filter(g => {
+          const homeIsFbs = fbsTeamNames.has(g.home_team?.toLowerCase());
+          const awayIsFbs = fbsTeamNames.has(g.away_team?.toLowerCase());
+          return homeIsFbs && awayIsFbs; // Both teams must be FBS
+        });
+        console.log(`[${config.name}] FBS filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} FCS games)`);
+      }
       
       // Apply max games limit if specified (for NCAAB which can have 70+ games)
       const MAX_GAMES = config.maxGames || 100;
