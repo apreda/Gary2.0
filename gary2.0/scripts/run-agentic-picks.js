@@ -315,6 +315,56 @@ async function main() {
                 })
             : [];
           
+          // For NCAAF: Extract derived stats from compound stat objects for cleaner display
+          // This adds individual rows for passing_tds, interceptions, rushing_tds from QB_STATS/OL_RANKINGS
+          if (config.key === 'americanfootball_ncaaf' || config.key === 'americanfootball_nfl') {
+            const derivedStats = [];
+            
+            for (const stat of statsData) {
+              // From QB_STATS, extract separate rows for Pass TDs and INTs
+              if (stat.token === 'QB_STATS' && stat.home && stat.away) {
+                if (stat.home.passing_tds && stat.away.passing_tds && 
+                    stat.home.passing_tds !== 'N/A' && stat.away.passing_tds !== 'N/A') {
+                  derivedStats.push({
+                    name: 'PASSING TDS',
+                    token: 'PASSING_TDS',
+                    home: { team: stat.home.team, passing_tds: stat.home.passing_tds },
+                    away: { team: stat.away.team, passing_tds: stat.away.passing_tds }
+                  });
+                }
+                if (stat.home.interceptions && stat.away.interceptions &&
+                    stat.home.interceptions !== 'N/A' && stat.away.interceptions !== 'N/A') {
+                  derivedStats.push({
+                    name: 'INTERCEPTIONS',
+                    token: 'INTERCEPTIONS',
+                    home: { team: stat.home.team, interceptions: stat.home.interceptions },
+                    away: { team: stat.away.team, interceptions: stat.away.interceptions }
+                  });
+                }
+              }
+              
+              // From OL_RANKINGS or RB_STATS, extract rushing TDs
+              if ((stat.token === 'OL_RANKINGS' || stat.token === 'RB_STATS') && stat.home && stat.away) {
+                if (stat.home.rushing_tds && stat.away.rushing_tds &&
+                    stat.home.rushing_tds !== 'N/A' && stat.away.rushing_tds !== 'N/A') {
+                  // Only add if not already added
+                  const alreadyHasRushTds = derivedStats.some(s => s.token === 'RUSHING_TDS');
+                  if (!alreadyHasRushTds) {
+                    derivedStats.push({
+                      name: 'RUSHING TDS',
+                      token: 'RUSHING_TDS',
+                      home: { team: stat.home.team, rushing_tds: stat.home.rushing_tds },
+                      away: { team: stat.away.team, rushing_tds: stat.away.rushing_tds }
+                    });
+                  }
+                }
+              }
+            }
+            
+            // Add derived stats to statsData
+            statsData.push(...derivedStats);
+          }
+          
           // Also keep simple token list for backwards compatibility
           const statsUsed = result.toolCallHistory 
             ? result.toolCallHistory.map(t => t.token) 
