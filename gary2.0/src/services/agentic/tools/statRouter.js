@@ -161,6 +161,148 @@ async function fetchNBALeaders(statType, season = 2024) {
 }
 
 /**
+ * Fetch NBA team BASE stats via BDL Season Averages endpoint
+ * Aggregates player stats to get team-level 3PT%, FT%, rebounds, turnovers, etc.
+ * 
+ * BDL Season Averages types:
+ * - general/base: pts, reb, ast, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct, ftm, fta, ft_pct, oreb, dreb, tov
+ * - general/advanced: off_rating, def_rating, net_rating, efg_pct, pace, ts_pct
+ */
+async function fetchNBATeamBaseStats(teamId, season = 2024) {
+  try {
+    // Get active players for team (get more players for better aggregation)
+    const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=15`;
+    const playersResp = await fetch(playersUrl, { headers: { Authorization: BDL_API_KEY } });
+    const playersJson = await playersResp.json();
+    const players = playersJson.data || [];
+    
+    if (players.length === 0) {
+      console.warn(`[NBA Base Stats] No players found for team ${teamId}`);
+      return null;
+    }
+    
+    // Get season averages (base) for top 10 players
+    const topPlayerIds = players.slice(0, 10).map(p => p.id);
+    const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
+    const seasonAvgUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=base&${playerIdParams}`;
+    
+    console.log(`[NBA Base Stats] Fetching: ${seasonAvgUrl.replace(BDL_API_KEY, 'HIDDEN')}`);
+    
+    const resp = await fetch(seasonAvgUrl, { headers: { Authorization: BDL_API_KEY } });
+    const json = await resp.json();
+    const playerStats = json.data || [];
+    
+    if (playerStats.length === 0) {
+      console.warn(`[NBA Base Stats] No season averages for team ${teamId}`);
+      return null;
+    }
+    
+    // Aggregate team stats (weighted by games played)
+    let totalGames = 0;
+    let totalPts = 0, totalReb = 0, totalAst = 0;
+    let totalFgm = 0, totalFga = 0;
+    let totalFg3m = 0, totalFg3a = 0;
+    let totalFtm = 0, totalFta = 0;
+    let totalOreb = 0, totalDreb = 0;
+    let totalTov = 0;
+    let maxGames = 0;
+    
+    for (const ps of playerStats) {
+      const s = ps.stats || {};
+      const gp = s.gp || 0;
+      if (gp === 0) continue;
+      
+      maxGames = Math.max(maxGames, gp);
+      totalGames += gp;
+      
+      // Accumulate per-game stats * games played
+      totalPts += (s.pts || 0) * gp;
+      totalReb += (s.reb || 0) * gp;
+      totalAst += (s.ast || 0) * gp;
+      totalFgm += (s.fgm || 0) * gp;
+      totalFga += (s.fga || 0) * gp;
+      totalFg3m += (s.fg3m || 0) * gp;
+      totalFg3a += (s.fg3a || 0) * gp;
+      totalFtm += (s.ftm || 0) * gp;
+      totalFta += (s.fta || 0) * gp;
+      totalOreb += (s.oreb || 0) * gp;
+      totalDreb += (s.dreb || 0) * gp;
+      totalTov += (s.turnover || 0) * gp;
+    }
+    
+    if (totalGames === 0) return null;
+    
+    // Calculate team per-game averages (divide by total player-games then multiply by ~5 starters)
+    const teamGamesEst = maxGames; // Use max games as the team's game count
+    const perGameDivisor = totalGames / teamGamesEst; // Normalize for player overlap
+    
+    // Calculate percentages
+    const fg_pct = totalFga > 0 ? (totalFgm / totalFga) : 0;
+    const fg3_pct = totalFg3a > 0 ? (totalFg3m / totalFg3a) : 0;
+    const ft_pct = totalFta > 0 ? (totalFtm / totalFta) : 0;
+    const ft_rate = totalFga > 0 ? (totalFta / totalFga) : 0; // FTA per FGA
+    
+    // Calculate per-game stats
+    const ppg = totalPts / totalGames * perGameDivisor;
+    const rpg = totalReb / totalGames * perGameDivisor;
+    const apg = totalAst / totalGames * perGameDivisor;
+    const fg3m_pg = totalFg3m / totalGames * perGameDivisor;
+    const fg3a_pg = totalFg3a / totalGames * perGameDivisor;
+    const ftm_pg = totalFtm / totalGames * perGameDivisor;
+    const fta_pg = totalFta / totalGames * perGameDivisor;
+    const oreb_pg = totalOreb / totalGames * perGameDivisor;
+    const dreb_pg = totalDreb / totalGames * perGameDivisor;
+    const tov_pg = totalTov / totalGames * perGameDivisor;
+    
+    // Turnover rate approximation: TOV / (FGA + 0.44*FTA + TOV)
+    const possessions = totalFga + 0.44 * totalFta + totalTov;
+    const tov_rate = possessions > 0 ? (totalTov / possessions) : 0;
+    
+    // OREB rate approximation (would need opponent DREB for true rate)
+    const oreb_rate = (totalOreb + totalDreb) > 0 ? (totalOreb / (totalOreb + totalDreb)) : 0;
+    
+    console.log(`[NBA Base Stats] Team ${teamId}: FG3%=${(fg3_pct*100).toFixed(1)}%, FT%=${(ft_pct*100).toFixed(1)}%, FT_RATE=${ft_rate.toFixed(3)}`);
+    
+    return {
+      games_played: maxGames,
+      players_sampled: playerStats.length,
+      // Shooting
+      fg_pct: (fg_pct * 100).toFixed(1),
+      fg3_pct: (fg3_pct * 100).toFixed(1),
+      fg3m_per_game: fg3m_pg.toFixed(1),
+      fg3a_per_game: fg3a_pg.toFixed(1),
+      // Free throws
+      ft_pct: (ft_pct * 100).toFixed(1),
+      ft_rate: ft_rate.toFixed(3),
+      ftm_per_game: ftm_pg.toFixed(1),
+      fta_per_game: fta_pg.toFixed(1),
+      // Rebounds
+      oreb_per_game: oreb_pg.toFixed(1),
+      dreb_per_game: dreb_pg.toFixed(1),
+      reb_per_game: rpg.toFixed(1),
+      oreb_rate: (oreb_rate * 100).toFixed(1),
+      // Turnovers
+      tov_per_game: tov_pg.toFixed(1),
+      tov_rate: (tov_rate * 100).toFixed(1),
+      // Other
+      pts_per_game: ppg.toFixed(1),
+      ast_per_game: apg.toFixed(1),
+      // Top scorers for TOP_PLAYERS token
+      top_players: playerStats.slice(0, 5).map(ps => ({
+        name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
+        ppg: (ps.stats?.pts || 0).toFixed(1),
+        rpg: (ps.stats?.reb || 0).toFixed(1),
+        apg: (ps.stats?.ast || 0).toFixed(1),
+        fg3_pct: ps.stats?.fg3_pct ? (ps.stats.fg3_pct * 100).toFixed(1) : 'N/A'
+      }))
+    };
+  } catch (error) {
+    console.warn('[Stat Router] BDL NBA base stats fetch failed:', error.message);
+    return null;
+  }
+}
+
+/**
  * Find team by name
  */
 function findTeam(teams, teamName) {
@@ -506,6 +648,29 @@ const FETCHERS = {
   },
   
   TURNOVER_RATE: async (bdlSport, home, away, season) => {
+    // For NBA, use player-aggregated base stats (BDL has no team_season_stats for NBA)
+    if (bdlSport === 'basketball_nba') {
+      const [homeStats, awayStats] = await Promise.all([
+        fetchNBATeamBaseStats(home.id, season),
+        fetchNBATeamBaseStats(away.id, season)
+      ]);
+      
+      return {
+        category: 'Turnover Rate',
+        home: {
+          team: home.full_name || home.name,
+          tov_rate: homeStats?.tov_rate ? `${homeStats.tov_rate}%` : 'N/A',
+          turnovers_per_game: homeStats?.tov_per_game || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          tov_rate: awayStats?.tov_rate ? `${awayStats.tov_rate}%` : 'N/A',
+          turnovers_per_game: awayStats?.tov_per_game || 'N/A'
+        }
+      };
+    }
+    
+    // For other sports, use getTeamSeasonStats
     const [homeStats, awayStats] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
@@ -531,6 +696,29 @@ const FETCHERS = {
   },
   
   OREB_RATE: async (bdlSport, home, away, season) => {
+    // For NBA, use player-aggregated base stats (BDL has no team_season_stats for NBA)
+    if (bdlSport === 'basketball_nba') {
+      const [homeStats, awayStats] = await Promise.all([
+        fetchNBATeamBaseStats(home.id, season),
+        fetchNBATeamBaseStats(away.id, season)
+      ]);
+      
+      return {
+        category: 'Offensive Rebounding',
+        home: {
+          team: home.full_name || home.name,
+          oreb_rate: homeStats?.oreb_rate ? `${homeStats.oreb_rate}%` : 'N/A',
+          oreb_per_game: homeStats?.oreb_per_game || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          oreb_rate: awayStats?.oreb_rate ? `${awayStats.oreb_rate}%` : 'N/A',
+          oreb_per_game: awayStats?.oreb_per_game || 'N/A'
+        }
+      };
+    }
+    
+    // For other sports, use getTeamSeasonStats
     const [homeStats, awayStats] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
@@ -555,6 +743,31 @@ const FETCHERS = {
   },
   
   FT_RATE: async (bdlSport, home, away, season) => {
+    // For NBA, use player-aggregated base stats (BDL has no team_season_stats for NBA)
+    if (bdlSport === 'basketball_nba') {
+      const [homeStats, awayStats] = await Promise.all([
+        fetchNBATeamBaseStats(home.id, season),
+        fetchNBATeamBaseStats(away.id, season)
+      ]);
+      
+      return {
+        category: 'Free Throw Rate',
+        home: {
+          team: home.full_name || home.name,
+          ft_rate: homeStats?.ft_rate || 'N/A',
+          ft_pct: homeStats?.ft_pct ? `${homeStats.ft_pct}%` : 'N/A',
+          fta_per_game: homeStats?.fta_per_game || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          ft_rate: awayStats?.ft_rate || 'N/A',
+          ft_pct: awayStats?.ft_pct ? `${awayStats.ft_pct}%` : 'N/A',
+          fta_per_game: awayStats?.fta_per_game || 'N/A'
+        }
+      };
+    }
+    
+    // For other sports, use getTeamSeasonStats
     const [homeStats, awayStats] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
@@ -590,6 +803,31 @@ const FETCHERS = {
 
   // ===== SHOOTING =====
   THREE_PT_SHOOTING: async (bdlSport, home, away, season) => {
+    // For NBA, use player-aggregated base stats (BDL has no team_season_stats for NBA)
+    if (bdlSport === 'basketball_nba') {
+      const [homeStats, awayStats] = await Promise.all([
+        fetchNBATeamBaseStats(home.id, season),
+        fetchNBATeamBaseStats(away.id, season)
+      ]);
+      
+      return {
+        category: 'Three-Point Shooting',
+        home: {
+          team: home.full_name || home.name,
+          three_pct: homeStats?.fg3_pct ? `${homeStats.fg3_pct}%` : 'N/A',
+          three_made_per_game: homeStats?.fg3m_per_game || 'N/A',
+          three_attempted_per_game: homeStats?.fg3a_per_game || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          three_pct: awayStats?.fg3_pct ? `${awayStats.fg3_pct}%` : 'N/A',
+          three_made_per_game: awayStats?.fg3m_per_game || 'N/A',
+          three_attempted_per_game: awayStats?.fg3a_per_game || 'N/A'
+        }
+      };
+    }
+    
+    // For other sports, use getTeamSeasonStats
     const [homeStats, awayStats] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
@@ -615,6 +853,27 @@ const FETCHERS = {
 
   // ===== PLAYERS =====
   TOP_PLAYERS: async (bdlSport, home, away, season) => {
+    // For NBA, use player-aggregated base stats which includes top_players
+    if (bdlSport === 'basketball_nba') {
+      const [homeStats, awayStats] = await Promise.all([
+        fetchNBATeamBaseStats(home.id, season),
+        fetchNBATeamBaseStats(away.id, season)
+      ]);
+      
+      return {
+        category: 'Top Players',
+        home: {
+          team: home.full_name || home.name,
+          players: homeStats?.top_players || [{ note: 'No player data' }]
+        },
+        away: {
+          team: away.full_name || away.name,
+          players: awayStats?.top_players || [{ note: 'No player data' }]
+        }
+      };
+    }
+    
+    // For other sports, use the generic fetcher
     const [homePlayers, awayPlayers] = await Promise.all([
       fetchTopPlayersForTeam(bdlSport, home, season),
       fetchTopPlayersForTeam(bdlSport, away, season)
