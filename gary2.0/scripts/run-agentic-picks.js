@@ -32,7 +32,7 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀' }, // Full games - stats now working!
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
-  ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈' }
+  ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈' } // Full NCAAF picks
 };
 
 // In-memory tracking to prevent duplicate processing in same run session
