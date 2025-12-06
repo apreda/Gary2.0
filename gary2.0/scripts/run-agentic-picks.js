@@ -315,9 +315,26 @@ async function main() {
                 })
             : [];
           
-          // For NCAAF: Extract derived stats from compound stat objects for cleaner display
-          // This adds individual rows for passing_tds, interceptions, rushing_tds from QB_STATS/OL_RANKINGS
+          // For NCAAF/NFL: Filter out useless stats and extract derived stats for cleaner display
           if (config.key === 'americanfootball_ncaaf' || config.key === 'americanfootball_nfl') {
+            // Remove SP_PLUS_RATINGS for NCAAF - BDL doesn't have this data, it just returns 0.0
+            const filteredOutTokens = ['SP_PLUS_RATINGS', 'NET_RATING', 'FEI_RATINGS'];
+            for (let i = statsData.length - 1; i >= 0; i--) {
+              if (filteredOutTokens.includes(statsData[i].token)) {
+                // Check if all values are 0.0 or N/A
+                const home = statsData[i].home || {};
+                const away = statsData[i].away || {};
+                const homeVals = Object.entries(home).filter(([k]) => k !== 'team').map(([,v]) => v);
+                const awayVals = Object.entries(away).filter(([k]) => k !== 'team').map(([,v]) => v);
+                const allZeroOrNA = [...homeVals, ...awayVals].every(v => 
+                  v === '0.0' || v === '0' || v === 0 || v === 'N/A' || v === null
+                );
+                if (allZeroOrNA) {
+                  statsData.splice(i, 1);
+                }
+              }
+            }
+            
             const derivedStats = [];
             
             for (const stat of statsData) {

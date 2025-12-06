@@ -372,8 +372,17 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               if (!stat || !stat.token) return null;
               
               // Skip tokens that return non-stat data
-              const skipTokens = ['TOP_PLAYERS', 'WEATHER', 'REST_SITUATION', 'PASSING_EPA', 'RUSHING_EPA', 'FIELD_POSITION'];
+              const skipTokens = ['TOP_PLAYERS', 'WEATHER', 'REST_SITUATION', 'PASSING_EPA', 'RUSHING_EPA', 'FIELD_POSITION', 'MOTIVATION_CONTEXT'];
               if (skipTokens.includes(stat.token)) return null;
+              
+              // Skip SP_PLUS_RATINGS/NET_RATING for NCAAF if values are 0.0 (BDL doesn't have this data)
+              if (['SP_PLUS_RATINGS', 'NET_RATING', 'FEI_RATINGS', 'ADJ_EFFICIENCY_MARGIN'].includes(stat.token)) {
+                const homeNR = stat.home?.net_rating;
+                const awayNR = stat.away?.net_rating;
+                if ((homeNR === '0.0' || homeNR === 0) && (awayNR === '0.0' || awayNR === 0)) {
+                  return null;
+                }
+              }
               
               // Skip if no home or away data exists
               if (!stat.home || !stat.away) return null;
