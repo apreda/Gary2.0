@@ -205,7 +205,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
           transition: 'all 0.2s'
         }}
       >
-        View Stats ({allStats.length || data.stats.length})
+        View Stats ({allStatsData.length})
       </button>
       
       {/* Main Content */}
@@ -351,24 +351,32 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               <span style={{ flex: 1, textAlign: 'right', opacity: 0.7 }}>{displayRight}</span>
             </div>
             
-            {/* Stats - use statsData if available (has values), otherwise fall back to parsed rationale */}
-            {/* Sort stats to put RECORD at top, filter duplicates, use friendly names */}
+            {/* Stats - ONLY use real statsData from Supabase (what Gary actually called) */}
+            {/* No mock data, no filler - only real stats with real values */}
             {(() => {
-              const statsToRender = allStatsData.length > 0 ? [...allStatsData] : [...data.stats];
-              // Move PACE_HOME_AWAY (Record) to the top
-              const recordIndex = statsToRender.findIndex(s => s.token === 'PACE_HOME_AWAY' || s.token === 'HOME_AWAY_SPLITS' || s.token === 'SPECIAL_TEAMS');
+              // ONLY use statsData from Supabase - these are the real stats Gary requested
+              if (allStatsData.length === 0) return [];
+              
+              const statsToRender = [...allStatsData];
+              // Move RECORD to the top if present
+              const recordIndex = statsToRender.findIndex(s => 
+                s.token === 'PACE_HOME_AWAY' || s.token === 'HOME_AWAY_SPLITS' || s.token === 'SPECIAL_TEAMS'
+              );
               if (recordIndex > 0) {
                 const [recordStat] = statsToRender.splice(recordIndex, 1);
                 statsToRender.unshift(recordStat);
               }
               return statsToRender;
             })().map((stat, i, arr) => {
-              // Handle both statsData format {name, token, home, away} and parsed format {name, left, right, advantage}
-              const isStatsData = stat.token !== undefined;
+              // Only process stats from statsData (real stats Gary called)
+              if (!stat || !stat.token) return null;
               
-              // Skip tokens that don't have real data or are aliases
-              const skipTokens = ['TOP_PLAYERS', 'WEATHER', 'REST_SITUATION', 'PASSING_EPA', 'RUSHING_EPA'];
+              // Skip tokens that return non-stat data
+              const skipTokens = ['TOP_PLAYERS', 'WEATHER', 'REST_SITUATION', 'PASSING_EPA', 'RUSHING_EPA', 'FIELD_POSITION'];
               if (skipTokens.includes(stat.token)) return null;
+              
+              // Skip if no home or away data exists
+              if (!stat.home || !stat.away) return null;
               
               // Map tokens to user-friendly display names
               const displayNameMap = {
@@ -476,20 +484,29 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 return 'N/A';
               };
               
-              let homeVal, awayVal;
-              if (isStatsData) {
-                homeVal = extractValue(stat.home, stat.token);
-                awayVal = extractValue(stat.away, stat.token);
-              } else {
-                homeVal = stat.left;
-                awayVal = stat.right;
+              // Extract real values from statsData
+              const homeVal = extractValue(stat.home, stat.token);
+              const awayVal = extractValue(stat.away, stat.token);
+              
+              // STRICT FILTER: Skip if either value is N/A, undefined, or empty
+              if (homeVal === 'N/A' || awayVal === 'N/A' || 
+                  homeVal === undefined || awayVal === undefined ||
+                  homeVal === '' || awayVal === '') {
+                return null;
               }
               
               // Skip if values are team names (indicates no real data)
               const homeTeam = pick?.homeTeam || '';
               const awayTeam = pick?.awayTeam || '';
-              if (String(homeVal).includes(homeTeam) || String(homeVal).includes(awayTeam) ||
-                  String(awayVal).includes(homeTeam) || String(awayVal).includes(awayTeam)) {
+              const homeStr = String(homeVal);
+              const awayStr = String(awayVal);
+              if (homeStr.includes(homeTeam) || homeStr.includes(awayTeam) ||
+                  awayStr.includes(homeTeam) || awayStr.includes(awayTeam)) {
+                return null;
+              }
+              
+              // Skip if values contain "Check" (placeholder text)
+              if (homeStr.includes('Check') || awayStr.includes('Check')) {
                 return null;
               }
               
@@ -497,7 +514,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               const valueKey = `${homeVal}-${awayVal}`;
               const prevStats = arr.slice(0, i);
               const isDuplicate = prevStats.some(prevStat => {
-                if (!prevStat.token) return false;
+                if (!prevStat || !prevStat.token) return false;
                 const prevHome = extractValue(prevStat.home, prevStat.token);
                 const prevAway = extractValue(prevStat.away, prevStat.token);
                 return `${prevHome}-${prevAway}` === valueKey;
@@ -575,26 +592,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
               }}>{injRight === 'None' ? 'Healthy' : injRight}</span>
             </div>
             
-            
-            {/* Only show Research list if we don't have statsData with values */}
-            {allStatsData.length === 0 && allStats.length > 0 && (
-              <div style={{ 
-                marginTop: '0.8rem', 
-                paddingTop: '0.6rem', 
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-                fontSize: '0.65rem',
-                color: 'rgba(255, 255, 255, 0.45)',
-                lineHeight: 1.5
-              }}>
-                <span style={{ fontWeight: 500, opacity: 0.7 }}>Research: </span>
-                {allStats.map((stat, i) => (
-                  <span key={i}>
-                    {stat.replace(/_/g, ' ').toLowerCase()}
-                    {i < allStats.length - 1 ? ' · ' : ''}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* No fallback - only show real stats from Supabase */}
           </div>
         </div>
       )}
