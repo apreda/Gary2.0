@@ -29,7 +29,7 @@ const { picksService } = await import('../src/services/picksService.js');
 
 // Configuration
 const SPORT_CONFIG = {
-  nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', maxGames: 15 }, // All NBA games for the day
+  nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', maxGames: 1 }, // TEST: Just 1 game to verify filtering
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈' }
@@ -245,19 +245,27 @@ async function main() {
                   // Skip if home or away is just 'N/A' string
                   if (stat.home === 'N/A' || stat.away === 'N/A') return false;
                   
-                  // Skip if home/away objects have all N/A or empty values
+                  // Helper to check if a value is valid (not N/A, empty, placeholder, or invalid zero)
+                  const isValidValue = (k, v) => {
+                    if (k === 'team') return false; // Skip team name
+                    if (v === 'N/A' || v === '' || v === null || v === undefined) return false;
+                    if (Array.isArray(v) && v.length === 0) return false;
+                    if (String(v).includes('Check scout')) return false;
+                    // Filter out invalid zero rates (no NBA team has 0.000 FT rate, etc.)
+                    if ((k.includes('rate') || k.includes('pct') || k.includes('_pct')) && 
+                        (v === '0.000' || v === 0 || v === '0' || v === '0.0' || v === '0.00')) {
+                      return false;
+                    }
+                    return true;
+                  };
+                  
+                  // Skip if home/away objects have all invalid values
                   const hasRealHomeData = typeof stat.home === 'object' && stat.home !== null
-                    ? Object.entries(stat.home).some(([k, v]) => 
-                        k !== 'team' && v !== 'N/A' && v !== '' && v !== null && 
-                        !(Array.isArray(v) && v.length === 0) &&
-                        !String(v).includes('Check scout'))
+                    ? Object.entries(stat.home).some(([k, v]) => isValidValue(k, v))
                     : true; // primitives are fine
                     
                   const hasRealAwayData = typeof stat.away === 'object' && stat.away !== null
-                    ? Object.entries(stat.away).some(([k, v]) => 
-                        k !== 'team' && v !== 'N/A' && v !== '' && v !== null && 
-                        !(Array.isArray(v) && v.length === 0) &&
-                        !String(v).includes('Check scout'))
+                    ? Object.entries(stat.away).some(([k, v]) => isValidValue(k, v))
                     : true; // primitives are fine
                     
                   if (!hasRealHomeData || !hasRealAwayData) return false;
