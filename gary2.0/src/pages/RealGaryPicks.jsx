@@ -383,10 +383,11 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'PACE_HOME_AWAY': 'Record',
                 'HOME_AWAY_SPLITS': 'Record',
                 'SPECIAL_TEAMS': 'Record',
-                'OFFENSIVE_EPA': 'Points/Game',
-                'DEFENSIVE_EPA': 'Points Allowed',
+                'OFFENSIVE_EPA': 'Total YPG',
+                'DEFENSIVE_EPA': 'Opp Yards',
                 'SUCCESS_RATE_OFFENSE': 'Yards/Game',
                 'SUCCESS_RATE_DEFENSE': 'Yards Allowed',
+                'SUCCESS_RATE': 'Total YPG',
                 'EPA_LAST_5': 'Recent PPG',
                 'EARLY_DOWN_SUCCESS': 'Scoring Efficiency',
                 'QB_STATS': 'QB Rating',
@@ -395,12 +396,13 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'RED_ZONE_DEFENSE': 'Opp 3rd Down %',
                 'TURNOVER_MARGIN': 'Turnover +/-',
                 'OL_RANKINGS': 'Rush YPG',
+                'DL_RANKINGS': 'Opp Rush',
                 'RB_STATS': 'Rush Yards/Carry',
                 'EXPLOSIVE_PLAYS': 'Total Yards',
                 'EXPLOSIVE_ALLOWED': 'Yards Allowed',
                 'WR_TE_STATS': 'Pass Yards',
                 'DEFENSIVE_PLAYMAKERS': 'Def Points Allowed',
-                // NBA
+                // NBA/NCAAB
                 'OFFENSIVE_RATING': 'Off Rating',
                 'DEFENSIVE_RATING': 'Def Rating',
                 'NET_RATING': 'Net Rating',
@@ -411,7 +413,16 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'CLUTCH_STATS': 'Close Games',
                 'PACE': 'Pace',
                 'PAINT_SCORING': 'Paint Scoring',
-                'PAINT_DEFENSE': 'Paint Defense'
+                'PAINT_DEFENSE': 'Paint Defense',
+                'TURNOVER_RATE': 'TOV/Game',
+                'OREB_RATE': 'Off Reb/G',
+                'FT_RATE': 'FT Rate',
+                'ADJ_EFFICIENCY_MARGIN': 'Net Rating',
+                // NCAAF specific
+                'SP_PLUS_RATINGS': 'Net Rating',
+                'EXPLOSIVENESS': 'Big Plays',
+                'HAVOC_RATE': 'Havoc Rate',
+                'HAVOC_ALLOWED': 'Opp Havoc'
               };
               
               let statName = displayNameMap[stat.token] || stat.name || stat.token;
@@ -422,7 +433,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 
                 // Map token to the SPECIFIC key field we want (avoiding duplicates)
                 const keyMap = {
-                  // === NBA STATS ===
+                  // === NBA/NCAAB STATS ===
                   'OFFENSIVE_RATING': 'offensive_rating',
                   'DEFENSIVE_RATING': 'defensive_rating',
                   'NET_RATING': 'net_rating',
@@ -431,30 +442,31 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'PACE_LAST_10': 'pace',
                   'EFG_PCT': 'efg_pct',
                   'OPP_EFG_PCT': 'efg_pct',
-                  'TURNOVER_RATE': 'tov_rate',
+                  'TURNOVER_RATE': 'turnovers_per_game',
                   'THREE_PT_SHOOTING': 'three_pct',
                   'PAINT_DEFENSE': 'defensive_rating',
                   'PERIMETER_DEFENSE': 'three_pct',
                   'RECENT_FORM': 'last_5',
                   'HOME_AWAY_SPLITS': 'overall',
-                  'OREB_RATE': 'oreb_rate',
+                  'OREB_RATE': 'oreb_per_game',
                   'FT_RATE': 'ft_rate',
                   'CLUTCH_STATS': 'close_record',
                   'EFFICIENCY_LAST_10': 'net_rating',
                   'PAINT_SCORING': 'efg_pct',
                   'LINEUP_DATA': 'offensive_rating',
                   'USAGE_RATES': 'usage',
+                  'ADJ_EFFICIENCY_MARGIN': 'net_rating',
                   
                   // === NFL STATS - Each token extracts DIFFERENT field ===
-                  'OFFENSIVE_EPA': 'points_per_game',
-                  'DEFENSIVE_EPA': 'opp_points_per_game',
-                  'SUCCESS_RATE_OFFENSE': 'yards_per_game', // Different from OFFENSIVE_EPA
-                  'SUCCESS_RATE_DEFENSE': 'opp_yards_per_game', // Different from DEFENSIVE_EPA
+                  'OFFENSIVE_EPA': 'total_yards_per_game', // For NCAAF, fallback to points_per_game
+                  'DEFENSIVE_EPA': 'opp_total_yards', // For NCAAF
+                  'SUCCESS_RATE_OFFENSE': 'yards_per_game',
+                  'SUCCESS_RATE_DEFENSE': 'opp_yards_per_game',
                   'EPA_LAST_5': 'points_per_game',
                   'EARLY_DOWN_SUCCESS': 'points_per_game',
                   'TURNOVER_MARGIN': 'turnover_diff',
                   'QB_STATS': 'qb_rating',
-                  'PRESSURE_RATE': 'completion_pct', // Different from QB_STATS
+                  'PRESSURE_RATE': 'completion_pct',
                   'RED_ZONE_OFFENSE': 'third_down_pct',
                   'RED_ZONE_DEFENSE': 'third_down_pct',
                   'THIRD_DOWN': 'third_down_pct',
@@ -462,11 +474,15 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'EXPLOSIVE_PLAYS': 'yards_per_game',
                   'EXPLOSIVE_ALLOWED': 'opp_yards_per_game',
                   'OL_RANKINGS': 'rushing_yards_per_game',
-                  'RB_STATS': 'yards_per_carry', // Different from OL_RANKINGS
+                  'RB_STATS': 'yards_per_carry',
                   'WR_TE_STATS': 'yards_per_game',
                   'DEFENSIVE_PLAYMAKERS': 'opp_points_per_game',
                   'SPECIAL_TEAMS': 'overall',
-                  'FIELD_POSITION': 'overall'
+                  'FIELD_POSITION': 'overall',
+                  // NCAAF/NCAAB specific
+                  'SP_PLUS_RATINGS': 'net_rating',
+                  'SUCCESS_RATE': 'total_yards_per_game',
+                  'DL_RANKINGS': 'opp_rushing_yards'
                 };
                 
                 const key = keyMap[token] || Object.keys(obj).find(k => 

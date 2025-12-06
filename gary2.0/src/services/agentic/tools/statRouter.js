@@ -303,16 +303,59 @@ async function fetchNBATeamBaseStats(teamId, season = 2024) {
 }
 
 /**
- * Find team by name
+ * Find team by name - STRICT matching to avoid mascot collisions
+ * e.g., "Montana State Bobcats" should NOT match "Ohio Bobcats"
  */
 function findTeam(teams, teamName) {
   if (!teams || !teamName) return null;
-  const normalized = teamName.toLowerCase();
-  return teams.find(t => 
-    t.full_name?.toLowerCase().includes(normalized) ||
-    t.name?.toLowerCase().includes(normalized) ||
-    normalized.includes(t.name?.toLowerCase())
-  );
+  const normalized = teamName.toLowerCase().trim();
+  
+  // 1. Try exact full_name match first (best)
+  let match = teams.find(t => t.full_name?.toLowerCase() === normalized);
+  if (match) return match;
+  
+  // 2. Try full_name contains the search term (e.g., "Duke Blue Devils" contains "duke")
+  match = teams.find(t => t.full_name?.toLowerCase().includes(normalized));
+  if (match) return match;
+  
+  // 3. Try search term contains full_name (e.g., searching "Duke Blue Devils NCAA" contains "Duke Blue Devils")
+  match = teams.find(t => normalized.includes(t.full_name?.toLowerCase()));
+  if (match) return match;
+  
+  // 4. For college sports: Try matching on college + mascot (e.g., "Montana State" + "Bobcats")
+  // Split the search into parts
+  const searchParts = normalized.split(/\s+/);
+  if (searchParts.length >= 2) {
+    // Try to find team where college/city matches AND mascot matches
+    match = teams.find(t => {
+      const fullName = t.full_name?.toLowerCase() || '';
+      const college = t.college?.toLowerCase() || '';
+      const mascot = t.name?.toLowerCase() || '';
+      
+      // Check if the search contains BOTH the college/city AND the mascot
+      const collegeMatch = normalized.includes(college) || college.split(/\s+/).every(p => normalized.includes(p));
+      const mascotMatch = normalized.includes(mascot);
+      
+      return collegeMatch && mascotMatch;
+    });
+    if (match) return match;
+  }
+  
+  // 5. Try abbreviation match (e.g., "MSU" for Michigan State)
+  match = teams.find(t => t.abbreviation?.toLowerCase() === normalized);
+  if (match) return match;
+  
+  // 6. Last resort: partial match on full_name only (NOT on mascot alone)
+  // This prevents "Bobcats" from matching "Ohio Bobcats" when searching for "Montana State Bobcats"
+  match = teams.find(t => {
+    const fullName = t.full_name?.toLowerCase() || '';
+    // Only match if search term shares significant portion with full_name
+    const searchWords = normalized.split(/\s+/).filter(w => w.length > 2);
+    const matchCount = searchWords.filter(w => fullName.includes(w)).length;
+    return matchCount >= Math.ceil(searchWords.length * 0.6); // At least 60% of words must match
+  });
+  
+  return match || null;
 }
 
 /**
@@ -1157,6 +1200,33 @@ const FETCHERS = {
     const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
     const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
+    // NCAAF uses different field names than NFL
+    if (bdlSport === 'americanfootball_ncaaf') {
+      const homeTotalYpg = (homeStats?.passing_yards_per_game || 0) + (homeStats?.rushing_yards_per_game || 0);
+      const awayTotalYpg = (awayStats?.passing_yards_per_game || 0) + (awayStats?.rushing_yards_per_game || 0);
+      const homeTotalTds = (homeStats?.passing_touchdowns || 0) + (homeStats?.rushing_touchdowns || 0);
+      const awayTotalTds = (awayStats?.passing_touchdowns || 0) + (awayStats?.rushing_touchdowns || 0);
+      
+      return {
+        category: 'Offensive Production',
+        home: {
+          team: home.full_name || home.name,
+          total_yards_per_game: fmtNum(homeTotalYpg),
+          passing_ypg: fmtNum(homeStats?.passing_yards_per_game),
+          rushing_ypg: fmtNum(homeStats?.rushing_yards_per_game),
+          total_tds: homeTotalTds.toString()
+        },
+        away: {
+          team: away.full_name || away.name,
+          total_yards_per_game: fmtNum(awayTotalYpg),
+          passing_ypg: fmtNum(awayStats?.passing_yards_per_game),
+          rushing_ypg: fmtNum(awayStats?.rushing_yards_per_game),
+          total_tds: awayTotalTds.toString()
+        }
+      };
+    }
+    
+    // NFL and other sports
     return {
       category: 'Offensive EPA (Points Per Game / Yards Per Play proxies)',
       home: {
@@ -1184,6 +1254,29 @@ const FETCHERS = {
     const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
     const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
+    // NCAAF uses different field names
+    if (bdlSport === 'americanfootball_ncaaf') {
+      const homeOppYards = (homeStats?.opp_passing_yards || 0) + (homeStats?.opp_rushing_yards || 0);
+      const awayOppYards = (awayStats?.opp_passing_yards || 0) + (awayStats?.opp_rushing_yards || 0);
+      
+      return {
+        category: 'Defensive Production',
+        home: {
+          team: home.full_name || home.name,
+          opp_total_yards: fmtNum(homeOppYards),
+          opp_passing_yards: fmtNum(homeStats?.opp_passing_yards),
+          opp_rushing_yards: fmtNum(homeStats?.opp_rushing_yards)
+        },
+        away: {
+          team: away.full_name || away.name,
+          opp_total_yards: fmtNum(awayOppYards),
+          opp_passing_yards: fmtNum(awayStats?.opp_passing_yards),
+          opp_rushing_yards: fmtNum(awayStats?.opp_rushing_yards)
+        }
+      };
+    }
+    
+    // NFL and other sports
     return {
       category: 'Defensive EPA (Points Allowed / Yards Allowed proxies)',
       home: {
