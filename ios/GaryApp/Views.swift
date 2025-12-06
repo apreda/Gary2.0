@@ -1,14 +1,159 @@
 import SwiftUI
 import WebKit
 
-// MARK: - Theme Colors
+// MARK: - Liquid Glass Design System
+
+/// Glass modifier with material-based glass effect
+extension View {
+    func liquidGlass(cornerRadius: CGFloat = 20, intensity: GlassIntensity = .regular) -> some View {
+        self.background(intensity.material, in: RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.35), .white.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+            .shadow(color: .black.opacity(0.2), radius: 12, y: 8)
+    }
+    
+    func liquidGlassInteractive(cornerRadius: CGFloat = 20) -> some View {
+        self.liquidGlass(cornerRadius: cornerRadius, intensity: .regular)
+    }
+    
+    func liquidGlassCircle(intensity: GlassIntensity = .regular) -> some View {
+        self.background(intensity.material, in: Circle())
+            .overlay(
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.35), .white.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+    }
+    
+    func liquidGlassCapsule(intensity: GlassIntensity = .regular) -> some View {
+        self.background(intensity.material, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.35), .white.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+    }
+}
+
+enum GlassIntensity {
+    case clear
+    case regular
+    case prominent
+    
+    var material: Material {
+        switch self {
+        case .clear: return .ultraThinMaterial
+        case .regular: return .thinMaterial
+        case .prominent: return .regularMaterial
+        }
+    }
+}
+
+// MARK: - Enhanced Theme Colors
 
 enum GaryColors {
-    static let gold = Color(hex: "#B8953F")
-    static let lightGold = Color(hex: "#D8B878")
-    static let cream = Color(hex: "#F5F3EE")
-    static let darkBg = Color(hex: "#0F0F10")
-    static let cardBg = Color(red: 28/255, green: 28/255, blue: 28/255)
+    // Core brand colors with P3 gamut
+    static let gold = Color(hex: "#C9A227")
+    static let lightGold = Color(hex: "#E8D48B")
+    static let warmGold = Color(hex: "#F4E4BA")
+    static let cream = Color(hex: "#FAF8F5")
+    
+    // Deep backgrounds
+    static let darkBg = Color(hex: "#08080A")
+    static let cardBg = Color(hex: "#121214")
+    static let elevatedBg = Color(hex: "#1A1A1E")
+    
+    // Glass tints
+    static let glassTint = Color.white.opacity(0.08)
+    static let glassHighlight = Color.white.opacity(0.15)
+    static let glassBorder = Color.white.opacity(0.12)
+    
+    // Accent gradients
+    static let goldGradient = LinearGradient(
+        colors: [Color(hex: "#E8D48B"), Color(hex: "#C9A227"), Color(hex: "#8B6914")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    static let premiumGradient = LinearGradient(
+        colors: [Color(hex: "#C9A227").opacity(0.8), Color(hex: "#8B6914").opacity(0.4)],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+}
+
+// MARK: - Immersive Background
+
+struct LiquidGlassBackground: View {
+    var accentColor: Color = GaryColors.gold
+    
+    var body: some View {
+        ZStack {
+            // Deep base
+            Color(hex: "#050506")
+            
+            // Ambient glow orbs
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [accentColor.opacity(0.15), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 300
+                    )
+                )
+                .frame(width: 600, height: 600)
+                .offset(x: -150, y: -200)
+                .blur(radius: 60)
+            
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color(hex: "#1a1a2e").opacity(0.6), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 250
+                    )
+                )
+                .frame(width: 500, height: 500)
+                .offset(x: 180, y: 400)
+                .blur(radius: 50)
+            
+            // Subtle noise texture
+            Rectangle()
+                .fill(.white.opacity(0.015))
+                .background(
+                    Image(systemName: "circle.grid.3x3.fill")
+                        .resizable()
+                        .frame(width: 4, height: 4)
+                        .opacity(0.02)
+                )
+        }
+        .ignoresSafeArea()
+    }
 }
 
 // MARK: - Home View
@@ -16,42 +161,76 @@ enum GaryColors {
 struct HomeView: View {
     @State private var freePick: GaryPick?
     @State private var loading = true
+    @State private var animateIn = false
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [GaryColors.darkBg, Color(hex: "#141516")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            LiquidGlassBackground()
             
-            ScrollView {
-                VStack(spacing: 22) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 24) {
+                    // Hero Section
+                    VStack(spacing: 16) {
+                        GaryLogo(size: 100)
+                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 20, y: 8)
+                        
+                        Text("GARY A.I.")
+                            .font(.system(size: 28, weight: .black, design: .rounded))
+                            .foregroundStyle(GaryColors.goldGradient)
+                        
+                        Text("Intelligent Sports Analysis")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 20)
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 20)
+                    
                     // Today's Free Pick
                     if let pick = freePick {
-                        Text("Today's Free Pick")
-                            .padding(.top, 24)
-                            .font(.title2.bold())
-                            .foregroundColor(GaryColors.cream)
-                        
-                        PickCardMobile(pick: pick)
-                            .padding(.horizontal)
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(GaryColors.goldGradient)
+                                Text("TODAY'S FREE PICK")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 4)
+                            
+                            PickCardMobile(pick: pick)
+                        }
+                        .padding(.horizontal, 16)
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 30)
+                        .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                     }
-                    
                     
                     // Benefits Grid
-                    LazyVGrid(columns: [GridItem(.fixed(182), spacing: 12), GridItem(.fixed(182), spacing: 12)], spacing: 12) {
-                        BenefitCard(title: "Statistical Brain", text: "Leverages sportsbook odds and player metrics to identify mispriced betting lines.", icon: "waveform.path.ecg")
-                        BenefitCard(title: "Three-Layer Core", text: "Combines odds data, real-time storylines, and deep reasoning for each pick.", icon: "square.stack.3d.up")
-                        BenefitCard(title: "Narrative Tracker", text: "Monitors fatigue, travel schedules, injuries, and lineup changes in real-time.", icon: "text.bubble")
-                        BenefitCard(title: "Street Smart", text: "Blends old-school handicapping instincts with cutting-edge analytics.", icon: "map")
-                        BenefitCard(title: "Fan Brain", text: "Reads market sentiment and sharp money flows to separate hype from value.", icon: "person.3.fill")
-                        BenefitCard(title: "No Stat Dumping", text: "Agentic AI scouts only the most relevant stats per matchup—signal, not noise.", icon: "slider.horizontal.below.square.and.square.filled")
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("WHY GARY?")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
+                        
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ], spacing: 12) {
+                            BenefitCard(title: "Statistical Brain", text: "Identifies mispriced betting lines using odds & metrics.", icon: "waveform.path.ecg")
+                            BenefitCard(title: "Three-Layer Core", text: "Combines odds, storylines, and deep reasoning.", icon: "square.stack.3d.up")
+                            BenefitCard(title: "Narrative Tracker", text: "Monitors fatigue, injuries, and lineup changes.", icon: "text.bubble")
+                            BenefitCard(title: "Street Smart", text: "Blends handicapping instincts with analytics.", icon: "map")
+                            BenefitCard(title: "Fan Brain", text: "Reads market sentiment and sharp money.", icon: "person.3.fill")
+                            BenefitCard(title: "Signal Focus", text: "Only the most relevant stats per matchup.", icon: "antenna.radiowaves.left.and.right")
+                        }
+                        .padding(.horizontal, 16)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 28)
+                    .opacity(animateIn ? 1 : 0)
+                    .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
+                    
+                    Spacer(minLength: 100)
                 }
             }
         }
@@ -60,6 +239,9 @@ struct HomeView: View {
             let date = SupabaseAPI.todayEST()
             freePick = try? await SupabaseAPI.fetchAllPicks(date: date).first
             loading = false
+            withAnimation(.easeOut(duration: 0.8)) {
+                animateIn = true
+            }
         }
     }
 }
@@ -89,21 +271,19 @@ enum Sport: String, CaseIterable {
         }
     }
     
-    /// Sport-specific accent color matching the website
     var accentColor: Color {
         switch self {
-        case .all: return GaryColors.gold           // Default gold
-        case .nba: return Color(hex: "#3B82F6")     // Blue
-        case .wnba: return Color(hex: "#F97316")    // Orange
-        case .nfl: return GaryColors.gold           // Original Gold
-        case .ncaab: return Color(hex: "#8B5CF6")   // Purple
-        case .ncaaf: return Color(hex: "#DC2626")   // Red
-        case .mlb: return Color(hex: "#0EA5E9")     // Sky Blue
-        case .nhl: return Color(hex: "#F97316")     // Orange
+        case .all: return GaryColors.gold
+        case .nba: return Color(hex: "#3B82F6")
+        case .wnba: return Color(hex: "#F97316")
+        case .nfl: return GaryColors.gold
+        case .ncaab: return Color(hex: "#8B5CF6")
+        case .ncaaf: return Color(hex: "#DC2626")
+        case .mlb: return Color(hex: "#0EA5E9")
+        case .nhl: return Color(hex: "#F97316")
         }
     }
     
-    /// Get Sport from league string
     static func from(league: String?) -> Sport {
         guard let league = league?.uppercased() else { return .all }
         return Sport(rawValue: league) ?? .all
@@ -116,35 +296,46 @@ struct SportFilterBar: View {
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 ForEach(Sport.allCases, id: \.self) { sport in
                     let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
-                    let sportColor = sport.accentColor
+                    let isSelected = selected == sport
                     
                     Button {
-                        selected = sport
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selected = sport
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: sport.icon)
-                                .font(.system(size: 12))
+                                .font(.system(size: 11, weight: .semibold))
                             Text(sport.rawValue)
                                 .font(.caption.bold())
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(selected == sport ? sportColor : Color.white.opacity(0.08))
-                        .foregroundColor(selected == sport ? .black : isAvailable ? .white : .gray.opacity(0.5))
-                        .cornerRadius(20)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(selected == sport ? sportColor : Color.white.opacity(0.15), lineWidth: 1)
-                        )
+                        .foregroundStyle(isSelected ? .black : (isAvailable ? .white : .gray.opacity(0.5)))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(sport.accentColor)
+                                    .shadow(color: sport.accentColor.opacity(0.4), radius: 8, y: 4)
+                            } else {
+                                Capsule()
+                                    .fill(.white.opacity(0.06))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                            }
+                        }
                     }
                     .disabled(!isAvailable)
-                    .opacity(isAvailable ? 1 : 0.4)
+                    .scaleEffect(isSelected ? 1.05 : 1.0)
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.vertical, 4)
         }
     }
 }
@@ -155,6 +346,7 @@ struct GaryPicksView: View {
     @State private var allPicks: [GaryPick] = []
     @State private var loading = true
     @State private var selectedSport: Sport = .all
+    @State private var animateIn = false
     
     private var filteredPicks: [GaryPick] {
         guard selectedSport != .all else { return allPicks }
@@ -167,49 +359,62 @@ struct GaryPicksView: View {
     
     var body: some View {
         ZStack {
-            Color.black.opacity(0.96).ignoresSafeArea()
+            LiquidGlassBackground(accentColor: selectedSport.accentColor)
             
             VStack(spacing: 0) {
-                // Header
+                // Floating Header
                 VStack(spacing: 8) {
                     Text("Gary's Picks")
-                        .font(.largeTitle.bold())
-                        .foregroundColor(GaryColors.gold)
+                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .foregroundStyle(GaryColors.goldGradient)
                     
                     Text("AI-Powered Sports Analysis")
-                        .foregroundColor(.gray)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.top, 16)
-                .padding(.bottom, 12)
+                .padding(.bottom, 16)
                 
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 16)
                 
                 // Content
                 if loading {
                     Spacer()
-                    ProgressView().tint(GaryColors.gold)
+                    ProgressView()
+                        .tint(GaryColors.gold)
+                        .scaleEffect(1.2)
                     Spacer()
                 } else if filteredPicks.isEmpty {
                     Spacer()
-                    VStack(spacing: 8) {
+                    VStack(spacing: 16) {
                         Image(systemName: "sportscourt")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
+                            .font(.system(size: 50))
+                            .foregroundStyle(.tertiary)
                         Text(selectedSport == .all ? "No picks yet." : "No \(selectedSport.rawValue) picks today.")
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.secondary)
                     }
+                    .padding()
+                    .liquidGlass(cornerRadius: 24)
                     Spacer()
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(filteredPicks) { pick in
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 16) {
+                            ForEach(Array(filteredPicks.enumerated()), id: \.element.id) { index, pick in
                                 PickCardMobile(pick: pick)
                                     .padding(.horizontal, 16)
+                                    .opacity(animateIn ? 1 : 0)
+                                    .offset(y: animateIn ? 0 : 20)
+                                    .animation(
+                                        .spring(response: 0.5, dampingFraction: 0.8)
+                                        .delay(Double(index) * 0.08),
+                                        value: animateIn
+                                    )
                             }
                         }
                         .padding(.vertical, 8)
+                        .padding(.bottom, 100)
                     }
                 }
             }
@@ -220,15 +425,25 @@ struct GaryPicksView: View {
         .refreshable {
             await loadPicks()
         }
+        .onChange(of: selectedSport) { _, _ in
+            animateIn = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation { animateIn = true }
+            }
+        }
     }
     
     private func loadPicks() async {
         loading = true
+        animateIn = false
         let date = SupabaseAPI.todayEST()
         if let arr = try? await SupabaseAPI.fetchAllPicks(date: date) {
             allPicks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
         }
         loading = false
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            animateIn = true
+        }
     }
 }
 
@@ -238,6 +453,7 @@ struct GaryPropsView: View {
     @State private var allProps: [PropPick] = []
     @State private var loading = true
     @State private var selectedSport: Sport = .all
+    @State private var animateIn = false
     
     private var filteredProps: [PropPick] {
         guard selectedSport != .all else { return allProps }
@@ -250,49 +466,62 @@ struct GaryPropsView: View {
     
     var body: some View {
         ZStack {
-            Color.black.opacity(0.96).ignoresSafeArea()
+            LiquidGlassBackground(accentColor: Color(hex: "#8B5CF6"))
             
             VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 8) {
-                    Text("GARY PROPS")
-                        .font(.largeTitle.bold())
-                        .foregroundColor(GaryColors.gold)
+                    Text("Gary Props")
+                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .foregroundStyle(GaryColors.goldGradient)
                     
                     Text("AI-Powered Prop Betting")
-                        .foregroundColor(.gray)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.top, 16)
-                .padding(.bottom, 12)
+                .padding(.bottom, 16)
                 
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 16)
                 
                 // Content
                 if loading {
                     Spacer()
-                    ProgressView().tint(GaryColors.gold)
+                    ProgressView()
+                        .tint(GaryColors.gold)
+                        .scaleEffect(1.2)
                     Spacer()
                 } else if filteredProps.isEmpty {
                     Spacer()
-                    VStack(spacing: 8) {
+                    VStack(spacing: 16) {
                         Image(systemName: "person.fill.questionmark")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
-                        Text(selectedSport == .all ? "No prop picks yet." : "No \(selectedSport.rawValue) props today.")
-                            .foregroundColor(.gray)
+                            .font(.system(size: 50))
+                            .foregroundStyle(.tertiary)
+                        Text(selectedSport == .all ? "No props yet." : "No \(selectedSport.rawValue) props today.")
+                            .foregroundStyle(.secondary)
                     }
+                    .padding()
+                    .liquidGlass(cornerRadius: 24)
                     Spacer()
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(filteredProps) { prop in
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 16) {
+                            ForEach(Array(filteredProps.enumerated()), id: \.element.id) { index, prop in
                                 PropCardMobile(prop: prop)
                                     .padding(.horizontal, 16)
+                                    .opacity(animateIn ? 1 : 0)
+                                    .offset(y: animateIn ? 0 : 20)
+                                    .animation(
+                                        .spring(response: 0.5, dampingFraction: 0.8)
+                                        .delay(Double(index) * 0.08),
+                                        value: animateIn
+                                    )
                             }
                         }
                         .padding(.vertical, 8)
+                        .padding(.bottom, 100)
                     }
                 }
             }
@@ -303,20 +532,30 @@ struct GaryPropsView: View {
         .refreshable {
             await loadProps()
         }
+        .onChange(of: selectedSport) { _, _ in
+            animateIn = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation { animateIn = true }
+            }
+        }
     }
     
     private func loadProps() async {
         loading = true
+        animateIn = false
         let date = SupabaseAPI.todayEST()
         allProps = (try? await SupabaseAPI.fetchPropPicks(date: date)) ?? []
         loading = false
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            animateIn = true
+        }
     }
 }
 
 // MARK: - Billfold View
 
 struct BillfoldView: View {
-    @State private var selectedTab = 0  // 0 = games, 1 = props
+    @State private var selectedTab = 0
     @State private var timeframe = "all"
     @State private var gameResults: [GameResult] = []
     @State private var propResults: [PropResult] = []
@@ -327,72 +566,94 @@ struct BillfoldView: View {
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "#101112"), Color(hex: "#151617")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            LiquidGlassBackground(accentColor: Color(hex: "#10B981"))
             
-            ScrollView {
-                VStack(spacing: 16) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    // Header
+                    Text("Billfold")
+                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .foregroundStyle(GaryColors.goldGradient)
+                        .padding(.top, 16)
+                    
+                    // Segmented Control with Glass
                     segmentedControl
+                    
+                    // Timeframe Buttons
                     timeframeButtons
+                    
+                    // Metrics
                     metricsCards
+                    
+                    // Recent Picks
                     recentPicksList
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 20)
+                .padding(.bottom, 100)
             }
         }
         .task { await loadData() }
     }
     
-    // MARK: - Subviews
-    
     private var segmentedControl: some View {
         HStack(spacing: 0) {
-            segmentButton(title: "Game Picks", index: 0)
-            segmentButton(title: "Prop Picks", index: 1)
+            ForEach(["Game Picks", "Prop Picks"].indices, id: \.self) { index in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedTab = index
+                    }
+                    Task { await loadData() }
+                } label: {
+                    Text(index == 0 ? "Game Picks" : "Prop Picks")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(selectedTab == index ? .black : .white)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            if selectedTab == index {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(GaryColors.goldGradient)
+                            }
+                        }
+                }
+            }
         }
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(GaryColors.lightGold.opacity(0.5)))
-    }
-    
-    private func segmentButton(title: String, index: Int) -> some View {
-        Button {
-            selectedTab = index
-            Task { await loadData() }
-        } label: {
-            Text(title)
-                .font(.subheadline.bold())
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-        }
-        .background(selectedTab == index ? GaryColors.lightGold : Color.white.opacity(0.06))
-        .foregroundColor(selectedTab == index ? Color(hex: "#1A1B1D") : .white)
-        .cornerRadius(8)
+        .padding(4)
+        .liquidGlass(cornerRadius: 16)
     }
     
     private var timeframeButtons: some View {
         HStack(spacing: 8) {
             ForEach(timeframes, id: \.self) { tf in
                 Button {
-                    timeframe = tf
+                    withAnimation(.spring(response: 0.3)) {
+                        timeframe = tf
+                    }
                     Task { await loadData() }
                 } label: {
                     Text(tf.uppercased())
                         .font(.caption.bold())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(timeframe == tf ? Color.white.opacity(0.12) : Color.white.opacity(0.06))
-                        .cornerRadius(8)
+                        .foregroundStyle(timeframe == tf ? .black : .white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background {
+                            if timeframe == tf {
+                                Capsule().fill(GaryColors.lightGold)
+                            } else {
+                                Capsule().fill(.white.opacity(0.08))
+                            }
+                        }
                 }
-                .foregroundColor(.white)
             }
             Spacer()
-            Button { Task { await loadData() } } label: {
+            Button {
+                Task { await loadData() }
+            } label: {
                 Image(systemName: "arrow.clockwise")
-                    .foregroundColor(GaryColors.lightGold)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(10)
+                    .liquidGlassCircle()
             }
         }
     }
@@ -409,32 +670,36 @@ struct BillfoldView: View {
     }
     
     private var recentPicksList: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("RECENT PICKS")
-                .foregroundColor(GaryColors.lightGold)
-                .font(.headline)
+                .font(.caption.bold())
+                .foregroundStyle(GaryColors.lightGold)
             
             if loading {
-                ProgressView().tint(GaryColors.lightGold)
-            }
-            
-            if let error = error {
-                Text(error).foregroundColor(.red)
-            }
-            
-            if selectedTab == 0 {
-                ForEach(Array(gameResults.enumerated()), id: \.offset) { _, result in
-                    GameResultRow(result: result)
+                HStack {
+                    Spacer()
+                    ProgressView().tint(GaryColors.gold)
+                    Spacer()
                 }
+                .padding(.vertical, 40)
+            } else if let error = error {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .padding()
+                    .liquidGlass(cornerRadius: 12)
             } else {
-                ForEach(Array(propResults.enumerated()), id: \.offset) { _, result in
-                    PropResultRow(result: result)
+                if selectedTab == 0 {
+                    ForEach(Array(gameResults.enumerated()), id: \.offset) { _, result in
+                        GameResultRow(result: result)
+                    }
+                } else {
+                    ForEach(Array(propResults.enumerated()), id: \.offset) { _, result in
+                        PropResultRow(result: result)
+                    }
                 }
             }
         }
     }
-    
-    // MARK: - Data Loading
     
     private func loadData() async {
         loading = true
@@ -474,7 +739,7 @@ struct BillfoldView: View {
     }
     
     private func calculateRecord() -> (wins: Int, losses: Int, pushes: Int) {
-        let results = selectedTab == 0 
+        let results = selectedTab == 0
             ? gameResults.map { $0.result ?? "" }
             : propResults.map { $0.result ?? "" }
         
@@ -491,12 +756,7 @@ struct BillfoldView: View {
 struct BetCardView: View {
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "#101112"), Color(hex: "#151617")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            LiquidGlassBackground()
             
             WebContainer(url: URL(string: "https://www.betwithgary.ai/betcard")!)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -507,35 +767,11 @@ struct BetCardView: View {
 
 // MARK: - Reusable Components
 
-struct HomeTile: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(GaryColors.lightGold)
-                .font(.system(size: 24))
-                .frame(width: 36)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).foregroundColor(GaryColors.cream).font(.headline)
-                Text(subtitle).foregroundColor(.white.opacity(0.6)).font(.subheadline)
-            }
-            Spacer()
-        }
-        .padding()
-        .background(Color.white.opacity(0.04))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.lightGold.opacity(0.8), lineWidth: 1.2))
-        .cornerRadius(12)
-    }
-}
-
 struct BenefitCard: View {
     let title: String
     let text: String
     let icon: String?
+    @State private var isPressed = false
     
     init(title: String, text: String, icon: String? = nil) {
         self.title = title
@@ -544,51 +780,36 @@ struct BenefitCard: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
                 if let icon = icon {
-                    ZStack {
-                        Circle().fill(GaryColors.gold.opacity(0.2))
-                        Image(systemName: icon)
-                            .foregroundColor(GaryColors.gold)
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .frame(width: 30, height: 30)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(GaryColors.goldGradient)
+                        .frame(width: 32, height: 32)
+                        .liquidGlassCircle()
                 }
                 Text(title)
-                    .foregroundColor(GaryColors.lightGold)
                     .font(.subheadline.bold())
-                    .lineLimit(2)
+                    .foregroundStyle(GaryColors.lightGold)
+                    .lineLimit(1)
             }
+            
             Text(text)
-                .foregroundColor(GaryColors.cream)
-                .font(.system(size: 14))
-                .lineLimit(4)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
         }
-        .padding(12)
-        .frame(width: 182, height: 154, alignment: .topLeading)
-        .background(Color.white.opacity(0.04))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.lightGold.opacity(0.7), lineWidth: 1.0))
-        .cornerRadius(12)
-    }
-}
-
-struct Pill: View {
-    let text: String
-    var compact: Bool = false
-    
-    var body: some View {
-        Text(text)
-            .font(compact ? .caption.bold() : .subheadline)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .fontWeight(.bold)
-            .foregroundColor(Color(hex: "#1A1B1D"))
-            .padding(.horizontal, compact ? 10 : 14)
-            .padding(.vertical, compact ? 6 : 10)
-            .frame(height: compact ? 28 : 38)
-            .background(GaryColors.lightGold)
-            .cornerRadius(compact ? 14 : 20)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: 130)
+        .liquidGlass(cornerRadius: 16)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                isPressed = pressing
+            }
+        }, perform: {})
     }
 }
 
@@ -597,15 +818,17 @@ struct KPICard: View {
     let value: String
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).foregroundColor(.gray).font(.caption.bold())
-            Text(value).foregroundColor(GaryColors.lightGold).font(.title.bold())
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 28, weight: .black, design: .rounded))
+                .foregroundStyle(GaryColors.goldGradient)
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.04))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.lightGold.opacity(0.6), lineWidth: 1))
-        .cornerRadius(12)
+        .liquidGlass(cornerRadius: 16)
     }
 }
 
@@ -618,13 +841,27 @@ struct GaryLogo: View {
             case .empty:
                 ProgressView().tint(GaryColors.gold)
             case .success(let img):
-                img.resizable().scaledToFit().frame(width: size, height: size)
+                img.resizable()
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [GaryColors.lightGold, GaryColors.gold.opacity(0.3)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                    )
             case .failure:
                 Image(systemName: "seal.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: size, height: size)
-                    .foregroundColor(GaryColors.gold)
+                    .foregroundStyle(GaryColors.goldGradient)
             @unknown default:
                 EmptyView()
             }
@@ -637,170 +874,257 @@ struct GaryLogo: View {
 struct PickCardMobile: View {
     let pick: GaryPick
     @State private var showAnalysis = false
+    @State private var isPressed = false
     
-    /// Sport-specific accent color
     private var accentColor: Color {
         Sport.from(league: pick.league).accentColor
     }
     
-    /// Split pick text: team/spread in accent color, odds in gold
     private var pickTextView: some View {
         let (pickPart, oddsPart) = Formatters.splitPickAndOdds(pick.pick)
-        return HStack(spacing: 4) {
+        return HStack(spacing: 6) {
             Text(pickPart)
-                .foregroundColor(accentColor)
+                .foregroundStyle(accentColor)
                 .font(.title2.bold())
             if !oddsPart.isEmpty {
                 Text(oddsPart)
-                    .foregroundColor(GaryColors.gold)
+                    .foregroundStyle(GaryColors.goldGradient)
                     .font(.title2.bold())
             }
         }
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
+        VStack(alignment: .leading, spacing: 14) {
+            // Header Row
             HStack {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: Sport.from(league: pick.league).icon)
-                        .foregroundColor(accentColor)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                        .padding(8)
+                        .liquidGlassCircle()
+                    
                     Text((pick.league ?? "").uppercased())
-                        .foregroundColor(.white)
                         .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
                 }
+                
                 Spacer()
+                
                 HStack(spacing: 6) {
-                    Image(systemName: "clock").foregroundColor(accentColor)
+                    Image(systemName: "clock")
+                        .font(.caption)
                     Text(Formatters.labelEST(pick.time))
-                        .foregroundColor(accentColor)
-                        .font(.subheadline.bold())
+                        .font(.caption.bold())
                 }
+                .foregroundStyle(accentColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .liquidGlassCapsule()
             }
             
-            // Teams (shortened to mascot only)
+            // Teams
             HStack {
-                Text(Formatters.shortTeamName(pick.awayTeam)).foregroundColor(.white).font(.title3.bold())
+                Text(Formatters.shortTeamName(pick.awayTeam))
+                    .font(.title3.bold())
                 Spacer()
-                Text("@").foregroundColor(.gray)
+                Text("@")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
                 Spacer()
-                Text(Formatters.shortTeamName(pick.homeTeam)).foregroundColor(.white).font(.title3.bold())
+                Text(Formatters.shortTeamName(pick.homeTeam))
+                    .font(.title3.bold())
+            }
+            .padding(.vertical, 4)
+            
+            // Divider
+            Rectangle()
+                .fill(accentColor.opacity(0.3))
+                .frame(height: 1)
+            
+            // Pick Label
+            HStack(spacing: 8) {
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(accentColor)
+                Text("GARY'S PICK")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
             }
             
-            Divider().overlay(accentColor.opacity(0.3))
-            
-            // Pick
-            HStack(spacing: 6) {
-                Image(systemName: "bolt.fill").foregroundColor(accentColor)
-                Text("GARY'S PICK").foregroundColor(.gray).font(.footnote.bold())
-            }
-            
-            // Split pick text to show odds in gold
+            // Pick Text
             pickTextView
             
-            // Confidence
-            HStack(spacing: 6) {
-                Image(systemName: "chart.line.uptrend.xyaxis").foregroundColor(.gray)
-                Text("Confidence: \(Formatters.confidencePercent(pick.confidence))%")
-                    .foregroundColor(.gray)
-                    .font(.subheadline)
+            // Confidence Bar
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.caption)
+                    Text("Confidence")
+                        .font(.caption)
+                    Spacer()
+                    Text("\(Formatters.confidencePercent(pick.confidence))%")
+                        .font(.caption.bold())
+                }
+                .foregroundStyle(.secondary)
+                
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(.white.opacity(0.1))
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(accentColor)
+                            .frame(width: geo.size.width * CGFloat(pick.confidence ?? 0))
+                    }
+                }
+                .frame(height: 6)
             }
             
             // Analysis Button
-            Button { showAnalysis.toggle() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "paperclip")
-                    Text("Tap for Analysis")
+            Button {
+                showAnalysis.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                    Text("View Analysis")
                 }
-                .font(.footnote.bold())
-                .foregroundColor(GaryColors.gold.opacity(0.8))
+                .font(.subheadline.bold())
+                .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(Color.white.opacity(0.06))
-                .cornerRadius(12)
+                .padding(.vertical, 12)
+                .liquidGlass(cornerRadius: 12)
             }
             .sheet(isPresented: $showAnalysis) {
-                AnalysisSheet(title: "Gary's Analysis", content: pick.rationale ?? "", accentColor: GaryColors.gold)
+                AnalysisSheet(title: "Gary's Analysis", content: pick.rationale ?? "", accentColor: accentColor)
             }
         }
-        .padding(16)
-        .background(GaryColors.cardBg)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(GaryColors.gold.opacity(0.9), lineWidth: 1.5))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(GaryColors.cardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(
+                            LinearGradient(
+                                colors: [accentColor.opacity(0.6), accentColor.opacity(0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
+                .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+        }
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                isPressed = pressing
+            }
+        }, perform: {})
     }
 }
 
 struct PropCardMobile: View {
     let prop: PropPick
     @State private var showAnalysis = false
+    @State private var isPressed = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             // Header
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text((prop.player ?? prop.team) ?? "")
-                        .foregroundColor(.white)
                         .font(.headline.bold())
-                    if let team = prop.team {
-                        Text(team).foregroundColor(.gray).font(.subheadline)
+                    if let team = prop.team, prop.player != nil {
+                        Text(team)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
                 Text(Formatters.americanOdds(prop.odds))
-                    .foregroundColor(GaryColors.gold)
                     .font(.title3.bold())
+                    .foregroundStyle(GaryColors.goldGradient)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .liquidGlass(cornerRadius: 10)
             }
             
-            Divider().overlay(Color.white.opacity(0.12))
+            Rectangle()
+                .fill(.white.opacity(0.1))
+                .frame(height: 1)
             
-            HStack(spacing: 6) {
-                Image(systemName: "bolt.fill").foregroundColor(GaryColors.gold)
-                Text("GARY'S PICK").foregroundColor(.gray).font(.caption.bold())
+            HStack(spacing: 8) {
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(GaryColors.gold)
+                Text("GARY'S PICK")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
             }
             
             Text(Formatters.propDisplay(prop.prop))
-                .foregroundColor(.white)
                 .font(.headline)
             
             HStack {
                 if let bet = prop.bet {
                     Text(bet.uppercased())
-                        .foregroundColor(bet.lowercased() == "over" ? .green : .red)
                         .font(.subheadline.bold())
+                        .foregroundStyle(bet.lowercased() == "over" ? .green : .red)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background((bet.lowercased() == "over" ? Color.green : Color.red).opacity(0.15))
+                        .clipShape(Capsule())
                 }
                 Spacer()
                 if let ev = Formatters.computeEV(confidence: prop.confidence, american: prop.odds) {
-                    Text("EV: \(String(format: "%.2f%%", ev))")
-                        .foregroundColor(.gray)
-                        .font(.footnote)
+                    HStack(spacing: 4) {
+                        Text("EV:")
+                            .foregroundStyle(.secondary)
+                        Text(String(format: "+%.1f%%", ev))
+                            .foregroundStyle(.green)
+                    }
+                    .font(.caption.bold())
                 }
             }
             
             if let analysis = prop.analysis, !analysis.isEmpty {
-                Button { showAnalysis.toggle() } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "paperclip")
-                        Text("Tap for Analysis")
+                Button {
+                    showAnalysis.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                        Text("View Analysis")
                     }
-                    .font(.footnote.bold())
-                    .foregroundColor(GaryColors.gold.opacity(0.7))
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.06))
-                    .cornerRadius(12)
+                    .padding(.vertical, 12)
+                    .liquidGlass(cornerRadius: 12)
                 }
                 .sheet(isPresented: $showAnalysis) {
                     BulletPointSheet(title: "Gary's Analysis", content: analysis)
                 }
             }
         }
-        .padding(16)
-        .background(GaryColors.cardBg)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(GaryColors.gold.opacity(0.9), lineWidth: 1.5))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(GaryColors.cardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1)
+                )
+                .shadow(color: GaryColors.gold.opacity(0.1), radius: 16, y: 8)
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+        }
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                isPressed = pressing
+            }
+        }, perform: {})
     }
 }
 
@@ -810,19 +1134,18 @@ struct GameResultRow: View {
     let result: GameResult
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(Formatters.formatDate(result.game_date))
-                    .foregroundColor(.gray)
                     .font(.caption)
+                    .foregroundStyle(.tertiary)
                 Spacer()
                 Text(Formatters.americanOdds(result.odds?.value))
-                    .foregroundColor(GaryColors.lightGold)
                     .font(.subheadline.bold())
+                    .foregroundStyle(GaryColors.lightGold)
             }
             
             Text(result.pick_text ?? result.matchup ?? "")
-                .foregroundColor(.white)
                 .font(.subheadline)
             
             HStack {
@@ -830,10 +1153,8 @@ struct GameResultRow: View {
                 ResultBadge(result: result.result ?? "")
             }
         }
-        .padding(12)
-        .background(Color.white.opacity(0.04))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.06)))
-        .cornerRadius(10)
+        .padding(14)
+        .liquidGlass(cornerRadius: 14)
     }
 }
 
@@ -841,19 +1162,18 @@ struct PropResultRow: View {
     let result: PropResult
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(Formatters.formatDate(result.game_date))
-                    .foregroundColor(.gray)
                     .font(.caption)
+                    .foregroundStyle(.tertiary)
                 Spacer()
                 Text(Formatters.americanOdds(result.odds?.value))
-                    .foregroundColor(GaryColors.lightGold)
                     .font(.subheadline.bold())
+                    .foregroundStyle(GaryColors.lightGold)
             }
             
             Text(Formatters.propResultTitle(result))
-                .foregroundColor(.white)
                 .font(.subheadline)
             
             HStack {
@@ -861,10 +1181,8 @@ struct PropResultRow: View {
                 ResultBadge(result: result.result ?? "")
             }
         }
-        .padding(12)
-        .background(Color.white.opacity(0.04))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.06)))
-        .cornerRadius(10)
+        .padding(14)
+        .liquidGlass(cornerRadius: 14)
     }
 }
 
@@ -882,11 +1200,15 @@ struct ResultBadge: View {
     var body: some View {
         Text(result.uppercased())
             .font(.caption.bold())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.2))
-            .foregroundColor(color)
-            .cornerRadius(8)
+            .foregroundStyle(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(color.opacity(0.15))
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(color.opacity(0.3), lineWidth: 0.5)
+            )
     }
 }
 
@@ -896,53 +1218,104 @@ struct AnalysisSheet: View {
     let title: String
     let content: String
     var accentColor: Color = GaryColors.gold
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(accentColor)
-            ScrollView {
-                Text(content).foregroundColor(.white)
+        ZStack {
+            LiquidGlassBackground(accentColor: accentColor)
+            
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.title2.bold())
+                            .foregroundStyle(accentColor)
+                        Text("Powered by Gary A.I.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .padding(10)
+                            .liquidGlassCircle()
+                    }
+                }
+                
+                ScrollView(showsIndicators: false) {
+                    Text(content)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .lineSpacing(6)
+                        .padding()
+                        .liquidGlass(cornerRadius: 16)
+                }
             }
+            .padding(20)
         }
-        .padding()
-        .background(Color.black)
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
 struct BulletPointSheet: View {
     let title: String
     let content: String
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(GaryColors.gold)
+        ZStack {
+            LiquidGlassBackground(accentColor: GaryColors.gold)
             
-            ScrollView {
-                let bullets = content
-                    .components(separatedBy: "•")
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(bullets, id: \.self) { line in
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("•").foregroundColor(GaryColors.gold)
-                            Text(line)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text(title)
+                        .font(.title2.bold())
+                        .foregroundStyle(GaryColors.goldGradient)
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .padding(10)
+                            .liquidGlassCircle()
                     }
                 }
+                
+                ScrollView(showsIndicators: false) {
+                    let bullets = content
+                        .components(separatedBy: "•")
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(bullets, id: \.self) { line in
+                            HStack(alignment: .top, spacing: 12) {
+                                Circle()
+                                    .fill(GaryColors.gold)
+                                    .frame(width: 6, height: 6)
+                                    .padding(.top, 6)
+                                Text(line)
+                                    .font(.body)
+                                    .lineSpacing(4)
+                            }
+                        }
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 16)
+                }
             }
+            .padding(20)
         }
-        .padding()
-        .background(Color.black)
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -955,8 +1328,8 @@ struct WebContainer: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         let view = WKWebView(frame: .zero, configuration: config)
         view.isOpaque = false
-        view.backgroundColor = .black
-        view.scrollView.backgroundColor = .black
+        view.backgroundColor = .clear
+        view.scrollView.backgroundColor = .clear
         view.scrollView.contentInsetAdjustmentBehavior = .never
         view.scrollView.bounces = false
         view.pageZoom = 1.12
@@ -983,20 +1356,6 @@ struct RoundedCorner: Shape {
             cornerRadii: CGSize(width: radius, height: radius)
         )
         return Path(path.cgPath)
-    }
-}
-
-// MARK: - Button Styles
-
-struct GoldButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(Color(hex: "#1A1B1D"))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(GaryColors.lightGold)
-            .cornerRadius(10)
-            .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 
@@ -1045,7 +1404,7 @@ enum Formatters {
         let b: Double = am > 0 ? Double(am) / 100.0 : 100.0 / Double(abs(am))
         let prob = p > 1.0 ? (p / 100.0) : p
         let ev = prob * b - (1 - prob)
-        return (ev * 100) / 10.0  // Scale down by 10x
+        return (ev * 100) / 10.0
     }
     
     static func formatDate(_ iso: String?) -> String {
@@ -1068,20 +1427,15 @@ enum Formatters {
         ].compactMap { $0 }.joined(separator: " ")
     }
     
-    /// Shorten team name to just the mascot - e.g., "Dallas Cowboys" → "Cowboys"
     static func shortTeamName(_ team: String?) -> String {
         guard let team = team, !team.isEmpty else { return "" }
         let words = team.split(separator: " ")
-        // Return last word (mascot), or full name if only one word
         return words.count > 1 ? String(words.last!) : team
     }
     
-    /// Split pick text into (team/spread, odds) and shorten team name
-    /// e.g., "Dallas Cowboys ML +145" → ("Cowboys ML", "+145")
     static func splitPickAndOdds(_ pick: String?) -> (String, String) {
         guard let pick = pick, !pick.isEmpty else { return ("", "") }
         
-        // Look for odds pattern at the end: -110, +150, -7.5, etc.
         let pattern = #"(.+?)\s+([-+]\d+\.?\d*)$"#
         var pickPart = pick
         var oddsPart = ""
@@ -1095,18 +1449,14 @@ enum Formatters {
             }
         }
         
-        // Shorten team names in the pick part (e.g., "Dallas Cowboys" → "Cowboys")
         let shortenedPick = shortenTeamNamesInPick(pickPart)
-        
         return (shortenedPick, oddsPart)
     }
     
-    /// Shorten team names within a pick string
     private static func shortenTeamNamesInPick(_ pick: String) -> String {
-        // Common city names to remove
-        let cities = ["Dallas", "Detroit", "Los Angeles", "LA", "New York", "NY", "Boston", "Washington", 
+        let cities = ["Dallas", "Detroit", "Los Angeles", "LA", "New York", "NY", "Boston", "Washington",
                       "Golden State", "San Francisco", "San Antonio", "New Orleans", "Oklahoma City", "OKC",
-                      "Minnesota", "Milwaukee", "Miami", "Memphis", "Indiana", "Houston", "Denver", 
+                      "Minnesota", "Milwaukee", "Miami", "Memphis", "Indiana", "Houston", "Denver",
                       "Cleveland", "Chicago", "Charlotte", "Brooklyn", "Atlanta", "Phoenix", "Portland",
                       "Sacramento", "Toronto", "Utah", "Orlando", "Philadelphia", "Cincinnati", "Baltimore",
                       "Pittsburgh", "Kansas City", "Las Vegas", "Seattle", "Tampa Bay", "Green Bay",
@@ -1114,7 +1464,6 @@ enum Formatters {
         
         var result = pick
         for city in cities {
-            // Remove city name if followed by a space and more text
             let pattern = "\\b\(city)\\s+"
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
                 result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
@@ -1123,4 +1472,3 @@ enum Formatters {
         return result.trimmingCharacters(in: .whitespaces)
     }
 }
-

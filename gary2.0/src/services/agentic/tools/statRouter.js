@@ -1661,12 +1661,15 @@ function formatRecentGames(games, teamName) {
     return { record: 'N/A', games: [], note: 'No recent game data available' };
   }
   
-  // Filter to only completed games (status = 'Final')
-  const completedGames = games.filter(g => 
-    g.status === 'Final' || 
-    g.home_team_score !== null || 
-    g.visitor_team_score !== null
-  );
+  // Filter to only completed games - handle both NBA and NCAAB field names
+  // NCAAB uses: home_score, away_score, status: 'post', period_detail: 'Final'
+  // NBA uses: home_team_score, visitor_team_score, status: 'Final'
+  const completedGames = games.filter(g => {
+    const hasStatus = g.status === 'Final' || g.status === 'post' || g.period_detail === 'Final';
+    const hasNBAScore = g.home_team_score !== null && g.home_team_score !== undefined;
+    const hasNCAABScore = g.home_score !== null && g.home_score !== undefined;
+    return hasStatus && (hasNBAScore || hasNCAABScore);
+  });
   
   if (completedGames.length === 0) {
     return { record: 'N/A', games: [], note: 'No completed games found' };
@@ -1685,8 +1688,14 @@ function formatRecentGames(games, teamName) {
     
     const isHome = normalizedHome.includes(normalizedTeamName) || normalizedTeamName.includes(normalizedHome);
     
-    const teamScore = isHome ? g.home_team_score : g.visitor_team_score;
-    const oppScore = isHome ? g.visitor_team_score : g.home_team_score;
+    // Handle both NBA and NCAAB field names for scores
+    // NCAAB: home_score, away_score
+    // NBA: home_team_score, visitor_team_score
+    const homeScore = g.home_team_score ?? g.home_score ?? 0;
+    const awayScore = g.visitor_team_score ?? g.away_score ?? 0;
+    
+    const teamScore = isHome ? homeScore : awayScore;
+    const oppScore = isHome ? awayScore : homeScore;
     const opponent = isHome ? awayTeamName : homeTeamName;
     
     let result = 'T';

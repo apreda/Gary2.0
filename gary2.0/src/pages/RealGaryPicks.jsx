@@ -532,6 +532,14 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 return null;
               }
               
+              // Filter out 0.0 net ratings for NCAAB/NCAAF - BDL doesn't have efficiency ratings
+              const efficiencyTokens = ['ADJ_EFFICIENCY_MARGIN', 'NET_RATING', 'ADJ_OFFENSIVE_EFF', 'ADJ_DEFENSIVE_EFF', 'SP_PLUS_RATINGS'];
+              if (efficiencyTokens.includes(stat.token) && 
+                  (homeVal === '0.0' || homeVal === 0 || homeVal === '0' ||
+                   awayVal === '0.0' || awayVal === 0 || awayVal === '0')) {
+                return null;
+              }
+              
               // Skip if values are team names (indicates no real data)
               const homeTeam = pick?.homeTeam || '';
               const awayTeam = pick?.awayTeam || '';

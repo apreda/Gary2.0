@@ -1,37 +1,124 @@
 import SwiftUI
 
-// MARK: - Main Tab View
+// MARK: - Main Tab View with Liquid Glass
 
 struct ContentView: View {
-    @AppStorage("selectedTab") private var selectedTab: Int = 0
+    @State private var selectedTab: Int = 0
+    @Namespace private var tabAnimation
     
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
-                .tag(0)
+        ZStack(alignment: .bottom) {
+            // Content
+            TabView(selection: $selectedTab) {
+                HomeView()
+                    .tag(0)
+                
+                GaryPicksView()
+                    .tag(1)
+                
+                GaryPropsView()
+                    .tag(2)
+                
+                BillfoldView()
+                    .tag(3)
+                
+                SettingsView()
+                    .tag(4)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
             
-            GaryPicksView()
-                .tabItem { Label("Gary's Picks", systemImage: "list.bullet.rectangle") }
-                .tag(1)
-            
-            GaryPropsView()
-                .tabItem { Label("Gary's Props", systemImage: "sportscourt") }
-                .tag(2)
-            
-            BillfoldView()
-                .tabItem { Label("Billfold", systemImage: "wallet.pass") }
-                .tag(3)
-            
-            BetCardView()
-                .tabItem { Label("BetCard", systemImage: "creditcard") }
-                .tag(4)
-            
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(5)
+            // Custom Floating Tab Bar
+            FloatingTabBar(selectedTab: $selectedTab, namespace: tabAnimation)
         }
-        .tint(GaryColors.gold)
+        .ignoresSafeArea(.keyboard)
+    }
+}
+
+// MARK: - Floating Tab Bar
+
+struct FloatingTabBar: View {
+    @Binding var selectedTab: Int
+    var namespace: Namespace.ID
+    
+    private let tabs: [(icon: String, label: String)] = [
+        ("house.fill", "Home"),
+        ("list.bullet.rectangle.fill", "Picks"),
+        ("sportscourt.fill", "Props"),
+        ("wallet.pass.fill", "Billfold"),
+        ("gearshape.fill", "Settings")
+    ]
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(tabs.indices, id: \.self) { index in
+                TabBarButton(
+                    icon: tabs[index].icon,
+                    label: tabs[index].label,
+                    isSelected: selectedTab == index,
+                    namespace: namespace
+                ) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        selectedTab = index
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.3), .white.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+        )
+        .padding(.horizontal, 20)
+        .padding(.bottom, 20)
+    }
+}
+
+struct TabBarButton: View {
+    let icon: String
+    let label: String
+    let isSelected: Bool
+    var namespace: Namespace.ID
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                ZStack {
+                    if isSelected {
+                        Circle()
+                            .fill(GaryColors.goldGradient)
+                            .frame(width: 44, height: 44)
+                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 8, y: 4)
+                            .matchedGeometryEffect(id: "tabIndicator", in: namespace)
+                    }
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: isSelected ? 18 : 20, weight: .semibold))
+                        .foregroundStyle(isSelected ? .black : .white.opacity(0.6))
+                        .scaleEffect(isSelected ? 1.0 : 0.9)
+                }
+                .frame(width: 50, height: 44)
+                
+                Text(label)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? GaryColors.gold : .white.opacity(0.5))
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -67,4 +154,5 @@ extension Color {
 
 #Preview {
     ContentView()
+        .preferredColorScheme(.dark)
 }
