@@ -148,10 +148,28 @@ export const Billfold = () => {
           throw new Error(`Error fetching prop results: ${propResultsError.message}`);
         }
         
+        // Debug logging for prop results
+        console.log('Billfold: Fetched propResults count:', propResults?.length || 0);
+        console.log('Billfold: showPicksType:', showPicksType);
+        
         // Check if we have any results at all based on current tab
         const currentResults = showPicksType === 'games' ? gameResults : propResults;
         if (!currentResults || currentResults.length === 0) {
           setBettingLog([]); // Clear the betting log so old data doesn't show
+          // Reset stats to show empty state
+          setStats({
+            record: '0-0',
+            totalBets: 0,
+            totalWins: 0,
+            totalLosses: 0,
+            pushes: 0,
+            winLoss: 0,
+            sportPerformance: [],
+            betTypePerformance: [],
+            mostProfitableBetType: null
+          });
+          setBestWin(null);
+          setYesterdayRecord('0-0');
           setError(`No ${showPicksType === 'games' ? 'game' : 'prop'} results found. Check back later for updated picks.`);
           setIsLoading(false);
           return;
@@ -662,6 +680,13 @@ export const Billfold = () => {
             </button>
           </div>
         </div>
+        
+        {/* Error display */}
+        {error && (
+          <div className="mb-6 p-4 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-center">
+            {error}
+          </div>
+        )}
         
         {/* Enhanced Key Metrics Row - Using fixed-width grid and improved typography */}
         <div className="gary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
