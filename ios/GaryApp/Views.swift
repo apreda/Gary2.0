@@ -306,7 +306,7 @@ struct HomeView: View {
                         Image("GaryCoin")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 130, height: 130)
+                            .frame(width: 162, height: 162)
                             .shadow(color: GaryColors.gold.opacity(0.5), radius: 20, y: 8)
                         
                         Text("GARY A.I.")
