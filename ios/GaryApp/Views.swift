@@ -228,8 +228,10 @@ struct HomeView: View {
     
     var body: some View {
         ZStack {
+            // Background - ignores safe area (fills entire screen)
             LiquidGlassBackground()
             
+            // Content - respects safe area
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     // Hero Section
@@ -245,7 +247,7 @@ struct HomeView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 16)
+                    .padding(.top, 8) // Small extra padding after safe area
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
@@ -292,9 +294,9 @@ struct HomeView: View {
                     }
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
-                    
-                    Spacer(minLength: 120)
                 }
+                .padding(.horizontal, 4) // Ensure content doesn't touch edges
+                .padding(.bottom, 100) // Space for floating tab bar
             }
         }
         .task {
@@ -422,21 +424,23 @@ struct GaryPicksView: View {
     
     var body: some View {
         ZStack {
+            // Background - ignores safe area
             LiquidGlassBackground(accentColor: selectedSport.accentColor)
             
+            // Content - respects safe area
             VStack(spacing: 0) {
                 // Floating Header
                 VStack(spacing: 8) {
                     Text("Gary's Picks")
-                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .black, design: .rounded))
                         .foregroundStyle(GaryColors.goldGradient)
                     
                     Text("AI-Powered Sports Analysis")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 16)
-                .padding(.bottom, 16)
+                .padding(.top, 8) // Extra padding after safe area
+                .padding(.bottom, 12)
                 
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports)
@@ -529,21 +533,23 @@ struct GaryPropsView: View {
     
     var body: some View {
         ZStack {
+            // Background - ignores safe area
             LiquidGlassBackground(accentColor: Color(hex: "#8B5CF6"))
             
+            // Content - respects safe area
             VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 8) {
                     Text("Gary Props")
-                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .black, design: .rounded))
                         .foregroundStyle(GaryColors.goldGradient)
                     
                     Text("AI-Powered Prop Betting")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 16)
-                .padding(.bottom, 16)
+                .padding(.top, 8) // Extra padding after safe area
+                .padding(.bottom, 12)
                 
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports)
@@ -629,15 +635,17 @@ struct BillfoldView: View {
     
     var body: some View {
         ZStack {
+            // Background - ignores safe area
             LiquidGlassBackground(accentColor: Color(hex: "#10B981"))
             
+            // Content - respects safe area
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     // Header
                     Text("Billfold")
-                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .black, design: .rounded))
                         .foregroundStyle(GaryColors.goldGradient)
-                        .padding(.top, 16)
+                        .padding(.top, 8) // Extra after safe area
                     
                     // Segmented Control with Glass
                     segmentedControl

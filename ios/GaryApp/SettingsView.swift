@@ -10,21 +10,23 @@ struct SettingsView: View {
     
     var body: some View {
         ZStack {
+            // Background - ignores safe area
             LiquidGlassBackground(accentColor: Color(hex: "#6366F1"))
             
+            // Content - respects safe area
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     // Header
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Settings")
-                            .font(.system(size: 32, weight: .black, design: .rounded))
+                            .font(.system(size: 28, weight: .black, design: .rounded))
                             .foregroundStyle(GaryColors.goldGradient)
                         
                         Text("Manage your preferences")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 8) // Extra padding after safe area
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
@@ -45,10 +47,9 @@ struct SettingsView: View {
                         .opacity(animateIn ? 1 : 0)
                         .offset(y: animateIn ? 0 : 20)
                         .animation(.easeOut(duration: 0.5).delay(0.3), value: animateIn)
-                    
-                    Spacer(minLength: 120)
                 }
                 .padding(.horizontal, 20)
+                .padding(.bottom, 100) // Space for floating tab bar
             }
         }
         .onAppear {

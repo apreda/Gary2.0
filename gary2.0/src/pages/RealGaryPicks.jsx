@@ -957,21 +957,17 @@ function RealGaryPicks() {
         .eq('date', queryDate)
         .maybeSingle();
 
-      // Fetch weekly NFL picks (persists all week)
-      const getNFLWeekStart = () => {
-        const d = new Date();
-        const day = d.getDay();
-        const diff = day === 0 ? -6 : 1 - day;
-        d.setDate(d.getDate() + diff);
-        return d.toISOString().split('T')[0];
-      };
-      
+      // Fetch weekly NFL picks - get the most recent week's picks
+      // NFL picks persist for the whole week, and we should show them until new ones are generated
       const { data: nflData } = await supabase
         .from('weekly_nfl_picks')
-        .select('picks')
-        .eq('week_start', getNFLWeekStart())
+        .select('picks, week_start')
         .eq('season', new Date().getFullYear())
+        .order('week_start', { ascending: false })
+        .limit(1)
         .maybeSingle();
+      
+      console.log('[Picks] NFL data found:', nflData ? `${nflData.picks?.length || 0} picks for week ${nflData.week_start}` : 'none');
 
       const currentDate = queryDate;
 
@@ -1112,70 +1108,15 @@ function RealGaryPicks() {
           });
       }
 
-      if (fetchError || !picksArray.length) {
-        // Get today's date in EST
-        const now = new Date();
-        const estOptions = { timeZone: 'America/New_York' };
-        const estDateString = now.toLocaleDateString('en-US', estOptions);
-        const [month, day, year] = estDateString.split('/');
-        const today = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-
-        try {
-          setLoading(true);
-
-          await supabase
-            .from('daily_picks')
-            .delete()
-            .eq('date', today);
-
-          const generatedPicks = await picksService.generateDailyPicks();
-
-          if (generatedPicks && Array.isArray(generatedPicks) && generatedPicks.length > 0) {
-            setPicks(generatedPicks.map(pick => {
-              const rawOutput = pick.rawAnalysis || pick;
-              return {
-                // PRIORITY: Use pick_id from data, then id, then generate fallback
-                id: pick.pick_id || pick.id || `pick-${today}-${rawOutput.league}-${rawOutput.pick?.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()}`,
-                pick_id: pick.pick_id || pick.id, // Preserve the original pick_id
-                pick: rawOutput.pick,
-                type: rawOutput.type || 'moneyline',
-                confidence: rawOutput.confidence,
-                rationale: rawOutput.rationale,
-                trapAlert: rawOutput.trapAlert || false,
-                revenge: rawOutput.revenge || false,
-                momentum: rawOutput.momentum || 0,
-                homeTeam: rawOutput.homeTeam || pick.home_team || '',
-                awayTeam: rawOutput.awayTeam || pick.away_team || '',
-                league: rawOutput.league || pick.league || '',
-                time: rawOutput.time || pick.time || ''
-              };
-            }));
-            setLoading(false);
-            return;
-          }
-
-          const { data: freshData } = await supabase
-            .from('daily_picks')
-            .select('picks, date')
-            .eq('date', today)
-            .maybeSingle();
-
-          if (freshData && freshData.picks) {
-            picksArray = typeof freshData.picks === 'string' ?
-              JSON.parse(freshData.picks) : freshData.picks;
-
-            picksArray = picksArray.filter(pick => {
-              return pick.id && !pick.id.includes('emergency') &&
-                pick.pick && pick.pick !== '' &&
-                pick.rationale && pick.rationale !== '';
-            });
-          }
-        } catch (genError) {
-          console.error('Error generating picks:', genError);
-          setError('Failed to generate picks. Please try again later.');
-        }
-      } else {
+      // Simply display whatever picks we found (daily + NFL weekly)
+      // No frontend generation - picks are generated via scripts only
+      if (picksArray.length > 0) {
+        console.log(`[Picks] Displaying ${picksArray.length} picks`);
         setPicks(picksArray);
+      } else {
+        console.log('[Picks] No picks found for today');
+        // Don't show error - just no picks available yet
+        setPicks([]);
       }
     } catch (err) {
       console.error('Error loading picks:', err);
