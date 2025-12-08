@@ -75,34 +75,52 @@ struct CompactTabBar: View {
         .padding(.vertical, 6)
         .background {
             ZStack {
-                // Base Material
+                // 1. Base glass material
                 Capsule()
                     .fill(.ultraThinMaterial)
                 
-                // Liquid Shine
+                // 2. Gold-tinted overlay
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [.white.opacity(0.3), .white.opacity(0.0)],
+                            colors: [
+                                GaryColors.gold.opacity(0.12),
+                                GaryColors.gold.opacity(0.04)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
+                
+                // 3. Liquid shine (top highlight)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.4), .white.opacity(0.0)],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
                     .blendMode(.overlay)
                 
-                // Edge Light
+                // 4. Premium gold edge
                 Capsule()
                     .strokeBorder(
                         LinearGradient(
-                            colors: [.white.opacity(0.4), .white.opacity(0.1)],
-                            startPoint: .top,
-                            endPoint: .bottom
+                            colors: [
+                                GaryColors.lightGold.opacity(0.5),
+                                GaryColors.gold.opacity(0.25),
+                                GaryColors.gold.opacity(0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         ),
-                        lineWidth: 0.5
+                        lineWidth: 0.8
                     )
             }
         }
-        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+        .shadow(color: GaryColors.gold.opacity(0.15), radius: 16, y: 8)
+        .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
         .padding(.horizontal, 24)
         .padding(.bottom, 8)
     }

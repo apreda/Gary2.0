@@ -342,12 +342,15 @@ struct HomeView: View {
                         .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                     }
                     
-                    // Benefits Grid
+                    // Benefits Grid - Why Gary Section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("WHY GARY?")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 20)
+                        HStack {
+                            Text("WHY GARY?")
+                                .font(.caption.bold())
+                                .foregroundStyle(GaryColors.gold)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 4)
                         
                         LazyVGrid(columns: [
                             GridItem(.flexible(), spacing: 10),
@@ -360,8 +363,24 @@ struct HomeView: View {
                             BenefitCard(title: "Fan Brain", text: "Market sentiment & flows.", icon: "person.3.fill")
                             BenefitCard(title: "Signal Focus", text: "Only relevant stats.", icon: "antenna.radiowaves.left.and.right")
                         }
-                        .padding(.horizontal, 16)
                     }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(hex: "#0A0A0C").opacity(0.6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [GaryColors.gold.opacity(0.3), GaryColors.gold.opacity(0.1)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.5
+                                    )
+                            )
+                    )
+                    .padding(.horizontal, 16)
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
                 }
