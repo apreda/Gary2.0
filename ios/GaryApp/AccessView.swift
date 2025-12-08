@@ -12,8 +12,8 @@ struct AccessView: View {
         ZStack {
             LiquidGlassBackground()
             
-            VStack(spacing: 24) {
-                Spacer(minLength: 40)
+            VStack(spacing: 20) {
+                Spacer(minLength: 20)
                 
                 // Logo - no glow, matches home page
                 VStack(spacing: 0) {
@@ -69,7 +69,7 @@ struct AccessView: View {
                         ],
                         spacing: 10
                     ) {
-                        TechChip(icon: "brain.head.profile", text: "GPT-4o")
+                        TechChip(icon: "brain.head.profile", text: "GPT 5.1")
                         TechChip(icon: "arrow.triangle.2.circlepath", text: "Agentic AI")
                         TechChip(icon: "chart.line.uptrend.xyaxis", text: "Odds API")
                         TechChip(icon: "magnifyingglass", text: "Perplexity")
@@ -82,9 +82,7 @@ struct AccessView: View {
                 .offset(y: animateIn ? 0 : 30)
                 .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
                 
-                Spacer()
-                
-                // Action Buttons
+                // Action Buttons - tighter spacing
                 VStack(spacing: 14) {
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
@@ -122,10 +120,11 @@ struct AccessView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 40)
                 .opacity(animateIn ? 1 : 0)
                 .offset(y: animateIn ? 0 : 40)
                 .animation(.easeOut(duration: 0.6).delay(0.6), value: animateIn)
+                
+                Spacer(minLength: 40)
             }
         }
         .onAppear {
