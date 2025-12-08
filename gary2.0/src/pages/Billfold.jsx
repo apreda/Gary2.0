@@ -258,7 +258,7 @@ export const Billfold = () => {
           date: new Date(prop.game_date),
           rawGameDate: prop.game_date,  // Store the original date string
           sport: detectSportFromProp(prop.prop_type),
-          matchup: prop.matchup || prop.player_name || 'Player Prop',
+          matchup: formatBetTypeName(prop.prop_type) || 'Player Prop', // Show prop type as matchup
           player: prop.player_name,
           pick: prop.pick_text ? formatPropPickText(prop.pick_text) : `${prop.player_name} ${formatBetTypeName(prop.prop_type)} ${prop.bet || ''} ${prop.line_value}`,
           propType: prop.prop_type,
@@ -541,13 +541,37 @@ export const Billfold = () => {
   const formatBetTypeName = (betType) => {
     if (!betType) return '';
     
-    // Special cases for MLB prop types
+    // Special cases for prop types (MLB, NBA, NFL)
     const specialCases = {
+      // MLB
       'hits': 'Hits',
       'strikeouts': 'Strikeouts',
       'total_bases': 'Total Bases',
-      'hits_runs_rbis': 'Hits Runs RBIs',
+      'hits_runs_rbis': 'H+R+RBI',
       'outs': 'Outs',
+      'home_runs': 'Home Runs',
+      'rbis': 'RBIs',
+      'runs': 'Runs',
+      // NBA
+      'points': 'Points',
+      'rebounds': 'Rebounds',
+      'assists': 'Assists',
+      'threes': '3-Pointers',
+      'steals': 'Steals',
+      'blocks': 'Blocks',
+      'turnovers': 'Turnovers',
+      'pra': 'Pts+Reb+Ast',
+      'pts_rebs': 'Pts+Reb',
+      'pts_asts': 'Pts+Ast',
+      'rebs_asts': 'Reb+Ast',
+      // NFL
+      'passing_yards': 'Pass Yards',
+      'rushing_yards': 'Rush Yards',
+      'receiving_yards': 'Rec Yards',
+      'touchdowns': 'Touchdowns',
+      'completions': 'Completions',
+      'receptions': 'Receptions',
+      // Generic
       'Player Prop': 'Player Prop'
     };
     
