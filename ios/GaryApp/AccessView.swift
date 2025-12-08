@@ -17,7 +17,7 @@ struct AccessView: View {
                 
                 // Logo - no glow, matches home page
                 VStack(spacing: 0) {
-                    Image("GaryLiquid")
+                    Image("GaryCoin") // Transparent glass bear image, no added background
                         .resizable()
                         .scaledToFit()
                         .frame(width: 180, height: 180)
@@ -112,7 +112,7 @@ struct AccessView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "gift.fill")
                                 .font(.caption)
-                        Text("See Free Pick of the Day")
+                        Text("See Today's Picks")
                                 .font(.subheadline.bold())
                         }
                         .foregroundStyle(GaryColors.gold)

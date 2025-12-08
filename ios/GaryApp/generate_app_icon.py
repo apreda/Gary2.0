@@ -15,14 +15,15 @@ import os
 
 # Paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SOURCE_IMAGE = os.path.join(SCRIPT_DIR, "../../gary2.0/src/assets/images/Garyemblem.png")
+# Use coin2 (transparent) as the source for the app icon
+SOURCE_IMAGE = os.path.join(SCRIPT_DIR, "../../gary2.0/public/coin2.png")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "Assets.xcassets/AppIcon.appiconset")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "icon-1024.png")
 
 # App icon specs
 ICON_SIZE = 1024
-BACKGROUND_COLOR = (17, 17, 17)  # Near black (#111111) to match app theme
-# Alternative: BACKGROUND_COLOR = (0, 0, 0)  # Pure black
+BACKGROUND_COLOR = (230, 230, 230)  # Very light grey (#E6E6E6)
+# Alternative: BACKGROUND_COLOR = (17, 17, 17)  # Near black (#111111)
 
 def create_app_icon():
     """Create the app icon with solid background."""

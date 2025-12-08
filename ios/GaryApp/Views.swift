@@ -135,6 +135,68 @@ extension View {
         .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
     }
     
+    /// Gold gradient glass
+    func goldGlass(cornerRadius: CGFloat = 12) -> some View {
+        self.background {
+            ZStack {
+                // Gold gradient background (light gold to darker gold)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                GaryColors.lightGold.opacity(0.3),
+                                GaryColors.gold.opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                // Gold gradient border
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.8
+                    )
+            }
+        }
+    }
+    
+    /// Gold gradient glass circle
+    func goldGlassCircle() -> some View {
+        self.background {
+            ZStack {
+                // Gold gradient background (light gold to darker gold)
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                GaryColors.lightGold.opacity(0.3),
+                                GaryColors.gold.opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                // Gold gradient border
+                Circle()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.8
+                    )
+            }
+        }
+    }
+    
     /// Premium liquid glass button with gold tint
     func liquidGlassButton(cornerRadius: CGFloat = 12) -> some View {
         self.background {
@@ -251,35 +313,30 @@ struct LiquidGlassBackground: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Deep base
-                Color(hex: "#050506")
+                // Base: 80% Black (Dark Grey)
+                Color(hex: "#1A1A1C")
                 
-                // Ambient glow orbs (positioned relative to screen, not affecting layout)
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [accentColor.opacity(0.15), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 300
-                        )
-                    )
-                    .frame(width: 600, height: 600)
-                    .position(x: geo.size.width * 0.2, y: geo.size.height * 0.15)
-                    .blur(radius: 60)
+                // Mix of White Gold and Grey
+                LinearGradient(
+                    colors: [
+                        GaryColors.lightGold.opacity(0.1),  // White Gold
+                        Color.gray.opacity(0.15),           // Grey
+                        Color.black.opacity(0.4)            // Fade
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color(hex: "#1a1a2e").opacity(0.6), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 250
-                        )
-                    )
-                    .frame(width: 500, height: 500)
-                    .position(x: geo.size.width * 0.8, y: geo.size.height * 0.7)
-                    .blur(radius: 50)
+                // Vignette
+                RadialGradient(
+                    colors: [
+                        Color.clear,
+                        Color.black.opacity(0.6)
+                    ],
+                    center: .center,
+                    startRadius: geo.size.width * 0.3,
+                    endRadius: geo.size.width * 1.2
+                )
             }
         }
         .ignoresSafeArea()
@@ -303,7 +360,7 @@ struct HomeView: View {
                 VStack(spacing: 20) {
                     // Hero Section
                     VStack(spacing: 0) {
-                        Image("GaryLiquid")
+                        Image("GaryCoin") // Transparent coin image, no added background
                             .resizable()
                             .scaledToFit()
                             .frame(width: 170, height: 170)
@@ -327,7 +384,7 @@ struct HomeView: View {
                             HStack {
                                 Image(systemName: "star.fill")
                                     .foregroundStyle(GaryColors.goldGradient)
-                                Text("TODAY'S FREE PICK")
+                                Text("TODAY'S TOP PICK")
                                     .font(.caption.bold())
                                     .foregroundStyle(.secondary)
                                 Spacer()
@@ -356,12 +413,12 @@ struct HomeView: View {
                             GridItem(.flexible(), spacing: 10),
                             GridItem(.flexible(), spacing: 10)
                         ], spacing: 10) {
-                            BenefitCard(title: "GPT 5.1 Engine", text: "Multi-pass reasoning with OpenAI's most advanced model for deep game analysis.", icon: "brain.head.profile")
-                            BenefitCard(title: "Agentic Analysis", text: "6-iteration agent loop that requests specific stats, forms hypotheses, and validates picks.", icon: "arrow.triangle.2.circlepath")
-                            BenefitCard(title: "Live Scout Reports", text: "Real-time injuries, lineup changes, team form, and situational factors for every game.", icon: "doc.text.magnifyingglass")
-                            BenefitCard(title: "Odds Intelligence", text: "Live odds from The Odds API. Identifies mispriced lines and value opportunities.", icon: "chart.line.uptrend.xyaxis")
-                            BenefitCard(title: "Perplexity News", text: "AI-powered news search for breaking storylines, trends, and market narratives.", icon: "magnifyingglass")
-                            BenefitCard(title: "Convergence Engine", text: "Measures alignment between stats, odds, and analysis. Higher scores = stronger picks.", icon: "target")
+                            BenefitCard(title: "GPT 5.1 Engine", text: "Powered by OpenAI's most advanced reasoning model. Gary doesn't just analyze games—he thinks through them like a seasoned handicapper with decades of experience, using multi-pass logic to uncover edges the market misses.", icon: "brain.head.profile")
+                            BenefitCard(title: "Agentic Analysis", text: "Gary runs a 6-step autonomous research loop for every single pick. He requests specific stats, forms hypotheses, stress-tests his reasoning, and only locks in picks that survive rigorous validation. No gut feelings—pure systematic edge.", icon: "arrow.triangle.2.circlepath")
+                            BenefitCard(title: "Matchup Insight", text: "Every pick includes real-time intelligence: breaking injury news, last-minute lineup changes, travel schedules, rest advantages, and situational factors that move lines. Gary sees what the public doesn't.", icon: "doc.text.magnifyingglass")
+                            BenefitCard(title: "The Odds API", text: "Gary ingests live odds from 15+ sportsbooks via The Odds API, instantly identifying mispriced lines and +EV opportunities. When the market is wrong, Gary strikes.", icon: "chart.line.uptrend.xyaxis")
+                            BenefitCard(title: "Headline Hunter", text: "AI-powered news search scans thousands of sources for breaking storylines, locker room drama, weather updates, and market narratives that sharp bettors exploit. Information is edge—Gary has it first.", icon: "magnifyingglass")
+                            BenefitCard(title: "Sports Brain", text: "Gary's secret weapon. This proprietary system measures alignment between statistical models, market odds, and qualitative analysis. When all signals converge, you get Gary's highest-conviction plays. Higher convergence = higher confidence = stronger picks.", icon: "target")
                         }
                     }
                     .padding(16)
@@ -450,45 +507,49 @@ enum Sport: String, CaseIterable {
 struct SportFilterBar: View {
     @Binding var selected: Sport
     let availableSports: Set<String>
+    var showAll: Bool = true  // Whether to show the ALL option
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(Sport.allCases, id: \.self) { sport in
-                    let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
-                    let isSelected = selected == sport
-                    
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selected = sport
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: sport.icon)
-                                .font(.system(size: 11, weight: .semibold))
-                            Text(sport.rawValue)
-                                .font(.caption.bold())
-                        }
-                        .foregroundStyle(isSelected ? .black : (isAvailable ? .white : .gray.opacity(0.5)))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background {
-                            if isSelected {
-                                Capsule()
-                                    .fill(sport.accentColor)
-                                    .shadow(color: sport.accentColor.opacity(0.4), radius: 8, y: 4)
-                            } else {
-                                Capsule()
-                                    .fill(.white.opacity(0.06))
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                                    )
+                    // Skip ALL if showAll is false
+                    if sport == .all && !showAll { } else {
+                        let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
+                        let isSelected = selected == sport
+                        
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selected = sport
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: sport.icon)
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(sport.rawValue)
+                                    .font(.caption.bold())
+                            }
+                            .foregroundStyle(isSelected ? .black : (isAvailable ? .white : .gray.opacity(0.5)))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background {
+                                if isSelected {
+                                    Capsule()
+                                        .fill(sport.accentColor)
+                                        .shadow(color: sport.accentColor.opacity(0.4), radius: 8, y: 4)
+                                } else {
+                                    Capsule()
+                                        .fill(.white.opacity(0.06))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                        )
+                                }
                             }
                         }
+                        .disabled(!isAvailable)
+                        .scaleEffect(isSelected ? 1.05 : 1.0)
                     }
-                    .disabled(!isAvailable)
-                    .scaleEffect(isSelected ? 1.05 : 1.0)
                 }
             }
             .padding(.horizontal, 16)
@@ -502,11 +563,10 @@ struct SportFilterBar: View {
 struct GaryPicksView: View {
     @State private var allPicks: [GaryPick] = []
     @State private var loading = true
-    @State private var selectedSport: Sport = .all
+    @State private var selectedSport: Sport = .nfl
     @State private var animateIn = false
     
     private var filteredPicks: [GaryPick] {
-        guard selectedSport != .all else { return allPicks }
         return allPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
     }
     
@@ -535,8 +595,8 @@ struct GaryPicksView: View {
                 .padding(.top, 8) // Extra padding after safe area
                 .padding(.bottom, 12)
                 
-                // Sport Filter
-                SportFilterBar(selected: $selectedSport, availableSports: availableSports)
+                // Sport Filter (no ALL option - starts with NFL)
+                SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: false)
                     .padding(.bottom, 16)
                 
                 // Content
@@ -552,7 +612,7 @@ struct GaryPicksView: View {
                         Image(systemName: "sportscourt")
                             .font(.system(size: 50))
                             .foregroundStyle(.tertiary)
-                        Text(selectedSport == .all ? "No picks yet." : "No \(selectedSport.rawValue) picks today.")
+                        Text("No \(selectedSport.rawValue) picks today.")
                             .foregroundStyle(.secondary)
                     }
                     .padding()
@@ -1096,8 +1156,8 @@ struct BenefitCard: View {
                 Text(title)
                     .font(.caption.bold())
                     .foregroundStyle(GaryColors.lightGold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 
                 Spacer()
                 
@@ -1230,39 +1290,39 @@ struct PickCardMobile: View {
             // Header Row - Icon left, Time right
             HStack {
                 Image(systemName: Sport.from(league: pick.league).icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(GaryColors.gold)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.75))
                     .padding(10)
-                    .liquidGlassCircle()
+                    .goldGlassCircle()
                 
                 Spacer()
                 
                 if let time = pick.displayTime {
                     Text(Formatters.formatCommenceTime(time))
-                        .font(.caption.bold())
-                        .foregroundStyle(GaryColors.lightGold)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.75))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .liquidGlass(cornerRadius: 8)
+                        .goldGlass(cornerRadius: 8)
                 }
             }
             
-            // Teams - Solid gold with truncation for long names
+            // Teams - Soft white with truncation for long names
             HStack {
                 Text(Formatters.shortTeamName(pick.awayTeam))
                     .font(.title3.bold())
-                    .foregroundStyle(GaryColors.gold)
+                    .foregroundStyle(Color.white.opacity(0.75))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer()
                 Text("@")
                     .font(.caption)
-                    .foregroundStyle(GaryColors.gold.opacity(0.5))
+                    .foregroundStyle(Color.white.opacity(0.5))
                     .layoutPriority(1)
                 Spacer()
                 Text(Formatters.shortTeamName(pick.homeTeam))
                     .font(.title3.bold())
-                    .foregroundStyle(GaryColors.gold)
+                    .foregroundStyle(Color.white.opacity(0.75))
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -1273,28 +1333,28 @@ struct PickCardMobile: View {
                 .fill(accentColor.opacity(0.3))
                 .frame(height: 1)
             
-            // Pick Text with Odds aligned horizontally
+            // Pick Text with Odds aligned horizontally (KEEP GOLD for actual pick)
             HStack(alignment: .center) {
                 Text(pickParts.pick)
                     .foregroundStyle(GaryColors.gold)
-                    .font(.title2.bold())
+                    .font(.system(size: 22, weight: .heavy))
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
                 
                 Spacer()
                 
-                // Odds badge - aligned with pick text
+                // Odds badge - soft white, unbold
                 if !pickParts.odds.isEmpty {
                     Text(pickParts.odds)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(GaryColors.goldGradient)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.75))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .liquidGlass(cornerRadius: 8)
+                        .goldGlass(cornerRadius: 8)
                 }
             }
             
-            // Confidence Bar
+            // Confidence Bar (KEEP AS-IS)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Image(systemName: "chart.line.uptrend.xyaxis")
@@ -1319,23 +1379,24 @@ struct PickCardMobile: View {
                 .frame(height: 6)
             }
             
-            // Analysis Button
+            // Analysis Button - soft white, unbold
             Button {
                 showAnalysis.toggle()
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text.magnifyingglass")
-                        .foregroundStyle(GaryColors.goldGradient)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.75))
                     Text("View Analysis")
+                        .font(.system(size: 15, weight: .medium))
                 }
-                .font(.subheadline.bold())
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.white.opacity(0.75))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .liquidGlassButton(cornerRadius: 12)
+                .goldGlass(cornerRadius: 12)
             }
             .sheet(isPresented: $showAnalysis) {
-                AnalysisSheet(title: "Gary's Analysis", content: pick.rationale ?? "", accentColor: accentColor)
+                AnalysisSheet(title: "Gary's Analysis", pick: pick, accentColor: accentColor)
             }
         }
         .padding(18)
@@ -1350,7 +1411,7 @@ struct PickCardMobile: View {
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1
+                            lineWidth: 2
                         )
                 )
                 .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
@@ -1587,7 +1648,7 @@ struct ResultBadge: View {
 
 struct AnalysisSheet: View {
     let title: String
-    let content: String
+    let pick: GaryPick
     var accentColor: Color = GaryColors.gold
     @Environment(\.dismiss) private var dismiss
     
@@ -1596,9 +1657,40 @@ struct AnalysisSheet: View {
     private let amberAccent = Color(hex: "#fbbf24")
     private let darkBg = Color(hex: "#0a0a0a")
     
+    /// Get shortened team names
+    private var homeTeam: String {
+        Formatters.shortTeamName(pick.homeTeam)
+    }
+    
+    private var awayTeam: String {
+        Formatters.shortTeamName(pick.awayTeam)
+    }
+    
+    /// Extract Gary's narrative from the rationale (after "Gary's Take")
+    private var narrative: String {
+        guard let rationale = pick.rationale else { return "" }
+        if let range = rationale.range(of: "Gary's Take", options: .caseInsensitive) {
+            return String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // Fallback: if no structured format, return everything after the stats section
+        if let range = rationale.range(of: "\n\n", options: .backwards) {
+            return String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return rationale
+    }
+    
+    /// Determine if Gary picked the home team
+    private var garyPickedHome: Bool {
+        guard let pickText = pick.pick?.lowercased() else { return true }
+        let homeLower = (pick.homeTeam ?? "").lowercased()
+        let homeShort = Formatters.shortTeamName(pick.homeTeam).lowercased()
+        
+        // Check if pick contains home team name
+        return pickText.contains(homeLower) || pickText.contains(homeShort)
+    }
+    
     var body: some View {
         ZStack {
-            // Dark background matching desktop
             darkBg.ignoresSafeArea()
             
             VStack(alignment: .leading, spacing: 16) {
@@ -1620,17 +1712,27 @@ struct AnalysisSheet: View {
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.white.opacity(0.7))
                             .padding(10)
-                            .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.1))
-                            )
+                            .background(Circle().fill(Color.white.opacity(0.1)))
                     }
                 }
                 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Render the content with proper formatting
-                        FormattedAnalysisView(content: content, accentColor: accentColor)
+                    VStack(alignment: .leading, spacing: 20) {
+                        // TALE OF THE TAPE - Stats Section (Gary's pick on left)
+                        if let statsData = pick.statsData, !statsData.isEmpty {
+                            TaleOfTapeSection(
+                                homeTeam: homeTeam,
+                                awayTeam: awayTeam,
+                                statsData: statsData,
+                                injuries: pick.injuries,
+                                garyPickedHome: garyPickedHome
+                            )
+                        }
+                        
+                        // GARY'S TAKE - Narrative Section
+                        if !narrative.isEmpty {
+                            GaryTakeSection(narrative: narrative)
+                        }
                     }
                     .padding(.bottom, 20)
                 }
@@ -1639,6 +1741,244 @@ struct AnalysisSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+// MARK: - Tale of the Tape Section
+struct TaleOfTapeSection: View {
+    let homeTeam: String
+    let awayTeam: String
+    let statsData: [StatData]
+    let injuries: TeamInjuries?
+    let garyPickedHome: Bool  // True if Gary picked the home team
+    
+    private let greenAccent = Color(hex: "#4ade80")
+    
+    /// Left side is always Gary's pick
+    private var leftTeam: String { garyPickedHome ? homeTeam : awayTeam }
+    private var rightTeam: String { garyPickedHome ? awayTeam : homeTeam }
+    
+    /// Map tokens to display names
+    private func displayName(for token: String) -> String {
+        let map: [String: String] = [
+            "OFFENSIVE_RATING": "Off Rating",
+            "DEFENSIVE_RATING": "Def Rating",
+            "NET_RATING": "Net Rating",
+            "EFFICIENCY_LAST_10": "Net Rating",
+            "PACE": "Pace",
+            "PACE_HOME_AWAY": "Record",
+            "HOME_AWAY_SPLITS": "Record",
+            "EFG_PCT": "eFG%",
+            "THREE_PT_SHOOTING": "3PT%",
+            "TURNOVER_RATE": "TOV Rate",
+            "OREB_RATE": "Off Reb Rate",
+            "FT_RATE": "FT Rate",
+            "CLUTCH_STATS": "Clutch Record",
+            "PAINT_SCORING": "Paint Pts",
+            "PAINT_DEFENSE": "Opp Paint Pts",
+            "TRANSITION_DEFENSE": "Trans Def"
+        ]
+        return map[token] ?? token.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Section Header
+            Text("TALE OF THE TAPE")
+                .font(.caption.bold())
+                .foregroundStyle(greenAccent)
+                .tracking(1)
+                .opacity(0.8)
+            
+            VStack(spacing: 0) {
+                // Team Header Row - Gary's pick on left (green), opponent on right
+                HStack {
+                    Text(leftTeam)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(greenAccent)
+                        .frame(width: 70, alignment: .leading)
+                    
+                    Spacer()
+                    
+                    Text("vs")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.4))
+                    
+                    Spacer()
+                    
+                    Text(rightTeam)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 70, alignment: .trailing)
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .background(Color.white.opacity(0.05))
+                
+                // Stats Rows
+                ForEach(Array(statsData.enumerated()), id: \.offset) { index, stat in
+                    if let token = stat.token,
+                       let home = stat.home,
+                       let away = stat.away {
+                        let homeVal = home.getValue(for: token)
+                        let awayVal = away.getValue(for: token)
+                        
+                        // Get values for display (Gary's pick on left)
+                        let leftVal = garyPickedHome ? homeVal : awayVal
+                        let rightVal = garyPickedHome ? awayVal : homeVal
+                        
+                        // Determine if left side (Gary's pick) has advantage
+                        let leftAdvantage = garyPickedHome ? 
+                            compareValues(homeVal, awayVal, token: token) : 
+                            !compareValues(homeVal, awayVal, token: token)
+                        
+                        HStack {
+                            // Left value (Gary's pick)
+                            Text(leftVal)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(leftAdvantage ? greenAccent : .white.opacity(0.6))
+                                .frame(width: 70, alignment: .leading)
+                            
+                            Spacer()
+                            
+                            // Stat name with arrow
+                            HStack(spacing: 4) {
+                                if leftAdvantage {
+                                    Image(systemName: "arrow.left")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(greenAccent)
+                                }
+                                Text(displayName(for: token))
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.5))
+                                if !leftAdvantage {
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(greenAccent)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            // Right value (opponent)
+                            Text(rightVal)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(!leftAdvantage ? greenAccent : .white.opacity(0.6))
+                                .frame(width: 70, alignment: .trailing)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(index % 2 == 0 ? Color.clear : Color.white.opacity(0.02))
+                    }
+                }
+                
+                // Injuries Row
+                if let injuries = injuries {
+                    let homeInjuries = injuries.home?.filter { $0.status == "Out" }.prefix(3).compactMap { $0.name } ?? []
+                    let awayInjuries = injuries.away?.filter { $0.status == "Out" }.prefix(3).compactMap { $0.name } ?? []
+                    
+                    // Swap based on Gary's pick
+                    let leftInjuries = garyPickedHome ? homeInjuries : awayInjuries
+                    let rightInjuries = garyPickedHome ? awayInjuries : homeInjuries
+                    
+                    if !leftInjuries.isEmpty || !rightInjuries.isEmpty {
+                        Divider().background(Color.white.opacity(0.1))
+                        
+                        HStack(alignment: .top) {
+                            // Left injuries (Gary's pick)
+                            Text(leftInjuries.isEmpty ? "Healthy" : leftInjuries.joined(separator: ", "))
+                                .font(.caption)
+                                .foregroundStyle(leftInjuries.isEmpty ? .green.opacity(0.7) : .red.opacity(0.9))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .lineLimit(2)
+                            
+                            // Label in red
+                            Text("Injuries")
+                                .font(.caption.bold())
+                                .foregroundStyle(.red.opacity(0.8))
+                                .frame(width: 60)
+                            
+                            // Right injuries (opponent)
+                            Text(rightInjuries.isEmpty ? "Healthy" : rightInjuries.joined(separator: ", "))
+                                .font(.caption)
+                                .foregroundStyle(rightInjuries.isEmpty ? .green.opacity(0.7) : .red.opacity(0.9))
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                .lineLimit(2)
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
+                        .background(Color.red.opacity(0.05))
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.03))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+    
+    /// Compare two stat values to determine if home is better
+    private func compareValues(_ home: String, _ away: String, token: String) -> Bool {
+        // Extract numeric values
+        let homeNum = Double(home.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "-", with: "")) ?? 0
+        let awayNum = Double(away.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "-", with: "")) ?? 0
+        
+        // For defensive stats, lower is better
+        let lowerIsBetter = ["DEFENSIVE_RATING", "TURNOVER_RATE", "PAINT_DEFENSE"].contains(token)
+        
+        // For records like "5-18", compare wins
+        if token == "PACE_HOME_AWAY" || token == "HOME_AWAY_SPLITS" {
+            let homeWins = Int(home.components(separatedBy: "-").first ?? "0") ?? 0
+            let awayWins = Int(away.components(separatedBy: "-").first ?? "0") ?? 0
+            return homeWins > awayWins
+        }
+        
+        return lowerIsBetter ? homeNum < awayNum : homeNum > awayNum
+    }
+}
+
+// MARK: - Gary's Take Section
+struct GaryTakeSection: View {
+    let narrative: String
+    
+    private let greenAccent = Color(hex: "#4ade80")
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Section Header
+            Text("GARY'S TAKE")
+                .font(.caption.bold())
+                .foregroundStyle(greenAccent)
+                .tracking(1)
+                .opacity(0.8)
+            
+            // Narrative text - split into paragraphs
+            VStack(alignment: .leading, spacing: 12) {
+                let paragraphs = narrative.components(separatedBy: "\n\n").filter { !$0.isEmpty }
+                
+                ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, para in
+                    Text(para.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineSpacing(5)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.03))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
     }
 }
 
@@ -1747,8 +2087,8 @@ struct StatRowView: View {
     // Desktop-matching colors
     private let greenAccent = Color(hex: "#4ade80")
     
-    var body: some View {
-        // Parse: "Record    5-18    →    6-17" or "Off Rating    110.1    ←    109.1"
+    // Parse the stat line into components
+    private var parsedStat: (statName: String, leftVal: String, rightVal: String, isRightAdvantage: Bool)? {
         let isRightAdvantage = line.contains("→")
         let parts = line
             .replacingOccurrences(of: "→", with: "|")
@@ -1756,50 +2096,57 @@ struct StatRowView: View {
             .components(separatedBy: "|")
             .map { $0.trimmingCharacters(in: .whitespaces) }
         
-        if parts.count >= 2 {
-            let leftPart = parts[0]
-            let rightPart = parts[parts.count - 1]
-            
-            // Extract stat name and left value - expanded list matching desktop
-            let statLabels = ["Record", "Off Rating", "Def Rating", "Net Rating", "Pace", "eFG%", 
-                             "TOV%", "ORB%", "FT Rate", "Key Injuries", "Injuries", "Last 5",
-                             "3PT%", "Paint Scoring", "Paint Defense", "Close Games",
-                             "Total YPG", "Opp Yards", "Yards/Game", "Yards Allowed",
-                             "Recent PPG", "Scoring Efficiency", "QB Rating", "Completion %",
-                             "3rd Down %", "Opp 3rd Down %", "Turnover +/-", "Rush YPG",
-                             "Opp Rush", "Rush Yards/Carry", "Total Yards", "Pass Yards",
-                             "Def Points Allowed", "Big Plays", "Havoc Rate", "Opp Havoc"]
-            var statName = ""
-            var leftVal = leftPart
-            
-            for label in statLabels {
-                if leftPart.contains(label) {
-                    statName = label
-                    leftVal = leftPart.replacingOccurrences(of: label, with: "").trimmingCharacters(in: .whitespaces)
-                    break
-                }
+        guard parts.count >= 2 else { return nil }
+        
+        let leftPart = parts[0]
+        let rightPart = parts[parts.count - 1]
+        
+        // Extract stat name and left value - expanded list matching desktop
+        let statLabels = ["Record", "Off Rating", "Def Rating", "Net Rating", "Pace", "eFG%", 
+                         "TOV%", "ORB%", "FT Rate", "Key Injuries", "Injuries", "Last 5",
+                         "3PT%", "Paint Scoring", "Paint Defense", "Close Games",
+                         "Total YPG", "Opp Yards", "Yards/Game", "Yards Allowed",
+                         "Recent PPG", "Scoring Efficiency", "QB Rating", "Completion %",
+                         "3rd Down %", "Opp 3rd Down %", "Turnover +/-", "Rush YPG",
+                         "Opp Rush", "Rush Yards/Carry", "Total Yards", "Pass Yards",
+                         "Def Points Allowed", "Big Plays", "Havoc Rate", "Opp Havoc"]
+        
+        var statName = ""
+        var leftVal = leftPart
+        
+        for label in statLabels {
+            if leftPart.contains(label) {
+                statName = label
+                leftVal = leftPart.replacingOccurrences(of: label, with: "").trimmingCharacters(in: .whitespaces)
+                break
             }
-            
+        }
+        
+        return (statName, leftVal, rightPart, isRightAdvantage)
+    }
+    
+    var body: some View {
+        if let stat = parsedStat {
             HStack {
                 // Left value - green if advantage, white if not
-                Text(leftVal)
+                Text(stat.leftVal)
                     .font(.subheadline.bold())
-                    .foregroundStyle(isRightAdvantage ? .white.opacity(0.7) : greenAccent)
+                    .foregroundStyle(stat.isRightAdvantage ? .white.opacity(0.7) : greenAccent)
                     .frame(width: 65, alignment: .leading)
                 
                 Spacer()
                 
                 // Stat name with arrow indicator
                 HStack(spacing: 4) {
-                    if !isRightAdvantage {
+                    if !stat.isRightAdvantage {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(greenAccent)
                     }
-                    Text(statName)
+                    Text(stat.statName)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.5))
-                    if isRightAdvantage {
+                    if stat.isRightAdvantage {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(greenAccent)
@@ -1809,9 +2156,9 @@ struct StatRowView: View {
                 Spacer()
                 
                 // Right value - green if advantage, white if not
-                Text(rightPart)
+                Text(stat.rightVal)
                     .font(.subheadline.bold())
-                    .foregroundStyle(isRightAdvantage ? greenAccent : .white.opacity(0.7))
+                    .foregroundStyle(stat.isRightAdvantage ? greenAccent : .white.opacity(0.7))
                     .frame(width: 65, alignment: .trailing)
             }
             .padding(.vertical, 8)

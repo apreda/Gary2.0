@@ -64,7 +64,7 @@ struct SettingsView: View {
     
     private var appInfoCard: some View {
         HStack(spacing: 16) {
-            Image("GaryLiquid")
+            Image("GaryCoin") // Transparent coin image, no added background
                 .resizable()
                 .scaledToFit()
                 .frame(width: 100, height: 100)
