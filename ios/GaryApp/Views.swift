@@ -1604,7 +1604,7 @@ enum Formatters {
     static func formatGameTime(_ time: String?) -> String {
         guard let time = time, !time.isEmpty else { return "" }
         // Remove any emoji characters and clean up
-        var clean = time
+        let clean = time
             .replacingOccurrences(of: "🏈", with: "")
             .replacingOccurrences(of: "🏀", with: "")
             .replacingOccurrences(of: "⚾", with: "")
