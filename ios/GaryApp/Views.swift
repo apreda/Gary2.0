@@ -1154,15 +1154,6 @@ struct PickCardMobile: View {
                 .fill(accentColor.opacity(0.3))
                 .frame(height: 1)
             
-            // Pick Label
-            HStack(spacing: 8) {
-                Image(systemName: "bolt.fill")
-                    .foregroundStyle(accentColor)
-                Text("GARY'S PICK")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-            }
-            
             // Pick Text
             pickTextView
             
