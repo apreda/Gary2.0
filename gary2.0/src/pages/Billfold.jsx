@@ -240,19 +240,31 @@ export const Billfold = () => {
           limitedPropResults = [...limitedPropResults, ...topPicks];
         });
         
+        // Helper to detect sport from prop type
+        const detectSportFromProp = (propType) => {
+          const nbaPropTypes = ['points', 'rebounds', 'assists', 'threes', 'steals', 'blocks', 'turnovers', 'pra', 'pts_rebs', 'pts_asts', 'rebs_asts'];
+          const mlbPropTypes = ['hits', 'strikeouts', 'total_bases', 'hits_runs_rbis', 'outs', 'home_runs', 'rbis', 'runs'];
+          const nflPropTypes = ['passing_yards', 'rushing_yards', 'receiving_yards', 'touchdowns', 'completions', 'receptions'];
+          
+          if (nbaPropTypes.includes(propType?.toLowerCase())) return 'NBA';
+          if (mlbPropTypes.includes(propType?.toLowerCase())) return 'MLB';
+          if (nflPropTypes.includes(propType?.toLowerCase())) return 'NFL';
+          return 'NBA'; // Default to NBA for current season
+        };
+        
         // Map the limited prop results to our standard format
         const processedPropLog = limitedPropResults ? limitedPropResults.map(prop => ({
           id: prop.id,
           date: new Date(prop.game_date),
           rawGameDate: prop.game_date,  // Store the original date string
-          sport: 'MLB', // Props are currently MLB only
-          matchup: prop.matchup || 'Player Prop',
+          sport: detectSportFromProp(prop.prop_type),
+          matchup: prop.matchup || prop.player_name || 'Player Prop',
           player: prop.player_name,
           pick: prop.pick_text ? formatPropPickText(prop.pick_text) : `${prop.player_name} ${formatBetTypeName(prop.prop_type)} ${prop.bet || ''} ${prop.line_value}`,
           propType: prop.prop_type,
           line: prop.line_value,
           result: prop.result,
-          odds: prop.odds,
+          odds: prop.odds || extractOddsFromPick(prop.pick_text),
           actual: prop.actual_value,
           bet: prop.bet, // over/under
           type: 'prop' // Add type to distinguish from games
