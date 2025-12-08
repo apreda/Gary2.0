@@ -302,12 +302,11 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     // Hero Section
-                    VStack(spacing: 12) {
+                    VStack(spacing: 4) {
                         Image("GaryLiquid")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 170, height: 170)
-                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 20, y: 8)
                         
                         Text("GARY A.I.")
                             .font(.system(size: 26, weight: .heavy))
