@@ -267,7 +267,7 @@ enum SupabaseAPI {
     
     // MARK: - Billfold (Results)
     
-    /// Fetch game results with optional date filter
+    /// Fetch game results with optional date filter (excludes NFL - those come from nfl_results)
     static func fetchGameResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
             URLQueryItem(name: "select", value: "*"),
@@ -287,11 +287,6 @@ enum SupabaseAPI {
             return []
         }
         
-        // Debug: print raw response
-        if let jsonStr = String(data: data, encoding: .utf8) {
-            print("GameResults raw response (first 500 chars): \(String(jsonStr.prefix(500)))")
-        }
-        
         let decoder = JSONDecoder()
         do {
             return try decoder.decode([GameResult].self, from: data)
@@ -299,6 +294,50 @@ enum SupabaseAPI {
             print("GameResults decode error: \(error)")
             return []
         }
+    }
+    
+    /// Fetch NFL results from nfl_results table
+    static func fetchNFLResults(since dateFilter: String?) async throws -> [GameResult] {
+        var query = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "limit", value: "500")
+        ]
+        
+        if let since = dateFilter, !since.isEmpty {
+            query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
+        }
+        
+        let url = buildURL(table: "nfl_results", query: query)
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            print("NFLResults fetch failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+        
+        let decoder = JSONDecoder()
+        do {
+            let nflResults = try decoder.decode([NFLResult].self, from: data)
+            // Convert to GameResult for unified display
+            return nflResults.map { $0.toGameResult() }
+        } catch {
+            print("NFLResults decode error: \(error)")
+            return []
+        }
+    }
+    
+    /// Fetch all game results (game_results + nfl_results combined)
+    static func fetchAllGameResults(since dateFilter: String?) async throws -> [GameResult] {
+        async let gameTask = fetchGameResults(since: dateFilter)
+        async let nflTask = fetchNFLResults(since: dateFilter)
+        
+        let gameResults = (try? await gameTask) ?? []
+        let nflResults = (try? await nflTask) ?? []
+        
+        // Combine and sort by date descending
+        let combined = gameResults + nflResults
+        return combined.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }
     }
     
     /// Fetch prop results with optional date filter
