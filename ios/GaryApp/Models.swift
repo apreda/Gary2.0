@@ -61,8 +61,17 @@ struct GaryPick: Identifiable, Codable {
     let awayTeam: String?
     let type: String?
     let trapAlert: Bool?
+    let commence_time: String?  // ISO format: "2025-12-07T18:00:00Z"
     
     var id: String { pick_id ?? UUID().uuidString }
+    
+    /// Get display time - prefer commence_time, fallback to time
+    var displayTime: String? {
+        if let ct = commence_time, !ct.isEmpty {
+            return ct
+        }
+        return time
+    }
     
     /// Parse from dictionary (for manual JSON parsing)
     static func from(dict: [String: Any]) -> GaryPick? {
@@ -76,7 +85,8 @@ struct GaryPick: Identifiable, Codable {
             homeTeam: dict["homeTeam"] as? String,
             awayTeam: dict["awayTeam"] as? String,
             type: dict["type"] as? String,
-            trapAlert: dict["trapAlert"] as? Bool
+            trapAlert: dict["trapAlert"] as? Bool,
+            commence_time: dict["commence_time"] as? String
         )
     }
 }
