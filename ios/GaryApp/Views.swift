@@ -705,8 +705,21 @@ struct BillfoldView: View {
     
     var body: some View {
         ZStack {
-            // Background - ignores safe area
-            LiquidGlassBackground(accentColor: Color(hex: "#10B981"))
+            // Matte black background with subtle gold accent
+            Color(hex: "#0A0A0C")
+                .ignoresSafeArea()
+            
+            // Subtle gold gradient at top
+            VStack {
+                LinearGradient(
+                    colors: [GaryColors.gold.opacity(0.08), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 200)
+                Spacer()
+            }
+            .ignoresSafeArea()
             
             // Content - respects safe area
             ScrollView(showsIndicators: false) {
@@ -747,7 +760,7 @@ struct BillfoldView: View {
                 } label: {
                     Text(index == 0 ? "Game Picks" : "Prop Picks")
                         .font(.subheadline.bold())
-                        .foregroundStyle(selectedTab == index ? .black : .white)
+                        .foregroundStyle(selectedTab == index ? .black : .white.opacity(0.7))
                         .padding(.vertical, 12)
                         .frame(maxWidth: .infinity)
                         .background {
@@ -760,7 +773,14 @@ struct BillfoldView: View {
             }
         }
         .padding(4)
-        .liquidGlass(cornerRadius: 16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: "#141416"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                )
+        )
     }
     
     private var timeframeButtons: some View {
@@ -774,14 +794,18 @@ struct BillfoldView: View {
                 } label: {
                     Text(tf.uppercased())
                         .font(.caption.bold())
-                        .foregroundStyle(timeframe == tf ? .black : .white)
+                        .foregroundStyle(timeframe == tf ? .black : .white.opacity(0.6))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background {
                             if timeframe == tf {
-                                Capsule().fill(GaryColors.lightGold)
+                                Capsule().fill(GaryColors.goldGradient)
                             } else {
-                                Capsule().fill(.white.opacity(0.08))
+                                Capsule()
+                                    .fill(Color(hex: "#1A1A1E"))
+                                    .overlay(
+                                        Capsule().stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                                    )
                             }
                         }
                 }
@@ -794,7 +818,13 @@ struct BillfoldView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(GaryColors.gold)
                     .padding(10)
-                    .liquidGlassCircle()
+                    .background(
+                        Circle()
+                            .fill(Color(hex: "#1A1A1E"))
+                            .overlay(
+                                Circle().stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.5)
+                            )
+                    )
             }
         }
     }
@@ -965,14 +995,22 @@ struct KPICard: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption.bold())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(GaryColors.gold.opacity(0.7))
             Text(value)
                 .font(.system(size: 28, weight: .black, design: .rounded))
                 .foregroundStyle(GaryColors.goldGradient)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(cornerRadius: 16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: "#111113"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                )
+        )
+        .shadow(color: GaryColors.gold.opacity(0.1), radius: 12, y: 4)
     }
 }
 
@@ -1293,15 +1331,16 @@ struct GameResultRow: View {
             HStack {
                 Text(Formatters.formatDate(result.game_date))
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.white.opacity(0.5))
                 Spacer()
                 Text(Formatters.americanOdds(result.odds?.value))
                     .font(.subheadline.bold())
-                    .foregroundStyle(GaryColors.lightGold)
+                    .foregroundStyle(GaryColors.goldGradient)
             }
             
             Text(result.pick_text ?? result.matchup ?? "")
                 .font(.subheadline)
+                .foregroundStyle(.white)
             
             HStack {
                 Spacer()
@@ -1309,7 +1348,21 @@ struct GameResultRow: View {
             }
         }
         .padding(14)
-        .liquidGlass(cornerRadius: 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(hex: "#111113"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.25), GaryColors.gold.opacity(0.05)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+        )
     }
 }
 
@@ -1321,15 +1374,16 @@ struct PropResultRow: View {
             HStack {
                 Text(Formatters.formatDate(result.game_date))
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.white.opacity(0.5))
                 Spacer()
                 Text(Formatters.americanOdds(result.odds?.value))
                     .font(.subheadline.bold())
-                    .foregroundStyle(GaryColors.lightGold)
+                    .foregroundStyle(GaryColors.goldGradient)
             }
             
             Text(Formatters.propResultTitle(result))
                 .font(.subheadline)
+                .foregroundStyle(.white)
             
             HStack {
                 Spacer()
@@ -1337,7 +1391,21 @@ struct PropResultRow: View {
             }
         }
         .padding(14)
-        .liquidGlass(cornerRadius: 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(hex: "#111113"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.25), GaryColors.gold.opacity(0.05)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+        )
     }
 }
 
