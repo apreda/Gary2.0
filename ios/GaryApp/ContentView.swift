@@ -4,11 +4,10 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab: Int = 0
-    @Namespace private var tabAnimation
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Content - Using standard tab switching instead of page style
+            // Content Views
             Group {
                 switch selectedTab {
                 case 0:
@@ -25,20 +24,17 @@ struct ContentView: View {
                     HomeView()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Custom Floating Tab Bar
-            FloatingTabBar(selectedTab: $selectedTab, namespace: tabAnimation)
+            // Compact Floating Tab Bar
+            CompactTabBar(selectedTab: $selectedTab)
         }
-        .ignoresSafeArea(.keyboard)
     }
 }
 
-// MARK: - Floating Tab Bar
+// MARK: - Compact Floating Tab Bar (Original Style)
 
-struct FloatingTabBar: View {
+struct CompactTabBar: View {
     @Binding var selectedTab: Int
-    var namespace: Namespace.ID
     
     private let tabs: [(icon: String, label: String)] = [
         ("house.fill", "Home"),
@@ -49,91 +45,66 @@ struct FloatingTabBar: View {
     ]
     
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             ForEach(tabs.indices, id: \.self) { index in
-                TabBarButton(
-                    icon: tabs[index].icon,
-                    label: tabs[index].label,
-                    isSelected: selectedTab == index,
-                    namespace: namespace
-                ) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         selectedTab = index
                     }
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: tabs[index].icon)
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(tabs[index].label)
+                            .font(.system(size: 9, weight: .medium))
+                    }
+                    .foregroundStyle(selectedTab == index ? GaryColors.gold : .white.opacity(0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background {
+                        if selectedTab == index {
+                            Capsule()
+                                .fill(GaryColors.gold.opacity(0.15))
+                        }
+                    }
                 }
+                .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
         .background {
             ZStack {
-                // Base Material (Refraction)
+                // Base Material
                 Capsule()
                     .fill(.ultraThinMaterial)
-                    .opacity(0.9)
                 
-                // Liquid Shine (Overlay Blend)
+                // Liquid Shine
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [.white.opacity(0.4), .white.opacity(0.0)],
+                            colors: [.white.opacity(0.3), .white.opacity(0.0)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .blendMode(.overlay)
                 
-                // Edge Light (Rim)
+                // Edge Light
                 Capsule()
                     .strokeBorder(
                         LinearGradient(
-                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
+                            colors: [.white.opacity(0.4), .white.opacity(0.1)],
                             startPoint: .top,
                             endPoint: .bottom
                         ),
-                        lineWidth: 0.8
+                        lineWidth: 0.5
                     )
             }
         }
-        .shadow(color: .black.opacity(0.2), radius: 16, y: 10)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 20)
-    }
-}
-
-struct TabBarButton: View {
-    let icon: String
-    let label: String
-    let isSelected: Bool
-    var namespace: Namespace.ID
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                ZStack {
-                    if isSelected {
-                        Circle()
-                            .fill(GaryColors.goldGradient)
-                            .frame(width: 44, height: 44)
-                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 8, y: 4)
-                            .matchedGeometryEffect(id: "tabIndicator", in: namespace)
-                    }
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: isSelected ? 18 : 20, weight: .semibold))
-                        .foregroundStyle(isSelected ? .black : .white.opacity(0.6))
-                        .scaleEffect(isSelected ? 1.0 : 0.9)
-                }
-                .frame(width: 50, height: 44)
-                
-                Text(label)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? GaryColors.gold : .white.opacity(0.5))
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.plain)
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 8)
     }
 }
 
