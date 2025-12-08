@@ -1070,16 +1070,11 @@ struct PickCardMobile: View {
                 
                 Spacer()
                 
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.caption)
-                    Text(Formatters.labelEST(pick.time))
+                if let time = pick.time, !time.isEmpty {
+                    Text(Formatters.formatGameTime(time))
                         .font(.caption.bold())
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(accentColor)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .liquidGlassCapsule()
             }
             
             // Teams
@@ -1525,6 +1520,26 @@ enum Formatters {
     static func labelEST(_ time: String?) -> String {
         guard let time = time, !time.isEmpty else { return "" }
         return time.uppercased().contains("EST") ? time : "\(time) EST"
+    }
+    
+    /// Clean game time display - just the time, no emojis
+    static func formatGameTime(_ time: String?) -> String {
+        guard let time = time, !time.isEmpty else { return "" }
+        // Remove any emoji characters and clean up
+        var clean = time
+            .replacingOccurrences(of: "🏈", with: "")
+            .replacingOccurrences(of: "🏀", with: "")
+            .replacingOccurrences(of: "⚾", with: "")
+            .replacingOccurrences(of: "🏒", with: "")
+            .replacingOccurrences(of: "⏰", with: "")
+            .replacingOccurrences(of: "🕐", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        // If it already has AM/PM or EST, return as is
+        let upper = clean.uppercased()
+        if upper.contains("AM") || upper.contains("PM") || upper.contains("EST") || upper.contains("ET") {
+            return clean
+        }
+        return clean
     }
     
     static func confidencePercent(_ confidence: Double?) -> Int {
