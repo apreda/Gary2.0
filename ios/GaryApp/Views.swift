@@ -303,11 +303,11 @@ struct HomeView: View {
                 VStack(spacing: 20) {
                     // Hero Section
                     VStack(spacing: 12) {
-                        Image("GaryCoin")
+                        Image("GaryLiquid")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 162, height: 162)
-                            .shadow(color: GaryColors.gold.opacity(0.5), radius: 20, y: 8)
+                            .frame(width: 180, height: 180)
+                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 24, y: 10)
                         
                         Text("GARY A.I.")
                             .font(.system(size: 26, weight: .heavy))
