@@ -151,10 +151,14 @@ export const Billfold = () => {
         // Check if we have any results at all based on current tab
         const currentResults = showPicksType === 'games' ? gameResults : propResults;
         if (!currentResults || currentResults.length === 0) {
+          setBettingLog([]); // Clear the betting log so old data doesn't show
           setError(`No ${showPicksType === 'games' ? 'game' : 'prop'} results found. Check back later for updated picks.`);
           setIsLoading(false);
           return;
         }
+        
+        // Clear any previous error when we have data
+        setError(null);
         
         // For debugging - let's see what dates we're getting from Supabase
         if (gameResults?.length > 0) {
