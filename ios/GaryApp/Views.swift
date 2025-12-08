@@ -111,6 +111,29 @@ extension View {
         }
         .shadow(color: .black.opacity(0.1), radius: 6, y: 4)
     }
+    
+    /// Dark solid card - for "Why Gary" section
+    func darkCard(cornerRadius: CGFloat = 14) -> some View {
+        self.background {
+            ZStack {
+                // Solid dark background
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color(hex: "#0D0D0F"))
+                
+                // Subtle top edge highlight
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.12), .white.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
+        }
+        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
+    }
 }
 
 enum GlassIntensity {
@@ -228,8 +251,11 @@ struct HomeView: View {
                 VStack(spacing: 20) {
                     // Hero Section
                     VStack(spacing: 12) {
-                        GaryLogo(size: 90)
-                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 16, y: 6)
+                        Image("GaryCoin")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 100, height: 100)
+                            .shadow(color: GaryColors.gold.opacity(0.5), radius: 20, y: 8)
                         
                         Text("GARY A.I.")
                             .font(.system(size: 26, weight: .black, design: .rounded))
@@ -850,7 +876,10 @@ struct BenefitCard: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(GaryColors.goldGradient)
                         .frame(width: 28, height: 28)
-                        .liquidGlassCircle()
+                        .background(
+                            Circle()
+                                .fill(Color(hex: "#1A1A1C"))
+                        )
                 }
                 Text(title)
                     .font(.caption.bold())
@@ -866,7 +895,7 @@ struct BenefitCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
-        .liquidGlass(cornerRadius: 14)
+        .darkCard(cornerRadius: 14)
         .scaleEffect(isPressed ? 0.97 : 1.0)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
