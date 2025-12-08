@@ -14,11 +14,19 @@ export function PrivacyPolicy() {
 
         <div className="privacy-section">
           <h2 className="privacy-heading">1. Information We Collect</h2>
+          <p className="privacy-text font-bold mb-2">Web Platform (Browser):</p>
           <ul>
             <li>Account data – name, email, password hash.</li>
             <li>Payment data – tokenized card info via Stripe (we never store full PAN).</li>
             <li>Usage data – IP address, device type, pages visited, picks clicked.</li>
             <li>Marketing data – opt‑in preferences, survey responses.</li>
+          </ul>
+          <p className="privacy-text font-bold mt-4 mb-2">iOS Mobile App:</p>
+          <ul>
+            <li>The iOS mobile app is currently a "read-only" informational companion.</li>
+            <li>It does not support user accounts, login, or registration.</li>
+            <li>It does not collect personal data, usage analytics, or track users.</li>
+            <li>No data is linked to your identity within the iOS environment.</li>
           </ul>
         </div>
 
