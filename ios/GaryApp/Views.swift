@@ -310,7 +310,8 @@ struct HomeView: View {
                             .shadow(color: GaryColors.gold.opacity(0.5), radius: 20, y: 8)
                         
                         Text("GARY A.I.")
-                            .font(.system(size: 26, weight: .black, design: .rounded))
+                            .font(.system(size: 26, weight: .heavy))
+                            .tracking(-0.5)
                             .foregroundStyle(GaryColors.goldGradient)
                         
                         Text("Intelligent Sports Analysis")
@@ -521,7 +522,8 @@ struct GaryPicksView: View {
                 // Floating Header
                 VStack(spacing: 8) {
                     Text("Gary's Picks")
-                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.5)
                         .foregroundStyle(GaryColors.goldGradient)
                     
                     Text("AI-Powered Sports Analysis")
@@ -630,7 +632,8 @@ struct GaryPropsView: View {
                 // Header
                 VStack(spacing: 8) {
                     Text("Gary Props")
-                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.5)
                         .foregroundStyle(GaryColors.goldGradient)
                     
                     Text("AI-Powered Prop Betting")
@@ -745,7 +748,8 @@ struct BillfoldView: View {
                 VStack(spacing: 20) {
                     // Header
                     Text("Billfold")
-                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.5)
                         .foregroundStyle(GaryColors.goldGradient)
                         .padding(.top, 8) // Extra after safe area
                     
@@ -1016,7 +1020,8 @@ struct KPICard: View {
                 .font(.caption.bold())
                 .foregroundStyle(GaryColors.gold.opacity(0.7))
             Text(value)
-                .font(.system(size: 28, weight: .black, design: .rounded))
+                .font(.system(size: 28, weight: .heavy))
+                .tracking(-0.5)
                 .foregroundStyle(GaryColors.goldGradient)
         }
         .padding(16)
