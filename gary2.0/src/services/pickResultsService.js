@@ -98,8 +98,19 @@ const pickResultsService = {
       // Extract picks from each row
       const allPropPicks = [];
       for (const row of data) {
-        if (row.picks && Array.isArray(JSON.parse(row.picks))) {
-          const parsedPicks = JSON.parse(row.picks).map(pick => ({
+        // Handle both JSONB (native array) and JSON string formats
+        let picks = row.picks;
+        if (typeof picks === 'string') {
+          try {
+            picks = JSON.parse(picks);
+          } catch (e) {
+            console.warn('Failed to parse picks JSON:', e.message);
+            continue;
+          }
+        }
+        
+        if (picks && Array.isArray(picks)) {
+          const parsedPicks = picks.map(pick => ({
             ...pick,
             prop_pick_id: row.id,
             game_date: targetDate

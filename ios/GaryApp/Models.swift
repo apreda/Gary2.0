@@ -145,6 +145,49 @@ struct GameResult: Decodable {
     enum CodingKeys: String, CodingKey {
         case game_date, league, matchup, pick_text, result, odds, final_score
     }
+    
+    /// Memberwise initializer for creating from NFLResult
+    init(game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?) {
+        self.game_date = game_date
+        self.league = league
+        self.matchup = matchup
+        self.pick_text = pick_text
+        self.result = result
+        self.odds = odds
+        self.final_score = final_score
+    }
+}
+
+struct NFLResult: Decodable {
+    let game_date: String?
+    let week_number: Int?
+    let season: Int?
+    let matchup: String?
+    let pick_text: String?
+    let result: String?
+    let odds: StringOrNumber?
+    let final_score: String?
+    let home_team: String?
+    let away_team: String?
+    let pick_type: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case game_date, week_number, season, matchup, pick_text, result, odds, final_score
+        case home_team, away_team, pick_type
+    }
+    
+    /// Convert to GameResult for unified display
+    func toGameResult() -> GameResult {
+        GameResult(
+            game_date: game_date,
+            league: "NFL",
+            matchup: matchup ?? "\(away_team ?? "") @ \(home_team ?? "")",
+            pick_text: pick_text,
+            result: result,
+            odds: odds,
+            final_score: final_score
+        )
+    }
 }
 
 struct PropResult: Decodable {
@@ -159,10 +202,17 @@ struct PropResult: Decodable {
     let odds: StringOrNumber?
     let actual_value: StringOrNumber?
     let confidence: Double?
+    let league: String?
+    let sport: String?
     
     enum CodingKeys: String, CodingKey {
         case game_date, matchup, player_name, pick_text, prop_type, bet
-        case line_value, result, odds, actual_value, confidence
+        case line_value, result, odds, actual_value, confidence, league, sport
+    }
+    
+    /// Get the effective league (checks both league and sport fields)
+    var effectiveLeague: String? {
+        league ?? sport
     }
 }
 

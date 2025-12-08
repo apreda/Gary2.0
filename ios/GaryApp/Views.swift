@@ -720,12 +720,32 @@ struct GaryPropsView: View {
 struct BillfoldView: View {
     @State private var selectedTab = 0
     @State private var timeframe = "all"
+    @State private var selectedSport: Sport = .all
     @State private var gameResults: [GameResult] = []
     @State private var propResults: [PropResult] = []
     @State private var loading = true
     @State private var error: String?
     
     private let timeframes = ["7d", "30d", "90d", "ytd", "all"]
+    
+    /// Filter game results by selected sport
+    private var filteredGameResults: [GameResult] {
+        guard selectedSport != .all else { return gameResults }
+        return gameResults.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
+    }
+    
+    /// Filter prop results by selected sport
+    private var filteredPropResults: [PropResult] {
+        guard selectedSport != .all else { return propResults }
+        return propResults.filter { ($0.effectiveLeague ?? "").uppercased() == selectedSport.rawValue }
+    }
+    
+    /// Get available sports from the loaded results (both game and prop results)
+    private var availableSports: Set<String> {
+        let gameLeagues = Set(gameResults.compactMap { $0.league?.uppercased() })
+        let propLeagues = Set(propResults.compactMap { $0.effectiveLeague?.uppercased() })
+        return gameLeagues.union(propLeagues)
+    }
     
     var body: some View {
         ZStack {
@@ -747,16 +767,19 @@ struct BillfoldView: View {
             
             // Content - respects safe area
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     // Header
                     Text("Billfold")
                         .font(.system(size: 28, weight: .heavy))
                         .tracking(-0.5)
                         .foregroundStyle(GaryColors.goldGradient)
-                        .padding(.top, 8) // Extra after safe area
+                        .padding(.top, 8)
                     
                     // Segmented Control with Glass
                     segmentedControl
+                    
+                    // Sport Filter
+                    sportFilterBar
                     
                     // Timeframe Buttons
                     timeframeButtons
@@ -781,7 +804,6 @@ struct BillfoldView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         selectedTab = index
                     }
-                    Task { await loadData() }
                 } label: {
                     Text(index == 0 ? "Game Picks" : "Prop Picks")
                         .font(.subheadline.bold())
@@ -806,6 +828,50 @@ struct BillfoldView: View {
                         .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
                 )
         )
+    }
+    
+    private var sportFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Sport.allCases, id: \.self) { sport in
+                    let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
+                    let isSelected = selectedSport == sport
+                    
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedSport = sport
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: sport.icon)
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(sport.rawValue)
+                                .font(.caption2.bold())
+                        }
+                        .foregroundStyle(isSelected ? .black : (isAvailable ? .white : .gray.opacity(0.5)))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(sport.accentColor)
+                                    .shadow(color: sport.accentColor.opacity(0.4), radius: 6, y: 3)
+                            } else {
+                                Capsule()
+                                    .fill(Color(hex: "#1A1A1E"))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                                    )
+                            }
+                        }
+                    }
+                    .disabled(!isAvailable)
+                    .scaleEffect(isSelected ? 1.03 : 1.0)
+                }
+            }
+            .padding(.horizontal, 2)
+        }
     }
     
     private var timeframeButtons: some View {
@@ -859,17 +925,29 @@ struct BillfoldView: View {
         let total = max(1, record.wins + record.losses + record.pushes)
         let winRate = Double(record.wins) / Double(total) * 100
         
+        let sportLabel = selectedSport == .all ? "" : " (\(selectedSport.rawValue))"
+        
         return HStack(spacing: 12) {
-            KPICard(title: "RECORD", value: "\(record.wins)-\(record.losses)\(record.pushes > 0 ? "-\(record.pushes)" : "")")
-            KPICard(title: "WIN RATE", value: String(format: "%.1f%%", winRate))
+            KPICard(title: "RECORD\(sportLabel)", value: "\(record.wins)-\(record.losses)\(record.pushes > 0 ? "-\(record.pushes)" : "")")
+            KPICard(title: "WIN RATE\(sportLabel)", value: String(format: "%.1f%%", winRate))
         }
     }
     
     private var recentPicksList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("RECENT PICKS")
-                .font(.caption.bold())
-                .foregroundStyle(GaryColors.lightGold)
+            HStack {
+                Text("RECENT PICKS")
+                    .font(.caption.bold())
+                    .foregroundStyle(GaryColors.lightGold)
+                
+                if selectedSport != .all {
+                    Text("• \(selectedSport.rawValue)")
+                        .font(.caption.bold())
+                        .foregroundStyle(selectedSport.accentColor)
+                }
+                
+                Spacer()
+            }
             
             if loading {
                 HStack {
@@ -884,17 +962,41 @@ struct BillfoldView: View {
                     .padding()
                     .liquidGlass(cornerRadius: 12)
             } else {
+                let displayResults = selectedTab == 0 ? filteredGameResults : []
+                let displayProps = selectedTab == 1 ? filteredPropResults : []
+                
                 if selectedTab == 0 {
-                    ForEach(Array(gameResults.enumerated()), id: \.offset) { _, result in
-                        GameResultRow(result: result)
+                    if displayResults.isEmpty {
+                        emptyStateView
+                    } else {
+                        ForEach(Array(displayResults.prefix(50).enumerated()), id: \.offset) { _, result in
+                            GameResultRow(result: result)
+                        }
                     }
                 } else {
-                    ForEach(Array(propResults.enumerated()), id: \.offset) { _, result in
-                        PropResultRow(result: result)
+                    if displayProps.isEmpty {
+                        emptyStateView
+                    } else {
+                        ForEach(Array(displayProps.prefix(50).enumerated()), id: \.offset) { _, result in
+                            PropResultRow(result: result)
+                        }
                     }
                 }
             }
         }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.tertiary)
+            Text(selectedSport == .all ? "No results yet" : "No \(selectedSport.rawValue) results")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
     
     private func loadData() async {
@@ -903,7 +1005,8 @@ struct BillfoldView: View {
         
         do {
             let since = sinceDate(for: timeframe)
-            async let games = SupabaseAPI.fetchGameResults(since: since)
+            // Use the combined fetch that includes NFL results
+            async let games = SupabaseAPI.fetchAllGameResults(since: since)
             async let props = SupabaseAPI.fetchPropResults(since: since)
             
             gameResults = try await games
@@ -935,9 +1038,10 @@ struct BillfoldView: View {
     }
     
     private func calculateRecord() -> (wins: Int, losses: Int, pushes: Int) {
+        // Use filtered results based on selected sport
         let results = selectedTab == 0
-            ? gameResults.map { $0.result ?? "" }
-            : propResults.map { $0.result ?? "" }
+            ? filteredGameResults.map { $0.result ?? "" }
+            : filteredPropResults.map { $0.result ?? "" }
         
         return (
             wins: results.filter { $0 == "won" }.count,
@@ -967,6 +1071,7 @@ struct BenefitCard: View {
     let title: String
     let text: String
     let icon: String?
+    @State private var isExpanded = false
     @State private var isPressed = false
     
     init(title: String, text: String, icon: String? = nil) {
@@ -993,17 +1098,30 @@ struct BenefitCard: View {
                     .foregroundStyle(GaryColors.lightGold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                
+                Spacer()
+                
+                // Expand/collapse indicator
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(GaryColors.gold.opacity(0.6))
             }
             
             Text(text)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .lineLimit(isExpanded ? nil : 2)
+                .fixedSize(horizontal: false, vertical: isExpanded)
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
         .darkCard(cornerRadius: 14)
         .scaleEffect(isPressed ? 0.97 : 1.0)
+        .onTapGesture {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                isExpanded.toggle()
+            }
+        }
         .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 isPressed = pressing
@@ -1102,23 +1220,14 @@ struct PickCardMobile: View {
         Sport.from(league: pick.league).accentColor
     }
     
-    private var pickTextView: some View {
-        let (pickPart, oddsPart) = Formatters.splitPickAndOdds(pick.pick)
-        return HStack(spacing: 6) {
-            Text(pickPart)
-                .foregroundStyle(GaryColors.gold)
-                .font(.title2.bold())
-            if !oddsPart.isEmpty {
-                Text(oddsPart)
-                    .foregroundStyle(GaryColors.lightGold)
-                    .font(.title2.bold())
-            }
-        }
+    /// Extract pick text and odds separately
+    private var pickParts: (pick: String, odds: String) {
+        Formatters.splitPickAndOdds(pick.pick)
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Header Row - Icon only + Game Time
+            // Header Row - Icon left, Time right
             HStack {
                 Image(systemName: Sport.from(league: pick.league).icon)
                     .font(.system(size: 14, weight: .semibold))
@@ -1132,22 +1241,30 @@ struct PickCardMobile: View {
                     Text(Formatters.formatCommenceTime(time))
                         .font(.caption.bold())
                         .foregroundStyle(GaryColors.lightGold)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .liquidGlass(cornerRadius: 8)
                 }
             }
             
-            // Teams - Solid gold
+            // Teams - Solid gold with truncation for long names
             HStack {
                 Text(Formatters.shortTeamName(pick.awayTeam))
                     .font(.title3.bold())
                     .foregroundStyle(GaryColors.gold)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer()
                 Text("@")
                     .font(.caption)
                     .foregroundStyle(GaryColors.gold.opacity(0.5))
+                    .layoutPriority(1)
                 Spacer()
                 Text(Formatters.shortTeamName(pick.homeTeam))
                     .font(.title3.bold())
                     .foregroundStyle(GaryColors.gold)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             .padding(.vertical, 4)
             
@@ -1156,8 +1273,26 @@ struct PickCardMobile: View {
                 .fill(accentColor.opacity(0.3))
                 .frame(height: 1)
             
-            // Pick Text
-            pickTextView
+            // Pick Text with Odds aligned horizontally
+            HStack(alignment: .center) {
+                Text(pickParts.pick)
+                    .foregroundStyle(GaryColors.gold)
+                    .font(.title2.bold())
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                
+                Spacer()
+                
+                // Odds badge - aligned with pick text
+                if !pickParts.odds.isEmpty {
+                    Text(pickParts.odds)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(GaryColors.goldGradient)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .liquidGlass(cornerRadius: 8)
+                }
+            }
             
             // Confidence Bar
             VStack(alignment: .leading, spacing: 6) {
@@ -1456,9 +1591,15 @@ struct AnalysisSheet: View {
     var accentColor: Color = GaryColors.gold
     @Environment(\.dismiss) private var dismiss
     
+    // Desktop-matching colors
+    private let greenAccent = Color(hex: "#4ade80")
+    private let amberAccent = Color(hex: "#fbbf24")
+    private let darkBg = Color(hex: "#0a0a0a")
+    
     var body: some View {
         ZStack {
-            LiquidGlassBackground(accentColor: accentColor)
+            // Dark background matching desktop
+            darkBg.ignoresSafeArea()
             
             VStack(alignment: .leading, spacing: 16) {
                 // Header
@@ -1466,10 +1607,10 @@ struct AnalysisSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(title)
                             .font(.title2.bold())
-                            .foregroundStyle(accentColor)
+                            .foregroundStyle(greenAccent)
                         Text("Powered by Gary A.I.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.5))
                     }
                     Spacer()
                     Button {
@@ -1477,25 +1618,442 @@ struct AnalysisSheet: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.7))
                             .padding(10)
-                            .liquidGlassCircle()
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.1))
+                            )
                     }
                 }
                 
                 ScrollView(showsIndicators: false) {
-                    Text(content)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .lineSpacing(6)
-                        .padding()
-                        .liquidGlass(cornerRadius: 16)
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Render the content with proper formatting
+                        FormattedAnalysisView(content: content, accentColor: accentColor)
+                    }
+                    .padding(.bottom, 20)
                 }
             }
             .padding(20)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+/// Displays analysis content with proper formatting
+struct FormattedAnalysisView: View {
+    let content: String
+    let accentColor: Color
+    
+    var body: some View {
+        let lines = content.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                AnalysisLineView(line: line, accentColor: accentColor)
+            }
+        }
+    }
+}
+
+/// Renders a single line of analysis with appropriate styling
+struct AnalysisLineView: View {
+    let line: String
+    let accentColor: Color
+    
+    // Desktop-matching colors
+    private let greenAccent = Color(hex: "#4ade80")
+    private let amberAccent = Color(hex: "#fbbf24")
+    
+    var body: some View {
+        let upperLine = line.uppercased()
+        
+        // Section headers - use green like desktop
+        if upperLine.contains("TALE OF THE TAPE") || 
+           upperLine.contains("GARY'S TAKE") || 
+           upperLine.contains("KEY INJURIES") ||
+           upperLine == "THE EDGE" ||
+           upperLine == "THE VERDICT" {
+            Text(line.uppercased())
+                .font(.caption.bold())
+                .foregroundStyle(greenAccent)
+                .tracking(1)
+                .padding(.top, 8)
+                .opacity(0.8)
+        }
+        // Team names (green for picked team style)
+        else if !line.contains("→") && !line.contains("←") && !line.contains("•") && 
+                !line.contains(":") && line.count < 35 && 
+                isTeamName(line) {
+            Text(line)
+                .font(.subheadline.bold())
+                .foregroundStyle(greenAccent)
+        }
+        // Stats rows with arrows
+        else if line.contains("→") || line.contains("←") {
+            StatRowView(line: line, accentColor: accentColor)
+        }
+        // Bullet points
+        else if line.hasPrefix("•") {
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(greenAccent)
+                    .frame(width: 5, height: 5)
+                    .padding(.top, 6)
+                Text(String(line.dropFirst()).trimmingCharacters(in: .whitespaces))
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // Regular text (narrative)
+        else {
+            Text(line)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.92))
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    
+    private func isTeamName(_ text: String) -> Bool {
+        // Common team name patterns - NBA, NFL, College
+        let teamPatterns = ["Pacers", "Kings", "Lakers", "Celtics", "Warriors", "Nets", "Knicks", 
+                           "Heat", "Bulls", "Bucks", "Suns", "Mavs", "Mavericks", "Clippers",
+                           "Nuggets", "Grizzlies", "Pelicans", "Cavaliers", "Raptors", "Hawks",
+                           "Hornets", "Magic", "Pistons", "Wizards", "Thunder", "Blazers",
+                           "Jazz", "Timberwolves", "Spurs", "Rockets", "76ers", "Sixers",
+                           "Indiana", "Sacramento", "Los Angeles", "Boston", "Golden State",
+                           "Cardinals", "Cowboys", "Eagles", "Giants", "Commanders", "Bears",
+                           "Lions", "Packers", "Vikings", "Falcons", "Panthers", "Saints",
+                           "Buccaneers", "49ers", "Seahawks", "Rams", "Chiefs", "Raiders",
+                           "Chargers", "Broncos", "Dolphins", "Bills", "Patriots", "Jets",
+                           "Ravens", "Bengals", "Browns", "Steelers", "Texans", "Colts",
+                           "Jaguars", "Titans", "Wildcats", "Bulldogs", "Tigers", "Crimson"]
+        return teamPatterns.contains { text.contains($0) }
+    }
+}
+
+/// Renders a stat row with values and arrow
+struct StatRowView: View {
+    let line: String
+    let accentColor: Color
+    
+    // Desktop-matching colors
+    private let greenAccent = Color(hex: "#4ade80")
+    
+    var body: some View {
+        // Parse: "Record    5-18    →    6-17" or "Off Rating    110.1    ←    109.1"
+        let isRightAdvantage = line.contains("→")
+        let parts = line
+            .replacingOccurrences(of: "→", with: "|")
+            .replacingOccurrences(of: "←", with: "|")
+            .components(separatedBy: "|")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        
+        if parts.count >= 2 {
+            let leftPart = parts[0]
+            let rightPart = parts[parts.count - 1]
+            
+            // Extract stat name and left value - expanded list matching desktop
+            let statLabels = ["Record", "Off Rating", "Def Rating", "Net Rating", "Pace", "eFG%", 
+                             "TOV%", "ORB%", "FT Rate", "Key Injuries", "Injuries", "Last 5",
+                             "3PT%", "Paint Scoring", "Paint Defense", "Close Games",
+                             "Total YPG", "Opp Yards", "Yards/Game", "Yards Allowed",
+                             "Recent PPG", "Scoring Efficiency", "QB Rating", "Completion %",
+                             "3rd Down %", "Opp 3rd Down %", "Turnover +/-", "Rush YPG",
+                             "Opp Rush", "Rush Yards/Carry", "Total Yards", "Pass Yards",
+                             "Def Points Allowed", "Big Plays", "Havoc Rate", "Opp Havoc"]
+            var statName = ""
+            var leftVal = leftPart
+            
+            for label in statLabels {
+                if leftPart.contains(label) {
+                    statName = label
+                    leftVal = leftPart.replacingOccurrences(of: label, with: "").trimmingCharacters(in: .whitespaces)
+                    break
+                }
+            }
+            
+            HStack {
+                // Left value - green if advantage, white if not
+                Text(leftVal)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(isRightAdvantage ? .white.opacity(0.7) : greenAccent)
+                    .frame(width: 65, alignment: .leading)
+                
+                Spacer()
+                
+                // Stat name with arrow indicator
+                HStack(spacing: 4) {
+                    if !isRightAdvantage {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(greenAccent)
+                    }
+                    Text(statName)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.5))
+                    if isRightAdvantage {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(greenAccent)
+                    }
+                }
+                
+                Spacer()
+                
+                // Right value - green if advantage, white if not
+                Text(rightPart)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(isRightAdvantage ? greenAccent : .white.opacity(0.7))
+                    .frame(width: 65, alignment: .trailing)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity(0.05))
+            )
+        } else {
+            Text(line)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.9))
+        }
+    }
+}
+
+// MARK: - Analysis Section Models
+
+struct AnalysisSection: Identifiable {
+    let id = UUID()
+    let title: String
+    let type: SectionType
+    var content: String
+    var tapeData: [(String, String, String)] // (label, awayValue, homeValue)
+    var teams: (String, String) // (away, home)
+    var bullets: [String]
+    
+    enum SectionType {
+        case taleOfTape
+        case injuries
+        case bullets
+        case text
+    }
+}
+
+struct AnalysisSectionView: View {
+    let section: AnalysisSection
+    let accentColor: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Section Header
+            Text(section.title)
+                .font(.caption.bold())
+                .foregroundStyle(accentColor)
+                .tracking(1)
+            
+            // Section Content
+            VStack(alignment: .leading, spacing: 16) {
+                switch section.type {
+                case .taleOfTape:
+                    // Stats table
+                    TaleOfTapeView(teams: section.teams, data: section.tapeData, accentColor: accentColor)
+                    
+                    // Injuries within the same card
+                    if !section.bullets.isEmpty {
+                        Divider()
+                            .background(accentColor.opacity(0.3))
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("KEY INJURIES")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+                            
+                            InjuriesView(injuries: section.bullets, teams: section.teams)
+                        }
+                    }
+                    
+                case .injuries:
+                    InjuriesView(injuries: section.bullets, teams: ("", ""))
+                    
+                case .bullets:
+                    GaryTakeView(bullets: section.bullets)
+                    
+                case .text:
+                    Text(section.content)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .liquidGlass(cornerRadius: 14)
+        }
+    }
+}
+
+struct TaleOfTapeView: View {
+    let teams: (String, String) // (team1, team2) - order from parsing
+    let data: [(String, String, String)] // (label, team1Value, team2Value)
+    let accentColor: Color
+    
+    /// Get shortened team names (just the nickname)
+    private var shortTeams: (String, String) {
+        let short1 = Formatters.shortTeamName(teams.0)
+        let short2 = Formatters.shortTeamName(teams.1)
+        return (short1, short2)
+    }
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Team Header - Centered matchup display
+            HStack(spacing: 8) {
+                Text(shortTeams.0)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(GaryColors.gold)
+                
+                Text("vs")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Text(shortTeams.1)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(GaryColors.gold)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 4)
+            
+            // Column headers
+            HStack {
+                Text(shortTeams.0)
+                    .font(.caption2.bold())
+                    .foregroundStyle(GaryColors.lightGold)
+                    .frame(width: 55, alignment: .leading)
+                
+                Spacer()
+                
+                Text("")
+                    .frame(maxWidth: .infinity)
+                
+                Spacer()
+                
+                Text(shortTeams.1)
+                    .font(.caption2.bold())
+                    .foregroundStyle(GaryColors.lightGold)
+                    .frame(width: 55, alignment: .trailing)
+            }
+            
+            // Stats Table
+            VStack(spacing: 6) {
+                ForEach(Array(data.enumerated()), id: \.offset) { _, row in
+                    HStack {
+                        // Team 1 value
+                        Text(row.1)
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                            .frame(width: 55, alignment: .leading)
+                        
+                        Spacer()
+                        
+                        // Stat label
+                        Text(row.0)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Spacer()
+                        
+                        // Team 2 value
+                        Text(row.2)
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                            .frame(width: 55, alignment: .trailing)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(hex: "#0D0D0F"))
+                    )
+                }
+            }
+        }
+    }
+}
+
+struct InjuriesView: View {
+    let injuries: [String]
+    let teams: (String, String)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Split injuries by team if possible
+            ForEach(injuries, id: \.self) { injury in
+                HStack(alignment: .top, spacing: 8) {
+                    Circle()
+                        .fill(.red.opacity(0.8))
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 6)
+                    Text(injury)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
+struct GaryTakeView: View {
+    let bullets: [String]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 10) {
+                    Circle()
+                        .fill(GaryColors.gold)
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 6)
+                    Text(bullet)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
+struct BulletListView: View {
+    let bullets: [String]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 10) {
+                    Circle()
+                        .fill(GaryColors.gold)
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 6)
+                    Text(bullet)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 }
 
@@ -1720,7 +2278,10 @@ enum Formatters {
     static func splitPickAndOdds(_ pick: String?) -> (String, String) {
         guard let pick = pick, !pick.isEmpty else { return ("", "") }
         
-        let pattern = #"(.+?)\s+([-+]\d+\.?\d*)$"#
+        // Pattern to match American odds at the end (typically -110, +150, -105, etc.)
+        // American odds are usually 3+ digits (100 or greater absolute value)
+        // Spread/line values are smaller (like -7.5, +3, -14.5)
+        let pattern = #"(.+?)\s+([-+]\d{3,}\.?\d*)$"#
         var pickPart = pick
         var oddsPart = ""
         
@@ -1728,13 +2289,20 @@ enum Formatters {
            let match = regex.firstMatch(in: pick, range: NSRange(pick.startIndex..., in: pick)) {
             if let pickRange = Range(match.range(at: 1), in: pick),
                let oddsRange = Range(match.range(at: 2), in: pick) {
-                pickPart = String(pick[pickRange]).trimmingCharacters(in: .whitespaces)
-                oddsPart = String(pick[oddsRange])
+                let potentialOdds = String(pick[oddsRange])
+                // Only treat as odds if absolute value >= 100 (American odds format)
+                if let oddsValue = Double(potentialOdds.replacingOccurrences(of: "+", with: "")),
+                   abs(oddsValue) >= 100 {
+                    pickPart = String(pick[pickRange]).trimmingCharacters(in: .whitespaces)
+                    oddsPart = potentialOdds
+                }
             }
         }
         
+        // First shorten city names, then truncate if still too long
         let shortenedPick = shortenTeamNamesInPick(pickPart)
-        return (shortenedPick, oddsPart)
+        let truncatedPick = truncatePickText(shortenedPick)
+        return (truncatedPick, oddsPart)
     }
     
     private static func shortenTeamNamesInPick(_ pick: String) -> String {
@@ -1754,5 +2322,64 @@ enum Formatters {
             }
         }
         return result.trimmingCharacters(in: .whitespaces)
+    }
+    
+    /// Formats pick text with clean team names and preserved bet info
+    /// e.g., "Kennesaw State Owls spread -7.5" -> "Kennesaw -7.5"
+    /// e.g., "Incarnate Word Cardinals ML" -> "Incarnate Word ML"
+    /// e.g., "Pennsylvania Quakers -3.5" -> "Pennsylvania -3.5"
+    static func truncatePickText(_ pick: String, maxLength: Int = 20) -> String {
+        var cleanPick = pick
+        
+        // Remove the word "spread" (we show the number, that's enough)
+        cleanPick = cleanPick.replacingOccurrences(of: " spread ", with: " ", options: .caseInsensitive)
+        cleanPick = cleanPick.replacingOccurrences(of: " spread", with: "", options: .caseInsensitive)
+        
+        // Extract bet type and value at the end (ML, -7.5, +3, over 145.5, under 200, etc.)
+        let betPattern = #"^(.+?)\s+(ML|moneyline|over\s+[\d.]+|under\s+[\d.]+|[-+][\d.]+)$"#
+        
+        if let regex = try? NSRegularExpression(pattern: betPattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: cleanPick, range: NSRange(cleanPick.startIndex..., in: cleanPick)) {
+            if let teamRange = Range(match.range(at: 1), in: cleanPick),
+               let betRange = Range(match.range(at: 2), in: cleanPick) {
+                var teamPart = String(cleanPick[teamRange]).trimmingCharacters(in: .whitespaces)
+                let betPart = String(cleanPick[betRange]).trimmingCharacters(in: .whitespaces)
+                
+                // Shorten team name if needed - use first 1-2 words
+                teamPart = shortenTeamForDisplay(teamPart, maxLength: 14)
+                
+                return "\(teamPart) \(betPart)"
+            }
+        }
+        
+        // No bet type found - just shorten the whole thing
+        if cleanPick.count > maxLength {
+            return shortenTeamForDisplay(cleanPick, maxLength: maxLength)
+        }
+        return cleanPick
+    }
+    
+    /// Shortens a team name to fit display
+    /// e.g., "Kennesaw State Owls" -> "Kennesaw"
+    /// e.g., "Incarnate Word Cardinals" -> "Incarnate Word"
+    private static func shortenTeamForDisplay(_ team: String, maxLength: Int) -> String {
+        if team.count <= maxLength { return team }
+        
+        let words = team.split(separator: " ").map(String.init)
+        
+        // Try first word
+        if let first = words.first, first.count <= maxLength {
+            // If first word is very short, try adding second word
+            if first.count < 8 && words.count > 1 {
+                let twoWords = "\(first) \(words[1])"
+                if twoWords.count <= maxLength {
+                    return twoWords
+                }
+            }
+            return first
+        }
+        
+        // Fallback: truncate to max length
+        return String(team.prefix(maxLength))
     }
 }
