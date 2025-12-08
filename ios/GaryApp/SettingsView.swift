@@ -10,8 +10,8 @@ struct SettingsView: View {
     
     var body: some View {
         ZStack {
-            // Background - ignores safe area
-            LiquidGlassBackground(accentColor: Color(hex: "#6366F1"))
+            // Background - matches homepage
+            LiquidGlassBackground()
             
             // Content - respects safe area
             ScrollView(showsIndicators: false) {
@@ -19,8 +19,9 @@ struct SettingsView: View {
                     // Header
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Settings")
-                            .font(.system(size: 28, weight: .black, design: .rounded))
-                            .foregroundStyle(GaryColors.goldGradient)
+                            .font(.system(size: 28, weight: .heavy))
+                            .tracking(-0.5)
+                            .foregroundStyle(GaryColors.gold)
                         
                         Text("Manage your preferences")
                             .font(.subheadline)
@@ -91,7 +92,21 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(20)
-        .liquidGlass(cornerRadius: 20)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(hex: "#0D0D0F"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.3), GaryColors.gold.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+        )
     }
     
     // MARK: - Legal Section
@@ -110,32 +125,39 @@ struct SettingsView: View {
                 SettingsLink(
                     title: "Privacy Policy",
                     icon: "lock.shield.fill",
-                    iconColor: .blue,
+                    iconColor: GaryColors.gold,
                     url: "https://www.betwithgary.ai/privacy"
                 )
                 
                 SettingsLink(
                     title: "Terms of Service",
                     icon: "doc.plaintext.fill",
-                    iconColor: .purple,
+                    iconColor: GaryColors.gold,
                     url: "https://www.betwithgary.ai/terms"
                 )
                 
                 SettingsLink(
                     title: "Responsible Gambling",
                     icon: "heart.fill",
-                    iconColor: .red,
+                    iconColor: GaryColors.gold,
                     url: "https://www.ncpgambling.org/help-treatment/"
                 )
                 
                 SettingsLink(
                     title: "Contact Support",
                     icon: "envelope.fill",
-                    iconColor: .green,
+                    iconColor: GaryColors.gold,
                     url: "https://www.betwithgary.ai/contact"
                 )
             }
-            .liquidGlass(cornerRadius: 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(hex: "#0D0D0F"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
         }
     }
     
@@ -221,7 +243,14 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
-            .liquidGlass(cornerRadius: 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(hex: "#0D0D0F"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
         }
     }
     
@@ -274,18 +303,18 @@ struct SettingsLink: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(iconColor)
                     .frame(width: 32, height: 32)
-                    .background(iconColor.opacity(0.15))
+                    .background(Color(hex: "#1A1A1C"))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 Text(title)
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white)
                 
                 Spacer()
                 
                 Image(systemName: "arrow.up.right")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(GaryColors.gold.opacity(0.5))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
