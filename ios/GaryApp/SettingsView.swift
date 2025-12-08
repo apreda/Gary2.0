@@ -63,12 +63,17 @@ struct SettingsView: View {
     
     private var appInfoCard: some View {
         HStack(spacing: 16) {
-            GaryLogo(size: 70)
+            Image("GaryGlass")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 80, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: GaryColors.gold.opacity(0.3), radius: 10, y: 4)
             
             VStack(alignment: .leading, spacing: 6) {
                 Text("Gary A.I.")
                     .font(.title2.bold())
-                    .foregroundStyle(GaryColors.goldGradient)
+                    .foregroundStyle(GaryColors.gold)
                 
                 Text("Version 1.0")
                     .font(.caption)
