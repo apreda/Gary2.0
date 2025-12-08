@@ -12,19 +12,19 @@ struct AccessView: View {
         ZStack {
             LiquidGlassBackground()
             
-            VStack(spacing: 28) {
+            VStack(spacing: 24) {
                 Spacer(minLength: 40)
                 
-                // Logo with glow
-                GaryLogo(size: 200)
-                    .shadow(color: GaryColors.gold.opacity(0.5), radius: 30, y: 10)
-                    .opacity(animateIn ? 1 : 0)
-                    .scaleEffect(animateIn ? 1 : 0.8)
-                
-                // Title
-                VStack(spacing: 8) {
+                // Logo - no glow, matches home page
+                VStack(spacing: 0) {
+                    Image("GaryLiquid")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 180, height: 180)
+                    
                     Text("GARY A.I.")
-                        .font(.system(size: 36, weight: .black, design: .rounded))
+                        .font(.system(size: 32, weight: .heavy))
+                        .tracking(-0.5)
                         .foregroundStyle(GaryColors.goldGradient)
                     
                     Text("Intelligent Sports Analysis")
@@ -32,7 +32,7 @@ struct AccessView: View {
                         .foregroundStyle(.secondary)
                 }
                 .opacity(animateIn ? 1 : 0)
-                .offset(y: animateIn ? 0 : 20)
+                .scaleEffect(animateIn ? 1 : 0.8)
                 .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                 
                 // Tech Chips
@@ -53,7 +53,14 @@ struct AccessView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .liquidGlass(cornerRadius: 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(hex: "#0D0D0F"))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.5)
+                            )
+                    )
                     
                     LazyVGrid(
                         columns: [
@@ -81,17 +88,17 @@ struct AccessView: View {
                 VStack(spacing: 14) {
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            hasEntered = true
-                            selectedTab = 0
+                        hasEntered = true
+                        selectedTab = 0
                         }
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "star.fill")
-                            Text("Access Picks")
+                        Text("Access Picks")
                                 .font(.headline.bold())
                         }
                         .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
+                            .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(GaryColors.goldGradient)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -100,14 +107,14 @@ struct AccessView: View {
                     
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            hasEntered = true
-                            selectedTab = 1
+                        hasEntered = true
+                        selectedTab = 1
                         }
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "gift.fill")
                                 .font(.caption)
-                            Text("See Free Pick of the Day")
+                        Text("See Free Pick of the Day")
                                 .font(.subheadline.bold())
                         }
                         .foregroundStyle(GaryColors.gold)
@@ -145,12 +152,19 @@ struct TechChip: View {
                 .foregroundStyle(GaryColors.gold)
             Text(text)
                 .font(.caption.bold())
-                .foregroundStyle(.primary)
+                .foregroundStyle(.white)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .liquidGlass(cornerRadius: 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#0D0D0F"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                )
+        )
     }
 }
 
@@ -161,27 +175,35 @@ struct DisclaimerSheet: View {
     
     var body: some View {
         ZStack {
-            LiquidGlassBackground(accentColor: .red.opacity(0.5))
+            LiquidGlassBackground(accentColor: GaryColors.gold)
             
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(GaryColors.gold)
                         .font(.title2)
                     Text("Important Disclaimer")
-                        .font(.title2.bold())
+                        .font(.system(size: 22, weight: .heavy))
+                        .tracking(-0.5)
                         .foregroundStyle(GaryColors.goldGradient)
                 }
-                
+            
                 ScrollView(showsIndicators: false) {
                     Text(disclaimerText)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineSpacing(4)
                         .padding()
-                        .liquidGlass(cornerRadius: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(hex: "#0D0D0F"))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                                )
+                        )
                 }
-                
+            
                 Button {
                     isPresented = false
                 } label: {
