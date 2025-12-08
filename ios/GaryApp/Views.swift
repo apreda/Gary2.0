@@ -389,13 +389,16 @@ struct HomeView: View {
             }
         }
         .task {
+            // Start animation immediately so content is visible
+            withAnimation(.easeOut(duration: 0.8)) {
+                animateIn = true
+            }
+            
+            // Then load data
             loading = true
             let date = SupabaseAPI.todayEST()
             freePick = try? await SupabaseAPI.fetchAllPicks(date: date).first
             loading = false
-            withAnimation(.easeOut(duration: 0.8)) {
-                animateIn = true
-            }
         }
     }
 }
