@@ -625,7 +625,7 @@ struct GaryPropsView: View {
     var body: some View {
         ZStack {
             // Background - ignores safe area
-            LiquidGlassBackground(accentColor: Color(hex: "#8B5CF6"))
+            LiquidGlassBackground(accentColor: GaryColors.gold)
             
             // Content - respects safe area
             VStack(spacing: 0) {
