@@ -174,46 +174,38 @@ struct LiquidGlassBackground: View {
     var accentColor: Color = GaryColors.gold
     
     var body: some View {
-        ZStack {
-            // Deep base
-            Color(hex: "#050506")
-            
-            // Ambient glow orbs
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [accentColor.opacity(0.15), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 300
+        GeometryReader { geo in
+            ZStack {
+                // Deep base
+                Color(hex: "#050506")
+                
+                // Ambient glow orbs (positioned relative to screen, not affecting layout)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [accentColor.opacity(0.15), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 300
+                        )
                     )
-                )
-                .frame(width: 600, height: 600)
-                .offset(x: -150, y: -200)
-                .blur(radius: 60)
-            
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color(hex: "#1a1a2e").opacity(0.6), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 250
+                    .frame(width: 600, height: 600)
+                    .position(x: geo.size.width * 0.2, y: geo.size.height * 0.15)
+                    .blur(radius: 60)
+                
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(hex: "#1a1a2e").opacity(0.6), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 250
+                        )
                     )
-                )
-                .frame(width: 500, height: 500)
-                .offset(x: 180, y: 400)
-                .blur(radius: 50)
-            
-            // Subtle noise texture
-            Rectangle()
-                .fill(.white.opacity(0.015))
-                .background(
-                    Image(systemName: "circle.grid.3x3.fill")
-                        .resizable()
-                        .frame(width: 4, height: 4)
-                        .opacity(0.02)
-                )
+                    .frame(width: 500, height: 500)
+                    .position(x: geo.size.width * 0.8, y: geo.size.height * 0.7)
+                    .blur(radius: 50)
+            }
         }
         .ignoresSafeArea()
     }
