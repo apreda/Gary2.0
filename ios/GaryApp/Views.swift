@@ -3,22 +3,41 @@ import WebKit
 
 // MARK: - Liquid Glass Design System
 
-/// Glass modifier with material-based glass effect
+/// True Liquid Glass modifier using overlay blend mode for authentic refraction
 extension View {
     func liquidGlass(cornerRadius: CGFloat = 20, intensity: GlassIntensity = .regular) -> some View {
-        self.background(intensity.material, in: RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(
+        self.background {
+            ZStack {
+                // 1. Base Material (The Refraction)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(intensity.material)
+                    .opacity(intensity.opacity)
+                
+                // 2. Liquid Shine (Top Gradient with Overlay Blend)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
                         LinearGradient(
-                            colors: [.white.opacity(0.35), .white.opacity(0.08)],
+                            colors: [.white.opacity(0.45), .white.opacity(0.0)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
+                        )
                     )
-            )
-            .shadow(color: .black.opacity(0.2), radius: 12, y: 8)
+                    .blendMode(.overlay)
+                
+                // 3. Edge Light (Rim)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+            }
+        }
+        // 4. Drop Shadow (Depth)
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 8)
     }
     
     func liquidGlassInteractive(cornerRadius: CGFloat = 20) -> some View {
@@ -26,35 +45,71 @@ extension View {
     }
     
     func liquidGlassCircle(intensity: GlassIntensity = .regular) -> some View {
-        self.background(intensity.material, in: Circle())
-            .overlay(
+        self.background {
+            ZStack {
+                // Base Material
                 Circle()
-                    .stroke(
+                    .fill(intensity.material)
+                    .opacity(intensity.opacity)
+                
+                // Liquid Shine
+                Circle()
+                    .fill(
                         LinearGradient(
-                            colors: [.white.opacity(0.35), .white.opacity(0.08)],
+                            colors: [.white.opacity(0.45), .white.opacity(0.0)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
+                        )
                     )
-            )
-            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                    .blendMode(.overlay)
+                
+                // Edge Light
+                Circle()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+            }
+        }
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 6)
     }
     
     func liquidGlassCapsule(intensity: GlassIntensity = .regular) -> some View {
-        self.background(intensity.material, in: Capsule())
-            .overlay(
+        self.background {
+            ZStack {
+                // Base Material
                 Capsule()
-                    .stroke(
+                    .fill(intensity.material)
+                    .opacity(intensity.opacity)
+                
+                // Liquid Shine
+                Capsule()
+                    .fill(
                         LinearGradient(
-                            colors: [.white.opacity(0.35), .white.opacity(0.08)],
+                            colors: [.white.opacity(0.45), .white.opacity(0.0)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
+                        )
                     )
-            )
-            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+                    .blendMode(.overlay)
+                
+                // Edge Light
+                Capsule()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+            }
+        }
+        .shadow(color: .black.opacity(0.1), radius: 6, y: 4)
     }
 }
 
@@ -66,8 +121,16 @@ enum GlassIntensity {
     var material: Material {
         switch self {
         case .clear: return .ultraThinMaterial
-        case .regular: return .thinMaterial
-        case .prominent: return .regularMaterial
+        case .regular: return .ultraThinMaterial
+        case .prominent: return .thinMaterial
+        }
+    }
+    
+    var opacity: Double {
+        switch self {
+        case .clear: return 0.7
+        case .regular: return 0.85
+        case .prominent: return 0.95
         }
     }
 }
@@ -168,21 +231,21 @@ struct HomeView: View {
             LiquidGlassBackground()
             
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
+                VStack(spacing: 20) {
                     // Hero Section
-                    VStack(spacing: 16) {
-                        GaryLogo(size: 100)
-                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 20, y: 8)
+                    VStack(spacing: 12) {
+                        GaryLogo(size: 90)
+                            .shadow(color: GaryColors.gold.opacity(0.4), radius: 16, y: 6)
                         
                         Text("GARY A.I.")
-                            .font(.system(size: 28, weight: .black, design: .rounded))
+                            .font(.system(size: 26, weight: .black, design: .rounded))
                             .foregroundStyle(GaryColors.goldGradient)
                         
                         Text("Intelligent Sports Analysis")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 16)
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
@@ -215,22 +278,22 @@ struct HomeView: View {
                             .padding(.horizontal, 20)
                         
                         LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12)
-                        ], spacing: 12) {
-                            BenefitCard(title: "Statistical Brain", text: "Identifies mispriced betting lines using odds & metrics.", icon: "waveform.path.ecg")
-                            BenefitCard(title: "Three-Layer Core", text: "Combines odds, storylines, and deep reasoning.", icon: "square.stack.3d.up")
-                            BenefitCard(title: "Narrative Tracker", text: "Monitors fatigue, injuries, and lineup changes.", icon: "text.bubble")
-                            BenefitCard(title: "Street Smart", text: "Blends handicapping instincts with analytics.", icon: "map")
-                            BenefitCard(title: "Fan Brain", text: "Reads market sentiment and sharp money.", icon: "person.3.fill")
-                            BenefitCard(title: "Signal Focus", text: "Only the most relevant stats per matchup.", icon: "antenna.radiowaves.left.and.right")
+                            GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10)
+                        ], spacing: 10) {
+                            BenefitCard(title: "Statistical Brain", text: "Identifies mispriced lines.", icon: "waveform.path.ecg")
+                            BenefitCard(title: "Three-Layer Core", text: "Odds, storylines, reasoning.", icon: "square.stack.3d.up")
+                            BenefitCard(title: "Narrative Tracker", text: "Injuries & lineup changes.", icon: "text.bubble")
+                            BenefitCard(title: "Street Smart", text: "Instincts meets analytics.", icon: "map")
+                            BenefitCard(title: "Fan Brain", text: "Market sentiment & flows.", icon: "person.3.fill")
+                            BenefitCard(title: "Signal Focus", text: "Only relevant stats.", icon: "antenna.radiowaves.left.and.right")
                         }
                         .padding(.horizontal, 16)
                     }
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
                     
-                    Spacer(minLength: 100)
+                    Spacer(minLength: 120)
                 }
             }
         }
@@ -425,7 +488,7 @@ struct GaryPicksView: View {
         .refreshable {
             await loadPicks()
         }
-        .onChange(of: selectedSport) { _, _ in
+        .onChange(of: selectedSport) { _ in
             animateIn = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 withAnimation { animateIn = true }
@@ -532,7 +595,7 @@ struct GaryPropsView: View {
         .refreshable {
             await loadProps()
         }
-        .onChange(of: selectedSport) { _, _ in
+        .onChange(of: selectedSport) { _ in
             animateIn = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 withAnimation { animateIn = true }
@@ -780,30 +843,30 @@ struct BenefitCard: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
                 if let icon = icon {
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(GaryColors.goldGradient)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 28, height: 28)
                         .liquidGlassCircle()
                 }
                 Text(title)
-                    .font(.subheadline.bold())
+                    .font(.caption.bold())
                     .foregroundStyle(GaryColors.lightGold)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             
             Text(text)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(3)
+                .lineLimit(2)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .frame(height: 130)
-        .liquidGlass(cornerRadius: 16)
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
+        .liquidGlass(cornerRadius: 14)
         .scaleEffect(isPressed ? 0.97 : 1.0)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {

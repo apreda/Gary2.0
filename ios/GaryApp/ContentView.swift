@@ -8,24 +8,24 @@ struct ContentView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Content
-            TabView(selection: $selectedTab) {
-                HomeView()
-                    .tag(0)
-                
-                GaryPicksView()
-                    .tag(1)
-                
-                GaryPropsView()
-                    .tag(2)
-                
-                BillfoldView()
-                    .tag(3)
-                
-                SettingsView()
-                    .tag(4)
+            // Content - Using standard tab switching instead of page style
+            Group {
+                switch selectedTab {
+                case 0:
+                    HomeView()
+                case 1:
+                    GaryPicksView()
+                case 2:
+                    GaryPropsView()
+                case 3:
+                    BillfoldView()
+                case 4:
+                    SettingsView()
+                default:
+                    HomeView()
+                }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Custom Floating Tab Bar
             FloatingTabBar(selectedTab: $selectedTab, namespace: tabAnimation)
@@ -65,22 +65,37 @@ struct FloatingTabBar: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.3), .white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
+        .background {
+            ZStack {
+                // Base Material (Refraction)
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.9)
+                
+                // Liquid Shine (Overlay Blend)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.4), .white.opacity(0.0)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                )
-                .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
-        )
+                    )
+                    .blendMode(.overlay)
+                
+                // Edge Light (Rim)
+                Capsule()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.5), .white.opacity(0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+            }
+        }
+        .shadow(color: .black.opacity(0.2), radius: 16, y: 10)
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
     }
