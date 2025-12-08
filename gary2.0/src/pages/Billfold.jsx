@@ -94,11 +94,43 @@ export const Billfold = () => {
         if (dateFilter) {
           gameQuery = gameQuery.gte('game_date', dateFilter.toISOString());
         }
-        const { data: gameResults, error: gameResultsError } = await gameQuery.order('game_date', { ascending: false });
+        const { data: gameResultsRaw, error: gameResultsError } = await gameQuery.order('game_date', { ascending: false });
         
         if (gameResultsError) {
           throw new Error(`Error fetching game results: ${gameResultsError.message}`);
         }
+        
+        // STEP 1b: Fetch NFL results from separate table
+        let nflQuery = supabase.from('nfl_results').select('*');
+        if (dateFilter) {
+          nflQuery = nflQuery.gte('game_date', dateFilter.toISOString());
+        }
+        const { data: nflResultsRaw, error: nflResultsError } = await nflQuery.order('game_date', { ascending: false });
+        
+        // Don't throw error if nfl_results doesn't exist yet, just log it
+        if (nflResultsError) {
+          console.warn('NFL results table error (may not exist yet):', nflResultsError.message);
+        }
+        
+        // Merge game results with NFL results
+        // Map NFL results to match game_results structure
+        const mappedNflResults = (nflResultsRaw || []).map(nfl => ({
+          id: nfl.id,
+          pick_id: nfl.nfl_pick_id,
+          game_date: nfl.game_date,
+          league: 'NFL',
+          result: nfl.result,
+          final_score: nfl.final_score,
+          pick_text: nfl.pick_text,
+          matchup: nfl.matchup,
+          confidence: nfl.confidence,
+          created_at: nfl.created_at,
+          updated_at: nfl.updated_at
+        }));
+        
+        // Combine and sort by date
+        const gameResults = [...(gameResultsRaw || []), ...mappedNflResults]
+          .sort((a, b) => new Date(b.game_date) - new Date(a.game_date));
         
         // STEP 2: Fetch prop results
         let propQuery = supabase.from('prop_results').select('*');
