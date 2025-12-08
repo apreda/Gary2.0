@@ -128,9 +128,14 @@ export const Billfold = () => {
           updated_at: nfl.updated_at
         }));
         
-        // Combine and sort by date
+        // Combine and sort by date (descending), then by created_at (descending) as tiebreaker
         const gameResults = [...(gameResultsRaw || []), ...mappedNflResults]
-          .sort((a, b) => new Date(b.game_date) - new Date(a.game_date));
+          .sort((a, b) => {
+            const dateCompare = new Date(b.game_date) - new Date(a.game_date);
+            if (dateCompare !== 0) return dateCompare;
+            // If same date, sort by created_at (newest first)
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+          });
         
         // STEP 2: Fetch prop results
         let propQuery = supabase.from('prop_results').select('*');
