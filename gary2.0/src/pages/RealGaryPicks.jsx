@@ -612,14 +612,14 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 }}>
                   <span style={{ 
                     flex: 1,
-                    color: isRecentForm ? 'inherit' : (leftWins ? '#4ade80' : 'rgba(255,255,255,0.55)'),
+                    color: isRecentForm ? 'inherit' : (leftWins ? '#4ade80' : '#f87171'),
                     fontWeight: leftWins && !isRecentForm ? 600 : 400
                   }}>{isRecentForm ? renderFormValue(displayLeft) : displayLeft}</span>
                   <span style={{ width: '110px', textAlign: 'center', opacity: 0.4, fontSize: '0.62rem' }}>{statName}</span>
                   <span style={{ 
                     flex: 1, 
                     textAlign: 'right',
-                    color: isRecentForm ? 'inherit' : (rightWins ? '#4ade80' : 'rgba(255,255,255,0.55)'),
+                    color: isRecentForm ? 'inherit' : (rightWins ? '#4ade80' : '#f87171'),
                     fontWeight: rightWins && !isRecentForm ? 600 : 400
                   }}>{isRecentForm ? renderFormValue(displayRight) : displayRight}</span>
                 </div>
