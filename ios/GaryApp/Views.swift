@@ -134,6 +134,58 @@ extension View {
         }
         .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
     }
+    
+    /// Premium liquid glass button with gold tint
+    func liquidGlassButton(cornerRadius: CGFloat = 12) -> some View {
+        self.background {
+            ZStack {
+                // 1. Base glass with subtle gold tint
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                
+                // 2. Gold-tinted overlay
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                GaryColors.gold.opacity(0.15),
+                                GaryColors.gold.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                // 3. Liquid shine (top highlight)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.5), .white.opacity(0.0)],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
+                    .blendMode(.overlay)
+                
+                // 4. Premium gold edge
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                GaryColors.lightGold.opacity(0.6),
+                                GaryColors.gold.opacity(0.3),
+                                GaryColors.gold.opacity(0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+        }
+        .shadow(color: GaryColors.gold.opacity(0.2), radius: 12, y: 6)
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+    }
 }
 
 enum GlassIntensity {
@@ -1092,13 +1144,14 @@ struct PickCardMobile: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text.magnifyingglass")
+                        .foregroundStyle(GaryColors.goldGradient)
                     Text("View Analysis")
                 }
                 .font(.subheadline.bold())
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .liquidGlass(cornerRadius: 12)
+                .liquidGlassButton(cornerRadius: 12)
             }
             .sheet(isPresented: $showAnalysis) {
                 AnalysisSheet(title: "Gary's Analysis", content: pick.rationale ?? "", accentColor: accentColor)
@@ -1201,13 +1254,14 @@ struct PropCardMobile: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.text.magnifyingglass")
+                            .foregroundStyle(GaryColors.goldGradient)
                         Text("View Analysis")
                     }
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .liquidGlass(cornerRadius: 12)
+                    .liquidGlassButton(cornerRadius: 12)
                 }
                 .sheet(isPresented: $showAnalysis) {
                     BulletPointSheet(title: "Gary's Analysis", content: analysis)
