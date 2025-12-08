@@ -43,9 +43,13 @@ const getTargetDate = () => {
   if (args.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(args[0])) {
     return args[0];
   }
+  // Use local date instead of UTC to avoid timezone issues
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  return yesterday.toISOString().split('T')[0];
+  const year = yesterday.getFullYear();
+  const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+  const day = String(yesterday.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 // December 4, 2025 NBA game scores (manually verified from ESPN)
