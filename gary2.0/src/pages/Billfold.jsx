@@ -165,6 +165,18 @@ export const Billfold = () => {
         }
 
         // STEP 3: Process game results
+        // Helper to extract odds from pick text (e.g., "Minnesota Timberwolves -10 -112" -> "-112")
+        const extractOddsFromPick = (pickText) => {
+          if (!pickText) return null;
+          // Look for odds pattern at the end: +/- followed by 3 digits
+          const oddsMatch = pickText.match(/([+-]\d{3})$/);
+          if (oddsMatch) return oddsMatch[1];
+          // Also try pattern like "-110" or "+150" anywhere in the text
+          const altMatch = pickText.match(/\s([+-]\d{2,3})(?:\s|$)/);
+          if (altMatch) return altMatch[1];
+          return null;
+        };
+        
         const processedGameLog = gameResults ? gameResults.map(game => ({
           id: game.id,
           date: new Date(game.game_date),
@@ -173,7 +185,7 @@ export const Billfold = () => {
           matchup: game.matchup,
           pick: game.pick_text,
           result: game.result,
-          odds: game.odds,
+          odds: game.odds || extractOddsFromPick(game.pick_text),
           final_score: game.final_score,
           type: 'game' // Add type to distinguish from props
         })) : [];
@@ -706,7 +718,8 @@ export const Billfold = () => {
                   <tr>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>DATE</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>SPORT</th>
-                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>{showPicksType === 'props' ? 'ODDS' : 'MATCHUP'}</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>MATCHUP</th>
+                    <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>ODDS</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000' }}>PICK</th>
                     <th className="sticky-header" style={{ position: 'sticky', top: 0, background: '#121212', zIndex: 10, padding: '1rem 1.5rem', borderBottom: '2px solid #000000', textAlign: 'right' }}>RESULT</th>
                   </tr>
@@ -718,11 +731,12 @@ export const Billfold = () => {
                       {formatDateFromSupabase(bet.rawGameDate) || new Date(bet.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-400">{bet.sport}</td>
-                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">{
-                      showPicksType === 'props' ? 
-                        (bet.odds || 'N/A') : 
-                        (bet.matchup || 'Game not found')
-                    }</td>
+                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-200">
+                      {bet.matchup || 'Game not found'}
+                    </td>
+                    <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6 text-gray-300">
+                      {bet.odds || 'N/A'}
+                    </td>
                     <td style={{ padding: '1rem 1.5rem' }} className="py-4 px-6">
                       <div className="flex items-center">
                         <span className="inline-block w-2 h-2 rounded-sm bg-[#b8953f]"></span>

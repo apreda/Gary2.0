@@ -337,7 +337,24 @@ export const isESTTimeInRange = (startHour, endHour) => {
 };
 
 export function getYesterdayDate() {
-  const today = new Date();
-  today.setDate(today.getDate() - 1);
-  return today.toISOString().split('T')[0];
+  // Use local date instead of UTC to avoid timezone issues
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const year = yesterday.getFullYear();
+  const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+  const day = String(yesterday.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Format a date to local YYYY-MM-DD string (avoids UTC timezone issues)
+ * @param {Date} date - The date to format
+ * @returns {string} Date in YYYY-MM-DD format
+ */
+export function formatLocalDate(date) {
+  const d = date || new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

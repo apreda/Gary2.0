@@ -555,6 +555,16 @@ const pickResultsService = {
       const propType = propPick.prop?.split(' ')[0] || 'unknown';
       const lineValue = parseFloat(propPick.prop?.split(' ')[1]) || 0;
       
+      // Format odds properly - ensure it's a string with the sign
+      let oddsStr = null;
+      if (propPick.odds !== undefined && propPick.odds !== null) {
+        const oddsNum = Number(propPick.odds);
+        if (!isNaN(oddsNum)) {
+          // Format with + sign for positive odds
+          oddsStr = oddsNum > 0 ? `+${oddsNum}` : String(oddsNum);
+        }
+      }
+      
       const { error } = await supabase
         .from('prop_results')
         .insert({
@@ -565,9 +575,10 @@ const pickResultsService = {
           line_value: lineValue,
           actual_value: actualValue || 0,
           result: resultStr,
-          odds: propPick.odds?.toString() || '',
+          odds: oddsStr,
           pick_text: `${propPick.player} ${propPick.prop} ${propPick.bet}`,
           matchup: propPick.team,
+          bet: propPick.bet || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
