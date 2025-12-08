@@ -302,7 +302,7 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     // Hero Section
-                    VStack(spacing: 4) {
+                    VStack(spacing: 0) {
                         Image("GaryLiquid")
                             .resizable()
                             .scaledToFit()
