@@ -1104,11 +1104,11 @@ struct PickCardMobile: View {
         let (pickPart, oddsPart) = Formatters.splitPickAndOdds(pick.pick)
         return HStack(spacing: 6) {
             Text(pickPart)
-                .foregroundStyle(accentColor)
+                .foregroundStyle(GaryColors.gold)
                 .font(.title2.bold())
             if !oddsPart.isEmpty {
                 Text(oddsPart)
-                    .foregroundStyle(GaryColors.goldGradient)
+                    .foregroundStyle(GaryColors.lightGold)
                     .font(.title2.bold())
             }
         }
@@ -1120,24 +1120,24 @@ struct PickCardMobile: View {
             HStack {
                 Image(systemName: Sport.from(league: pick.league).icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(GaryColors.goldGradient)
+                    .foregroundStyle(GaryColors.gold)
                     .padding(10)
                     .liquidGlassCircle()
                 
                 Spacer()
                 
-                if let time = pick.time, !time.isEmpty {
-                    Text(Formatters.formatGameTime(time))
+                if let time = pick.displayTime {
+                    Text(Formatters.formatCommenceTime(time))
                         .font(.caption.bold())
                         .foregroundStyle(GaryColors.lightGold)
                 }
             }
             
-            // Teams - Gold colored
+            // Teams - Solid gold
             HStack {
                 Text(Formatters.shortTeamName(pick.awayTeam))
                     .font(.title3.bold())
-                    .foregroundStyle(GaryColors.goldGradient)
+                    .foregroundStyle(GaryColors.gold)
                 Spacer()
                 Text("@")
                     .font(.caption)
@@ -1145,7 +1145,7 @@ struct PickCardMobile: View {
                 Spacer()
                 Text(Formatters.shortTeamName(pick.homeTeam))
                     .font(.title3.bold())
-                    .foregroundStyle(GaryColors.goldGradient)
+                    .foregroundStyle(GaryColors.gold)
             }
             .padding(.vertical, 4)
             
@@ -1628,6 +1628,34 @@ enum Formatters {
             return clean
         }
         return clean
+    }
+    
+    /// Format ISO commence_time to readable time (e.g., "1:00 PM ET")
+    static func formatCommenceTime(_ isoTime: String?) -> String {
+        guard let isoTime = isoTime, !isoTime.isEmpty else { return "" }
+        
+        // Try to parse ISO format: "2025-12-07T18:00:00Z"
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        // Try with fractional seconds first, then without
+        var date = isoFormatter.date(from: isoTime)
+        if date == nil {
+            isoFormatter.formatOptions = [.withInternetDateTime]
+            date = isoFormatter.date(from: isoTime)
+        }
+        
+        guard let gameDate = date else {
+            // Fallback: return cleaned version
+            return formatGameTime(isoTime)
+        }
+        
+        // Format to readable time in ET
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "h:mm a"
+        displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+        
+        return displayFormatter.string(from: gameDate) + " ET"
     }
     
     static func confidencePercent(_ confidence: Double?) -> Int {
