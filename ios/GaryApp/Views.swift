@@ -1116,40 +1116,36 @@ struct PickCardMobile: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Header Row
+            // Header Row - Icon only + Game Time
             HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: Sport.from(league: pick.league).icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accentColor)
-                        .padding(8)
-                        .liquidGlassCircle()
-                    
-                    Text((pick.league ?? "").uppercased())
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.primary)
-                }
+                Image(systemName: Sport.from(league: pick.league).icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(GaryColors.goldGradient)
+                    .padding(10)
+                    .liquidGlassCircle()
                 
                 Spacer()
                 
                 if let time = pick.time, !time.isEmpty {
                     Text(Formatters.formatGameTime(time))
                         .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(GaryColors.lightGold)
                 }
             }
             
-            // Teams
+            // Teams - Gold colored
             HStack {
                 Text(Formatters.shortTeamName(pick.awayTeam))
                     .font(.title3.bold())
+                    .foregroundStyle(GaryColors.goldGradient)
                 Spacer()
                 Text("@")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(GaryColors.gold.opacity(0.5))
                 Spacer()
                 Text(Formatters.shortTeamName(pick.homeTeam))
                     .font(.title3.bold())
+                    .foregroundStyle(GaryColors.goldGradient)
             }
             .padding(.vertical, 4)
             
