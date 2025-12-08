@@ -356,12 +356,12 @@ struct HomeView: View {
                             GridItem(.flexible(), spacing: 10),
                             GridItem(.flexible(), spacing: 10)
                         ], spacing: 10) {
-                            BenefitCard(title: "Statistical Brain", text: "Identifies mispriced lines.", icon: "waveform.path.ecg")
-                            BenefitCard(title: "Three-Layer Core", text: "Odds, storylines, reasoning.", icon: "square.stack.3d.up")
-                            BenefitCard(title: "Narrative Tracker", text: "Injuries & lineup changes.", icon: "text.bubble")
-                            BenefitCard(title: "Street Smart", text: "Instincts meets analytics.", icon: "map")
-                            BenefitCard(title: "Fan Brain", text: "Market sentiment & flows.", icon: "person.3.fill")
-                            BenefitCard(title: "Signal Focus", text: "Only relevant stats.", icon: "antenna.radiowaves.left.and.right")
+                            BenefitCard(title: "GPT 5.1 Engine", text: "Multi-pass reasoning with OpenAI's most advanced model for deep game analysis.", icon: "brain.head.profile")
+                            BenefitCard(title: "Agentic Analysis", text: "6-iteration agent loop that requests specific stats, forms hypotheses, and validates picks.", icon: "arrow.triangle.2.circlepath")
+                            BenefitCard(title: "Live Scout Reports", text: "Real-time injuries, lineup changes, team form, and situational factors for every game.", icon: "doc.text.magnifyingglass")
+                            BenefitCard(title: "Odds Intelligence", text: "Live odds from The Odds API. Identifies mispriced lines and value opportunities.", icon: "chart.line.uptrend.xyaxis")
+                            BenefitCard(title: "Perplexity News", text: "AI-powered news search for breaking storylines, trends, and market narratives.", icon: "magnifyingglass")
+                            BenefitCard(title: "Convergence Engine", text: "Measures alignment between stats, odds, and analysis. Higher scores = stronger picks.", icon: "target")
                         }
                     }
                     .padding(16)
