@@ -14,19 +14,18 @@ export function PrivacyPolicy() {
 
         <div className="privacy-section">
           <h2 className="privacy-heading">1. Information We Collect</h2>
-          <p className="privacy-text font-bold mb-2">Web Platform (Browser):</p>
+          <p className="privacy-text">Gary A.I. is a free service that does not require user accounts or registration.</p>
+          <p className="privacy-text font-bold mt-4 mb-2">Web Platform:</p>
           <ul>
-            <li>Account data – name, email, password hash.</li>
-            <li>Payment data – tokenized card info via Stripe (we never store full PAN).</li>
-            <li>Usage data – IP address, device type, pages visited, picks clicked.</li>
-            <li>Marketing data – opt‑in preferences, survey responses.</li>
+            <li>We do not collect personal information such as names, emails, or passwords.</li>
+            <li>Basic usage data may be collected for analytics (pages visited, device type).</li>
+            <li>Your bet/fade decisions are stored locally on your device only.</li>
           </ul>
           <p className="privacy-text font-bold mt-4 mb-2">iOS Mobile App:</p>
           <ul>
-            <li>The iOS mobile app is currently a "read-only" informational companion.</li>
-            <li>It does not support user accounts, login, or registration.</li>
+            <li>The iOS mobile app is a free informational companion.</li>
             <li>It does not collect personal data, usage analytics, or track users.</li>
-            <li>No data is linked to your identity within the iOS environment.</li>
+            <li>No data is linked to your identity.</li>
           </ul>
         </div>
 
@@ -34,63 +33,39 @@ export function PrivacyPolicy() {
           <h2 className="privacy-heading">2. How We Use Information</h2>
           <ul>
             <li>Provide and improve the Service (algorithm tuning, UX).</li>
-            <li>Process payments and manage subscriptions.</li>
-            <li>Prevent fraud and ensure platform security.</li>
-            <li>Send transactional notices and marketing (with consent).</li>
+            <li>Ensure platform security and prevent abuse.</li>
           </ul>
         </div>
 
         <div className="privacy-section">
-          <h2 className="privacy-heading">3. Payments via Stripe</h2>
-          <p className="privacy-text">We use Stripe to process payments. When you submit a payment, your data is sent directly to Stripe, which acts as a minimum‑scope PCI DSS Level 1 service provider. Stripe may use your data per its own Privacy Policy (see link below).</p>
+          <h2 className="privacy-heading">3. Local Storage</h2>
+          <p className="privacy-text">We use browser local storage to save your preferences and bet decisions. This data stays on your device and is not transmitted to our servers.</p>
         </div>
 
         <div className="privacy-section">
-          <h2 className="privacy-heading">4. Legal Bases (GDPR)</h2>
-          <p className="privacy-text">We process personal data under one or more of the following bases: (a) contract performance; (b) legitimate interests (service security, analytics); (c) consent (marketing emails); (d) legal obligation (tax records).</p>
+          <h2 className="privacy-heading">4. Cookies & Analytics</h2>
+          <p className="privacy-text">We may use minimal analytics cookies to understand how visitors use our site. You can disable cookies in your browser settings.</p>
         </div>
 
         <div className="privacy-section">
-          <h2 className="privacy-heading">5. Your Rights</h2>
-          <p className="privacy-text">EU/EEA: Access, rectify, erase, restrict, object, data portability, lodge complaint with supervisory authority.</p>
-          <p className="privacy-text">California (CCPA): Know, delete, opt‑out of "sale," non‑discrimination. Request via privacy@betwithgary.com.</p>
+          <h2 className="privacy-heading">5. Data Security</h2>
+          <p className="privacy-text">We implement TLS encryption and industry-standard security practices. Since we don't collect personal data, there is minimal data to protect.</p>
         </div>
 
         <div className="privacy-section">
-          <h2 className="privacy-heading">6. Cookies & Tracking</h2>
-          <p className="privacy-text">We use first‑party and third‑party cookies for analytics (e.g., Plausible) and session management. You can disable cookies in your browser, but parts of the Service may not function.</p>
+          <h2 className="privacy-heading">6. Children's Privacy</h2>
+          <p className="privacy-text">The Service is not directed to minors under 18 years. We do not knowingly collect data from such users.</p>
         </div>
 
         <div className="privacy-section">
-          <h2 className="privacy-heading">7. Data Security</h2>
-          <p className="privacy-text">We implement TLS 1.3 encryption, least‑privilege access, and annual penetration tests. Payment flows inherit Stripe's security certifications (PCI‑DSS v4.0, SOC 2).</p>
+          <h2 className="privacy-heading">7. Changes to This Policy</h2>
+          <p className="privacy-text">We will post revisions here. Continued use after changes constitutes acceptance.</p>
         </div>
 
         <div className="privacy-section">
-          <h2 className="privacy-heading">8. Data Retention</h2>
-          <p className="privacy-text">Account data is retained while your account is active and for 7 years thereafter to meet tax/audit obligations. Anonymized analytical data may be retained indefinitely.</p>
-        </div>
-
-        <div className="privacy-section">
-          <h2 className="privacy-heading">9. International Transfers</h2>
-          <p className="privacy-text">We host in the United States and may transfer data internationally under Standard Contractual Clauses (SCCs) where required.</p>
-        </div>
-
-        <div className="privacy-section">
-          <h2 className="privacy-heading">10. Children's Privacy</h2>
-          <p className="privacy-text">The Service is not directed to minors under 13 years (or under legal betting age). We do not knowingly collect data from such users.</p>
-        </div>
-
-        <div className="privacy-section">
-          <h2 className="privacy-heading">11. Changes to This Policy</h2>
-          <p className="privacy-text">We will post revisions here and, for material changes, notify you via email or in‑app notice. Continued use after the effective date constitutes acceptance.</p>
-        </div>
-
-        <div className="privacy-section">
-          <h2 className="privacy-heading">Stripe Reference Links</h2>
+          <h2 className="privacy-heading">Contact Us</h2>
           <p className="privacy-text">
-            <a href="https://stripe.com/legal" target="_blank" rel="noopener noreferrer">Stripe Services Agreement</a><br />
-            <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">Stripe Privacy Policy</a>
+            For privacy-related questions, contact us at: <a href="mailto:privacy@betwithgary.com">privacy@betwithgary.com</a>
           </p>
         </div>
       </div>

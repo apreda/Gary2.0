@@ -1,6 +1,24 @@
 import SwiftUI
 import WebKit
 
+// MARK: - Async Helpers
+
+/// Execute an async operation with a timeout
+func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask {
+            try await operation()
+        }
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw URLError(.timedOut)
+        }
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
+    }
+}
+
 // MARK: - Liquid Glass Design System
 
 /// True Liquid Glass modifier using overlay blend mode for authentic refraction
@@ -563,10 +581,11 @@ struct SportFilterBar: View {
 struct GaryPicksView: View {
     @State private var allPicks: [GaryPick] = []
     @State private var loading = true
-    @State private var selectedSport: Sport = .nfl
+    @State private var selectedSport: Sport = .all
     @State private var animateIn = false
-    
+
     private var filteredPicks: [GaryPick] {
+        guard selectedSport != .all else { return allPicks }
         return allPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
     }
     
@@ -595,8 +614,8 @@ struct GaryPicksView: View {
                 .padding(.top, 8) // Extra padding after safe area
                 .padding(.bottom, 12)
                 
-                // Sport Filter (no ALL option - starts with NFL)
-                SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: false)
+                // Sport Filter
+                SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: true)
                     .padding(.bottom, 16)
                 
                 // Content
@@ -612,7 +631,7 @@ struct GaryPicksView: View {
                         Image(systemName: "sportscourt")
                             .font(.system(size: 50))
                             .foregroundStyle(.tertiary)
-                        Text("No \(selectedSport.rawValue) picks today.")
+                        Text(selectedSport == .all ? "No picks today." : "No \(selectedSport.rawValue) picks today.")
                             .foregroundStyle(.secondary)
                     }
                     .padding()
@@ -631,10 +650,14 @@ struct GaryPicksView: View {
                                         .delay(Double(index) * 0.08),
                                         value: animateIn
                                     )
+                                    // FIX: This ensures animation is reset when switching tabs so it doesn't "bounce"
+                                    .id("\(selectedSport.rawValue)-\(pick.id)") 
                             }
                         }
                         .padding(.vertical, 8)
                         .padding(.bottom, 100)
+                        // Force a transition when sport changes to avoid list diffing
+                        .id(selectedSport) 
                     }
                 }
             }
@@ -654,15 +677,30 @@ struct GaryPicksView: View {
     }
     
     private func loadPicks() async {
-        loading = true
-        animateIn = false
-        let date = SupabaseAPI.todayEST()
-        if let arr = try? await SupabaseAPI.fetchAllPicks(date: date) {
-            allPicks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
+        await MainActor.run {
+            loading = true
+            animateIn = false
         }
-        loading = false
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            animateIn = true
+        
+        let date = SupabaseAPI.todayEST()
+        
+        // Use a timeout to prevent infinite loading
+        var picks: [GaryPick] = []
+        do {
+            let arr = try await withTimeout(seconds: 15) {
+                try await SupabaseAPI.fetchAllPicks(date: date)
+            }
+            picks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
+        } catch {
+            print("Picks load error: \(error)")
+        }
+        
+        await MainActor.run {
+            allPicks = picks
+            loading = false
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                animateIn = true
+            }
         }
     }
 }
@@ -764,13 +802,30 @@ struct GaryPropsView: View {
     }
     
     private func loadProps() async {
-        loading = true
-        animateIn = false
+        await MainActor.run {
+            loading = true
+            animateIn = false
+        }
+        
         let date = SupabaseAPI.todayEST()
-        allProps = (try? await SupabaseAPI.fetchPropPicks(date: date)) ?? []
-        loading = false
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            animateIn = true
+        
+        // Use a timeout to prevent infinite loading
+        let props: [PropPick]
+        do {
+            props = try await withTimeout(seconds: 15) {
+                try await SupabaseAPI.fetchPropPicks(date: date)
+            }
+        } catch {
+            print("Props load error: \(error)")
+            props = []
+        }
+        
+        await MainActor.run {
+            allProps = props
+            loading = false
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                animateIn = true
+            }
         }
     }
 }
@@ -1060,22 +1115,33 @@ struct BillfoldView: View {
     }
     
     private func loadData() async {
-        loading = true
-        error = nil
-        
+        await MainActor.run {
+            loading = true
+            error = nil
+        }
+
         do {
             let since = sinceDate(for: timeframe)
-            // Use the combined fetch that includes NFL results
-            async let games = SupabaseAPI.fetchAllGameResults(since: since)
-            async let props = SupabaseAPI.fetchPropResults(since: since)
+            // Use the combined fetch that includes NFL results with timeout
+            let (games, props) = try await withTimeout(seconds: 15) {
+                async let g = SupabaseAPI.fetchAllGameResults(since: since)
+                async let p = SupabaseAPI.fetchPropResults(since: since)
+                return try await (g, p)
+            }
             
-            gameResults = try await games
-            propResults = try await props
+            await MainActor.run {
+                gameResults = games
+                propResults = props
+            }
         } catch {
-            self.error = "Failed to load data"
+            await MainActor.run {
+                self.error = "Failed to load data"
+            }
         }
-        
-        loading = false
+
+        await MainActor.run {
+            loading = false
+        }
     }
     
     private func sinceDate(for timeframe: String) -> String? {
@@ -1280,9 +1346,34 @@ struct PickCardMobile: View {
         Sport.from(league: pick.league).accentColor
     }
     
-    /// Extract pick text and odds separately
+    /// Extract pick text and odds separately, expanding team names for NBA
     private var pickParts: (pick: String, odds: String) {
-        Formatters.splitPickAndOdds(pick.pick)
+        let parts = Formatters.splitPickAndOdds(pick.pick)
+        
+        // For NBA, replace short team name with full team name in pick text
+        if pick.league?.uppercased() == "NBA" {
+            var expandedPick = parts.0
+            
+            // Check if pick contains the short home team name and replace with full name
+            if let homeTeam = pick.homeTeam {
+                let shortHome = homeTeam.split(separator: " ").last.map(String.init) ?? homeTeam
+                if expandedPick.contains(shortHome) {
+                    expandedPick = expandedPick.replacingOccurrences(of: shortHome, with: homeTeam)
+                }
+            }
+            
+            // Check if pick contains the short away team name and replace with full name
+            if let awayTeam = pick.awayTeam {
+                let shortAway = awayTeam.split(separator: " ").last.map(String.init) ?? awayTeam
+                if expandedPick.contains(shortAway) {
+                    expandedPick = expandedPick.replacingOccurrences(of: shortAway, with: awayTeam)
+                }
+            }
+            
+            return (expandedPick, parts.1)
+        }
+        
+        return parts
     }
     
     var body: some View {
@@ -1307,7 +1398,7 @@ struct PickCardMobile: View {
                 }
             }
             
-            // Teams - Soft white with truncation for long names
+            // Teams - Soft white with truncation for long names (always short names for matchup)
             HStack {
                 Text(Formatters.shortTeamName(pick.awayTeam))
                     .font(.title3.bold())
@@ -1761,22 +1852,57 @@ struct TaleOfTapeSection: View {
     /// Map tokens to display names
     private func displayName(for token: String) -> String {
         let map: [String: String] = [
+            // NBA/NCAAB stats
             "OFFENSIVE_RATING": "Off Rating",
             "DEFENSIVE_RATING": "Def Rating",
             "NET_RATING": "Net Rating",
             "EFFICIENCY_LAST_10": "Net Rating",
+            "ADJ_EFFICIENCY_MARGIN": "Net Rating",
+            "SP_PLUS_RATINGS": "Net Rating",
             "PACE": "Pace",
             "PACE_HOME_AWAY": "Record",
             "HOME_AWAY_SPLITS": "Record",
             "EFG_PCT": "eFG%",
+            "OPP_EFG_PCT": "Opp eFG%",
             "THREE_PT_SHOOTING": "3PT%",
-            "TURNOVER_RATE": "TOV Rate",
-            "OREB_RATE": "Off Reb Rate",
+            "TURNOVER_RATE": "TOV/Game",
+            "OREB_RATE": "Off Reb/G",
             "FT_RATE": "FT Rate",
-            "CLUTCH_STATS": "Clutch Record",
+            "CLUTCH_STATS": "Close Games",
             "PAINT_SCORING": "Paint Pts",
             "PAINT_DEFENSE": "Opp Paint Pts",
-            "TRANSITION_DEFENSE": "Trans Def"
+            "TRANSITION_DEFENSE": "Trans Def",
+            "RECENT_FORM": "Last 5",
+            "PERIMETER_DEFENSE": "3PT Def",
+            // NFL/NCAAF stats
+            "OFFENSIVE_EPA": "Total YPG",
+            "DEFENSIVE_EPA": "Opp Yards",
+            "SUCCESS_RATE_OFFENSE": "Yards/Game",
+            "SUCCESS_RATE_DEFENSE": "Yards Allowed",
+            "SUCCESS_RATE": "Total YPG",
+            "EPA_LAST_5": "Recent PPG",
+            "EARLY_DOWN_SUCCESS": "Scoring Eff",
+            "QB_STATS": "QB Rating",
+            "PRESSURE_RATE": "Comp %",
+            "RED_ZONE_OFFENSE": "3rd Down %",
+            "RED_ZONE_DEFENSE": "Opp 3rd Down %",
+            "THIRD_DOWN": "3rd Down %",
+            "FOURTH_DOWN": "4th Down %",
+            "TURNOVER_MARGIN": "Turnover +/-",
+            "OL_RANKINGS": "Rush YPG",
+            "DL_RANKINGS": "Opp Rush",
+            "RB_STATS": "Yards/Carry",
+            "EXPLOSIVE_PLAYS": "Total Yards",
+            "EXPLOSIVE_ALLOWED": "Yards Allowed",
+            "WR_TE_STATS": "Pass Yards",
+            "DEFENSIVE_PLAYMAKERS": "Pts Allowed",
+            "SPECIAL_TEAMS": "Record",
+            "EXPLOSIVENESS": "Big Plays",
+            "HAVOC_RATE": "Havoc Rate",
+            "HAVOC_ALLOWED": "Opp Havoc",
+            "PASSING_TDS": "Pass TDs",
+            "INTERCEPTIONS": "INTs",
+            "RUSHING_TDS": "Rush TDs"
         ]
         return map[token] ?? token.replacingOccurrences(of: "_", with: " ").capitalized
     }
@@ -1823,52 +1949,58 @@ struct TaleOfTapeSection: View {
                         let homeVal = home.getValue(for: token)
                         let awayVal = away.getValue(for: token)
                         
-                        // Get values for display (Gary's pick on left)
-                        let leftVal = garyPickedHome ? homeVal : awayVal
-                        let rightVal = garyPickedHome ? awayVal : homeVal
+                        // Skip tokens that don't have displayable data
+                        let skipTokens = ["TOP_PLAYERS", "WEATHER", "REST_SITUATION", "PASSING_EPA", "RUSHING_EPA", "FIELD_POSITION", "MOTIVATION_CONTEXT"]
                         
-                        // Determine if left side (Gary's pick) has advantage
-                        let leftAdvantage = garyPickedHome ? 
-                            compareValues(homeVal, awayVal, token: token) : 
-                            !compareValues(homeVal, awayVal, token: token)
-                        
-                        HStack {
-                            // Left value (Gary's pick)
-                            Text(leftVal)
-                                .font(.subheadline.bold())
-                                .foregroundStyle(leftAdvantage ? greenAccent : .white.opacity(0.6))
-                                .frame(width: 70, alignment: .leading)
+                        // Only show if both values are valid (not N/A)
+                        if !skipTokens.contains(token) && homeVal != "N/A" && awayVal != "N/A" && !homeVal.isEmpty && !awayVal.isEmpty {
+                            // Get values for display (Gary's pick on left)
+                            let leftVal = garyPickedHome ? homeVal : awayVal
+                            let rightVal = garyPickedHome ? awayVal : homeVal
                             
-                            Spacer()
+                            // Determine if left side (Gary's pick) has advantage
+                            let leftAdvantage = garyPickedHome ? 
+                                compareValues(homeVal, awayVal, token: token) : 
+                                !compareValues(homeVal, awayVal, token: token)
                             
-                            // Stat name with arrow
-                            HStack(spacing: 4) {
-                                if leftAdvantage {
-                                    Image(systemName: "arrow.left")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(greenAccent)
+                            HStack {
+                                // Left value (Gary's pick)
+                                Text(leftVal)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(leftAdvantage ? greenAccent : .white.opacity(0.6))
+                                    .frame(width: 70, alignment: .leading)
+                                
+                                Spacer()
+                                
+                                // Stat name with arrow
+                                HStack(spacing: 4) {
+                                    if leftAdvantage {
+                                        Image(systemName: "arrow.left")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(greenAccent)
+                                    }
+                                    Text(displayName(for: token))
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.5))
+                                    if !leftAdvantage {
+                                        Image(systemName: "arrow.right")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(greenAccent)
+                                    }
                                 }
-                                Text(displayName(for: token))
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.5))
-                                if !leftAdvantage {
-                                    Image(systemName: "arrow.right")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(greenAccent)
-                                }
+                                
+                                Spacer()
+                                
+                                // Right value (opponent)
+                                Text(rightVal)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(!leftAdvantage ? greenAccent : .white.opacity(0.6))
+                                    .frame(width: 70, alignment: .trailing)
                             }
-                            
-                            Spacer()
-                            
-                            // Right value (opponent)
-                            Text(rightVal)
-                                .font(.subheadline.bold())
-                                .foregroundStyle(!leftAdvantage ? greenAccent : .white.opacity(0.6))
-                                .frame(width: 70, alignment: .trailing)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(index % 2 == 0 ? Color.clear : Color.white.opacity(0.02))
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(index % 2 == 0 ? Color.clear : Color.white.opacity(0.02))
                     }
                 }
                 
@@ -1929,13 +2061,25 @@ struct TaleOfTapeSection: View {
         let awayNum = Double(away.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "-", with: "")) ?? 0
         
         // For defensive stats, lower is better
-        let lowerIsBetter = ["DEFENSIVE_RATING", "TURNOVER_RATE", "PAINT_DEFENSE"].contains(token)
+        let lowerIsBetter = [
+            "DEFENSIVE_RATING", "TURNOVER_RATE", "PAINT_DEFENSE",
+            "DEFENSIVE_EPA", "SUCCESS_RATE_DEFENSE", "EXPLOSIVE_ALLOWED",
+            "RED_ZONE_DEFENSE", "DL_RANKINGS", "DEFENSIVE_PLAYMAKERS",
+            "OPP_EFG_PCT", "HAVOC_ALLOWED"
+        ].contains(token)
         
         // For records like "5-18", compare wins
-        if token == "PACE_HOME_AWAY" || token == "HOME_AWAY_SPLITS" {
+        if token == "PACE_HOME_AWAY" || token == "HOME_AWAY_SPLITS" || token == "SPECIAL_TEAMS" {
             let homeWins = Int(home.components(separatedBy: "-").first ?? "0") ?? 0
             let awayWins = Int(away.components(separatedBy: "-").first ?? "0") ?? 0
             return homeWins > awayWins
+        }
+        
+        // For turnover margin, handle positive/negative
+        if token == "TURNOVER_MARGIN" {
+            let homeVal = Double(home) ?? 0
+            let awayVal = Double(away) ?? 0
+            return homeVal > awayVal
         }
         
         return lowerIsBetter ? homeNum < awayNum : homeNum > awayNum

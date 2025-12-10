@@ -9,8 +9,6 @@
     "build:secure": "vite build && node scripts/scan-dist-for-secrets.js",
     "lint": "eslint .",
     "preview": "vite preview",
-    "api": "node api/stripe-api.js",
-    "api:prod": "NODE_ENV=production node api/stripe-api.js",
     "picks": "node scripts/generate-picks-local.js",
     "picks:nba": "node scripts/generate-picks-local.js --nba",
     "picks:nfl": "node scripts/generate-picks-local.js --nfl",
@@ -29,8 +27,6 @@
     "@react-three/drei": "^9.88.7",
     "@react-three/fiber": "^9.1.2",
     "@shadcn/ui": "^0.0.4",
-    "@stripe/react-stripe-js": "^3.7.0",
-    "@stripe/stripe-js": "^7.3.0",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/aspect-ratio": "^0.4.2",
     "@tailwindcss/typography": "^0.5.16",
@@ -54,7 +50,6 @@
     "react-spring": "^9.7.5",
     "react-swipeable": "^7.0.2",
     "recharts": "^2.15.3",
-    "stripe": "^18.1.0",
     "three": "^0.175.0"
   },
   "devDependencies": {

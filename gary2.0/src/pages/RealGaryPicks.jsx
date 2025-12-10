@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useUserPlan } from "../contexts/UserPlanContext";
 import BG2 from '/BG2.png';
 import { useToast } from '../components/ui/ToastProvider';
-import { useAuth } from '../contexts/AuthContext';
 import '../styles/PickCardGlow.css';
 import '../styles/DisableCardGlow.css';
 import '../styles/MobileScrollFix.css';
-import { picksService } from '../services/picksService';
-import { betTrackingService } from '../services/betTrackingService';
-import { userStatsService } from '../services/userStatsService';
 import { garyPhrases } from '../utils/garyPhrases';
-import { supabase, ensureAnonymousSession } from '../supabaseClient';
+import { supabase } from '../supabaseClient';
 import { getEasternDate, getYesterdayDate, formatGameTime } from '../utils/dateUtils';
 
 
@@ -882,9 +877,7 @@ const TaleOfTheTape = ({ rationale, accentColor, pick }) => {
 };
 
 function RealGaryPicks() {
-  const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
-  const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
 
   const [picks, setPicks] = useState([]);
@@ -898,30 +891,27 @@ function RealGaryPicks() {
   const [selectedSport, setSelectedSport] = useState('NBA');
   const sportsTabs = ['NBA', 'NFL', 'NCAAB', 'NCAAF', 'EPL', 'MLB', 'WNBA'];
 
-  const checkUserDecisions = async () => {
-    if (!user) return;
-
-    const userId = user.id;
-    const decisionsMap = {};
-
-    for (const pick of picks) {
-      const { hasMade, decision } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
-      if (hasMade) {
-        decisionsMap[pick.id] = decision;
+  // Load decisions from localStorage
+  const loadLocalDecisions = () => {
+    try {
+      const stored = localStorage.getItem('garyBetDecisions');
+      if (stored) {
+        setUserDecisions(JSON.parse(stored));
       }
+    } catch (e) {
+      console.error('Error loading local decisions:', e);
     }
-
-    setUserDecisions(decisionsMap);
   };
 
   useEffect(() => {
     const controller = new AbortController();
     
     const loadData = async () => {
-      if (controller.signal.aborted || planLoading || subscriptionStatus !== 'active') return;
+      if (controller.signal.aborted) return;
       
       try {
         await loadPicks();
+        loadLocalDecisions();
       } catch (error) {
         if (error.name !== 'AbortError') {
           console.error('Error loading picks:', error);
@@ -932,13 +922,7 @@ function RealGaryPicks() {
     loadData();
     
     return () => controller.abort();
-  }, [planLoading, subscriptionStatus]);
-
-  useEffect(() => {
-    if (picks.length > 0 && user) {
-      checkUserDecisions();
-    }
-  }, [picks, user]);
+  }, []);
 
   const showToast = useToast();
 
@@ -1131,7 +1115,7 @@ function RealGaryPicks() {
     // eslint-disable-next-line
   }, []);
 
-  const visiblePicks = picks.slice(0, userPlan === 'premium' ? picks.length : 1);
+  const visiblePicks = picks; // All picks are free
 
   const handleDecisionMade = async (decision, pick) => {
     if (processingDecisions[pick.id] || userDecisions[pick.id]) {
@@ -1145,57 +1129,6 @@ function RealGaryPicks() {
     }));
 
     try {
-      if (!user) {
-        await ensureAnonymousSession();
-      }
-
-      const userId = user?.id || (await supabase.auth.getUser()).data.user?.id;
-
-      if (!userId) {
-        console.error('User ID not available for tracking bet/fade decision');
-        showToast('Sign in to track your picks!', 'error', 3000, false);
-        setProcessingDecisions(prev => ({
-          ...prev,
-          [pick.id]: false
-        }));
-        return;
-      }
-
-      // Check if user already made a decision (this is now also checked in betTrackingService)
-      const { hasMade } = await betTrackingService.hasUserMadeDecision(pick.id, userId);
-      if (hasMade) {
-        showToast('You already placed a bet on this pick!', 'warning', 3000, false);
-        setProcessingDecisions(prev => ({
-          ...prev,
-          [pick.id]: false
-        }));
-        return;
-      }
-
-      // Save decision to user_picks table via betTrackingService
-      const saveResult = await betTrackingService.saveBetDecision(pick.id, decision, userId);
-      
-      if (!saveResult.success) {
-        if (saveResult.existingDecision) {
-          showToast(saveResult.error, 'warning', 3000, false);
-          // Update local state with existing decision
-          setUserDecisions(prev => ({
-            ...prev,
-            [pick.id]: saveResult.existingDecision
-          }));
-        } else {
-          showToast(saveResult.error || 'Failed to save your decision. Please try again.', 'error', 3000, false);
-        }
-        setProcessingDecisions(prev => ({
-          ...prev,
-          [pick.id]: false
-        }));
-        return;
-      }
-
-      // Update user stats (this updates the user_stats table)
-      await userStatsService.recordDecision(userId, decision, pick);
-
       // Show success message
       const toastMessage = decision === 'bet'
         ? garyPhrases.getRandom('betPhrases')
@@ -1204,10 +1137,14 @@ function RealGaryPicks() {
       showToast(toastMessage, decision === 'bet' ? 'success' : 'info', 4000, true);
 
       // Update local state
-      setUserDecisions(prev => ({
-        ...prev,
+      const newDecisions = {
+        ...userDecisions,
         [pick.id]: decision
-      }));
+      };
+      setUserDecisions(newDecisions);
+      
+      // Save to localStorage
+      localStorage.setItem('garyBetDecisions', JSON.stringify(newDecisions));
 
       // Reload picks to refresh any state
       loadPicks();
@@ -1374,19 +1311,7 @@ function RealGaryPicks() {
 
       {/* Main content, zIndex: 2 */}
       <div className="w-full flex flex-col items-center justify-center pt-32 pb-6 px-4 relative" style={{ minHeight: '100vh', zIndex: 2 }}>
-        {/* Show loading screen while plan status is being checked */}
-        {planLoading ? (
-          <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
-            <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
-              <h3 className="font-bold text-black">CHECKING SUBSCRIPTION...</h3>
-            </div>
-            <p className="text-yellow-500 mb-4">Please wait while we verify your subscription status</p>
-            <div className="flex justify-center">
-              <div className="w-8 h-8 border-t-2 border-b-2 border-[#d4af37] rounded-full animate-spin"></div>
-            </div>
-          </div>
-        ) : (
-          loading ? (
+        {loading ? (
             <div className="mx-auto max-w-md text-center py-4 px-6 rounded-lg" style={{ backgroundColor: '#121212', border: '3px solid #d4af37' }}>
               <div className="py-2 -mx-6 mb-4" style={{ backgroundColor: '#d4af37' }}>
                 <h3 className="font-bold text-black">LOADING...</h3>
@@ -1536,35 +1461,8 @@ function RealGaryPicks() {
                               style={{
                                 perspective: '1000px',
                               }}
-                              onClick={!planLoading && subscriptionStatus === 'active' ? toggleFlip : null}
+                              onClick={toggleFlip}
                             >
-                              {/* Blur overlay for users without active subscription - only show when loading is complete */}
-                              {!planLoading && subscriptionStatus !== 'active' && (
-                                <div 
-                                  className="absolute inset-0 z-50 flex flex-col items-center justify-center" 
-                                  style={{
-                                    background: 'rgba(0, 0, 0, 0.7)',
-                                    backdropFilter: 'blur(15px)',
-                                    borderRadius: '16px',
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="text-center px-6">
-                                    <div className="mb-4">
-                                      <img src="/coin2.png" alt="Gary A.I." className="w-[106px] h-[106px] mx-auto" />
-                                    </div>
-                                    <h3 className="text-[#b8953f] text-2xl font-bold mb-3">Unlock Premium Picks</h3>
-                                    <p className="text-white mb-6 max-w-sm">Upgrade to Pro to see all of Gary's premium picks with detailed analysis and reasoning.</p>
-                                    <a 
-                                      href={user ? "https://buy.stripe.com/dR603v2UndMebrq144" : "https://www.betwithgary.ai/signin"}
-                                      className="block py-4 px-8 bg-[#b8953f] hover:bg-[#c5a030] text-black font-medium rounded-lg transition-colors focus:ring-2 focus:ring-[#b8953f]/50 focus:outline-none w-64 mx-auto text-center"
-                                    >
-                                      Upgrade to Pro — $29/month
-                                    </a>
-                                    <p className="mt-4 text-gray-400 text-sm">Cancel anytime</p>
-                                  </div>
-                                </div>
-                              )}
                               <div 
                                 style={{
                                   position: 'relative',
@@ -2174,8 +2072,7 @@ function RealGaryPicks() {
                 </div>
               </div>
             </div>
-          )
-        )}
+          )}
       </div>
     </div>
   );

@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import { supabase } from '../supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
 import '../styles/BillfoldEnhanced.css'; // Consolidated high-tech modern styling
 import '../styles/BillfoldScroll.css'; // Custom scrolling for Recent Picks
 
 export const Billfold = () => {
-  // Get user from auth context
-  const { user } = useAuth();
-  
-  // State for user performance data
+  // State for performance data
   const [stats, setStats] = useState({
     record: '',
     totalBets: 0,

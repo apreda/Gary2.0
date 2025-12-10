@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import garyLogo from '../assets/images/gary3.png';
-import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import { FlipCard } from '../components/FlipCard';
@@ -108,7 +107,6 @@ function CursiveAnimation({ text }) {
 }
 
 export function MeetGary() {
-  const { user } = useAuth();
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
 
   const quotes = [
@@ -170,12 +168,6 @@ export function MeetGary() {
                   <div className="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
                 </Link>
                 
-                <a 
-                  href="https://buy.stripe.com/dR603v2UndMebrq144" 
-                  className="bg-transparent border-2 border-[#d4af37] text-[#d4af37] hover:text-[#e5c349] hover:border-[#e5c349] font-semibold px-6 py-3 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
-                >
-                  Upgrade to Pro
-                </a>
               </div>
             </div>
             

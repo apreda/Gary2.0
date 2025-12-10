@@ -20,7 +20,7 @@ struct AccessView: View {
                     Image("GaryCoin") // Transparent glass bear image, no added background
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 180, height: 180)
+                        .frame(width: 260, height: 260)
                     
                     Text("GARY A.I.")
                         .font(.system(size: 32, weight: .heavy))

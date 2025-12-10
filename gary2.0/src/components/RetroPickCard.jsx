@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import GaryMascot from '../assets/images/gary21.png';
-import { useAuth } from '../contexts/AuthContext';
 import { useToast } from './ui/ToastProvider';
-import { supabase } from '../supabaseClient';
 import FlipCard from './FlipCard';
 import GaryEmblem from '../assets/images/Garyemblem.png';
 
@@ -107,7 +105,6 @@ function formatGameTitle(game, homeTeam, awayTeam) {
     );
   }
 
-  const { user } = useAuth();
   const showToast = showToastFromProps || useToast();
   const [decision, setDecision] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -262,141 +259,65 @@ function formatGameTitle(game, homeTeam, awayTeam) {
     setIsFlipped(false);
   }, [safePick.id]);
 
-  // Load existing decision for this user and pick
+  // Load existing decision from localStorage
   useEffect(() => {
-    const fetchDecision = async () => {
-      if (!user || !safePick.id) {
-        // Clear any previous decision if no user or pick
-        console.log('[RetroPickCard] No user or pick ID, clearing decision', { 
-          hasUser: !!user, 
-          pickId: safePick.id 
-        });
+    const loadDecision = () => {
+      if (!safePick.id) {
         setDecision(null);
         return;
       }
       
-      console.log('[RetroPickCard] Fetching decision for:', { 
-        userId: user.id, 
-        pickId: safePick.id,
-        userEmail: user.email 
-      });
-      
       try {
-        const { data, error } = await supabase
-          .from('user_picks')
-          .select('decision')
-          .eq('user_id', user.id)
-          .eq('pick_id', safePick.id)
-          .maybeSingle();
-          
-        if (error) {
-          console.error('[RetroPickCard] Error fetching user decision:', error);
-          setDecision(null);
-          return;
+        const stored = localStorage.getItem('garyBetDecisions');
+        if (stored) {
+          const decisions = JSON.parse(stored);
+          setDecision(decisions[safePick.id] || null);
         }
-        
-        console.log('[RetroPickCard] Fetched decision data:', data);
-        
-        // Only set decision if data exists for THIS user
-        setDecision(data?.decision || null);
       } catch (error) {
-        console.error('[RetroPickCard] Error in fetchDecision:', error);
+        console.error('[RetroPickCard] Error loading decision:', error);
         setDecision(null);
       }
     };
     
-    fetchDecision();
-  }, [user?.id, safePick.id]); // Use user.id specifically to trigger on user changes
+    loadDecision();
+  }, [safePick.id]);
 
   // --- User Decision Handler ---
-  const handleUserDecision = async (userDecision) => {
-    console.log('[RetroPickCard] handleUserDecision called:', { 
-      userDecision, 
-      hasUser: !!user, 
-      userId: user?.id,
-      userEmail: user?.email,
-      pickId: safePick.id, 
-      currentDecision: decision,
-      loading 
-    });
-    
-    // Check authentication
-    if (!user) {
-      console.log('[RetroPickCard] No user authenticated');
-      showToast('Please sign in to make your pick!', 'error');
-      return;
-    }
-    
-    // Check if user already made a decision
+  const handleUserDecision = (userDecision) => {
+    // Check if already made a decision
     if (decision) {
-      console.log('[RetroPickCard] User already has decision:', decision);
       showToast(`You already chose to ${decision.toUpperCase()} this pick!`, 'info');
       return;
     }
     
     // Check if pick has valid ID
     if (!safePick.id || safePick.id === 'unknown') {
-      console.log('[RetroPickCard] Invalid pick ID:', safePick.id);
       showToast('Invalid pick data. Please refresh the page.', 'error');
       return;
     }
     
-    console.log('[RetroPickCard] All checks passed, proceeding with decision save');
     setLoading(true);
     
     try {
-      // Double-check if user already made a decision (race condition protection)
-      const { data: existingDecision } = await supabase
-        .from('user_picks')
-        .select('decision')
-        .eq('user_id', user.id)
-        .eq('pick_id', safePick.id)
-        .maybeSingle();
-        
-      console.log('[RetroPickCard] Double-check existing decision:', existingDecision);
-        
-      if (existingDecision?.decision) {
-        setDecision(existingDecision.decision);
-        showToast(`You already chose to ${existingDecision.decision.toUpperCase()} this pick!`, 'info');
-        setLoading(false);
-        return;
+      // Save to localStorage
+      const stored = localStorage.getItem('garyBetDecisions');
+      const decisions = stored ? JSON.parse(stored) : {};
+      decisions[safePick.id] = userDecision;
+      localStorage.setItem('garyBetDecisions', JSON.stringify(decisions));
+      
+      // Update local state
+      setDecision(userDecision);
+      
+      // Notify parent component if callback provided
+      if (typeof onDecisionMade === 'function') {
+        onDecisionMade(userDecision, safePick);
       }
       
-      console.log('[RetroPickCard] Inserting new decision:', {
-        user_id: user.id,
-        pick_id: safePick.id,
-        decision: userDecision
-      });
-      
-      // Insert the new decision
-      const { error } = await supabase.from('user_picks').insert([
-        {
-          user_id: user.id,
-          pick_id: safePick.id,
-          decision: userDecision,
-          created_at: new Date().toISOString()
-        }
-      ]);
-      
-      if (error) {
-        console.error('[RetroPickCard] Supabase error:', error);
-        showToast('Failed to save your pick. Please try again.', 'error');
-      } else {
-        console.log('[RetroPickCard] Decision saved successfully');
-        // Success! Update local state
-        setDecision(userDecision);
-        
-        // Notify parent component if callback provided
-        if (typeof onDecisionMade === 'function') {
-          onDecisionMade(userDecision, safePick);
-        }
-        
-        // Show success message
-        const successMessage = userDecision === 'bet' 
-          ? 'You bet with Gary! Good luck! 🍀' 
-          : 'Fading Gary! Bold move! 🎲';
-        showToast(successMessage, 'success');
-      }
+      // Show success message
+      const successMessage = userDecision === 'bet' 
+        ? 'You bet with Gary! Good luck! 🍀' 
+        : 'Fading Gary! Bold move! 🎲';
+      showToast(successMessage, 'success');
     } catch (err) {
       console.error('[RetroPickCard] Error saving pick:', err);
       showToast('Something went wrong. Please try again.', 'error');

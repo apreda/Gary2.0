@@ -3,9 +3,6 @@ import SwiftUI
 // MARK: - Settings View
 
 struct SettingsView: View {
-    @State private var deleting = false
-    @State private var deleted = false
-    @State private var error: String?
     @State private var animateIn = false
     
     var body: some View {
@@ -17,19 +14,13 @@ struct SettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     // Header
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Settings")
-                            .font(.system(size: 28, weight: .heavy))
-                            .tracking(-0.5)
-                            .foregroundStyle(GaryColors.gold)
-                        
-                        Text("Manage your preferences")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 8) // Extra padding after safe area
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 20)
+                    Text("Settings")
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.5)
+                        .foregroundStyle(GaryColors.gold)
+                        .padding(.top, 8) // Extra padding after safe area
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 20)
                     
                     // App Info Card
                     appInfoCard
@@ -42,12 +33,6 @@ struct SettingsView: View {
                         .opacity(animateIn ? 1 : 0)
                         .offset(y: animateIn ? 0 : 20)
                         .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
-                    
-                    // Account Section
-                    accountSection
-                        .opacity(animateIn ? 1 : 0)
-                        .offset(y: animateIn ? 0 : 20)
-                        .animation(.easeOut(duration: 0.5).delay(0.3), value: animateIn)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 100) // Space for floating tab bar
@@ -78,14 +63,6 @@ struct SettingsView: View {
                 Text("Version 1.0")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
-                    Text("Premium Active")
-                        .font(.caption.bold())
-                        .foregroundStyle(.green)
-                }
             }
             
             Spacer()
@@ -160,131 +137,6 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - Account Section
-    
-    private var accountSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "person.fill")
-                    .foregroundStyle(GaryColors.gold)
-                Text("ACCOUNT")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-            }
-            
-            VStack(alignment: .leading, spacing: 16) {
-                if let error = error {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.red.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-                
-                if deleted {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text("Your account has been deleted.")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.green.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-                
-                Button {
-                    Task { await deleteAccount() }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.red)
-                            .frame(width: 36, height: 36)
-                            .background(.red.opacity(0.15))
-                            .clipShape(Circle())
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Delete Account")
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.red)
-                            Text("Permanently remove your data")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        if deleting {
-                            ProgressView()
-                                .tint(.red)
-                        } else {
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .padding(16)
-                }
-                .disabled(deleting)
-                
-                Text("Deleting your account permanently removes your profile. This cannot be undone.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-        }
-    }
-    
-    // MARK: - Actions
-    
-    private func deleteAccount() async {
-        error = nil
-        deleted = false
-        deleting = true
-        defer { deleting = false }
-        
-        guard let session = SupabaseAuth.currentSession() else {
-            error = "Please sign in first."
-            return
-        }
-        
-        do {
-            var request = URLRequest(url: URL(string: "https://www.betwithgary.ai/api/delete-account")!)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(session.access_token)", forHTTPHeaderField: "Authorization")
-            
-            let (_, response) = try await URLSession.shared.data(for: request)
-            
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                error = "Failed to delete account"
-                return
-            }
-            
-            SupabaseAuth.clearSession()
-            deleted = true
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
 }
 
 // MARK: - Settings Link Component

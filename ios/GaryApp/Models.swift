@@ -153,6 +153,25 @@ struct StatValues: Codable {
     let closeRecord: String?
     let closeWinPct: String?
     let trueShootingPct: String?
+    // NFL-specific stats
+    let totalYardsPerGame: String?
+    let oppTotalYards: String?
+    let yardsPerGame: String?
+    let oppYardsPerGame: String?
+    let pointsPerGame: String?
+    let oppPointsPerGame: String?
+    let turnoverDiff: String?
+    let qbRating: String?
+    let completionPct: String?
+    let thirdDownPct: String?
+    let fourthDownPct: String?
+    let rushingYardsPerGame: String?
+    let oppRushingYards: String?
+    let yardsPerCarry: String?
+    let passingTds: String?
+    let interceptions: String?
+    let rushingTds: String?
+    let last5: String?
     
     static func from(dict: [String: Any]) -> StatValues {
         StatValues(
@@ -177,25 +196,66 @@ struct StatValues: Codable {
             closeGames: dict["close_games"] as? Int,
             closeRecord: dict["close_record"] as? String,
             closeWinPct: dict["close_win_pct"] as? String,
-            trueShootingPct: dict["true_shooting_pct"] as? String
+            trueShootingPct: dict["true_shooting_pct"] as? String,
+            // NFL-specific stats
+            totalYardsPerGame: dict["total_yards_per_game"] as? String ?? (dict["total_yards_per_game"] as? NSNumber)?.stringValue,
+            oppTotalYards: dict["opp_total_yards"] as? String ?? (dict["opp_total_yards"] as? NSNumber)?.stringValue,
+            yardsPerGame: dict["yards_per_game"] as? String ?? (dict["yards_per_game"] as? NSNumber)?.stringValue,
+            oppYardsPerGame: dict["opp_yards_per_game"] as? String ?? (dict["opp_yards_per_game"] as? NSNumber)?.stringValue,
+            pointsPerGame: dict["points_per_game"] as? String ?? (dict["points_per_game"] as? NSNumber)?.stringValue,
+            oppPointsPerGame: dict["opp_points_per_game"] as? String ?? (dict["opp_points_per_game"] as? NSNumber)?.stringValue,
+            turnoverDiff: dict["turnover_diff"] as? String ?? (dict["turnover_diff"] as? NSNumber)?.stringValue,
+            qbRating: dict["qb_rating"] as? String ?? (dict["qb_rating"] as? NSNumber)?.stringValue,
+            completionPct: dict["completion_pct"] as? String ?? (dict["completion_pct"] as? NSNumber)?.stringValue,
+            thirdDownPct: dict["third_down_pct"] as? String ?? (dict["third_down_pct"] as? NSNumber)?.stringValue,
+            fourthDownPct: dict["fourth_down_pct"] as? String ?? (dict["fourth_down_pct"] as? NSNumber)?.stringValue,
+            rushingYardsPerGame: dict["rushing_yards_per_game"] as? String ?? (dict["rushing_yards_per_game"] as? NSNumber)?.stringValue,
+            oppRushingYards: dict["opp_rushing_yards"] as? String ?? (dict["opp_rushing_yards"] as? NSNumber)?.stringValue,
+            yardsPerCarry: dict["yards_per_carry"] as? String ?? (dict["yards_per_carry"] as? NSNumber)?.stringValue,
+            passingTds: dict["passing_tds"] as? String ?? (dict["passing_tds"] as? NSNumber)?.stringValue,
+            interceptions: dict["interceptions"] as? String ?? (dict["interceptions"] as? NSNumber)?.stringValue,
+            rushingTds: dict["rushing_tds"] as? String ?? (dict["rushing_tds"] as? NSNumber)?.stringValue,
+            last5: dict["last_5"] as? String
         )
     }
     
     /// Get the primary display value for this stat based on the token
     func getValue(for token: String) -> String {
         switch token {
+        // NBA/NCAAB stats
         case "OFFENSIVE_RATING": return offensiveRating ?? "N/A"
         case "DEFENSIVE_RATING": return defensiveRating ?? "N/A"
-        case "NET_RATING", "EFFICIENCY_LAST_10": return netRating ?? "N/A"
-        case "PACE": return pace ?? "N/A"
-        case "PACE_HOME_AWAY", "HOME_AWAY_SPLITS": return overall ?? "N/A"
-        case "EFG_PCT": return efgPct ?? "N/A"
-        case "THREE_PT_SHOOTING": return threePct ?? "N/A"
-        case "TURNOVER_RATE": return tovRate ?? turnoversPerGame ?? "N/A"
-        case "OREB_RATE": return orebRate ?? orebPerGame ?? "N/A"
+        case "NET_RATING", "EFFICIENCY_LAST_10", "ADJ_EFFICIENCY_MARGIN", "SP_PLUS_RATINGS": return netRating ?? "N/A"
+        case "PACE", "PACE_LAST_10": return pace ?? "N/A"
+        case "PACE_HOME_AWAY", "HOME_AWAY_SPLITS", "SPECIAL_TEAMS": return overall ?? "N/A"
+        case "EFG_PCT", "OPP_EFG_PCT", "PAINT_SCORING": return efgPct ?? "N/A"
+        case "THREE_PT_SHOOTING", "PERIMETER_DEFENSE": return threePct ?? "N/A"
+        case "TURNOVER_RATE": return turnoversPerGame ?? tovRate ?? "N/A"
+        case "OREB_RATE": return orebPerGame ?? orebRate ?? "N/A"
         case "FT_RATE": return ftRate ?? "N/A"
         case "CLUTCH_STATS": return closeRecord ?? "N/A"
-        default: return offensiveRating ?? defensiveRating ?? netRating ?? overall ?? "N/A"
+        case "RECENT_FORM": return last5 ?? "N/A"
+        // NFL/NCAAF stats
+        case "OFFENSIVE_EPA", "SUCCESS_RATE": return totalYardsPerGame ?? yardsPerGame ?? pointsPerGame ?? "N/A"
+        case "DEFENSIVE_EPA": return oppTotalYards ?? oppYardsPerGame ?? "N/A"
+        case "SUCCESS_RATE_OFFENSE", "EXPLOSIVE_PLAYS": return yardsPerGame ?? totalYardsPerGame ?? "N/A"
+        case "SUCCESS_RATE_DEFENSE", "EXPLOSIVE_ALLOWED": return oppYardsPerGame ?? oppTotalYards ?? "N/A"
+        case "EPA_LAST_5", "EARLY_DOWN_SUCCESS": return pointsPerGame ?? "N/A"
+        case "TURNOVER_MARGIN": return turnoverDiff ?? "N/A"
+        case "QB_STATS": return qbRating ?? "N/A"
+        case "PRESSURE_RATE": return completionPct ?? "N/A"
+        case "RED_ZONE_OFFENSE", "THIRD_DOWN": return thirdDownPct ?? "N/A"
+        case "RED_ZONE_DEFENSE": return thirdDownPct ?? "N/A"
+        case "FOURTH_DOWN": return fourthDownPct ?? "N/A"
+        case "OL_RANKINGS": return rushingYardsPerGame ?? "N/A"
+        case "DL_RANKINGS": return oppRushingYards ?? "N/A"
+        case "RB_STATS": return yardsPerCarry ?? "N/A"
+        case "WR_TE_STATS": return yardsPerGame ?? "N/A"
+        case "DEFENSIVE_PLAYMAKERS": return oppPointsPerGame ?? "N/A"
+        case "PASSING_TDS": return passingTds ?? "N/A"
+        case "INTERCEPTIONS": return interceptions ?? "N/A"
+        case "RUSHING_TDS": return rushingTds ?? "N/A"
+        default: return offensiveRating ?? defensiveRating ?? netRating ?? overall ?? totalYardsPerGame ?? pointsPerGame ?? "N/A"
         }
     }
 }
