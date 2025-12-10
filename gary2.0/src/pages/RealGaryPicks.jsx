@@ -1202,11 +1202,6 @@ function RealGaryPicks() {
   };
 
   useEffect(() => {
-    checkUserDecisions();
-    // eslint-disable-next-line
-  }, [user]);
-
-  useEffect(() => {
     document.body.classList.add('picks-page');
     return () => {
       document.body.classList.remove('picks-page');
