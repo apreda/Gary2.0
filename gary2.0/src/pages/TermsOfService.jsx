@@ -20,7 +20,7 @@ export function TermsOfService() {
       }}>
         <h1 style={{ color: '#b8953f', fontSize: '2.5rem', marginBottom: '10px', fontWeight: 600 }}>Terms of Service</h1>
         <p style={{ color: '#999', marginBottom: '10px', fontSize: '0.9rem' }}>Last updated: {formattedDate}</p>
-        <p style={{ color: '#999', marginBottom: '10px', fontSize: '0.9rem' }}>Legal entity: Gary A.I. LLC, 123 Walnut St, Cincinnati, OH 45202, USA</p>
+        <p style={{ color: '#999', marginBottom: '10px', fontSize: '0.9rem' }}>Operated by Gary A.I.</p>
         <p style={{ color: '#999', marginBottom: '10px', fontSize: '0.9rem' }}>Contact: support@betwithgary.com</p>
 
         <div style={{ margin: '30px 0' }}>
