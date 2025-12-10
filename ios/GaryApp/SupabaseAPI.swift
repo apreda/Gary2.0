@@ -32,15 +32,18 @@ enum SupabaseAPI {
     }
     
     private static func formatDateEST(_ date: Date) -> String {
-        let tz = TimeZone(identifier: "America/New_York")!
+        guard let tz = TimeZone(identifier: "America/New_York") else { return "" }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
         let comps = cal.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", comps.year!, comps.month!, comps.day!)
+        let year = comps.year ?? 2024
+        let month = comps.month ?? 1
+        let day = comps.day ?? 1
+        return String(format: "%04d-%02d-%02d", year, month, day)
     }
     
     private static func isBefore10amEST() -> Bool {
-        let tz = TimeZone(identifier: "America/New_York")!
+        guard let tz = TimeZone(identifier: "America/New_York") else { return false }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
         return cal.component(.hour, from: Date()) < 10
@@ -48,7 +51,7 @@ enum SupabaseAPI {
     
     /// Get NFL week start date (Monday) for a given date
     private static func getNFLWeekStart(for date: Date = Date()) -> String {
-        let tz = TimeZone(identifier: "America/New_York")!
+        guard let tz = TimeZone(identifier: "America/New_York") else { return todayEST() }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
         
@@ -72,9 +75,11 @@ enum SupabaseAPI {
     
     private static func buildURL(table: String, query: [URLQueryItem]) -> URL {
         let url = baseURL.appendingPathComponent(table)
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
         components.queryItems = query
-        return components.url!
+        return components.url ?? url
     }
     
     // MARK: - Daily Picks (Non-NFL sports)
@@ -125,7 +130,7 @@ enum SupabaseAPI {
     }
     
     private static func fetchPreviousWeekNFLPicks() async throws -> [GaryPick] {
-        let tz = TimeZone(identifier: "America/New_York")!
+        guard let tz = TimeZone(identifier: "America/New_York") else { return [] }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
         

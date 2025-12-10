@@ -148,7 +148,7 @@ struct SettingsLink: View {
     let url: String
     
     var body: some View {
-        Link(destination: URL(string: url)!) {
+        Link(destination: URL(string: url) ?? URL(string: "https://betwithgary.ai")!) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))

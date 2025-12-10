@@ -79,10 +79,15 @@ enum SupabaseAuth {
     /// Sign in with email and password
     static func signIn(email: String, password: String) async throws -> SupabaseAuthSession {
         let url = baseAuthURL.appendingPathComponent("/token")
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw SupabaseAuthError.unknown
+        }
         components.queryItems = [URLQueryItem(name: "grant_type", value: "password")]
         
-        var request = URLRequest(url: components.url!)
+        guard let requestURL = components.url else {
+            throw SupabaseAuthError.unknown
+        }
+        var request = URLRequest(url: requestURL)
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         request.httpMethod = "POST"
         request.httpBody = try JSONSerialization.data(withJSONObject: [
