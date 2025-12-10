@@ -2763,7 +2763,7 @@ enum Formatters {
     static func shortTeamName(_ team: String?) -> String {
         guard let team = team, !team.isEmpty else { return "" }
         let words = team.split(separator: " ")
-        return words.count > 1 ? String(words.last!) : team
+        return words.count > 1 ? String(words.last ?? "") : team
     }
     
     static func splitPickAndOdds(_ pick: String?) -> (String, String) {
