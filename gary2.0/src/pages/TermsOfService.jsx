@@ -30,36 +30,26 @@ export function TermsOfService() {
 
         <div style={{ margin: '30px 0' }}>
           <h2>2. Eligibility</h2>
-          <p>You must be 21 years or older (or the legal sports‑betting age in your jurisdiction) and legally able to enter contracts. You are solely responsible for ensuring that online sports‑wagering is lawful where you live.</p>
+          <p>You must be 18 years or older to use this Service. You are solely responsible for ensuring that viewing sports betting information is lawful where you live.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>3. Account Registration</h2>
-          <p>You agree to provide accurate information, safeguard your credentials, and accept full responsibility for activities under your account. We may suspend or terminate accounts that violate these Terms.</p>
+          <h2>3. Services Provided</h2>
+          <p>Gary A.I. supplies free algorithmic betting picks and analysis. We do not place bets on your behalf. All wagering decisions and financial risk are yours alone. Content is provided "as‑is" without guarantee of outcome. This is an informational service only—no real money wagering occurs within our platform. No account registration is required.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>4. Services Provided</h2>
-          <p>Gary A.I. supplies algorithmic betting picks, analysis, and interactive features ("Ride or Fade," leaderboards, chat, etc.). We do not place bets on your behalf. All wagering decisions and financial risk are yours alone. Content is provided "as‑is" without guarantee of outcome.</p>
-        </div>
-
-        <div style={{ margin: '30px 0' }}>
-          <h2>5. Payments & Fees (Stripe)</h2>
-          <p>All paid plans and in‑app purchases are processed via Stripe, Inc. You authorize us and Stripe to charge your selected payment method for recurring or one‑time fees, including applicable taxes. Your card data never touches our servers; it is stored and processed by Stripe in compliance with PCI‑DSS v4.0. Refund requests are subject to our plan‑specific policies and Stripe's dispute procedures.</p>
-        </div>
-
-        <div style={{ margin: '30px 0' }}>
-          <h2>6. Intellectual Property</h2>
+          <h2>4. Intellectual Property</h2>
           <p>All content, trademarks, and software (excluding user‑generated data) belong to Gary A.I. or its licensors. You may not copy, modify, or distribute any portion of the Service without prior written consent.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>7. User Content</h2>
+          <h2>5. User Content</h2>
           <p>When you post data (e.g., comments, picks, chat messages), you grant us a worldwide, royalty‑free license to use, display, and adapt that content solely to operate and improve the Service. You represent that you own or have rights to any content posted.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>8. Prohibited Conduct</h2>
+          <h2>6. Prohibited Conduct</h2>
           <p>You agree not to:</p>
           <ul>
             <li>Violate laws or regulations (including any gambling regulations).</li>
@@ -71,32 +61,32 @@ export function TermsOfService() {
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>9. Disclaimers</h2>
+          <h2>7. Disclaimers</h2>
           <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE." WE MAKE NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON‑INFRINGEMENT. Betting carries inherent financial risk; past performance does not guarantee future results.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>10. Limitation of Liability</h2>
-          <p>To the maximum extent permitted by law, Gary A.I. shall not be liable for indirect, incidental, or consequential damages, or any loss of profits, arising from use of the Service—even if advised of the possibility. Our total liability will not exceed the amount you paid to us in the 12 months preceding the claim.</p>
+          <h2>8. Limitation of Liability</h2>
+          <p>To the maximum extent permitted by law, Gary A.I. shall not be liable for indirect, incidental, or consequential damages, or any loss of profits, arising from use of the Service—even if advised of the possibility.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>11. Indemnification</h2>
-          <p>You will indemnify and hold Gary A.I., its directors, employees, and partners (including Stripe) harmless from any claims, damages, or liabilities arising out of your use of the Service or violation of these Terms.</p>
+          <h2>9. Indemnification</h2>
+          <p>You will indemnify and hold Gary A.I., its directors, employees, and partners harmless from any claims, damages, or liabilities arising out of your use of the Service or violation of these Terms.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>12. Governing Law & Dispute Resolution</h2>
+          <h2>10. Governing Law & Dispute Resolution</h2>
           <p>These Terms are governed by the laws of the State of Ohio, USA, without regard to conflict‑of‑law rules. All disputes shall be resolved through binding arbitration in Cincinnati, OH, in English, under the AAA Consumer Arbitration Rules. YOU WAIVE ANY RIGHT TO CLASS‑ACTION PROCEEDINGS.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>13. Modifications</h2>
+          <h2>11. Modifications</h2>
           <p>We may revise these Terms by posting an updated version with a new "Last updated" date. Continued use after changes constitutes acceptance.</p>
         </div>
 
         <div style={{ margin: '30px 0' }}>
-          <h2>14. Contact</h2>
+          <h2>12. Contact</h2>
           <p>Questions? Email legal@betwithgary.com or write to the address above.</p>
         </div>
       </div>

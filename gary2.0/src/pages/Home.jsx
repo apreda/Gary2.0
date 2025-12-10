@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
-import { useAuth } from '../contexts/AuthContext';
 import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import '../assets/css/logo-responsive.css';
@@ -10,7 +9,6 @@ import { supabase } from "../supabaseClient";
 // Using inline CSS for simplicity
 
 function Home() {
-  const { user } = useAuth();
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [winRate, setWinRate] = useState('67%');
@@ -769,11 +767,11 @@ function Home() {
                   View Picks
                 </Link>
                 <Link 
-                  to="/how-it-works" 
+                  to="/billfold" 
                   className="bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] text-white font-medium rounded-md border border-[rgba(255,255,255,0.1)] backdrop-blur-sm transition duration-200 ease-in-out"
                   style={{ padding: "10px 20px" }}
                 >
-                  How it Works
+                  Past Results
                 </Link>
               </div>
             </div>

@@ -19,9 +19,8 @@ export function Footer() {
               <h4>Pages</h4>
               <ul>
                 <li><Link to="/">Home</Link></li>
-                <li><Link to="/picks">Picks</Link></li>
-                <li><Link to="/leaderboard">Leaderboard</Link></li>
-                <li><Link to="/pricing">Pricing</Link></li>
+                <li><Link to="/real-gary-picks">Picks</Link></li>
+                <li><Link to="/billfold">Billfold</Link></li>
               </ul>
             </div>
             

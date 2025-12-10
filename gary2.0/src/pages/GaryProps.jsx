@@ -2,10 +2,8 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useUserPlan } from '../contexts/UserPlanContext';
 import BG2 from '/BG2.png'; // Background image for page
 import { useToast } from '../components/ui/ToastProvider';
-import { useAuth } from '../contexts/AuthContext';
 // Use coin2.png from public folder
 import coinImage from '/coin2.png';
 import { propPicksService } from '../services/propPicksService';
@@ -15,9 +13,7 @@ import { supabase } from '../supabaseClient';
 
 export default function GaryProps() {
   const showToast = useToast();
-  const { user } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
-  const { userPlan, planLoading, subscriptionStatus } = useUserPlan();
   const navigate = useNavigate();
 
   // State for prop picks and UI state
@@ -29,12 +25,8 @@ export default function GaryProps() {
   const [selectedSport, setSelectedSport] = useState('NBA'); // Default to NBA
 
   useEffect(() => {
-    if (user) console.log('GaryProps: User subscription status:', subscriptionStatus);
-  }, [user, subscriptionStatus]);
-
-  useEffect(() => {
-    if (!planLoading) loadPicks();
-  }, [planLoading, subscriptionStatus, reloadKey]);
+    loadPicks();
+  }, [reloadKey]);
 
   // Re-filter picks when sport selection changes
   useEffect(() => {
@@ -217,29 +209,7 @@ export default function GaryProps() {
           <div className="flex justify-center items-center min-h-[50vh]"><div className="animate-pulse text-gray-200 text-xl">Loading prop picks...</div></div>
         ) : error ? (
           <div className="flex justify-center items-center min-h-[50vh]"><div className="text-red-500 text-xl">{error}</div></div>
-        ) : (
-          <>
-            {!planLoading && subscriptionStatus !== 'active' ? (
-              <div className="flex justify-center items-center min-h-[50vh]">
-                <div className="bg-gray-900 border border-gray-800 rounded-lg p-8 max-w-2xl w-full mx-auto text-center" style={{ boxShadow: '0 10px 25px -5px rgba(0,0,0,0.8)', background: 'linear-gradient(145deg, rgba(30,30,35,0.9) 0%, rgba(18,18,22,0.95) 100%)', borderTop: '3px solid #b8953f' }}>
-                  <img src={coinImage} alt="Gary Coin" className="mx-auto mb-6" style={{ height: '80px', opacity: 0.9 }} />
-                  <h2 className="text-2xl font-bold mb-2" style={{ color: '#b8953f' }}>Unlock Player Props Access</h2>
-                  <p className="text-gray-300 mb-6 text-lg">Upgrade to Pro for exclusive player prop picks with higher odds and bigger potential payouts.</p>
-                  <ul className="mb-8 text-left mx-auto inline-block">
-                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">High-value player props</span></li>
-                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Detailed player season and recent Stat analysis and research</span></li>
-                    <li className="flex items-center mb-3"><span className="text-b8953f mr-2">✓</span><span className="text-gray-200">Updated daily 10-20 Daily Player Props</span></li>
-                  </ul>
-                  <Link 
-                    to={user ? "https://buy.stripe.com/dR603v2UndMebrq144" : "https://www.betwithgary.ai/signin"} 
-                    className="inline-block py-3 px-8 rounded-md text-white font-medium" 
-                    style={{ background: 'linear-gradient(90deg, #b8953f 0%, #d4af37 100%)', boxShadow: '0 4px 12px rgba(184,149,63,0.5)' }}
-                  >
-                    Upgrade to Pro
-                  </Link>
-                </div>
-              </div>
-            ) : picks.length === 0 ? (
+        ) : picks.length === 0 ? (
               <div className="flex justify-center items-center min-h-[30vh]">
                 <div className="text-center">
                   <div className="text-gray-300 text-xl mb-2">No {selectedSport} prop picks available.</div>
@@ -251,7 +221,6 @@ export default function GaryProps() {
                 </div>
               </div>
             ) : (
-              <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-5 px-2 sm:px-4">
                 {picks.map(pick => {
                   const flipped = !!flippedCards[pick.id];
@@ -346,10 +315,7 @@ export default function GaryProps() {
                   );
                 })}
               </div>
-              </>
             )}
-          </>
-        )}
       </div>
     </div>
   );

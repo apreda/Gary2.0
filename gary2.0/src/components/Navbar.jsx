@@ -1,8 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { useUserPlan } from "../contexts/UserPlanContext";
-import { useBetCardProfile } from "../contexts/BetCardProfileContext";
-import { useAuth } from '../contexts/AuthContext';
 import { ChevronDown } from 'lucide-react';
 
 export function Navbar() {
@@ -11,10 +8,6 @@ export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPicksDropdownOpen, setIsPicksDropdownOpen] = useState(false);
   const [dropdownTimeout, setDropdownTimeout] = useState(null);
-  const { userPlan } = useUserPlan();
-  const { openBetCardProfile } = useBetCardProfile();
-  const { user } = useAuth();
-  const session = !!user;
   
   // Navigation items with dropdown structure
   const navItems = [
@@ -24,17 +17,12 @@ export function Navbar() {
       label: 'Gary\'s Picks',
       hasDropdown: true,
       dropdownItems: [
-        { path: '/real-gary-picks', label: 'Gary\'s Premium Picks' },
+        { path: '/real-gary-picks', label: 'Gary\'s Picks' },
         { path: '/gary-props', label: 'Gary\'s Props' }
       ]
     },
     { path: '/billfold', label: 'Billfold' },
-    { path: '/pricing', label: 'Pricing' },
   ];
-  
-  // We don't need to modify signedInNavItems differently, just use the navItems defined above
-  const signedInNavItems = [...navItems];
-  const filteredNavItems = session ? signedInNavItems : navItems;
   
   useEffect(() => {
     setActiveLink(location.pathname);
@@ -66,7 +54,7 @@ export function Navbar() {
   const handleDropdownMouseLeave = () => {
     const timeout = setTimeout(() => {
       setIsPicksDropdownOpen(false);
-    }, 300); // 300ms delay before closing
+    }, 300);
     setDropdownTimeout(timeout);
   };
 
@@ -82,7 +70,7 @@ export function Navbar() {
   return (
     <header className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black z-50 border border-[#B8953F]/20 py-3 rounded-3xl shadow-xl w-11/12 max-w-6xl">
       <div className="w-full px-6 flex items-center justify-between">
-        {/* Modern high-tech logo without the G circle */}
+        {/* Logo */}
         <div className="flex items-center">
           <Link to="/" className="flex items-center group">
             <span className="text-white text-xl font-light tracking-tight" style={{ fontFamily: 'Arial, sans-serif', letterSpacing: '0.05em' }}>Gary</span>
@@ -101,9 +89,9 @@ export function Navbar() {
           </Link>
         </div>
         
-        {/* Center navigation - Exactly like Hashnode */}
+        {/* Center navigation */}
         <nav className="hidden md:flex space-x-6 mx-auto">
-          {filteredNavItems.map((item) => (
+          {navItems.map((item) => (
             item.hasDropdown ? (
               <div 
                 key={item.path}
@@ -169,35 +157,7 @@ export function Navbar() {
           ))}
         </nav>
       
-        {/* BetCard and Sign In buttons */}
         <div className="flex items-center space-x-2">
-          {/* BetCard Link - Always visible */}
-          <button
-            onClick={() => openBetCardProfile()}
-            className="text-white bg-[#1E2330] hover:bg-[#2a334a] font-medium text-sm transition-colors rounded-full px-4 py-2"
-          >
-            BetCard
-          </button>
-          
-          {/* Auth button */}
-          {!session ? (
-            <Link 
-              to="/signin" 
-              className="text-black bg-[#b8953f] hover:bg-[#d4af37] font-medium text-sm transition-colors rounded-full px-4 py-2"
-              onClick={() => setActiveLink("/signin")}
-            >
-              Sign in
-            </Link>
-          ) : (
-            <Link 
-              to="/signout" 
-              className="text-black bg-[#b8953f] hover:bg-[#d4af37] font-medium text-sm transition-colors rounded-full px-4 py-2"
-              onClick={() => setActiveLink("/signout")}
-            >
-              Sign out
-            </Link>
-          )}
-          
           {/* Mobile menu button */}
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -218,12 +178,12 @@ export function Navbar() {
         </div>
       </div>
       
-      {/* Mobile Menu Dropdown - Floating style with black and gold */}
+      {/* Mobile Menu Dropdown */}
       {isMobileMenuOpen && (
         <div className="bg-black border border-[#B8953F]/20 md:hidden mt-2 overflow-hidden absolute left-1/2 transform -translate-x-1/2 z-50 rounded-3xl shadow-xl w-11/12 max-w-6xl">
           <div className="py-4 px-6">
             <div className="flex flex-col space-y-3">
-              {filteredNavItems.map((item) => (
+              {navItems.map((item) => (
                 item.hasDropdown ? (
                   <div key={item.path}>
                     <button
@@ -282,56 +242,6 @@ export function Navbar() {
                 )
               ))}
               
-              {/* Mobile menu additional options */}
-              <div className="pt-4 mt-3 border-t border-[#1E2330]">
-                {/* BetCard button in mobile menu */}
-                <button
-                  onClick={() => {
-                    openBetCardProfile();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="block w-full text-left py-2 text-sm font-medium text-gray-300 hover:text-white"
-                >
-                  BetCard
-                </button>
-                
-                {/* Mobile sign in button */}
-                {!session ? (
-                  <>
-                    <Link 
-                      to="/signin" 
-                      className="block py-2 text-sm font-medium text-gray-300 hover:text-white"
-                      onClick={() => {
-                        setActiveLink("/signin");
-                        setIsMobileMenuOpen(false);
-                      }}
-                    >
-                      Sign in
-                    </Link>
-                    <Link 
-                      to="/pricing" 
-                      className="mt-4 block text-center bg-[#B8953F] hover:bg-[#d4af37] text-black px-4 py-2 rounded-full text-sm font-medium transition-all"
-                      onClick={() => {
-                        setActiveLink("/pricing");
-                        setIsMobileMenuOpen(false);
-                      }}
-                    >
-                      Try it free
-                    </Link>
-                  </>
-                ) : (
-                  <Link 
-                    to="/dashboard" 
-                    className="mt-3 block text-center bg-[#B8953F] hover:bg-[#d4af37] text-black px-4 py-2 rounded-full text-sm font-medium transition-all"
-                    onClick={() => {
-                      setActiveLink("/dashboard");
-                      setIsMobileMenuOpen(false);
-                    }}
-                  >
-                    Dashboard
-                  </Link>
-                )}
-              </div>
             </div>
           </div>
         </div>
