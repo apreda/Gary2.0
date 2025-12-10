@@ -6,11 +6,6 @@ import SwiftUI
 struct GaryApp: App {
     @AppStorage("hasEntered") private var hasEntered: Bool = false
     
-    init() {
-        // Reset for testing - REMOVE FOR PRODUCTION
-        UserDefaults.standard.set(false, forKey: "hasEntered")
-    }
-    
     var body: some Scene {
         WindowGroup {
             Group {
