@@ -10,7 +10,7 @@ export function PrivacyPolicy() {
       <div className="privacy-card">
         <h1 className="privacy-title">Privacy Policy</h1>
         <p className="privacy-last-updated">Last updated: {formattedDate}</p>
-        <p className="privacy-last-updated">Data Controller: Gary A.I. LLC, 123 Walnut St, Cincinnati, OH 45202, USA</p>
+        <p className="privacy-last-updated">Operated by Gary A.I.</p>
 
         <div className="privacy-section">
           <h2 className="privacy-heading">1. Information We Collect</h2>
