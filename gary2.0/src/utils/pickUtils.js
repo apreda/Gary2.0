@@ -162,7 +162,7 @@ export function sortPicksByConfidence(picks) {
  * @param {number} minConfidence - Minimum confidence score (1-100)
  * @returns {Array} - Filtered array of picks
  */
-export function filterPicksByConfidence(picks, minConfidence = 60) {
+export function filterPicksByConfidence(picks, minConfidence = 65) {
   return picks.filter(pick => pick.confidence >= minConfidence);
 }
 

@@ -478,8 +478,8 @@ async function main() {
         console.log(`\n[${config.name}] Storing ${sportPicks.length} picks...`);
         
         // Filter by confidence
-        const qualifiedPicks = sportPicks.filter(p => p.confidence >= 0.60);
-        console.log(`[${config.name}] ${qualifiedPicks.length} picks meet confidence threshold (>= 0.60)`);
+        const qualifiedPicks = sportPicks.filter(p => p.confidence >= 0.65);
+        console.log(`[${config.name}] ${qualifiedPicks.length} picks meet confidence threshold (>= 0.65)`);
         
         if (qualifiedPicks.length > 0) {
           await storePicks(qualifiedPicks);
@@ -491,7 +491,7 @@ async function main() {
       summary[config.name] = {
         games: finalGames.length,
         picks: sportPicks.length,
-        qualified: sportPicks.filter(p => p.confidence >= 0.60).length,
+        qualified: sportPicks.filter(p => p.confidence >= 0.65).length,
         time: sportTime
       };
       

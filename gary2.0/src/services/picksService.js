@@ -317,7 +317,7 @@ async function storeDailyPicksInDatabase(picks) {
     
     return pickData;
   }).filter(pick => {
-    // Filter out picks with confidence below 0.60 threshold (all sports)
+    // Filter out picks with confidence below 0.65 threshold (all sports)
     // Robust confidence parsing (handles string values like "0.66")
     let confidence = 0;
     if (typeof pick.confidence === 'number') {
@@ -327,13 +327,13 @@ async function storeDailyPicksInDatabase(picks) {
       confidence = Number.isFinite(parsed) ? parsed : 0;
     }
     const sport = pick.sport || '';
-    const passesConfidence = confidence >= 0.60;
-    if (passesConfidence) console.log(`✅ Including ${sport} pick with confidence ${confidence} (>= 0.60)`);
-    else console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.60)`);
+    const passesConfidence = confidence >= 0.65;
+    if (passesConfidence) console.log(`✅ Including ${sport} pick with confidence ${confidence} (>= 0.65)`);
+    else console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.65)`);
     return passesConfidence;
   });
 
-  console.log(`After confidence filter (>= 0.60), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After confidence filter (>= 0.65), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // If no valid picks, exit early
   if (validPicks.length === 0) {
