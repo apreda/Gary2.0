@@ -17,7 +17,7 @@ export async function runAgenticPipeline({ game, buildContext, sportLabel = 'Age
   const stage1 = await runHypothesisStage({
     gameSummary: context.gameSummary
   });
-  const requestedTokens = sanitizeTokenRequests(stage1.requested_tokens, context.gameSummary.sport, 4);
+  const requestedTokens = sanitizeTokenRequests(stage1.requested_tokens, context.gameSummary.sport, 8);
   console.log(`[Agentic][${label}] Hypothesis:`, stage1.hypothesis);
   console.log(`[Agentic][${label}] Requested tokens:`, requestedTokens);
 
