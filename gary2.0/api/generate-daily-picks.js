@@ -127,13 +127,13 @@ export default async function handler(req, res) {
     if (selErr) console.warn('[Daily Picks] select error:', selErr.message);
 
     const prev = Array.isArray(existing?.picks) ? existing.picks : (existing?.picks ? JSON.parse(existing.picks) : []);
-    // Apply confidence filter (>= 0.60) to both existing and new picks
+    // Apply confidence filter (>= 0.65) to both existing and new picks
     const parseConfidence = (v) => {
       if (typeof v === 'number') return v;
       const n = parseFloat(v);
       return Number.isFinite(n) ? n : 0;
     };
-    const filterByConfidence = (arr) => (Array.isArray(arr) ? arr.filter(p => parseConfidence(p?.confidence) >= 0.60) : []);
+    const filterByConfidence = (arr) => (Array.isArray(arr) ? arr.filter(p => parseConfidence(p?.confidence) >= 0.65) : []);
 
     const filteredPrev = filterByConfidence(prev);
     const filteredNew = filterByConfidence(picks);
