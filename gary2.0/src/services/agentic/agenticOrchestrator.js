@@ -789,6 +789,16 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     pickText = pickText.replace(/[+-]X\.X/g, 'ML');
   }
   
+  // FIX: If pick says "Team spread -110" without actual number, insert the spread value
+  if (pickText.toLowerCase().includes(' spread ') && parsed.spread) {
+    const spreadNum = parseFloat(parsed.spread);
+    if (!isNaN(spreadNum)) {
+      const spreadStr = spreadNum > 0 ? `+${spreadNum}` : `${spreadNum}`;
+      // Replace "spread" with actual spread number
+      pickText = pickText.replace(/\s+spread\s+/i, ` ${spreadStr} `);
+    }
+  }
+  
   // Ensure pick text includes odds if not already present
   const odds = parsed.odds || parsed.spreadOdds || parsed.moneylineHome || parsed.moneylineAway || -110;
   if (!pickText.includes('-1') && !pickText.includes('+1') && !pickText.includes('-2') && !pickText.includes('+2')) {
@@ -798,6 +808,24 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
       if (!pickText.includes(oddsStr)) {
         pickText = `${pickText} ${oddsStr}`;
       }
+    }
+  }
+  
+  // Final validation: if pick text is too short or missing team name, reconstruct it
+  if (pickText.length < 10 || !pickText.match(/[A-Za-z]{3,}/)) {
+    // Reconstruct pick text from available data
+    const team = parsed.homeTeam || homeTeam || parsed.awayTeam || awayTeam || 'Unknown Team';
+    const type = parsed.type || 'spread';
+    if (type === 'moneyline' || type === 'ml') {
+      const mlOdds = parsed.moneylineHome || parsed.moneylineAway || odds;
+      const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
+      pickText = `${team} ML ${mlOddsStr}`;
+    } else if (parsed.spread) {
+      const spreadNum = parseFloat(parsed.spread);
+      const spreadStr = spreadNum > 0 ? `+${spreadNum}` : `${spreadNum}`;
+      const spreadOdds = parsed.spreadOdds || -110;
+      const spreadOddsStr = spreadOdds > 0 ? `+${spreadOdds}` : `${spreadOdds}`;
+      pickText = `${team} ${spreadStr} ${spreadOddsStr}`;
     }
   }
   
