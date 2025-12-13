@@ -8,6 +8,49 @@ import { supabase } from "../supabaseClient";
 
 // Using inline CSS for simplicity
 
+// Helper to get college school/location name (e.g., "Nebraska" from "Nebraska Cornhuskers")
+// Used for NCAAB and NCAAF to display school names instead of mascots
+// Only removes the mascot portion, keeps full school name
+const getCollegeSchoolName = (teamName) => {
+  if (!teamName) return 'TBD';
+  const words = teamName.split(' ');
+  
+  if (words.length <= 1) return teamName;
+  if (words.length === 2) return words[0]; // "Nebraska Cornhuskers" → "Nebraska"
+  
+  // Common mascot prefix words that indicate a 2-word mascot
+  // e.g., "Fighting Illini", "Blue Devils", "Red Raiders", "Tar Heels"
+  const mascotPrefixes = ['Fighting', 'Golden', 'Blue', 'Red', 'Crimson', 'Scarlet', 'Mean', 'Runnin', 'Running', 'Flying', 'Ragin', 'Sun', 'War', 'Nittany', 'Horned', 'Yellow', 'Demon', 'Green', 'Purple', 'Orange', 'Tar', 'Great'];
+  
+  // Check if second-to-last word is a mascot prefix (indicates 2-word mascot)
+  const secondToLast = words[words.length - 2];
+  if (mascotPrefixes.includes(secondToLast)) {
+    // Two-word mascot, remove last 2 words
+    return words.slice(0, -2).join(' '); // "Illinois Fighting Illini" → "Illinois"
+  }
+  
+  // Single-word mascot, remove last word only
+  return words.slice(0, -1).join(' '); // "San Diego State Aztecs" → "San Diego State"
+};
+
+// Helper to format matchup display based on league
+const formatMatchupDisplay = (pick) => {
+  if (!pick?.homeTeam || !pick?.awayTeam) {
+    return pick?.game || 'TBD';
+  }
+  
+  const league = pick?.league?.toUpperCase() || '';
+  const isCollege = league === 'NCAAB' || league === 'NCAAF';
+  
+  if (isCollege) {
+    // Use school names for college sports
+    return `${getCollegeSchoolName(pick.awayTeam)} @ ${getCollegeSchoolName(pick.homeTeam)}`;
+  } else {
+    // Use mascots for pro sports (current behavior)
+    return `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}`;
+  }
+};
+
 function Home() {
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,9 +182,7 @@ function Home() {
                     fontWeight: 600,
                     opacity: 0.9
                   }}>
-                    {(displayPick.homeTeam && displayPick.awayTeam) ? 
-                      `${displayPick.awayTeam.split(' ').pop()} @ ${displayPick.homeTeam.split(' ').pop()}` : 
-                      (displayPick.game ? displayPick.game : 'TBD')}
+                    {formatMatchupDisplay(displayPick)}
                   </div>
                 </div>
               </div>
