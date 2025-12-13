@@ -908,6 +908,147 @@ const FETCHERS = {
     };
   },
 
+  // ===== NCAAB/NCAAF SPECIFIC STATS =====
+  // These provide actual data that BDL has for college sports
+  
+  SCORING: async (bdlSport, home, away, season) => {
+    const [homeStats, awayStats] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    
+    return {
+      category: 'Scoring',
+      home: {
+        team: home.full_name || home.name,
+        points_per_game: fmtNum(homeData?.pts || homeData?.points_per_game, 1),
+        fg_pct: fmtPct(homeData?.fg_pct),
+        games_played: homeData?.games_played || 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        points_per_game: fmtNum(awayData?.pts || awayData?.points_per_game, 1),
+        fg_pct: fmtPct(awayData?.fg_pct),
+        games_played: awayData?.games_played || 'N/A'
+      }
+    };
+  },
+
+  ASSISTS: async (bdlSport, home, away, season) => {
+    const [homeStats, awayStats] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    
+    return {
+      category: 'Assists',
+      home: {
+        team: home.full_name || home.name,
+        assists_per_game: fmtNum(homeData?.ast || homeData?.assists_per_game, 1)
+      },
+      away: {
+        team: away.full_name || away.name,
+        assists_per_game: fmtNum(awayData?.ast || awayData?.assists_per_game, 1)
+      }
+    };
+  },
+
+  REBOUNDS: async (bdlSport, home, away, season) => {
+    const [homeStats, awayStats] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    
+    return {
+      category: 'Rebounding',
+      home: {
+        team: home.full_name || home.name,
+        rebounds_per_game: fmtNum(homeData?.reb || homeData?.rebounds_per_game, 1),
+        oreb_per_game: fmtNum(homeData?.oreb, 1),
+        dreb_per_game: fmtNum(homeData?.dreb, 1)
+      },
+      away: {
+        team: away.full_name || away.name,
+        rebounds_per_game: fmtNum(awayData?.reb || awayData?.rebounds_per_game, 1),
+        oreb_per_game: fmtNum(awayData?.oreb, 1),
+        dreb_per_game: fmtNum(awayData?.dreb, 1)
+      }
+    };
+  },
+
+  STEALS: async (bdlSport, home, away, season) => {
+    const [homeStats, awayStats] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    
+    return {
+      category: 'Steals',
+      home: {
+        team: home.full_name || home.name,
+        steals_per_game: fmtNum(homeData?.stl || homeData?.steals_per_game, 1)
+      },
+      away: {
+        team: away.full_name || away.name,
+        steals_per_game: fmtNum(awayData?.stl || awayData?.steals_per_game, 1)
+      }
+    };
+  },
+
+  BLOCKS: async (bdlSport, home, away, season) => {
+    const [homeStats, awayStats] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    
+    return {
+      category: 'Blocks',
+      home: {
+        team: home.full_name || home.name,
+        blocks_per_game: fmtNum(homeData?.blk || homeData?.blocks_per_game, 1)
+      },
+      away: {
+        team: away.full_name || away.name,
+        blocks_per_game: fmtNum(awayData?.blk || awayData?.blocks_per_game, 1)
+      }
+    };
+  },
+
+  FG_PCT: async (bdlSport, home, away, season) => {
+    const [homeStats, awayStats] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    
+    return {
+      category: 'Field Goal Percentage',
+      home: {
+        team: home.full_name || home.name,
+        fg_pct: fmtPct(homeData?.fg_pct),
+        fgm_per_game: fmtNum(homeData?.fgm, 1),
+        fga_per_game: fmtNum(homeData?.fga, 1)
+      },
+      away: {
+        team: away.full_name || away.name,
+        fg_pct: fmtPct(awayData?.fg_pct),
+        fgm_per_game: fmtNum(awayData?.fgm, 1),
+        fga_per_game: fmtNum(awayData?.fga, 1)
+      }
+    };
+  },
+
   // ===== PLAYERS =====
   TOP_PLAYERS: async (bdlSport, home, away, season) => {
     // For NBA, use player-aggregated base stats which includes top_players
