@@ -55,9 +55,22 @@ const PROP_MARKETS = {
   ],
   icehockey_nhl: [
     'player_points',
+    'player_power_play_points',
     'player_goals',
     'player_assists',
-    'player_shots_on_goal'
+    'player_shots_on_goal',
+    'player_blocked_shots',
+    'player_saves'
+  ],
+  soccer_epl: [
+    // Soccer player props - shots, goals, assists
+    'player_shots',
+    'player_shots_on_target',
+    'player_goal_scorer_anytime',
+    'player_first_goal_scorer',
+    'player_last_goal_scorer',
+    'player_to_score_2_or_more',
+    'player_assists'
   ]
 };
 
