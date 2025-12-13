@@ -595,7 +595,6 @@ struct GaryPicksView: View {
     @State private var allPicks: [GaryPick] = []
     @State private var loading = true
     @State private var selectedSport: Sport = .all
-    @State private var animateIn = false
 
     private var filteredPicks: [GaryPick] {
         guard selectedSport != .all else { return allPicks }
@@ -653,24 +652,15 @@ struct GaryPicksView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 16) {
-                            ForEach(Array(filteredPicks.enumerated()), id: \.element.id) { index, pick in
+                            ForEach(filteredPicks) { pick in
                                 PickCardMobile(pick: pick)
                                     .padding(.horizontal, 16)
-                                    .opacity(animateIn ? 1 : 0)
-                                    .offset(y: animateIn ? 0 : 20)
-                                    .animation(
-                                        .spring(response: 0.5, dampingFraction: 0.8)
-                                        .delay(Double(index) * 0.08),
-                                        value: animateIn
-                                    )
-                                    // FIX: This ensures animation is reset when switching tabs so it doesn't "bounce"
-                                    .id("\(selectedSport.rawValue)-\(pick.id)") 
+                                    .transaction { $0.animation = nil }
                             }
                         }
                         .padding(.vertical, 8)
                         .padding(.bottom, 100)
-                        // Force a transition when sport changes to avoid list diffing
-                        .id(selectedSport) 
+                        .transaction { $0.animation = nil }
                     }
                     // Pull-to-refresh only on the picks ScrollView, not the filter bar
                     .refreshable {
@@ -682,18 +672,11 @@ struct GaryPicksView: View {
         .task {
             await loadPicks()
         }
-        .onChange(of: selectedSport) { _ in
-            animateIn = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation { animateIn = true }
-            }
-        }
     }
     
     private func loadPicks() async {
         await MainActor.run {
             loading = true
-            animateIn = false
         }
         
         let date = SupabaseAPI.todayEST()
@@ -712,9 +695,6 @@ struct GaryPicksView: View {
         await MainActor.run {
             allPicks = picks
             loading = false
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                animateIn = true
-            }
         }
     }
 }
@@ -725,7 +705,6 @@ struct GaryPropsView: View {
     @State private var allProps: [PropPick] = []
     @State private var loading = true
     @State private var selectedSport: Sport = .all
-    @State private var animateIn = false
     
     private var filteredProps: [PropPick] {
         guard selectedSport != .all else { return allProps }
@@ -783,20 +762,15 @@ struct GaryPropsView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 16) {
-                            ForEach(Array(filteredProps.enumerated()), id: \.element.id) { index, prop in
+                            ForEach(filteredProps) { prop in
                                 PropCardMobile(prop: prop)
                                     .padding(.horizontal, 16)
-                                    .opacity(animateIn ? 1 : 0)
-                                    .offset(y: animateIn ? 0 : 20)
-                                    .animation(
-                                        .spring(response: 0.5, dampingFraction: 0.8)
-                                        .delay(Double(index) * 0.08),
-                                        value: animateIn
-                                    )
+                                    .transaction { $0.animation = nil }
                             }
                         }
                         .padding(.vertical, 8)
                         .padding(.bottom, 100)
+                        .transaction { $0.animation = nil }
                     }
                     // Pull-to-refresh only on the props ScrollView, not the filter bar
                     .refreshable {
@@ -808,18 +782,11 @@ struct GaryPropsView: View {
         .task {
             await loadProps()
         }
-        .onChange(of: selectedSport) { _ in
-            animateIn = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation { animateIn = true }
-            }
-        }
     }
     
     private func loadProps() async {
         await MainActor.run {
             loading = true
-            animateIn = false
         }
         
         let date = SupabaseAPI.todayEST()
@@ -838,9 +805,6 @@ struct GaryPropsView: View {
         await MainActor.run {
             allProps = props
             loading = false
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                animateIn = true
-            }
         }
     }
 }
@@ -1102,6 +1066,7 @@ struct BillfoldView: View {
                     } else {
                         ForEach(Array(displayResults.prefix(50).enumerated()), id: \.offset) { _, result in
                             GameResultRow(result: result)
+                                .transaction { $0.animation = nil }
                         }
                     }
                 } else {
@@ -1110,6 +1075,7 @@ struct BillfoldView: View {
                     } else {
                         ForEach(Array(displayProps.prefix(50).enumerated()), id: \.offset) { _, result in
                             PropResultRow(result: result)
+                                .transaction { $0.animation = nil }
                         }
                     }
                 }

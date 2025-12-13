@@ -34,7 +34,7 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀' }, // Full games - stats now working!
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true }, // BETA: Limited advanced analytics
-  epl: { key: 'soccer_epl', name: 'EPL', emoji: '⚽', isBeta: true, daysAhead: 7 }, // BETA: Soccer/EPL (weekly schedule)
+  epl: { key: 'soccer_epl', name: 'EPL', emoji: '⚽', isBeta: true, daysAhead: 7, confidenceThreshold: 0.63 }, // BETA: Lower threshold for EPL
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true } // FBS only (no FCS)
 };
@@ -489,9 +489,10 @@ async function main() {
       if (sportPicks.length > 0) {
         console.log(`\n[${config.name}] Storing ${sportPicks.length} picks...`);
         
-        // Filter by confidence
-        const qualifiedPicks = sportPicks.filter(p => p.confidence >= 0.65);
-        console.log(`[${config.name}] ${qualifiedPicks.length} picks meet confidence threshold (>= 0.65)`);
+        // Filter by confidence (sport-specific threshold, default 0.65)
+        const threshold = config.confidenceThreshold || 0.65;
+        const qualifiedPicks = sportPicks.filter(p => p.confidence >= threshold);
+        console.log(`[${config.name}] ${qualifiedPicks.length} picks meet confidence threshold (>= ${threshold})`);
         
         if (qualifiedPicks.length > 0) {
           await storePicks(qualifiedPicks);
@@ -500,10 +501,11 @@ async function main() {
       }
       
       const sportTime = ((Date.now() - sportStartTime) / 1000).toFixed(1);
+      const threshold = config.confidenceThreshold || 0.65;
       summary[config.name] = {
         games: finalGames.length,
         picks: sportPicks.length,
-        qualified: sportPicks.filter(p => p.confidence >= 0.65).length,
+        qualified: sportPicks.filter(p => p.confidence >= threshold).length,
         time: sportTime
       };
       
