@@ -54,7 +54,8 @@ function sportToBdlKey(sport) {
     'NFL': 'americanfootball_nfl',
     'NCAAB': 'basketball_ncaab',
     'NCAAF': 'americanfootball_ncaaf',
-    'NHL': 'icehockey_nhl'
+    'NHL': 'icehockey_nhl',
+    'EPL': 'soccer_epl'
   };
   return mapping[sport] || sport;
 }
@@ -69,11 +70,13 @@ function normalizeSportName(sport) {
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
     'icehockey_nhl': 'NHL',
+    'soccer_epl': 'EPL',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NCAAB': 'NCAAB',
     'NCAAF': 'NCAAF',
-    'NHL': 'NHL'
+    'NHL': 'NHL',
+    'EPL': 'EPL'
   };
   return mapping[sport] || sport;
 }
@@ -1822,6 +1825,272 @@ const FETCHERS = {
         ? `${home.name} has stronger goal differential (+${fmtNum(homeDiff - awayDiff, 2)}/game)`
         : `${away.name} has stronger goal differential (+${fmtNum(awayDiff - homeDiff, 2)}/game)`
     };
+  },
+
+  // ===== EPL SPECIFIC FETCHERS (BETA) =====
+
+  CLEAN_SHEETS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Object.fromEntries((homeStatsArr || []).map(s => [s.name, s.value]));
+    const awayStats = Object.fromEntries((awayStatsArr || []).map(s => [s.name, s.value]));
+    
+    return {
+      home: {
+        team: home.name,
+        clean_sheets: homeStats.clean_sheet || 0,
+        goals_against: homeStats.goals_conceded || homeStats.goals_conceded_ibox || 0,
+        saves: homeStats.saves || 0
+      },
+      away: {
+        team: away.name,
+        clean_sheets: awayStats.clean_sheet || 0,
+        goals_against: awayStats.goals_conceded || awayStats.goals_conceded_ibox || 0,
+        saves: awayStats.saves || 0
+      },
+      interpretation: `${home.name}: ${homeStats.clean_sheet || 0} clean sheets, ${away.name}: ${awayStats.clean_sheet || 0} clean sheets`
+    };
+  },
+
+  POSSESSION_PCT: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Object.fromEntries((homeStatsArr || []).map(s => [s.name, s.value]));
+    const awayStats = Object.fromEntries((awayStatsArr || []).map(s => [s.name, s.value]));
+    
+    return {
+      home: {
+        team: home.name,
+        touches: homeStats.touches || 0,
+        total_pass: homeStats.total_pass || 0,
+        accurate_pass: homeStats.accurate_pass || 0,
+        pass_accuracy: homeStats.accurate_pass && homeStats.total_pass ? 
+          ((homeStats.accurate_pass / homeStats.total_pass) * 100).toFixed(1) + '%' : 'N/A'
+      },
+      away: {
+        team: away.name,
+        touches: awayStats.touches || 0,
+        total_pass: awayStats.total_pass || 0,
+        accurate_pass: awayStats.accurate_pass || 0,
+        pass_accuracy: awayStats.accurate_pass && awayStats.total_pass ?
+          ((awayStats.accurate_pass / awayStats.total_pass) * 100).toFixed(1) + '%' : 'N/A'
+      },
+      interpretation: `Passing comparison - ${home.name} vs ${away.name}`
+    };
+  },
+
+  SHOTS_ON_TARGET: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Object.fromEntries((homeStatsArr || []).map(s => [s.name, s.value]));
+    const awayStats = Object.fromEntries((awayStatsArr || []).map(s => [s.name, s.value]));
+    
+    return {
+      home: {
+        team: home.name,
+        shots_on_target: homeStats.ontarget_scoring_att || 0,
+        total_shots: homeStats.total_scoring_att || 0,
+        shot_accuracy: homeStats.ontarget_scoring_att && homeStats.total_scoring_att ?
+          ((homeStats.ontarget_scoring_att / homeStats.total_scoring_att) * 100).toFixed(1) + '%' : 'N/A',
+        big_chances_missed: homeStats.big_chance_missed || 0
+      },
+      away: {
+        team: away.name,
+        shots_on_target: awayStats.ontarget_scoring_att || 0,
+        total_shots: awayStats.total_scoring_att || 0,
+        shot_accuracy: awayStats.ontarget_scoring_att && awayStats.total_scoring_att ?
+          ((awayStats.ontarget_scoring_att / awayStats.total_scoring_att) * 100).toFixed(1) + '%' : 'N/A',
+        big_chances_missed: awayStats.big_chance_missed || 0
+      },
+      interpretation: `Shot comparison - ${home.name}: ${homeStats.ontarget_scoring_att || 0} on target, ${away.name}: ${awayStats.ontarget_scoring_att || 0} on target`
+    };
+  },
+
+  TACKLES: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Object.fromEntries((homeStatsArr || []).map(s => [s.name, s.value]));
+    const awayStats = Object.fromEntries((awayStatsArr || []).map(s => [s.name, s.value]));
+    
+    return {
+      home: {
+        team: home.name,
+        tackles: homeStats.total_tackle || 0,
+        won_tackles: homeStats.won_tackle || 0,
+        interceptions: homeStats.interception || 0,
+        clearances: homeStats.total_clearance || 0
+      },
+      away: {
+        team: away.name,
+        tackles: awayStats.total_tackle || 0,
+        won_tackles: awayStats.won_tackle || 0,
+        interceptions: awayStats.interception || 0,
+        clearances: awayStats.total_clearance || 0
+      },
+      interpretation: `Defensive actions comparison`
+    };
+  },
+
+  YELLOW_CARDS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Object.fromEntries((homeStatsArr || []).map(s => [s.name, s.value]));
+    const awayStats = Object.fromEntries((awayStatsArr || []).map(s => [s.name, s.value]));
+    
+    return {
+      home: {
+        team: home.name,
+        yellow_cards: homeStats.total_yel_card || 0,
+        red_cards: homeStats.total_red_card || 0,
+        fouls: homeStats.fk_foul_lost || 0
+      },
+      away: {
+        team: away.name,
+        yellow_cards: awayStats.total_yel_card || 0,
+        red_cards: awayStats.total_red_card || 0,
+        fouls: awayStats.fk_foul_lost || 0
+      },
+      interpretation: `Discipline comparison - ${home.name}: ${homeStats.total_yel_card || 0} yellows, ${away.name}: ${awayStats.total_yel_card || 0} yellows`
+    };
+  },
+
+  CORNERS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Object.fromEntries((homeStatsArr || []).map(s => [s.name, s.value]));
+    const awayStats = Object.fromEntries((awayStatsArr || []).map(s => [s.name, s.value]));
+    
+    return {
+      home: {
+        team: home.name,
+        corners_won: homeStats.won_corners || 0,
+        corners_lost: homeStats.lost_corners || 0,
+        corners_into_box: homeStats.total_corners_intobox || 0
+      },
+      away: {
+        team: away.name,
+        corners_won: awayStats.won_corners || 0,
+        corners_lost: awayStats.lost_corners || 0,
+        corners_into_box: awayStats.total_corners_intobox || 0
+      },
+      interpretation: `Set piece comparison`
+    };
+  },
+
+  LEAGUE_POSITION: async (bdlSport, home, away, season) => {
+    try {
+      const standings = await ballDontLieService.getStandings(bdlSport, { season });
+      const homeStanding = standings?.find(s => s.team?.id === home.id || s.team?.name?.toLowerCase().includes(home.name?.toLowerCase()));
+      const awayStanding = standings?.find(s => s.team?.id === away.id || s.team?.name?.toLowerCase().includes(away.name?.toLowerCase()));
+      
+      return {
+        home: {
+          team: home.name,
+          position: homeStanding?.position || 'N/A',
+          points: homeStanding?.overall_points || 0,
+          played: homeStanding?.overall_played || 0,
+          won: homeStanding?.overall_won || 0,
+          drawn: homeStanding?.overall_drawn || 0,
+          lost: homeStanding?.overall_lost || 0,
+          goal_difference: homeStanding?.overall_goals_difference || 0,
+          form: homeStanding?.form || 'N/A'
+        },
+        away: {
+          team: away.name,
+          position: awayStanding?.position || 'N/A',
+          points: awayStanding?.overall_points || 0,
+          played: awayStanding?.overall_played || 0,
+          won: awayStanding?.overall_won || 0,
+          drawn: awayStanding?.overall_drawn || 0,
+          lost: awayStanding?.overall_lost || 0,
+          goal_difference: awayStanding?.overall_goals_difference || 0,
+          form: awayStanding?.form || 'N/A'
+        },
+        interpretation: `${home.name} is ${homeStanding?.position || '?'}th, ${away.name} is ${awayStanding?.position || '?'}th in the table`
+      };
+    } catch (e) {
+      return { error: `Could not fetch standings: ${e.message}` };
+    }
+  },
+
+  HOME_RECORD: async (bdlSport, home, away, season) => {
+    try {
+      const standings = await ballDontLieService.getStandings(bdlSport, { season });
+      const homeStanding = standings?.find(s => s.team?.id === home.id || s.team?.name?.toLowerCase().includes(home.name?.toLowerCase()));
+      const awayStanding = standings?.find(s => s.team?.id === away.id || s.team?.name?.toLowerCase().includes(away.name?.toLowerCase()));
+      
+      return {
+        home: {
+          team: home.name,
+          home_played: homeStanding?.home_played || 0,
+          home_won: homeStanding?.home_won || 0,
+          home_drawn: homeStanding?.home_drawn || 0,
+          home_lost: homeStanding?.home_lost || 0,
+          home_goals_for: homeStanding?.home_goals_for || 0,
+          home_goals_against: homeStanding?.home_goals_against || 0,
+          home_points: homeStanding?.home_points || 0
+        },
+        away: {
+          team: away.name,
+          home_played: awayStanding?.home_played || 0,
+          home_won: awayStanding?.home_won || 0,
+          home_drawn: awayStanding?.home_drawn || 0,
+          home_lost: awayStanding?.home_lost || 0,
+          home_goals_for: awayStanding?.home_goals_for || 0,
+          home_goals_against: awayStanding?.home_goals_against || 0,
+          home_points: awayStanding?.home_points || 0
+        },
+        interpretation: `Home form - ${home.name}: ${homeStanding?.home_won || 0}W-${homeStanding?.home_drawn || 0}D-${homeStanding?.home_lost || 0}L`
+      };
+    } catch (e) {
+      return { error: `Could not fetch home records: ${e.message}` };
+    }
+  },
+
+  AWAY_RECORD: async (bdlSport, home, away, season) => {
+    try {
+      const standings = await ballDontLieService.getStandings(bdlSport, { season });
+      const homeStanding = standings?.find(s => s.team?.id === home.id || s.team?.name?.toLowerCase().includes(home.name?.toLowerCase()));
+      const awayStanding = standings?.find(s => s.team?.id === away.id || s.team?.name?.toLowerCase().includes(away.name?.toLowerCase()));
+      
+      return {
+        home: {
+          team: home.name,
+          away_played: homeStanding?.away_played || 0,
+          away_won: homeStanding?.away_won || 0,
+          away_drawn: homeStanding?.away_drawn || 0,
+          away_lost: homeStanding?.away_lost || 0,
+          away_goals_for: homeStanding?.away_goals_for || 0,
+          away_goals_against: homeStanding?.away_goals_against || 0,
+          away_points: homeStanding?.away_points || 0
+        },
+        away: {
+          team: away.name,
+          away_played: awayStanding?.away_played || 0,
+          away_won: awayStanding?.away_won || 0,
+          away_drawn: awayStanding?.away_drawn || 0,
+          away_lost: awayStanding?.away_lost || 0,
+          away_goals_for: awayStanding?.away_goals_for || 0,
+          away_goals_against: awayStanding?.away_goals_against || 0,
+          away_points: awayStanding?.away_points || 0
+        },
+        interpretation: `Away form - ${away.name}: ${awayStanding?.away_won || 0}W-${awayStanding?.away_drawn || 0}D-${awayStanding?.away_lost || 0}L`
+      };
+    } catch (e) {
+      return { error: `Could not fetch away records: ${e.message}` };
+    }
   }
 };
 
@@ -1848,6 +2117,33 @@ const ALIASES = {
   LUCK_INDICATORS: 'RECENT_FORM',
   OVERTIME_RECORD: 'RECENT_FORM',
   DIVISION_STANDING: 'STANDINGS',
+  // EPL Aliases
+  PASS_ACCURACY: 'POSSESSION_PCT',
+  TOUCHES_IN_BOX: 'SHOTS_ON_TARGET',
+  CROSSES: 'CORNERS',
+  INTERCEPTIONS: 'TACKLES',
+  CLEARANCES: 'TACKLES',
+  SAVES: 'CLEAN_SHEETS',
+  SHOTS_TOTAL: 'SHOTS_ON_TARGET',
+  BIG_CHANCES_CREATED: 'SHOTS_ON_TARGET',
+  BIG_CHANCES_MISSED: 'SHOTS_ON_TARGET',
+  FREE_KICKS: 'CORNERS',
+  PENALTIES_WON: 'CORNERS',
+  PENALTIES_CONCEDED: 'CORNERS',
+  RED_CARDS: 'YELLOW_CARDS',
+  FOULS: 'YELLOW_CARDS',
+  HOME_FORM: 'HOME_RECORD',
+  AWAY_FORM: 'AWAY_RECORD',
+  LAST_5_RESULTS: 'LEAGUE_POSITION',
+  TOP_ASSISTS: 'TOP_PLAYERS',
+  KEY_PLAYERS: 'TOP_PLAYERS',
+  HEAD_TO_HEAD: 'RECENT_FORM',
+  DRAW_FREQUENCY: 'RECENT_FORM',
+  FIXTURE_CONGESTION: 'RECENT_FORM',
+  EUROPEAN_FOOTBALL: 'RECENT_FORM',
+  MOTIVATION: 'RECENT_FORM',
+  XG_DIFFERENCE: 'SHOTS_ON_TARGET',
+  XG_OVERPERFORMANCE: 'SHOTS_ON_TARGET',
   PACE_LAST_10: 'PACE',
   PACE_HOME_AWAY: 'HOME_AWAY_SPLITS',
   EFFICIENCY_LAST_10: 'NET_RATING',

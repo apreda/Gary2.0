@@ -6,6 +6,8 @@
  * Usage:
  *   node scripts/run-agentic-picks.js --nba
  *   node scripts/run-agentic-picks.js --nfl
+ *   node scripts/run-agentic-picks.js --nhl
+ *   node scripts/run-agentic-picks.js --epl
  *   node scripts/run-agentic-picks.js --ncaab
  *   node scripts/run-agentic-picks.js --ncaaf
  *   node scripts/run-agentic-picks.js --all
@@ -32,6 +34,7 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀' }, // Full games - stats now working!
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true }, // BETA: Limited advanced analytics
+  epl: { key: 'soccer_epl', name: 'EPL', emoji: '⚽', isBeta: true, daysAhead: 7 }, // BETA: Soccer/EPL (weekly schedule)
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true } // FBS only (no FCS)
 };
@@ -65,11 +68,12 @@ const runAll = args.includes('--all');
 const sportsToRun = [];
 
 if (runAll) {
-  sportsToRun.push('nba', 'nfl', 'nhl', 'ncaab', 'ncaaf');
+  sportsToRun.push('nba', 'nfl', 'nhl', 'epl', 'ncaab', 'ncaaf');
 } else {
   if (args.includes('--nba')) sportsToRun.push('nba');
   if (args.includes('--nfl')) sportsToRun.push('nfl');
   if (args.includes('--nhl')) sportsToRun.push('nhl');
+  if (args.includes('--epl')) sportsToRun.push('epl');
   if (args.includes('--ncaab')) sportsToRun.push('ncaab');
   if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
 }
@@ -84,6 +88,7 @@ if (sportsToRun.length === 0) {
 ║    node scripts/run-agentic-picks.js --nba                       ║
 ║    node scripts/run-agentic-picks.js --nfl                       ║
 ║    node scripts/run-agentic-picks.js --nhl   (BETA)              ║
+║    node scripts/run-agentic-picks.js --epl   (BETA)              ║
 ║    node scripts/run-agentic-picks.js --ncaab                     ║
 ║    node scripts/run-agentic-picks.js --ncaaf                     ║
 ║    node scripts/run-agentic-picks.js --all                       ║
