@@ -868,7 +868,19 @@ const ballDontLieService = {
         };
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getTeams not supported');
-        const url = `https://api.balldontlie.io/${path}`;
+        
+        // EPL requires season parameter - calculate current season
+        let queryParams = { ...params };
+        if (sportKey === 'soccer_epl' && !queryParams.season) {
+          const now = new Date();
+          const month = now.getMonth();
+          const year = now.getFullYear();
+          // EPL season: Aug-Dec = current year, Jan-Jul = previous year
+          queryParams.season = month >= 7 ? year : year - 1;
+        }
+        
+        const qs = Object.keys(queryParams).length > 0 ? buildQuery(queryParams) : '';
+        const url = `https://api.balldontlie.io/${path}${qs}`;
         const resp = await fetch(url, {
           headers: { Authorization: API_KEY }
         });
@@ -905,7 +917,16 @@ const ballDontLieService = {
         };
         const path = endpointMap[sportKey];
         if (path) {
-          const url = `https://api.balldontlie.io/${path}`;
+          // EPL requires season parameter
+          let qs = '';
+          if (sportKey === 'soccer_epl') {
+            const now = new Date();
+            const month = now.getMonth();
+            const year = now.getFullYear();
+            const season = month >= 7 ? year : year - 1;
+            qs = `?season=${season}`;
+          }
+          const url = `https://api.balldontlie.io/${path}${qs}`;
           const resp = await fetch(url, { headers: { Authorization: API_KEY } });
           if (resp.ok) {
             const json = await resp.json().catch(() => ({}));
