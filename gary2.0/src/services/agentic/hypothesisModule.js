@@ -30,7 +30,7 @@ YOUR RESPONSIBILITIES
 ========================
 1. Read the high-level matchup context ONLY.
 2. Form a sharp hypothesis consistent with the philosophy above.
-3. Request 4-8 info tokens from the approved list that would meaningfully confirm/deny your take.
+3. Request 6-12 info tokens from the approved list that would meaningfully confirm/deny your take. Request MORE tokens for complex matchups.
 4. Recommend an initial lean (side + bet type) with soft confidence (0.50-0.80) tied to price sensitivity.
 5. Surface immediate concerns (injury watch, pace mismatch, etc.).
 
@@ -89,7 +89,7 @@ export async function runHypothesisStage({ gameSummary }) {
 
   const sanitized = {
     hypothesis: parsed.hypothesis || '',
-    requested_tokens: sanitizeTokenRequests(parsed.requested_tokens, sportKey, 8),
+    requested_tokens: sanitizeTokenRequests(parsed.requested_tokens, sportKey, 16),
     preliminary_lean: parsed.preliminary_lean || null,
     concerns: Array.isArray(parsed.concerns) ? parsed.concerns.slice(0, 3) : []
   };
