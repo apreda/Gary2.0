@@ -2021,8 +2021,8 @@ struct TaleOfTapeSection: View {
                 
                 // Injuries Row
                 if let injuries = injuries {
-                    let homeInjuries = injuries.home?.filter { $0.status == "Out" }.prefix(3).compactMap { $0.name } ?? []
-                    let awayInjuries = injuries.away?.filter { $0.status == "Out" }.prefix(3).compactMap { $0.name } ?? []
+                    let homeInjuries = injuries.home?.filter { $0.status == "Out" }.prefix(5).compactMap { $0.name } ?? []
+                    let awayInjuries = injuries.away?.filter { $0.status == "Out" }.prefix(5).compactMap { $0.name } ?? []
                     
                     // Swap based on Gary's pick
                     let leftInjuries = garyPickedHome ? homeInjuries : awayInjuries
@@ -2031,28 +2031,58 @@ struct TaleOfTapeSection: View {
                     if !leftInjuries.isEmpty || !rightInjuries.isEmpty {
                         Divider().background(Color.white.opacity(0.1))
                         
-                        HStack(alignment: .top) {
-                            // Left injuries (Gary's pick)
-                            Text(leftInjuries.isEmpty ? "Healthy" : leftInjuries.joined(separator: ", "))
-                                .font(.caption)
-                                .foregroundStyle(leftInjuries.isEmpty ? .green.opacity(0.7) : .red.opacity(0.9))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .lineLimit(2)
-                            
-                            // Label in red
-                            Text("Injuries")
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Injuries header
+                            Text("KEY INJURIES (OUT)")
                                 .font(.caption.bold())
                                 .foregroundStyle(.red.opacity(0.8))
-                                .frame(width: 60)
+                                .tracking(0.5)
                             
-                            // Right injuries (opponent)
-                            Text(rightInjuries.isEmpty ? "Healthy" : rightInjuries.joined(separator: ", "))
-                                .font(.caption)
-                                .foregroundStyle(rightInjuries.isEmpty ? .green.opacity(0.7) : .red.opacity(0.9))
+                            HStack(alignment: .top, spacing: 16) {
+                                // Left injuries (Gary's pick)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    if leftInjuries.isEmpty {
+                                        Text("✓ Healthy")
+                                            .font(.caption)
+                                            .foregroundStyle(.green.opacity(0.8))
+                                    } else {
+                                        ForEach(Array(leftInjuries), id: \.self) { name in
+                                            HStack(spacing: 4) {
+                                                Circle()
+                                                    .fill(.red.opacity(0.7))
+                                                    .frame(width: 5, height: 5)
+                                                Text(name)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.red.opacity(0.9))
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                // Right injuries (opponent)
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    if rightInjuries.isEmpty {
+                                        Text("✓ Healthy")
+                                            .font(.caption)
+                                            .foregroundStyle(.green.opacity(0.8))
+                                    } else {
+                                        ForEach(Array(rightInjuries), id: \.self) { name in
+                                            HStack(spacing: 4) {
+                                                Text(name)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.red.opacity(0.9))
+                                                Circle()
+                                                    .fill(.red.opacity(0.7))
+                                                    .frame(width: 5, height: 5)
+                                            }
+                                        }
+                                    }
+                                }
                                 .frame(maxWidth: .infinity, alignment: .trailing)
-                                .lineLimit(2)
+                            }
                         }
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 12)
                         .padding(.horizontal, 12)
                         .background(Color.red.opacity(0.05))
                     }
