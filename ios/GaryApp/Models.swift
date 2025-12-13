@@ -172,8 +172,7 @@ struct StatValues: Codable {
     let interceptions: String?
     let rushingTds: String?
     let last5: String?
-    // NCAAB/NCAAF specific stats
-    let pointsPerGame: String?
+    // NCAAB/NCAAF specific stats (pointsPerGame already defined above)
     let assistsPerGame: String?
     let reboundsPerGame: String?
     let stealsPerGame: String?
@@ -226,8 +225,7 @@ struct StatValues: Codable {
             interceptions: dict["interceptions"] as? String ?? (dict["interceptions"] as? NSNumber)?.stringValue,
             rushingTds: dict["rushing_tds"] as? String ?? (dict["rushing_tds"] as? NSNumber)?.stringValue,
             last5: dict["last_5"] as? String,
-            // NCAAB/NCAAF specific stats
-            pointsPerGame: dict["points_per_game"] as? String ?? (dict["points_per_game"] as? NSNumber)?.stringValue,
+            // NCAAB/NCAAF specific stats (pointsPerGame already assigned above)
             assistsPerGame: dict["assists_per_game"] as? String ?? (dict["assists_per_game"] as? NSNumber)?.stringValue,
             reboundsPerGame: dict["rebounds_per_game"] as? String ?? (dict["rebounds_per_game"] as? NSNumber)?.stringValue,
             stealsPerGame: dict["steals_per_game"] as? String ?? (dict["steals_per_game"] as? NSNumber)?.stringValue,
