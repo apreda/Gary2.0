@@ -2140,7 +2140,7 @@ const FETCHERS = {
 
   LEAGUE_POSITION: async (bdlSport, home, away, season) => {
     try {
-      const standings = await ballDontLieService.getStandings(bdlSport, { season });
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
       const homeStanding = standings?.find(s => s.team?.id === home.id || s.team?.name?.toLowerCase().includes(home.name?.toLowerCase()));
       const awayStanding = standings?.find(s => s.team?.id === away.id || s.team?.name?.toLowerCase().includes(away.name?.toLowerCase()));
       
@@ -2176,7 +2176,7 @@ const FETCHERS = {
 
   HOME_RECORD: async (bdlSport, home, away, season) => {
     try {
-      const standings = await ballDontLieService.getStandings(bdlSport, { season });
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
       const homeStanding = standings?.find(s => s.team?.id === home.id || s.team?.name?.toLowerCase().includes(home.name?.toLowerCase()));
       const awayStanding = standings?.find(s => s.team?.id === away.id || s.team?.name?.toLowerCase().includes(away.name?.toLowerCase()));
       
@@ -2210,7 +2210,7 @@ const FETCHERS = {
 
   AWAY_RECORD: async (bdlSport, home, away, season) => {
     try {
-      const standings = await ballDontLieService.getStandings(bdlSport, { season });
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
       const homeStanding = standings?.find(s => s.team?.id === home.id || s.team?.name?.toLowerCase().includes(home.name?.toLowerCase()));
       const awayStanding = standings?.find(s => s.team?.id === away.id || s.team?.name?.toLowerCase().includes(away.name?.toLowerCase()));
       
@@ -2246,7 +2246,7 @@ const FETCHERS = {
   EPL_TOP_SCORERS: async (bdlSport, home, away, season) => {
     try {
       // Get league top scorers
-      const leaders = await ballDontLieService.getLeaders(bdlSport, { season, type: 'goals' });
+      const leaders = await ballDontLieService.getLeadersGeneric(bdlSport, { season, stat_type: 'goals' });
       
       // Find players from the two teams
       const homeScorers = leaders.filter(p => 
@@ -2295,7 +2295,7 @@ const FETCHERS = {
   // EPL Player Stats - Top Assists
   EPL_TOP_ASSISTS: async (bdlSport, home, away, season) => {
     try {
-      const leaders = await ballDontLieService.getLeaders(bdlSport, { season, type: 'goal_assist' });
+      const leaders = await ballDontLieService.getLeadersGeneric(bdlSport, { season, stat_type: 'goal_assist' });
       
       const homeAssisters = leaders.filter(p => 
         p.player?.team_ids?.includes(home.id)
@@ -2341,8 +2341,8 @@ const FETCHERS = {
   EPL_KEY_PLAYERS: async (bdlSport, home, away, season) => {
     try {
       const [goalLeaders, assistLeaders] = await Promise.all([
-        ballDontLieService.getLeaders(bdlSport, { season, type: 'goals' }),
-        ballDontLieService.getLeaders(bdlSport, { season, type: 'goal_assist' })
+        ballDontLieService.getLeadersGeneric(bdlSport, { season, stat_type: 'goals' }),
+        ballDontLieService.getLeadersGeneric(bdlSport, { season, stat_type: 'goal_assist' })
       ]);
       
       // Create a map of player contributions (goals + assists)
