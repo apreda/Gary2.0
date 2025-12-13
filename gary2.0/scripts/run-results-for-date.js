@@ -5,7 +5,9 @@
  * Defaults to yesterday if no date provided
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { createClient } = require('@supabase/supabase-js');
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
