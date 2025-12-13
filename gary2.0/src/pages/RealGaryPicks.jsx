@@ -1270,7 +1270,7 @@ function RealGaryPicks() {
       case 'NHL': return '#00A3E0';      // Ice Blue
       case 'NCAAB': return '#8B5CF6';    // Purple
       case 'NCAAF': return '#DC2626';    // Red
-      case 'EPL': return '#6366F1';      // Indigo
+      case 'EPL': return '#F97316';      // Orange
       case 'MLB': return '#0EA5E9';      // Sky Blue
       default: return '#bfa142';         // Fallback to original gold
     }
