@@ -512,9 +512,9 @@ enum Sport: String, CaseIterable {
         case .nba: return Color(hex: "#3B82F6")      // Blue
         case .nfl: return GaryColors.gold            // Gold
         case .nhl: return Color(hex: "#00A3E0")      // Ice Blue
-        case .ncaab: return Color(hex: "#8B5CF6")    // Purple
+        case .ncaab: return Color(hex: "#F97316")    // Orange
         case .ncaaf: return Color(hex: "#DC2626")    // Red
-        case .epl: return Color(hex: "#F97316")      // Orange
+        case .epl: return Color(hex: "#8B5CF6")      // Purple
         case .mlb: return Color(hex: "#0EA5E9")      // Sky Blue
         case .wnba: return Color(hex: "#F97316")     // Orange
         }
