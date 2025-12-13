@@ -472,23 +472,53 @@ struct PropResult: Decodable {
     
     /// Get the effective league (normalized to match Sport enum values)
     var effectiveLeague: String? {
-        // Get the raw value from league or sport field
+        // First try to get from league or sport field
         let raw = (league?.isEmpty == false ? league : sport) ?? ""
-        guard !raw.isEmpty else { return nil }
+        if !raw.isEmpty {
+            let normalized = raw.lowercased()
+            if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
+            if normalized.contains("nfl") { return "NFL" }
+            if normalized.contains("nhl") { return "NHL" }
+            if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
+            if normalized.contains("ncaaf") { return "NCAAF" }
+            if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
+            if normalized.contains("mlb") { return "MLB" }
+            if normalized.contains("wnba") { return "WNBA" }
+            return raw.uppercased()
+        }
         
-        let normalized = raw.lowercased()
+        // Infer sport from prop_type if no explicit sport/league field
+        guard let propType = prop_type?.lowercased() else { return nil }
         
-        // Handle API sport keys like "basketball_nba" -> "NBA"
-        if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
-        if normalized.contains("nfl") { return "NFL" }
-        if normalized.contains("nhl") { return "NHL" }
-        if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
-        if normalized.contains("ncaaf") { return "NCAAF" }
-        if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
-        if normalized.contains("mlb") { return "MLB" }
-        if normalized.contains("wnba") { return "WNBA" }
+        // NBA props
+        if ["points", "rebounds", "assists", "steals", "blocks", "threes", "three_pointers", 
+            "pts", "reb", "ast", "stl", "blk", "pts_rebs_asts", "fantasy_score"].contains(where: { propType.contains($0) }) {
+            return "NBA"
+        }
         
-        return raw.uppercased()
+        // NFL props
+        if ["pass_yds", "rush_yds", "rec_yds", "pass_tds", "rush_tds", "rec_tds", "receptions",
+            "passing", "rushing", "receiving", "completions", "interceptions", "tackles", "sacks"].contains(where: { propType.contains($0) }) {
+            return "NFL"
+        }
+        
+        // NHL props
+        if ["goals", "shots", "saves", "shots_on_goal", "points_nhl", "power_play"].contains(where: { propType.contains($0) }) {
+            return "NHL"
+        }
+        
+        // MLB props
+        if ["hits", "total_bases", "home_runs", "rbis", "runs", "strikeouts", "walks",
+            "stolen_bases", "pitching", "earned_runs", "innings"].contains(where: { propType.contains($0) }) {
+            return "MLB"
+        }
+        
+        // EPL/Soccer props
+        if ["goal_scorer", "shots_target", "fouls", "cards", "corners", "offsides"].contains(where: { propType.contains($0) }) {
+            return "EPL"
+        }
+        
+        return nil
     }
 }
 
