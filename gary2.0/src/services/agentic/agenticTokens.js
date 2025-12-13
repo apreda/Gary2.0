@@ -143,6 +143,47 @@ const TOKEN_DEFINITIONS = {
     id: 'ft_rate',
     label: 'FT Rate',
     description: 'Free-throw attempts per field-goal attempt to flag foul pressure.'
+  },
+  // NFL Props-specific tokens
+  player_stats: {
+    id: 'player_stats',
+    label: 'Player Season Stats',
+    description: 'Season averages for passing, rushing, receiving yards and TDs.'
+  },
+  prop_lines: {
+    id: 'prop_lines',
+    label: 'Available Prop Lines',
+    description: 'Current sportsbook lines for player props with over/under odds.'
+  },
+  player_recent_form: {
+    id: 'player_recent_form',
+    label: 'Player Recent Form',
+    description: 'Last 3-5 game stats showing trends in player performance.'
+  },
+  opponent_vs_position: {
+    id: 'opponent_vs_position',
+    label: 'Opponent vs Position',
+    description: 'How opponent defense ranks against QB/RB/WR/TE.'
+  },
+  target_share: {
+    id: 'target_share',
+    label: 'Target Share',
+    description: 'Percentage of team targets for receivers, snap counts.'
+  },
+  game_script: {
+    id: 'game_script',
+    label: 'Projected Game Script',
+    description: 'Expected game flow based on spread/total affecting pass/run ratio.'
+  },
+  red_zone_usage: {
+    id: 'red_zone_usage',
+    label: 'Red Zone Usage',
+    description: 'Player involvement in red zone and goal line situations.'
+  },
+  weather_impact: {
+    id: 'weather_impact',
+    label: 'Weather Impact',
+    description: 'Wind, temperature, precipitation affecting passing/outdoor games.'
   }
 };
 
@@ -168,6 +209,17 @@ const TOKENS_BY_SPORT = {
     'explosiveness',
     'injury_report',
     'market_snapshot'
+  ],
+  americanfootball_nfl_props: [
+    'player_stats',
+    'prop_lines',
+    'player_recent_form',
+    'opponent_vs_position',
+    'target_share',
+    'game_script',
+    'red_zone_usage',
+    'weather_impact',
+    'injury_report'
   ],
   americanfootball_ncaaf: [
     'talent_composite',
