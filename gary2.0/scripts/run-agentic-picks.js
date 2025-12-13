@@ -466,8 +466,8 @@ async function main() {
             statsData: statsData, // Full stat data with values for Tale of the Tape
             injuries: result.injuries || null, // Structured injury data from BDL
             isBeta: config.isBeta || false, // Beta flag for sports with limited data
-            dataLimitationNote: config.isBeta 
-              ? 'NHL picks use supplemental web-sourced analytics. Confidence may be lower than NBA/NFL.'
+            dataLimitationNote: config.isBeta
+              ? `${config.name} picks use supplemental web-sourced analytics. Confidence may be lower than NBA/NFL.`
               : null
           };
           

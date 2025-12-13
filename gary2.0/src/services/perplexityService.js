@@ -521,8 +521,8 @@ export const perplexityService = {
         'Return as JSON only.'
       ].join(' ');
 
-      let response = await this._callPerplexity(query, systemMessage);
-      
+      let response = await this.search(query);
+
       if (!response) {
         console.warn('getEplAdvancedStats: first attempt failed, retrying with simplified query');
         const simplified = [
@@ -530,7 +530,7 @@ export const perplexityService = {
           'Keys: home_advanced, away_advanced, form, head_to_head, key_injuries, key_insights, data_sources.',
           'Include xG, possession%, form (WWDLW format), recent H2H. Use null for unavailable stats.'
         ].join(' ');
-        response = await this._callPerplexity(simplified, systemMessage);
+        response = await this.search(simplified);
         if (!response) {
           console.warn('getEplAdvancedStats: both attempts failed');
           return this._getDefaultEplAdvancedStats(homeTeam, awayTeam);
