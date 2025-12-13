@@ -30,8 +30,16 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
       return { error: `Could not find teams: ${homeTeam} or ${awayTeam}`, token };
     }
     
-    // Route to appropriate fetcher
-    const fetcher = FETCHERS[token];
+    // Check for sport-specific fetcher first (e.g., EPL_TOP_SCORERS for EPL)
+    let fetcher = null;
+    const sportSpecificToken = `${normalizedSport}_${token}`;
+    if (FETCHERS[sportSpecificToken]) {
+      fetcher = FETCHERS[sportSpecificToken];
+      console.log(`[Stat Router] Using sport-specific fetcher: ${sportSpecificToken}`);
+    } else {
+      fetcher = FETCHERS[token];
+    }
+    
     if (!fetcher) {
       return { error: `Unknown stat token: ${token}`, token };
     }
@@ -2091,6 +2099,190 @@ const FETCHERS = {
     } catch (e) {
       return { error: `Could not fetch away records: ${e.message}` };
     }
+  },
+
+  // EPL Player Stats - Top Scorers
+  EPL_TOP_SCORERS: async (bdlSport, home, away, season) => {
+    try {
+      // Get league top scorers
+      const leaders = await ballDontLieService.getLeaders(bdlSport, { season, type: 'goals' });
+      
+      // Find players from the two teams
+      const homeScorers = leaders.filter(p => 
+        p.player?.team_ids?.includes(home.id) || 
+        p.player?.name?.toLowerCase().includes(home.name?.toLowerCase().split(' ')[0])
+      ).slice(0, 3);
+      
+      const awayScorers = leaders.filter(p => 
+        p.player?.team_ids?.includes(away.id) ||
+        p.player?.name?.toLowerCase().includes(away.name?.toLowerCase().split(' ')[0])
+      ).slice(0, 3);
+      
+      // Also get top 5 overall
+      const topOverall = leaders.slice(0, 5).map(p => ({
+        name: p.player?.name || 'Unknown',
+        goals: p.value,
+        rank: p.rank,
+        position: p.player?.position || 'N/A'
+      }));
+      
+      return {
+        league_top_5: topOverall,
+        home: {
+          team: home.name,
+          scorers: homeScorers.map(p => ({
+            name: p.player?.name || 'Unknown',
+            goals: p.value,
+            rank: p.rank
+          }))
+        },
+        away: {
+          team: away.name,
+          scorers: awayScorers.map(p => ({
+            name: p.player?.name || 'Unknown',
+            goals: p.value,
+            rank: p.rank
+          }))
+        },
+        interpretation: `Top scorers comparison for ${home.name} vs ${away.name}`
+      };
+    } catch (e) {
+      return { error: `Could not fetch EPL top scorers: ${e.message}` };
+    }
+  },
+
+  // EPL Player Stats - Top Assists
+  EPL_TOP_ASSISTS: async (bdlSport, home, away, season) => {
+    try {
+      const leaders = await ballDontLieService.getLeaders(bdlSport, { season, type: 'goal_assist' });
+      
+      const homeAssisters = leaders.filter(p => 
+        p.player?.team_ids?.includes(home.id)
+      ).slice(0, 3);
+      
+      const awayAssisters = leaders.filter(p => 
+        p.player?.team_ids?.includes(away.id)
+      ).slice(0, 3);
+      
+      const topOverall = leaders.slice(0, 5).map(p => ({
+        name: p.player?.name || 'Unknown',
+        assists: p.value,
+        rank: p.rank,
+        position: p.player?.position || 'N/A'
+      }));
+      
+      return {
+        league_top_5: topOverall,
+        home: {
+          team: home.name,
+          assisters: homeAssisters.map(p => ({
+            name: p.player?.name || 'Unknown',
+            assists: p.value,
+            rank: p.rank
+          }))
+        },
+        away: {
+          team: away.name,
+          assisters: awayAssisters.map(p => ({
+            name: p.player?.name || 'Unknown',
+            assists: p.value,
+            rank: p.rank
+          }))
+        },
+        interpretation: `Top assist providers for ${home.name} vs ${away.name}`
+      };
+    } catch (e) {
+      return { error: `Could not fetch EPL top assists: ${e.message}` };
+    }
+  },
+
+  // EPL Key Players - Combined goals + assists leaders
+  EPL_KEY_PLAYERS: async (bdlSport, home, away, season) => {
+    try {
+      const [goalLeaders, assistLeaders] = await Promise.all([
+        ballDontLieService.getLeaders(bdlSport, { season, type: 'goals' }),
+        ballDontLieService.getLeaders(bdlSport, { season, type: 'goal_assist' })
+      ]);
+      
+      // Create a map of player contributions (goals + assists)
+      const playerMap = new Map();
+      
+      goalLeaders.forEach(p => {
+        const key = p.player?.id || p.player?.name;
+        if (key) {
+          playerMap.set(key, {
+            name: p.player?.name,
+            position: p.player?.position,
+            team_ids: p.player?.team_ids || [],
+            goals: p.value,
+            assists: 0,
+            total: p.value
+          });
+        }
+      });
+      
+      assistLeaders.forEach(p => {
+        const key = p.player?.id || p.player?.name;
+        if (key) {
+          if (playerMap.has(key)) {
+            const existing = playerMap.get(key);
+            existing.assists = p.value;
+            existing.total = existing.goals + p.value;
+          } else {
+            playerMap.set(key, {
+              name: p.player?.name,
+              position: p.player?.position,
+              team_ids: p.player?.team_ids || [],
+              goals: 0,
+              assists: p.value,
+              total: p.value
+            });
+          }
+        }
+      });
+      
+      const allPlayers = Array.from(playerMap.values()).sort((a, b) => b.total - a.total);
+      
+      const homeKeyPlayers = allPlayers
+        .filter(p => p.team_ids?.includes(home.id))
+        .slice(0, 3);
+      
+      const awayKeyPlayers = allPlayers
+        .filter(p => p.team_ids?.includes(away.id))
+        .slice(0, 3);
+      
+      return {
+        home: {
+          team: home.name,
+          key_players: homeKeyPlayers.map(p => ({
+            name: p.name,
+            position: p.position,
+            goals: p.goals,
+            assists: p.assists,
+            goal_contributions: p.total
+          }))
+        },
+        away: {
+          team: away.name,
+          key_players: awayKeyPlayers.map(p => ({
+            name: p.name,
+            position: p.position,
+            goals: p.goals,
+            assists: p.assists,
+            goal_contributions: p.total
+          }))
+        },
+        league_top_contributors: allPlayers.slice(0, 5).map(p => ({
+          name: p.name,
+          goals: p.goals,
+          assists: p.assists,
+          total: p.total
+        })),
+        interpretation: `Key attacking players comparison`
+      };
+    } catch (e) {
+      return { error: `Could not fetch EPL key players: ${e.message}` };
+    }
   }
 };
 
@@ -2135,8 +2327,6 @@ const ALIASES = {
   HOME_FORM: 'HOME_RECORD',
   AWAY_FORM: 'AWAY_RECORD',
   LAST_5_RESULTS: 'LEAGUE_POSITION',
-  TOP_ASSISTS: 'TOP_PLAYERS',
-  KEY_PLAYERS: 'TOP_PLAYERS',
   HEAD_TO_HEAD: 'RECENT_FORM',
   DRAW_FREQUENCY: 'RECENT_FORM',
   FIXTURE_CONGESTION: 'RECENT_FORM',

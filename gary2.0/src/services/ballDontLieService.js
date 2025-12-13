@@ -1193,7 +1193,9 @@ const ballDontLieService = {
           basketball_nba: 'nba/v1/leaders', // if available; otherwise use player_stats/leaders
           basketball_ncaab: 'ncaab/v1/player_stats/leaders',
           icehockey_nhl: 'nhl/v1/player_stats/leaders',
-          icehockey_nhl_team: 'nhl/v1/team_stats/leaders'
+          icehockey_nhl_team: 'nhl/v1/team_stats/leaders',
+          soccer_epl: 'epl/v1/player_stats/leaders',
+          soccer_epl_team: 'epl/v1/team_stats/leaders'
         };
         let path = endpointMap[sportKey] || null;
         // Allow special alias for NHL team leaders
