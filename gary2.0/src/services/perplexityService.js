@@ -482,6 +482,103 @@ export const perplexityService = {
       _fetchedAt: new Date().toISOString()
     };
   },
+
+  /**
+   * Get EPL advanced analytics (xG, possession, etc.) via Perplexity
+   * BETA: Supplements BDL data with advanced metrics from football analytics sites
+   */
+  getEplAdvancedStats: async function(homeTeam, awayTeam, dateStr = new Date().toISOString().slice(0, 10)) {
+    try {
+      const cacheKey = `epl_adv:${dateStr}:${homeTeam}|${awayTeam}`;
+      const cached = cache.get(cacheKey);
+      if (cached && (Date.now() - cached.t) < CACHE_TTL) {
+        return cached.v;
+      }
+
+      const systemMessage = [
+        'You are a football (soccer) analytics expert specializing in EPL data.',
+        'Return ONLY valid JSON (no markdown, no explanation) with these exact keys:',
+        'home_advanced: {team, xg_for, xg_against, xg_difference, possession_pct, pass_completion_pct, shots_per_game, shots_on_target_per_game, big_chances_created, big_chances_missed, clean_sheets, ppg},',
+        'away_advanced: {team, xg_for, xg_against, xg_difference, possession_pct, pass_completion_pct, shots_per_game, shots_on_target_per_game, big_chances_created, big_chances_missed, clean_sheets, ppg},',
+        'form: {home_last_5: string like "WWDLW", home_goals_scored_l5: number, home_goals_conceded_l5: number, away_last_5: string, away_goals_scored_l5: number, away_goals_conceded_l5: number},',
+        'head_to_head: {last_5_meetings: array of {date, home_team, away_team, score}, home_wins: number, away_wins: number, draws: number},',
+        'key_injuries: {home: array of player names, away: array of player names},',
+        'key_insights: array of 3-4 analytical insights about this matchup,',
+        'data_sources: array of sources used.',
+        'Use null for any stats you cannot find. Do NOT include markdown formatting.'
+      ].join(' ');
+
+      const query = [
+        `Find current advanced EPL analytics for the matchup: ${awayTeam} at ${homeTeam}`,
+        `scheduled for ${dateStr} (2024-25 Premier League season).`,
+        'Search FBRef, Understat, FotMob, WhoScored for:',
+        '1. Expected Goals (xG) for and against each team',
+        '2. Possession and passing accuracy stats',
+        '3. Shots and shots on target per game',
+        '4. Recent form (last 5 matches)',
+        '5. Head-to-head record last 5 meetings',
+        '6. Key injuries for both squads',
+        'Return as JSON only.'
+      ].join(' ');
+
+      let response = await this._callPerplexity(query, systemMessage);
+      
+      if (!response) {
+        console.warn('getEplAdvancedStats: first attempt failed, retrying with simplified query');
+        const simplified = [
+          `Return JSON with EPL advanced stats for ${awayTeam} vs ${homeTeam}.`,
+          'Keys: home_advanced, away_advanced, form, head_to_head, key_injuries, key_insights, data_sources.',
+          'Include xG, possession%, form (WWDLW format), recent H2H. Use null for unavailable stats.'
+        ].join(' ');
+        response = await this._callPerplexity(simplified, systemMessage);
+        if (!response) {
+          console.warn('getEplAdvancedStats: both attempts failed');
+          return this._getDefaultEplAdvancedStats(homeTeam, awayTeam);
+        }
+      }
+
+      const tryParse = (txt) => {
+        if (!txt) return null;
+        try {
+          const cleaned = txt.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+          if (jsonMatch) return JSON.parse(jsonMatch[0]);
+        } catch {}
+        return null;
+      };
+
+      const parsed = tryParse(response);
+      if (parsed) {
+        parsed._source = 'perplexity';
+        parsed._fetchedAt = new Date().toISOString();
+        cache.set(cacheKey, { v: parsed, t: Date.now() });
+        return parsed;
+      }
+
+      console.warn('getEplAdvancedStats: failed to parse response, using defaults');
+      return this._getDefaultEplAdvancedStats(homeTeam, awayTeam);
+    } catch (e) {
+      console.error('getEplAdvancedStats error:', e.message);
+      return this._getDefaultEplAdvancedStats(homeTeam, awayTeam);
+    }
+  },
+
+  /**
+   * Default/fallback EPL advanced stats structure
+   */
+  _getDefaultEplAdvancedStats: function(homeTeam, awayTeam) {
+    return {
+      home_advanced: { team: homeTeam, xg_for: null, xg_against: null, xg_difference: null, possession_pct: null, pass_completion_pct: null, shots_per_game: null, shots_on_target_per_game: null, big_chances_created: null, big_chances_missed: null, clean_sheets: null, ppg: null },
+      away_advanced: { team: awayTeam, xg_for: null, xg_against: null, xg_difference: null, possession_pct: null, pass_completion_pct: null, shots_per_game: null, shots_on_target_per_game: null, big_chances_created: null, big_chances_missed: null, clean_sheets: null, ppg: null },
+      form: { home_last_5: null, home_goals_scored_l5: null, home_goals_conceded_l5: null, away_last_5: null, away_goals_scored_l5: null, away_goals_conceded_l5: null },
+      head_to_head: { last_5_meetings: [], home_wins: null, away_wins: null, draws: null },
+      key_injuries: { home: [], away: [] },
+      key_insights: [],
+      data_sources: [],
+      _source: 'default',
+      _fetchedAt: new Date().toISOString()
+    };
+  },
   
   /**
    * Extract sports stats from an ESPN game page using Perplexity

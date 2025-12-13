@@ -1666,7 +1666,7 @@ function RealGaryPicks() {
                                                 gap: '0.4rem'
                                               }}>
                                                 {pick.league || 'MLB'}
-                                                {(pick.isBeta || pick.league === 'NHL') && (
+                                                {(pick.isBeta || pick.league === 'NHL' || pick.league === 'EPL') && (
                                                   <span style={{
                                                     fontSize: '0.6rem',
                                                     fontWeight: 700,
