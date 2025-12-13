@@ -172,6 +172,16 @@ struct StatValues: Codable {
     let interceptions: String?
     let rushingTds: String?
     let last5: String?
+    // NCAAB/NCAAF specific stats
+    let pointsPerGame: String?
+    let assistsPerGame: String?
+    let reboundsPerGame: String?
+    let stealsPerGame: String?
+    let blocksPerGame: String?
+    let fgPct: String?
+    let fgmPerGame: String?
+    let fgaPerGame: String?
+    let drebPerGame: String?
     
     static func from(dict: [String: Any]) -> StatValues {
         StatValues(
@@ -215,7 +225,17 @@ struct StatValues: Codable {
             passingTds: dict["passing_tds"] as? String ?? (dict["passing_tds"] as? NSNumber)?.stringValue,
             interceptions: dict["interceptions"] as? String ?? (dict["interceptions"] as? NSNumber)?.stringValue,
             rushingTds: dict["rushing_tds"] as? String ?? (dict["rushing_tds"] as? NSNumber)?.stringValue,
-            last5: dict["last_5"] as? String
+            last5: dict["last_5"] as? String,
+            // NCAAB/NCAAF specific stats
+            pointsPerGame: dict["points_per_game"] as? String ?? (dict["points_per_game"] as? NSNumber)?.stringValue,
+            assistsPerGame: dict["assists_per_game"] as? String ?? (dict["assists_per_game"] as? NSNumber)?.stringValue,
+            reboundsPerGame: dict["rebounds_per_game"] as? String ?? (dict["rebounds_per_game"] as? NSNumber)?.stringValue,
+            stealsPerGame: dict["steals_per_game"] as? String ?? (dict["steals_per_game"] as? NSNumber)?.stringValue,
+            blocksPerGame: dict["blocks_per_game"] as? String ?? (dict["blocks_per_game"] as? NSNumber)?.stringValue,
+            fgPct: dict["fg_pct"] as? String ?? (dict["fg_pct"] as? NSNumber)?.stringValue,
+            fgmPerGame: dict["fgm_per_game"] as? String ?? (dict["fgm_per_game"] as? NSNumber)?.stringValue,
+            fgaPerGame: dict["fga_per_game"] as? String ?? (dict["fga_per_game"] as? NSNumber)?.stringValue,
+            drebPerGame: dict["dreb_per_game"] as? String ?? (dict["dreb_per_game"] as? NSNumber)?.stringValue
         )
     }
     
@@ -255,6 +275,13 @@ struct StatValues: Codable {
         case "PASSING_TDS": return passingTds ?? "N/A"
         case "INTERCEPTIONS": return interceptions ?? "N/A"
         case "RUSHING_TDS": return rushingTds ?? "N/A"
+        // NCAAB/NCAAF specific stats
+        case "SCORING": return pointsPerGame ?? "N/A"
+        case "ASSISTS": return assistsPerGame ?? "N/A"
+        case "REBOUNDS": return reboundsPerGame ?? "N/A"
+        case "STEALS": return stealsPerGame ?? "N/A"
+        case "BLOCKS": return blocksPerGame ?? "N/A"
+        case "FG_PCT": return fgPct ?? efgPct ?? "N/A"
         default: return offensiveRating ?? defensiveRating ?? netRating ?? overall ?? totalYardsPerGame ?? pointsPerGame ?? "N/A"
         }
     }

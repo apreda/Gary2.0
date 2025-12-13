@@ -1910,7 +1910,14 @@ struct TaleOfTapeSection: View {
             "HAVOC_ALLOWED": "Opp Havoc",
             "PASSING_TDS": "Pass TDs",
             "INTERCEPTIONS": "INTs",
-            "RUSHING_TDS": "Rush TDs"
+            "RUSHING_TDS": "Rush TDs",
+            // NCAAB/NCAAF specific
+            "SCORING": "PPG",
+            "ASSISTS": "Assists/G",
+            "REBOUNDS": "Reb/G",
+            "STEALS": "Steals/G",
+            "BLOCKS": "Blocks/G",
+            "FG_PCT": "FG%"
         ]
         return map[token] ?? token.replacingOccurrences(of: "_", with: " ").capitalized
     }
