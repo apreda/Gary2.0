@@ -708,11 +708,11 @@ struct GaryPropsView: View {
     
     private var filteredProps: [PropPick] {
         guard selectedSport != .all else { return allProps }
-        return allProps.filter { ($0.effectiveLeague ?? "").uppercased() == selectedSport.rawValue }
+        return allProps.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
     }
     
     private var availableSports: Set<String> {
-        Set(allProps.compactMap { $0.effectiveLeague?.uppercased() })
+        Set(allProps.compactMap { $0.effectiveLeague })
     }
     
     var body: some View {
@@ -825,19 +825,19 @@ struct BillfoldView: View {
     /// Filter game results by selected sport
     private var filteredGameResults: [GameResult] {
         guard selectedSport != .all else { return gameResults }
-        return gameResults.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
+        return gameResults.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
     }
     
     /// Filter prop results by selected sport
     private var filteredPropResults: [PropResult] {
         guard selectedSport != .all else { return propResults }
-        return propResults.filter { ($0.effectiveLeague ?? "").uppercased() == selectedSport.rawValue }
+        return propResults.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
     }
     
     /// Get available sports from the loaded results (both game and prop results)
     private var availableSports: Set<String> {
-        let gameLeagues = Set(gameResults.compactMap { $0.league?.uppercased() })
-        let propLeagues = Set(propResults.compactMap { $0.effectiveLeague?.uppercased() })
+        let gameLeagues = Set(gameResults.compactMap { $0.effectiveLeague })
+        let propLeagues = Set(propResults.compactMap { $0.effectiveLeague })
         return gameLeagues.union(propLeagues)
     }
     
