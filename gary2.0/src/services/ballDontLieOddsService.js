@@ -329,9 +329,42 @@ export const ballDontLieOddsService = {
       });
     }
     // EPL: use sport-specific v1 odds endpoint with moneyline including draw
+    // EPL uses season/week params, not dates - calculate current season and get multiple weeks
     if (sportKey === 'soccer_epl') {
       const apiKey = getApiKey();
-      const games = await ballDontLieService.getGames('soccer_epl', { dates: [dateStr], per_page: 100 }, 10);
+      // EPL season is year-based: 2024 = Aug 2024 - May 2025, 2025 = Aug 2025 - May 2026
+      const targetDate = new Date(dateStr);
+      const month = targetDate.getMonth(); // 0-indexed
+      const year = targetDate.getFullYear();
+      // If Aug-Dec, season = current year; if Jan-July, season = previous year
+      const season = month >= 7 ? year : year - 1;
+      
+      // Fetch games for weeks 1-38 and filter by date (EPL has 38 matchweeks)
+      // To avoid too many requests, estimate the current week based on date
+      const seasonStart = new Date(season, 7, 10); // Approx Aug 10
+      const daysSinceStart = Math.floor((targetDate - seasonStart) / (1000 * 60 * 60 * 24));
+      const estimatedWeek = Math.max(1, Math.min(38, Math.floor(daysSinceStart / 7) + 1));
+      
+      // Fetch 3 weeks around estimated week to capture all nearby games
+      const weeksToFetch = [estimatedWeek - 1, estimatedWeek, estimatedWeek + 1].filter(w => w >= 1 && w <= 38);
+      let allGames = [];
+      for (const week of weeksToFetch) {
+        try {
+          const weekGames = await ballDontLieService.getGames('soccer_epl', { season, week, per_page: 20 }, 10);
+          if (Array.isArray(weekGames)) allGames = allGames.concat(weekGames);
+        } catch (e) {
+          console.warn(`[BallDontLieOdds][EPL] Failed to fetch week ${week}:`, e.message);
+        }
+      }
+      
+      // Filter games to target date (allow +/- 1 day for timezone issues)
+      const targetDateStr = dateStr;
+      const games = allGames.filter(g => {
+        if (!g.kickoff) return false;
+        const gameDate = g.kickoff.slice(0, 10);
+        return gameDate === targetDateStr;
+      });
+      console.log(`[BallDontLieOdds][EPL] Season ${season}, weeks ${weeksToFetch.join(',')}: ${allGames.length} total, ${games.length} on ${dateStr}`);
       const ids = (games || []).map(g => g.id).filter(Boolean);
       let oddsRows = [];
       if (ids.length > 0) {
