@@ -1,22 +1,40 @@
 /**
  * Props Agentic Runner
  * 3-stage pipeline for player prop analysis
+ * Supports multiple sports via constitution parameter
  */
 import { openaiService } from '../openaiService.js';
 import { safeJsonParse } from './agenticUtils.js';
 import { NFL_PROPS_CONSTITUTION } from './constitution/nflPropsConstitution.js';
+import { NBA_PROPS_CONSTITUTION } from './constitution/nbaPropsConstitution.js';
+
+// Map of sport labels to constitutions
+const SPORT_CONSTITUTIONS = {
+  'NFL': NFL_PROPS_CONSTITUTION,
+  'NBA': NBA_PROPS_CONSTITUTION,
+  // Add more sports here as they're created
+};
+
+/**
+ * Get the appropriate constitution for a sport
+ */
+function getConstitution(sportLabel) {
+  return SPORT_CONSTITUTIONS[sportLabel] || NFL_PROPS_CONSTITUTION;
+}
 
 /**
  * Stage 1: Props Hypothesis
  * Form initial hypotheses about which props have value
  */
-async function runPropsHypothesisStage({ gameSummary, propCandidates, playerStats }) {
+async function runPropsHypothesisStage({ gameSummary, propCandidates, playerStats, sportLabel = 'NFL' }) {
+  const constitution = getConstitution(sportLabel);
+  
   const systemPrompt = `
 You are Stage 1 of the Gary Props Pipeline: "The Scout"
 
 Your job is to identify the BEST player prop opportunities in this game.
 
-${NFL_PROPS_CONSTITUTION}
+${constitution}
 
 ## YOUR TASK
 1. Review the available prop candidates and player stats
@@ -29,8 +47,8 @@ ${NFL_PROPS_CONSTITUTION}
   "top_opportunities": [
     {
       "player": "Player Name",
-      "prop_type": "pass_yds",
-      "line": 245.5,
+      "prop_type": "${sportLabel === 'NBA' ? 'points' : 'pass_yds'}",
+      "line": ${sportLabel === 'NBA' ? '24.5' : '245.5'},
       "lean": "over" or "under",
       "hypothesis": "One sentence explaining why",
       "confidence": 0.50-0.75
@@ -43,7 +61,7 @@ ${NFL_PROPS_CONSTITUTION}
 
 Guidelines:
 - Focus on props with odds better than -130
-- Prefer volume stats (yards, receptions) over outcome stats (TDs)
+- Prefer volume stats (${sportLabel === 'NBA' ? 'points, rebounds, assists' : 'yards, receptions'}) over outcome stats (TDs)
 - Consider game script heavily
 - Flag any injury concerns
 `;
@@ -296,7 +314,8 @@ export async function runAgenticPropsPipeline({
   const stage1 = await runPropsHypothesisStage({
     gameSummary: context.gameSummary,
     propCandidates: context.propCandidates,
-    playerStats: context.playerStats
+    playerStats: context.playerStats,
+    sportLabel
   });
   console.log(`[Agentic Props][${sportLabel}] Found ${stage1.top_opportunities.length} opportunities`);
 

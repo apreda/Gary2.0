@@ -8,6 +8,7 @@ import { NCAAB_CONSTITUTION } from './ncaabConstitution.js';
 import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
 import { NHL_CONSTITUTION } from './nhlConstitution.js';
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
+import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { EPL_CONSTITUTION } from './eplConstitution.js';
 
 const CONSTITUTIONS = {
@@ -17,9 +18,11 @@ const CONSTITUTIONS = {
   NCAAF: NCAAF_CONSTITUTION,
   NHL: NHL_CONSTITUTION,
   NFL_PROPS: NFL_PROPS_CONSTITUTION,
+  NBA_PROPS: NBA_PROPS_CONSTITUTION,
   EPL: EPL_CONSTITUTION,
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
+  basketball_nba_props: NBA_PROPS_CONSTITUTION,
   americanfootball_nfl: NFL_CONSTITUTION,
   americanfootball_nfl_props: NFL_PROPS_CONSTITUTION,
   basketball_ncaab: NCAAB_CONSTITUTION,
@@ -33,5 +36,5 @@ export function getConstitution(sport) {
   return CONSTITUTIONS[normalized] || CONSTITUTIONS[sport] || '';
 }
 
-export { NBA_CONSTITUTION, NFL_CONSTITUTION, NCAAB_CONSTITUTION, NCAAF_CONSTITUTION, NHL_CONSTITUTION, NFL_PROPS_CONSTITUTION, EPL_CONSTITUTION };
+export { NBA_CONSTITUTION, NFL_CONSTITUTION, NCAAB_CONSTITUTION, NCAAF_CONSTITUTION, NHL_CONSTITUTION, NFL_PROPS_CONSTITUTION, NBA_PROPS_CONSTITUTION, EPL_CONSTITUTION };
 

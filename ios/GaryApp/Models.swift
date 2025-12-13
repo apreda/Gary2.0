@@ -309,8 +309,23 @@ struct PropPick: Identifiable, Codable {
     }
     
     /// Get the sport/league (checks both fields)
+    /// Normalizes API format ("basketball_nba") to display format ("NBA")
     var effectiveLeague: String? {
-        league ?? sport
+        if let league = league, !league.isEmpty {
+            return league.uppercased()
+        }
+        // Normalize sport field from API format (e.g., "basketball_nba" -> "NBA")
+        guard let sport = sport else { return nil }
+        let normalized = sport.lowercased()
+        if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
+        if normalized.contains("nfl") { return "NFL" }
+        if normalized.contains("nhl") { return "NHL" }
+        if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
+        if normalized.contains("ncaaf") { return "NCAAF" }
+        if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
+        if normalized.contains("mlb") { return "MLB" }
+        if normalized.contains("wnba") { return "WNBA" }
+        return sport.uppercased()
     }
     
     /// Parse from dictionary (for manual JSON parsing)

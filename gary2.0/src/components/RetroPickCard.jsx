@@ -4,6 +4,31 @@ import { useToast } from './ui/ToastProvider';
 import FlipCard from './FlipCard';
 import GaryEmblem from '../assets/images/Garyemblem.png';
 
+// Helper to get college school/location name (e.g., "Nebraska" from "Nebraska Cornhuskers")
+// Used for NCAAB and NCAAF to display school names instead of mascots
+// Only removes the mascot portion, keeps full school name
+const getCollegeSchoolName = (teamName) => {
+  if (!teamName) return 'TBD';
+  const words = teamName.split(' ');
+  
+  if (words.length <= 1) return teamName;
+  if (words.length === 2) return words[0]; // "Nebraska Cornhuskers" → "Nebraska"
+  
+  // Common mascot prefix words that indicate a 2-word mascot
+  // e.g., "Fighting Illini", "Blue Devils", "Red Raiders", "Tar Heels"
+  const mascotPrefixes = ['Fighting', 'Golden', 'Blue', 'Red', 'Crimson', 'Scarlet', 'Mean', 'Runnin', 'Running', 'Flying', 'Ragin', 'Sun', 'War', 'Nittany', 'Horned', 'Yellow', 'Demon', 'Green', 'Purple', 'Orange', 'Tar', 'Great'];
+  
+  // Check if second-to-last word is a mascot prefix (indicates 2-word mascot)
+  const secondToLast = words[words.length - 2];
+  if (mascotPrefixes.includes(secondToLast)) {
+    // Two-word mascot, remove last 2 words
+    return words.slice(0, -2).join(' '); // "Illinois Fighting Illini" → "Illinois"
+  }
+  
+  // Single-word mascot, remove last word only
+  return words.slice(0, -1).join(' '); // "San Diego State Aztecs" → "San Diego State"
+};
+
 /**
  * RetroPickCard - Combines backend logic with retro sports card styling
  * Implements the 1980s Vegas / retro sports card design for Gary 2.0
@@ -11,15 +36,27 @@ import GaryEmblem from '../assets/images/Garyemblem.png';
 export default function RetroPickCard({ pick, showToast: showToastFromProps, onDecisionMade, isFlipped: controlledFlipped, setIsFlipped: setControlledFlipped }) {
   // Format game title to show only team names (e.g., "PISTONS @ KNICKS")
 // Use direct homeTeam and awayTeam fields if available, otherwise try to parse from game string
-function formatGameTitle(game, homeTeam, awayTeam) {
+// For NCAAB and NCAAF, shows school names instead of mascots
+function formatGameTitle(game, homeTeam, awayTeam, league) {
   // If we have direct homeTeam and awayTeam fields, use those (preferred method)
   if (homeTeam && awayTeam) {
     console.log('Using direct team names:', homeTeam, awayTeam);
-    // Extract team names (everything after the last space for shorter display)
-    const homeName = homeTeam.split(' ').pop() || 'HOME';
-    const awayName = awayTeam.split(' ').pop() || 'AWAY';
-    // ALWAYS use awayTeam @ homeTeam format
-    return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+    
+    const leagueUpper = (league || '').toUpperCase();
+    const isCollege = leagueUpper === 'NCAAB' || leagueUpper === 'NCAAF';
+    
+    if (isCollege) {
+      // Use school names for college sports
+      const homeName = getCollegeSchoolName(homeTeam);
+      const awayName = getCollegeSchoolName(awayTeam);
+      return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+    } else {
+      // Extract mascot names (everything after the last space for shorter display)
+      const homeName = homeTeam.split(' ').pop() || 'HOME';
+      const awayName = awayTeam.split(' ').pop() || 'AWAY';
+      // ALWAYS use awayTeam @ homeTeam format
+      return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+    }
   }
   
   // Fallback to parsing from game string if homeTeam/awayTeam not available
@@ -231,13 +268,14 @@ function formatGameTitle(game, homeTeam, awayTeam) {
   // Apply formatting to safePick - store the formatted version as a new property to avoid overwriting original
   safePick.formattedPick = getFormattedShortPick(safePick);
   
-  // Format game display (convert to "AWAY @ HOME" format with team nicknames only)
-  // ALWAYS use homeTeam and awayTeam fields directly when available
+  // Format game display (convert to "AWAY @ HOME" format)
+  // For NCAAB/NCAAF: shows school names (e.g., "NEBRASKA @ ILLINOIS")
+  // For pro sports: shows mascots (e.g., "THUNDER @ LAKERS")
   safePick.formattedGame = (safePick.homeTeam && safePick.awayTeam) ? 
-    `${safePick.awayTeam.split(' ').pop().toUpperCase()} @ ${safePick.homeTeam.split(' ').pop().toUpperCase()}` : 
+    formatGameTitle(safePick.game, safePick.homeTeam, safePick.awayTeam, safePick.league) : 
     (pick?.homeTeam && pick?.awayTeam ? 
-      `${pick.awayTeam.split(' ').pop().toUpperCase()} @ ${pick.homeTeam.split(' ').pop().toUpperCase()}` : 
-      formatGameTitle(safePick.game));
+      formatGameTitle(pick.game, pick.homeTeam, pick.awayTeam, pick.league) : 
+      formatGameTitle(safePick.game, null, null, safePick.league));
 
   // Get league information from the pick (could be MLB, NBA, NHL, etc.)
   // Don't default to any specific league to avoid bias

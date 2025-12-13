@@ -481,24 +481,27 @@ struct HomeView: View {
 // MARK: - Sport Filter
 
 enum Sport: String, CaseIterable {
+    // Order: ALL → NBA → NFL → NHL → NCAAB → NCAAF → EPL → MLB → WNBA
     case all = "ALL"
-    case nfl = "NFL"
     case nba = "NBA"
+    case nfl = "NFL"
+    case nhl = "NHL"
     case ncaab = "NCAAB"
     case ncaaf = "NCAAF"
+    case epl = "EPL"
     case mlb = "MLB"
-    case nhl = "NHL"
     case wnba = "WNBA"
     
     var icon: String {
         switch self {
         case .all: return "star.fill"
-        case .nfl: return "football.fill"
         case .nba: return "basketball.fill"
+        case .nfl: return "football.fill"
+        case .nhl: return "hockey.puck.fill"
         case .ncaab: return "basketball.fill"
         case .ncaaf: return "football.fill"
+        case .epl: return "soccerball"
         case .mlb: return "baseball.fill"
-        case .nhl: return "hockey.puck.fill"
         case .wnba: return "basketball.fill"
         }
     }
@@ -506,13 +509,22 @@ enum Sport: String, CaseIterable {
     var accentColor: Color {
         switch self {
         case .all: return GaryColors.gold
-        case .nba: return Color(hex: "#3B82F6")
-        case .wnba: return Color(hex: "#F97316")
-        case .nfl: return GaryColors.gold
-        case .ncaab: return Color(hex: "#8B5CF6")
-        case .ncaaf: return Color(hex: "#DC2626")
-        case .mlb: return Color(hex: "#0EA5E9")
-        case .nhl: return Color(hex: "#F97316")
+        case .nba: return Color(hex: "#3B82F6")      // Blue
+        case .nfl: return GaryColors.gold            // Gold
+        case .nhl: return Color(hex: "#00A3E0")      // Ice Blue
+        case .ncaab: return Color(hex: "#8B5CF6")    // Purple
+        case .ncaaf: return Color(hex: "#DC2626")    // Red
+        case .epl: return Color(hex: "#37003C")      // Premier League Purple
+        case .mlb: return Color(hex: "#0EA5E9")      // Sky Blue
+        case .wnba: return Color(hex: "#F97316")     // Orange
+        }
+    }
+    
+    /// Whether this sport is in beta (limited data/analytics)
+    var isBeta: Bool {
+        switch self {
+        case .nhl, .epl: return true
+        default: return false
         }
     }
     
@@ -573,6 +585,7 @@ struct SportFilterBar: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
         }
+        .frame(height: 44)
     }
 }
 
@@ -659,13 +672,14 @@ struct GaryPicksView: View {
                         // Force a transition when sport changes to avoid list diffing
                         .id(selectedSport) 
                     }
+                    // Pull-to-refresh only on the picks ScrollView, not the filter bar
+                    .refreshable {
+                        await loadPicks()
+                    }
                 }
             }
         }
         .task {
-            await loadPicks()
-        }
-        .refreshable {
             await loadPicks()
         }
         .onChange(of: selectedSport) { _ in
@@ -784,13 +798,14 @@ struct GaryPropsView: View {
                         .padding(.vertical, 8)
                         .padding(.bottom, 100)
                     }
+                    // Pull-to-refresh only on the props ScrollView, not the filter bar
+                    .refreshable {
+                        await loadProps()
+                    }
                 }
             }
         }
         .task {
-            await loadProps()
-        }
-        .refreshable {
             await loadProps()
         }
         .onChange(of: selectedSport) { _ in
@@ -987,6 +1002,7 @@ struct BillfoldView: View {
             }
             .padding(.horizontal, 2)
         }
+        .frame(height: 38)
     }
     
     private var timeframeButtons: some View {
@@ -1376,15 +1392,33 @@ struct PickCardMobile: View {
         return parts
     }
     
+    /// Check if this pick's sport is in beta
+    private var isBetaSport: Bool {
+        Sport.from(league: pick.league).isBeta
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Header Row - Icon left, Time right
             HStack {
-                Image(systemName: Sport.from(league: pick.league).icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.75))
-                    .padding(10)
-                    .goldGlassCircle()
+                HStack(spacing: 8) {
+                    Image(systemName: Sport.from(league: pick.league).icon)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.75))
+                        .padding(10)
+                        .goldGlassCircle()
+                    
+                    // BETA badge for sports with limited analytics
+                    if isBetaSport {
+                        Text("BETA")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.orange.opacity(0.2))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                }
                 
                 Spacer()
                 
@@ -1399,8 +1433,10 @@ struct PickCardMobile: View {
             }
             
             // Teams - Soft white with truncation for long names (always short names for matchup)
+            // For NCAAB/NCAAF: shows school names (e.g., "Nebraska @ Illinois")
+            // For pro sports: shows mascots (e.g., "Thunder @ Lakers")
             HStack {
-                Text(Formatters.shortTeamName(pick.awayTeam))
+                Text(Formatters.shortTeamName(pick.awayTeam, league: pick.league))
                     .font(.title3.bold())
                     .foregroundStyle(Color.white.opacity(0.75))
                     .lineLimit(1)
@@ -1411,7 +1447,7 @@ struct PickCardMobile: View {
                     .foregroundStyle(Color.white.opacity(0.5))
                     .layoutPriority(1)
                 Spacer()
-                Text(Formatters.shortTeamName(pick.homeTeam))
+                Text(Formatters.shortTeamName(pick.homeTeam, league: pick.league))
                     .font(.title3.bold())
                     .foregroundStyle(Color.white.opacity(0.75))
                     .lineLimit(1)
@@ -1522,6 +1558,11 @@ struct PropCardMobile: View {
     @State private var showAnalysis = false
     @State private var isPressed = false
     
+    /// Get accent color based on sport/league (matches pick cards)
+    private var accentColor: Color {
+        Sport.from(league: prop.effectiveLeague).accentColor
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -1538,7 +1579,7 @@ struct PropCardMobile: View {
                 Spacer()
                 Text(Formatters.americanOdds(prop.odds))
                     .font(.title3.bold())
-                    .foregroundStyle(GaryColors.goldGradient)
+                    .foregroundStyle(accentColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .liquidGlass(cornerRadius: 10)
@@ -1550,7 +1591,7 @@ struct PropCardMobile: View {
             
             HStack(spacing: 8) {
                 Image(systemName: "bolt.fill")
-                    .foregroundStyle(GaryColors.gold)
+                    .foregroundStyle(accentColor)
                 Text("GARY'S PICK")
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
@@ -1587,7 +1628,7 @@ struct PropCardMobile: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.text.magnifyingglass")
-                            .foregroundStyle(GaryColors.goldGradient)
+                            .foregroundStyle(accentColor)
                         Text("View Analysis")
                     }
                     .font(.subheadline.bold())
@@ -1607,9 +1648,9 @@ struct PropCardMobile: View {
                 .fill(GaryColors.cardBg)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1)
+                        .stroke(accentColor.opacity(0.4), lineWidth: 1)
                 )
-                .shadow(color: GaryColors.gold.opacity(0.1), radius: 16, y: 8)
+                .shadow(color: accentColor.opacity(0.1), radius: 16, y: 8)
                 .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
         }
         .scaleEffect(isPressed ? 0.98 : 1.0)
@@ -1749,12 +1790,13 @@ struct AnalysisSheet: View {
     private let darkBg = Color(hex: "#0a0a0a")
     
     /// Get shortened team names
+    /// For NCAAB/NCAAF: shows school names; for pro sports: shows mascots
     private var homeTeam: String {
-        Formatters.shortTeamName(pick.homeTeam)
+        Formatters.shortTeamName(pick.homeTeam, league: pick.league)
     }
     
     private var awayTeam: String {
-        Formatters.shortTeamName(pick.awayTeam)
+        Formatters.shortTeamName(pick.awayTeam, league: pick.league)
     }
     
     /// Extract Gary's narrative from the rationale (after "Gary's Take")
@@ -1774,7 +1816,7 @@ struct AnalysisSheet: View {
     private var garyPickedHome: Bool {
         guard let pickText = pick.pick?.lowercased() else { return true }
         let homeLower = (pick.homeTeam ?? "").lowercased()
-        let homeShort = Formatters.shortTeamName(pick.homeTeam).lowercased()
+        let homeShort = Formatters.shortTeamName(pick.homeTeam, league: pick.league).lowercased()
         
         // Check if pick contains home team name
         return pickText.contains(homeLower) || pickText.contains(homeShort)
@@ -2397,11 +2439,13 @@ struct TaleOfTapeView: View {
     let teams: (String, String) // (team1, team2) - order from parsing
     let data: [(String, String, String)] // (label, team1Value, team2Value)
     let accentColor: Color
+    var league: String? = nil // Optional league for college team name formatting
     
-    /// Get shortened team names (just the nickname)
+    /// Get shortened team names
+    /// For NCAAB/NCAAF: shows school names; for pro sports: shows mascots
     private var shortTeams: (String, String) {
-        let short1 = Formatters.shortTeamName(teams.0)
-        let short2 = Formatters.shortTeamName(teams.1)
+        let short1 = Formatters.shortTeamName(teams.0, league: league)
+        let short2 = Formatters.shortTeamName(teams.1, league: league)
         return (short1, short2)
     }
     
@@ -2760,10 +2804,58 @@ enum Formatters {
         ].compactMap { $0 }.joined(separator: " ")
     }
     
-    static func shortTeamName(_ team: String?) -> String {
+    /// Get short team name for display
+    /// - For NCAAB/NCAAF: Returns school name (e.g., "Nebraska" from "Nebraska Cornhuskers")
+    /// - For pro sports: Returns mascot (e.g., "Thunder" from "Oklahoma City Thunder")
+    static func shortTeamName(_ team: String?, league: String? = nil) -> String {
         guard let team = team, !team.isEmpty else { return "" }
-        let words = team.split(separator: " ")
-        return words.count > 1 ? String(words.last ?? "") : team
+        let words = team.split(separator: " ").map(String.init)
+        
+        guard words.count > 1 else { return team }
+        
+        // Check if this is a college sport
+        let leagueUpper = (league ?? "").uppercased()
+        let isCollege = leagueUpper == "NCAAB" || leagueUpper == "NCAAF"
+        
+        if isCollege {
+            // For college: return school name (remove mascot from end)
+            return collegeSchoolName(words)
+        } else {
+            // For pro sports: return mascot (last word)
+            return words.last ?? team
+        }
+    }
+    
+    /// Extract college school name from full team name
+    /// Removes mascot(s) from the end, keeping school/location
+    /// e.g., "Nebraska Cornhuskers" → "Nebraska"
+    /// e.g., "North Carolina Tar Heels" → "North Carolina"
+    /// e.g., "San Diego State Aztecs" → "San Diego State"
+    private static func collegeSchoolName(_ words: [String]) -> String {
+        guard words.count >= 2 else { return words.joined(separator: " ") }
+        
+        // For 2-word names, first word is school
+        if words.count == 2 {
+            return words[0]
+        }
+        
+        // Common mascot prefix words that indicate a 2-word mascot
+        // e.g., "Fighting Illini", "Blue Devils", "Red Raiders", "Tar Heels"
+        let mascotPrefixes: Set<String> = [
+            "Fighting", "Golden", "Blue", "Red", "Crimson", "Scarlet", "Mean",
+            "Runnin", "Running", "Flying", "Ragin", "Sun", "War", "Nittany",
+            "Horned", "Yellow", "Demon", "Green", "Purple", "Orange", "Tar", "Great"
+        ]
+        
+        // Check if second-to-last word is a mascot prefix (indicates 2-word mascot)
+        let secondToLast = words[words.count - 2]
+        if mascotPrefixes.contains(secondToLast) {
+            // Two-word mascot, remove last 2 words
+            return words.dropLast(2).joined(separator: " ")
+        }
+        
+        // Single-word mascot, remove last word only
+        return words.dropLast(1).joined(separator: " ")
     }
     
     static func splitPickAndOdds(_ pick: String?) -> (String, String) {
