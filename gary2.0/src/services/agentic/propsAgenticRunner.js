@@ -7,12 +7,15 @@ import { openaiService } from '../openaiService.js';
 import { safeJsonParse } from './agenticUtils.js';
 import { NFL_PROPS_CONSTITUTION } from './constitution/nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './constitution/nbaPropsConstitution.js';
+import { EPL_PROPS_CONSTITUTION } from './constitution/eplPropsConstitution.js';
+import { NHL_PROPS_CONSTITUTION } from './constitution/nhlPropsConstitution.js';
 
 // Map of sport labels to constitutions
 const SPORT_CONSTITUTIONS = {
   'NFL': NFL_PROPS_CONSTITUTION,
   'NBA': NBA_PROPS_CONSTITUTION,
-  // Add more sports here as they're created
+  'EPL': EPL_PROPS_CONSTITUTION,
+  'NHL': NHL_PROPS_CONSTITUTION,
 };
 
 /**
