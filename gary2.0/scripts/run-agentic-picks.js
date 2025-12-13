@@ -31,6 +31,7 @@ const { picksService } = await import('../src/services/picksService.js');
 const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀' }, // Full games - stats now working!
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
+  nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true }, // BETA: Limited advanced analytics
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true } // FBS only (no FCS)
 };
@@ -64,10 +65,11 @@ const runAll = args.includes('--all');
 const sportsToRun = [];
 
 if (runAll) {
-  sportsToRun.push('nba', 'nfl', 'ncaab', 'ncaaf');
+  sportsToRun.push('nba', 'nfl', 'nhl', 'ncaab', 'ncaaf');
 } else {
   if (args.includes('--nba')) sportsToRun.push('nba');
   if (args.includes('--nfl')) sportsToRun.push('nfl');
+  if (args.includes('--nhl')) sportsToRun.push('nhl');
   if (args.includes('--ncaab')) sportsToRun.push('ncaab');
   if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
 }
@@ -81,6 +83,7 @@ if (sportsToRun.length === 0) {
 ║  Usage:                                                          ║
 ║    node scripts/run-agentic-picks.js --nba                       ║
 ║    node scripts/run-agentic-picks.js --nfl                       ║
+║    node scripts/run-agentic-picks.js --nhl   (BETA)              ║
 ║    node scripts/run-agentic-picks.js --ncaab                     ║
 ║    node scripts/run-agentic-picks.js --ncaaf                     ║
 ║    node scripts/run-agentic-picks.js --all                       ║
@@ -456,7 +459,11 @@ async function main() {
             commence_time: game.commence_time,
             statsUsed: statsUsed, // Token names for backwards compatibility
             statsData: statsData, // Full stat data with values for Tale of the Tape
-            injuries: result.injuries || null // Structured injury data from BDL
+            injuries: result.injuries || null, // Structured injury data from BDL
+            isBeta: config.isBeta || false, // Beta flag for sports with limited data
+            dataLimitationNote: config.isBeta 
+              ? 'NHL picks use supplemental web-sourced analytics. Confidence may be lower than NBA/NFL.'
+              : null
           };
           
           // Add to picks

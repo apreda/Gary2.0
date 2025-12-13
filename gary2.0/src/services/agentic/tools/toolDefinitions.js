@@ -97,12 +97,39 @@ const NCAAF_TOKENS = [
   'RECENT_FORM', 'CONFERENCE_RECORD', 'VS_RANKED', 'ATS_TRENDS'
 ];
 
+// NHL Stat Tokens (BETA - uses BDL + Perplexity for advanced stats)
+const NHL_TOKENS = [
+  // Standings & Records
+  'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'DIVISION_STANDING',
+  // Special Teams (critical in hockey)
+  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES',
+  // Scoring
+  'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'SCORING_FIRST',
+  // Shot Metrics (Corsi proxy)
+  'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL', 'SHOT_QUALITY',
+  // Advanced (via Perplexity)
+  'CORSI_FOR_PCT', 'EXPECTED_GOALS', 'PDO', 'HIGH_DANGER_CHANCES',
+  // Goaltending
+  'GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP',
+  // Situational
+  'REST_SITUATION', 'BACK_TO_BACK', 'HOME_ICE', 'ROAD_PERFORMANCE',
+  // Faceoffs & Possession
+  'FACEOFF_PCT', 'POSSESSION_METRICS',
+  // Players
+  'TOP_SCORERS', 'TOP_PLAYERS', 'INJURIES', 'LINE_COMBINATIONS',
+  // Historical
+  'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS', 'ATS_TRENDS',
+  // Luck/Regression
+  'LUCK_INDICATORS', 'CLOSE_GAME_RECORD', 'OVERTIME_RECORD'
+];
+
 // Combine all tokens by sport
 const ALL_TOKENS_BY_SPORT = {
   NBA: NBA_TOKENS,
   NFL: NFL_TOKENS,
   NCAAB: NCAAB_TOKENS,
-  NCAAF: NCAAF_TOKENS
+  NCAAF: NCAAF_TOKENS,
+  NHL: NHL_TOKENS
 };
 
 // Get all unique tokens across all sports
@@ -110,7 +137,8 @@ const ALL_TOKENS = [...new Set([
   ...NBA_TOKENS,
   ...NFL_TOKENS,
   ...NCAAB_TOKENS,
-  ...NCAAF_TOKENS
+  ...NCAAF_TOKENS,
+  ...NHL_TOKENS
 ])];
 
 /**
@@ -131,7 +159,7 @@ Typical analysis needs 2-5 stat categories.`,
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NCAAB", "NCAAF"],
+            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL"],
             description: "The sport league"
           },
           token: {
@@ -210,5 +238,5 @@ export function formatTokenMenu(sport) {
   return output.trim();
 }
 
-export { NBA_TOKENS, NFL_TOKENS, NCAAB_TOKENS, NCAAF_TOKENS, ALL_TOKENS };
+export { NBA_TOKENS, NFL_TOKENS, NCAAB_TOKENS, NCAAF_TOKENS, NHL_TOKENS, ALL_TOKENS };
 

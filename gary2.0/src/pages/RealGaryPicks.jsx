@@ -28,6 +28,49 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+// Helper to get college school/location name (e.g., "Nebraska" from "Nebraska Cornhuskers")
+// Used for NCAAB and NCAAF to display school names instead of mascots
+// Only removes the mascot portion, keeps full school name
+const getCollegeSchoolName = (teamName) => {
+  if (!teamName) return 'TBD';
+  const words = teamName.split(' ');
+  
+  if (words.length <= 1) return teamName;
+  if (words.length === 2) return words[0]; // "Nebraska Cornhuskers" → "Nebraska"
+  
+  // Common mascot prefix words that indicate a 2-word mascot
+  // e.g., "Fighting Illini", "Blue Devils", "Red Raiders", "Tar Heels"
+  const mascotPrefixes = ['Fighting', 'Golden', 'Blue', 'Red', 'Crimson', 'Scarlet', 'Mean', 'Runnin', 'Running', 'Flying', 'Ragin', 'Sun', 'War', 'Nittany', 'Horned', 'Yellow', 'Demon', 'Green', 'Purple', 'Orange', 'Tar', 'Great'];
+  
+  // Check if second-to-last word is a mascot prefix (indicates 2-word mascot)
+  const secondToLast = words[words.length - 2];
+  if (mascotPrefixes.includes(secondToLast)) {
+    // Two-word mascot, remove last 2 words
+    return words.slice(0, -2).join(' '); // "Illinois Fighting Illini" → "Illinois"
+  }
+  
+  // Single-word mascot, remove last word only
+  return words.slice(0, -1).join(' '); // "San Diego State Aztecs" → "San Diego State"
+};
+
+// Helper to format matchup display based on league
+const formatMatchupDisplay = (pick) => {
+  if (!pick?.homeTeam || !pick?.awayTeam) {
+    return pick?.game || 'TBD';
+  }
+  
+  const league = pick?.league?.toUpperCase() || '';
+  const isCollege = league === 'NCAAB' || league === 'NCAAF';
+  
+  if (isCollege) {
+    // Use school names for college sports
+    return `${getCollegeSchoolName(pick.awayTeam)} @ ${getCollegeSchoolName(pick.homeTeam)}`;
+  } else {
+    // Use mascots for pro sports (current behavior)
+    return `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}`;
+  }
+};
+
 // Integrated Analysis Component - Gary's Take main, Risks at bottom, Stats overlay
 const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
   const [showStatsOverlay, setShowStatsOverlay] = useState(false);
@@ -889,7 +932,7 @@ function RealGaryPicks() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [selectedSport, setSelectedSport] = useState('NBA');
-  const sportsTabs = ['NBA', 'NFL', 'NCAAB', 'NCAAF', 'EPL', 'MLB', 'WNBA'];
+  const sportsTabs = ['NBA', 'NFL', 'NHL', 'NCAAB', 'NCAAF', 'EPL', 'MLB', 'WNBA'];
 
   // Load decisions from localStorage
   const loadLocalDecisions = () => {
@@ -1224,6 +1267,7 @@ function RealGaryPicks() {
       case 'NBA': return '#3B82F6';      // Blue
       case 'WNBA': return '#F97316';     // Orange
       case 'NFL': return '#bfa142';      // Original Gold
+      case 'NHL': return '#00A3E0';      // Ice Blue
       case 'NCAAB': return '#8B5CF6';    // Purple
       case 'NCAAF': return '#DC2626';    // Red
       case 'EPL': return '#6366F1';      // Indigo
@@ -1612,13 +1656,30 @@ function RealGaryPicks() {
                                               }}>
                                                 League
                                               </div>
-                                              <div style={{ 
-                                                fontSize: '1.25rem', 
-                                                fontWeight: 600, 
+                                              <div style={{
+                                                fontSize: '1.25rem',
+                                                fontWeight: 600,
                                                 letterSpacing: '0.02em',
-                                                opacity: 0.95
+                                                opacity: 0.95,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem'
                                               }}>
                                                 {pick.league || 'MLB'}
+                                                {(pick.isBeta || pick.league === 'NHL') && (
+                                                  <span style={{
+                                                    fontSize: '0.6rem',
+                                                    fontWeight: 700,
+                                                    padding: '0.15rem 0.35rem',
+                                                    borderRadius: '4px',
+                                                    background: 'rgba(255,165,0,0.2)',
+                                                    color: '#FFA500',
+                                                    letterSpacing: '0.05em',
+                                                    textTransform: 'uppercase'
+                                                  }}>
+                                                    BETA
+                                                  </span>
+                                                )}
                                               </div>
                                             </div>
                                             
@@ -1665,9 +1726,7 @@ function RealGaryPicks() {
                                                 fontWeight: 600,
                                                 opacity: 0.9
                                               }}>
-                                                {(pick.homeTeam && pick.awayTeam) ? 
-                                                  `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}` : 
-                                                  (pick.game ? pick.game : 'TBD')}
+                                                {formatMatchupDisplay(pick)}
                                               </div>
                                             </div>
                                           </div>
