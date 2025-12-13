@@ -53,7 +53,8 @@ function sportToBdlKey(sport) {
     'NBA': 'basketball_nba',
     'NFL': 'americanfootball_nfl',
     'NCAAB': 'basketball_ncaab',
-    'NCAAF': 'americanfootball_ncaaf'
+    'NCAAF': 'americanfootball_ncaaf',
+    'NHL': 'icehockey_nhl'
   };
   return mapping[sport] || sport;
 }
@@ -67,10 +68,12 @@ function normalizeSportName(sport) {
     'americanfootball_nfl': 'NFL',
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
+    'icehockey_nhl': 'NHL',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NCAAB': 'NCAAB',
-    'NCAAF': 'NCAAF'
+    'NCAAF': 'NCAAF',
+    'NHL': 'NHL'
   };
   return mapping[sport] || sport;
 }
@@ -1522,11 +1525,329 @@ const FETCHERS = {
       home: { team: home.full_name || home.name },
       away: { team: away.full_name || away.name }
     };
+  },
+
+  // ===== NHL SPECIFIC FETCHERS (BETA) =====
+  
+  POWER_PLAY_PCT: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Power Play Percentage',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        power_play_pct: homeRates?.ppPct ? fmtPct(homeRates.ppPct) : 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        power_play_pct: awayRates?.ppPct ? fmtPct(awayRates.ppPct) : 'N/A'
+      },
+      note: 'League average PP% is ~20%. Elite is 24%+.'
+    };
+  },
+  
+  PENALTY_KILL_PCT: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Penalty Kill Percentage',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        penalty_kill_pct: homeRates?.pkPct ? fmtPct(homeRates.pkPct) : 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        penalty_kill_pct: awayRates?.pkPct ? fmtPct(awayRates.pkPct) : 'N/A'
+      },
+      note: 'League average PK% is ~80%. Elite is 82%+.'
+    };
+  },
+  
+  SPECIAL_TEAMS: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Special Teams (PP% + PK%)',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        power_play_pct: homeRates?.ppPct ? fmtPct(homeRates.ppPct) : 'N/A',
+        penalty_kill_pct: homeRates?.pkPct ? fmtPct(homeRates.pkPct) : 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        power_play_pct: awayRates?.ppPct ? fmtPct(awayRates.ppPct) : 'N/A',
+        penalty_kill_pct: awayRates?.pkPct ? fmtPct(awayRates.pkPct) : 'N/A'
+      },
+      interpretation: `Compare ${home.name} PP% vs ${away.name} PK% and vice versa for scoring edges`
+    };
+  },
+  
+  GOALS_FOR: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Goals For Per Game',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        goals_for_per_game: fmtNum(homeRates?.goalsForPerGame)
+      },
+      away: {
+        team: away.full_name || away.name,
+        goals_for_per_game: fmtNum(awayRates?.goalsForPerGame)
+      }
+    };
+  },
+  
+  GOALS_AGAINST: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Goals Against Per Game',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        goals_against_per_game: fmtNum(homeRates?.goalsAgainstPerGame)
+      },
+      away: {
+        team: away.full_name || away.name,
+        goals_against_per_game: fmtNum(awayRates?.goalsAgainstPerGame)
+      },
+      note: 'Lower is better for defense'
+    };
+  },
+  
+  SHOTS_FOR: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Shots For Per Game (Possession Proxy)',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        shots_for_per_game: fmtNum(homeRates?.shotsForPerGame)
+      },
+      away: {
+        team: away.full_name || away.name,
+        shots_for_per_game: fmtNum(awayRates?.shotsForPerGame)
+      },
+      note: 'Higher shot volume indicates more puck possession'
+    };
+  },
+  
+  SHOTS_AGAINST: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Shots Against Per Game',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        shots_against_per_game: fmtNum(homeRates?.shotsAgainstPerGame)
+      },
+      away: {
+        team: away.full_name || away.name,
+        shots_against_per_game: fmtNum(awayRates?.shotsAgainstPerGame)
+      },
+      note: 'Lower is better - indicates defensive structure'
+    };
+  },
+  
+  SHOT_DIFFERENTIAL: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    const homeDiff = (homeRates?.shotsForPerGame || 0) - (homeRates?.shotsAgainstPerGame || 0);
+    const awayDiff = (awayRates?.shotsForPerGame || 0) - (awayRates?.shotsAgainstPerGame || 0);
+    
+    return {
+      category: 'Shot Differential (Corsi Proxy)',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        shots_for: fmtNum(homeRates?.shotsForPerGame),
+        shots_against: fmtNum(homeRates?.shotsAgainstPerGame),
+        differential: fmtNum(homeDiff, 1)
+      },
+      away: {
+        team: away.full_name || away.name,
+        shots_for: fmtNum(awayRates?.shotsForPerGame),
+        shots_against: fmtNum(awayRates?.shotsAgainstPerGame),
+        differential: fmtNum(awayDiff, 1)
+      },
+      interpretation: homeDiff > awayDiff 
+        ? `${home.name} controls possession better (+${fmtNum(homeDiff - awayDiff, 1)} shots/game)`
+        : `${away.name} controls possession better (+${fmtNum(awayDiff - homeDiff, 1)} shots/game)`
+    };
+  },
+  
+  FACEOFF_PCT: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    return {
+      category: 'Faceoff Win Percentage',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        faceoff_pct: homeRates?.faceoffWinPct ? fmtPct(homeRates.faceoffWinPct) : 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        faceoff_pct: awayRates?.faceoffWinPct ? fmtPct(awayRates.faceoffWinPct) : 'N/A'
+      },
+      note: 'Faceoff wins correlate with puck possession and zone time'
+    };
+  },
+  
+  GOALIE_STATS: async (bdlSport, home, away, season) => {
+    // For NHL, try to get goalie stats from player leaders
+    try {
+      const leaders = await ballDontLieService.getLeadersGeneric(bdlSport, { season, type: 'save_pct' });
+      
+      // Find goalies for each team
+      const homeGoalies = (leaders || []).filter(l => 
+        l.player?.team?.id === home.id || l.team?.id === home.id
+      );
+      const awayGoalies = (leaders || []).filter(l => 
+        l.player?.team?.id === away.id || l.team?.id === away.id
+      );
+      
+      return {
+        category: 'Goaltending Stats',
+        source: 'Ball Don\'t Lie API (Player Leaders)',
+        home: {
+          team: home.full_name || home.name,
+          goalies: homeGoalies.length > 0 
+            ? homeGoalies.slice(0, 2).map(g => ({
+                name: g.player?.full_name || `${g.player?.first_name} ${g.player?.last_name}`,
+                save_pct: g.value ? fmtPct(g.value) : 'N/A'
+              }))
+            : [{ note: 'Goalie data unavailable - check scout report' }]
+        },
+        away: {
+          team: away.full_name || away.name,
+          goalies: awayGoalies.length > 0 
+            ? awayGoalies.slice(0, 2).map(g => ({
+                name: g.player?.full_name || `${g.player?.first_name} ${g.player?.last_name}`,
+                save_pct: g.value ? fmtPct(g.value) : 'N/A'
+              }))
+            : [{ note: 'Goalie data unavailable - check scout report' }]
+        },
+        note: 'Save% >.920 = elite, .910-.920 = average, <.905 = liability'
+      };
+    } catch (e) {
+      return {
+        category: 'Goaltending Stats',
+        error: 'Goalie data unavailable',
+        home: { team: home.full_name || home.name, note: 'Check scout report for goalie info' },
+        away: { team: away.full_name || away.name, note: 'Check scout report for goalie info' }
+      };
+    }
+  },
+  
+  GOAL_DIFFERENTIAL: async (bdlSport, home, away, season) => {
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
+    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
+    
+    const homeDiff = (homeRates?.goalsForPerGame || 0) - (homeRates?.goalsAgainstPerGame || 0);
+    const awayDiff = (awayRates?.goalsForPerGame || 0) - (awayRates?.goalsAgainstPerGame || 0);
+    
+    return {
+      category: 'Goal Differential',
+      source: 'Ball Don\'t Lie API',
+      home: {
+        team: home.full_name || home.name,
+        goals_for: fmtNum(homeRates?.goalsForPerGame),
+        goals_against: fmtNum(homeRates?.goalsAgainstPerGame),
+        differential: fmtNum(homeDiff, 2)
+      },
+      away: {
+        team: away.full_name || away.name,
+        goals_for: fmtNum(awayRates?.goalsForPerGame),
+        goals_against: fmtNum(awayRates?.goalsAgainstPerGame),
+        differential: fmtNum(awayDiff, 2)
+      },
+      interpretation: homeDiff > awayDiff 
+        ? `${home.name} has stronger goal differential (+${fmtNum(homeDiff - awayDiff, 2)}/game)`
+        : `${away.name} has stronger goal differential (+${fmtNum(awayDiff - homeDiff, 2)}/game)`
+    };
   }
 };
 
 // Add aliases for tokens that use the same fetcher
 const ALIASES = {
+  // NHL Aliases
+  SHOT_METRICS: 'SHOT_DIFFERENTIAL',
+  SHOT_QUALITY: 'SHOT_DIFFERENTIAL',
+  SAVE_PCT: 'GOALIE_STATS',
+  GOALS_AGAINST_AVG: 'GOALIE_STATS',
+  GOALIE_MATCHUP: 'GOALIE_STATS',
+  PP_OPPORTUNITIES: 'SPECIAL_TEAMS',
+  SCORING_FIRST: 'RECENT_FORM',
+  CORSI_FOR_PCT: 'SHOT_DIFFERENTIAL',
+  EXPECTED_GOALS: 'SHOT_DIFFERENTIAL',
+  PDO: 'SHOT_DIFFERENTIAL',
+  HIGH_DANGER_CHANCES: 'SHOT_DIFFERENTIAL',
+  BACK_TO_BACK: 'REST_SITUATION',
+  HOME_ICE: 'HOME_AWAY_SPLITS',
+  ROAD_PERFORMANCE: 'HOME_AWAY_SPLITS',
+  POSSESSION_METRICS: 'FACEOFF_PCT',
+  TOP_SCORERS: 'TOP_PLAYERS',
+  LINE_COMBINATIONS: 'TOP_PLAYERS',
+  LUCK_INDICATORS: 'RECENT_FORM',
+  OVERTIME_RECORD: 'RECENT_FORM',
+  DIVISION_STANDING: 'STANDINGS',
   PACE_LAST_10: 'PACE',
   PACE_HOME_AWAY: 'HOME_AWAY_SPLITS',
   EFFICIENCY_LAST_10: 'NET_RATING',

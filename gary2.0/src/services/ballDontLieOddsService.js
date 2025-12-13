@@ -592,7 +592,8 @@ export const ballDontLieOddsService = {
       // Normalize away/visitor for non-NBA sports
       const awayTeamName = mapTeamName(g.visitor_team || g.away_team);
       const homeTeamName = mapTeamName(g.home_team);
-      const commenceTime = g.date || g.commence_time || g.game_time || new Date().toISOString();
+      // NHL uses start_time_utc, other sports use date/commence_time/game_time
+      const commenceTime = g.start_time_utc || g.date || g.commence_time || g.game_time || new Date().toISOString();
 
       const result = {
         id: g.id,

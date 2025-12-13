@@ -103,10 +103,12 @@ function normalizeSport(sport) {
     'americanfootball_nfl': 'NFL',
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
+    'icehockey_nhl': 'NHL',
     'nba': 'NBA',
     'nfl': 'NFL',
     'ncaab': 'NCAAB',
-    'ncaaf': 'NCAAF'
+    'ncaaf': 'NCAAF',
+    'nhl': 'NHL'
   };
   return mapping[sport?.toLowerCase()] || sport?.toUpperCase() || 'UNKNOWN';
 }
@@ -214,6 +216,34 @@ function buildTeamIdentity(stats, sport) {
       const oppPpg = parseFloat(stats.opp_total_points_per_game);
       if (oppPpg < 18) parts.push('elite defense');
       else if (oppPpg > 28) parts.push('porous defense');
+    }
+  } else if (sport === 'NHL') {
+    // Hockey identity
+    if (stats.goals_for_per_game) {
+      const gpg = parseFloat(stats.goals_for_per_game);
+      if (gpg > 3.5) parts.push('high-scoring');
+      else if (gpg < 2.5) parts.push('struggling offensively');
+    }
+    if (stats.goals_against_per_game) {
+      const gaa = parseFloat(stats.goals_against_per_game);
+      if (gaa < 2.5) parts.push('stingy defense');
+      else if (gaa > 3.5) parts.push('leaky defense');
+    }
+    if (stats.power_play_percentage) {
+      const pp = parseFloat(stats.power_play_percentage);
+      if (pp > 0.24) parts.push('elite PP');
+      else if (pp < 0.17) parts.push('weak PP');
+    }
+    if (stats.penalty_kill_percentage) {
+      const pk = parseFloat(stats.penalty_kill_percentage);
+      if (pk > 0.82) parts.push('elite PK');
+      else if (pk < 0.76) parts.push('vulnerable PK');
+    }
+    if (stats.shots_for_per_game && stats.shots_against_per_game) {
+      const sf = parseFloat(stats.shots_for_per_game);
+      const sa = parseFloat(stats.shots_against_per_game);
+      if (sf > sa + 5) parts.push('possession-heavy');
+      else if (sa > sf + 5) parts.push('outshot regularly');
     }
   }
   
@@ -682,10 +712,12 @@ function sportToBdlKey(sport) {
     'NFL': 'americanfootball_nfl',
     'NCAAB': 'basketball_ncaab',
     'NCAAF': 'americanfootball_ncaaf',
+    'NHL': 'icehockey_nhl',
     'basketball_nba': 'basketball_nba',
     'americanfootball_nfl': 'americanfootball_nfl',
     'basketball_ncaab': 'basketball_ncaab',
-    'americanfootball_ncaaf': 'americanfootball_ncaaf'
+    'americanfootball_ncaaf': 'americanfootball_ncaaf',
+    'icehockey_nhl': 'icehockey_nhl'
   };
   return mapping[sport] || null;
 }

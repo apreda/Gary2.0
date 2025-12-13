@@ -370,6 +370,118 @@ export const perplexityService = {
       return {};
     }
   },
+
+  /**
+   * Fetch advanced NHL analytics via Perplexity web search
+   * Sources: Natural Stat Trick, MoneyPuck, Hockey-Reference, Elite Prospects
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} dateStr - Game date (YYYY-MM-DD)
+   * @returns {Promise<Object>} - Advanced analytics as JSON
+   */
+  getNhlAdvancedStats: async function(homeTeam, awayTeam, dateStr = new Date().toISOString().slice(0, 10)) {
+    try {
+      const cacheKey = `nhl_adv:${dateStr}:${homeTeam}|${awayTeam}`;
+      const cached = cache.get(cacheKey);
+      if (cached && (Date.now() - cached.t) < CACHE_TTL) {
+        return cached.v;
+      }
+
+      const systemMessage = [
+        'You are a hockey analytics expert.',
+        'Return ONLY valid JSON (no markdown, no explanation) with these exact keys:',
+        'home_advanced: {team, corsi_for_pct, expected_goals_for_pct, pdo, high_danger_chances_for_pct, goals_saved_above_expected},',
+        'away_advanced: {team, corsi_for_pct, expected_goals_for_pct, pdo, high_danger_chances_for_pct, goals_saved_above_expected},',
+        'goalie_matchup: {home_starter, home_record, home_sv_pct, home_gaa, home_gsax, away_starter, away_record, away_sv_pct, away_gaa, away_gsax},',
+        'five_on_five: {home_cf_pct, home_xgf_pct, away_cf_pct, away_xgf_pct},',
+        'recent_form: {home_last_10, home_goals_per_game_l10, away_last_10, away_goals_per_game_l10},',
+        'key_analytics_insights: [] (3-4 most predictive metrics with brief rationale),',
+        'data_sources: [] (URLs or site names where data was found).',
+        'Use current 2024-25 season data. If a stat is unavailable, use null.'
+      ].join(' ');
+
+      const query = [
+        `Find current advanced NHL analytics for the matchup: ${awayTeam} at ${homeTeam}`,
+        `scheduled for ${dateStr} (2024-25 NHL season).`,
+        'Search Natural Stat Trick, MoneyPuck, Hockey-Reference for:',
+        '1. Corsi For % (CF%) - 5v5 shot attempt differential',
+        '2. Expected Goals For % (xGF%) - 5v5 chance quality',
+        '3. PDO (shooting% + save%) - luck indicator, league avg is 100',
+        '4. High-Danger Chances For % - quality scoring chances',
+        '5. Goals Saved Above Expected (GSAx) - goalie quality',
+        '6. Expected starting goalies with recent stats',
+        '7. Last 10 games record and scoring for both teams',
+        'Provide the most recent available data for both teams.'
+      ].join(' ');
+
+      const attempt = async (prompt, preferLarge = true) => {
+        const res = await this.search(prompt, {
+          model: preferLarge ? 'sonar-pro' : 'sonar',
+          temperature: 0.1,
+          maxTokens: 1800,
+          systemMessage
+        });
+        return res;
+      };
+
+      let res = await attempt(query, true);
+      if (!res?.success || !res?.data) {
+        console.warn('getNhlAdvancedStats: first attempt failed, retrying with simplified query');
+        const simplified = [
+          `Return JSON with NHL advanced stats for ${awayTeam} vs ${homeTeam}.`,
+          'Keys: home_advanced, away_advanced, goalie_matchup, five_on_five, recent_form, key_analytics_insights, data_sources.',
+          'Include Corsi%, xGF%, PDO, goalie save%, GSAx. Use null for unavailable stats.'
+        ].join(' ');
+        res = await attempt(simplified, false);
+        if (!res?.success || !res?.data) {
+          console.warn('getNhlAdvancedStats: both attempts failed');
+          return this._getDefaultNhlAdvancedStats(homeTeam, awayTeam);
+        }
+      }
+
+      const tryParse = (txt) => {
+        if (!txt) return null;
+        try { return JSON.parse(txt); } catch (e) {}
+        const codeMatch = txt.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (codeMatch && codeMatch[1]) { try { return JSON.parse(codeMatch[1]); } catch (e) {} }
+        const braceMatch = txt.match(/\{[\s\S]*\}/);
+        if (braceMatch && braceMatch[0]) { try { return JSON.parse(braceMatch[0]); } catch (e) {} }
+        return null;
+      };
+
+      const obj = tryParse(res.data);
+      if (obj && typeof obj === 'object') {
+        // Add metadata
+        obj._source = 'perplexity';
+        obj._fetchedAt = new Date().toISOString();
+        cache.set(cacheKey, { t: Date.now(), v: obj });
+        return obj;
+      }
+      
+      console.warn('getNhlAdvancedStats: failed to parse response, using defaults');
+      return this._getDefaultNhlAdvancedStats(homeTeam, awayTeam);
+    } catch (e) {
+      console.error('getNhlAdvancedStats error:', e.message);
+      return this._getDefaultNhlAdvancedStats(homeTeam, awayTeam);
+    }
+  },
+
+  /**
+   * Default/fallback NHL advanced stats structure
+   */
+  _getDefaultNhlAdvancedStats: function(homeTeam, awayTeam) {
+    return {
+      home_advanced: { team: homeTeam, corsi_for_pct: null, expected_goals_for_pct: null, pdo: null, high_danger_chances_for_pct: null, goals_saved_above_expected: null },
+      away_advanced: { team: awayTeam, corsi_for_pct: null, expected_goals_for_pct: null, pdo: null, high_danger_chances_for_pct: null, goals_saved_above_expected: null },
+      goalie_matchup: { home_starter: null, home_record: null, home_sv_pct: null, home_gaa: null, home_gsax: null, away_starter: null, away_record: null, away_sv_pct: null, away_gaa: null, away_gsax: null },
+      five_on_five: { home_cf_pct: null, home_xgf_pct: null, away_cf_pct: null, away_xgf_pct: null },
+      recent_form: { home_last_10: null, home_goals_per_game_l10: null, away_last_10: null, away_goals_per_game_l10: null },
+      key_analytics_insights: [],
+      data_sources: [],
+      _source: 'default',
+      _fetchedAt: new Date().toISOString()
+    };
+  },
   
   /**
    * Extract sports stats from an ESPN game page using Perplexity
