@@ -54,13 +54,8 @@ const PROP_MARKETS = {
     'pitcher_record_a_win'
   ],
   icehockey_nhl: [
-    'player_points',
-    'player_power_play_points',
-    'player_goals',
-    'player_assists',
-    'player_shots_on_goal',
-    'player_blocked_shots',
-    'player_saves'
+    // The Odds API only supports player_shots_on_goal for NHL currently
+    'player_shots_on_goal'
   ],
   soccer_epl: [
     // Soccer player props - shots, goals, assists
@@ -149,38 +144,70 @@ export const propOddsService = {
       
       console.log(`🔍 Fetching player prop odds for ${sport} game: ${homeTeam} vs ${awayTeam}... (useOddsApi=${useOddsApi})`);
       
-      // Look up the game by team names (BDL-backed oddsService)
-      const games = await oddsService.getUpcomingGames(sport);
-      console.log(`Found ${games.length} upcoming ${sport} games.`);
-      
       // Normalize team names for more flexible matching
       const normalizeTeamName = (name) => name.toLowerCase().replace(/\s+/g, '');
       const normalizedHomeTeam = normalizeTeamName(homeTeam);
       const normalizedAwayTeam = normalizeTeamName(awayTeam);
       
-      // Try exact match first
-      let game = games.find(g => 
-        (g.home_team === homeTeam && g.away_team === awayTeam) || 
-        (g.home_team === awayTeam && g.away_team === homeTeam)
-      );
+      let game = null;
       
-      // If exact match fails, try normalized match
-      if (!game) {
-        game = games.find(g => {
-          const normalizedGameHome = normalizeTeamName(g.home_team);
-          const normalizedGameAway = normalizeTeamName(g.away_team);
+      // For sports where we need The Odds API game IDs directly (NHL, EPL), fetch from Odds API
+      const needsOddsApiGameId = ['icehockey_nhl', 'soccer_epl'].includes(sport);
+      
+      if (needsOddsApiGameId && useOddsApi) {
+        try {
+          console.log(`[PropOdds] Fetching game ID directly from The Odds API for ${sport}...`);
+          const oddsApiGames = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
+            params: { apiKey, regions: 'us', markets: 'h2h' }
+          });
           
-          return (normalizedGameHome === normalizedHomeTeam && normalizedGameAway === normalizedAwayTeam) ||
-                 (normalizedGameHome === normalizedAwayTeam && normalizedGameAway === normalizedHomeTeam);
-        });
+          if (oddsApiGames.data && oddsApiGames.data.length > 0) {
+            // Find matching game by team names
+            game = oddsApiGames.data.find(g => {
+              const normalizedGameHome = normalizeTeamName(g.home_team);
+              const normalizedGameAway = normalizeTeamName(g.away_team);
+              return (normalizedGameHome === normalizedHomeTeam && normalizedGameAway === normalizedAwayTeam) ||
+                     (normalizedGameHome === normalizedAwayTeam && normalizedGameAway === normalizedHomeTeam);
+            });
+            
+            if (game) {
+              console.log(`✅ Found matching game from Odds API with ID: ${game.id}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`[PropOdds] Could not fetch from Odds API directly: ${e.message}`);
+        }
       }
       
-      // Log all available games if we can't find a match
+      // Fallback to BDL-backed oddsService for other sports or if Odds API lookup failed
       if (!game) {
-        console.error(`❌ No game found matching ${homeTeam} vs ${awayTeam} for ${sport} today.`);
-        console.log('Available games:');
-        games.forEach(g => console.log(`- ${g.home_team} vs ${g.away_team}`));
-        throw new Error(`No game found for ${homeTeam} vs ${awayTeam} in today's schedule.`);
+        const games = await oddsService.getUpcomingGames(sport);
+        console.log(`Found ${games.length} upcoming ${sport} games.`);
+        
+        // Try exact match first
+        game = games.find(g => 
+          (g.home_team === homeTeam && g.away_team === awayTeam) || 
+          (g.home_team === awayTeam && g.away_team === homeTeam)
+        );
+        
+        // If exact match fails, try normalized match
+        if (!game) {
+          game = games.find(g => {
+            const normalizedGameHome = normalizeTeamName(g.home_team);
+            const normalizedGameAway = normalizeTeamName(g.away_team);
+            
+            return (normalizedGameHome === normalizedHomeTeam && normalizedGameAway === normalizedAwayTeam) ||
+                   (normalizedGameHome === normalizedAwayTeam && normalizedGameAway === normalizedHomeTeam);
+          });
+        }
+        
+        // Log all available games if we can't find a match
+        if (!game) {
+          console.error(`❌ No game found matching ${homeTeam} vs ${awayTeam} for ${sport} today.`);
+          console.log('Available games:');
+          games.forEach(g => console.log(`- ${g.home_team} vs ${g.away_team}`));
+          throw new Error(`No game found for ${homeTeam} vs ${awayTeam} in today's schedule.`);
+        }
       }
       
       console.log(`✅ Found matching game with ID: ${game.id}, scheduled for ${new Date(game.commence_time).toLocaleString()}`);
