@@ -336,12 +336,13 @@ struct PropPick: Identifiable, Codable {
     /// Get the sport/league (checks both fields)
     /// Normalizes API format ("basketball_nba") to display format ("NBA")
     var effectiveLeague: String? {
-        if let league = league, !league.isEmpty {
-            return league.uppercased()
-        }
-        // Normalize sport field from API format (e.g., "basketball_nba" -> "NBA")
-        guard let sport = sport else { return nil }
-        let normalized = sport.lowercased()
+        // Get the raw value from league or sport field
+        let raw = (league?.isEmpty == false ? league : sport) ?? ""
+        guard !raw.isEmpty else { return nil }
+        
+        let normalized = raw.lowercased()
+        
+        // Handle API sport keys like "basketball_nba" -> "NBA"
         if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
         if normalized.contains("nfl") { return "NFL" }
         if normalized.contains("nhl") { return "NHL" }
@@ -350,7 +351,8 @@ struct PropPick: Identifiable, Codable {
         if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
         if normalized.contains("mlb") { return "MLB" }
         if normalized.contains("wnba") { return "WNBA" }
-        return sport.uppercased()
+        
+        return raw.uppercased()
     }
     
     /// Parse from dictionary (for manual JSON parsing)
@@ -381,11 +383,11 @@ struct GameResult: Decodable {
     let result: String?
     let odds: StringOrNumber?
     let final_score: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case game_date, league, matchup, pick_text, result, odds, final_score
     }
-    
+
     /// Memberwise initializer for creating from NFLResult
     init(game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?) {
         self.game_date = game_date
@@ -395,6 +397,24 @@ struct GameResult: Decodable {
         self.result = result
         self.odds = odds
         self.final_score = final_score
+    }
+    
+    /// Get the effective league (normalized to match Sport enum values)
+    var effectiveLeague: String? {
+        guard let raw = league, !raw.isEmpty else { return nil }
+        let normalized = raw.lowercased()
+        
+        // Handle API sport keys like "basketball_nba" -> "NBA"
+        if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
+        if normalized.contains("nfl") { return "NFL" }
+        if normalized.contains("nhl") { return "NHL" }
+        if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
+        if normalized.contains("ncaaf") { return "NCAAF" }
+        if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
+        if normalized.contains("mlb") { return "MLB" }
+        if normalized.contains("wnba") { return "WNBA" }
+        
+        return raw.uppercased()
     }
 }
 
@@ -452,14 +472,11 @@ struct PropResult: Decodable {
     
     /// Get the effective league (normalized to match Sport enum values)
     var effectiveLeague: String? {
-        // If league is set and not empty, use it
-        if let league = league, !league.isEmpty {
-            return league.uppercased()
-        }
+        // Get the raw value from league or sport field
+        let raw = (league?.isEmpty == false ? league : sport) ?? ""
+        guard !raw.isEmpty else { return nil }
         
-        // Otherwise normalize the sport field
-        guard let sport = sport else { return nil }
-        let normalized = sport.lowercased()
+        let normalized = raw.lowercased()
         
         // Handle API sport keys like "basketball_nba" -> "NBA"
         if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
@@ -471,7 +488,7 @@ struct PropResult: Decodable {
         if normalized.contains("mlb") { return "MLB" }
         if normalized.contains("wnba") { return "WNBA" }
         
-        return sport.uppercased()
+        return raw.uppercased()
     }
 }
 
