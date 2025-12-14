@@ -86,7 +86,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       candidates: propCandidates.map(p => ({
         player: p.player,
         team: p.team,
-        props: p.props.slice(0, 5)
+        props: p.props // Send all props so Gary can analyze everything
       })),
       totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0)
     },

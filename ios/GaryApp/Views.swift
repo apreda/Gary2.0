@@ -1917,7 +1917,32 @@ struct TaleOfTapeSection: View {
             "REBOUNDS": "Reb/G",
             "STEALS": "Steals/G",
             "BLOCKS": "Blocks/G",
-            "FG_PCT": "FG%"
+            "FG_PCT": "FG%",
+            // NHL specific
+            "GOALS_FOR": "Goals/G",
+            "GOALS_AGAINST": "GA/G",
+            "GOAL_DIFFERENTIAL": "Goal Diff",
+            "POWER_PLAY_PCT": "PP%",
+            "PENALTY_KILL_PCT": "PK%",
+            "SHOTS_FOR": "Shots/G",
+            "SHOTS_AGAINST": "SA/G",
+            "SHOT_DIFFERENTIAL": "Shot Diff",
+            "SHOT_QUALITY": "Shot Quality",
+            "EXPECTED_GOALS": "xGoals",
+            "CORSI_FOR_PCT": "Corsi%",
+            "PDO": "PDO",
+            "SAVE_PCT": "Save%",
+            "GOALIE_STATS": "Goalie",
+            "GOALIE_MATCHUP": "Goalie",
+            "GOALS_AGAINST_AVG": "GAA",
+            "FACEOFF_PCT": "FO%",
+            "POSSESSION_METRICS": "Poss%",
+            "HOME_ICE": "Home Ice",
+            "REST_SITUATION": "Rest",
+            "BACK_TO_BACK": "B2B",
+            "HIGH_DANGER_CHANCES": "HD Chances",
+            "TOP_SCORERS": "Top Scorers",
+            "LINE_COMBINATIONS": "Lines"
         ]
         return map[token] ?? token.replacingOccurrences(of: "_", with: " ").capitalized
     }

@@ -181,6 +181,17 @@ struct StatValues: Codable {
     let fgmPerGame: String?
     let fgaPerGame: String?
     let drebPerGame: String?
+    // NHL-specific stats
+    let goalsForPerGame: String?
+    let goalsAgainstPerGame: String?
+    let powerPlayPct: String?
+    let penaltyKillPct: String?
+    let shotsFor: String?
+    let shotsAgainst: String?
+    let shotDifferential: String?
+    let savePct: String?
+    let goalsAgainstAvg: String?
+    let faceoffPct: String?
     
     static func from(dict: [String: Any]) -> StatValues {
         StatValues(
@@ -233,7 +244,18 @@ struct StatValues: Codable {
             fgPct: dict["fg_pct"] as? String ?? (dict["fg_pct"] as? NSNumber)?.stringValue,
             fgmPerGame: dict["fgm_per_game"] as? String ?? (dict["fgm_per_game"] as? NSNumber)?.stringValue,
             fgaPerGame: dict["fga_per_game"] as? String ?? (dict["fga_per_game"] as? NSNumber)?.stringValue,
-            drebPerGame: dict["dreb_per_game"] as? String ?? (dict["dreb_per_game"] as? NSNumber)?.stringValue
+            drebPerGame: dict["dreb_per_game"] as? String ?? (dict["dreb_per_game"] as? NSNumber)?.stringValue,
+            // NHL-specific stats
+            goalsForPerGame: dict["goals_for_per_game"] as? String ?? (dict["goals_for_per_game"] as? NSNumber)?.stringValue,
+            goalsAgainstPerGame: dict["goals_against_per_game"] as? String ?? (dict["goals_against_per_game"] as? NSNumber)?.stringValue,
+            powerPlayPct: dict["power_play_pct"] as? String ?? (dict["power_play_pct"] as? NSNumber)?.stringValue,
+            penaltyKillPct: dict["penalty_kill_pct"] as? String ?? (dict["penalty_kill_pct"] as? NSNumber)?.stringValue,
+            shotsFor: dict["shots_for"] as? String ?? (dict["shots_for"] as? NSNumber)?.stringValue,
+            shotsAgainst: dict["shots_against"] as? String ?? (dict["shots_against"] as? NSNumber)?.stringValue,
+            shotDifferential: dict["differential"] as? String ?? (dict["differential"] as? NSNumber)?.stringValue,
+            savePct: dict["save_pct"] as? String ?? (dict["save_pct"] as? NSNumber)?.stringValue,
+            goalsAgainstAvg: dict["goals_against_avg"] as? String ?? (dict["goals_against_avg"] as? NSNumber)?.stringValue ?? (dict["gaa"] as? NSNumber)?.stringValue,
+            faceoffPct: dict["faceoff_pct"] as? String ?? (dict["faceoff_pct"] as? NSNumber)?.stringValue
         )
     }
     
@@ -280,7 +302,23 @@ struct StatValues: Codable {
         case "STEALS": return stealsPerGame ?? "N/A"
         case "BLOCKS": return blocksPerGame ?? "N/A"
         case "FG_PCT": return fgPct ?? efgPct ?? "N/A"
-        default: return offensiveRating ?? defensiveRating ?? netRating ?? overall ?? totalYardsPerGame ?? pointsPerGame ?? "N/A"
+        // NHL-specific stats
+        case "GOALS_FOR": return goalsForPerGame ?? "N/A"
+        case "GOALS_AGAINST": return goalsAgainstPerGame ?? "N/A"
+        case "GOAL_DIFFERENTIAL": return shotDifferential ?? "N/A"
+        case "POWER_PLAY_PCT": return powerPlayPct ?? "N/A"
+        case "PENALTY_KILL_PCT": return penaltyKillPct ?? "N/A"
+        case "SHOTS_FOR": return shotsFor ?? "N/A"
+        case "SHOTS_AGAINST": return shotsAgainst ?? "N/A"
+        case "SHOT_DIFFERENTIAL", "SHOT_QUALITY": return shotDifferential ?? shotsFor ?? "N/A"
+        case "EXPECTED_GOALS", "CORSI_FOR_PCT", "PDO": return shotsFor ?? shotDifferential ?? "N/A"
+        case "SAVE_PCT", "GOALIE_STATS", "GOALIE_MATCHUP": return savePct ?? goalsAgainstAvg ?? "N/A"
+        case "GOALS_AGAINST_AVG": return goalsAgainstAvg ?? "N/A"
+        case "FACEOFF_PCT", "POSSESSION_METRICS": return faceoffPct ?? "N/A"
+        case "HOME_ICE", "REST_SITUATION", "BACK_TO_BACK": return overall ?? "N/A"
+        case "HIGH_DANGER_CHANCES": return shotsFor ?? "N/A"
+        case "TOP_SCORERS", "LINE_COMBINATIONS": return overall ?? "N/A"
+        default: return offensiveRating ?? defensiveRating ?? netRating ?? overall ?? totalYardsPerGame ?? pointsPerGame ?? goalsForPerGame ?? "N/A"
         }
     }
 }

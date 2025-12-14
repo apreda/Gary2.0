@@ -475,7 +475,32 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'INTERCEPTIONS': 'INTs',
                 'RUSHING_TDS': 'Rush TDs',
                 'TOTAL_TDS': 'Total TDs',
-                'PASSING_YPG': 'Pass YPG'
+                'PASSING_YPG': 'Pass YPG',
+                // NHL stats
+                'GOALS_FOR': 'Goals/G',
+                'GOALS_AGAINST': 'GA/G',
+                'GOAL_DIFFERENTIAL': 'Goal Diff',
+                'POWER_PLAY_PCT': 'PP%',
+                'PENALTY_KILL_PCT': 'PK%',
+                'SHOTS_FOR': 'Shots/G',
+                'SHOTS_AGAINST': 'SA/G',
+                'SHOT_DIFFERENTIAL': 'Shot Diff',
+                'SHOT_QUALITY': 'Shot Quality',
+                'EXPECTED_GOALS': 'xGoals',
+                'CORSI_FOR_PCT': 'Corsi%',
+                'PDO': 'PDO',
+                'SAVE_PCT': 'Save%',
+                'GOALIE_STATS': 'Goalie',
+                'GOALIE_MATCHUP': 'Goalie',
+                'GOALS_AGAINST_AVG': 'GAA',
+                'FACEOFF_PCT': 'FO%',
+                'POSSESSION_METRICS': 'Possession',
+                'HOME_ICE': 'Home Ice',
+                'REST_SITUATION': 'Rest',
+                'BACK_TO_BACK': 'B2B',
+                'HIGH_DANGER_CHANCES': 'HD Chances',
+                'TOP_SCORERS': 'Top Scorers',
+                'LINE_COMBINATIONS': 'Lines'
               };
               
               let statName = displayNameMap[stat.token] || stat.name || stat.token;
@@ -541,7 +566,33 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'INTERCEPTIONS': 'interceptions',
                   'RUSHING_TDS': 'rushing_tds',
                   'TOTAL_TDS': 'total_tds',
-                  'PASSING_YPG': 'passing_ypg'
+                  'PASSING_YPG': 'passing_ypg',
+                  
+                  // === NHL STATS ===
+                  'GOALS_FOR': 'goals_for_per_game',
+                  'GOALS_AGAINST': 'goals_against_per_game',
+                  'GOAL_DIFFERENTIAL': 'differential',
+                  'POWER_PLAY_PCT': 'power_play_pct',
+                  'PENALTY_KILL_PCT': 'penalty_kill_pct',
+                  'SHOTS_FOR': 'shots_for',
+                  'SHOTS_AGAINST': 'shots_against',
+                  'SHOT_DIFFERENTIAL': 'differential',
+                  'SHOT_QUALITY': 'shots_for',
+                  'EXPECTED_GOALS': 'shots_for',
+                  'CORSI_FOR_PCT': 'differential',
+                  'PDO': 'differential',
+                  'SAVE_PCT': 'save_pct',
+                  'GOALIE_STATS': 'save_pct',
+                  'GOALIE_MATCHUP': 'save_pct',
+                  'GOALS_AGAINST_AVG': 'goals_against_avg',
+                  'FACEOFF_PCT': 'faceoff_pct',
+                  'POSSESSION_METRICS': 'faceoff_pct',
+                  'HOME_ICE': 'overall',
+                  'REST_SITUATION': 'overall',
+                  'BACK_TO_BACK': 'overall',
+                  'HIGH_DANGER_CHANCES': 'shots_for',
+                  'TOP_SCORERS': 'overall',
+                  'LINE_COMBINATIONS': 'overall'
                 };
                 
                 const key = keyMap[token] || Object.keys(obj).find(k => 

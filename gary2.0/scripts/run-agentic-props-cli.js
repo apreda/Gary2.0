@@ -167,10 +167,10 @@ export async function runAgenticPropsCli({
     return (b.ev || 0) - (a.ev || 0);
   });
 
-  // Take top picks
-  const topPicks = sortedPicks.slice(0, 10);
+  // Store ALL picks that meet the 75% confidence threshold (no artificial limit)
+  const topPicks = sortedPicks;
 
-  console.log(`\n🏆 Top ${topPicks.length} Picks:`);
+  console.log(`\n🏆 ${topPicks.length} Picks (75%+ confidence):`);
   topPicks.forEach((pick, i) => {
     const conf = (pick.confidence * 100).toFixed(0);
     const ev = pick.ev ? ` | EV: ${pick.ev > 0 ? '+' : ''}${pick.ev.toFixed(1)}%` : '';

@@ -50,8 +50,8 @@ ${constitution}
   "top_opportunities": [
     {
       "player": "Player Name",
-      "prop_type": "${sportLabel === 'NBA' ? 'points' : 'pass_yds'}",
-      "line": ${sportLabel === 'NBA' ? '24.5' : '245.5'},
+      "prop_type": "${sportLabel === 'NBA' ? 'points' : sportLabel === 'NHL' ? 'shots_on_goal' : 'pass_yds'}",
+      "line": ${sportLabel === 'NBA' ? '24.5' : sportLabel === 'NHL' ? '2.5' : '245.5'},
       "lean": "over" or "under",
       "hypothesis": "One sentence explaining why",
       "confidence": 0.50-0.75
@@ -64,7 +64,7 @@ ${constitution}
 
 Guidelines:
 - Focus on props with odds better than -130
-- Prefer volume stats (${sportLabel === 'NBA' ? 'points, rebounds, assists' : 'yards, receptions'}) over outcome stats (TDs)
+- Analyze ALL prop types available (${sportLabel === 'NBA' ? 'points, rebounds, assists, threes, blocks, steals' : sportLabel === 'NHL' ? 'shots_on_goal, goals, assists, points' : 'pass yards, rush yards, receiving yards, receptions, TDs'}) - pick whichever props have the BEST EDGE regardless of type
 - Consider game script heavily
 - Flag any injury concerns
 `;
@@ -73,12 +73,12 @@ Guidelines:
     matchup: gameSummary.matchup,
     tipoff: gameSummary.tipoff,
     odds: gameSummary.odds,
-    propCandidates: propCandidates.slice(0, 10).map(p => ({
+    propCandidates: propCandidates.slice(0, 12).map(p => ({
       player: p.player,
       team: p.team,
-      props: p.props.slice(0, 4)
+      props: p.props // Send all props so Gary can analyze everything
     })),
-    playerStatsPreview: playerStats.substring(0, 2000)
+    playerStatsPreview: playerStats.substring(0, 2500)
   });
 
   const messages = [
@@ -367,8 +367,8 @@ export async function runAgenticPropsPipeline({
     };
   });
 
-  // Filter by confidence threshold
-  const confidentPicks = enhancedPicks.filter(p => p.confidence >= 0.60);
+  // Filter by confidence threshold (70% minimum for quality picks)
+  const confidentPicks = enhancedPicks.filter(p => p.confidence >= 0.70);
 
   const elapsedMs = Date.now() - start;
   console.log(`[Agentic Props][${sportLabel}] Pipeline complete in ${elapsedMs}ms`);
