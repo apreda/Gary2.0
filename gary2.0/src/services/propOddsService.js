@@ -7,6 +7,7 @@ import axios from 'axios';
 import { configLoader } from './configLoader.js';
 import { oddsService } from './oddsService.js';
 import { perplexityService } from './perplexityService.js';
+import { ballDontLieService } from './ballDontLieService.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
@@ -54,8 +55,14 @@ const PROP_MARKETS = {
     'pitcher_record_a_win'
   ],
   icehockey_nhl: [
-    // The Odds API only supports player_shots_on_goal for NHL currently
-    'player_shots_on_goal'
+    // Ball Don't Lie NHL player props - comprehensive coverage
+    'goals',
+    'assists', 
+    'points',
+    'shots_on_goal',
+    'saves',
+    'power_play_points',
+    'anytime_goal'
   ],
   soccer_epl: [
     // Soccer player props - shots, goals, assists
@@ -133,7 +140,103 @@ export const propOddsService = {
    */
   getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
     try {
-      // Prefer non-OddsAPI sources. Attempt OddsAPI only if an API key is present.
+      console.log(`🔍 Fetching player prop odds for ${sport} game: ${homeTeam} vs ${awayTeam}...`);
+      
+      // Normalize team names for more flexible matching
+      const normalizeTeamName = (name) => name.toLowerCase().replace(/\s+/g, '');
+      const normalizedHomeTeam = normalizeTeamName(homeTeam);
+      const normalizedAwayTeam = normalizeTeamName(awayTeam);
+      
+      // ============ NHL: Use Ball Don't Lie Player Props API ============
+      if (sport === 'icehockey_nhl') {
+        console.log(`[PropOdds] Using Ball Don't Lie for NHL player props`);
+        
+        // Get today's date in YYYY-MM-DD format (EST)
+        const now = new Date();
+        const estOffset = -5 * 60; // EST is UTC-5
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const est = new Date(utc + (estOffset * 60000));
+        const dateStr = est.toISOString().split('T')[0];
+        
+        // Find the game ID from BDL
+        const nhlGames = await ballDontLieService.getNhlGamesForDate(dateStr);
+        
+        // Find matching game
+        const matchingGame = nhlGames.find(g => {
+          const homeMatch = normalizeTeamName(g.home_team?.full_name || '') === normalizedHomeTeam ||
+                           normalizeTeamName(g.home_team?.full_name || '').includes(normalizedHomeTeam) ||
+                           normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || ''));
+          const awayMatch = normalizeTeamName(g.away_team?.full_name || '') === normalizedAwayTeam ||
+                           normalizeTeamName(g.away_team?.full_name || '').includes(normalizedAwayTeam) ||
+                           normalizedAwayTeam.includes(normalizeTeamName(g.away_team?.full_name || ''));
+          return homeMatch && awayMatch;
+        });
+        
+        if (!matchingGame) {
+          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
+          // Fall through to Odds API fallback below
+        } else {
+          console.log(`✅ Found BDL NHL game ID: ${matchingGame.id}`);
+          
+          // Fetch player props from BDL
+          const bdlProps = await ballDontLieService.getNhlPlayerProps(matchingGame.id);
+          
+          if (bdlProps && bdlProps.length > 0) {
+            // Get unique player IDs to resolve names
+            const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
+            const playerMap = await ballDontLieService.getNhlPlayersByIds(playerIds);
+            
+            // Transform BDL format to our standard format
+            const transformedProps = bdlProps.map(prop => {
+              const isOverUnder = prop.market?.type === 'over_under';
+              const isMilestone = prop.market?.type === 'milestone';
+              const playerInfo = playerMap[prop.player_id] || {};
+              
+              return {
+                player: playerInfo.name || `Player ${prop.player_id}`,
+                player_id: prop.player_id,
+                team: playerInfo.team || 'NHL',
+                prop_type: prop.prop_type,
+                line: parseFloat(prop.line_value) || 0.5,
+                over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
+                under_odds: isOverUnder ? prop.market?.under_odds : null,
+                vendor: prop.vendor
+              };
+            });
+            
+            // Group by player and prop type to consolidate odds from different vendors
+            const grouped = {};
+            for (const prop of transformedProps) {
+              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              if (!grouped[key]) {
+                grouped[key] = { ...prop };
+              } else {
+                // Merge odds from different vendors - take best odds
+                if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
+                  grouped[key].over_odds = prop.over_odds;
+                }
+                if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
+                  grouped[key].under_odds = prop.under_odds;
+                }
+              }
+            }
+            
+            const result = Object.values(grouped);
+            
+            // Log prop type breakdown
+            const propTypes = {};
+            result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+            console.log(`[PropOdds] BDL NHL props breakdown:`, propTypes);
+            console.log(`[PropOdds] BDL returned ${result.length} unique NHL player props`);
+            
+            // Filter by odds value
+            const filtered = propOddsService.filterPropsByOddsValue(result);
+            return filtered;
+          }
+        }
+      }
+      
+      // ============ Other Sports: Use The Odds API ============
       let apiKey = null;
       try {
         apiKey = await configLoader.getOddsApiKey();
@@ -142,17 +245,10 @@ export const propOddsService = {
       }
       const useOddsApi = Boolean(apiKey);
       
-      console.log(`🔍 Fetching player prop odds for ${sport} game: ${homeTeam} vs ${awayTeam}... (useOddsApi=${useOddsApi})`);
-      
-      // Normalize team names for more flexible matching
-      const normalizeTeamName = (name) => name.toLowerCase().replace(/\s+/g, '');
-      const normalizedHomeTeam = normalizeTeamName(homeTeam);
-      const normalizedAwayTeam = normalizeTeamName(awayTeam);
-      
       let game = null;
       
-      // For sports where we need The Odds API game IDs directly (NHL, EPL), fetch from Odds API
-      const needsOddsApiGameId = ['icehockey_nhl', 'soccer_epl'].includes(sport);
+      // For sports where we need The Odds API game IDs directly (EPL), fetch from Odds API
+      const needsOddsApiGameId = ['soccer_epl'].includes(sport);
       
       if (needsOddsApiGameId && useOddsApi) {
         try {

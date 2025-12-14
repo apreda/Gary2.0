@@ -165,15 +165,41 @@ async function main() {
       const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true });
       
       // Filter to games within time window
-      // NFL uses 7 days (weekly), others use 24 hours
       const now = new Date();
-      const daysAhead = config.daysAhead || 1;
-      const endTime = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-      let games = allGames?.filter(g => {
-        const gameTime = new Date(g.commence_time);
-        return gameTime >= now && gameTime <= endTime;
-      }) || [];
-      const timeLabel = daysAhead === 7 ? 'this week' : 'within 24h';
+      let games;
+      let timeLabel;
+      
+      // NFL: Filter to current NFL week only using week number
+      // This prevents grabbing next week's games (e.g., Week 16 games when running Week 15)
+      if (config.key === 'americanfootball_nfl') {
+        const currentWeekNumber = picksService.getNFLWeekNumber();
+        const currentWeekStart = picksService.getNFLWeekStart();
+        
+        // NFL weeks run Tuesday-Monday, so we filter games that belong to the current week
+        // Get end of current week (next Tuesday 5:00 AM ET to catch late Monday games)
+        const weekStartDate = new Date(currentWeekStart + 'T00:00:00');
+        const weekEndDate = new Date(weekStartDate);
+        weekEndDate.setDate(weekEndDate.getDate() + 8); // Tuesday of next week
+        weekEndDate.setHours(5, 0, 0, 0); // 5 AM to catch any late Monday finishes
+        
+        games = allGames?.filter(g => {
+          const gameTime = new Date(g.commence_time);
+          // Game must be in the future AND within the current NFL week
+          return gameTime >= now && gameTime >= weekStartDate && gameTime < weekEndDate;
+        }) || [];
+        
+        timeLabel = `Week ${currentWeekNumber} (${currentWeekStart})`;
+        console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: weekStart=${currentWeekStart}, weekEnd=${weekEndDate.toISOString()}`);
+      } else {
+        // Other sports use daysAhead (default 1 day = 24 hours)
+        const daysAhead = config.daysAhead || 1;
+        const endTime = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+        games = allGames?.filter(g => {
+          const gameTime = new Date(g.commence_time);
+          return gameTime >= now && gameTime <= endTime;
+        }) || [];
+        timeLabel = daysAhead === 7 ? 'this week' : 'within 24h';
+      }
       
       // NCAAF: Filter to FBS only (exclude FCS games)
       if (config.fbsOnly && config.key === 'americanfootball_ncaaf') {
