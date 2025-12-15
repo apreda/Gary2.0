@@ -22,15 +22,35 @@ const PROP_MARKETS = {
     'player_steals'
   ],
   americanfootball_nfl: [
-    // Common NFL player prop markets
+    // Full game NFL player prop markets (no quarters/halves, no game props)
+    // Passing
     'player_pass_yds',
     'player_pass_tds',
+    'player_pass_completions',
+    'player_pass_attempts',
     'player_pass_interceptions',
+    'player_pass_longest_completion',
+    // Rushing
     'player_rush_yds',
-    'player_rush_att',
-    'player_receiving_yds',
+    'player_rush_attempts',
+    'player_rush_tds',
+    'player_rush_longest',
+    // Receiving
+    'player_reception_yds',
     'player_receptions',
-    'player_anytime_td'
+    'player_reception_tds',
+    'player_reception_longest',
+    // Combined
+    'player_pass_rush_yds',
+    'player_rush_reception_yds',
+    'player_rush_reception_tds',
+    // Touchdown Scorers
+    'player_anytime_td',
+    'player_1st_td',
+    'player_last_td',
+    // Defense
+    'player_tackles_assists',
+    'player_sacks'
   ],
   baseball_mlb: [
     // Standard MLB player props - using only non-alternate lines
@@ -55,14 +75,17 @@ const PROP_MARKETS = {
     'pitcher_record_a_win'
   ],
   icehockey_nhl: [
-    // Ball Don't Lie NHL player props - comprehensive coverage
-    'goals',
-    'assists', 
-    'points',
-    'shots_on_goal',
-    'saves',
-    'power_play_points',
-    'anytime_goal'
+    // NHL player props from The Odds API
+    'player_points',
+    'player_power_play_points',
+    'player_assists',
+    'player_blocked_shots',
+    'player_shots_on_goal',
+    'player_goals',
+    'player_total_saves',
+    'player_goal_scorer_anytime',
+    'player_goal_scorer_first',
+    'player_goal_scorer_last'
   ],
   soccer_epl: [
     // Soccer player props - shots, goals, assists
@@ -236,6 +259,116 @@ export const propOddsService = {
         }
       }
       
+      // ============ EPL: Use Ball Don't Lie Player Props API ============
+      if (sport === 'soccer_epl') {
+        console.log(`[PropOdds] Using Ball Don't Lie for EPL player props`);
+        
+        // Get today's date in YYYY-MM-DD format (EST)
+        const now = new Date();
+        const estOffset = -5 * 60; // EST is UTC-5
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const est = new Date(utc + (estOffset * 60000));
+        const dateStr = est.toISOString().split('T')[0];
+        
+        // Find the game ID from BDL
+        const eplGames = await ballDontLieService.getEplGamesForDate(dateStr);
+        
+        // Get all EPL teams for ID-to-name mapping
+        const eplTeams = await ballDontLieService.getTeams('soccer_epl');
+        const teamMap = {};
+        (eplTeams || []).forEach(t => {
+          teamMap[t.id] = t;
+        });
+        
+        // Find matching game by resolving team IDs to names
+        const matchingGame = eplGames.find(g => {
+          // BDL EPL games use home_team_id/away_team_id (integers)
+          const homeTeamObj = teamMap[g.home_team_id] || {};
+          const awayTeamObj = teamMap[g.away_team_id] || {};
+          const homeTeamName = homeTeamObj.name || homeTeamObj.short_name || '';
+          const awayTeamName = awayTeamObj.name || awayTeamObj.short_name || '';
+          
+          const homeMatch = normalizeTeamName(homeTeamName) === normalizedHomeTeam ||
+                           normalizeTeamName(homeTeamName).includes(normalizedHomeTeam) ||
+                           normalizedHomeTeam.includes(normalizeTeamName(homeTeamName));
+          const awayMatch = normalizeTeamName(awayTeamName) === normalizedAwayTeam ||
+                           normalizeTeamName(awayTeamName).includes(normalizedAwayTeam) ||
+                           normalizedAwayTeam.includes(normalizeTeamName(awayTeamName));
+          return homeMatch && awayMatch;
+        });
+        
+        if (!matchingGame) {
+          console.warn(`[PropOdds] No BDL EPL game found for ${homeTeam} vs ${awayTeam} on ${dateStr}`);
+          console.log(`[PropOdds] Available EPL games:`, eplGames.map(g => {
+            const h = teamMap[g.home_team_id]?.name || g.home_team_id;
+            const a = teamMap[g.away_team_id]?.name || g.away_team_id;
+            return `${h} vs ${a}`;
+          }));
+          // Fall through to Odds API fallback below
+        } else {
+          console.log(`✅ Found BDL EPL game ID: ${matchingGame.id}`);
+          
+          // Fetch player props from BDL
+          const bdlProps = await ballDontLieService.getEplPlayerProps(matchingGame.id);
+          
+          if (bdlProps && bdlProps.length > 0) {
+            // Get unique player IDs to resolve names
+            const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
+            const playerMap = await ballDontLieService.getEplPlayersByIds(playerIds);
+            
+            // Transform BDL format to our standard format
+            // BDL EPL props have: { market: { type: 'milestone' | 'over_under', odds, over_odds, under_odds } }
+            const transformedProps = bdlProps.map(prop => {
+              const isOverUnder = prop.market?.type === 'over_under';
+              const isMilestone = prop.market?.type === 'milestone';
+              const playerInfo = playerMap[prop.player_id] || {};
+              
+              return {
+                player: playerInfo.name || `Player ${prop.player_id}`,
+                player_id: prop.player_id,
+                team: playerInfo.team || 'EPL',
+                prop_type: prop.prop_type,
+                line: parseFloat(prop.line_value) || 0.5,
+                over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
+                under_odds: isOverUnder ? prop.market?.under_odds : null,
+                vendor: prop.vendor
+              };
+            });
+            
+            // Group by player and prop type to consolidate odds from different vendors
+            const grouped = {};
+            for (const prop of transformedProps) {
+              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              if (!grouped[key]) {
+                grouped[key] = { ...prop };
+              } else {
+                // Merge odds from different vendors - take best odds
+                if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
+                  grouped[key].over_odds = prop.over_odds;
+                }
+                if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
+                  grouped[key].under_odds = prop.under_odds;
+                }
+              }
+            }
+            
+            const result = Object.values(grouped);
+            
+            // Log prop type breakdown
+            const propTypes = {};
+            result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+            console.log(`[PropOdds] BDL EPL props breakdown:`, propTypes);
+            console.log(`[PropOdds] BDL returned ${result.length} unique EPL player props`);
+            
+            // Filter by odds value
+            const filtered = propOddsService.filterPropsByOddsValue(result);
+            return filtered;
+          } else {
+            console.log(`[PropOdds] BDL returned no EPL props for game ${matchingGame.id}, falling back to Odds API`);
+          }
+        }
+      }
+      
       // ============ Other Sports: Use The Odds API ============
       let apiKey = null;
       try {
@@ -247,7 +380,7 @@ export const propOddsService = {
       
       let game = null;
       
-      // For sports where we need The Odds API game IDs directly (EPL), fetch from Odds API
+      // For sports where we need The Odds API game IDs directly (if BDL fails for EPL), fetch from Odds API
       const needsOddsApiGameId = ['soccer_epl'].includes(sport);
       
       if (needsOddsApiGameId && useOddsApi) {
@@ -768,16 +901,36 @@ export const propOddsService = {
     }
     // NFL standardization
     else if (sport === 'nfl' || sport === 'americanfootball_nfl') {
-      // Map exact Odds API market keys when present
+      // Map exact Odds API market keys
       const nflMap = {
+        // Passing
         'player_pass_yds': 'pass_yds',
         'player_pass_tds': 'pass_tds',
+        'player_pass_completions': 'pass_completions',
+        'player_pass_attempts': 'pass_attempts',
         'player_pass_interceptions': 'interceptions',
+        'player_pass_longest_completion': 'longest_pass',
+        // Rushing
         'player_rush_yds': 'rush_yds',
-        'player_rush_att': 'rush_att',
-        'player_receiving_yds': 'rec_yds',
+        'player_rush_attempts': 'rush_attempts',
+        'player_rush_tds': 'rush_tds',
+        'player_rush_longest': 'longest_rush',
+        // Receiving
+        'player_reception_yds': 'rec_yds',
         'player_receptions': 'receptions',
-        'player_anytime_td': 'anytime_td'
+        'player_reception_tds': 'rec_tds',
+        'player_reception_longest': 'longest_reception',
+        // Combined
+        'player_pass_rush_yds': 'pass_rush_yds',
+        'player_rush_reception_yds': 'rush_rec_yds',
+        'player_rush_reception_tds': 'rush_rec_tds',
+        // Touchdown Scorers
+        'player_anytime_td': 'anytime_td',
+        'player_1st_td': 'first_td',
+        'player_last_td': 'last_td',
+        // Defense
+        'player_tackles_assists': 'tackles_assists',
+        'player_sacks': 'sacks'
       };
       if (nflMap[type]) return nflMap[type];
       // Pattern-based fallback
@@ -785,17 +938,50 @@ export const propOddsService = {
       if (type.includes('pass') && (type.includes('td') || type.includes('touchdown'))) return 'pass_tds';
       if (type.includes('interception')) return 'interceptions';
       if (type.includes('rush') && type.includes('yd')) return 'rush_yds';
-      if (type.includes('rush') && (type.includes('attempt') || type.includes('att'))) return 'rush_att';
+      if (type.includes('rush') && (type.includes('attempt') || type.includes('att'))) return 'rush_attempts';
+      if (type.includes('rush') && type.includes('td')) return 'rush_tds';
       if ((type.includes('receiving') || type.includes('rec')) && type.includes('yd')) return 'rec_yds';
-      if (type.includes('reception')) return 'receptions';
+      if (type.includes('reception') && !type.includes('yd')) return 'receptions';
       if (type.includes('anytime') && type.includes('td')) return 'anytime_td';
+      if (type.includes('1st') && type.includes('td')) return 'first_td';
+      if (type.includes('last') && type.includes('td')) return 'last_td';
+      if (type.includes('tackle')) return 'tackles_assists';
+      if (type.includes('sack')) return 'sacks';
     }
     // NHL standardization
     else if (sport === 'nhl' || sport === 'icehockey_nhl') {
-      if (type.includes('goal')) return 'goals';
+      // Map exact Odds API market keys
+      const nhlMap = {
+        'player_points': 'points',
+        'player_power_play_points': 'power_play_points',
+        'player_assists': 'assists',
+        'player_blocked_shots': 'blocked_shots',
+        'player_shots_on_goal': 'shots_on_goal',
+        'player_goals': 'goals',
+        'player_total_saves': 'saves',
+        'player_goal_scorer_anytime': 'anytime_goal',
+        'player_goal_scorer_first': 'first_goal',
+        'player_goal_scorer_last': 'last_goal',
+        // BDL format fallbacks
+        'goals': 'goals',
+        'assists': 'assists',
+        'points': 'points',
+        'shots_on_goal': 'shots_on_goal',
+        'saves': 'saves',
+        'power_play_points': 'power_play_points',
+        'anytime_goal': 'anytime_goal'
+      };
+      if (nhlMap[type]) return nhlMap[type];
+      // Pattern-based fallback
+      if (type.includes('goal') && type.includes('anytime')) return 'anytime_goal';
+      if (type.includes('goal') && type.includes('first')) return 'first_goal';
+      if (type.includes('goal') && !type.includes('scorer')) return 'goals';
       if (type.includes('assist')) return 'assists';
       if (type.includes('shot')) return 'shots_on_goal';
+      if (type.includes('point') && type.includes('power')) return 'power_play_points';
       if (type.includes('point')) return 'points';
+      if (type.includes('save')) return 'saves';
+      if (type.includes('block')) return 'blocked_shots';
     }
     
     // Return the market name without prefixes if no standardization matches

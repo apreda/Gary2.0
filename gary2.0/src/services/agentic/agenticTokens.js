@@ -184,6 +184,42 @@ const TOKEN_DEFINITIONS = {
     id: 'weather_impact',
     label: 'Weather Impact',
     description: 'Wind, temperature, precipitation affecting passing/outdoor games.'
+  },
+  // NHL-specific tokens
+  corsi_xg: {
+    id: 'corsi_xg',
+    label: 'Corsi & Expected Goals',
+    description: 'Possession metrics (CF%) and expected goals (xGF%) at 5v5 play.'
+  },
+  special_teams: {
+    id: 'special_teams',
+    label: 'Special Teams',
+    description: 'Power play percentage (PP%) and penalty kill percentage (PK%).'
+  },
+  goalie_matchup: {
+    id: 'goalie_matchup',
+    label: 'Goalie Matchup',
+    description: 'Starting goalies with save%, GAA, and goals saved above expected (GSAx).'
+  },
+  shot_metrics: {
+    id: 'shot_metrics',
+    label: 'Shot Metrics',
+    description: 'Shots for/against per game and shot differential.'
+  },
+  five_on_five: {
+    id: 'five_on_five',
+    label: '5v5 Play',
+    description: 'Even-strength Corsi and expected goals percentages.'
+  },
+  scoring: {
+    id: 'scoring',
+    label: 'Scoring Rates',
+    description: 'Goals for and against per game averages.'
+  },
+  pdo_luck: {
+    id: 'pdo_luck',
+    label: 'PDO Luck Indicator',
+    description: 'PDO (shooting% + save%) to identify regression candidates. League avg = 100.'
   }
 };
 
@@ -241,6 +277,19 @@ const TOKENS_BY_SPORT = {
     'ft_rate',
     'injury_report',
     'market_snapshot'
+  ],
+  icehockey_nhl: [
+    'corsi_xg',
+    'special_teams',
+    'goalie_matchup',
+    'shot_metrics',
+    'five_on_five',
+    'scoring',
+    'pdo_luck',
+    'rest_fatigue',
+    'injury_report',
+    'market_snapshot',
+    'recent_form'
   ]
 };
 

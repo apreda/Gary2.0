@@ -327,8 +327,13 @@ Respond with ONLY a JSON array of your best prop picks in this format:
       // Process existing entries to include high confidence picks
       const processedEntries = data.map(entry => {
         if (entry.picks && Array.isArray(entry.picks) && entry.picks.length > 0) {
-          // Filter for confident picks (0.65 or higher)
-          const confidencePicks = entry.picks.filter(pick => pick.confidence >= 0.65);
+          // Filter for confident picks (0.55 or higher) and exclude -200 or worse odds
+          const confidencePicks = entry.picks.filter(pick => {
+            if (pick.confidence < 0.55) return false;
+            const odds = pick.odds || 0;
+            if (typeof odds === 'number' && odds <= -200) return false;
+            return true;
+          });
 
           return {
             ...entry,
@@ -339,7 +344,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         return entry;
       });
 
-      console.log(`Found ${data.length} entries for ${dateString}, filtered to 65%+ confidence threshold`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered to 55%+ confidence, excluding ≤-200 odds`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
@@ -571,8 +576,8 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         return oddsOK;
       });
 
-      // Filter by confidence threshold - 0.65 minimum for all picks
-      const highConf = validOdds.filter(p => p.confidence >= 0.65);
+      // Filter by confidence threshold - 0.55 minimum for all picks
+      const highConf = validOdds.filter(p => p.confidence >= 0.55);
 
       // Sort by confidence (highest first) and take only the top 5 per game
       const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
@@ -617,6 +622,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
           // Additional fields
           sport: leagueLabel,
           time: propPicksService.formatGameTime(actualGameTime),
+          commence_time: actualGameTime || null, // ISO format for sorting/grouping
           
           // Keep the original pick string for backwards compatibility
           pick: pick.pick || `${pick.player} ${(pick.bet || 'OVER').toUpperCase()} ${pick.prop} ${pick.odds}`
@@ -658,10 +664,15 @@ Respond with ONLY a JSON array of your best prop picks in this format:
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Filter the picks by confidence threshold (0.65 minimum for all picks)
+      // Filter the picks by confidence threshold (0.55 minimum) and exclude ≤-200 odds
       // DON'T slice here - let frontend handle per-sport slicing
       const filteredData = data.map(record => {
-        const filtered = record.picks.filter(pick => pick.confidence >= 0.65);
+        const filtered = record.picks.filter(pick => {
+          if (pick.confidence < 0.55) return false;
+          const odds = pick.odds || 0;
+          if (typeof odds === 'number' && odds <= -200) return false;
+          return true;
+        });
         record.picks = filtered
           .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)));
         return record;
@@ -673,7 +684,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         acc[p.sport || 'unknown'] = (acc[p.sport || 'unknown'] || 0) + 1;
         return acc;
       }, {});
-      console.log(`After filtering for confidence >= 0.65: ${allPicks.length} picks by sport:`, sportCounts);
+      console.log(`After filtering (>= 0.55 conf, not ≤-200 odds): ${allPicks.length} picks by sport:`, sportCounts);
       
       return filteredData || [];
     } catch (error) {

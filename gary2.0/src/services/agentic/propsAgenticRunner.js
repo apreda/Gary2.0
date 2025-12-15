@@ -263,21 +263,6 @@ Guidelines:
   return parsed.picks;
 }
 
-/**
- * Calculate EV for a prop pick
- */
-function calculateEV(confidence, odds) {
-  // Convert American odds to decimal
-  let decimalOdds;
-  if (odds < 0) {
-    decimalOdds = 1 + (100 / Math.abs(odds));
-  } else {
-    decimalOdds = 1 + (odds / 100);
-  }
-  
-  // EV% = (confidence * decimalOdds - 1) * 100
-  return Math.round(((confidence * decimalOdds) - 1) * 1000) / 10;
-}
 
 /**
  * Format game time for display
@@ -348,14 +333,12 @@ export async function runAgenticPropsPipeline({
     playerProps: context.playerProps
   });
 
-  // Enhance picks with metadata
+  // Enhance picks with metadata (confidence is used only for filtering, not EV)
   const enhancedPicks = rawPicks.slice(0, propsPerGame).map(pick => {
-    const ev = calculateEV(pick.confidence, pick.odds);
     return {
       ...pick,
       sport: sportLabel,
       time: formatGameTime(game.commence_time),
-      ev,
       // Ensure all required fields
       player: pick.player || 'Unknown',
       team: pick.team || sportLabel,

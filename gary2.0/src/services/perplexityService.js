@@ -579,6 +579,260 @@ export const perplexityService = {
       _fetchedAt: new Date().toISOString()
     };
   },
+
+  /**
+   * Get NFL game weather specifically - more reliable than extracting from getRichGameContext
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} venue - Stadium/venue name (optional)
+   * @param {string} gameDate - Game date (YYYY-MM-DD or "tonight", "today")
+   * @returns {Promise<Object>} - Weather data with temp, wind, conditions
+   */
+  getNFLGameWeather: async function(homeTeam, awayTeam, venue = null, gameDate = 'tonight') {
+    try {
+      const cacheKey = `nfl_weather:${homeTeam}|${awayTeam}:${gameDate}`;
+      const cached = cache.get(cacheKey);
+      // Shorter cache for weather - 2 hours
+      if (cached && (Date.now() - cached.t) < (2 * 60 * 60 * 1000)) {
+        console.log('[Perplexity] Returning cached NFL weather data');
+        return cached.v;
+      }
+
+      console.log(`[Perplexity] Fetching NFL game weather for ${awayTeam} @ ${homeTeam}`);
+
+      const systemMessage = [
+        'You are a weather reporter for NFL games.',
+        'Return ONLY valid JSON (no markdown, no explanation) with these exact keys:',
+        'temperature: number in Fahrenheit (e.g., 23),',
+        'feels_like: number in Fahrenheit accounting for wind chill,',
+        'wind_speed: number in mph,',
+        'wind_gusts: number in mph or null,',
+        'conditions: string (e.g., "Cloudy", "Snow", "Clear", "Rain"),',
+        'precipitation_chance: number 0-100,',
+        'is_dome: boolean (true if indoor/dome stadium),',
+        'weather_summary: string with 1-2 sentence summary,',
+        'source: string URL where weather data was found.',
+        'Return actual current/forecast numbers, not ranges. Use null only if data unavailable.'
+      ].join(' ');
+
+      const venueHint = venue ? ` at ${venue}` : ` in ${homeTeam}'s stadium`;
+      const query = [
+        `What is the current weather forecast for the NFL game ${gameDate}?`,
+        `${awayTeam} at ${homeTeam}${venueHint}.`,
+        'Provide the expected game-time temperature in Fahrenheit, wind speed in mph, and conditions.',
+        'Is this an indoor/dome stadium? Account for that.',
+        'Include wind chill/feels-like temperature if applicable.',
+        'Be specific with numbers - no ranges like "20-25°F", give a single number.'
+      ].join(' ');
+
+      const res = await this.search(query, {
+        model: 'sonar',
+        temperature: 0.1,
+        maxTokens: 500,
+        systemMessage
+      });
+
+      if (!res?.success || !res?.data) {
+        console.warn('[Perplexity] getNFLGameWeather: fetch failed');
+        return null;
+      }
+
+      const obj = this._tryParseJson(res.data);
+      if (obj && typeof obj === 'object') {
+        console.log(`[Perplexity] NFL Weather: ${obj.temperature}°F (feels like ${obj.feels_like}°F), wind ${obj.wind_speed}mph, ${obj.conditions}`);
+        cache.set(cacheKey, { t: Date.now(), v: obj });
+        return obj;
+      }
+
+      // If JSON parsing failed, try to extract from text
+      const text = res.data;
+      const tempMatch = text.match(/(\d+)\s*°?\s*[Ff]/);
+      const windMatch = text.match(/(\d+)\s*mph/i);
+      const fallback = {
+        temperature: tempMatch ? parseInt(tempMatch[1], 10) : null,
+        wind_speed: windMatch ? parseInt(windMatch[1], 10) : null,
+        conditions: text.toLowerCase().includes('snow') ? 'Snow' : 
+                   text.toLowerCase().includes('rain') ? 'Rain' : 
+                   text.toLowerCase().includes('cloudy') ? 'Cloudy' : 'Unknown',
+        is_dome: text.toLowerCase().includes('dome') || text.toLowerCase().includes('indoor'),
+        weather_summary: text.substring(0, 200),
+        _parsed_from_text: true
+      };
+      console.log(`[Perplexity] NFL Weather (text parse fallback): ${fallback.temperature}°F, ${fallback.conditions}`);
+      cache.set(cacheKey, { t: Date.now(), v: fallback });
+      return fallback;
+
+    } catch (e) {
+      console.error('[Perplexity] getNFLGameWeather error:', e.message);
+      return null;
+    }
+  },
+
+  /**
+   * Get NFL QB weather performance history
+   * Fetches historical data on how each QB performs in specific weather conditions
+   * @param {string} homeQB - Home team's starting QB name
+   * @param {string} awayQB - Away team's starting QB name  
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {Object} weatherConditions - Current weather info (temp, wind, precipitation)
+   * @returns {Promise<Object>} - QB weather performance data
+   */
+  getQBWeatherPerformance: async function(homeQB, awayQB, homeTeam, awayTeam, weatherConditions = {}) {
+    try {
+      const { temp, wind, precipitation, conditions } = weatherConditions;
+      
+      // Determine weather type for query
+      let weatherType = 'normal';
+      let weatherDescription = '';
+      
+      if (temp !== undefined && temp < 40) {
+        weatherType = 'cold';
+        weatherDescription = `cold weather (${temp}°F)`;
+      }
+      if (precipitation && (precipitation.toLowerCase().includes('snow') || conditions?.toLowerCase().includes('snow'))) {
+        weatherType = 'snow';
+        weatherDescription = 'snow conditions';
+      }
+      if (wind !== undefined && wind > 15) {
+        if (weatherType === 'cold') {
+          weatherDescription += ` with high wind (${wind} mph)`;
+        } else {
+          weatherType = 'wind';
+          weatherDescription = `windy conditions (${wind} mph)`;
+        }
+      }
+      
+      // If weather is normal, return empty - no need to query
+      if (weatherType === 'normal') {
+        console.log('[Perplexity] Weather is normal, skipping QB weather performance lookup');
+        return { skip: true, reason: 'Normal weather conditions' };
+      }
+
+      const cacheKey = `qb_weather:${homeQB}|${awayQB}:${weatherType}`;
+      const cached = cache.get(cacheKey);
+      if (cached && (Date.now() - cached.t) < CACHE_TTL) {
+        return cached.v;
+      }
+
+      console.log(`[Perplexity] Fetching QB performance in ${weatherDescription}`);
+
+      const systemMessage = [
+        'You are an NFL statistics expert specializing in quarterback performance analysis.',
+        'Return ONLY valid JSON (no markdown, no explanation) with these exact keys:',
+        'home_qb_weather: {name, team, career_games_in_condition, career_record, completion_pct, yards_per_game, td_per_game, int_per_game, passer_rating, notable_games[], assessment},',
+        'away_qb_weather: {name, team, career_games_in_condition, career_record, completion_pct, yards_per_game, td_per_game, int_per_game, passer_rating, notable_games[], assessment},',
+        'weather_impact_summary: string explaining how this weather typically affects QB play,',
+        'edge_assessment: string explaining which QB has the advantage in these conditions and why,',
+        'confidence_adjustment: number (-15 to +15) indicating how much to adjust confidence for/against passing game,',
+        'citations: array of source URLs.',
+        'Use null for stats you cannot verify. Be accurate with historical data.'
+      ].join(' ');
+
+      const query = [
+        `Research NFL quarterback performance in ${weatherDescription} for upcoming game:`,
+        `${awayTeam} (${awayQB}) at ${homeTeam} (${homeQB}).`,
+        '',
+        'Find historical data for each QB in similar weather conditions:',
+        '1. Career games played in this type of weather',
+        '2. Win-loss record in these conditions', 
+        '3. Passing stats: completion %, yards/game, TDs, INTs, passer rating',
+        '4. Notable performances (good or bad) in similar weather',
+        '5. Any quotes or tendencies about how they handle this weather',
+        '',
+        'Consider:',
+        `- ${homeQB}'s experience playing in ${homeTeam}'s climate`,
+        `- ${awayQB}'s typical playing conditions and adjustment history`,
+        '- Which QB has more experience in adverse weather',
+        '- Historical trends of passing efficiency drop in this weather type',
+        '',
+        'Provide assessment of which QB has the edge in these conditions.'
+      ].join(' ');
+
+      const res = await this.search(query, {
+        model: 'sonar-pro',
+        temperature: 0.1,
+        maxTokens: 1600,
+        systemMessage
+      });
+
+      if (!res?.success || !res?.data) {
+        console.warn('getQBWeatherPerformance: first attempt failed, trying simplified query');
+        const simplified = [
+          `Return JSON with NFL QB cold/bad weather performance data.`,
+          `QBs: ${homeQB} (${homeTeam}) vs ${awayQB} (${awayTeam}).`,
+          `Weather: ${weatherDescription}.`,
+          'Keys: home_qb_weather, away_qb_weather, weather_impact_summary, edge_assessment, confidence_adjustment, citations.',
+          'Include career stats in similar weather, notable games, and which QB has the edge.'
+        ].join(' ');
+        
+        const res2 = await this.search(simplified, {
+          model: 'sonar',
+          temperature: 0.1,
+          maxTokens: 1200,
+          systemMessage
+        });
+        
+        if (!res2?.success || !res2?.data) {
+          console.warn('getQBWeatherPerformance: both attempts failed');
+          return this._getDefaultQBWeatherStats(homeQB, awayQB, homeTeam, awayTeam, weatherDescription);
+        }
+        
+        const parsed2 = this._tryParseJson(res2.data);
+        if (parsed2) {
+          parsed2._source = 'perplexity';
+          parsed2._weatherType = weatherType;
+          parsed2._fetchedAt = new Date().toISOString();
+          cache.set(cacheKey, { v: parsed2, t: Date.now() });
+          return parsed2;
+        }
+      }
+
+      const parsed = this._tryParseJson(res.data);
+      if (parsed) {
+        parsed._source = 'perplexity';
+        parsed._weatherType = weatherType;
+        parsed._fetchedAt = new Date().toISOString();
+        cache.set(cacheKey, { v: parsed, t: Date.now() });
+        return parsed;
+      }
+
+      console.warn('getQBWeatherPerformance: failed to parse response');
+      return this._getDefaultQBWeatherStats(homeQB, awayQB, homeTeam, awayTeam, weatherDescription);
+    } catch (e) {
+      console.error('getQBWeatherPerformance error:', e.message);
+      return this._getDefaultQBWeatherStats(homeQB, awayQB, homeTeam, awayTeam, 'adverse weather');
+    }
+  },
+
+  /**
+   * Default QB weather stats when Perplexity fails
+   */
+  _getDefaultQBWeatherStats: function(homeQB, awayQB, homeTeam, awayTeam, weatherDesc) {
+    return {
+      home_qb_weather: { name: homeQB, team: homeTeam, career_games_in_condition: null, assessment: 'Data unavailable' },
+      away_qb_weather: { name: awayQB, team: awayTeam, career_games_in_condition: null, assessment: 'Data unavailable' },
+      weather_impact_summary: `${weatherDesc} typically reduces passing efficiency by 10-15% league-wide.`,
+      edge_assessment: 'Unable to determine advantage - factor in home field and dome/outdoor experience.',
+      confidence_adjustment: 0,
+      citations: [],
+      _source: 'default',
+      _fetchedAt: new Date().toISOString()
+    };
+  },
+
+  /**
+   * Helper to parse JSON from various response formats
+   */
+  _tryParseJson: function(txt) {
+    if (!txt) return null;
+    try { return JSON.parse(txt); } catch {}
+    const codeMatch = txt.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeMatch?.[1]) { try { return JSON.parse(codeMatch[1]); } catch {} }
+    const braceMatch = txt.match(/\{[\s\S]*\}/);
+    if (braceMatch?.[0]) { try { return JSON.parse(braceMatch[0]); } catch {} }
+    return null;
+  },
   
   /**
    * Extract sports stats from an ESPN game page using Perplexity

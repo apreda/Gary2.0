@@ -92,6 +92,31 @@ https://www.betwithgary.ai
 
 ---
 
+## What's New (Version 1.2)
+
+```
+New in 1.2:
+
+• Time Slot Headers — All picks & props now grouped by game time (1pm, 4pm, SNF, MNF, etc.)
+• Sorted by Game Time — All sports display picks in chronological order (earliest games first)
+• Improved ALL Tab — Interleaved picks cycle through sports (NBA, NFL, NCAAB, NHL, NCAAF, EPL) for variety
+• Props Sorted by Time — Player props now organized by game time with headers
+• NFL Week Filtering Fix — Picks now correctly filtered to current week only
+
+Gary's getting smarter. Let's go.
+```
+
+---
+
+## What's New (Version 1.1)
+
+```
+• Bug fixes and performance improvements
+• Enhanced pick card display
+```
+
+---
+
 ## What's New (Version 1.0)
 
 ```

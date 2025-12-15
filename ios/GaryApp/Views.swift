@@ -321,6 +321,9 @@ enum GaryColors {
         startPoint: .top,
         endPoint: .bottom
     )
+    
+    // NFL Green (same as prop picks)
+    static let nflAccent = Color(hex: "#22C55E")
 }
 
 // MARK: - Immersive Background
@@ -417,26 +420,26 @@ struct HomeView: View {
                         .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                     }
                     
-                    // Benefits Grid - Why Gary Section
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("WHY GARY?")
-                                .font(.caption.bold())
-                                .foregroundStyle(GaryColors.gold)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 4)
+                    // Benefits Section - Why Gary (Full-width cards, all text visible)
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("WHY GARY?")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                            .tracking(1)
+                            .padding(.horizontal, 4)
                         
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 10),
-                            GridItem(.flexible(), spacing: 10)
-                        ], spacing: 10) {
-                            BenefitCard(title: "GPT 5.1 Engine", text: "Powered by OpenAI's most advanced reasoning model. Gary doesn't just analyze games—he thinks through them like a seasoned handicapper with decades of experience, using multi-pass logic to uncover edges the market misses.", icon: "brain.head.profile")
-                            BenefitCard(title: "Agentic Analysis", text: "Gary runs a 6-step autonomous research loop for every single pick. He requests specific stats, forms hypotheses, stress-tests his reasoning, and only locks in picks that survive rigorous validation. No gut feelings—pure systematic edge.", icon: "arrow.triangle.2.circlepath")
-                            BenefitCard(title: "Matchup Insight", text: "Every pick includes real-time intelligence: breaking injury news, last-minute lineup changes, travel schedules, rest advantages, and situational factors that move lines. Gary sees what the public doesn't.", icon: "doc.text.magnifyingglass")
-                            BenefitCard(title: "The Odds API", text: "Gary ingests live odds from 15+ sportsbooks via The Odds API, instantly identifying mispriced lines and +EV opportunities. When the market is wrong, Gary strikes.", icon: "chart.line.uptrend.xyaxis")
-                            BenefitCard(title: "Headline Hunter", text: "AI-powered news search scans thousands of sources for breaking storylines, locker room drama, weather updates, and market narratives that sharp bettors exploit. Information is edge—Gary has it first.", icon: "magnifyingglass")
-                            BenefitCard(title: "Sports Brain", text: "Gary's secret weapon. This proprietary system measures alignment between statistical models, market odds, and qualitative analysis. When all signals converge, you get Gary's highest-conviction plays. Higher convergence = higher confidence = stronger picks.", icon: "target")
+                        VStack(spacing: 14) {
+                            HeroBenefitCard(title: "Sports Brain", text: "Gary's secret weapon. This proprietary system measures alignment between statistical models, market odds, and qualitative analysis. When all signals converge, you get Gary's highest-conviction plays. Higher convergence = higher confidence = stronger picks.", badge: "GARY'S SECRET WEAPON")
+                            
+                            HeroBenefitCard(title: "GPT 5.1 Engine", text: "Powered by OpenAI's most advanced reasoning model. Gary doesn't just analyze games—he thinks through them like a seasoned handicapper with decades of experience, using multi-pass logic to uncover edges the market misses.", badge: "ADVANCED AI")
+                            
+                            HeroBenefitCard(title: "Agentic Analysis", text: "Gary runs a 6-step autonomous research loop for every single pick. He requests specific stats, forms hypotheses, stress-tests his reasoning, and only locks in picks that survive rigorous validation. No gut feelings—pure systematic edge.", badge: "AUTONOMOUS RESEARCH")
+                            
+                            HeroBenefitCard(title: "Matchup Insight", text: "Every pick includes real-time intelligence: breaking injury news, last-minute lineup changes, travel schedules, rest advantages, and situational factors that move lines. Gary sees what the public doesn't.", badge: "REAL-TIME INTEL")
+                            
+                            HeroBenefitCard(title: "Rest & Fatigue Edge", text: "Gary tracks days since last game, back-to-back situations, and schedule density for every matchup. Teams on short rest or heavy travel often underperform—Gary spots these situational edges before the public.", badge: "SITUATIONAL INTEL")
+                            
+                            HeroBenefitCard(title: "Headline Hunter", text: "AI-powered news search scans thousands of sources for breaking storylines, locker room drama, weather updates, and market narratives that sharp bettors exploit. Information is edge—Gary has it first.", badge: "NEWS SCANNER")
                         }
                     }
                     .padding(16)
@@ -481,10 +484,11 @@ struct HomeView: View {
 // MARK: - Sport Filter
 
 enum Sport: String, CaseIterable {
-    // Order: ALL → NBA → NFL → NHL → NCAAB → NCAAF → EPL → MLB → WNBA
+    // Order: ALL → NBA → NFL → NFL TDs → NHL → NCAAB → NCAAF → EPL → MLB → WNBA
     case all = "ALL"
     case nba = "NBA"
     case nfl = "NFL"
+    case nflTDs = "NFL TDs"
     case nhl = "NHL"
     case ncaab = "NCAAB"
     case ncaaf = "NCAAF"
@@ -497,6 +501,7 @@ enum Sport: String, CaseIterable {
         case .all: return "star.fill"
         case .nba: return "basketball.fill"
         case .nfl: return "football.fill"
+        case .nflTDs: return "football.fill"
         case .nhl: return "hockey.puck.fill"
         case .ncaab: return "basketball.fill"
         case .ncaaf: return "football.fill"
@@ -510,7 +515,8 @@ enum Sport: String, CaseIterable {
         switch self {
         case .all: return GaryColors.gold
         case .nba: return Color(hex: "#3B82F6")      // Blue
-        case .nfl: return GaryColors.gold            // Gold
+        case .nfl: return GaryColors.nflAccent        // Green
+        case .nflTDs: return Color(hex: "#22C55E")   // Green
         case .nhl: return Color(hex: "#00A3E0")      // Ice Blue
         case .ncaab: return Color(hex: "#F97316")    // Orange
         case .ncaaf: return Color(hex: "#DC2626")    // Red
@@ -528,6 +534,14 @@ enum Sport: String, CaseIterable {
         }
     }
     
+    /// Whether this is a props-only filter (not for regular picks)
+    var isPropsOnly: Bool {
+        switch self {
+        case .nflTDs: return true
+        default: return false
+        }
+    }
+    
     static func from(league: String?) -> Sport {
         guard let league = league?.uppercased() else { return .all }
         return Sport(rawValue: league) ?? .all
@@ -538,13 +552,43 @@ struct SportFilterBar: View {
     @Binding var selected: Sport
     let availableSports: Set<String>
     var showAll: Bool = true  // Whether to show the ALL option
+    var showPropsOnly: Bool = false  // Whether to show props-only filters (like NFL TDs)
+    
+    // Sort sports: ALL first, then available sports, then unavailable sports (faded)
+    private var sortedSports: [Sport] {
+        Sport.allCases.sorted { a, b in
+            // ALL always comes first
+            if a == .all { return true }
+            if b == .all { return false }
+            
+            let aAvailable = availableSports.contains(a.rawValue)
+            let bAvailable = availableSports.contains(b.rawValue)
+            
+            // Available sports come before unavailable
+            if aAvailable && !bAvailable { return true }
+            if !aAvailable && bAvailable { return false }
+            
+            // Within same availability group, maintain original order
+            let allCases = Sport.allCases
+            let aIndex = allCases.firstIndex(of: a) ?? 0
+            let bIndex = allCases.firstIndex(of: b) ?? 0
+            return aIndex < bIndex
+        }
+    }
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                ForEach(Sport.allCases, id: \.self) { sport in
+                ForEach(sortedSports, id: \.self) { sport in
                     // Skip ALL if showAll is false
-                    if sport == .all && !showAll { } else {
+                    // Skip props-only sports (like NFL TDs) unless showPropsOnly is true
+                    let shouldShow = {
+                        if sport == .all && !showAll { return false }
+                        if sport.isPropsOnly && !showPropsOnly { return false }
+                        return true
+                    }()
+                    
+                    if shouldShow {
                         let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
                         let isSelected = selected == sport
                         
@@ -597,12 +641,143 @@ struct GaryPicksView: View {
     @State private var selectedSport: Sport = .all
 
     private var filteredPicks: [GaryPick] {
-        guard selectedSport != .all else { return allPicks }
-        return allPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
+        // Sort picks by game time (commence_time) - earliest games first
+        let sortByTime: ([GaryPick]) -> [GaryPick] = { picks in
+            picks.sorted { a, b in
+                let timeA = a.commence_time ?? ""
+                let timeB = b.commence_time ?? ""
+                return timeA < timeB
+            }
+        }
+        
+        // Filter NFL picks on Mondays to only show today's games (MNF)
+        let filterNFLForMonday: ([GaryPick]) -> [GaryPick] = { picks in
+            let now = Date()
+            
+            // Get current day of week in EST
+            var estCalendar = Calendar.current
+            estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+            let dayOfWeek = estCalendar.component(.weekday, from: now) // 1 = Sunday, 2 = Monday
+            
+            // If not Monday, return all picks
+            guard dayOfWeek == 2 else { return picks }
+            
+            // It's Monday - filter NFL picks to only today's games
+            let todayStart = estCalendar.startOfDay(for: now)
+            let todayEnd = estCalendar.date(byAdding: .day, value: 1, to: todayStart) ?? now
+            
+            return picks.filter { pick in
+                // Non-NFL picks pass through
+                guard (pick.league ?? "").uppercased() == "NFL" else { return true }
+                
+                // NFL picks: check if game is today
+                guard let commenceTime = pick.commence_time,
+                      let gameDate = ISO8601DateFormatter().date(from: commenceTime) else {
+                    return false
+                }
+                
+                return gameDate >= todayStart && gameDate < todayEnd
+            }
+        }
+        
+        // Apply Monday filter to all picks
+        let mondayFiltered = filterNFLForMonday(allPicks)
+        
+        // For "All" tab: interleave picks by sport (NBA, NFL, NCAAB, NHL, NCAAF, EPL, repeat)
+        // This gives users variety as they scroll instead of all picks from one sport first
+        guard selectedSport != .all else {
+            return interleaveBySport(mondayFiltered)
+        }
+        return sortByTime(mondayFiltered.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
+    }
+    
+    /// Interleave picks by sport in round-robin order
+    /// Order: NBA, NFL, NCAAB, NHL, NCAAF, EPL (skips sports with no picks)
+    private func interleaveBySport(_ picks: [GaryPick]) -> [GaryPick] {
+        let sportOrder = ["NBA", "NFL", "NCAAB", "NHL", "NCAAF", "EPL"]
+        
+        // Sort each sport's picks by game time first
+        var picksBySport: [String: [GaryPick]] = [:]
+        for sport in sportOrder {
+            let sportPicks = picks
+                .filter { ($0.league ?? "").uppercased() == sport }
+                .sorted { a, b in
+                    let timeA = a.commence_time ?? ""
+                    let timeB = b.commence_time ?? ""
+                    return timeA < timeB
+                }
+            if !sportPicks.isEmpty {
+                picksBySport[sport] = sportPicks
+            }
+        }
+        
+        // Track current index for each sport
+        var indices: [String: Int] = [:]
+        for sport in sportOrder {
+            indices[sport] = 0
+        }
+        
+        // Interleave: take one pick from each sport in order, repeat
+        var result: [GaryPick] = []
+        var hasMore = true
+        
+        while hasMore {
+            hasMore = false
+            for sport in sportOrder {
+                guard let sportPicks = picksBySport[sport],
+                      let idx = indices[sport],
+                      idx < sportPicks.count else { continue }
+                
+                result.append(sportPicks[idx])
+                indices[sport] = idx + 1
+                hasMore = true
+            }
+        }
+        
+        return result
     }
     
     private var availableSports: Set<String> {
         Set(allPicks.compactMap { $0.league?.uppercased() })
+    }
+    
+    /// Get time slot string for NFL picks (e.g., "Sunday 1:00 PM ET")
+    private func getTimeSlot(for pick: GaryPick) -> String? {
+        guard let isoTime = pick.commence_time, !isoTime.isEmpty else { return nil }
+        
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        var date = isoFormatter.date(from: isoTime)
+        if date == nil {
+            isoFormatter.formatOptions = [.withInternetDateTime]
+            date = isoFormatter.date(from: isoTime)
+        }
+        
+        guard let gameDate = date else { return nil }
+        
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "EEEE h:mm a"
+        
+        return formatter.string(from: gameDate) + " ET"
+    }
+    
+    /// Group picks by time slot for section headers (works for all sports)
+    private var picksByTimeSlot: [(timeSlot: String, picks: [GaryPick])] {
+        var grouped: [String: [GaryPick]] = [:]
+        var order: [String] = []
+        
+        for pick in filteredPicks {
+            let slot = getTimeSlot(for: pick) ?? "TBD"
+            if grouped[slot] == nil {
+                grouped[slot] = []
+                order.append(slot)
+            }
+            grouped[slot]?.append(pick)
+        }
+        
+        return order.map { (timeSlot: $0, picks: grouped[$0] ?? []) }
     }
     
     var body: some View {
@@ -652,10 +827,30 @@ struct GaryPicksView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 16) {
-                            ForEach(filteredPicks) { pick in
-                                PickCardMobile(pick: pick)
-                                    .padding(.horizontal, 16)
-                                    .transaction { $0.animation = nil }
+                            // All sports: Show picks grouped by time slot with headers
+                            ForEach(picksByTimeSlot, id: \.timeSlot) { group in
+                                // Time slot header
+                                HStack {
+                                    Rectangle()
+                                        .fill(GaryColors.gold.opacity(0.5))
+                                        .frame(height: 1)
+                                    Text(group.timeSlot)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(GaryColors.gold)
+                                        .fixedSize()
+                                    Rectangle()
+                                        .fill(GaryColors.gold.opacity(0.5))
+                                        .frame(height: 1)
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.top, 8)
+                                
+                                // Picks in this time slot
+                                ForEach(group.picks) { pick in
+                                    PickCardMobile(pick: pick)
+                                        .padding(.horizontal, 16)
+                                        .transaction { $0.animation = nil }
+                                }
                             }
                         }
                         .padding(.vertical, 8)
@@ -707,18 +902,112 @@ struct GaryPropsView: View {
     @State private var selectedSport: Sport = .all
     
     private var filteredProps: [PropPick] {
-        guard selectedSport != .all else { return allProps }
-        return allProps.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
+        // Sort props by game time (commence_time) - earliest games first
+        let sortByTime: ([PropPick]) -> [PropPick] = { props in
+            props.sorted { a, b in
+                let timeA = a.commence_time ?? ""
+                let timeB = b.commence_time ?? ""
+                return timeA < timeB
+            }
+        }
+        
+        switch selectedSport {
+        case .all:
+            // Show all non-TD props (TD picks are in their own tab)
+            return sortByTime(allProps.filter { !$0.isTDPick })
+        case .nflTDs:
+            // Show only TD scorer picks, sorted by category then time
+            return allProps.filter { $0.isTDPick }.sorted { a, b in
+                // Standard before underdog
+                if a.tdCategory != b.tdCategory {
+                    return a.tdCategory == "standard"
+                }
+                return (a.commence_time ?? "") < (b.commence_time ?? "")
+            }
+        case .nfl:
+            // Show NFL props but exclude TD picks
+            return sortByTime(allProps.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDPick })
+        default:
+            return sortByTime(allProps.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue })
+        }
+    }
+    
+    /// TD picks grouped by category for section headers
+    private var tdPicksByCategory: [(category: String, label: String, picks: [PropPick])] {
+        guard selectedSport == .nflTDs else { return [] }
+        
+        let standardPicks = filteredProps.filter { $0.tdCategory == "standard" }
+        let underdogPicks = filteredProps.filter { $0.tdCategory == "underdog" }
+        
+        var result: [(category: String, label: String, picks: [PropPick])] = []
+        if !standardPicks.isEmpty {
+            result.append(("standard", "Regular", standardPicks))
+        }
+        if !underdogPicks.isEmpty {
+            result.append(("underdog", "Value", underdogPicks))
+        }
+        return result
     }
     
     private var availableSports: Set<String> {
-        Set(allProps.compactMap { $0.effectiveLeague })
+        var sports = Set(allProps.compactMap { $0.effectiveLeague })
+        // Add NFL TDs if there are any TD picks
+        if allProps.contains(where: { $0.isTDPick }) {
+            sports.insert("NFL TDs")
+        }
+        return sports
+    }
+    
+    /// Get time slot string for props (e.g., "Sunday 1:00 PM ET")
+    private func getTimeSlot(for prop: PropPick) -> String? {
+        // Try commence_time first (ISO format)
+        if let isoTime = prop.commence_time, !isoTime.isEmpty {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            var date = isoFormatter.date(from: isoTime)
+            if date == nil {
+                isoFormatter.formatOptions = [.withInternetDateTime]
+                date = isoFormatter.date(from: isoTime)
+            }
+            
+            if let gameDate = date {
+                let formatter = DateFormatter()
+                formatter.timeZone = TimeZone(identifier: "America/New_York")
+                formatter.dateFormat = "EEEE h:mm a"
+                return formatter.string(from: gameDate) + " ET"
+            }
+        }
+        
+        // Fallback to time field if available (already formatted)
+        if let time = prop.time, !time.isEmpty, time != "TBD" {
+            return time
+        }
+        
+        return nil
+    }
+    
+    /// Group props by time slot for section headers
+    private var propsByTimeSlot: [(timeSlot: String, props: [PropPick])] {
+        var grouped: [String: [PropPick]] = [:]
+        var order: [String] = []
+        
+        for prop in filteredProps {
+            let slot = getTimeSlot(for: prop) ?? "TBD"
+            if grouped[slot] == nil {
+                grouped[slot] = []
+                order.append(slot)
+            }
+            grouped[slot]?.append(prop)
+        }
+        
+        return order.map { (timeSlot: $0, props: grouped[$0] ?? []) }
     }
     
     var body: some View {
         ZStack {
             // Background - ignores safe area
-            LiquidGlassBackground(accentColor: GaryColors.gold)
+            LiquidGlassBackground(accentColor: selectedSport == .nflTDs ? Color(hex: "#22C55E") : GaryColors.gold)
             
             // Content - respects safe area
             VStack(spacing: 0) {
@@ -736,8 +1025,8 @@ struct GaryPropsView: View {
                 .padding(.top, 8) // Extra padding after safe area
                 .padding(.bottom, 12)
                 
-                // Sport Filter
-                SportFilterBar(selected: $selectedSport, availableSports: availableSports)
+                // Sport Filter (with props-only filters like NFL TDs)
+                SportFilterBar(selected: $selectedSport, availableSports: availableSports, showPropsOnly: true)
                     .padding(.bottom, 16)
                 
                 // Content
@@ -762,10 +1051,65 @@ struct GaryPropsView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 16) {
-                            ForEach(filteredProps) { prop in
-                                PropCardMobile(prop: prop)
-                                    .padding(.horizontal, 16)
-                                    .transaction { $0.animation = nil }
+                            // NFL TDs: Show with category section headers (Regular / Value)
+                            if selectedSport == .nflTDs {
+                                ForEach(tdPicksByCategory, id: \.category) { group in
+                                    // Section Header
+                                    HStack {
+                                        Rectangle()
+                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : Color(hex: "#22C55E").opacity(0.6))
+                                            .frame(width: 30, height: 2)
+                                        
+                                        Text(group.label)
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(group.category == "standard" ? Color(hex: "#3B82F6") : Color(hex: "#22C55E"))
+                                        
+                                        if group.category == "underdog" {
+                                            Text("• +200 or better")
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        
+                                        Rectangle()
+                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : Color(hex: "#22C55E").opacity(0.6))
+                                            .frame(height: 2)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, group.category == "underdog" ? 12 : 4)
+                                    
+                                    // TD Picks in this category
+                                    ForEach(group.picks) { prop in
+                                        PropCardMobile(prop: prop)
+                                            .padding(.horizontal, 16)
+                                            .transaction { $0.animation = nil }
+                                    }
+                                }
+                            } else {
+                                // Regular props: Show grouped by time slot with headers
+                                ForEach(propsByTimeSlot, id: \.timeSlot) { group in
+                                    // Time slot header
+                                    HStack {
+                                        Rectangle()
+                                            .fill(GaryColors.gold.opacity(0.5))
+                                            .frame(height: 1)
+                                        Text(group.timeSlot)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(GaryColors.gold)
+                                            .fixedSize()
+                                        Rectangle()
+                                            .fill(GaryColors.gold.opacity(0.5))
+                                            .frame(height: 1)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
+                                    
+                                    // Props in this time slot
+                                    ForEach(group.props) { prop in
+                                        PropCardMobile(prop: prop)
+                                            .padding(.horizontal, 16)
+                                            .transaction { $0.animation = nil }
+                                    }
+                                }
                             }
                         }
                         .padding(.vertical, 8)
@@ -830,15 +1174,31 @@ struct BillfoldView: View {
     
     /// Filter prop results by selected sport
     private var filteredPropResults: [PropResult] {
-        guard selectedSport != .all else { return propResults }
-        return propResults.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
+        switch selectedSport {
+        case .all:
+            // Show all props except TD results (those are in NFL TDs tab)
+            return propResults.filter { !$0.isTDResult }
+        case .nflTDs:
+            // Show only TD results
+            return propResults.filter { $0.isTDResult }
+        case .nfl:
+            // Show NFL props but exclude TD results
+            return propResults.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDResult }
+        default:
+            return propResults.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
+        }
     }
     
     /// Get available sports from the loaded results (both game and prop results)
     private var availableSports: Set<String> {
         let gameLeagues = Set(gameResults.compactMap { $0.effectiveLeague })
         let propLeagues = Set(propResults.compactMap { $0.effectiveLeague })
-        return gameLeagues.union(propLeagues)
+        var combined = gameLeagues.union(propLeagues)
+        // Add NFL TDs if there are any TD results
+        if propResults.contains(where: { $0.isTDResult }) {
+            combined.insert("NFL TDs")
+        }
+        return combined
     }
     
     var body: some View {
@@ -924,10 +1284,39 @@ struct BillfoldView: View {
         )
     }
     
+    // Sort sports: ALL first, then available sports, then unavailable sports (faded)
+    // Filter out props-only sports (like NFL TDs) when on Game Picks tab
+    private var sortedSportsForBillfold: [Sport] {
+        Sport.allCases
+            .filter { sport in
+                // Hide props-only sports (like NFL TDs) on Game Picks tab
+                if selectedTab == 0 && sport.isPropsOnly { return false }
+                return true
+            }
+            .sorted { a, b in
+                // ALL always comes first
+                if a == .all { return true }
+                if b == .all { return false }
+                
+                let aAvailable = availableSports.contains(a.rawValue)
+                let bAvailable = availableSports.contains(b.rawValue)
+                
+                // Available sports come before unavailable
+                if aAvailable && !bAvailable { return true }
+                if !aAvailable && bAvailable { return false }
+                
+                // Within same availability group, maintain original order
+                let allCases = Sport.allCases
+                let aIndex = allCases.firstIndex(of: a) ?? 0
+                let bIndex = allCases.firstIndex(of: b) ?? 0
+                return aIndex < bIndex
+            }
+    }
+    
     private var sportFilterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(Sport.allCases, id: \.self) { sport in
+                ForEach(sortedSportsForBillfold, id: \.self) { sport in
                     let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
                     let isSelected = selectedSport == sport
                     
@@ -1179,8 +1568,6 @@ struct BenefitCard: View {
     let title: String
     let text: String
     let icon: String?
-    @State private var isExpanded = false
-    @State private var isPressed = false
     
     init(title: String, text: String, icon: String? = nil) {
         self.title = title
@@ -1189,52 +1576,94 @@ struct BenefitCard: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                if let icon = icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(GaryColors.goldGradient)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle()
-                                .fill(Color(hex: "#1A1A1C"))
-                        )
-                }
-                Text(title)
-                    .font(.caption.bold())
-                    .foregroundStyle(GaryColors.lightGold)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-                
-                Spacer()
-                
-                // Expand/collapse indicator
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.6))
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            // Title - large and gold
+            Text(title)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(GaryColors.gold)
             
+            // Full description text - always visible
             Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(isExpanded ? nil : 2)
-                .fixedSize(horizontal: false, vertical: isExpanded)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.8))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
-        .darkCard(cornerRadius: 14)
-        .scaleEffect(isPressed ? 0.97 : 1.0)
-        .onTapGesture {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                isExpanded.toggle()
-            }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: "#141416"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                )
+        )
+    }
+}
+
+/// Hero card for flagship features (Sports Brain) - gold border and badge
+struct HeroBenefitCard: View {
+    let title: String
+    let text: String
+    let badge: String
+    
+    init(title: String, text: String, badge: String = "GARY'S SECRET WEAPON") {
+        self.title = title
+        self.text = text
+        self.badge = badge
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Badge at top
+            Text(badge)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(GaryColors.gold)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(GaryColors.gold.opacity(0.15))
+                )
+            
+            // Title - larger and gold
+            Text(title)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(GaryColors.lightGold)
+            
+            // Full description text - always visible
+            Text(text)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.85))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                isPressed = pressing
-            }
-        }, perform: {})
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "#1A1814"), Color(hex: "#141416")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.5), GaryColors.gold.opacity(0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+        )
+        .shadow(color: GaryColors.gold.opacity(0.1), radius: 20, y: 8)
     }
 }
 
@@ -1326,6 +1755,10 @@ struct PickCardMobile: View {
     
     private var accentColor: Color {
         Sport.from(league: pick.league).accentColor
+    }
+    
+    private var isNFL: Bool {
+        pick.league?.uppercased() == "NFL"
     }
     
     /// Extract pick text and odds separately, expanding team names for NBA
@@ -1463,7 +1896,7 @@ struct PickCardMobile: View {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(.white.opacity(0.1))
+                            .fill(accentColor.opacity(isNFL ? 0.05 : 0.25))
                         RoundedRectangle(cornerRadius: 4)
                             .fill(accentColor)
                             .frame(width: geo.size.width * CGFloat(pick.confidence ?? 0))
@@ -1546,9 +1979,6 @@ struct PropCardMobile: View {
                 Text(Formatters.americanOdds(prop.odds))
                     .font(.title3.bold())
                     .foregroundStyle(accentColor)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .liquidGlass(cornerRadius: 10)
             }
             
             Rectangle()
@@ -1563,7 +1993,7 @@ struct PropCardMobile: View {
                     .foregroundStyle(.secondary)
             }
             
-            Text(Formatters.propDisplay(prop.prop))
+            Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
                 .font(.headline)
             
             HStack {
@@ -1604,7 +2034,7 @@ struct PropCardMobile: View {
                     .liquidGlassButton(cornerRadius: 12)
                 }
                 .sheet(isPresented: $showAnalysis) {
-                    BulletPointSheet(title: "Gary's Analysis", content: analysis)
+                    PropAnalysisSheet(prop: prop)
                 }
             }
         }
@@ -1830,7 +2260,7 @@ struct AnalysisSheet: View {
                         
                         // GARY'S TAKE - Narrative Section
                         if !narrative.isEmpty {
-                            GaryTakeSection(narrative: narrative)
+                            GaryTakeSection(narrative: narrative, accentColor: accentColor)
                         }
                     }
                     .padding(.bottom, 20)
@@ -2159,9 +2589,70 @@ struct TaleOfTapeSection: View {
 // MARK: - Gary's Take Section
 struct GaryTakeSection: View {
     let narrative: String
-    
+    var accentColor: Color = Color(hex: "#4ade80")  // Default green, can be overridden
+
     private let greenAccent = Color(hex: "#4ade80")
     
+    /// Remove common opening phrases from paragraphs
+    private func cleanParagraph(_ text: String) -> String {
+        var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Simple prefix strings to remove (case insensitive check)
+        let prefixesToRemove = [
+            "Here's how I see this playing out:",
+            "Here's how I see it playing out:",
+            "Here's the thing:",
+            "Let me break this down:",
+            "Here's my take:",
+            "Bottom line:",
+            "The bottom line:",
+            "Here's the deal:"
+        ]
+        
+        // Check and remove simple prefixes
+        for prefix in prefixesToRemove {
+            if cleaned.lowercased().hasPrefix(prefix.lowercased()) {
+                cleaned = String(cleaned.dropFirst(prefix.count))
+                break
+            }
+        }
+        
+        // Handle "I love this spot for [team]." or "I love this spot for [team]:" pattern
+        if cleaned.lowercased().hasPrefix("i love this spot") {
+            // Find the first period or colon after "I love this spot"
+            if let periodIndex = cleaned.firstIndex(of: ".") {
+                let afterPeriod = cleaned.index(after: periodIndex)
+                if afterPeriod < cleaned.endIndex {
+                    cleaned = String(cleaned[afterPeriod...])
+                }
+            } else if let colonIndex = cleaned.firstIndex(of: ":") {
+                let afterColon = cleaned.index(after: colonIndex)
+                if afterColon < cleaned.endIndex {
+                    cleaned = String(cleaned[afterColon...])
+                }
+            }
+        }
+        
+        // Handle "Here's the thing about this [matchup]:" pattern
+        if cleaned.lowercased().hasPrefix("here's the thing about") {
+            if let colonIndex = cleaned.firstIndex(of: ":") {
+                let afterColon = cleaned.index(after: colonIndex)
+                if afterColon < cleaned.endIndex {
+                    cleaned = String(cleaned[afterColon...])
+                }
+            }
+        }
+        
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Capitalize first letter after cleaning
+        if let first = cleaned.first, first.isLowercase {
+            cleaned = cleaned.prefix(1).uppercased() + cleaned.dropFirst()
+        }
+        
+        return cleaned
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Section Header
@@ -2170,27 +2661,37 @@ struct GaryTakeSection: View {
                 .foregroundStyle(greenAccent)
                 .tracking(1)
                 .opacity(0.8)
-            
-            // Narrative text - split into paragraphs
-            VStack(alignment: .leading, spacing: 12) {
+
+            // Narrative text - split into paragraphs with dividers
+            VStack(alignment: .leading, spacing: 0) {
                 let paragraphs = narrative.components(separatedBy: "\n\n").filter { !$0.isEmpty }
-                
-                ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, para in
-                    Text(para.trimmingCharacters(in: .whitespacesAndNewlines))
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.92))
-                        .lineSpacing(5)
-                        .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(Array(paragraphs.enumerated()), id: \.offset) { index, para in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(cleanParagraph(para))
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineSpacing(5)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.vertical, 14)
+                        
+                        // Add divider between paragraphs (not after last one)
+                        if index < paragraphs.count - 1 {
+                            Rectangle()
+                                .fill(accentColor.opacity(0.5))
+                                .frame(height: 1)
+                        }
+                    }
                 }
             }
-            .padding(14)
+            .padding(.horizontal, 14)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color.white.opacity(0.03))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(accentColor.opacity(0.35), lineWidth: 1)
             )
         }
     }
@@ -2676,6 +3177,328 @@ struct BulletPointSheet: View {
     }
 }
 
+// MARK: - Prop Analysis Sheet (Enhanced)
+struct PropAnalysisSheet: View {
+    let prop: PropPick
+    @Environment(\.dismiss) private var dismiss
+    
+    private let greenAccent = Color(hex: "#4ade80")
+    private let darkBg = Color(hex: "#0a0a0a")
+    
+    private var accentColor: Color {
+        if prop.isTDPick {
+            return prop.tdCategory == "underdog" ? Color(hex: "#22C55E") : Color(hex: "#3B82F6")
+        }
+        return Sport.from(league: prop.effectiveLeague).accentColor
+    }
+    
+    /// Clean prop analysis text - remove caps labels and format nicely
+    private func cleanPropAnalysis(_ text: String) -> [String] {
+        var cleaned = text
+        
+        // Remove caps section labels
+        let labelsToRemove = [
+            "HYPOTHESIS:",
+            "EVIDENCE:",
+            "CONVERGENCE",  // May have score like (0.78)
+            "IF WRONG:",
+            "THE EDGE:",
+            "THE VERDICT:",
+            "RISK:"
+        ]
+        
+        for label in labelsToRemove {
+            // Remove the label and any score in parentheses after it
+            if let range = cleaned.range(of: label, options: .caseInsensitive) {
+                // Check if followed by a score like (0.78):
+                let afterLabel = cleaned[range.upperBound...]
+                if afterLabel.hasPrefix(" (") || afterLabel.hasPrefix("(") {
+                    // Find the closing ) and any :
+                    if let closeParenRange = afterLabel.range(of: "):") {
+                        cleaned.removeSubrange(range.lowerBound...closeParenRange.upperBound)
+                    } else if let closeParenRange = afterLabel.range(of: ")") {
+                        cleaned.removeSubrange(range.lowerBound...closeParenRange.upperBound)
+                    } else {
+                        cleaned.removeSubrange(range)
+                    }
+                } else {
+                    cleaned.removeSubrange(range)
+                }
+            }
+        }
+        
+        // First try splitting by newlines
+        var paragraphs = cleaned.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        
+        // If we only got 1 paragraph but it's long, try to split it smartly
+        if paragraphs.count == 1 && paragraphs[0].count > 300 {
+            let longText = paragraphs[0]
+            var sections: [String] = []
+            var remaining = longText
+            
+            // Look for "if wrong" type patterns to split the last section
+            let riskPatterns = [
+                " Ottawa either", " Winnipeg either", " The only way this misses",
+                " The risk here", " If wrong", " The main risk",
+                " Where this misses", " This misses if", " The fade scenario"
+            ]
+            
+            for pattern in riskPatterns {
+                if let range = remaining.range(of: pattern, options: .caseInsensitive) {
+                    let beforeRisk = String(remaining[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let riskSection = String(remaining[range.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !beforeRisk.isEmpty {
+                        // Try to split the first part roughly in half by finding a sentence break
+                        let midPoint = beforeRisk.count / 2
+                        let searchRange = beforeRisk.index(beforeRisk.startIndex, offsetBy: max(0, midPoint - 100))..<beforeRisk.index(beforeRisk.startIndex, offsetBy: min(beforeRisk.count, midPoint + 100))
+                        
+                        if let periodRange = beforeRisk.range(of: ". ", options: [], range: searchRange) {
+                            let firstHalf = String(beforeRisk[..<periodRange.upperBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            let secondHalf = String(beforeRisk[periodRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !firstHalf.isEmpty { sections.append(firstHalf) }
+                            if !secondHalf.isEmpty { sections.append(secondHalf) }
+                        } else {
+                            sections.append(beforeRisk)
+                        }
+                    }
+                    if !riskSection.isEmpty { sections.append(riskSection) }
+                    remaining = ""
+                    break
+                }
+            }
+            
+            // If no risk pattern found, just split into 2-3 parts by sentence
+            if sections.isEmpty && !remaining.isEmpty {
+                let sentences = remaining.components(separatedBy: ". ")
+                let sentenceCount = sentences.count
+                if sentenceCount >= 4 {
+                    let firstBreak = sentenceCount / 3
+                    let secondBreak = (sentenceCount * 2) / 3
+                    sections.append(sentences[0..<firstBreak].joined(separator: ". ") + ".")
+                    sections.append(sentences[firstBreak..<secondBreak].joined(separator: ". ") + ".")
+                    sections.append(sentences[secondBreak...].joined(separator: ". "))
+                } else if sentenceCount >= 2 {
+                    let midBreak = sentenceCount / 2
+                    sections.append(sentences[0..<midBreak].joined(separator: ". ") + ".")
+                    sections.append(sentences[midBreak...].joined(separator: ". "))
+                } else {
+                    sections.append(remaining)
+                }
+            }
+            
+            paragraphs = sections.filter { !$0.isEmpty }
+        }
+        
+        // Clean up each paragraph
+        return paragraphs.map { para -> String in
+            var p = para.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Capitalize first letter if lowercase
+            if let first = p.first, first.isLowercase {
+                p = p.prefix(1).uppercased() + p.dropFirst()
+            }
+            return p
+        }
+    }
+    
+    private var categoryLabel: String? {
+        guard let cat = prop.tdCategory else { return nil }
+        return cat == "standard" ? "Regular Pick" : "Value Pick (+200+)"
+    }
+    
+    var body: some View {
+        ZStack {
+            darkBg.ignoresSafeArea()
+            
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Gary's Analysis")
+                            .font(.title2.bold())
+                            .foregroundStyle(greenAccent)
+                        Text("Powered by Gary A.I.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(10)
+                            .background(Circle().fill(Color.white.opacity(0.1)))
+                    }
+                }
+                .padding(.bottom, 20)
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Player & Pick Info Card
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Player Header
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(prop.player ?? "Unknown")
+                                        .font(.title3.bold())
+                                        .foregroundStyle(.white)
+                                    
+                                    if let team = prop.team {
+                                        Text(team)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.white.opacity(0.6))
+                                    }
+                                    
+                                    if let matchup = prop.matchup {
+                                        Text(matchup)
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.4))
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                // Odds - just accent color text, no box
+                                Text(Formatters.americanOdds(prop.odds))
+                                    .font(.title2.bold())
+                                    .foregroundStyle(accentColor)
+                            }
+                            
+                            Rectangle()
+                                .fill(.white.opacity(0.1))
+                                .frame(height: 1)
+                            
+                            // The Pick
+                            HStack(spacing: 12) {
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(accentColor)
+                                
+                                Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                
+                                if let bet = prop.bet {
+                                    Text(bet.uppercased())
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(bet.lowercased() == "over" ? .green : .red)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background((bet.lowercased() == "over" ? Color.green : Color.red).opacity(0.15))
+                                        .clipShape(Capsule())
+                                }
+                                
+                                Spacer()
+                            }
+                            
+                            // Category Badge for TD picks
+                            if let category = categoryLabel {
+                                HStack(spacing: 6) {
+                                    Image(systemName: prop.tdCategory == "underdog" ? "sparkles" : "checkmark.seal.fill")
+                                        .font(.system(size: 11))
+                                    Text(category)
+                                        .font(.caption.bold())
+                                }
+                                .foregroundStyle(accentColor)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(accentColor.opacity(0.1))
+                                .clipShape(Capsule())
+                            }
+                        }
+                        .padding(18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(hex: "#111113"))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(accentColor.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                        
+                        // Gary's Take Section
+                        if let analysis = prop.analysis, !analysis.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("GARY'S TAKE")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(greenAccent)
+                                    .tracking(1)
+                                    .opacity(0.8)
+                                
+                                // Cleaned paragraphs with dividers
+                                VStack(alignment: .leading, spacing: 0) {
+                                    let paragraphs = cleanPropAnalysis(analysis)
+                                    
+                                    ForEach(Array(paragraphs.enumerated()), id: \.offset) { index, para in
+                                        VStack(alignment: .leading, spacing: 0) {
+                                            Text(para)
+                                                .font(.subheadline)
+                                                .foregroundStyle(.white.opacity(0.92))
+                                                .lineSpacing(5)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .padding(.vertical, 14)
+                                            
+                                            // Add divider between paragraphs (not after last one)
+                                            if index < paragraphs.count - 1 {
+                                                Rectangle()
+                                                    .fill(accentColor.opacity(0.5))
+                                                    .frame(height: 1)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.white.opacity(0.03))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(accentColor.opacity(0.35), lineWidth: 1)
+                                )
+                            }
+                        }
+                        
+                        // Time & Sport Info
+                        HStack(spacing: 16) {
+                            if let time = prop.time, !time.isEmpty, time != "TBD" {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "clock")
+                                        .font(.system(size: 12))
+                                    Text(time)
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(.white.opacity(0.5))
+                            }
+                            
+                            if let league = prop.effectiveLeague {
+                                HStack(spacing: 6) {
+                                    Image(systemName: Sport.from(league: league).icon)
+                                        .font(.system(size: 12))
+                                    Text(league)
+                                        .font(.caption.bold())
+                                }
+                                .foregroundStyle(accentColor)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .padding(.bottom, 20)
+                }
+            }
+            .padding(20)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 // MARK: - Web Container
 
 struct WebContainer: UIViewRepresentable {
@@ -2784,7 +3607,7 @@ enum Formatters {
         return s
     }
     
-    static func propDisplay(_ raw: String?) -> String {
+    static func propDisplay(_ raw: String?, league: String? = nil) -> String {
         guard var s = raw, !s.isEmpty else { return "" }
         s = s.replacingOccurrences(of: "_", with: " ")
         let parts = s.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
@@ -2797,7 +3620,25 @@ enum Formatters {
             typeWords = Array(parts.dropLast())
         }
         
-        let typeTitle = typeWords.joined(separator: " ").capitalized
+        // Handle combined props like "goals assists" -> "Goals + Assists"
+        var typeTitle = typeWords.joined(separator: " ").capitalized
+        
+        // Special case: combined stat props with "+" separator
+        let combinedProps = ["Goals Assists", "Rebounds Assists", "Points Rebounds", "Points Assists", "Points Rebounds Assists"]
+        for combo in combinedProps {
+            if typeTitle.lowercased() == combo.lowercased() {
+                typeTitle = combo.split(separator: " ").map(String.init).joined(separator: " + ")
+                break
+            }
+        }
+        
+        // Fix "Td" -> "TD" (capitalized lowercases the D)
+        typeTitle = typeTitle.replacingOccurrences(of: " Td", with: " TD")
+        typeTitle = typeTitle.replacingOccurrences(of: "Td ", with: "TD ")
+        if typeTitle == "Td" { typeTitle = "TD" }
+        if typeTitle.hasSuffix(" Td") { typeTitle = String(typeTitle.dropLast(2)) + "TD" }
+        
+        // Return formatted prop with line number (no + suffix)
         return linePart.map { "\(typeTitle) \($0)" } ?? typeTitle
     }
     
@@ -2823,7 +3664,7 @@ enum Formatters {
     }
     
     static func propResultTitle(_ p: PropResult) -> String {
-        if let txt = p.pick_text, !txt.isEmpty { return propDisplay(txt) }
+        if let txt = p.pick_text, !txt.isEmpty { return propDisplay(txt, league: p.effectiveLeague) }
         return [
             p.player_name,
             p.prop_type?.replacingOccurrences(of: "_", with: " ").capitalized,

@@ -312,6 +312,8 @@ async function getNFLPlayerStats(playerName, dateStr) {
     const playerStats = allStats.find(p => namesMatch(p.player_name, playerName));
     
     if (playerStats) {
+      // Calculate total TDs for anytime TD props
+      const totalTds = (playerStats.rush_tds || 0) + (playerStats.rec_tds || 0) + (playerStats.pass_tds || 0);
       return {
         player: playerName,
         pass_yds: playerStats.pass_yds,
@@ -322,6 +324,7 @@ async function getNFLPlayerStats(playerName, dateStr) {
         rec_tds: playerStats.rec_tds,
         receptions: playerStats.receptions,
         targets: playerStats.targets,
+        total_tds: totalTds,
         source: 'BallDontLie'
       };
     }
@@ -782,7 +785,7 @@ async function fetchPlayerStatsViaPerplexity(playerName, dateStr, sport) {
   if (sport === 'NBA' || sport === 'NCAAB') {
     query = `What were ${playerName}'s exact stats on ${gameDate}? Respond with ONLY: PTS:X REB:Y AST:Z 3PM:W (replace X,Y,Z,W with actual numbers, no extra text)`;
   } else if (sport === 'NFL' || sport === 'NCAAF') {
-    query = `What were ${playerName}'s exact stats on ${gameDate}? Respond with ONLY the key stat values in format - PASS_YDS:X RUSH_YDS:Y REC:Z REC_YDS:W (replace with actual numbers)`;
+    query = `What were ${playerName}'s exact stats on ${gameDate}? Respond with ONLY the key stat values in format - PASS_YDS:X RUSH_YDS:Y REC:Z REC_YDS:W RUSH_TDS:A REC_TDS:B (replace with actual numbers, use 0 if stat doesn't apply)`;
   } else if (sport === 'NHL') {
     query = `What were ${playerName}'s exact stats on ${gameDate}? Respond with ONLY: G:X A:Y SOG:Z (goals, assists, shots on goal) replacing with actual numbers`;
   } else if (sport === 'EPL') {
@@ -851,6 +854,29 @@ async function fetchPlayerStatsViaPerplexity(playerName, dateStr, sport) {
     if (recYdsMatch) { stats.rec_yds = parseInt(recYdsMatch[1]); foundStats = true; }
     if (recMatch) { stats.receptions = parseInt(recMatch[1]); foundStats = true; }
     
+    // NFL/NCAAF TD patterns
+    const rushTdsMatch = text.match(/RUSH(?:ING)?[_\s]*(?:TD|TDS|TOUCHDOWNS?)[:\s]*(\d+)/i);
+    const recTdsMatch = text.match(/REC(?:EIVING)?[_\s]*(?:TD|TDS|TOUCHDOWNS?)[:\s]*(\d+)/i);
+    const passTdsMatch = text.match(/PASS(?:ING)?[_\s]*(?:TD|TDS|TOUCHDOWNS?)[:\s]*(\d+)/i);
+    const tdsMatch = text.match(/\bTD[S]?[:\s]*(\d+)/i);
+    
+    if (rushTdsMatch) { stats.rush_tds = parseInt(rushTdsMatch[1]); foundStats = true; }
+    if (recTdsMatch) { stats.rec_tds = parseInt(recTdsMatch[1]); foundStats = true; }
+    if (passTdsMatch) { stats.pass_tds = parseInt(passTdsMatch[1]); foundStats = true; }
+    
+    // Calculate total_tds for NFL
+    if (sport === 'NFL' || sport === 'NCAAF') {
+      stats.rush_tds = stats.rush_tds || 0;
+      stats.rec_tds = stats.rec_tds || 0;
+      stats.pass_tds = stats.pass_tds || 0;
+      stats.total_tds = stats.rush_tds + stats.rec_tds + stats.pass_tds;
+      // If we only found a generic TD match, use that
+      if (tdsMatch && stats.total_tds === 0) {
+        stats.total_tds = parseInt(tdsMatch[1]);
+        foundStats = true;
+      }
+    }
+    
     // NHL patterns
     const goalsMatch = text.match(/\bG(?:OALS)?[:\s]*(\d+)/i);
     const assistsNhlMatch = text.match(/\bA(?:SSISTS)?[:\s]*(\d+)/i);
@@ -859,6 +885,11 @@ async function fetchPlayerStatsViaPerplexity(playerName, dateStr, sport) {
     if (goalsMatch) { stats.goals = parseInt(goalsMatch[1]); foundStats = true; }
     if (assistsNhlMatch) { stats.assists_nhl = parseInt(assistsNhlMatch[1]); foundStats = true; }
     if (sogMatch) { stats.sog = parseInt(sogMatch[1]); foundStats = true; }
+    
+    // Calculate NHL points (goals + assists)
+    if (sport === 'NHL' && (stats.goals !== undefined || stats.assists_nhl !== undefined)) {
+      stats.points = (stats.goals || 0) + (stats.assists_nhl || 0);
+    }
     
     // EPL (Soccer) patterns
     const eplAssistsMatch = text.match(/ASSISTS?[:\s]*(\d+)/i);
@@ -936,8 +967,16 @@ const propToStatField = {
   'receiving_yards': 'rec_yds',
   'receivingyards': 'rec_yds',
   'recyards': 'rec_yds',
+  'reception_yds': 'rec_yds',
+  'receptionyds': 'rec_yds',
   'receptions': 'receptions',
   'rec': 'receptions',
+  // NFL Anytime TD props
+  'anytimetd': 'total_tds',
+  'anytime_td': 'total_tds',
+  'td': 'total_tds',
+  'touchdown': 'total_tds',
+  'touchdowns': 'total_tds',
   // NHL
   'goals': 'goals',
   'assists_nhl': 'assists_nhl',
@@ -946,6 +985,7 @@ const propToStatField = {
   'shots_on_goal': 'sog',
   'shotsgoal': 'sog',
   'shotsongoal': 'sog',
+  'points_nhl': 'points',
   // EPL (Soccer)
   'anytime_goal': 'goals',
   'anytimegoal': 'goals',
@@ -959,6 +999,16 @@ const propToStatField = {
   'sot': 'shots_on_target',
   'saves': 'saves',
   'tackles': 'tackles'
+};
+
+// Sport-specific field overrides (since some prop names are ambiguous)
+const sportSpecificFields = {
+  'NBA': { 'assists': 'ast', 'points': 'pts' },
+  'NCAAB': { 'assists': 'ast', 'points': 'pts' },
+  'CBB': { 'assists': 'ast', 'points': 'pts' },
+  'NHL': { 'points': 'points', 'assists': 'assists_nhl' },
+  'NFL': { 'assists': 'ast' },  // NFL doesn't have assists, but just in case
+  'EPL': { 'points': 'goals' }  // Soccer doesn't really have points prop
 };
 
 // Get player stats based on sport
@@ -1074,8 +1124,12 @@ async function processPropPicks(dateStr) {
       
       // Get the relevant stat value (remove numbers and special chars, keep only letters and underscores)
       const propType = pick.prop?.toLowerCase().replace(/[^a-z_]/g, '') || '';
-      const statField = propToStatField[propType];
       
+      // Check for sport-specific field overrides first
+      const sportOverrides = sportSpecificFields[pick.sport] || {};
+      let statField = sportOverrides[propType] || propToStatField[propType];
+      
+      // If still not found, and propType doesn't exist in mapping, log and skip
       if (!statField || !(statField in stats)) {
         console.log(`  ❌ Unknown prop type: ${propType} (field: ${statField})`);
         console.log(`     Available stats: ${Object.keys(stats).join(', ')}`);
@@ -1177,3 +1231,4 @@ main()
     console.error('Fatal error:', err);
     process.exit(1);
   });
+

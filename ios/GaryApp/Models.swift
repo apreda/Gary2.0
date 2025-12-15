@@ -366,9 +366,24 @@ struct PropPick: Identifiable, Codable {
     let sport: String?  // Web app uses "sport" field
     let line: String?
     let time: String?
+    let commence_time: String?  // ISO format for sorting/grouping by game time
+    let tdCategory: String?  // "standard" or "underdog" for TD scorer picks
+    let matchup: String?     // Game matchup for TD picks
+    
+    // CodingKeys to map snake_case from JSON
+    enum CodingKeys: String, CodingKey {
+        case player, team, prop, bet, odds, confidence, analysis, league, sport, line, time, matchup
+        case commence_time = "commence_time"
+        case tdCategory = "td_category"
+    }
     
     var id: String {
-        "\(team ?? player ?? "prop")-\(prop ?? "")-\(odds ?? "")"
+        "\(team ?? player ?? "prop")-\(prop ?? "")-\(odds ?? "")-\(tdCategory ?? "")"
+    }
+    
+    /// Whether this is a TD scorer pick
+    var isTDPick: Bool {
+        tdCategory != nil
     }
     
     /// Get the sport/league (checks both fields)
@@ -406,7 +421,10 @@ struct PropPick: Identifiable, Codable {
             league: dict["league"] as? String,
             sport: dict["sport"] as? String,
             line: dict["line"] as? String,
-            time: dict["time"] as? String
+            time: dict["time"] as? String,
+            commence_time: dict["commence_time"] as? String,
+            tdCategory: dict["td_category"] as? String,
+            matchup: dict["matchup"] as? String
         )
     }
 }
@@ -557,6 +575,16 @@ struct PropResult: Decodable {
         }
         
         return nil
+    }
+    
+    /// Whether this is a TD scorer result (NFL anytime TD picks)
+    var isTDResult: Bool {
+        let propLower = (prop_type ?? "").lowercased()
+        let pickLower = (pick_text ?? "").lowercased()
+        return propLower.contains("anytime") && propLower.contains("td") ||
+               pickLower.contains("anytime") && pickLower.contains("td") ||
+               propLower == "anytime_td" ||
+               propLower == "td_scorer"
     }
 }
 

@@ -7,7 +7,7 @@ import '../styles/DisableCardGlow.css';
 import '../styles/MobileScrollFix.css';
 import { garyPhrases } from '../utils/garyPhrases';
 import { supabase } from '../supabaseClient';
-import { getEasternDate, getYesterdayDate, formatGameTime } from '../utils/dateUtils';
+import { getEasternDate, getYesterdayDate, formatGameTime, toESTDate, getESTDate } from '../utils/dateUtils';
 
 
 // Custom hook to detect mobile
@@ -465,6 +465,18 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'OREB_RATE': 'Off Reb/G',
                 'FT_RATE': 'FT Rate',
                 'ADJ_EFFICIENCY_MARGIN': 'Net Rating',
+                // NCAAB-Specific (unique calculations)
+                'NCAAB_EFG_PCT': 'eFG%',
+                'NCAAB_TEMPO': 'Tempo',
+                'NCAAB_OFFENSIVE_RATING': 'Off Rtg',
+                'NCAAB_AP_RANKING': 'AP Rank',
+                'NCAAB_COACHES_RANKING': 'Coaches Rank',
+                'NCAAB_CONFERENCE_RECORD': 'Conf Record',
+                // NCAAB Advanced (Perplexity)
+                'NCAAB_KENPOM_RATINGS': 'KenPom',
+                'NCAAB_NET_RANKING': 'NET Rank',
+                'NCAAB_STRENGTH_OF_SCHEDULE': 'SOS',
+                'NCAAB_QUAD_RECORD': 'Quad Record',
                 // NCAAF specific
                 'SP_PLUS_RATINGS': 'Net Rating',
                 'EXPLOSIVENESS': 'Big Plays',
@@ -527,6 +539,17 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'RECENT_FORM': 'last_5',
                   'HOME_AWAY_SPLITS': 'overall',
                   'OREB_RATE': 'oreb_per_game',
+                  // === NCAAB-Specific ===
+                  'NCAAB_EFG_PCT': 'efg_pct',
+                  'NCAAB_TEMPO': 'tempo',
+                  'NCAAB_OFFENSIVE_RATING': 'off_rating',
+                  'NCAAB_AP_RANKING': 'ap_rank',
+                  'NCAAB_COACHES_RANKING': 'coaches_rank',
+                  'NCAAB_CONFERENCE_RECORD': 'conference_record',
+                  'NCAAB_KENPOM_RATINGS': 'kenpom_rank',
+                  'NCAAB_NET_RANKING': 'net_rank',
+                  'NCAAB_STRENGTH_OF_SCHEDULE': 'sos_rank',
+                  'NCAAB_QUAD_RECORD': 'quad_1',
                   'FT_RATE': 'ft_rate',
                   'CLUTCH_STATS': 'close_record',
                   'EFFICIENCY_LAST_10': 'net_rating',
@@ -1059,8 +1082,30 @@ function RealGaryPicks() {
       }
       
       // Add NFL picks from weekly table
+      // On Mondays, only show Monday Night Football (games happening today)
+      // Other days, show all NFL picks for the week
       if (nflData && nflData.picks) {
-        const nflPicks = typeof nflData.picks === 'string' ? JSON.parse(nflData.picks) : nflData.picks;
+        let nflPicks = typeof nflData.picks === 'string' ? JSON.parse(nflData.picks) : nflData.picks;
+        
+        // Check if today is Monday in EST (day 1 = Monday)
+        const now = new Date();
+        const estDate = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const dayOfWeek = estDate.getDay(); // 0 = Sunday, 1 = Monday
+        const todayEST = getESTDate();
+        
+        if (dayOfWeek === 1) {
+          // It's Monday - only show games happening today (Monday Night Football)
+          console.log('[Picks] Monday detected - filtering NFL picks to today\'s games only');
+          nflPicks = nflPicks.filter(pick => {
+            if (!pick.gameTime) return false;
+            const pickGameDate = toESTDate(pick.gameTime);
+            const isToday = pickGameDate === todayEST;
+            console.log(`[Picks] NFL game ${pick.awayTeam} @ ${pick.homeTeam}: gameDate=${pickGameDate}, today=${todayEST}, showing=${isToday}`);
+            return isToday;
+          });
+          console.log(`[Picks] After Monday filter: ${nflPicks.length} NFL picks for today`);
+        }
+        
         picksArray = [...picksArray, ...nflPicks];
       }
       
@@ -1304,7 +1349,14 @@ function RealGaryPicks() {
 
   const isMobile = useIsMobile();
   const filteredPicks = React.useMemo(() => {
-    return picks.filter(p => (p.league || '').toUpperCase() === selectedSport);
+    return picks
+      .filter(p => (p.league || '').toUpperCase() === selectedSport)
+      .sort((a, b) => {
+        // Sort by game time (commence_time) - earliest games first
+        const timeA = a.commence_time ? new Date(a.commence_time).getTime() : 0;
+        const timeB = b.commence_time ? new Date(b.commence_time).getTime() : 0;
+        return timeA - timeB;
+      });
   }, [picks, selectedSport]);
 
   useEffect(() => {
@@ -1317,7 +1369,7 @@ function RealGaryPicks() {
     switch (league) {
       case 'NBA': return '#3B82F6';      // Blue
       case 'WNBA': return '#F97316';     // Orange
-      case 'NFL': return '#bfa142';      // Original Gold
+      case 'NFL': return '#22C55E';      // Green (same as prop picks)
       case 'NHL': return '#00A3E0';      // Ice Blue
       case 'NCAAB': return '#F97316';    // Orange
       case 'NCAAF': return '#DC2626';    // Red

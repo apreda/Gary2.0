@@ -791,6 +791,67 @@ const ballDontLieService = {
   },
 
   /**
+   * Get the starting QB for an NFL team based on season stats (most passing yards)
+   * @param {number} teamId - BDL team ID
+   * @param {number} season - Season year (e.g., 2025)
+   * @returns {Object|null} - { id, name, firstName, lastName, team, passingYards, passingTds, qbRating, ... }
+   */
+  async getTeamStartingQB(teamId, season = 2025, ttlMinutes = 60) {
+    try {
+      if (!teamId) return null;
+      const cacheKey = `nfl_starting_qb_${teamId}_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Fetch all player season stats for the team
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/season_stats${buildQuery({ 
+          season, 
+          team_id: teamId,
+          per_page: 100 
+        })}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const allStats = response.data?.data || [];
+        
+        // Filter to QBs only (position = "Quarterback" or position_abbreviation = "QB")
+        const qbStats = allStats.filter(p => 
+          p.player?.position === 'Quarterback' || 
+          p.player?.position_abbreviation === 'QB'
+        );
+        
+        if (qbStats.length === 0) {
+          console.warn(`[Ball Don't Lie] No QBs found for team ${teamId} in ${season}`);
+          return null;
+        }
+        
+        // Sort by passing yards descending to find the starter
+        qbStats.sort((a, b) => (b.passing_yards || 0) - (a.passing_yards || 0));
+        const starter = qbStats[0];
+        
+        const result = {
+          id: starter.player?.id,
+          firstName: starter.player?.first_name,
+          lastName: starter.player?.last_name,
+          name: `${starter.player?.first_name} ${starter.player?.last_name}`,
+          position: starter.player?.position,
+          team: starter.player?.team?.full_name || starter.player?.team?.name,
+          teamAbbr: starter.player?.team?.abbreviation,
+          jerseyNumber: starter.player?.jersey_number,
+          passingYards: starter.passing_yards,
+          passingTds: starter.passing_touchdowns,
+          passingInterceptions: starter.passing_interceptions,
+          passingCompletionPct: starter.passing_completion_pct,
+          qbRating: starter.qbr || starter.qb_rating,
+          gamesPlayed: starter.games_played
+        };
+        
+        console.log(`[Ball Don't Lie] Starting QB for team ${teamId}: ${result.name} (${result.passingYards} pass yds)`);
+        return result;
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] getTeamStartingQB error for team ${teamId}:`, e.message);
+      return null;
+    }
+  },
+
+  /**
    * NCAAB player season stats (single season; filterable by player or team)
    */
   async getNcaabPlayerSeasonStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 10) {
@@ -1233,6 +1294,36 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getLeaders error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Rankings endpoints (NCAAB) via HTTP fallback
+   * Returns AP and Coaches poll rankings
+   */
+  async getRankingsGeneric(sportKey, { season, week } = {}, ttlMinutes = 30) {
+    try {
+      const cacheKey = `${sportKey}_rankings_${season}_${week || 'latest'}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Only NCAAB has rankings endpoint
+        if (sportKey !== 'basketball_ncaab') {
+          console.log(`[Ball Don't Lie] Rankings not available for ${sportKey}`);
+          return [];
+        }
+        const params = { season };
+        if (week) params.week = week;
+        const url = `https://api.balldontlie.io/ncaab/v1/rankings${buildQuery(params)}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getRankings error:`, e.message);
       return [];
     }
   },
@@ -2851,6 +2942,160 @@ const ballDontLieService = {
       }, 60); // Cache for 60 minutes (player names don't change)
     } catch (error) {
       console.error(`[Ball Don't Lie] NHL players error:`, error?.response?.data || error.message);
+      return {};
+    }
+  },
+
+  // ==================== EPL PLAYER PROPS (BDL API) ====================
+
+  /**
+   * Get EPL player props from Ball Don't Lie API
+   * Supports: anytime_goal, assists, first_goal, goals_assists, header_goal, last_goal,
+   *           outside_box_goal, saves, shots, shots_on_target, tackles, first_half_goal, second_half_goal
+   * @param {number} gameId - BDL game ID
+   * @param {Object} options - Optional filters (player_id, prop_type, vendors)
+   * @returns {Promise<Array>} - Array of player prop objects
+   */
+  async getEplPlayerProps(gameId, options = {}) {
+    try {
+      if (!gameId) {
+        console.warn('[Ball Don\'t Lie] EPL player props requires game_id');
+        return [];
+      }
+
+      const cacheKey = `epl_player_props_${gameId}_${JSON.stringify(options)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = { game_id: gameId };
+        if (options.player_id) params.player_id = options.player_id;
+        if (options.prop_type) params.prop_type = options.prop_type;
+        if (options.vendors) params.vendors = options.vendors;
+
+        const url = `${BALLDONTLIE_API_BASE_URL}/epl/v1/odds/player_props${buildQuery(params)}`;
+        console.log(`[Ball Don't Lie] Fetching EPL player props: ${url}`);
+        
+        const response = await axios.get(url, { 
+          headers: { 'Authorization': API_KEY } 
+        });
+        
+        const props = response.data?.data || [];
+        console.log(`[Ball Don't Lie] Retrieved ${props.length} EPL player props for game ${gameId}`);
+        return props;
+      }, 2); // Cache for 2 minutes since props are live
+    } catch (error) {
+      const status = error?.response?.status;
+      const msg = error?.response?.data?.error || error.message;
+      console.error(`[Ball Don't Lie] EPL player props error: ${status} - ${msg}`);
+      return [];
+    }
+  },
+
+  /**
+   * Get EPL games for a specific date to find game IDs
+   * @param {string} dateStr - Date in YYYY-MM-DD format
+   * @returns {Promise<Array>} - Array of EPL game objects with IDs
+   */
+  async getEplGamesForDate(dateStr) {
+    try {
+      const cacheKey = `epl_games_date_${dateStr}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Calculate EPL season: Aug-Dec = current year, Jan-Jul = previous year
+        const targetDate = new Date(dateStr);
+        const month = targetDate.getMonth(); // 0-indexed
+        const year = targetDate.getFullYear();
+        const season = month >= 7 ? year : year - 1;
+        
+        // EPL season runs Aug-May with 38 matchweeks
+        // Week estimation: Aug 10 is roughly week 1, each week is ~7 days
+        // But matches can be rescheduled, so we search a wider range
+        const seasonStart = new Date(season, 7, 10); // Approx Aug 10
+        const daysSinceStart = Math.floor((targetDate - seasonStart) / (1000 * 60 * 60 * 24));
+        const estimatedWeek = Math.max(1, Math.min(38, Math.floor(daysSinceStart / 7) + 1));
+        
+        // Search a wider range: 3 weeks before and after the estimate
+        // This handles rescheduled matches and varying match schedules
+        const weeksToFetch = [];
+        for (let w = estimatedWeek - 3; w <= estimatedWeek + 3; w++) {
+          if (w >= 1 && w <= 38) weeksToFetch.push(w);
+        }
+        
+        let allGames = [];
+        
+        for (const week of weeksToFetch) {
+          try {
+            const url = `${BALLDONTLIE_API_BASE_URL}/epl/v1/games${buildQuery({ season, week, per_page: 20 })}`;
+            
+            const response = await axios.get(url, { 
+              headers: { 'Authorization': API_KEY } 
+            });
+            
+            const games = response.data?.data || [];
+            allGames = allGames.concat(games);
+          } catch (e) {
+            // Silently skip failed weeks
+          }
+        }
+        
+        // Filter games to target date
+        const games = allGames.filter(g => {
+          if (!g.kickoff) return false;
+          const gameDate = g.kickoff.slice(0, 10);
+          return gameDate === dateStr;
+        });
+        
+        console.log(`[Ball Don't Lie] Found ${games.length} EPL games for ${dateStr} (searched weeks ${weeksToFetch[0]}-${weeksToFetch[weeksToFetch.length-1]})`);
+        return games;
+      }, 5); // Cache for 5 minutes
+    } catch (error) {
+      console.error(`[Ball Don't Lie] EPL games error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get EPL players by IDs to resolve player names
+   * @param {Array<number>} playerIds - Array of player IDs
+   * @returns {Promise<Object>} - Map of player_id to player info
+   */
+  async getEplPlayersByIds(playerIds) {
+    try {
+      if (!playerIds || playerIds.length === 0) return {};
+      
+      // Dedupe and limit
+      const uniqueIds = [...new Set(playerIds)].slice(0, 100);
+      const cacheKey = `epl_players_${uniqueIds.sort().join(',')}`;
+      
+      // Calculate current EPL season
+      const now = new Date();
+      const month = now.getMonth();
+      const year = now.getFullYear();
+      const season = month >= 7 ? year : year - 1;
+      
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/epl/v1/players${buildQuery({ player_ids: uniqueIds, per_page: 100, season })}`;
+        console.log(`[Ball Don't Lie] Fetching ${uniqueIds.length} EPL players`);
+        
+        const response = await axios.get(url, { 
+          headers: { 'Authorization': API_KEY } 
+        });
+        
+        const players = response.data?.data || [];
+        
+        // Build lookup map
+        const playerMap = {};
+        for (const player of players) {
+          playerMap[player.id] = {
+            id: player.id,
+            name: player.name || `${player.first_name} ${player.last_name}`,
+            position: player.position,
+            team: player.team_ids?.[0] ? `Team ${player.team_ids[0]}` : 'Unknown'
+          };
+        }
+        
+        console.log(`[Ball Don't Lie] Resolved ${Object.keys(playerMap).length} EPL player names`);
+        return playerMap;
+      }, 60); // Cache for 60 minutes (player names don't change)
+    } catch (error) {
+      console.error(`[Ball Don't Lie] EPL players error:`, error?.response?.data || error.message);
       return {};
     }
   }
