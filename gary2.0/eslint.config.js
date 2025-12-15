@@ -4,9 +4,11 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist'] },
+  // Ignore build artifacts and generated dependency bundles
+  { ignores: ['dist', '.vite', '.vite/**', 'node_modules', 'node_modules/**'] },
   {
-    files: ['**/*.{js,jsx}'],
+    // Only lint application source (avoid linting serverless functions/scripts)
+    files: ['src/**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,

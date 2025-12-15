@@ -27,6 +27,12 @@ export async function buildScoutReport(game, sport) {
     fetchRecentGames(awayTeam, sportKey, 5)
   ]);
   
+  // For NFL/NCAAF, fetch starting QBs
+  let startingQBs = null;
+  if (sportKey === 'NFL' || sportKey === 'NCAAF') {
+    startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey);
+  }
+  
   // Format injuries for display
   const formatInjuriesForStorage = (injuries) => {
     const formatList = (list) => list.map(i => ({
@@ -63,7 +69,7 @@ TEAM IDENTITIES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatTeamIdentity(homeTeam, homeProfile, 'Home')}
 ${formatTeamIdentity(awayTeam, awayProfile, 'Away')}
-
+${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome)}
@@ -789,6 +795,85 @@ function formatStreak(standing) {
     return `L${standing.loss_streak}`;
   }
   return standing.streak || 'N/A';
+}
+
+/**
+ * Fetch starting QBs for both teams (NFL/NCAAF only)
+ */
+async function fetchStartingQBs(homeTeam, awayTeam, sport) {
+  try {
+    const bdlSport = sportToBdlKey(sport);
+    if (!bdlSport || (bdlSport !== 'americanfootball_nfl' && bdlSport !== 'americanfootball_ncaaf')) {
+      return null;
+    }
+    
+    const teams = await ballDontLieService.getTeams(bdlSport);
+    const homeTeamData = findTeam(teams, homeTeam);
+    const awayTeamData = findTeam(teams, awayTeam);
+    
+    if (!homeTeamData && !awayTeamData) {
+      console.warn('[Scout Report] Could not find team IDs for QB lookup');
+      return null;
+    }
+    
+    console.log(`[Scout Report] Fetching starting QBs for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
+    
+    // Fetch QBs in parallel
+    const [homeQB, awayQB] = await Promise.all([
+      homeTeamData ? ballDontLieService.getTeamStartingQB(homeTeamData.id, 2025) : null,
+      awayTeamData ? ballDontLieService.getTeamStartingQB(awayTeamData.id, 2025) : null
+    ]);
+    
+    if (homeQB) {
+      console.log(`[Scout Report] Home QB: ${homeQB.name} (${homeQB.passingYards} yds, ${homeQB.passingTds} TDs)`);
+    }
+    if (awayQB) {
+      console.log(`[Scout Report] Away QB: ${awayQB.name} (${awayQB.passingYards} yds, ${awayQB.passingTds} TDs)`);
+    }
+    
+    return { home: homeQB, away: awayQB };
+  } catch (error) {
+    console.error('[Scout Report] Error fetching starting QBs:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Format starting QBs section for display
+ */
+function formatStartingQBs(homeTeam, awayTeam, qbs) {
+  if (!qbs || (!qbs.home && !qbs.away)) {
+    return '';
+  }
+  
+  const lines = [
+    '',
+    '🎯 STARTING QUARTERBACKS (USE THESE NAMES IN ANALYSIS)',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+  ];
+  
+  if (qbs.home) {
+    const qb = qbs.home;
+    lines.push(`🏠 ${homeTeam}: ${qb.name} (#${qb.jerseyNumber || '?'})`);
+    lines.push(`   ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${qb.passingInterceptions || 0} INT | ${qb.passingCompletionPct ? qb.passingCompletionPct.toFixed(1) : '?'}% | Rating: ${qb.qbRating ? qb.qbRating.toFixed(1) : '?'}`);
+  } else {
+    lines.push(`🏠 ${homeTeam}: QB data unavailable`);
+  }
+  
+  if (qbs.away) {
+    const qb = qbs.away;
+    lines.push(`✈️ ${awayTeam}: ${qb.name} (#${qb.jerseyNumber || '?'})`);
+    lines.push(`   ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${qb.passingInterceptions || 0} INT | ${qb.passingCompletionPct ? qb.passingCompletionPct.toFixed(1) : '?'}% | Rating: ${qb.qbRating ? qb.qbRating.toFixed(1) : '?'}`);
+  } else {
+    lines.push(`✈️ ${awayTeam}: QB data unavailable`);
+  }
+  
+  lines.push('');
+  lines.push('⚠️ CRITICAL: Use the QB names above when discussing quarterbacks.');
+  lines.push('   Do NOT guess or use outdated QB information.');
+  lines.push('');
+  
+  return lines.join('\n');
 }
 
 export default { buildScoutReport };

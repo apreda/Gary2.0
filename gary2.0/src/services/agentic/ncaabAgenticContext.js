@@ -4,6 +4,31 @@ import { formatGameTimeEST, buildMarketSnapshot, calcRestInfo, calcRecentForm, p
 
 const SPORT_KEY = 'basketball_ncaab';
 
+// Minimum games played threshold to consider a team has adequate data
+const MIN_GAMES_THRESHOLD = 3;
+
+/**
+ * Check if a team profile has adequate data for analysis
+ * @param {Object} profile - Team profile built from season stats
+ * @param {Array} seasonRows - Raw season stats rows from API
+ * @returns {boolean} - True if team has sufficient data
+ */
+const hasAdequateData = (profile, seasonRows) => {
+  const map = seasonRowToMap(seasonRows);
+  const gamesPlayed = map.games_played ?? map.games ?? 0;
+  
+  // Must have played at least MIN_GAMES_THRESHOLD games
+  if (gamesPlayed < MIN_GAMES_THRESHOLD) return false;
+  
+  // Check for essential stats being present
+  const hasFGData = profile.shooting?.fgPct != null && profile.shooting.fgPct > 0;
+  const hasTempo = profile.tempo != null && profile.tempo > 0;
+  const hasRecord = profile.record != null && profile.record !== 'N/A';
+  
+  // Need at least shooting stats and games played
+  return hasFGData || (hasRecord && gamesPlayed >= MIN_GAMES_THRESHOLD);
+};
+
 const seasonRowToMap = (rows) => {
   if (!Array.isArray(rows) || rows.length === 0) return {};
   if (rows[0]?.name && typeof rows[0]?.value !== 'undefined') {
@@ -134,6 +159,23 @@ export async function buildNcaabAgenticContext(game, options = {}) {
   const homeProfile = buildTeamProfile(homeSeasonRows, Array.isArray(homeStandings) ? homeStandings.find((r) => r?.team?.id === homeTeam.id) : null);
   const awayProfile = buildTeamProfile(awaySeasonRows, Array.isArray(awayStandings) ? awayStandings.find((r) => r?.team?.id === awayTeam.id) : null);
 
+  // Check data quality for both teams
+  const homeHasData = hasAdequateData(homeProfile, homeSeasonRows);
+  const awayHasData = hasAdequateData(awayProfile, awaySeasonRows);
+  const dataQuality = {
+    homeHasAdequateData: homeHasData,
+    awayHasAdequateData: awayHasData,
+    bothTeamsHaveData: homeHasData && awayHasData,
+    homeGamesPlayed: seasonRowToMap(homeSeasonRows).games_played ?? seasonRowToMap(homeSeasonRows).games ?? 0,
+    awayGamesPlayed: seasonRowToMap(awaySeasonRows).games_played ?? seasonRowToMap(awaySeasonRows).games ?? 0
+  };
+  
+  if (!dataQuality.bothTeamsHaveData) {
+    console.warn(`[Agentic][NCAAB] ⚠️ Insufficient data for game: ${game.away_team} @ ${game.home_team}`);
+    console.warn(`  - ${game.home_team}: ${homeHasData ? '✓' : '✗'} (${dataQuality.homeGamesPlayed} games)`);
+    console.warn(`  - ${game.away_team}: ${awayHasData ? '✓' : '✗'} (${dataQuality.awayGamesPlayed} games)`);
+  }
+
   const injuriesList = (injuries || []).map((injury) => ({
     player: injury?.player?.full_name || `${injury?.player?.first_name || ''} ${injury?.player?.last_name || ''}`.trim(),
     status: injury?.status,
@@ -223,7 +265,8 @@ export async function buildNcaabAgenticContext(game, options = {}) {
       awayTeam,
       season,
       window: { start: startStr, end: endStr },
-      richKeyFindings: richContext?.key_findings || []
+      richKeyFindings: richContext?.key_findings || [],
+      dataQuality
     }
   };
 }

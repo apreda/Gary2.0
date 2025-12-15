@@ -6,7 +6,8 @@ runAgenticCli({
   leagueLabel: 'NCAAB',
   buildContext: buildNcaabAgenticContext,
   windowHours: 18,
-  limitDefault: 5
+  limitDefault: 10,  // Higher limit since we filter out low-data games
+  skipLowDataGames: true
 })
   .then(() => process.exit(0))
   .catch((error) => {

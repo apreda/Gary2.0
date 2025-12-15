@@ -35,7 +35,7 @@ const SPORT_CONFIG = {
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true }, // BETA: Limited advanced analytics
   epl: { key: 'soccer_epl', name: 'EPL', emoji: '⚽', isBeta: true, daysAhead: 7, confidenceThreshold: 0.63 }, // BETA: Lower threshold for EPL
-  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10 }, // Limit NCAAB to 10 games
+  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', maxGames: 10, minStats: 8 }, // Limit NCAAB to 10 games, require 8+ stats
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true } // FBS only (no FCS)
 };
 
@@ -182,14 +182,38 @@ async function main() {
         weekEndDate.setDate(weekEndDate.getDate() + 8); // Tuesday of next week
         weekEndDate.setHours(5, 0, 0, 0); // 5 AM to catch any late Monday finishes
         
-        games = allGames?.filter(g => {
-          const gameTime = new Date(g.commence_time);
-          // Game must be in the future AND within the current NFL week
-          return gameTime >= now && gameTime >= weekStartDate && gameTime < weekEndDate;
-        }) || [];
+        // Check if today is Monday (MNF day) - only process today's games
+        const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const dayOfWeek = estNow.getDay(); // 0 = Sunday, 1 = Monday
+        const isMonday = dayOfWeek === 1;
         
-        timeLabel = `Week ${currentWeekNumber} (${currentWeekStart})`;
-        console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: weekStart=${currentWeekStart}, weekEnd=${weekEndDate.toISOString()}`);
+        if (isMonday) {
+          // On Monday, only process Monday Night Football (games happening today)
+          const todayStart = new Date(estNow);
+          todayStart.setHours(0, 0, 0, 0);
+          const todayEnd = new Date(estNow);
+          todayEnd.setHours(23, 59, 59, 999);
+          
+          games = allGames?.filter(g => {
+            const gameTime = new Date(g.commence_time);
+            const gameTimeEST = new Date(gameTime.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            // Game must be in the future AND happening today (Monday Night Football)
+            return gameTime >= now && gameTimeEST >= todayStart && gameTimeEST <= todayEnd;
+          }) || [];
+          
+          timeLabel = `MNF (Week ${currentWeekNumber})`;
+          console.log(`[${config.name}] Monday Night Football filter: only today's games`);
+        } else {
+          // Other days, process the full week
+          games = allGames?.filter(g => {
+            const gameTime = new Date(g.commence_time);
+            // Game must be in the future AND within the current NFL week
+            return gameTime >= now && gameTime >= weekStartDate && gameTime < weekEndDate;
+          }) || [];
+          
+          timeLabel = `Week ${currentWeekNumber} (${currentWeekStart})`;
+          console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: weekStart=${currentWeekStart}, weekEnd=${weekEndDate.toISOString()}`);
+        }
       } else {
         // Other sports use daysAhead (default 1 day = 24 hours)
         const daysAhead = config.daysAhead || 1;
@@ -220,6 +244,84 @@ async function main() {
           return homeIsFbs && awayIsFbs; // Both teams must be FBS
         });
         console.log(`[${config.name}] FBS filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} FCS games)`);
+      }
+      
+      // NCAAB: Filter out games with teams that have insufficient stats data
+      // This prevents picks for tiny schools (D2/D3/NAIA) where we can't get good stats
+      // Based on BDL docs: team_season_stats returns games_played, fgm, fga, fg_pct, fg3m, fg3a, pts, etc.
+      if (config.key === 'basketball_ncaab') {
+        console.log(`[${config.name}] Checking data quality for teams...`);
+        const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
+        const MIN_GAMES_FOR_ANALYSIS = 5;
+        
+        const beforeCount = games.length;
+        const filteredGames = [];
+        const skippedGames = [];
+        
+        for (const game of games) {
+          try {
+            // Get team IDs
+            const homeTeam = await ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.home_team);
+            const awayTeam = await ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.away_team);
+            
+            if (!homeTeam || !awayTeam) {
+              skippedGames.push({ game, reason: 'Team not found in database' });
+              continue;
+            }
+            
+            // Check season stats for both teams
+            const season = now.getMonth() + 1 <= 4 ? now.getFullYear() - 1 : now.getFullYear();
+            const [homeStats, awayStats] = await Promise.all([
+              ballDontLieService.getTeamSeasonStats('basketball_ncaab', { teamId: homeTeam.id, season }),
+              ballDontLieService.getTeamSeasonStats('basketball_ncaab', { teamId: awayTeam.id, season })
+            ]);
+            
+            // Extract stats using exact BDL field names from docs
+            const h = homeStats?.[0] || {};
+            const a = awayStats?.[0] || {};
+            
+            // games_played, fgm, fga, fg_pct, fg3m, fg3a, pts are the key fields
+            const homeGames = h.games_played || 0;
+            const awayGames = a.games_played || 0;
+            const homePts = h.pts || 0;  // Per-game average
+            const awayPts = a.pts || 0;
+            const homeFgPct = h.fg_pct || 0;  // Already a percentage
+            const awayFgPct = a.fg_pct || 0;
+            
+            // Data quality: Must have 5+ games AND valid stats (PPG > 40, FG% > 30)
+            // Any real D1 team scores 50+ PPG and shoots 35%+
+            const homeHasData = homeGames >= MIN_GAMES_FOR_ANALYSIS && homePts > 40 && homeFgPct > 30;
+            const awayHasData = awayGames >= MIN_GAMES_FOR_ANALYSIS && awayPts > 40 && awayFgPct > 30;
+            
+            if (homeHasData && awayHasData) {
+              filteredGames.push(game);
+            } else {
+              const homeReason = !homeHasData ? `${homeGames}g/${homePts.toFixed(1)}ppg/${homeFgPct.toFixed(1)}%fg` : 'OK';
+              const awayReason = !awayHasData ? `${awayGames}g/${awayPts.toFixed(1)}ppg/${awayFgPct.toFixed(1)}%fg` : 'OK';
+              skippedGames.push({ 
+                game, 
+                reason: `${game.home_team}: ${homeReason} | ${game.away_team}: ${awayReason}` 
+              });
+            }
+          } catch (err) {
+            // If we can't check, include the game (let the 8-stat filter catch bad ones)
+            console.warn(`[${config.name}] Could not verify data for ${game.away_team} @ ${game.home_team}: ${err.message}`);
+            filteredGames.push(game);
+          }
+        }
+        
+        games = filteredGames;
+        
+        if (skippedGames.length > 0) {
+          console.log(`[${config.name}] ⚠️ Skipped ${skippedGames.length} games with insufficient data:`);
+          skippedGames.slice(0, 5).forEach(({ game, reason }) => {
+            console.log(`   - ${game.away_team} @ ${game.home_team}: ${reason}`);
+          });
+          if (skippedGames.length > 5) {
+            console.log(`   ... and ${skippedGames.length - 5} more`);
+          }
+        }
+        console.log(`[${config.name}] Data quality filter: ${beforeCount} → ${games.length} games`);
       }
       
       // Apply max games limit if specified (for NCAAB which can have 70+ games)
@@ -281,11 +383,65 @@ async function main() {
         const result = await analyzeGame(game, config.key);
         
         if (result && !result.error && result.pick) {
+          // Check minimum stats requirement (for NCAAB especially)
+          const statsCount = result.toolCallHistory?.length || 0;
+          const minStatsRequired = config.minStats || 0;
+          
+          if (minStatsRequired > 0 && statsCount < minStatsRequired) {
+            console.log(`\n⏭️  SKIPPED: ${result.pick}`);
+            console.log(`   Reason: Only ${statsCount} stats available (minimum ${minStatsRequired} required)`);
+            console.log(`   Stats: ${result.toolCallHistory?.map(t => t.token).join(', ') || 'none'}`);
+            continue; // Skip this pick
+          }
+          
+          // For NCAAB: Check that we have real stat values (not 0.0% or 0-0)
+          if (config.key === 'basketball_ncaab' && result.toolCallHistory) {
+            let zeroStatCount = 0;
+            let totalCheckedStats = 0;
+            const badStats = [];
+            
+            for (const stat of result.toolCallHistory) {
+              // Check for zero/empty values in home and away data
+              const checkForZeros = (obj, teamLabel) => {
+                if (!obj || typeof obj !== 'object') return false;
+                for (const [key, val] of Object.entries(obj)) {
+                  if (key === 'team') continue;
+                  // Check for problematic zero values that indicate missing data
+                  const isZero = val === 0 || val === '0' || val === '0.0' || val === '0.0%' || 
+                      val === '0-0' || val === '0.000' || val === 0.0 || val === '0.00';
+                  if (isZero) {
+                    badStats.push(`${stat.token}:${teamLabel}:${key}=${val}`);
+                    return true;
+                  }
+                }
+                return false;
+              };
+              
+              if (stat.homeValue || stat.awayValue) {
+                totalCheckedStats++;
+                const homeHasZero = checkForZeros(stat.homeValue, 'home');
+                const awayHasZero = checkForZeros(stat.awayValue, 'away');
+                if (homeHasZero || awayHasZero) {
+                  zeroStatCount++;
+                }
+              }
+            }
+            
+            // If more than 25% of stats have zeros, skip this pick
+            const zeroRatio = totalCheckedStats > 0 ? zeroStatCount / totalCheckedStats : 0;
+            if (zeroRatio > 0.25) {
+              console.log(`\n⏭️  SKIPPED: ${result.pick}`);
+              console.log(`   Reason: Too many zero/missing stats (${zeroStatCount}/${totalCheckedStats} = ${(zeroRatio*100).toFixed(0)}%)`);
+              console.log(`   Bad stats: ${badStats.slice(0, 5).join(', ')}${badStats.length > 5 ? '...' : ''}`);
+              continue;
+            }
+          }
+          
           console.log(`\n✅ PICK: ${result.pick}`);
           console.log(`   Confidence: ${result.confidence}`);
           console.log(`   Type: ${result.type}`);
           if (result.toolCallHistory) {
-            console.log(`   Stats Requested: ${result.toolCallHistory.map(t => t.token).join(', ')}`);
+            console.log(`   Stats Requested (${statsCount}): ${result.toolCallHistory.map(t => t.token).join(', ')}`);
           }
           // Log rationale preview
           const rationale = result.rationale || result.analysis || '';
@@ -301,119 +457,145 @@ async function main() {
           }
           
           // Extract stat data with values for structured Tale of the Tape display
-          // FILTER OUT stats with N/A values and duplicates - only store real, unique data
-          const seenDataKeys = new Set();
-          const statsData = result.toolCallHistory 
-            ? result.toolCallHistory
-                .map(t => ({
+          // FLATTEN nested stats - each individual metric becomes its own row
+          // This ensures every stat Gary called shows up individually in the Tale of the Tape
+          const seenStatKeys = new Set(); // Track unique stat keys to avoid duplicates
+          const statsData = [];
+          
+          // Helper to check if a value is valid
+          const isValidValue = (k, v) => {
+            if (k === 'team' || k === 'category' || k === 'note' || k === 'interpretation') return false;
+            if (v === 'N/A' || v === '' || v === null || v === undefined) return false;
+            if (Array.isArray(v) && v.length === 0) return false;
+            if (typeof v === 'object') return false; // Skip nested objects
+            if (String(v).includes('Check scout')) return false;
+            // Filter out invalid zero rates
+            if ((k.includes('rate') || k.includes('pct') || k.includes('_pct')) && 
+                (v === '0.000' || v === 0 || v === '0' || v === '0.0' || v === '0.00')) {
+              return false;
+            }
+            return true;
+          };
+          
+          // Human-readable names for common stat keys
+          const statNameMap = {
+            'yards_per_game': 'Total YPG',
+            'yards_per_play': 'Yards/Play',
+            'points_per_game': 'PPG',
+            'opp_yards_per_game': 'Opp Yards/Game',
+            'opp_points_per_game': 'Opp PPG',
+            'third_down_pct': '3rd Down %',
+            'fourth_down_pct': '4th Down %',
+            'opp_third_down_pct': 'Opp 3rd Down %',
+            'opp_fourth_down_pct': 'Opp 4th Down %',
+            'turnover_diff': 'Turnover +/-',
+            'takeaways': 'Takeaways',
+            'giveaways': 'Giveaways',
+            'qb_rating': 'QB Rating',
+            'completion_pct': 'Completion %',
+            'yards_per_attempt': 'Yards/Attempt',
+            'passing_tds': 'Pass TDs',
+            'interceptions': 'INTs',
+            'rushing_yards_per_game': 'Rush YPG',
+            'yards_per_carry': 'Yards/Carry',
+            'rushing_tds': 'Rush TDs',
+            'sacks_made': 'Sacks',
+            'sacks_allowed': 'Sacks Allowed',
+            'qb_hits': 'QB Hits',
+            'fumble_recoveries': 'Fumble Rec',
+            'total_takeaways': 'Total Takeaways',
+            'point_diff': 'Point Diff',
+            'red_zone_td_pct': 'Red Zone TD %',
+            'red_zone_scores': 'Red Zone Scores',
+            'red_zone_attempts': 'Red Zone Attempts',
+            'receiving_yards_per_game': 'Receiving YPG',
+            'receiving_tds': 'Receiving TDs',
+            'yards_per_catch': 'Yards/Catch',
+            'longest_pass': 'Long Pass',
+            'total_yards_per_game': 'Total YPG',
+            'passing_ypg': 'Passing YPG',
+            'opp_ppg': 'Opp PPG',
+            'sacks': 'Sacks'
+          };
+          
+          if (result.toolCallHistory) {
+            for (const t of result.toolCallHistory) {
+              if (!t.token) continue;
+              
+              const homeVal = t.homeValue;
+              const awayVal = t.awayValue;
+              
+              // If home/away are objects, flatten each key into its own stat row
+              if (typeof homeVal === 'object' && homeVal !== null && 
+                  typeof awayVal === 'object' && awayVal !== null) {
+                const homeKeys = Object.keys(homeVal).filter(k => isValidValue(k, homeVal[k]));
+                const awayKeys = Object.keys(awayVal).filter(k => isValidValue(k, awayVal[k]));
+                const allKeys = [...new Set([...homeKeys, ...awayKeys])];
+                
+                for (const key of allKeys) {
+                  const hv = homeVal[key];
+                  const av = awayVal[key];
+                  
+                  // Skip if both are invalid
+                  if (!isValidValue(key, hv) && !isValidValue(key, av)) continue;
+                  
+                  // Create unique key for dedup
+                  const statKey = `${key}:${hv}:${av}`;
+                  if (seenStatKeys.has(statKey)) continue;
+                  seenStatKeys.add(statKey);
+                  
+                  // Get human-readable name
+                  const displayName = statNameMap[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                  
+                  statsData.push({
+                    name: displayName,
+                    token: key.toUpperCase(),
+                    home: { team: homeVal.team, [key]: hv ?? 'N/A' },
+                    away: { team: awayVal.team, [key]: av ?? 'N/A' }
+                  });
+                }
+              } else {
+                // Primitive values - store directly
+                if (homeVal === 'N/A' || awayVal === 'N/A') continue;
+                
+                const statKey = `${t.token}:${homeVal}:${awayVal}`;
+                if (seenStatKeys.has(statKey)) continue;
+                seenStatKeys.add(statKey);
+                
+                statsData.push({
                   name: t.token.replace(/_/g, ' '),
                   token: t.token,
-                  home: t.homeValue ?? 'N/A',
-                  away: t.awayValue ?? 'N/A'
-                }))
-                .filter(stat => {
-                  // Skip if home or away is just 'N/A' string
-                  if (stat.home === 'N/A' || stat.away === 'N/A') return false;
-                  
-                  // Helper to check if a value is valid (not N/A, empty, placeholder, or invalid zero)
-                  const isValidValue = (k, v) => {
-                    if (k === 'team') return false; // Skip team name
-                    if (v === 'N/A' || v === '' || v === null || v === undefined) return false;
-                    if (Array.isArray(v) && v.length === 0) return false;
-                    if (String(v).includes('Check scout')) return false;
-                    // Filter out invalid zero rates (no NBA team has 0.000 FT rate, etc.)
-                    if ((k.includes('rate') || k.includes('pct') || k.includes('_pct')) && 
-                        (v === '0.000' || v === 0 || v === '0' || v === '0.0' || v === '0.00')) {
-                      return false;
-                    }
-                    return true;
-                  };
-                  
-                  // Skip if home/away objects have all invalid values
-                  const hasRealHomeData = typeof stat.home === 'object' && stat.home !== null
-                    ? Object.entries(stat.home).some(([k, v]) => isValidValue(k, v))
-                    : true; // primitives are fine
-                    
-                  const hasRealAwayData = typeof stat.away === 'object' && stat.away !== null
-                    ? Object.entries(stat.away).some(([k, v]) => isValidValue(k, v))
-                    : true; // primitives are fine
-                    
-                  if (!hasRealHomeData || !hasRealAwayData) return false;
-                  
-                  // DEDUP: Skip if we've seen identical data (aliases to same fetcher)
-                  const dataKey = JSON.stringify({ h: stat.home, a: stat.away });
-                  if (seenDataKeys.has(dataKey)) return false;
-                  seenDataKeys.add(dataKey);
-                  
-                  return true;
-                })
-            : [];
+                  home: homeVal,
+                  away: awayVal
+                });
+              }
+            }
+          }
           
-          // For NCAAF/NFL: Filter out useless stats and extract derived stats for cleaner display
+          // For NCAAF/NFL: Filter out useless stats that BDL doesn't provide
           if (config.key === 'americanfootball_ncaaf' || config.key === 'americanfootball_nfl') {
-            // Remove SP_PLUS_RATINGS for NCAAF - BDL doesn't have this data, it just returns 0.0
-            const filteredOutTokens = ['SP_PLUS_RATINGS', 'NET_RATING', 'FEI_RATINGS'];
+            // Remove stats with 0.0 or N/A values (BDL doesn't have this data)
             for (let i = statsData.length - 1; i >= 0; i--) {
-              if (filteredOutTokens.includes(statsData[i].token)) {
-                // Check if all values are 0.0 or N/A
-                const home = statsData[i].home || {};
-                const away = statsData[i].away || {};
-                const homeVals = Object.entries(home).filter(([k]) => k !== 'team').map(([,v]) => v);
-                const awayVals = Object.entries(away).filter(([k]) => k !== 'team').map(([,v]) => v);
-                const allZeroOrNA = [...homeVals, ...awayVals].every(v => 
-                  v === '0.0' || v === '0' || v === 0 || v === 'N/A' || v === null
-                );
-                if (allZeroOrNA) {
-                  statsData.splice(i, 1);
-                }
-              }
-            }
-            
-            const derivedStats = [];
-            
-            for (const stat of statsData) {
-              // From QB_STATS, extract separate rows for Pass TDs and INTs
-              if (stat.token === 'QB_STATS' && stat.home && stat.away) {
-                if (stat.home.passing_tds && stat.away.passing_tds && 
-                    stat.home.passing_tds !== 'N/A' && stat.away.passing_tds !== 'N/A') {
-                  derivedStats.push({
-                    name: 'PASSING TDS',
-                    token: 'PASSING_TDS',
-                    home: { team: stat.home.team, passing_tds: stat.home.passing_tds },
-                    away: { team: stat.away.team, passing_tds: stat.away.passing_tds }
-                  });
-                }
-                if (stat.home.interceptions && stat.away.interceptions &&
-                    stat.home.interceptions !== 'N/A' && stat.away.interceptions !== 'N/A') {
-                  derivedStats.push({
-                    name: 'INTERCEPTIONS',
-                    token: 'INTERCEPTIONS',
-                    home: { team: stat.home.team, interceptions: stat.home.interceptions },
-                    away: { team: stat.away.team, interceptions: stat.away.interceptions }
-                  });
-                }
-              }
+              const stat = statsData[i];
+              const home = stat.home || {};
+              const away = stat.away || {};
               
-              // From OL_RANKINGS or RB_STATS, extract rushing TDs
-              if ((stat.token === 'OL_RANKINGS' || stat.token === 'RB_STATS') && stat.home && stat.away) {
-                if (stat.home.rushing_tds && stat.away.rushing_tds &&
-                    stat.home.rushing_tds !== 'N/A' && stat.away.rushing_tds !== 'N/A') {
-                  // Only add if not already added
-                  const alreadyHasRushTds = derivedStats.some(s => s.token === 'RUSHING_TDS');
-                  if (!alreadyHasRushTds) {
-                    derivedStats.push({
-                      name: 'RUSHING TDS',
-                      token: 'RUSHING_TDS',
-                      home: { team: stat.home.team, rushing_tds: stat.home.rushing_tds },
-                      away: { team: stat.away.team, rushing_tds: stat.away.rushing_tds }
-                    });
-                  }
-                }
+              // Get values (excluding team name)
+              const getVal = (obj) => {
+                if (typeof obj !== 'object') return obj;
+                const vals = Object.entries(obj).filter(([k]) => k !== 'team').map(([,v]) => v);
+                return vals[0]; // First non-team value
+              };
+              
+              const hv = getVal(home);
+              const av = getVal(away);
+              
+              // Remove if both are zero or N/A
+              const isZeroOrNA = (v) => v === '0.0' || v === '0' || v === 0 || v === 'N/A' || v === null || v === undefined;
+              if (isZeroOrNA(hv) && isZeroOrNA(av)) {
+                statsData.splice(i, 1);
               }
             }
-            
-            // Add derived stats to statsData
-            statsData.push(...derivedStats);
           }
           
           // For NCAAB: Filter out stats that BDL doesn't provide for college basketball

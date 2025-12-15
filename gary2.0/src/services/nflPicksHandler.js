@@ -7,6 +7,114 @@ import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 
+/**
+ * Parse weather conditions from Perplexity response to determine if adverse
+ * and what type of weather we're dealing with
+ */
+function parseWeatherForQBAnalysis(weatherData) {
+  const result = {
+    isAdverse: false,
+    type: 'normal',
+    temp: null,
+    wind: null,
+    precipitation: null,
+    conditions: null
+  };
+  
+  if (!weatherData) return result;
+  
+  // Handle string format: "32°F, Snow, Wind 15mph" or "Cold (28°F), wind gusts 20mph"
+  const weatherStr = typeof weatherData === 'string' ? weatherData : JSON.stringify(weatherData);
+  const weatherLower = weatherStr.toLowerCase();
+  
+  // Extract temperature - more flexible regex patterns
+  const tempMatch = weatherStr.match(/(-?\d+)\s*°?\s*[fF]/) ||
+                    weatherStr.match(/temp(?:erature)?\s*(?:of|around|near|:)?\s*(-?\d+)/i) ||
+                    weatherStr.match(/(-?\d+)\s*degrees/i);
+  if (tempMatch) {
+    result.temp = parseInt(tempMatch[1], 10);
+  }
+  
+  // Extract wind speed - more flexible patterns
+  const windMatch = weatherStr.match(/wind[s]?\s*(?:gusts?)?\s*(?:of|up to|around|:)?\s*(\d+)\s*mph/i) ||
+                    weatherStr.match(/(\d+)\s*mph\s*wind/i) ||
+                    weatherStr.match(/gusts?\s*(?:of|up to|around)?\s*(\d+)\s*mph/i);
+  if (windMatch) {
+    result.wind = parseInt(windMatch[1], 10);
+  }
+  
+  // Check for precipitation/conditions
+  if (weatherLower.includes('snow') || weatherLower.includes('flurries') || weatherLower.includes('blizzard')) {
+    result.precipitation = 'snow';
+    result.conditions = 'snow';
+  } else if (weatherLower.includes('rain') || weatherLower.includes('drizzle') || weatherLower.includes('showers')) {
+    result.precipitation = 'rain';
+    result.conditions = 'rain';
+  } else if (weatherLower.includes('sleet') || weatherLower.includes('ice') || weatherLower.includes('freezing')) {
+    result.precipitation = 'ice';
+    result.conditions = 'ice';
+  }
+  
+  // Handle object format with specific fields
+  if (typeof weatherData === 'object') {
+    if (weatherData.temp || weatherData.temperature) {
+      const tempVal = weatherData.temp || weatherData.temperature;
+      const numMatch = String(tempVal).match(/(-?\d+)/);
+      if (numMatch) result.temp = parseInt(numMatch[1], 10);
+    }
+    if (weatherData.wind) {
+      const windVal = String(weatherData.wind).match(/(\d+)/);
+      if (windVal) result.wind = parseInt(windVal[1], 10);
+    }
+    if (weatherData.precipitation) {
+      result.precipitation = weatherData.precipitation;
+    }
+    if (weatherData.conditions) {
+      result.conditions = weatherData.conditions;
+    }
+  }
+  
+  // Determine if adverse and what type
+  // Cold: below 45°F (more lenient threshold for QB performance impact)
+  // Very Cold: below 32°F (freezing)
+  // High wind: above 12mph (lowered from 15mph for QB impact)
+  // Snow/Ice: any precipitation
+  
+  // Also check for cold-related keywords if temp wasn't extracted
+  const coldKeywords = ['cold', 'freezing', 'frigid', 'bitter', 'arctic', 'icy', 'chilly', 'frost'];
+  const hasColdKeyword = coldKeywords.some(kw => weatherLower.includes(kw));
+  
+  if (result.temp !== null && result.temp < 45) {
+    result.isAdverse = true;
+    result.type = result.temp < 32 ? 'very_cold' : 'cold';
+  } else if (hasColdKeyword && result.temp === null) {
+    // If keywords suggest cold but no temp found, assume it's cold
+    result.isAdverse = true;
+    result.type = 'cold';
+    result.temp = 35; // Assume ~35°F when cold keywords present
+  }
+  
+  if (result.precipitation === 'snow' || result.conditions?.toLowerCase().includes('snow')) {
+    result.isAdverse = true;
+    result.type = 'snow';
+  }
+  
+  if (result.wind !== null && result.wind > 12) {
+    result.isAdverse = true;
+    if (result.type === 'cold' || result.type === 'very_cold') {
+      result.type = result.temp < 32 ? 'very_cold_wind' : 'cold_wind';
+    } else if (result.type === 'snow') {
+      result.type = 'snow_wind';
+    } else {
+      result.type = 'wind';
+    }
+  }
+  
+  console.log(`[NFL Weather Parse] Input: "${weatherStr.substring(0, 100)}..." -> isAdverse=${result.isAdverse}, type=${result.type}, temp=${result.temp}°F, wind=${result.wind}mph`);
+  
+  return result;
+}
+
 export async function generateNFLPicks(options = {}) {
   console.log('Processing NFL games');
   if (options.nocache) {
@@ -408,12 +516,49 @@ export async function generateNFLPicks(options = {}) {
       // Perplexity key findings (trim to 3-4) and optional red-zone extraction fallback
       let richKeyFindings = [];
       let realTimeNewsText = '';
+      let weatherConditions = null;
+      let weatherData = null; // Parsed weather object
+      let qbWeatherAnalysis = null;
       try {
         const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
         const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nfl', dateStr);
         if (Array.isArray(rich?.key_findings)) {
           richKeyFindings = rich.key_findings.slice(0, 4);
         }
+        
+        // Extract weather conditions from rich context
+        if (rich?.weather) {
+          weatherConditions = rich.weather;
+          console.log(`[NFL] Weather from rich context for ${game.away_team} @ ${game.home_team}:`, weatherConditions);
+        }
+        
+        // FALLBACK: If no weather from rich context OR if parsing fails, use dedicated weather fetch
+        let parsedFromRich = weatherConditions ? parseWeatherForQBAnalysis(weatherConditions) : null;
+        if (!parsedFromRich || parsedFromRich.temp === null) {
+          console.log(`[NFL] Rich context weather insufficient, fetching dedicated NFL weather...`);
+          const dedicatedWeather = await perplexityService.getNFLGameWeather(
+            game.home_team,
+            game.away_team,
+            null, // venue
+            'tonight'
+          );
+          if (dedicatedWeather && dedicatedWeather.temperature !== null) {
+            // Build weather string from dedicated response
+            const tempStr = `${dedicatedWeather.temperature}°F`;
+            const windStr = dedicatedWeather.wind_speed ? `, wind ${dedicatedWeather.wind_speed} mph` : '';
+            const condStr = dedicatedWeather.conditions ? `, ${dedicatedWeather.conditions}` : '';
+            const domeStr = dedicatedWeather.is_dome ? ' (Dome stadium)' : '';
+            weatherConditions = `${tempStr}${windStr}${condStr}${domeStr}`;
+            console.log(`[NFL] Dedicated weather result: ${weatherConditions}`);
+            
+            // Skip weather analysis if it's a dome stadium
+            if (dedicatedWeather.is_dome) {
+              console.log(`[NFL] Dome stadium detected - weather won't affect gameplay`);
+              weatherConditions = `Indoor/Dome - ${dedicatedWeather.conditions || 'Controlled environment'}`;
+            }
+          }
+        }
+        
         // Compose a concise, verifiable summary for REAL-TIME NEWS AND TRENDS
         if (Array.isArray(rich?.key_findings) && rich.key_findings.length > 0) {
           const toLine = (k) => {
@@ -447,6 +592,35 @@ export async function generateNFLPicks(options = {}) {
         if (awayRates?.redZoneProxy == null) {
           const pct = scanFindings(game.away_team);
           if (typeof pct === 'number') awayRates.redZoneProxy = pct;
+        }
+        
+        // QB Weather Performance Analysis - fetch if adverse weather detected
+        if (weatherConditions && homeQb && awayQb) {
+          const weatherData = parseWeatherForQBAnalysis(weatherConditions);
+          if (weatherData.isAdverse) {
+            console.log(`[NFL] Adverse weather detected (${weatherData.type}), fetching QB performance history...`);
+            const homeQbName = homeQb.full_name || `${homeQb.first_name || ''} ${homeQb.last_name || ''}`.trim();
+            const awayQbName = awayQb.full_name || `${awayQb.first_name || ''} ${awayQb.last_name || ''}`.trim();
+            
+            qbWeatherAnalysis = await perplexityService.getQBWeatherPerformance(
+              homeQbName,
+              awayQbName,
+              game.home_team,
+              game.away_team,
+              weatherData
+            );
+            
+            if (qbWeatherAnalysis && !qbWeatherAnalysis.skip) {
+              console.log(`[NFL] QB Weather Analysis: ${qbWeatherAnalysis.edge_assessment || 'No clear edge'}`);
+              // Add weather analysis to real-time news
+              if (qbWeatherAnalysis.weather_impact_summary) {
+                realTimeNewsText += `\n\n⚠️ WEATHER FACTOR: ${qbWeatherAnalysis.weather_impact_summary}`;
+              }
+              if (qbWeatherAnalysis.edge_assessment) {
+                realTimeNewsText += `\nQB Weather Edge: ${qbWeatherAnalysis.edge_assessment}`;
+              }
+            }
+          }
         }
       } catch {}
 
@@ -496,7 +670,10 @@ export async function generateNFLPicks(options = {}) {
         postseason: false,
         notes: 'Regular season context from BDL NFL',
         richKeyFindings,
-        qbVenueH2H
+        qbVenueH2H,
+        // Weather data for Gary's decision making
+        weatherConditions: weatherConditions || null,
+        qbWeatherAnalysis: qbWeatherAnalysis || null
       };
 
       const gameObj = {

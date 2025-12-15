@@ -49,27 +49,34 @@ const NFL_TOKENS = [
   // Players
   'QB_STATS', 'RB_STATS', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS', 'INJURIES',
   // Context
-  'WEATHER', 'REST_SITUATION', 'DIVISION_RECORD', 'PRIMETIME_RECORD',
+  'WEATHER', 'QB_WEATHER_HISTORY', 'REST_SITUATION', 'DIVISION_RECORD', 'PRIMETIME_RECORD',
   // Historical
   'H2H_HISTORY', 'ATS_TRENDS', 'RECENT_FORM'
 ];
 
-// NCAAB Stat Tokens - prioritize stats that BDL actually provides
+// NCAAB Stat Tokens - unique fetchers with calculated values + Perplexity advanced stats
 const NCAAB_TOKENS = [
-  // Core Stats (BDL has these)
-  'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING', 'EFG_PCT',
+  // BDL Core Stats (unique calculations)
+  'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING',
   'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE',
   'REBOUNDS', 'ASSISTS', 'STEALS', 'BLOCKS',
-  // Four Factors
-  'OPP_EFG_PCT', 'OPP_TOV_RATE', 'DREB_RATE', 'OPP_FT_RATE',
-  // Shooting
-  'THREE_PT_DEFENSE', 'TWO_PT_SHOOTING',
-  // Context
-  'HOME_COURT_VALUE', 'ROAD_PERFORMANCE', 'CONFERENCE_STATS', 'HOME_AWAY_SPLITS',
-  // Players
-  'TOP_PLAYERS', 'INJURIES',
-  // Historical
-  'RECENT_FORM', 'H2H_HISTORY', 'CLOSE_GAME_RECORD', 'CLUTCH_STATS'
+  // NCAAB-Specific Calculated Stats (avoid aliases)
+  'NCAAB_EFG_PCT',           // Calculated eFG%
+  'NCAAB_TEMPO',             // Calculated possessions per game
+  'NCAAB_OFFENSIVE_RATING',  // Calculated offensive efficiency
+  // Rankings (BDL API)
+  'NCAAB_AP_RANKING',        // AP Poll rank
+  'NCAAB_COACHES_RANKING',   // Coaches Poll rank
+  'NCAAB_CONFERENCE_RECORD', // Conference record from standings
+  // Perplexity Advanced Stats (KenPom, NET, etc.)
+  'NCAAB_KENPOM_RATINGS',    // KenPom AdjEM, AdjO, AdjD, Tempo
+  'NCAAB_NET_RANKING',       // NCAA NET ranking
+  'NCAAB_STRENGTH_OF_SCHEDULE', // SOS ranking
+  'NCAAB_QUAD_RECORD',       // Quad 1-4 records
+  // Context (BDL)
+  'HOME_AWAY_SPLITS', 'RECENT_FORM',
+  // Players (BDL)
+  'TOP_PLAYERS', 'INJURIES'
 ];
 
 // NCAAF Stat Tokens

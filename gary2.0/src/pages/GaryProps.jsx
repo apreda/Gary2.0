@@ -28,12 +28,60 @@ export default function GaryProps() {
     loadPicks();
   }, [reloadKey]);
 
+  // Helper to parse time string to comparable value for sorting
+  const parseTimeToMinutes = (timeStr) => {
+    if (!timeStr || timeStr === 'TBD') return Infinity; // TBD goes to end
+    
+    // Try to parse formats like "Sun Dec 15, 1:00 PM" or "1:00 PM"
+    const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      const isPM = timeMatch[3].toUpperCase() === 'PM';
+      
+      if (isPM && hours !== 12) hours += 12;
+      if (!isPM && hours === 12) hours = 0;
+      
+      return hours * 60 + minutes;
+    }
+    return Infinity;
+  };
+
   // Re-filter picks when sport selection changes
   useEffect(() => {
     if (allPicks.length > 0) {
-      const filteredPicks = allPicks
-        .filter(p => (p.sport || p.league || 'NBA').toUpperCase() === selectedSport)
-        .slice(0, 10);
+      let filteredPicks;
+      
+      if (selectedSport === 'NFL TDs') {
+        // Special filter for NFL TD scorer picks only
+        // Sort by category first (standard before underdog), then by time
+        filteredPicks = allPicks
+          .filter(p => p.td_category !== undefined)
+          .sort((a, b) => {
+            if (a.td_category !== b.td_category) {
+              return a.td_category === 'standard' ? -1 : 1;
+            }
+            return parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time);
+          });
+      } else if (selectedSport === 'NFL') {
+        // NFL props - exclude TD picks, sort by time
+        filteredPicks = allPicks
+          .filter(p => {
+            const sport = (p.sport || p.league || 'NBA').toUpperCase();
+            if (p.td_category) return false; // Exclude TD picks
+            return sport === 'NFL';
+          })
+          .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+      } else {
+        // Other sports - sort by time
+        filteredPicks = allPicks
+          .filter(p => {
+            const sport = (p.sport || p.league || 'NBA').toUpperCase();
+            return sport === selectedSport;
+          })
+          .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+      }
+      
       setPicks(filteredPicks);
     }
   }, [selectedSport, allPicks]);
@@ -146,10 +194,21 @@ export default function GaryProps() {
     // Extract just the prop type without the line value
     const propOnly = propType.replace(/\s+[\d.]+$/, '');
     
+    // If it's already properly formatted (like "Anytime TD"), return as-is
+    if (propOnly.includes('TD') || propOnly.includes('TDs')) {
+      return propOnly;
+    }
+    
     // Handle snake_case conversion
     return propOnly
       .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .map(word => {
+        // Keep abbreviations uppercase (TD, TDs)
+        if (word.toUpperCase() === 'TD' || word.toUpperCase() === 'TDS') {
+          return word.toUpperCase();
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
       .join(' ');
   };
   
@@ -183,24 +242,53 @@ export default function GaryProps() {
         
         {/* Sports Tabs - matching RealGaryPicks style */}
         <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-6">
-          {['NBA', 'NFL'].map(tab => {
+          {['NBA', 'NHL', 'NFL', 'NFL TDs'].map(tab => {
             const isActive = selectedSport === tab;
+            const isSpecial = tab === 'NFL TDs';
             return (
               <button
                 key={tab}
                 onClick={() => setSelectedSport(tab)}
                 className="px-3 sm:px-4 py-2 rounded-md text-sm sm:text-base transition-all"
                 style={{
-                  background: isActive ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                  background: isActive 
+                    ? (isSpecial ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255,255,255,0.08)') 
+                    : 'rgba(255,255,255,0.04)',
                   color: isActive ? '#ffffff' : 'rgba(255,255,255,0.8)',
-                  border: isActive ? '1px solid #b8953f' : '1px solid rgba(255,255,255,0.1)',
+                  border: isActive 
+                    ? (isSpecial ? '1px solid #22c55e' : '1px solid #b8953f') 
+                    : '1px solid rgba(255,255,255,0.1)',
                 }}
               >
-                {tab}
+                {isSpecial ? '🏈 NFL TDs' : tab}
               </button>
             );
           })}
         </div>
+        
+        {/* NFL TDs Description Banner */}
+        {selectedSport === 'NFL TDs' && (
+          <div className="text-center mb-4 bg-[#1a1a1a] border border-[#22c55e]/30 rounded-lg p-4 max-w-2xl mx-auto">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <span className="text-lg">🏈</span>
+              <span className="text-white font-bold">Gary's TD Scorer Picks</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="text-left">
+                <span className="inline-block px-2 py-1 bg-blue-600/20 text-blue-400 font-semibold rounded text-xs mb-1">
+                  ✅ Standard (5 picks)
+                </span>
+                <p className="text-gray-400 text-xs">Gary's highest-confidence TD scorers based on usage, matchups & red zone data.</p>
+              </div>
+              <div className="text-left">
+                <span className="inline-block px-2 py-1 bg-green-600/20 text-green-400 font-semibold rounded text-xs mb-1">
+                  🎰 Longshots (5 picks)
+                </span>
+                <p className="text-gray-400 text-xs">Value plays at +200 or better. Higher risk, bigger payouts if they hit!</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MAIN CONTENT AREA - Contains loading states and picks */}
@@ -214,9 +302,11 @@ export default function GaryProps() {
                 <div className="text-center">
                   <div className="text-gray-300 text-xl mb-2">No {selectedSport} prop picks available.</div>
                   <p className="text-gray-500 text-sm">
-                    {selectedSport === 'NFL' 
-                      ? 'NFL props are generated for Thursday-Monday games.' 
-                      : 'Check back later for today\'s NBA props.'}
+                    {selectedSport === 'NFL TDs'
+                      ? 'NFL TD scorer picks are generated for game days.'
+                      : selectedSport === 'NFL' 
+                        ? 'NFL props are generated for Thursday-Monday games.' 
+                        : `Check back later for today's ${selectedSport} props.`}
                   </p>
                 </div>
               </div>
@@ -232,6 +322,28 @@ export default function GaryProps() {
                           <div style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', background: 'linear-gradient(135deg, rgba(22,22,28,0.97) 0%, rgba(28,28,32,0.95) 100%)', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(191,161,66,0.25)', color: '#fff', overflow: 'hidden', fontFamily: 'Inter, sans-serif' }}>
                             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, rgba(191,161,66,0.5) 0%, rgba(212,175,55,0.95) 50%, rgba(191,161,66,0.5) 100%)' }} />
                             <div style={{ height: '100%', padding: '1.25rem 1.25rem', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                              {/* TD Category Badge (if applicable) */}
+                              {pick.td_category && (
+                                <div style={{ 
+                                  position: 'absolute', 
+                                  top: '8px', 
+                                  right: '8px',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '0.65rem',
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em',
+                                  background: pick.td_category === 'underdog' 
+                                    ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' 
+                                    : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                  color: '#fff',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                                }}>
+                                  {pick.td_category === 'underdog' ? '🎰 Longshot' : '🏈 Standard'}
+                                </div>
+                              )}
+                              
                               {/* Top Section - Header Info - Fixed Height */}
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', height: '40px' }}>
                                 <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>League</div><div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{pick.league || 'MLB'}</div></div>
@@ -243,10 +355,21 @@ export default function GaryProps() {
                               <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.75rem', minHeight: '80px' }}>
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gary's Pick</div>
                                 <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2, color: '#bfa142', wordWrap: 'break-word', wordBreak: 'break-word'}}>
-                                  {pick.player && pick.bet && pick.prop ? 
-                                    `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)} ${pick.line || ''}`.trim() : 
-                                    '(No pick available)'}
+                                  {pick.td_category ? (
+                                    // TD scorer picks - show as "Player to Score TD"
+                                    `${pick.player} to Score TD`
+                                  ) : pick.player && pick.bet && pick.prop ? (
+                                    `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)} ${pick.line || ''}`.trim()
+                                  ) : (
+                                    '(No pick available)'
+                                  )}
                                 </div>
+                                {/* Show matchup for TD picks */}
+                                {pick.td_category && pick.matchup && (
+                                  <div style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.25rem' }}>
+                                    {pick.matchup}
+                                  </div>
+                                )}
                               </div>
                               
                               {/* Middle Content - Analysis - Fixed Height */}
@@ -291,12 +414,23 @@ export default function GaryProps() {
                                 <div style={{ fontSize: '0.84rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Pick Details</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                                   <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}>
-                                    <p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600, margin: 0 }}>EV</p>
-                                    <p style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0 }}>{pick.ev ? `+${Math.round(pick.ev)}%` : 'N/A'}</p>
+                                    <p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600, margin: 0 }}>
+                                      {pick.td_category ? 'Type' : 'Confidence'}
+                                    </p>
+                                    <p style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0 }}>
+                                      {pick.td_category 
+                                        ? (pick.td_category === 'underdog' ? '🎰 Value' : '✅ Chalk')
+                                        : (pick.confidence ? `${Math.round(pick.confidence * 100)}%` : 'N/A')}
+                                    </p>
                                   </div>
                                   <div style={{ padding: '0.5rem', borderRadius: '6px', background: 'linear-gradient(145deg, rgba(33,30,22,0.95) 0%, rgba(25,23,17,0.9) 100%)', border: '1px solid rgba(191,161,66,0.5)' }}>
                                     <p style={{ fontSize: '0.65rem', marginBottom: '0.25rem', fontWeight: 600, margin: 0 }}>Odds</p>
-                                    <p style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0 }}>
+                                    <p style={{ 
+                                      fontSize: '0.85rem', 
+                                      fontWeight: 700, 
+                                      margin: 0,
+                                      color: pick.td_category === 'underdog' ? '#22c55e' : 'inherit'
+                                    }}>
                                       {pick.odds ? (
                                         typeof pick.odds === 'number' ?
                                           (pick.odds > 0 ? `+${pick.odds}` : pick.odds) :

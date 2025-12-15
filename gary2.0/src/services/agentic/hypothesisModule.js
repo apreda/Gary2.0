@@ -3,6 +3,9 @@ import { sanitizeTokenRequests, buildTokenDescriptionBullets } from './agenticTo
 import { safeJsonParse } from './agenticUtils.js';
 import { buildStyleGuideForSport } from './styleGuide.js';
 
+// Generate token description bullets for the prompt
+const TOKEN_DESCRIPTION_BULLETS = buildTokenDescriptionBullets();
+
 const BASE_PROMPT = `
 You are Stage 1 of the Gary agentic pipeline, the "Capper's Instinct."
 
