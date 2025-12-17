@@ -4,6 +4,20 @@ import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";
+import { 
+  Flame, 
+  AlertTriangle, 
+  TrendingDown, 
+  Eye,
+  Syringe,
+  Cloud,
+  Plane,
+  Building2,
+  Newspaper,
+  Activity,
+  LineChart,
+  Users
+} from 'lucide-react';
 
 
 // Using inline CSS for simplicity
@@ -980,29 +994,37 @@ function Home() {
                       Before the pipeline even starts, Gary builds a comprehensive scout report with real-time intel that sharp bettors pay for.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">🏥 Injuries by Name</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <Syringe size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Injuries by Name</span>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">🌦️ Weather Conditions</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <Cloud size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Weather Conditions</span>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">✈️ Travel & Rest</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <Plane size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Travel & Rest</span>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">🏟️ Venue Factors</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <Building2 size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Venue Factors</span>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">📰 Breaking News</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <Newspaper size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Breaking News</span>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">⚾ Bullpen Usage</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <Activity size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Bullpen Usage</span>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">📊 Live Odds</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <LineChart size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Live Odds</span>
                       </div>
-                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs">🏀 Lineup Changes</span>
+                      <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
+                        <Users size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Lineup Changes</span>
                       </div>
                     </div>
                   </div>
@@ -1017,28 +1039,36 @@ function Home() {
                     </p>
                     <div className="mt-4 space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">🔥</span>
+                        <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
+                          <Flame size={16} className="text-[#B8953F]" />
+                        </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
                           <span className="text-[#B8953F] text-sm">Revenge Games</span>
                           <span className="text-white/40 text-xs ml-2">— Emotional edge from last loss</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">⚠️</span>
+                        <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
+                          <AlertTriangle size={16} className="text-[#B8953F]" />
+                        </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
                           <span className="text-[#B8953F] text-sm">Trap Alerts</span>
                           <span className="text-white/40 text-xs ml-2">— Suspicious line movement</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">😴</span>
+                        <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
+                          <TrendingDown size={16} className="text-[#B8953F]" />
+                        </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
                           <span className="text-[#B8953F] text-sm">Letdown Spots</span>
                           <span className="text-white/40 text-xs ml-2">— Flat after emotional win</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">👀</span>
+                        <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
+                          <Eye size={16} className="text-[#B8953F]" />
+                        </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
                           <span className="text-[#B8953F] text-sm">Lookahead Spots</span>
                           <span className="text-white/40 text-xs ml-2">— Big game next week trap</span>
