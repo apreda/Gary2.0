@@ -717,8 +717,8 @@ function Home() {
                        transform: 'scale(1.09)',
                        transformOrigin: 'center',
                      }}>
-                  <span className="mr-2 font-bold uppercase text-black">NEW</span>
-                  <span className="text-black">Introducing Gary AI: Intelligent Sports Bets</span>
+                  <span className="mr-2 font-bold uppercase text-black">📱 NOW ON iOS</span>
+                  <span className="text-black">Free Download • 7 Sports • No Paywall</span>
                 </div>
               </div>
 
@@ -755,7 +755,7 @@ function Home() {
                     Odds API
                   </div>
                   
-                  {/* Turbo 3.5 Mini badge */}
+                  {/* GPT-5.1 badge */}
                   <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
                     style={{
                       background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
@@ -765,7 +765,7 @@ function Home() {
                       border: '1px solid rgba(184, 149, 63, 0.5)',
                       minWidth: '120px',
                     }}>
-                    Turbo 3.5 Mini
+                    GPT-5.1
                   </div>
                   
                   {/* Perplexity badge */}
@@ -798,28 +798,33 @@ function Home() {
                 </div>
               </div>
               
-              {/* CTA Buttons - Exact Vault style from original GaryHero */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center">
-                <Link 
-                  to="/real-gary-picks" 
-                  className="bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] text-white font-medium rounded-md border border-[rgba(255,255,255,0.1)] backdrop-blur-sm transition duration-200 ease-in-out"
-                  style={{ padding: "10px 20px" }}
+              {/* CTA Button - Download App */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center items-center">
+                <a 
+                  href="https://apps.apple.com/us/app/gary-ai/id6751238914"
+                  target="_blank"
+                  rel="noopener noreferrer" 
+                  className="flex items-center gap-3 text-black font-bold rounded-full transition-all duration-300 ease-in-out hover:scale-105"
+                  style={{ 
+                    padding: "14px 32px",
+                    background: 'linear-gradient(135deg, #B8953F 0%, #d4af37 50%, #B8953F 100%)',
+                    boxShadow: '0 4px 15px rgba(184, 149, 63, 0.4)',
+                    fontSize: '1.1rem'
+                  }}
                 >
-                  View Picks
-                </Link>
-                <Link 
-                  to="/billfold" 
-                  className="bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] text-white font-medium rounded-md border border-[rgba(255,255,255,0.1)] backdrop-blur-sm transition duration-200 ease-in-out"
-                  style={{ padding: "10px 20px" }}
-                >
-                  Past Results
-                </Link>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                  </svg>
+                  Download on the App Store
+                </a>
+                <p className="text-white/50 text-sm">Free • No sign-up required</p>
               </div>
             </div>
 
             {/* Featured Pick Card Preview - Single Card Only */}
             <div className="mt-12 mb-24 w-full flex flex-col items-center justify-center">
-              <h2 className="text-white text-3xl font-bold mb-8">Today's Free Pick</h2>
+              <h2 className="text-white text-3xl font-bold mb-4">Today's Free Pick</h2>
+              <p className="text-white/60 mb-8 text-center max-w-md">Get daily picks across 7 sports in the app. No sign-up, no paywall.</p>
               
               <div className="flex justify-center">
                 {loading ? (
@@ -831,11 +836,40 @@ function Home() {
                     {renderPickCard(featuredPicks[0])}
                   </div>
                 ) : (
-                  <div className="p-8 rounded bg-black/30 backdrop-blur-sm">
-                    <p className="text-white/70">New picks coming soon!</p>
+                  <div className="p-12 rounded-2xl bg-black/30 backdrop-blur-sm border border-[#B8953F]/20 text-center">
+                    <p className="text-white/70 mb-4">New picks drop daily in the app!</p>
+                    <a 
+                      href="https://apps.apple.com/us/app/gary-ai/id6751238914"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-[#B8953F] font-semibold hover:underline"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                      </svg>
+                      Download Gary AI
+                    </a>
                   </div>
                 )}
               </div>
+              
+              {/* App download CTA below pick card */}
+              {featuredPicks.length > 0 && (
+                <div className="mt-8 text-center">
+                  <p className="text-white/50 text-sm mb-3">Want all picks + player props?</p>
+                  <a 
+                    href="https://apps.apple.com/us/app/gary-ai/id6751238914"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-[#B8953F] font-semibold hover:underline"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                    </svg>
+                    Get the Free App →
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* The Bears Brain Section - Dark theme matching homepage - moved up 2.5 inches */}

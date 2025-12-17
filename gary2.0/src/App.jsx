@@ -3,16 +3,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } f
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Navbar } from "./components/Navbar";
 import Home from "./pages/Home";
-import { MeetGary } from "./pages/MeetGary";
-import RealGaryPicks from "./pages/RealGaryPicks";
-import GaryProps from "./pages/GaryProps";
-import { Billfold } from "./pages/Billfold";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
-import LearnMore from "./pages/LearnMore";
-import TeamProps from './pages/TeamProps';
 
-// Admin components - dynamically loaded
+// Admin components - dynamically loaded (keep for internal use)
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
 const ResultsAdmin = lazy(() => import('./pages/ResultsAdmin'));
 
@@ -39,19 +33,26 @@ function AppContent() {
         <div className="flex-grow">
           <Suspense fallback={<div className="flex h-96 items-center justify-center"><div className="animate-pulse text-gray-600 dark:text-gray-300">Loading...</div></div>}>
             <Routes>
+              {/* Main landing page */}
               <Route path="/" element={<Home />} />
-              <Route path="/meet-gary" element={<MeetGary />} />
-              <Route path="/real-gary-picks" element={<RealGaryPicks />} />
-              <Route path="/gary-props" element={<GaryProps />} />
-              <Route path="/billfold" element={<Billfold />} />
-              <Route path="/leaderboard" element={<Navigate to="/real-gary-picks" replace />} />
-              <Route path="/learn-more" element={<LearnMore />} />
+              
+              {/* Legal pages (required) */}
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
-              <Route path="/team-picks" element={<TeamProps />} />
-              {/* Admin routes */}
+              
+              {/* Admin routes (internal use only) */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
               <Route path="/admin/results" element={<ResultsAdmin />} />
+              
+              {/* Redirect all other routes to home (marketing landing page) */}
+              <Route path="/meet-gary" element={<Navigate to="/" replace />} />
+              <Route path="/real-gary-picks" element={<Navigate to="/" replace />} />
+              <Route path="/gary-props" element={<Navigate to="/" replace />} />
+              <Route path="/billfold" element={<Navigate to="/" replace />} />
+              <Route path="/leaderboard" element={<Navigate to="/" replace />} />
+              <Route path="/learn-more" element={<Navigate to="/" replace />} />
+              <Route path="/team-picks" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </div>
