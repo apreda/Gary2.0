@@ -428,12 +428,6 @@ struct HomeView: View {
                             .tracking(1)
                             .padding(.horizontal, 4)
                         
-                        Text("Gary runs a 3-stage agentic pipeline on every single pick. No gut feelings. No trends without causality. Just structured reasoning.")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .padding(.horizontal, 4)
-                            .padding(.bottom, 8)
-                        
                         VStack(spacing: 14) {
                             HeroBenefitCard(title: "3-Stage Agentic Pipeline", text: "Every pick goes through three autonomous stages: (1) Hypothesis — form a sharp thesis on the game, (2) Investigation — pull 30+ metrics and test the theory, (3) The Judge — lock only when numbers converge. Only picks that survive all three stages make it to your screen.", badge: "HOW IT WORKS")
                             
