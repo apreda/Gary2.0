@@ -420,26 +420,30 @@ struct HomeView: View {
                         .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                     }
                     
-                    // Benefits Section - Why Gary (Full-width cards, all text visible)
+                    // The Bears Brain Section - How Gary Works
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("WHY GARY?")
+                        Text("THE BEARS BRAIN")
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(GaryColors.gold)
                             .tracking(1)
                             .padding(.horizontal, 4)
                         
+                        Text("Gary runs a 3-stage agentic pipeline on every single pick. No gut feelings. No trends without causality. Just structured reasoning.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.horizontal, 4)
+                            .padding(.bottom, 8)
+                        
                         VStack(spacing: 14) {
-                            HeroBenefitCard(title: "Sports Brain", text: "Gary's secret weapon. This proprietary system measures alignment between statistical models, market odds, and qualitative analysis. When all signals converge, you get Gary's highest-conviction plays. Higher convergence = higher confidence = stronger picks.", badge: "GARY'S SECRET WEAPON")
+                            HeroBenefitCard(title: "3-Stage Agentic Pipeline", text: "Every pick goes through three autonomous stages: (1) Hypothesis — form a sharp thesis on the game, (2) Investigation — pull 30+ metrics and test the theory, (3) The Judge — lock only when numbers converge. Only picks that survive all three stages make it to your screen.", badge: "HOW IT WORKS")
                             
-                            HeroBenefitCard(title: "GPT 5.1 Engine", text: "Powered by OpenAI's most advanced reasoning model. Gary doesn't just analyze games—he thinks through them like a seasoned handicapper with decades of experience, using multi-pass logic to uncover edges the market misses.", badge: "ADVANCED AI")
+                            HeroBenefitCard(title: "Sport-Specific Constitutions", text: "Sharp betting heuristics tailored to each sport. NFL uses EPA & Success Rate. NBA tracks Pace & Efficiency. NCAAF analyzes SP+ & Havoc Rate. NCAAB leverages KenPom & NET Rankings. Gary thinks like a specialist for every league.", badge: "TAILORED ANALYSIS")
                             
-                            HeroBenefitCard(title: "Agentic Analysis", text: "Gary runs a 6-step autonomous research loop for every single pick. He requests specific stats, forms hypotheses, stress-tests his reasoning, and only locks in picks that survive rigorous validation. No gut feelings—pure systematic edge.", badge: "AUTONOMOUS RESEARCH")
+                            HeroBenefitCard(title: "Scout Report Builder", text: "Before the pipeline starts, Gary builds a comprehensive scout report: injuries by name, weather conditions, travel & rest factors, venue data, breaking news, bullpen usage, live odds movement, and lineup changes.", badge: "REAL-TIME INTEL")
                             
-                            HeroBenefitCard(title: "Matchup Insight", text: "Every pick includes real-time intelligence: breaking injury news, last-minute lineup changes, travel schedules, rest advantages, and situational factors that move lines. Gary sees what the public doesn't.", badge: "REAL-TIME INTEL")
+                            HeroBenefitCard(title: "Fan Brain", text: "The qualitative factors that pure stat models miss. Revenge Games (emotional edge from last loss), Trap Alerts (suspicious line movement), Letdown Spots (flat after emotional win), and Lookahead Spots (big game next week trap).", badge: "SOFT FACTORS")
                             
-                            HeroBenefitCard(title: "Rest & Fatigue Edge", text: "Gary tracks days since last game, back-to-back situations, and schedule density for every matchup. Teams on short rest or heavy travel often underperform—Gary spots these situational edges before the public.", badge: "SITUATIONAL INTEL")
-                            
-                            HeroBenefitCard(title: "Headline Hunter", text: "AI-powered news search scans thousands of sources for breaking storylines, locker room drama, weather updates, and market narratives that sharp bettors exploit. Information is edge—Gary has it first.", badge: "NEWS SCANNER")
+                            HeroBenefitCard(title: "Convergence Scoring", text: "Gary's secret weapon. Measures alignment between statistical models, market odds, and qualitative analysis. When all signals converge, you get Gary's highest-conviction plays. Higher convergence = higher confidence = stronger picks.", badge: "GARY'S EDGE")
                         }
                     }
                     .padding(16)
@@ -529,7 +533,7 @@ enum Sport: String, CaseIterable {
     /// Whether this sport is in beta (limited data/analytics)
     var isBeta: Bool {
         switch self {
-        case .nhl, .epl: return true
+        case .nhl, .epl, .ncaab: return true
         default: return false
         }
     }
@@ -987,7 +991,27 @@ struct GaryPropsView: View {
         return nil
     }
     
-    /// Group props by time slot for section headers
+    /// Group props by matchup for section headers (with time as secondary info)
+    private var propsByMatchup: [(matchup: String, time: String, props: [PropPick])] {
+        var grouped: [String: (time: String, props: [PropPick])] = [:]
+        var order: [String] = []
+        
+        for prop in filteredProps {
+            // Use matchup if available, otherwise fall back to time slot
+            let matchup = prop.matchup ?? getTimeSlot(for: prop) ?? "TBD"
+            let time = getTimeSlot(for: prop) ?? ""
+            
+            if grouped[matchup] == nil {
+                grouped[matchup] = (time: time, props: [])
+                order.append(matchup)
+            }
+            grouped[matchup]?.props.append(prop)
+        }
+        
+        return order.map { (matchup: $0, time: grouped[$0]?.time ?? "", props: grouped[$0]?.props ?? []) }
+    }
+    
+    /// Group props by time slot for section headers (legacy, used as fallback)
     private var propsByTimeSlot: [(timeSlot: String, props: [PropPick])] {
         var grouped: [String: [PropPick]] = [:]
         var order: [String] = []
@@ -1085,27 +1109,27 @@ struct GaryPropsView: View {
                                     }
                                 }
                             } else {
-                                // Regular props: Show grouped by time slot with headers
-                                ForEach(propsByTimeSlot, id: \.timeSlot) { group in
-                                    // Time slot header
+                                // Regular props: Show grouped by matchup with headers
+                                ForEach(propsByMatchup, id: \.matchup) { group in
+                                    // Matchup header (time is shown on each card)
                                     HStack {
                                         Rectangle()
                                             .fill(GaryColors.gold.opacity(0.5))
-                                            .frame(height: 1)
-                                        Text(group.timeSlot)
-                                            .font(.system(size: 13, weight: .semibold))
+                                            .frame(width: 20, height: 1)
+                                        Text(group.matchup)
+                                            .font(.system(size: 14, weight: .bold))
                                             .foregroundColor(GaryColors.gold)
-                                            .fixedSize()
+                                            .lineLimit(1)
                                         Rectangle()
                                             .fill(GaryColors.gold.opacity(0.5))
-                                            .frame(height: 1)
+                                            .frame(width: 20, height: 1)
                                     }
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 12)
                                     
-                                    // Props in this time slot
+                                    // Props in this matchup
                                     ForEach(group.props) { prop in
-                                        PropCardMobile(prop: prop)
+                                        PropCardMobile(prop: prop, showTimeOnCard: true)
                                             .padding(.horizontal, 16)
                                             .transaction { $0.animation = nil }
                                     }
@@ -1157,8 +1181,8 @@ struct GaryPropsView: View {
 
 struct BillfoldView: View {
     @State private var selectedTab = 0
-    @State private var timeframe = "all"
-    @State private var selectedSport: Sport = .all
+    @State private var timeframe = "7d"  // Default to 7 days
+    @State private var selectedSport: Sport = .nba  // Default to NBA
     @State private var gameResults: [GameResult] = []
     @State private var propResults: [PropResult] = []
     @State private var loading = true
@@ -1323,6 +1347,11 @@ struct BillfoldView: View {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedSport = sport
+                            // Reset to 7D when switching sports
+                            if timeframe != "7d" {
+                                timeframe = "7d"
+                                Task { await loadData() }
+                            }
                         }
                     } label: {
                         HStack(spacing: 5) {
@@ -1404,6 +1433,51 @@ struct BillfoldView: View {
         }
     }
     
+    /// Streak meter using gambling terminology - returns bg color and bright text color
+    private func streakMeter(wins: Int, losses: Int, winRate: Double) -> (label: String, icon: String, bgColor: Color, textColor: Color)? {
+        let total = wins + losses
+        guard total >= 1 else { return nil }
+        
+        // Color pairs: (solid background, neon/bright text)
+        let heaterColors = (Color(hex: "#166534"), Color(hex: "#4ADE80"))  // Dark green bg, neon green text
+        let sharpColors = (Color(hex: "#1E3A29"), Color(hex: "#86EFAC"))   // Darker green bg, mint text
+        let rideColors = (Color(hex: "#422006"), Color(hex: "#FCD34D"))    // Dark amber bg, bright yellow text
+        let grindColors = (Color(hex: "#2D2A1E"), GaryColors.lightGold)    // Dark gold bg, gold text
+        let varianceColors = (Color(hex: "#431407"), Color(hex: "#FDBA74")) // Dark orange bg, bright orange text
+        let fadeColors = (Color(hex: "#450A0A"), Color(hex: "#FCA5A5"))    // Dark red bg, light red text
+        
+        // Perfect record
+        if losses == 0 && wins >= 3 {
+            return ("HEATER", "flame.fill", heaterColors.0, heaterColors.1)
+        }
+        if losses == 0 && wins >= 1 {
+            return ("RIDE", "arrow.up.right", rideColors.0, rideColors.1)
+        }
+        
+        // No wins
+        if wins == 0 && losses >= 3 {
+            return ("FADE", "arrow.down.right", fadeColors.0, fadeColors.1)
+        }
+        if wins == 0 && losses >= 1 {
+            return ("VARIANCE", "arrow.left.arrow.right", varianceColors.0, varianceColors.1)
+        }
+        
+        // Based on win rate
+        if winRate >= 75 {
+            return ("HEATER", "flame.fill", heaterColors.0, heaterColors.1)
+        } else if winRate >= 65 {
+            return ("SHARP", "checkmark.seal.fill", sharpColors.0, sharpColors.1)
+        } else if winRate >= 55 {
+            return ("RIDE", "arrow.up.right", rideColors.0, rideColors.1)
+        } else if winRate >= 45 {
+            return ("GRINDING", "gearshape.fill", grindColors.0, grindColors.1)
+        } else if winRate >= 35 {
+            return ("VARIANCE", "arrow.left.arrow.right", varianceColors.0, varianceColors.1)
+        } else {
+            return ("FADE", "arrow.down.right", fadeColors.0, fadeColors.1)
+        }
+    }
+    
     private var metricsCards: some View {
         let record = calculateRecord()
         let total = max(1, record.wins + record.losses + record.pushes)
@@ -1418,7 +1492,12 @@ struct BillfoldView: View {
     }
     
     private var recentPicksList: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let record = calculateRecord()
+        let total = max(1, record.wins + record.losses + record.pushes)
+        let winRate = Double(record.wins) / Double(total) * 100
+        let streak = streakMeter(wins: record.wins, losses: record.losses, winRate: winRate)
+        
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("RECENT PICKS")
                     .font(.caption.bold())
@@ -1431,6 +1510,23 @@ struct BillfoldView: View {
                 }
                 
                 Spacer()
+                
+                // Hot/Cold streak meter - solid background with bright text
+                if let streak = streak, record.wins + record.losses > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: streak.icon)
+                            .font(.system(size: 10, weight: .bold))
+                        Text(streak.label)
+                            .font(.system(size: 10, weight: .heavy))
+                    }
+                    .foregroundStyle(streak.textColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(streak.bgColor)
+                    )
+                }
             }
             
             if loading {
@@ -1761,12 +1857,38 @@ struct PickCardMobile: View {
         pick.league?.uppercased() == "NFL"
     }
     
-    /// Extract pick text and odds separately, expanding team names for NBA
+    private var isNBA: Bool {
+        pick.league?.uppercased() == "NBA"
+    }
+    
+    /// Check if this is an NBA Cup game
+    private var isNBACup: Bool {
+        pick.isNBACup
+    }
+    
+    /// Check if this is an NFL special game (divisional, primetime, etc.)
+    private var nflGameContext: String? {
+        guard isNFL, let ctx = pick.tournamentContext, !ctx.isEmpty else { return nil }
+        return ctx
+    }
+    
+    /// Get appropriate icon for NFL game context
+    private var nflContextIcon: String {
+        guard let ctx = nflGameContext?.lowercased() else { return "football.fill" }
+        if ctx.contains("divisional") { return "flag.2.crossed.fill" }
+        if ctx.contains("tnf") || ctx.contains("thursday") { return "moon.stars.fill" }
+        if ctx.contains("snf") || ctx.contains("sunday night") { return "moon.fill" }
+        if ctx.contains("mnf") || ctx.contains("monday") { return "moon.fill" }
+        return "football.fill"
+    }
+    
+    /// Extract pick text and odds separately, expanding team names for NBA, shortening for college
     private var pickParts: (pick: String, odds: String) {
         let parts = Formatters.splitPickAndOdds(pick.pick)
+        let league = pick.league?.uppercased() ?? ""
         
         // For NBA, replace short team name with full team name in pick text
-        if pick.league?.uppercased() == "NBA" {
+        if league == "NBA" {
             var expandedPick = parts.0
             
             // Check if pick contains the short home team name and replace with full name
@@ -1788,6 +1910,24 @@ struct PickCardMobile: View {
             return (expandedPick, parts.1)
         }
         
+        // For NCAAF/NCAAB, use shortened school name (without mascot) if pick is too long
+        if league == "NCAAF" || league == "NCAAB" {
+            var shortenedPick = parts.0
+            
+            // Replace full team name with just the school name for college sports
+            // e.g., "Jacksonville State Gamecocks ML" -> "Jacksonville State ML"
+            if let homeTeam = pick.homeTeam, shortenedPick.contains(homeTeam) {
+                let schoolName = Formatters.shortTeamName(homeTeam, league: pick.league)
+                shortenedPick = shortenedPick.replacingOccurrences(of: homeTeam, with: schoolName)
+            }
+            if let awayTeam = pick.awayTeam, shortenedPick.contains(awayTeam) {
+                let schoolName = Formatters.shortTeamName(awayTeam, league: pick.league)
+                shortenedPick = shortenedPick.replacingOccurrences(of: awayTeam, with: schoolName)
+            }
+            
+            return (shortenedPick, parts.1)
+        }
+        
         return parts
     }
     
@@ -1806,6 +1946,36 @@ struct PickCardMobile: View {
                         .foregroundStyle(Color.white.opacity(0.75))
                         .padding(10)
                         .goldGlassCircle()
+                    
+                    // NBA CUP badge for In-Season Tournament games
+                    if isNBACup {
+                        HStack(spacing: 4) {
+                            Image(systemName: "trophy.fill")
+                                .font(.system(size: 8, weight: .bold))
+                            Text("NBA CUP")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundStyle(GaryColors.gold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(GaryColors.gold.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    
+                    // NFL game context badge (Divisional, TNF, SNF, MNF)
+                    if let nflContext = nflGameContext {
+                        HStack(spacing: 4) {
+                            Image(systemName: nflContextIcon)
+                                .font(.system(size: 8, weight: .bold))
+                            Text(nflContext.uppercased())
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .foregroundStyle(accentColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(accentColor.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
                     
                     // BETA badge for sports with limited analytics
                     if isBetaSport {
@@ -1834,23 +2004,37 @@ struct PickCardMobile: View {
             // Teams - Soft white with truncation for long names (always short names for matchup)
             // For NCAAB/NCAAF: shows school names (e.g., "Nebraska @ Illinois")
             // For pro sports: shows mascots (e.g., "Thunder @ Lakers")
-            HStack {
-                Text(Formatters.shortTeamName(pick.awayTeam, league: pick.league))
-                    .font(.title3.bold())
-                    .foregroundStyle(Color.white.opacity(0.75))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer()
-                Text("@")
-                    .font(.caption)
+            VStack(spacing: 6) {
+                HStack {
+                    Text(Formatters.shortTeamName(pick.awayTeam, league: pick.league))
+                        .font(.title3.bold())
+                        .foregroundStyle(Color.white.opacity(0.75))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer()
+                    // Show "vs" for neutral site, "@" for regular games
+                    Text(pick.isNeutralSite == true ? "vs" : "@")
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .layoutPriority(1)
+                    Spacer()
+                    Text(Formatters.shortTeamName(pick.homeTeam, league: pick.league))
+                        .font(.title3.bold())
+                        .foregroundStyle(Color.white.opacity(0.75))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                
+                // Venue (when available - e.g., NBA Cup neutral site games)
+                if let venue = pick.venue, !venue.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 11))
+                        Text(venue)
+                            .font(.system(size: 12, weight: .medium))
+                    }
                     .foregroundStyle(Color.white.opacity(0.5))
-                    .layoutPriority(1)
-                Spacer()
-                Text(Formatters.shortTeamName(pick.homeTeam, league: pick.league))
-                    .font(.title3.bold())
-                    .foregroundStyle(Color.white.opacity(0.75))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                }
             }
             .padding(.vertical, 4)
             
@@ -1865,7 +2049,7 @@ struct PickCardMobile: View {
                     .foregroundStyle(GaryColors.gold)
                     .font(.system(size: 22, weight: .heavy))
                     .lineLimit(2)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.6) // Allow more shrinking for long college team names
                 
                 Spacer()
                 
@@ -1954,6 +2138,7 @@ struct PickCardMobile: View {
 
 struct PropCardMobile: View {
     let prop: PropPick
+    var showTimeOnCard: Bool = false  // Show game time on the card itself (when header shows matchup instead of time)
     @State private var showAnalysis = false
     @State private var isPressed = false
     
@@ -1972,13 +2157,22 @@ struct PropCardMobile: View {
                     if let team = prop.team, prop.player != nil {
                         Text(team)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.green)
                     }
                 }
                 Spacer()
-                Text(Formatters.americanOdds(prop.odds))
-                    .font(.title3.bold())
-                    .foregroundStyle(accentColor)
+                // Odds and time on the right side
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Formatters.americanOdds(prop.odds))
+                        .font(.title3.bold())
+                        .foregroundStyle(accentColor)
+                    // Show time on card when matchup header is used
+                    if showTimeOnCard, let time = prop.time, !time.isEmpty {
+                        Text(time)
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
             }
             
             Rectangle()
@@ -2281,11 +2475,35 @@ struct TaleOfTapeSection: View {
     let injuries: TeamInjuries?
     let garyPickedHome: Bool  // True if Gary picked the home team
     
+    @State private var isExpanded: Bool = false
+    private let maxCollapsedStats = 8  // Show only first 8 stats when collapsed
+    
     private let greenAccent = Color(hex: "#4ade80")
     
     /// Left side is always Gary's pick
     private var leftTeam: String { garyPickedHome ? homeTeam : awayTeam }
     private var rightTeam: String { garyPickedHome ? awayTeam : homeTeam }
+    
+    /// Filter valid stats that can be displayed
+    private var validStats: [(offset: Int, element: StatData)] {
+        let skipTokens = ["TOP_PLAYERS", "REST_SITUATION", "FIELD_POSITION", "MOTIVATION_CONTEXT", "QB_NAME", "CAREER_RECORD", "ASSESSMENT", "CAREER_GAMES_IN_CONDITION", "TEMPERATURE", "FEELS_LIKE", "WIND_SPEED", "CONDITIONS", "IMPACT"]
+        return statsData.enumerated().filter { (_, stat) in
+            guard let token = stat.token,
+                  let home = stat.home,
+                  let away = stat.away else { return false }
+            let homeVal = home.getValue(for: token)
+            let awayVal = away.getValue(for: token)
+            return !skipTokens.contains(token) && homeVal != "N/A" && awayVal != "N/A" && !homeVal.isEmpty && !awayVal.isEmpty
+        }.map { ($0.offset, $0.element) }
+    }
+    
+    private var displayedStats: [(offset: Int, element: StatData)] {
+        isExpanded ? validStats : Array(validStats.prefix(maxCollapsedStats))
+    }
+    
+    private var hasMoreStats: Bool {
+        validStats.count > maxCollapsedStats
+    }
     
     /// Map tokens to display names
     private func displayName(for token: String) -> String {
@@ -2303,10 +2521,26 @@ struct TaleOfTapeSection: View {
             "EFG_PCT": "eFG%",
             "OPP_EFG_PCT": "Opp eFG%",
             "THREE_PT_SHOOTING": "3PT%",
+            "THREE_PCT": "3PT%",
+            "THREE_MADE_PER_GAME": "3PM/G",
+            "THREE_ATTEMPTED_PER_GAME": "3PA/G",
             "TURNOVER_RATE": "TOV/Game",
+            "TOV_RATE": "TOV Rate",
+            "TURNOVERS_PER_GAME": "TOV/Game",
             "OREB_RATE": "Off Reb/G",
+            "OREB_PER_GAME": "Off Reb/G",
             "FT_RATE": "FT Rate",
+            "FT_PCT": "FT%",
+            "FTA_PER_GAME": "FTA/Game",
             "CLUTCH_STATS": "Close Games",
+            "CLOSE_RECORD": "Close Record",
+            "CLOSE_WIN_PCT": "Close Win %",
+            "CLOSE_GAMES": "Close Games",
+            "TRUE_SHOOTING_PCT": "TS%",
+            "OVERALL": "Record",
+            "HOME_RECORD": "Home",
+            "AWAY_RECORD": "Away",
+            "GAMES_PLAYED": "Games",
             "PAINT_SCORING": "Paint Pts",
             "PAINT_DEFENSE": "Opp Paint Pts",
             "TRANSITION_DEFENSE": "Trans Def",
@@ -2341,6 +2575,45 @@ struct TaleOfTapeSection: View {
             "PASSING_TDS": "Pass TDs",
             "INTERCEPTIONS": "INTs",
             "RUSHING_TDS": "Rush TDs",
+            // NEW: Individual NFL stat tokens (flattened)
+            "POINTS_PER_GAME": "Points/Game",
+            "PPG": "Points/Game",
+            "YARDS_PER_GAME": "Yards/Game",
+            "YPG": "Yards/Game",
+            "TOTAL_YARDS_PER_GAME": "Total YPG",
+            "YARDS_PER_PLAY": "Yards/Play",
+            "OPP_POINTS_PER_GAME": "Opp PPG",
+            "OPP_PPG": "Opp PPG",
+            "OPP_YARDS_PER_GAME": "Opp Yards",
+            "OPP_YPG": "Opp Yards",
+            "POINT_DIFF": "Point Diff",
+            "THIRD_DOWN_PCT": "3rd Down %",
+            "FOURTH_DOWN_PCT": "4th Down %",
+            "TURNOVER_DIFF": "Turnover +/-",
+            "TAKEAWAYS": "Takeaways",
+            "GIVEAWAYS": "Giveaways",
+            "SACKS": "Sacks",
+            "QB_RATING": "QB Rating",
+            "COMPLETION_PCT": "Comp %",
+            "YARDS_PER_ATTEMPT": "Yds/Att",
+            "PASS_TDS": "Pass TDs",
+            "INTS": "INTs",
+            "RUSH_TDS": "Rush TDs",
+            "RUSHING_YARDS_PER_GAME": "Rush YPG",
+            "RUSH_YPG": "Rush YPG",
+            "YARDS_PER_CARRY": "Yds/Carry",
+            "RECEIVING_YARDS_PER_GAME": "Recv YPG",
+            "RECV_YPG": "Recv YPG",
+            "RECEIVING_TDS": "Recv TDs",
+            "RECV_TDS": "Recv TDs",
+            "YARDS_PER_CATCH": "Yds/Catch",
+            "LONGEST_PASS": "Long Pass",
+            "LONGEST_RUSH": "Long Rush",
+            "TEMPERATURE": "Temp",
+            "FEELS_LIKE": "Feels Like",
+            "WIND_SPEED": "Wind",
+            "CONDITIONS": "Weather",
+            "IMPACT": "Weather Impact",
             // NCAAB/NCAAF specific
             "SCORING": "PPG",
             "ASSISTS": "Assists/G",
@@ -2348,6 +2621,16 @@ struct TaleOfTapeSection: View {
             "STEALS": "Steals/G",
             "BLOCKS": "Blocks/G",
             "FG_PCT": "FG%",
+            // NCAAB enriched
+            "NCAAB_EFG_PCT": "eFG%",
+            "NCAAB_TEMPO": "Tempo",
+            "NCAAB_OFFENSIVE_RATING": "Off Rating",
+            "NCAAB_AP_RANKING": "AP Rank",
+            "NCAAB_COACHES_RANKING": "Coaches Rank",
+            "NCAAB_CONFERENCE_RECORD": "Conf Record",
+            "NCAAB_NET_RANKING": "NET Rank",
+            "NCAAB_STRENGTH_OF_SCHEDULE": "SOS",
+            "NCAAB_KENPOM_RATINGS": "KenPom Rank",
             // NHL specific
             "GOALS_FOR": "Goals/G",
             "GOALS_AGAINST": "GA/G",
@@ -2392,103 +2675,179 @@ struct TaleOfTapeSection: View {
                     Text(leftTeam)
                         .font(.subheadline.bold())
                         .foregroundStyle(greenAccent)
-                        .frame(width: 70, alignment: .leading)
-                    
-                    Spacer()
-                    
-                    Text("vs")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.4))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(width: 90, alignment: .leading)
                     
                     Spacer()
                     
                     Text(rightTeam)
                         .font(.subheadline.bold())
                         .foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 70, alignment: .trailing)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(width: 110, alignment: .trailing)
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)
                 .background(Color.white.opacity(0.05))
                 
-                // Stats Rows
-                ForEach(Array(statsData.enumerated()), id: \.offset) { index, stat in
+                // Stats Rows - Show first 8 stats, with expand button for more
+                ForEach(Array(displayedStats.enumerated()), id: \.offset) { displayIndex, statTuple in
+                    let stat = statTuple.element
                     if let token = stat.token,
                        let home = stat.home,
                        let away = stat.away {
                         let homeVal = home.getValue(for: token)
                         let awayVal = away.getValue(for: token)
                         
-                        // Skip tokens that don't have displayable data
-                        let skipTokens = ["TOP_PLAYERS", "WEATHER", "REST_SITUATION", "PASSING_EPA", "RUSHING_EPA", "FIELD_POSITION", "MOTIVATION_CONTEXT"]
+                        // Get values for display (Gary's pick on left)
+                        let leftVal = garyPickedHome ? homeVal : awayVal
+                        let rightVal = garyPickedHome ? awayVal : homeVal
                         
-                        // Only show if both values are valid (not N/A)
-                        if !skipTokens.contains(token) && homeVal != "N/A" && awayVal != "N/A" && !homeVal.isEmpty && !awayVal.isEmpty {
-                            // Get values for display (Gary's pick on left)
-                            let leftVal = garyPickedHome ? homeVal : awayVal
-                            let rightVal = garyPickedHome ? awayVal : homeVal
+                        // Determine if left side (Gary's pick) has advantage
+                        let leftAdvantage = garyPickedHome ? 
+                            compareValues(homeVal, awayVal, token: token) : 
+                            !compareValues(homeVal, awayVal, token: token)
+                        
+                        HStack {
+                            // Left value (Gary's pick)
+                            Text(leftVal)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(leftAdvantage ? greenAccent : .white.opacity(0.6))
+                                .frame(width: 70, alignment: .leading)
                             
-                            // Determine if left side (Gary's pick) has advantage
-                            let leftAdvantage = garyPickedHome ? 
-                                compareValues(homeVal, awayVal, token: token) : 
-                                !compareValues(homeVal, awayVal, token: token)
+                            Spacer()
                             
-                            HStack {
-                                // Left value (Gary's pick)
-                                Text(leftVal)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(leftAdvantage ? greenAccent : .white.opacity(0.6))
-                                    .frame(width: 70, alignment: .leading)
-                                
-                                Spacer()
-                                
-                                // Stat name with arrow
-                                HStack(spacing: 4) {
-                                    if leftAdvantage {
-                                        Image(systemName: "arrow.left")
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundStyle(greenAccent)
-                                    }
-                                    Text(displayName(for: token))
-                                        .font(.caption)
-                                        .foregroundStyle(.white.opacity(0.5))
-                                    if !leftAdvantage {
-                                        Image(systemName: "arrow.right")
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundStyle(greenAccent)
-                                    }
+                            // Stat name with arrow
+                            HStack(spacing: 4) {
+                                if leftAdvantage {
+                                    Image(systemName: "arrow.left")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(greenAccent)
                                 }
-                                
-                                Spacer()
-                                
-                                // Right value (opponent)
-                                Text(rightVal)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(!leftAdvantage ? greenAccent : .white.opacity(0.6))
-                                    .frame(width: 70, alignment: .trailing)
+                                Text(displayName(for: token))
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.5))
+                                if !leftAdvantage {
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(greenAccent)
+                                }
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(index % 2 == 0 ? Color.clear : Color.white.opacity(0.02))
+                            
+                            Spacer()
+                            
+                            // Right value (opponent)
+                            Text(rightVal)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(!leftAdvantage ? greenAccent : .white.opacity(0.6))
+                                .frame(width: 70, alignment: .trailing)
                         }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(displayIndex % 2 == 0 ? Color.clear : Color.white.opacity(0.02))
                     }
+                }
+                
+                // Show More / Show Less button
+                if hasMoreStats {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isExpanded.toggle()
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Text(isExpanded ? "Show Less" : "Show \(validStats.count - maxCollapsedStats) More")
+                                .font(.caption.bold())
+                                .foregroundStyle(greenAccent.opacity(0.8))
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(greenAccent.opacity(0.8))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.03))
+                    }
+                    .buttonStyle(.plain)
                 }
                 
                 // Injuries Row
                 if let injuries = injuries {
-                    let homeInjuries = injuries.home?.filter { $0.status == "Out" }.prefix(5).compactMap { $0.name } ?? []
-                    let awayInjuries = injuries.away?.filter { $0.status == "Out" }.prefix(5).compactMap { $0.name } ?? []
+                    // Helper to abbreviate status
+                    let statusAbbrev: (String?) -> String = { status in
+                        guard let s = status?.lowercased() else { return "" }
+                        if s.contains("out") { return "OUT" }
+                        if s.contains("injured reserve") || s == "ir" || s.contains("ltir") { return "IR" }
+                        if s.contains("doubtful") { return "D" }
+                        if s.contains("questionable") { return "Q" }
+                        if s.contains("probable") { return "P" }
+                        if s.contains("day-to-day") || s.contains("dtd") { return "DTD" }
+                        return ""
+                    }
+                    
+                    // Helper to get status color (red for OUT/IR/D, orange for Q/DTD)
+                    let statusColor: (String) -> Color = { abbrev in
+                        switch abbrev {
+                        case "OUT", "IR", "D": return .red.opacity(0.9)
+                        case "Q", "DTD", "P": return .orange.opacity(0.9)
+                        default: return .red.opacity(0.9)
+                        }
+                    }
+                    
+                    // Get injuries with status (name, abbreviation)
+                    // Filter out corrupt entries (names with newlines, too short, or starting with common words)
+                    let isValidName: (String?) -> Bool = { name in
+                        guard let n = name, n.count >= 4 else { return false }
+                        let lower = n.lowercased()
+                        // Reject names that are clearly parsing errors
+                        if n.contains("\n") || n.contains("\r") { return false }
+                        if lower.hasPrefix("day") || lower.hasPrefix("out") || lower.hasPrefix("questionable") { return false }
+                        return true
+                    }
+                    
+                    let homeInjuriesList: [(name: String, status: String)] = (injuries.home ?? []).compactMap { injury in
+                        guard isValidName(injury.name), let name = injury.name else { return nil }
+                        let abbrev = statusAbbrev(injury.status)
+                        guard !abbrev.isEmpty else { return nil }
+                        return (name, abbrev)
+                    }
+                    let awayInjuriesList: [(name: String, status: String)] = (injuries.away ?? []).compactMap { injury in
+                        guard isValidName(injury.name), let name = injury.name else { return nil }
+                        let abbrev = statusAbbrev(injury.status)
+                        guard !abbrev.isEmpty else { return nil }
+                        return (name, abbrev)
+                    }
+                    
+                    // Sort: OUT/IR/D first, then Q/DTD
+                    let sortPriority: (String) -> Int = { abbrev in
+                        switch abbrev {
+                        case "OUT": return 0
+                        case "IR": return 1
+                        case "D": return 2
+                        case "Q": return 3
+                        case "DTD": return 4
+                        case "P": return 5
+                        default: return 6
+                        }
+                    }
+                    let homeSorted = homeInjuriesList.sorted { sortPriority($0.status) < sortPriority($1.status) }
+                    let awaySorted = awayInjuriesList.sorted { sortPriority($0.status) < sortPriority($1.status) }
+                    
+                    // Take top 5
+                    let homeTop5 = Array(homeSorted.prefix(5))
+                    let awayTop5 = Array(awaySorted.prefix(5))
                     
                     // Swap based on Gary's pick
-                    let leftInjuries = garyPickedHome ? homeInjuries : awayInjuries
-                    let rightInjuries = garyPickedHome ? awayInjuries : homeInjuries
+                    let leftInjuries = garyPickedHome ? homeTop5 : awayTop5
+                    let rightInjuries = garyPickedHome ? awayTop5 : homeTop5
                     
                     if !leftInjuries.isEmpty || !rightInjuries.isEmpty {
                         Divider().background(Color.white.opacity(0.1))
                         
                         VStack(alignment: .leading, spacing: 8) {
                             // Injuries header
-                            Text("KEY INJURIES (OUT)")
+                            Text("KEY INJURIES")
                                 .font(.caption.bold())
                                 .foregroundStyle(.red.opacity(0.8))
                                 .tracking(0.5)
@@ -2501,14 +2860,16 @@ struct TaleOfTapeSection: View {
                                             .font(.caption)
                                             .foregroundStyle(.green.opacity(0.8))
                                     } else {
-                                        ForEach(Array(leftInjuries), id: \.self) { name in
+                                        ForEach(Array(leftInjuries.enumerated()), id: \.offset) { _, injury in
                                             HStack(spacing: 4) {
-                                                Circle()
-                                                    .fill(.red.opacity(0.7))
-                                                    .frame(width: 5, height: 5)
-                                                Text(name)
+                                                Text(injury.status)
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundStyle(statusColor(injury.status))
+                                                    .frame(width: 24, alignment: .leading)
+                                                Text(injury.name)
                                                     .font(.caption)
-                                                    .foregroundStyle(.red.opacity(0.9))
+                                                    .foregroundStyle(statusColor(injury.status))
+                                                    .lineLimit(1)
                                             }
                                         }
                                     }
@@ -2522,14 +2883,16 @@ struct TaleOfTapeSection: View {
                                             .font(.caption)
                                             .foregroundStyle(.green.opacity(0.8))
                                     } else {
-                                        ForEach(Array(rightInjuries), id: \.self) { name in
+                                        ForEach(Array(rightInjuries.enumerated()), id: \.offset) { _, injury in
                                             HStack(spacing: 4) {
-                                                Text(name)
+                                                Text(injury.name)
                                                     .font(.caption)
-                                                    .foregroundStyle(.red.opacity(0.9))
-                                                Circle()
-                                                    .fill(.red.opacity(0.7))
-                                                    .frame(width: 5, height: 5)
+                                                    .foregroundStyle(statusColor(injury.status))
+                                                    .lineLimit(1)
+                                                Text(injury.status)
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundStyle(statusColor(injury.status))
+                                                    .frame(width: 24, alignment: .trailing)
                                             }
                                         }
                                     }
@@ -2565,7 +2928,10 @@ struct TaleOfTapeSection: View {
             "DEFENSIVE_RATING", "TURNOVER_RATE", "PAINT_DEFENSE",
             "DEFENSIVE_EPA", "SUCCESS_RATE_DEFENSE", "EXPLOSIVE_ALLOWED",
             "RED_ZONE_DEFENSE", "DL_RANKINGS", "DEFENSIVE_PLAYMAKERS",
-            "OPP_EFG_PCT", "HAVOC_ALLOWED"
+            "OPP_EFG_PCT", "HAVOC_ALLOWED",
+            // Defensive individual stats (lower is better)
+            "OPP_POINTS_PER_GAME", "OPP_PPG", "OPP_YARDS_PER_GAME", "OPP_YPG",
+            "GIVEAWAYS", "INTERCEPTIONS", "INTS"
         ].contains(token)
         
         // For records like "5-18", compare wins
@@ -2575,8 +2941,15 @@ struct TaleOfTapeSection: View {
             return homeWins > awayWins
         }
         
-        // For turnover margin, handle positive/negative
-        if token == "TURNOVER_MARGIN" {
+        // For Last 5 / RECENT_FORM (e.g., "WWWWW" vs "LLWLL"), count wins
+        if token == "RECENT_FORM" || token == "LAST_5" {
+            let homeWins = home.uppercased().filter { $0 == "W" }.count
+            let awayWins = away.uppercased().filter { $0 == "W" }.count
+            return homeWins > awayWins
+        }
+        
+        // For turnover margin and point diff, handle positive/negative
+        if token == "TURNOVER_MARGIN" || token == "TURNOVER_DIFF" || token == "POINT_DIFF" {
             let homeVal = Double(home) ?? 0
             let awayVal = Double(away) ?? 0
             return homeVal > awayVal
@@ -2981,14 +3354,10 @@ struct TaleOfTapeView: View {
     var body: some View {
         VStack(spacing: 12) {
             // Team Header - Centered matchup display
-            HStack(spacing: 8) {
+            HStack(spacing: 16) {
                 Text(shortTeams.0)
                     .font(.subheadline.bold())
                     .foregroundStyle(GaryColors.gold)
-                
-                Text("vs")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 
                 Text(shortTeams.1)
                     .font(.subheadline.bold())
@@ -3758,16 +4127,33 @@ enum Formatters {
     }
     
     private static func shortenTeamNamesInPick(_ pick: String) -> String {
+        // Pro sports cities to shorten (NOT college - college teams use city/school as part of name)
         let cities = ["Dallas", "Detroit", "Los Angeles", "LA", "New York", "NY", "Boston", "Washington",
                       "Golden State", "San Francisco", "San Antonio", "New Orleans", "Oklahoma City", "OKC",
                       "Minnesota", "Milwaukee", "Miami", "Memphis", "Indiana", "Houston", "Denver",
                       "Cleveland", "Chicago", "Charlotte", "Brooklyn", "Atlanta", "Phoenix", "Portland",
                       "Sacramento", "Toronto", "Utah", "Orlando", "Philadelphia", "Cincinnati", "Baltimore",
                       "Pittsburgh", "Kansas City", "Las Vegas", "Seattle", "Tampa Bay", "Green Bay",
-                      "New England", "Jacksonville", "Tennessee", "Arizona", "Carolina", "Buffalo"]
+                      "New England", "Tennessee", "Arizona", "Carolina", "Buffalo"]
+        // Note: Removed "Jacksonville" - it's also a college team name (Jacksonville State)
+        
+        // College indicators - don't strip city if followed by these words
+        let collegeIndicators = ["State", "Tech", "A&M", "University", "College", "Southern", "Northern", "Eastern", "Western", "Central"]
         
         var result = pick
         for city in cities {
+            // Check if this city is followed by a college indicator - if so, skip it
+            let cityPattern = "\\b\(city)\\s+(\\w+)"
+            if let regex = try? NSRegularExpression(pattern: cityPattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: result, range: NSRange(result.startIndex..., in: result)),
+               let nextWordRange = Range(match.range(at: 1), in: result) {
+                let nextWord = String(result[nextWordRange])
+                if collegeIndicators.contains(where: { nextWord.caseInsensitiveCompare($0) == .orderedSame }) {
+                    continue // Skip - this is a college team name
+                }
+            }
+            
+            // Safe to remove pro city name
             let pattern = "\\b\(city)\\s+"
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
                 result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
