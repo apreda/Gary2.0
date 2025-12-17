@@ -437,7 +437,7 @@ struct HomeView: View {
                         VStack(spacing: 14) {
                             HeroBenefitCard(title: "3-Stage Agentic Pipeline", text: "Every pick goes through three autonomous stages: (1) Hypothesis — form a sharp thesis on the game, (2) Investigation — pull 30+ metrics and test the theory, (3) The Judge — lock only when numbers converge. Only picks that survive all three stages make it to your screen.", badge: "HOW IT WORKS")
                             
-                            HeroBenefitCard(title: "Sport-Specific Constitutions", text: "Sharp betting heuristics tailored to each sport. NFL uses EPA & Success Rate. NBA tracks Pace & Efficiency. NCAAF analyzes SP+ & Havoc Rate. NCAAB leverages KenPom & NET Rankings. Gary thinks like a specialist for every league.", badge: "TAILORED ANALYSIS")
+                            HeroBenefitCard(title: "Sport-Specific Constitutions", text: "Gary doesn't dump stats—he requests them. For each game, he identifies which metrics actually matter for that matchup and pulls only the relevant data from 30+ available tokens per sport. NFL might need weather and EPA. NBA might need pace and rest. The constitution guides what to look for—the intelligence decides what to use.", badge: "TAILORED ANALYSIS")
                             
                             HeroBenefitCard(title: "Scout Report Builder", text: "Before the pipeline starts, Gary builds a comprehensive scout report: injuries by name, weather conditions, travel & rest factors, venue data, breaking news, bullpen usage, live odds movement, and lineup changes.", badge: "REAL-TIME INTEL")
                             
