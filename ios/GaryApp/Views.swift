@@ -437,7 +437,7 @@ struct HomeView: View {
                             
                             HeroBenefitCard(title: "Fan Brain", text: "The qualitative factors that pure stat models miss. Revenge Games (emotional edge from last loss), Trap Alerts (suspicious line movement), Letdown Spots (flat after emotional win), and Lookahead Spots (big game next week trap).", badge: "SOFT FACTORS")
                             
-                            HeroBenefitCard(title: "Convergence Scoring", text: "Gary's secret weapon. Measures alignment between statistical models, market odds, and qualitative analysis. When all signals converge, you get Gary's highest-conviction plays. Higher convergence = higher confidence = stronger picks.", badge: "GARY'S EDGE")
+                            HeroBenefitCard(title: "Confidence Score", text: "Every pick gets an unbiased confidence score from 0.50 to 1.00. Gary can't inflate his own numbers—we filter out picks below our threshold so only the strongest analysis makes it through. What you see is genuine conviction, not marketing.", badge: "HONEST RATINGS")
                         }
                     }
                     .padding(16)
