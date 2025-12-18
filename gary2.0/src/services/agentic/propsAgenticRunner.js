@@ -29,15 +29,45 @@ function getConstitution(sportLabel) {
  * Stage 1: Props Hypothesis
  * Form initial hypotheses about which props have value
  */
-async function runPropsHypothesisStage({ gameSummary, propCandidates, playerStats, sportLabel = 'NFL' }) {
+async function runPropsHypothesisStage({ gameSummary, propCandidates, playerStats, sportLabel = 'NFL', tokenData = {} }) {
   const constitution = getConstitution(sportLabel);
   
+  // Sport-specific instructions for using season stats
+  const statsGuidance = sportLabel === 'NHL' ? `
+## CRITICAL FOR NHL PROPS
+You have REAL player season stats available. For each player you MUST:
+1. Check their SOG/G (shots on goal per game) average
+2. Compare it to the prop line
+3. Only pick OVER if SOG/G is at least 0.5 above the line
+4. Only pick UNDER if SOG/G is at least 0.3 below the line
+5. AVOID props where the average is within ±0.2 of the line
+
+Example analysis:
+- Player A: SOG/G = 3.2, Line = 2.5 → OVER candidate (0.7 above line) ✓
+- Player B: SOG/G = 2.6, Line = 2.5 → AVOID (only 0.1 above, too close)
+- Player C: SOG/G = 2.1, Line = 2.5 → UNDER candidate (0.4 below line) ✓
+` : sportLabel === 'NBA' ? `
+## CRITICAL FOR NBA PROPS
+You have REAL player season stats available. For each player you MUST:
+1. Check their PPG (points per game), RPG (rebounds), APG (assists), 3PG (threes) averages
+2. Compare directly to the prop line
+3. For POINTS: Only pick OVER if PPG is at least 1.0 above the line
+4. For REBOUNDS/ASSISTS: Only pick OVER if avg is at least 0.5 above the line
+5. AVOID props where the average is within ±0.5 of the line (coin flip territory)
+
+Example analysis:
+- Player A: PPG = 28.5, Line = 26.5 → OVER candidate (+2.0 above line) ✓
+- Player B: PPG = 24.2, Line = 24.5 → AVOID (0.3 below, too close to line)
+- Player C: RPG = 8.5, Line = 7.5 → OVER candidate (+1.0 above line) ✓
+` : '';
+
   const systemPrompt = `
 You are Stage 1 of the Gary Props Pipeline: "The Scout"
 
 Your job is to identify the BEST player prop opportunities in this game.
 
 ${constitution}
+${statsGuidance}
 
 ## YOUR TASK
 1. Review the available prop candidates and player stats
@@ -53,8 +83,10 @@ ${constitution}
       "prop_type": "${sportLabel === 'NBA' ? 'points' : sportLabel === 'NHL' ? 'shots_on_goal' : 'pass_yds'}",
       "line": ${sportLabel === 'NBA' ? '24.5' : sportLabel === 'NHL' ? '2.5' : '245.5'},
       "lean": "over" or "under",
-      "hypothesis": "One sentence explaining why",
-      "confidence": 0.50-0.75
+      "hypothesis": "One sentence explaining why - MUST reference the player's season average",
+      "season_avg": ${sportLabel === 'NHL' ? '"3.2 SOG/G"' : sportLabel === 'NBA' ? '"28.5 PPG"' : '"N/A"'},
+      "edge_vs_line": ${sportLabel === 'NHL' || sportLabel === 'NBA' ? '"+2.0"' : '"N/A"'},
+      "confidence": 0.50-0.85
     }
   ],
   "requested_tokens": ["player_stats", "opponent_vs_position", "game_script"],
@@ -67,18 +99,34 @@ Guidelines:
 - Analyze ALL prop types available (${sportLabel === 'NBA' ? 'points, rebounds, assists, threes, blocks, steals' : sportLabel === 'NHL' ? 'shots_on_goal, goals, assists, points' : 'pass yards, rush yards, receiving yards, receptions, TDs'}) - pick whichever props have the BEST EDGE regardless of type
 - Consider game script heavily
 - Flag any injury concerns
+${(sportLabel === 'NHL' || sportLabel === 'NBA') ? '- ALWAYS cite the player season average in your hypothesis' : ''}
 `;
+
+  // Enhanced prop candidates with season stats for NHL and NBA
+  const enhancedCandidates = propCandidates.slice(0, 12).map(p => {
+    const base = {
+      player: p.player,
+      team: p.team,
+      props: p.props
+    };
+    
+    // Include season stats if available (from tokenData for NHL or NBA)
+    if ((sportLabel === 'NHL' || sportLabel === 'NBA') && tokenData?.prop_lines?.candidates) {
+      const match = tokenData.prop_lines.candidates.find(c => c.player === p.player);
+      if (match?.seasonStats) {
+        base.seasonStats = match.seasonStats;
+      }
+    }
+    
+    return base;
+  });
 
   const userContent = JSON.stringify({
     matchup: gameSummary.matchup,
     tipoff: gameSummary.tipoff,
     odds: gameSummary.odds,
-    propCandidates: propCandidates.slice(0, 12).map(p => ({
-      player: p.player,
-      team: p.team,
-      props: p.props // Send all props so Gary can analyze everything
-    })),
-    playerStatsPreview: playerStats.substring(0, 2500)
+    propCandidates: enhancedCandidates,
+    playerStatsPreview: playerStats.substring(0, 3000)
   });
 
   const messages = [
@@ -106,7 +154,7 @@ Guidelines:
 
 /**
  * Stage 2: Props Investigator
- * Validate hypotheses with detailed data
+ * Validate hypotheses with detailed data including recent form and consistency
  */
 async function runPropsInvestigatorStage({ gameSummary, hypothesis, tokenData, propCandidates }) {
   const systemPrompt = `
@@ -116,35 +164,51 @@ You receive the Scout's hypotheses and must validate them with data.
 
 ## YOUR TASK
 1. Evaluate each prop hypothesis against the provided stats
-2. Produce evidence bullets that support or contradict each lean
-3. Adjust confidence based on evidence
-4. Flag any props that should be dropped due to weak evidence
+2. Check recent form (last 5-10 games) - is the player hot, cold, or steady?
+3. Check consistency - high variance players are riskier
+4. Check home/away splits if relevant to the matchup
+5. Produce evidence bullets that support or contradict each lean
+6. Calculate the EDGE: (season avg - line) or (recent avg - line)
+7. Flag any props that should be dropped due to weak evidence
+
+## ENHANCED VALIDATION CRITERIA
+- EDGE CHECK: Is the player's average at least +0.5 (NBA pts) or +0.3 (NHL SOG) above the line for OVER?
+- FORM CHECK: Is the player trending up or down in the last 5 games?
+- CONSISTENCY CHECK: High variance (consistency < 50%) = add risk factor
+- SPLITS CHECK: Does home/away split favor or hurt this pick?
 
 ## RESPONSE FORMAT (STRICT JSON)
 {
   "validated_props": [
     {
       "player": "Player Name",
-      "prop_type": "pass_yds",
-      "line": 245.5,
+      "prop_type": "points",
+      "line": 24.5,
       "lean": "over" or "under",
       "confidence": 0.55-0.85,
+      "edge": "+3.7",
+      "form": "hot" or "cold" or "steady",
+      "consistency": "HIGH" or "MED" or "LOW",
       "evidence": [
-        {"stat": "Season avg", "value": "267 yds/game", "impact": "supports"},
-        {"stat": "vs this D", "value": "Opponent 28th in pass D", "impact": "supports"}
+        {"stat": "Season avg", "value": "28.2 PPG", "impact": "supports"},
+        {"stat": "L5 avg", "value": "29.4 PPG", "impact": "supports"},
+        {"stat": "Recent games", "value": "4/5 over line", "impact": "supports"},
+        {"stat": "Home split", "value": "30.1 PPG at home", "impact": "supports"}
       ]
     }
   ],
   "dropped_props": [
-    {"player": "Name", "reason": "Why dropped"}
+    {"player": "Name", "reason": "Why dropped - e.g., edge too thin (+0.3), inconsistent (LOW), cold streak"}
   ],
   "gaps": ["Any missing data noted"]
 }
 
 Guidelines:
 - Only keep props with strong evidence (2+ supporting factors)
-- Boost confidence if multiple data points align
-- Drop props with conflicting evidence
+- REQUIRE edge of at least +0.5 (NBA) or +0.3 (NHL) for OVER picks
+- Boost confidence if recent form AND season avg both support the pick
+- PENALIZE confidence for LOW consistency players
+- Drop props where player is in a clear cold streak (< season avg in L5)
 - Note any injury/weather concerns
 `;
 
@@ -182,11 +246,29 @@ Guidelines:
   };
 }
 
+// Sports that use the 2-per-game rule (quality over quantity)
+const TWO_PER_GAME_SPORTS = ['NBA', 'NHL', 'EPL'];
+
 /**
  * Stage 3: Props Judge
  * Render final prop picks with full rationale
  */
-async function runPropsJudgeStage({ gameSummary, investigation, playerProps }) {
+async function runPropsJudgeStage({ gameSummary, investigation, playerProps, sportLabel = 'NFL' }) {
+  // Sport-specific pick counts: NBA/NHL/EPL = exactly 2, NFL = 3-5
+  const usesTwoPerGame = TWO_PER_GAME_SPORTS.includes(sportLabel);
+  const pickCountText = usesTwoPerGame ? 'exactly 2' : '3-5';
+  const maxPicks = usesTwoPerGame ? 2 : 5;
+  const qualityEmphasis = usesTwoPerGame 
+    ? `These are the 2 picks you'd put your reputation on - your MOST CONFIDENT selections from this game.`
+    : '';
+
+  // Sport-specific stat references
+  const statExamples = sportLabel === 'NBA' 
+    ? { avg: '28.2 PPG', line: '24.5 pts', edge: '+3.7', stat: 'pts' }
+    : sportLabel === 'NHL'
+    ? { avg: '3.2 SOG/G', line: '2.5 shots', edge: '+0.7', stat: 'sog' }
+    : { avg: '267 yds/g', line: '245.5 yds', edge: '+21.5', stat: 'yds' };
+
   const systemPrompt = `
 You are Stage 3 of the Gary Props Pipeline: "The Judge"
 
@@ -194,9 +276,23 @@ You render the final prop picks with complete rationale.
 
 ## YOUR TASK
 1. Review the validated props from the Analyst
-2. Select the TOP 3-5 best prop bets
+2. Select the TOP ${pickCountText} best prop bets${usesTwoPerGame ? ' - NO MORE, NO LESS' : ''}
 3. Attach the actual odds from the prop lines
-4. Write clear rationale for each pick
+4. Write clear rationale for each pick using the ENHANCED format below
+
+${qualityEmphasis}
+
+## ENHANCED RATIONALE FORMAT
+
+Your rationale MUST follow this structure for each pick:
+
+THE EDGE: Line ${statExamples.line} | Season Avg: ${statExamples.avg} (${statExamples.edge} cushion) | Recent Form: L5 avg X.X (Y/5 games over line)
+
+WHY IT HITS: [2-3 sentences explaining the convergence of factors - matchup, recent form, consistency, usage]
+
+THE RISK: [One realistic failure scenario]
+
+CONFIDENCE: XX% | Edge: ${statExamples.edge} | Form: Hot/Cold/Steady
 
 ## RESPONSE FORMAT (STRICT JSON)
 {
@@ -204,22 +300,25 @@ You render the final prop picks with complete rationale.
     {
       "player": "Player Name",
       "team": "Team Name",
-      "prop": "pass_yds 245.5",
-      "line": 245.5,
+      "prop": "${statExamples.stat} ${statExamples.line.split(' ')[0]}",
+      "line": ${parseFloat(statExamples.line)},
       "bet": "over",
       "odds": -110,
       "confidence": 0.65-0.85,
-      "rationale": "HYPOTHESIS: Expected to exceed line based on matchup. EVIDENCE: Averages 267 yds/game, opponent 28th in pass D. CONVERGENCE (0.72): Strong alignment between volume and matchup. IF WRONG: Game script goes run-heavy if leading big."
+      "rationale": "THE EDGE: Line ${statExamples.line} | Season Avg: ${statExamples.avg} (${statExamples.edge} cushion) | Recent Form: L5 avg X.X (4/5 over line)\\n\\nWHY IT HITS: [Your analysis of why this hits]\\n\\nTHE RISK: [One scenario where this misses]\\n\\nCONFIDENCE: 72% | Edge: ${statExamples.edge} | Form: Hot"
     }
   ]
 }
 
-Guidelines:
-- Maximum 5 picks per game
+## CRITICAL GUIDELINES
+- ${usesTwoPerGame ? `EXACTLY ${maxPicks} picks per game - quality over quantity` : `Maximum ${maxPicks} picks per game`}
 - Confidence reflects estimated win probability
 - Only pick props with odds better than -140
-- Rationale must include HYPOTHESIS, EVIDENCE, CONVERGENCE, IF WRONG sections
-- Calculate EV: if confidence > implied probability from odds, it's +EV
+- ALWAYS calculate and show the edge (season avg vs line)
+- ALWAYS mention recent form trend (hot/cold/steady) based on last 5 games
+- If a player has LOW consistency (high variance), note it as a risk factor
+- Consider home/away splits if the data shows significant differences${usesTwoPerGame ? `
+- Pick ONLY your 2 most reliable props - the ones you are MOST confident will hit` : ''}
 `;
 
   // Build a lookup map for odds
@@ -303,7 +402,8 @@ export async function runAgenticPropsPipeline({
     gameSummary: context.gameSummary,
     propCandidates: context.propCandidates,
     playerStats: context.playerStats,
-    sportLabel
+    sportLabel,
+    tokenData: context.tokenData // Pass tokenData for NHL season stats
   });
   console.log(`[Agentic Props][${sportLabel}] Found ${stage1.top_opportunities.length} opportunities`);
 
@@ -330,15 +430,21 @@ export async function runAgenticPropsPipeline({
   const rawPicks = await runPropsJudgeStage({
     gameSummary: context.gameSummary,
     investigation: stage2,
-    playerProps: context.playerProps
+    playerProps: context.playerProps,
+    sportLabel // Pass sport label for sport-specific pick counts
   });
 
-  // Enhance picks with metadata (confidence is used only for filtering, not EV)
+  // Build matchup string (away @ home)
+  const matchup = `${game.away_team} @ ${game.home_team}`;
+  
+  // Enhance picks with metadata
   const enhancedPicks = rawPicks.slice(0, propsPerGame).map(pick => {
     return {
       ...pick,
       sport: sportLabel,
       time: formatGameTime(game.commence_time),
+      matchup: matchup,  // Add matchup for grouping in UI
+      commence_time: game.commence_time,  // ISO format for sorting
       // Ensure all required fields
       player: pick.player || 'Unknown',
       team: pick.team || sportLabel,
@@ -350,14 +456,28 @@ export async function runAgenticPropsPipeline({
     };
   });
 
-  // Filter by confidence threshold (70% minimum for quality picks)
-  const confidentPicks = enhancedPicks.filter(p => p.confidence >= 0.70);
+  // Sport-specific filtering:
+  // - NBA/NHL/EPL: No confidence filter (2-per-game rule handles quality)
+  // - NFL: Apply 70% confidence threshold
+  const usesTwoPerGame = TWO_PER_GAME_SPORTS.includes(sportLabel);
+  let finalPicks;
+  
+  if (usesTwoPerGame) {
+    // For NBA/NHL/EPL: Take exactly the picks returned (no confidence filter)
+    // The Judge was instructed to return exactly 2 high-quality picks
+    finalPicks = enhancedPicks;
+    console.log(`[Agentic Props][${sportLabel}] Using 2-per-game rule: ${finalPicks.length} picks (no confidence filter)`);
+  } else {
+    // For NFL: Apply confidence threshold (70% minimum)
+    finalPicks = enhancedPicks.filter(p => p.confidence >= 0.70);
+    console.log(`[Agentic Props][${sportLabel}] Applied confidence filter: ${enhancedPicks.length} -> ${finalPicks.length} picks`);
+  }
 
   const elapsedMs = Date.now() - start;
   console.log(`[Agentic Props][${sportLabel}] Pipeline complete in ${elapsedMs}ms`);
 
   return {
-    picks: confidentPicks,
+    picks: finalPicks,
     stage1,
     stage2,
     elapsedMs
