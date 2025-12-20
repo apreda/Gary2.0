@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Fix team names for specific NBA players in prop_picks
+ * Fix team names for specific NBA players in prop_picks for Dec 19, 2025
  * - Julius Randle -> Minnesota Timberwolves
  * - Karl-Anthony Towns -> New York Knicks
  * - Harrison Barnes -> San Antonio Spurs
+ * - De'Aaron Fox -> San Antonio Spurs
  */
 import dotenv from 'dotenv';
 import path from 'path';
@@ -22,18 +23,22 @@ const teamCorrections = {
   'Julius Randle': 'Minnesota Timberwolves',
   'Karl-Anthony Towns': 'New York Knicks',
   'Karl Anthony Towns': 'New York Knicks',  // Handle variation without hyphen
-  'Harrison Barnes': 'San Antonio Spurs'
+  'Harrison Barnes': 'San Antonio Spurs',
+  "De'Aaron Fox": 'San Antonio Spurs',
+  'DeAaron Fox': 'San Antonio Spurs',  // Handle variation without apostrophe
+  'Deaaron Fox': 'San Antonio Spurs'   // Handle lowercase variation
 };
 
 async function fixNbaTeamNames() {
-  const today = new Date().toISOString().slice(0, 10);
-  console.log(`🔧 Fixing NBA player team names in prop_picks for ${today}...`);
+  // Target December 19, 2025 specifically
+  const targetDate = '2025-12-19';
+  console.log(`🔧 Fixing NBA player team names in prop_picks for ${targetDate}...`);
   
-  // 1. Fetch current prop_picks for today
+  // 1. Fetch current prop_picks for the target date
   const { data } = await axios({
     method: 'GET',
     url: `${supabaseUrl}/rest/v1/prop_picks`,
-    params: { date: `eq.${today}` },
+    params: { date: `eq.${targetDate}` },
     headers: {
       'apikey': supabaseKey,
       'Authorization': `Bearer ${supabaseKey}`,
@@ -58,17 +63,26 @@ async function fixNbaTeamNames() {
     const updatedPicks = picks.map(pick => {
       // Check if this player needs a team correction
       const playerName = pick.player;
+      if (!playerName) return pick;
+      
+      // Normalize player name for comparison (lowercase, remove apostrophes/special chars)
+      const normalizedPlayerName = playerName.toLowerCase().replace(/['-]/g, '');
       
       // Check against all variations of player names
       for (const [name, correctTeam] of Object.entries(teamCorrections)) {
-        if (playerName && playerName.toLowerCase().includes(name.toLowerCase().split(' ')[1]) &&
-            playerName.toLowerCase().includes(name.toLowerCase().split(' ')[0])) {
+        const normalizedTargetName = name.toLowerCase().replace(/['-]/g, '');
+        
+        // Check for exact match or close match
+        if (normalizedPlayerName === normalizedTargetName ||
+            normalizedPlayerName.includes(normalizedTargetName) ||
+            normalizedTargetName.includes(normalizedPlayerName)) {
           if (pick.team !== correctTeam) {
             console.log(`  📝 ${playerName}: "${pick.team}" -> "${correctTeam}"`);
             pick.team = correctTeam;
             updated = true;
             totalUpdates++;
           }
+          break; // Found a match, stop checking
         }
       }
       
