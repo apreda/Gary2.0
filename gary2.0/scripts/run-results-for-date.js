@@ -22,6 +22,7 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
 const ODDS_API_KEY = process.env.VITE_ODDS_API_KEY || process.env.ODDS_API_KEY;
+const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY || process.env.VITE_BALL_DONT_LIE_API_KEY || process.env.BALL_DONT_LIE_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Missing Supabase credentials. Please check your .env file.');
@@ -31,6 +32,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 console.log(`Using ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON'} key`);
 console.log(`Perplexity API: ${PERPLEXITY_API_KEY ? 'Available' : 'Not configured'}`);
 console.log(`Odds API: ${ODDS_API_KEY ? 'Available' : 'Not configured'}`);
+console.log(`BallDontLie API: ${BDL_API_KEY ? 'Available' : 'Not configured'}`);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
@@ -53,6 +55,146 @@ const getTargetDate = () => {
 
 // Cache for API scores to avoid repeated calls
 const scoresCache = new Map();
+const bdlScoresCache = new Map();
+
+/**
+ * Fetch game scores from BallDontLie API for any sport
+ * Uses appropriate BDL endpoint based on league
+ */
+async function fetchScoresFromBDL(league, dateStr, checkAdjacentDays = true) {
+  const leagueUpper = league.toUpperCase();
+  const cacheKey = `${leagueUpper}-BDL-${dateStr}`;
+  
+  if (bdlScoresCache.has(cacheKey)) {
+    return bdlScoresCache.get(cacheKey);
+  }
+  
+  if (!BDL_API_KEY) {
+    console.log('  ⚠️ BDL API key not configured');
+    return null;
+  }
+  
+  // Map league to BDL endpoint
+  const endpointMap = {
+    'NBA': 'nba/v1/games',
+    'NHL': 'nhl/v1/games',
+    'NCAAB': 'ncaab/v1/games',
+    'NCAAF': 'ncaaf/v1/games',
+    'NFL': 'nfl/v1/games',
+    'MLB': 'mlb/v1/games'
+  };
+  
+  const endpoint = endpointMap[leagueUpper];
+  if (!endpoint) {
+    console.log(`  ⚠️ BDL endpoint not configured for ${league}`);
+    return null;
+  }
+  
+  try {
+    // Check target date and adjacent days (±1) to handle timezone issues
+    const datesToCheck = [dateStr];
+    if (checkAdjacentDays) {
+      const targetDate = new Date(dateStr);
+      const prevDate = new Date(targetDate);
+      prevDate.setDate(prevDate.getDate() - 1);
+      const nextDate = new Date(targetDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      datesToCheck.push(
+        prevDate.toISOString().split('T')[0],
+        nextDate.toISOString().split('T')[0]
+      );
+    }
+    
+    console.log(`  📡 Fetching ${league} scores from BallDontLie for ${datesToCheck.join(', ')}...`);
+    
+    // Fetch games with pagination for all dates
+    const allGames = [];
+    for (const date of datesToCheck) {
+      let cursor = null;
+      let page = 0;
+      const maxPages = 10;
+      
+      do {
+        page++;
+        let url = `https://api.balldontlie.io/${endpoint}?dates[]=${date}&per_page=100`;
+        if (cursor) url += `&cursor=${cursor}`;
+        
+        const response = await fetch(url, {
+          headers: { 'Authorization': BDL_API_KEY }
+        });
+        
+        if (!response.ok) {
+          if (response.status !== 404) {
+            console.log(`  ⚠️ BDL ${league} games error: ${response.status}`);
+          }
+          break;
+        }
+        
+        const data = await response.json();
+        
+        if (data.data && data.data.length > 0) {
+          // Filter for completed games
+          // BDL uses home_team_score/visitor_team_score for NBA, NFL, and some other sports
+          // Some sports may use home_score/away_score as fallback
+          const completed = data.data.filter(g => {
+            const status = (g.status || '').toLowerCase();
+            const hasTeamScores = (g.home_team_score !== null && g.home_team_score !== undefined && 
+                                  g.visitor_team_score !== null && g.visitor_team_score !== undefined);
+            const hasOtherScores = (g.home_score !== null && g.home_score !== undefined && 
+                                   g.away_score !== null && g.away_score !== undefined);
+            
+            return status === 'final' || status === 'post' || status === 'f' || 
+                   status.includes('final') || hasTeamScores || hasOtherScores;
+          });
+          allGames.push(...completed);
+        }
+        
+        cursor = data.meta?.next_cursor;
+        if (cursor) await new Promise(r => setTimeout(r, 100));
+        
+      } while (cursor && page < maxPages);
+    }
+    
+    if (allGames.length === 0) {
+      console.log(`  ℹ️ No completed ${league} games found`);
+      return null;
+    }
+    
+    // Transform to standard format
+    // BDL uses home_team_score/visitor_team_score for NBA, NFL, and some other sports
+    // Some sports may use home_score/away_score as fallback
+    const scores = allGames.map(game => {
+      // Try home_team_score/visitor_team_score first (NBA, NFL standard)
+      // Fall back to home_score/away_score if not available
+      const homeScore = (game.home_team_score !== undefined && game.home_team_score !== null) 
+                       ? game.home_team_score 
+                       : ((game.home_score !== undefined && game.home_score !== null) 
+                          ? game.home_score : 0);
+      const awayScore = (game.visitor_team_score !== undefined && game.visitor_team_score !== null) 
+                       ? game.visitor_team_score 
+                       : ((game.away_score !== undefined && game.away_score !== null) 
+                          ? game.away_score : 0);
+      
+      return {
+        home_team: game.home_team?.full_name || game.home_team?.name || '',
+        away_team: game.visitor_team?.full_name || game.visitor_team?.name || '',
+        homeScore: homeScore,
+        awayScore: awayScore,
+        game_id: game.id,
+        game_date: game.date
+      };
+    });
+    
+    console.log(`  ✅ Found ${scores.length} completed ${league} games from BDL`);
+    bdlScoresCache.set(cacheKey, scores);
+    return scores;
+    
+  } catch (error) {
+    console.log(`  ⚠️ BDL ${league} fetch error: ${error.message}`);
+    return null;
+  }
+}
 
 /**
  * Fetch scores from The Odds API for a given sport and date
@@ -141,50 +283,149 @@ async function fetchScoresFromOddsAPI(league, dateStr) {
 }
 
 /**
- * Normalize team name for matching
+ * Normalize team name for matching - improved to handle more cases
  */
 function normalizeTeamName(name) {
-  return (name || '')
+  if (!name) return '';
+  
+  return name
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-    .replace(/state$/, 'st')
-    .replace(/university$/, '');
+    .replace(/[^a-z0-9\s]/g, '') // Keep spaces for multi-word matching
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\bstate\b/g, 'st')
+    .replace(/\buniversity\b/g, '')
+    .replace(/\bcollege\b/g, '')
+    .replace(/\buniv\b/g, '');
+}
+
+/**
+ * Extract unique identifiers from team name (last word is usually mascot)
+ */
+function getTeamIdentifiers(name) {
+  if (!name) return { words: [], lastWord: '', allWords: [] };
+  
+  const words = name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  return {
+    words: words,
+    lastWord: words[words.length - 1] || '', // Mascot (e.g., "Lakers", "Clippers")
+    allWords: words
+  };
+}
+
+/**
+ * Find matching game from scores array with improved matching logic
+ */
+function findMatchingGame(scores, homeTeam, awayTeam, logMatch = false) {
+  const homeIds = getTeamIdentifiers(homeTeam);
+  const awayIds = getTeamIdentifiers(awayTeam);
+  const normalizedHome = normalizeTeamName(homeTeam);
+  const normalizedAway = normalizeTeamName(awayTeam);
+  
+  const matches = scores.map(game => {
+    const gameHomeIds = getTeamIdentifiers(game.home_team);
+    const gameAwayIds = getTeamIdentifiers(game.away_team);
+    const gameHomeNorm = normalizeTeamName(game.home_team);
+    const gameAwayNorm = normalizeTeamName(game.away_team);
+    
+    // Strategy 1: Exact normalized match (best)
+    const exactHomeMatch = gameHomeNorm === normalizedHome;
+    const exactAwayMatch = gameAwayNorm === normalizedAway;
+    
+    // Strategy 2: Mascot match (reliable for teams with same city)
+    const mascotHomeMatch = homeIds.lastWord && gameHomeIds.lastWord === homeIds.lastWord;
+    const mascotAwayMatch = awayIds.lastWord && gameAwayIds.lastWord === awayIds.lastWord;
+    
+    // Strategy 3: Contains match (fallback)
+    const containsHomeMatch = gameHomeNorm.includes(normalizedHome) || normalizedHome.includes(gameHomeNorm);
+    const containsAwayMatch = gameAwayNorm.includes(normalizedAway) || normalizedAway.includes(gameAwayNorm);
+    
+    // Strategy 4: Word overlap (for partial matches)
+    const homeWordOverlap = homeIds.words.some(w => w.length > 3 && gameHomeIds.words.includes(w));
+    const awayWordOverlap = awayIds.words.some(w => w.length > 3 && gameAwayIds.words.includes(w));
+    
+    // Calculate match score
+    let homeScore = 0;
+    let awayScore = 0;
+    
+    if (exactHomeMatch) homeScore += 10;
+    else if (mascotHomeMatch) homeScore += 8;
+    else if (containsHomeMatch) homeScore += 5;
+    else if (homeWordOverlap) homeScore += 3;
+    
+    if (exactAwayMatch) awayScore += 10;
+    else if (mascotAwayMatch) awayScore += 8;
+    else if (containsAwayMatch) awayScore += 5;
+    else if (awayWordOverlap) awayScore += 3;
+    
+    return {
+      game,
+      homeScore,
+      awayScore,
+      totalScore: homeScore + awayScore,
+      homeMatch: homeScore > 0,
+      awayMatch: awayScore > 0,
+      bothMatch: homeScore > 0 && awayScore > 0
+    };
+  });
+  
+  // Find best match (both teams must match, prefer higher scores)
+  const bestMatch = matches
+    .filter(m => m.bothMatch)
+    .sort((a, b) => b.totalScore - a.totalScore)[0];
+  
+  if (bestMatch && logMatch) {
+    console.log(`     🎯 Matched: "${bestMatch.game.away_team}" @ "${bestMatch.game.home_team}"`);
+    console.log(`        (Looking for: "${awayTeam}" @ "${homeTeam}")`);
+    console.log(`        Match score: ${bestMatch.totalScore} (Home: ${bestMatch.homeScore}, Away: ${bestMatch.awayScore})`);
+  }
+  
+  return bestMatch ? bestMatch.game : null;
 }
 
 /**
  * Find score for a specific game
+ * Priority: BDL (most reliable) -> Odds API -> Perplexity (last resort)
  */
 async function fetchGameScore(league, homeTeam, awayTeam, dateStr) {
-  const scores = await fetchScoresFromOddsAPI(league, dateStr);
+  const leagueUpper = league.toUpperCase();
   
-  if (!scores || scores.length === 0) {
-    return null;
+  // Step 1: Try BallDontLie first (most reliable source)
+  const bdlScores = await fetchScoresFromBDL(leagueUpper, dateStr, true);
+  
+  if (bdlScores && bdlScores.length > 0) {
+    const matchedGame = findMatchingGame(bdlScores, homeTeam, awayTeam, true);
+    
+    if (matchedGame) {
+      console.log(`     ✅ Score from BDL: ${matchedGame.awayScore}-${matchedGame.homeScore}`);
+      return {
+        homeScore: matchedGame.homeScore,
+        awayScore: matchedGame.awayScore,
+        final_score: `${matchedGame.awayScore}-${matchedGame.homeScore}`,
+        source: 'BallDontLie'
+      };
+    } else {
+      console.log(`     ⚠️ BDL found ${bdlScores.length} games but none matched "${awayTeam}" @ "${homeTeam}"`);
+    }
   }
   
-  const normalizedHome = normalizeTeamName(homeTeam);
-  const normalizedAway = normalizeTeamName(awayTeam);
+  // Step 2: Fallback to Odds API
+  const scores = await fetchScoresFromOddsAPI(league, dateStr);
   
-  // Find matching game
-  const matchedGame = scores.find(game => {
-    const gameHome = normalizeTeamName(game.home_team);
-    const gameAway = normalizeTeamName(game.away_team);
+  if (scores && scores.length > 0) {
+    const matchedGame = findMatchingGame(scores, homeTeam, awayTeam, true);
     
-    // Try various matching strategies
-    const homeMatch = gameHome.includes(normalizedHome) || normalizedHome.includes(gameHome) ||
-                     homeTeam.toLowerCase().split(' ').some(word => gameHome.includes(word.toLowerCase()));
-    const awayMatch = gameAway.includes(normalizedAway) || normalizedAway.includes(gameAway) ||
-                     awayTeam.toLowerCase().split(' ').some(word => gameAway.includes(word.toLowerCase()));
-    
-    return homeMatch && awayMatch;
-  });
-  
-  if (matchedGame) {
-    return {
-      homeScore: matchedGame.homeScore,
-      awayScore: matchedGame.awayScore,
-      final_score: `${matchedGame.awayScore}-${matchedGame.homeScore}`,
-      source: 'OddsAPI'
-    };
+    if (matchedGame) {
+      console.log(`     ✅ Score from Odds API: ${matchedGame.awayScore}-${matchedGame.homeScore}`);
+      return {
+        homeScore: matchedGame.homeScore,
+        awayScore: matchedGame.awayScore,
+        final_score: `${matchedGame.awayScore}-${matchedGame.homeScore}`,
+        source: 'OddsAPI'
+      };
+    } else {
+      console.log(`     ⚠️ Odds API found ${scores.length} games but none matched "${awayTeam}" @ "${homeTeam}"`);
+    }
   }
   
   return null;
@@ -258,11 +499,21 @@ function gradeSpreadPick(pickText, homeTeam, awayTeam, homeScore, awayScore) {
   const homeLower = homeTeam.toLowerCase();
   const awayLower = awayTeam.toLowerCase();
   
-  // Determine which team was picked
-  const isHomePick = pickLower.includes(homeLower.split(' ')[0]) || 
-                    pickLower.includes(homeLower.split(' ').pop());
+  // Determine which team was picked - use LAST word (mascot/unique identifier) to avoid conflicts
+  // e.g., "Los Angeles Lakers" vs "Los Angeles Clippers" - check for "lakers" vs "clippers"
+  const homeWords = homeLower.split(' ').filter(w => w.length > 2); // Filter out short words like "la", "ny"
+  const awayWords = awayLower.split(' ').filter(w => w.length > 2);
+  const homeUnique = homeWords[homeWords.length - 1]; // Last word is usually the mascot
+  const awayUnique = awayWords[awayWords.length - 1];
   
-  if (isHomePick) {
+  // Check for unique identifier first (most reliable)
+  const isHomePick = pickLower.includes(homeUnique) && !pickLower.includes(awayUnique);
+  const isAwayPick = pickLower.includes(awayUnique) && !pickLower.includes(homeUnique);
+  
+  // Fallback: if both match or neither match, check full team name
+  const finalIsHomePick = isHomePick || (!isAwayPick && pickLower.includes(homeLower));
+  
+  if (finalIsHomePick) {
     const homeWithSpread = homeScore + spread;
     if (homeWithSpread > awayScore) return 'won';
     if (homeWithSpread < awayScore) return 'lost';
@@ -281,13 +532,24 @@ function gradeSpreadPick(pickText, homeTeam, awayTeam, homeScore, awayScore) {
 function gradeMoneylinePick(pickText, homeTeam, awayTeam, homeScore, awayScore) {
   const pickLower = pickText.toLowerCase();
   const homeLower = homeTeam.toLowerCase();
+  const awayLower = awayTeam.toLowerCase();
   
-  const isHomePick = pickLower.includes(homeLower.split(' ')[0]) || 
-                    pickLower.includes(homeLower.split(' ').pop());
+  // Use LAST word (mascot/unique identifier) to avoid conflicts
+  const homeWords = homeLower.split(' ').filter(w => w.length > 2);
+  const awayWords = awayLower.split(' ').filter(w => w.length > 2);
+  const homeUnique = homeWords[homeWords.length - 1];
+  const awayUnique = awayWords[awayWords.length - 1];
+  
+  // Check for unique identifier first
+  const isHomePick = pickLower.includes(homeUnique) && !pickLower.includes(awayUnique);
+  const isAwayPick = pickLower.includes(awayUnique) && !pickLower.includes(homeUnique);
+  
+  // Fallback: if both match or neither match, check full team name
+  const finalIsHomePick = isHomePick || (!isAwayPick && pickLower.includes(homeLower));
   
   const homeWon = homeScore > awayScore;
   
-  if (isHomePick) {
+  if (finalIsHomePick) {
     return homeWon ? 'won' : 'lost';
   } else {
     return !homeWon ? 'won' : 'lost';
@@ -376,8 +638,17 @@ async function processDailyPicks(dateStr) {
         continue;
       }
       
-      const { homeScore, awayScore, final_score } = scoreData;
-      console.log(`     Score: ${pick.awayTeam} ${awayScore} - ${pick.homeTeam} ${homeScore}`);
+      const { homeScore, awayScore, final_score, source } = scoreData;
+      
+      // Validate scores are valid numbers
+      if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || 
+          isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
+        console.log(`  ❌ Invalid scores: ${awayScore}-${homeScore} (from ${source || 'unknown'})`);
+        results.errors++;
+        continue;
+      }
+      
+      console.log(`     Score: ${pick.awayTeam} ${awayScore} - ${pick.homeTeam} ${homeScore} (${source || 'unknown'})`);
       
       // Grade the pick
       let result;
@@ -473,6 +744,11 @@ async function processWeeklyNFLPicks(dateStr) {
   }
   
   const picks = typeof nflRow.picks === 'string' ? JSON.parse(nflRow.picks) : nflRow.picks;
+  if (!picks || !Array.isArray(picks) || picks.length === 0) {
+    console.log(`  ❌ No valid NFL picks found for week starting ${weekStart}`);
+    return { processed: 0, won: 0, lost: 0, push: 0, errors: 0 };
+  }
+  
   console.log(`  Found ${picks.length} NFL picks for Week ${nflRow.week_number}`);
   
   // Check existing results in nfl_results table
@@ -517,8 +793,17 @@ async function processWeeklyNFLPicks(dateStr) {
       continue;
     }
     
-    const { homeScore, awayScore, final_score } = scoreData;
-    console.log(`     Score: ${pick.awayTeam} ${awayScore} - ${pick.homeTeam} ${homeScore}`);
+    const { homeScore, awayScore, final_score, source } = scoreData;
+    
+    // Validate scores are valid numbers
+    if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || 
+        isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
+      console.log(`  ❌ Invalid scores: ${awayScore}-${homeScore} (from ${source || 'unknown'})`);
+      results.errors++;
+      continue;
+    }
+    
+    console.log(`     Score: ${pick.awayTeam} ${awayScore} - ${pick.homeTeam} ${homeScore} (${source || 'unknown'})`);
     
     // Grade the pick
     let result;

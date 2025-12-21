@@ -353,9 +353,32 @@ export async function buildNhlAgenticContext(game, options = {}) {
     }
   }
 
-  // Format injuries
+  // Long-term injuries that should NOT count as edges or contradictions
+  // (Same logic as NBA - these are already priced in, not actionable)
+  const LONG_TERM_INJURY_KEYWORDS = [
+    'out for season', 'season-ending', 'out indefinitely', 'out all year',
+    'ruled out for 2025', 'not expected to return', 'out for the year'
+  ];
+
+  /**
+   * Check if an injury should be ignored (long-term, not an edge)
+   */
+  const isLongTermInjury = (injuryDescription) => {
+    if (!injuryDescription) return false;
+    const lower = injuryDescription.toLowerCase();
+    return LONG_TERM_INJURY_KEYWORDS.some(kw => lower.includes(kw));
+  };
+
+  // Format injuries - filter out Available status and long-term injuries
+  // (Same approach as NBA: only show actionable injuries that affect today's game)
   const formattedInjuries = (injuries || [])
-    .filter(inj => inj?.status && inj.status !== 'Available')
+    .filter(inj => {
+      // Exclude Available players
+      if (!inj?.status || inj.status === 'Available') return false;
+      // Exclude long-term injuries (season-ending, etc.) - these are already priced in
+      if (isLongTermInjury(inj.description)) return false;
+      return true;
+    })
     .map(inj => ({
       player: `${inj?.player?.first_name || ''} ${inj?.player?.last_name || ''}`.trim(),
       position: inj?.player?.position || 'Unknown',

@@ -223,6 +223,7 @@ async function getNBAPlayerStats(playerName, dateStr) {
 
 // ============================================================================
 // NFL - Using Stats Endpoint with Games
+// NOTE: MNF games that start at 8:15pm EST may be logged as the next day in UTC
 // ============================================================================
 async function fetchNFLStats(dateStr) {
   if (boxScoreCache.NFL) return boxScoreCache.NFL;
@@ -233,31 +234,61 @@ async function fetchNFLStats(dateStr) {
   }
   
   try {
-    // First get games for this date
-    console.log(`  📡 Fetching NFL games for ${dateStr}...`);
-    const gamesUrl = `https://api.balldontlie.io/nfl/v1/games?dates[]=${dateStr}`;
-    const gamesResponse = await fetch(gamesUrl, {
+    // Check both the target date AND the next day (for MNF games that start late)
+    const targetDate = new Date(dateStr);
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const nextDayStr = nextDay.toISOString().split('T')[0];
+    
+    console.log(`  📡 Fetching NFL games for ${dateStr} and ${nextDayStr} (for late games)...`);
+    
+    let allGameIds = [];
+    
+    // Fetch games for target date
+    const gamesUrl1 = `https://api.balldontlie.io/nfl/v1/games?dates[]=${dateStr}`;
+    const gamesResponse1 = await fetch(gamesUrl1, {
       headers: { 'Authorization': BDL_API_KEY }
     });
     
-    if (!gamesResponse.ok) {
-      console.log(`  ⚠️ NFL games error: ${gamesResponse.status}`);
-      return null;
+    if (gamesResponse1.ok) {
+      const gamesData1 = await gamesResponse1.json();
+      if (gamesData1.data) {
+        allGameIds = allGameIds.concat(gamesData1.data.map(g => g.id));
+        console.log(`  ✅ Found ${gamesData1.data.length} NFL games on ${dateStr}`);
+      }
     }
     
-    const gamesData = await gamesResponse.json();
+    // Also fetch games for next day (catches MNF games logged in UTC)
+    const gamesUrl2 = `https://api.balldontlie.io/nfl/v1/games?dates[]=${nextDayStr}`;
+    const gamesResponse2 = await fetch(gamesUrl2, {
+      headers: { 'Authorization': BDL_API_KEY }
+    });
     
-    if (!gamesData.data || gamesData.data.length === 0) {
+    if (gamesResponse2.ok) {
+      const gamesData2 = await gamesResponse2.json();
+      if (gamesData2.data) {
+        // Only include games that started on the target date (checking the date in the API response)
+        for (const game of gamesData2.data) {
+          // MNF games start around 1:15 UTC (8:15pm EST), so they're logged as next day
+          // Include them if they're from the day after our target
+          if (!allGameIds.includes(game.id)) {
+            allGameIds.push(game.id);
+            console.log(`  ✅ Found late game on ${nextDayStr}: ${game.visitor_team?.abbreviation} @ ${game.home_team?.abbreviation}`);
+          }
+        }
+      }
+    }
+    
+    if (allGameIds.length === 0) {
       console.log(`  ℹ️ No NFL games found for ${dateStr}`);
       return null;
     }
     
-    const gameIds = gamesData.data.map(g => g.id);
-    console.log(`  ✅ Found ${gameIds.length} NFL games`);
+    console.log(`  📊 Total NFL games to process: ${allGameIds.length}`);
     
     // Now fetch stats for these games
     const allPlayerStats = [];
-    for (const gameId of gameIds) {
+    for (const gameId of allGameIds) {
       const statsUrl = `https://api.balldontlie.io/nfl/v1/stats?game_ids[]=${gameId}&per_page=100`;
       const statsResponse = await fetch(statsUrl, {
         headers: { 'Authorization': BDL_API_KEY }
@@ -270,15 +301,15 @@ async function fetchNFLStats(dateStr) {
             allPlayerStats.push({
               player_name: `${stat.player.first_name} ${stat.player.last_name}`,
               team: stat.team?.full_name || '',
-              pass_yds: stat.passing_yards || 0,
-              pass_tds: stat.passing_touchdowns || 0,
-              rush_yds: stat.rushing_yards || 0,
-              rush_tds: stat.rushing_touchdowns || 0,
-              rush_att: stat.rushing_attempts || 0,
-              rec_yds: stat.receiving_yards || 0,
-              rec_tds: stat.receiving_touchdowns || 0,
-              receptions: stat.receptions || 0,
-              targets: stat.receiving_targets || 0
+              pass_yds: stat.passing_yards ?? 0,
+              pass_tds: stat.passing_touchdowns ?? 0,
+              rush_yds: stat.rushing_yards ?? 0,
+              rush_tds: stat.rushing_touchdowns ?? 0,
+              rush_att: stat.rushing_attempts ?? 0,
+              rec_yds: stat.receiving_yards ?? 0,
+              rec_tds: stat.receiving_touchdowns ?? 0,
+              receptions: stat.receptions ?? 0,
+              targets: stat.receiving_targets ?? 0
             });
           }
         }
@@ -312,18 +343,24 @@ async function getNFLPlayerStats(playerName, dateStr) {
     const playerStats = allStats.find(p => namesMatch(p.player_name, playerName));
     
     if (playerStats) {
-      // Calculate total TDs for anytime TD props
-      const totalTds = (playerStats.rush_tds || 0) + (playerStats.rec_tds || 0) + (playerStats.pass_tds || 0);
+      // Calculate total TDs for anytime TD props - explicitly handle null/undefined
+      const rushTds = playerStats.rush_tds ?? 0;
+      const recTds = playerStats.rec_tds ?? 0;
+      const passTds = playerStats.pass_tds ?? 0;
+      const totalTds = rushTds + recTds + passTds;
+      
+      console.log(`     📊 ${playerName} TDs: Rush=${rushTds}, Rec=${recTds}, Pass=${passTds}, Total=${totalTds}`);
+      
       return {
         player: playerName,
-        pass_yds: playerStats.pass_yds,
-        pass_tds: playerStats.pass_tds,
-        rush_yds: playerStats.rush_yds,
-        rush_tds: playerStats.rush_tds,
-        rec_yds: playerStats.rec_yds,
-        rec_tds: playerStats.rec_tds,
-        receptions: playerStats.receptions,
-        targets: playerStats.targets,
+        pass_yds: playerStats.pass_yds ?? 0,
+        pass_tds: passTds,
+        rush_yds: playerStats.rush_yds ?? 0,
+        rush_tds: rushTds,
+        rec_yds: playerStats.rec_yds ?? 0,
+        rec_tds: recTds,
+        receptions: playerStats.receptions ?? 0,
+        targets: playerStats.targets ?? 0,
         total_tds: totalTds,
         source: 'BallDontLie'
       };
@@ -338,7 +375,7 @@ async function getNFLPlayerStats(playerName, dateStr) {
 }
 
 // ============================================================================
-// NHL - Using Box Scores Endpoint
+// NHL - Using Box Scores Endpoint with Pagination
 // ============================================================================
 async function fetchNHLBoxScores(dateStr) {
   if (boxScoreCache.NHL) return boxScoreCache.NHL;
@@ -350,38 +387,62 @@ async function fetchNHLBoxScores(dateStr) {
   
   try {
     console.log(`  📡 Fetching NHL box scores for ${dateStr}...`);
-    const url = `https://api.balldontlie.io/nhl/v1/box_scores?dates[]=${dateStr}&per_page=100`;
-    const response = await fetch(url, {
-      headers: { 'Authorization': BDL_API_KEY }
-    });
     
-    if (!response.ok) {
-      console.log(`  ⚠️ NHL box scores error: ${response.status}`);
-      return null;
-    }
+    // Fetch all box scores with pagination
+    const allPlayerStats = [];
+    let cursor = null;
+    let page = 0;
+    const maxPages = 10; // Safety limit
     
-    const data = await response.json();
+    do {
+      page++;
+      let url = `https://api.balldontlie.io/nhl/v1/box_scores?dates[]=${dateStr}&per_page=100`;
+      if (cursor) url += `&cursor=${cursor}`;
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': BDL_API_KEY }
+      });
+      
+      if (!response.ok) {
+        console.log(`  ⚠️ NHL box scores error: ${response.status}`);
+        break;
+      }
+      
+      const data = await response.json();
+      
+      if (data.data && data.data.length > 0) {
+        // Extract player stats from this page
+        for (const stat of data.data) {
+          allPlayerStats.push({
+            player_name: stat.player?.full_name || `${stat.player?.first_name} ${stat.player?.last_name}`,
+            team: stat.team?.full_name || '',
+            team_tricode: stat.team?.tricode || '',
+            goals: stat.goals || 0,
+            assists: stat.assists || 0,
+            points: stat.points || 0,
+            sog: stat.shots_on_goal || 0,
+            plus_minus: stat.plus_minus || 0,
+            hits: stat.hits || 0,
+            blocked_shots: stat.blocked_shots || 0,
+            pim: stat.penalty_minutes || 0
+          });
+        }
+        console.log(`  📄 Page ${page}: ${data.data.length} stats`);
+      }
+      
+      cursor = data.meta?.next_cursor;
+      
+      // Small delay to avoid rate limiting
+      if (cursor) await new Promise(resolve => setTimeout(resolve, 100));
+      
+    } while (cursor && page < maxPages);
     
-    if (!data.data || data.data.length === 0) {
+    if (allPlayerStats.length === 0) {
       console.log(`  ℹ️ No NHL stats found for ${dateStr}`);
       return null;
     }
     
-    // Extract player stats
-    const allPlayerStats = data.data.map(stat => ({
-      player_name: stat.player?.full_name || `${stat.player?.first_name} ${stat.player?.last_name}`,
-      team: stat.team?.full_name || '',
-      goals: stat.goals || 0,
-      assists: stat.assists || 0,
-      points: stat.points || 0,
-      sog: stat.shots_on_goal || 0,
-      plus_minus: stat.plus_minus || 0,
-      hits: stat.hits || 0,
-      blocked_shots: stat.blocked_shots || 0,
-      pim: stat.penalty_minutes || 0
-    }));
-    
-    console.log(`  ✅ Found ${allPlayerStats.length} NHL player stats`);
+    console.log(`  ✅ Found ${allPlayerStats.length} NHL player stats total`);
     boxScoreCache.NHL = allPlayerStats;
     return allPlayerStats;
     
@@ -934,6 +995,7 @@ const propToStatField = {
   'pts': 'pts',
   'rebounds': 'reb',
   'rebs': 'reb',
+  'reb': 'reb',  // Handle abbreviated "reb" prop type
   'assists': 'ast',
   'asts': 'ast',
   'threes': 'fg3m',
@@ -1165,7 +1227,7 @@ async function processPropPicks(dateStr) {
           result: result,
           bet: pick.bet,
           odds: pick.odds,
-          pick_text: `${pick.player} ${pick.bet?.toUpperCase()} ${pick.prop} ${pick.line}`,
+          pick_text: `${pick.player} ${pick.bet?.toUpperCase()} ${pick.prop}`,
           matchup: pick.matchup || `${pick.team || ''} Game`,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

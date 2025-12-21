@@ -22,7 +22,7 @@ const PROP_MARKETS = {
     'player_steals'
   ],
   americanfootball_nfl: [
-    // Full game NFL player prop markets (no quarters/halves, no game props)
+    // Full game NFL player prop markets (expanded coverage)
     // Passing
     'player_pass_yds',
     'player_pass_tds',
@@ -40,17 +40,25 @@ const PROP_MARKETS = {
     'player_receptions',
     'player_reception_tds',
     'player_reception_longest',
-    // Combined
+    // Combined Stats
     'player_pass_rush_yds',
     'player_rush_reception_yds',
     'player_rush_reception_tds',
+    'player_pass_rush_reception_yds',
+    'player_pass_rush_reception_tds',
     // Touchdown Scorers
     'player_anytime_td',
     'player_1st_td',
     'player_last_td',
+    'player_tds_over',
     // Defense
     'player_tackles_assists',
-    'player_sacks'
+    'player_sacks',
+    'player_solo_tackles',
+    // Kicker
+    'player_field_goals',
+    'player_kicking_points',
+    'player_pats'
   ],
   baseball_mlb: [
     // Standard MLB player props - using only non-alternate lines
@@ -522,13 +530,20 @@ export const propOddsService = {
                     underOdds = outcome.name === 'Under' ? outcome.price : null;
                   }
                   
+                  // IMPORTANT: Do NOT trust team data from The Odds API - it's often stale/wrong
+                  // Teams will be resolved from BDL (Ball Don't Lie) in the context builder
+                  // BDL has authoritative, up-to-date roster data
+                  
+                  // Store with null team - let BDL resolve it later
                   allPlayerProps.push({
                     player: outcome.description,
-                    team: outcome.team || (outcome.name?.includes(game.home_team) ? game.home_team : game.away_team),
+                    team: null, // Will be resolved from BDL in context builder (source of truth)
                     prop_type: propType,
                     line: lineValue,
                     over_odds: overOdds,
-                    under_odds: underOdds
+                    under_odds: underOdds,
+                    _home_team: game.home_team,  // Store game context for later team resolution
+                    _away_team: game.away_team
                   });
                 }
               }
@@ -920,17 +935,25 @@ export const propOddsService = {
         'player_receptions': 'receptions',
         'player_reception_tds': 'rec_tds',
         'player_reception_longest': 'longest_reception',
-        // Combined
+        // Combined Stats
         'player_pass_rush_yds': 'pass_rush_yds',
         'player_rush_reception_yds': 'rush_rec_yds',
         'player_rush_reception_tds': 'rush_rec_tds',
+        'player_pass_rush_reception_yds': 'pass_rush_rec_yds',
+        'player_pass_rush_reception_tds': 'pass_rush_rec_tds',
         // Touchdown Scorers
         'player_anytime_td': 'anytime_td',
         'player_1st_td': 'first_td',
         'player_last_td': 'last_td',
+        'player_tds_over': 'tds_over',
         // Defense
         'player_tackles_assists': 'tackles_assists',
-        'player_sacks': 'sacks'
+        'player_sacks': 'sacks',
+        'player_solo_tackles': 'solo_tackles',
+        // Kicker
+        'player_field_goals': 'field_goals',
+        'player_kicking_points': 'kicking_points',
+        'player_pats': 'pats'
       };
       if (nflMap[type]) return nflMap[type];
       // Pattern-based fallback
@@ -945,8 +968,13 @@ export const propOddsService = {
       if (type.includes('anytime') && type.includes('td')) return 'anytime_td';
       if (type.includes('1st') && type.includes('td')) return 'first_td';
       if (type.includes('last') && type.includes('td')) return 'last_td';
+      if (type.includes('tds_over')) return 'tds_over';
+      if (type.includes('tackle') && type.includes('solo')) return 'solo_tackles';
       if (type.includes('tackle')) return 'tackles_assists';
       if (type.includes('sack')) return 'sacks';
+      if (type.includes('field_goal') || type.includes('fg')) return 'field_goals';
+      if (type.includes('kicking') && type.includes('point')) return 'kicking_points';
+      if (type.includes('pat') || type.includes('extra_point')) return 'pats';
     }
     // NHL standardization
     else if (sport === 'nhl' || sport === 'icehockey_nhl') {

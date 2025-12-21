@@ -127,7 +127,7 @@ export const perplexityService = {
   API_KEY: (() => {
     // Only resolve secrets in server environments
     if (typeof window === 'undefined' && typeof process !== 'undefined' && process.env) {
-      return process.env.PERPLEXITY_API_KEY || '';
+      return process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY || '';
     }
     // Never expose Perplexity key in the browser bundle
     return '';
@@ -581,49 +581,63 @@ export const perplexityService = {
   },
 
   /**
-   * Get NFL game weather specifically - more reliable than extracting from getRichGameContext
+   * Get football game weather - works for NFL and NCAAF
    * @param {string} homeTeam - Home team name
    * @param {string} awayTeam - Away team name
    * @param {string} venue - Stadium/venue name (optional)
    * @param {string} gameDate - Game date (YYYY-MM-DD or "tonight", "today")
+   * @param {string} sport - 'NFL' or 'NCAAF' (default: NFL)
    * @returns {Promise<Object>} - Weather data with temp, wind, conditions
    */
-  getNFLGameWeather: async function(homeTeam, awayTeam, venue = null, gameDate = 'tonight') {
+  getNFLGameWeather: async function(homeTeam, awayTeam, venue = null, gameDate = 'tonight', sport = 'NFL') {
     try {
-      const cacheKey = `nfl_weather:${homeTeam}|${awayTeam}:${gameDate}`;
+      const sportLabel = sport === 'NCAAF' ? 'college football' : 'NFL';
+      const cacheKey = `${sport.toLowerCase()}_weather:${homeTeam}|${awayTeam}:${gameDate}`;
       const cached = cache.get(cacheKey);
       // Shorter cache for weather - 2 hours
       if (cached && (Date.now() - cached.t) < (2 * 60 * 60 * 1000)) {
-        console.log('[Perplexity] Returning cached NFL weather data');
+        console.log(`[Perplexity] Returning cached ${sport} weather data`);
         return cached.v;
       }
 
-      console.log(`[Perplexity] Fetching NFL game weather for ${awayTeam} @ ${homeTeam}`);
+      console.log(`[Perplexity] Fetching ${sport} game weather for ${awayTeam} @ ${homeTeam}`);
 
       const systemMessage = [
-        'You are a weather reporter for NFL games.',
+        `You are a weather reporter for ${sportLabel} games.`,
         'Return ONLY valid JSON (no markdown, no explanation) with these exact keys:',
-        'temperature: number in Fahrenheit (e.g., 23),',
+        'temperature: number in Fahrenheit (e.g., 53),',
         'feels_like: number in Fahrenheit accounting for wind chill,',
         'wind_speed: number in mph,',
         'wind_gusts: number in mph or null,',
-        'conditions: string (e.g., "Cloudy", "Snow", "Clear", "Rain"),',
+        'conditions: string (e.g., "Clear", "Cloudy", "Snow", "Rain"),',
         'precipitation_chance: number 0-100,',
         'is_dome: boolean (true if indoor/dome stadium),',
+        'city: string (city where game is being played),',
         'weather_summary: string with 1-2 sentence summary,',
         'source: string URL where weather data was found.',
-        'Return actual current/forecast numbers, not ranges. Use null only if data unavailable.'
+        'Return actual current/forecast numbers, not ranges. Use null only if data unavailable.',
+        'IMPORTANT: First verify the actual game location - CFP games may be at neutral sites.'
       ].join(' ');
 
+      // For NCAAF CFP games, be more careful about venue
+      const isCFP = sport === 'NCAAF' && (homeTeam.includes('Alabama') || homeTeam.includes('Oklahoma') || 
+                                          awayTeam.includes('Alabama') || awayTeam.includes('Oklahoma') ||
+                                          homeTeam.includes('Georgia') || homeTeam.includes('Texas'));
+      const venueNote = isCFP 
+        ? `IMPORTANT: This is a College Football Playoff game. Verify the actual venue - it may be at the higher seed's home stadium or a neutral site.`
+        : '';
+      
       const venueHint = venue ? ` at ${venue}` : ` in ${homeTeam}'s stadium`;
       const query = [
-        `What is the current weather forecast for the NFL game ${gameDate}?`,
+        `What is the current weather forecast for the ${sportLabel} game on ${gameDate}?`,
         `${awayTeam} at ${homeTeam}${venueHint}.`,
-        'Provide the expected game-time temperature in Fahrenheit, wind speed in mph, and conditions.',
+        venueNote,
+        'First confirm the exact city/stadium where this game is being played.',
+        'Then provide the expected game-time temperature in Fahrenheit, wind speed in mph, and conditions for THAT location.',
         'Is this an indoor/dome stadium? Account for that.',
         'Include wind chill/feels-like temperature if applicable.',
         'Be specific with numbers - no ranges like "20-25°F", give a single number.'
-      ].join(' ');
+      ].filter(Boolean).join(' ');
 
       const res = await this.search(query, {
         model: 'sonar',
@@ -666,6 +680,131 @@ export const perplexityService = {
       console.error('[Perplexity] getNFLGameWeather error:', e.message);
       return null;
     }
+  },
+
+  /**
+   * Get NFL defensive matchup data for player props analysis
+   * Fetches opponent defensive rankings, fantasy points allowed by position, and key matchup insights
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @param {string} dateStr - Game date (YYYY-MM-DD)
+   * @returns {Promise<Object>} - Defensive matchup data for both teams
+   */
+  getNFLDefensiveMatchups: async function(homeTeam, awayTeam, dateStr = new Date().toISOString().slice(0, 10)) {
+    try {
+      const cacheKey = `nfl_defense_matchup:${homeTeam}|${awayTeam}:${dateStr}`;
+      const cached = cache.get(cacheKey);
+      // Cache for 6 hours (defensive rankings don't change mid-game)
+      if (cached && (Date.now() - cached.t) < (6 * 60 * 60 * 1000)) {
+        console.log('[Perplexity] Returning cached NFL defensive matchup data');
+        return cached.v;
+      }
+
+      console.log(`[Perplexity] Fetching NFL defensive matchups for ${awayTeam} @ ${homeTeam}`);
+
+      const systemMessage = [
+        'You are an NFL defensive analytics expert.',
+        'Return ONLY valid JSON (no markdown, no explanation) with these exact keys:',
+        '{',
+        '  "home_defense_vs_away": {',
+        '    "pass_defense_rank": number 1-32 (1=best),',
+        '    "rush_defense_rank": number 1-32,',
+        '    "pass_yards_allowed_per_game": number,',
+        '    "rush_yards_allowed_per_game": number,',
+        '    "points_allowed_per_game": number,',
+        '    "fantasy_points_allowed_to_qb": number (DraftKings format per game),',
+        '    "fantasy_points_allowed_to_rb": number,',
+        '    "fantasy_points_allowed_to_wr": number,',
+        '    "fantasy_points_allowed_to_te": number,',
+        '    "key_defensive_injuries": string[] (max 3)',
+        '  },',
+        '  "away_defense_vs_home": { same structure },',
+        '  "matchup_insights": string[] (3-4 key insights for props betting),',
+        '  "source": string URL',
+        '}',
+        'Use current 2024-25 NFL season stats. Fantasy points should be DraftKings scoring.'
+      ].join(' ');
+
+      const query = [
+        `NFL Week ${this._getCurrentNFLWeek()} defensive rankings and fantasy points allowed:`,
+        `${awayTeam} at ${homeTeam} on ${dateStr}.`,
+        'For EACH defense, provide:',
+        '1. Pass defense rank (1-32) and pass yards allowed per game',
+        '2. Rush defense rank (1-32) and rush yards allowed per game',
+        '3. Fantasy points allowed per game to QB, RB, WR, TE (DraftKings scoring)',
+        '4. Any key defensive injuries',
+        'Also provide 3-4 specific matchup insights relevant to player props betting.',
+        'Be specific with current season numbers.'
+      ].join(' ');
+
+      const res = await this.search(query, {
+        model: 'sonar-pro',
+        temperature: 0.1,
+        maxTokens: 1200,
+        systemMessage
+      });
+
+      if (!res?.success || !res?.data) {
+        console.warn('[Perplexity] getNFLDefensiveMatchups: fetch failed');
+        return this._getDefaultDefensiveMatchups(homeTeam, awayTeam);
+      }
+
+      const obj = this._tryParseJson(res.data);
+      if (obj && typeof obj === 'object') {
+        console.log(`[Perplexity] NFL Defense: ${homeTeam} pass D rank #${obj.home_defense_vs_away?.pass_defense_rank}, ${awayTeam} pass D rank #${obj.away_defense_vs_home?.pass_defense_rank}`);
+        cache.set(cacheKey, { t: Date.now(), v: obj });
+        return obj;
+      }
+
+      console.warn('[Perplexity] getNFLDefensiveMatchups: could not parse JSON, using defaults');
+      return this._getDefaultDefensiveMatchups(homeTeam, awayTeam);
+
+    } catch (e) {
+      console.error('[Perplexity] getNFLDefensiveMatchups error:', e.message);
+      return this._getDefaultDefensiveMatchups(homeTeam, awayTeam);
+    }
+  },
+
+  /**
+   * Helper: Get current NFL week (approximate)
+   */
+  _getCurrentNFLWeek: function() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const season = month <= 7 ? year - 1 : year;
+    const seasonStart = new Date(season, 8, 1);
+    while (seasonStart.getDay() !== 4) {
+      seasonStart.setDate(seasonStart.getDate() + 1);
+    }
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const weeksSinceStart = Math.floor((now - seasonStart) / msPerWeek) + 1;
+    return Math.min(Math.max(1, weeksSinceStart), 22);
+  },
+
+  /**
+   * Helper: Default defensive matchup data when Perplexity fails
+   */
+  _getDefaultDefensiveMatchups: function(homeTeam, awayTeam) {
+    const defaultTeamDefense = {
+      pass_defense_rank: 16,
+      rush_defense_rank: 16,
+      pass_yards_allowed_per_game: 220,
+      rush_yards_allowed_per_game: 115,
+      points_allowed_per_game: 22,
+      fantasy_points_allowed_to_qb: 18,
+      fantasy_points_allowed_to_rb: 22,
+      fantasy_points_allowed_to_wr: 32,
+      fantasy_points_allowed_to_te: 10,
+      key_defensive_injuries: []
+    };
+    return {
+      home_defense_vs_away: { ...defaultTeamDefense },
+      away_defense_vs_home: { ...defaultTeamDefense },
+      matchup_insights: ['Unable to fetch live defensive data - using league averages'],
+      source: 'default',
+      _isDefault: true
+    };
   },
 
   /**
@@ -1334,12 +1473,23 @@ export const perplexityService = {
           }
           
           if (playerName && status && !foundPlayers.has(playerName.toLowerCase())) {
-            foundPlayers.add(playerName.toLowerCase());
+            // Validate player name to avoid parsing errors like "th Grant" or "with Player"
+            const nameParts = playerName.trim().split(' ');
+            const firstName = nameParts[0] || '';
+            const lastName = nameParts.slice(1).join(' ') || '';
             
+            // Skip malformed names: too short, starts with common word fragments
+            const invalidFirstNamePatterns = /^(th|nd|rd|st|with|for|and|the|or|by|to|in|on|at|of|is|as|a|an)$/i;
+            if (firstName.length < 2 || lastName.length < 2 || invalidFirstNamePatterns.test(firstName)) {
+              continue; // Skip this malformed entry
+            }
+            
+            foundPlayers.add(playerName.toLowerCase());
+
             const injury = {
               player: {
-                first_name: playerName.split(' ')[0],
-                last_name: playerName.split(' ').slice(1).join(' '),
+                first_name: firstName,
+                last_name: lastName,
                 position: ''
               },
               status: normalizeStatus(status),

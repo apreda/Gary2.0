@@ -5,6 +5,7 @@ import { Navbar } from "./components/Navbar";
 import Home from "./pages/Home";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
+import { Changelog } from "./pages/Changelog";
 
 // Admin components - dynamically loaded (keep for internal use)
 const RefreshTool = lazy(() => import('./components/RefreshTool'));
@@ -39,6 +40,7 @@ function AppContent() {
               {/* Legal pages (required) */}
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/changelog" element={<Changelog />} />
               
               {/* Admin routes (internal use only) */}
               <Route path="/admin/refresh-picks" element={<RefreshTool />} />
@@ -71,7 +73,8 @@ function AppContent() {
         <p>&copy; {new Date().getFullYear()} Gary A.I. LLC. All rights reserved.</p>
         <div style={{ marginTop: '10px', marginBottom: '20px' }}>
           <Link to="/terms" style={{ color: '#b8953f', marginRight: '20px', textDecoration: 'none' }}>Terms of Service</Link>
-          <Link to="/privacy" style={{ color: '#b8953f', textDecoration: 'none' }}>Privacy Policy</Link>
+          <Link to="/privacy" style={{ color: '#b8953f', marginRight: '20px', textDecoration: 'none' }}>Privacy Policy</Link>
+          <Link to="/changelog" style={{ color: '#b8953f', textDecoration: 'none' }}>Changelog</Link>
         </div>
         
         <div style={{ fontSize: '0.8rem', maxWidth: '800px', margin: '0 auto', lineHeight: '1.4' }}>

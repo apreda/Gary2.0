@@ -468,9 +468,9 @@ export async function runAgenticPropsPipeline({
     finalPicks = enhancedPicks;
     console.log(`[Agentic Props][${sportLabel}] Using 2-per-game rule: ${finalPicks.length} picks (no confidence filter)`);
   } else {
-    // For NFL: Apply confidence threshold (70% minimum)
-    finalPicks = enhancedPicks.filter(p => p.confidence >= 0.70);
-    console.log(`[Agentic Props][${sportLabel}] Applied confidence filter: ${enhancedPicks.length} -> ${finalPicks.length} picks`);
+    // For NFL: Apply confidence threshold (65% minimum - lowered to allow more picks through)
+    finalPicks = enhancedPicks.filter(p => p.confidence >= 0.65);
+    console.log(`[Agentic Props][${sportLabel}] Applied confidence filter (65%+): ${enhancedPicks.length} -> ${finalPicks.length} picks`);
   }
 
   const elapsedMs = Date.now() - start;

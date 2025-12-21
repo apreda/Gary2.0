@@ -7,7 +7,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Content Views
+            // Content Views - Use conditional animation for older iOS
             Group {
                 switch selectedTab {
                 case 0:
@@ -22,6 +22,12 @@ struct ContentView: View {
                     SettingsView()
                 default:
                     HomeView()
+                }
+            }
+            .transaction { transaction in
+                // Disable animations on older iOS for smoother tab switching
+                if !PerformanceMode.current.useExpensiveEffects {
+                    transaction.animation = nil
                 }
             }
             
@@ -48,7 +54,12 @@ struct CompactTabBar: View {
         HStack(spacing: 4) {
             ForEach(tabs.indices, id: \.self) { index in
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    // Use simpler animation on older iOS
+                    if PerformanceMode.current.useExpensiveEffects {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedTab = index
+                        }
+                    } else {
                         selectedTab = index
                     }
                 } label: {
@@ -74,53 +85,66 @@ struct CompactTabBar: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 6)
         .background {
-            ZStack {
-                // 1. Base glass material
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                
-                // 2. Gold-tinted overlay
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                GaryColors.gold.opacity(0.12),
-                                GaryColors.gold.opacity(0.04)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            if PerformanceMode.current.useExpensiveEffects {
+                // Full design for iOS 16+
+                ZStack {
+                    // 1. Base glass material
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                    
+                    // 2. Gold-tinted overlay
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    GaryColors.gold.opacity(0.12),
+                                    GaryColors.gold.opacity(0.04)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                
-                // 3. Liquid shine (top highlight)
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.4), .white.opacity(0.0)],
-                            startPoint: .top,
-                            endPoint: .center
+                    
+                    // 3. Liquid shine (top highlight)
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.4), .white.opacity(0.0)],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
                         )
-                    )
-                    .blendMode(.overlay)
-                
-                // 4. Premium gold edge
-                Capsule()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                GaryColors.lightGold.opacity(0.5),
-                                GaryColors.gold.opacity(0.25),
-                                GaryColors.gold.opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
-                    )
+                        .blendMode(.overlay)
+                    
+                    // 4. Premium gold edge
+                    Capsule()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    GaryColors.lightGold.opacity(0.5),
+                                    GaryColors.gold.opacity(0.25),
+                                    GaryColors.gold.opacity(0.1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                }
+                .shadow(color: GaryColors.gold.opacity(0.15), radius: 16, y: 8)
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+            } else {
+                // Lighter version for iOS 15 and below
+                ZStack {
+                    Capsule()
+                        .fill(Color(hex: "#1A1A1E"))
+                    
+                    Capsule()
+                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.8)
+                }
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             }
         }
-        .shadow(color: GaryColors.gold.opacity(0.15), radius: 16, y: 8)
-        .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
         .padding(.horizontal, 24)
         .padding(.bottom, 8)
     }

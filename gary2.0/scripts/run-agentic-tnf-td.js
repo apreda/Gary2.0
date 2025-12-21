@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Agentic Monday Night Football Touchdown Scorer Runner
- * Special feature: Gary picks 1 standard TD + 1 longshot TD + 1 First TD for MNF
+ * Agentic Thursday Night Football Touchdown Scorer Runner
+ * Special feature: Gary picks 1 standard TD + 1 longshot TD + 1 First TD for TNF
  */
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -19,6 +19,7 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { openaiService } = await import('../src/services/openaiService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
+const { perplexityService } = await import('../src/services/perplexityService.js');
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -29,11 +30,11 @@ function getESTDate() {
   return est.toISOString().split('T')[0];
 }
 
-// Check if today is Monday in EST
-function isMondayEST() {
+// Check if today is Thursday in EST
+function isThursdayEST() {
   const now = new Date();
   const estDate = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  return estDate.getDay() === 1; // 0 = Sunday, 1 = Monday
+  return estDate.getDay() === 4; // 0 = Sunday, 4 = Thursday
 }
 
 // Format game time to readable EST string
@@ -55,7 +56,7 @@ function formatGameTimeEST(isoString) {
   }
 }
 
-// Check if a game is today (Monday) in EST
+// Check if a game is today (Thursday) in EST
 function isGameToday(commenceTime) {
   if (!commenceTime) return false;
   const gameDate = new Date(commenceTime);
@@ -81,26 +82,50 @@ function parseArgs() {
 }
 
 /**
- * Run Gary's MNF TD Scorer Analysis
+ * Run Gary's TNF TD Scorer Analysis - ENHANCED with defensive matchups
  */
-async function runMNFTDAnalysis(allTDProps, firstTDProps, playerStats, matchup) {
+async function runTNFTDAnalysis(allTDProps, firstTDProps, playerStats, matchup, defensiveMatchups) {
   // Split into standard odds and underdog odds (+200 or better)
   const standardTDs = allTDProps.filter(p => p.odds < 200);
   const underdogTDs = allTDProps.filter(p => p.odds >= 200);
 
-  console.log(`\n📊 MNF TD Props Breakdown:`);
+  console.log(`\n📊 TNF TD Props Breakdown:`);
   console.log(`   Standard odds (<+200): ${standardTDs.length} players`);
   console.log(`   Underdog odds (+200+): ${underdogTDs.length} players`);
   console.log(`   First TD options: ${firstTDProps.length} players`);
 
+  // Build defensive context string
+  let defenseContext = '';
+  if (defensiveMatchups && !defensiveMatchups._isDefault) {
+    const homeD = defensiveMatchups.home_defense_vs_away || {};
+    const awayD = defensiveMatchups.away_defense_vs_home || {};
+    defenseContext = `
+## DEFENSIVE MATCHUP DATA (USE THIS!)
+Home Defense vs Away Offense:
+- Rush Defense Rank: #${homeD.rush_defense_rank || '?'} (${homeD.rush_yards_allowed_per_game || '?'} yds/g allowed)
+- Fantasy Points to RB: ${homeD.fantasy_points_allowed_to_rb || '?'}/game
+- Fantasy Points to WR: ${homeD.fantasy_points_allowed_to_wr || '?'}/game
+- Fantasy Points to TE: ${homeD.fantasy_points_allowed_to_te || '?'}/game
+
+Away Defense vs Home Offense:
+- Rush Defense Rank: #${awayD.rush_defense_rank || '?'} (${awayD.rush_yards_allowed_per_game || '?'} yds/g allowed)
+- Fantasy Points to RB: ${awayD.fantasy_points_allowed_to_rb || '?'}/game
+- Fantasy Points to WR: ${awayD.fantasy_points_allowed_to_wr || '?'}/game
+- Fantasy Points to TE: ${awayD.fantasy_points_allowed_to_te || '?'}/game
+
+Key Insights: ${defensiveMatchups.matchup_insights?.join(' | ') || 'N/A'}
+`;
+  }
+
   const systemPrompt = `
-You are Gary, the expert NFL analyst. You're picking Touchdown Scorers for MONDAY NIGHT FOOTBALL.
+You are Gary, the expert NFL analyst. You're picking Touchdown Scorers for THURSDAY NIGHT FOOTBALL.
+${defenseContext}
 
 ## YOUR TASK
-This is the primetime MNF game - make it count! You must make THREE TD scorer picks:
+This is the primetime TNF game - make it count! You must make THREE TD scorer picks:
 
 ### PICK 1: STANDARD TD SCORER
-Pick your #1 BEST touchdown scorer bet for tonight's MNF game. This is your highest-confidence play backed by:
+Pick your #1 BEST touchdown scorer bet for tonight's TNF game. This is your highest-confidence play backed by:
 - Red zone usage and targets
 - Goal line carries
 - Recent TD scoring trends
@@ -113,7 +138,7 @@ For the standard pick, use line 0.5 (Over 0.5 TDs = scores at least 1 TD).
 Pick 1 touchdown scorer bet with odds of +200 or better (higher payout). This is your VALUE play:
 - A player who could vulture a TD or score multiple
 - Someone in a favorable TD-scoring situation that oddsmakers are undervaluing
-- You CAN pick Over 1.5 TDs (2+ touchdowns) if you think someone will have a big MNF game
+- You CAN pick Over 1.5 TDs (2+ touchdowns) if you think someone will have a big TNF game
 
 ### PICK 3: FIRST TD SCORER
 Pick 1 player most likely to score the FIRST touchdown of the game. This is a HIGH VARIANCE play:
@@ -122,11 +147,11 @@ Pick 1 player most likely to score the FIRST touchdown of the game. This is a HI
 - Goal line backs and red zone targets
 - Consider each team's first-drive tendencies
 
-## MONDAY NIGHT FOOTBALL CONTEXT
-- Prime time games often see stars getting extra usage
-- Home crowds can affect goal-line decisions
-- Coaches sometimes save special plays for MNF
-- Consider the national spotlight factor
+## THURSDAY NIGHT FOOTBALL CONTEXT
+- Short week for both teams = fatigue factor
+- Less time to game plan = simpler offensive schemes
+- Primetime games often see star players getting featured
+- Running game typically more prominent on short rest
 
 ## RESPONSE FORMAT (STRICT JSON)
 {
@@ -136,7 +161,7 @@ Pick 1 player most likely to score the FIRST touchdown of the game. This is a HI
     "line": 0.5,
     "odds": -120,
     "matchup": "${matchup}",
-    "rationale": "3-4 sentences explaining why this player will score on MNF"
+    "rationale": "3-4 sentences explaining why this player will score on TNF"
   },
   "longshot_td_pick": {
     "player": "Player Name", 
@@ -144,7 +169,7 @@ Pick 1 player most likely to score the FIRST touchdown of the game. This is a HI
     "line": 0.5,
     "odds": 250,
     "matchup": "${matchup}",
-    "rationale": "3-4 sentences explaining the value opportunity for MNF"
+    "rationale": "3-4 sentences explaining the value opportunity for TNF"
   },
   "first_td_pick": {
     "player": "Player Name",
@@ -153,7 +178,7 @@ Pick 1 player most likely to score the FIRST touchdown of the game. This is a HI
     "matchup": "${matchup}",
     "rationale": "3-4 sentences explaining why this player could score FIRST"
   },
-  "mnf_preview": "2-3 sentences about tonight's MNF game and TD-scoring environment"
+  "tnf_preview": "2-3 sentences about tonight's TNF game and TD-scoring environment"
 }
 
 IMPORTANT:
@@ -165,7 +190,7 @@ IMPORTANT:
 
   const userContent = JSON.stringify({
     date: getESTDate(),
-    mnf_game: matchup,
+    tnf_game: matchup,
     standard_td_options: standardTDs.slice(0, 30).map(p => ({
       player: p.player,
       team: p.team,
@@ -192,7 +217,7 @@ IMPORTANT:
     { role: 'user', content: userContent }
   ];
 
-  console.log(`\n🤖 Gary analyzing MNF TD scorers...`);
+  console.log(`\n🤖 Gary analyzing TNF TD scorers...`);
   
   const raw = await openaiService.generateResponse(messages, {
     temperature: 0.5,
@@ -220,15 +245,15 @@ async function main() {
   const nocache = args.nocache === '1';
   const forceRun = args.force === '1' || args.force === 'true';
 
-  console.log(`\n🌙 MONDAY NIGHT FOOTBALL TD Picks`);
+  console.log(`\n🏈 THURSDAY NIGHT FOOTBALL TD Picks`);
   console.log(`${'='.repeat(50)}`);
   console.log(`📅 Date: ${getESTDate()}`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}`);
   console.log(`${'='.repeat(50)}\n`);
 
-  // Check if it's Monday (unless force flag is set)
-  if (!isMondayEST() && !forceRun) {
-    console.log('⚠️ Today is not Monday. MNF picks are only generated on Mondays.');
+  // Check if it's Thursday (unless force flag is set)
+  if (!isThursdayEST() && !forceRun) {
+    console.log('⚠️ Today is not Thursday. TNF picks are only generated on Thursdays.');
     console.log('   Use --force=1 to run anyway for testing.');
     return;
   }
@@ -238,24 +263,24 @@ async function main() {
   const now = Date.now();
   const todayStr = getESTDate();
 
-  // Filter to only today's games (should be MNF)
-  const mnfGames = games.filter(g => isGameToday(g.commence_time));
+  // Filter to only today's games (should be TNF)
+  const tnfGames = games.filter(g => isGameToday(g.commence_time));
 
-  console.log(`Found ${mnfGames.length} NFL game(s) scheduled for today (MNF).\n`);
+  console.log(`Found ${tnfGames.length} NFL game(s) scheduled for today (TNF).\n`);
 
-  if (mnfGames.length === 0) {
-    console.log('⚠️ No MNF games found for today.');
+  if (tnfGames.length === 0) {
+    console.log('⚠️ No TNF games found for today.');
     return;
   }
 
-  // Usually just 1 MNF game, but handle the rare double-header
-  const mnfGame = mnfGames[0];
-  const matchup = `${mnfGame.away_team} @ ${mnfGame.home_team}`;
+  // Usually just 1 TNF game
+  const tnfGame = tnfGames[0];
+  const matchup = `${tnfGame.away_team} @ ${tnfGame.home_team}`;
   
-  console.log(`🏈 Tonight's MNF Game: ${matchup}`);
-  console.log(`   Kickoff: ${formatGameTimeEST(mnfGame.commence_time)}`);
+  console.log(`🏈 Tonight's TNF Game: ${matchup}`);
+  console.log(`   Kickoff: ${formatGameTimeEST(tnfGame.commence_time)}`);
 
-  // Collect TD props for the MNF game
+  // Collect TD props for the TNF game
   const allTDProps = [];
   const firstTDProps = [];
   let playerStats = '';
@@ -263,7 +288,7 @@ async function main() {
   console.log(`\n📡 Fetching TD props for ${matchup}...`);
 
   try {
-    const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, mnfGame.home_team, mnfGame.away_team);
+    const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, tnfGame.home_team, tnfGame.away_team);
     
     // Filter for anytime TD props
     const tdProps = props.filter(p => {
@@ -289,7 +314,7 @@ async function main() {
         team: p.team,
         odds: p.over_odds || p.odds,
         matchup: matchup,
-        game_time: mnfGame.commence_time
+        game_time: tnfGame.commence_time
       });
     });
 
@@ -299,7 +324,7 @@ async function main() {
         team: p.team,
         odds: p.over_odds || p.odds,
         matchup: matchup,
-        game_time: mnfGame.commence_time
+        game_time: tnfGame.commence_time
       });
     });
 
@@ -308,10 +333,10 @@ async function main() {
     console.warn(`   ⚠️ Could not fetch props: ${e.message}`);
   }
 
-  console.log(`\n📊 Total MNF TD props collected: ${allTDProps.length} anytime, ${firstTDProps.length} first TD`);
+  console.log(`\n📊 Total TNF TD props collected: ${allTDProps.length} anytime, ${firstTDProps.length} first TD`);
 
   if (allTDProps.length === 0) {
-    console.log('⚠️ No TD props available for MNF. Exiting.');
+    console.log('⚠️ No TD props available for TNF. Exiting.');
     return;
   }
 
@@ -321,23 +346,45 @@ async function main() {
   // Get player stats for context
   try {
     const { formatNFLPlayerStats } = await import('../src/services/nflPlayerPropsService.js');
-    const stats = await formatNFLPlayerStats(mnfGame.home_team, mnfGame.away_team);
+    const stats = await formatNFLPlayerStats(tnfGame.home_team, tnfGame.away_team);
     playerStats = stats;
   } catch (e) {
     console.warn('Could not fetch player stats:', e.message);
   }
 
-  // Run Gary's MNF analysis
-  const result = await runMNFTDAnalysis(allTDProps, firstTDProps, playerStats, matchup);
+  // Fetch defensive matchups (ENHANCED)
+  let defensiveMatchups = null;
+  try {
+    console.log(`\n🛡️ Fetching defensive matchup data...`);
+    defensiveMatchups = await perplexityService.getNFLDefensiveMatchups(
+      tnfGame.home_team, 
+      tnfGame.away_team, 
+      getESTDate()
+    );
+    if (defensiveMatchups && !defensiveMatchups._isDefault) {
+      console.log(`   ✅ Got LIVE defensive data`);
+      const homeD = defensiveMatchups.home_defense_vs_away;
+      const awayD = defensiveMatchups.away_defense_vs_home;
+      console.log(`   ${tnfGame.home_team} Rush D: #${homeD?.rush_defense_rank}, Fantasy to RB: ${homeD?.fantasy_points_allowed_to_rb}`);
+      console.log(`   ${tnfGame.away_team} Rush D: #${awayD?.rush_defense_rank}, Fantasy to RB: ${awayD?.fantasy_points_allowed_to_rb}`);
+    } else {
+      console.log(`   ⚠️ Using default defensive data`);
+    }
+  } catch (e) {
+    console.warn(`   Could not fetch defensive matchups: ${e.message}`);
+  }
+
+  // Run Gary's TNF analysis with defensive context
+  const result = await runTNFTDAnalysis(allTDProps, firstTDProps, playerStats, matchup, defensiveMatchups);
 
   if (!result) {
-    console.error('❌ Failed to get MNF TD picks from Gary');
+    console.error('❌ Failed to get TNF TD picks from Gary');
     return;
   }
 
   // Display results
   console.log(`\n${'='.repeat(50)}`);
-  console.log(`🌙 GARY'S MNF TD PICKS - ${matchup}`);
+  console.log(`🏈 GARY'S TNF TD PICKS - ${matchup}`);
   console.log(`${'='.repeat(50)}`);
 
   if (result.standard_td_pick) {
@@ -361,13 +408,13 @@ async function main() {
     console.log(`   💡 ${pick.rationale}\n`);
   }
 
-  if (result.mnf_preview) {
-    console.log(`\n📺 MNF Preview: ${result.mnf_preview}`);
+  if (result.tnf_preview) {
+    console.log(`\n📺 TNF Preview: ${result.tnf_preview}`);
   }
 
   // Store if requested
   if (shouldStore) {
-    console.log(`\n💾 Storing MNF TD picks in Supabase...`);
+    console.log(`\n💾 Storing TNF TD picks in Supabase...`);
     
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -384,13 +431,13 @@ async function main() {
     const dateParam = getESTDate();
 
     // Format picks for storage
-    const mnfPicks = [];
+    const tnfPicks = [];
 
     if (result.standard_td_pick) {
       const pick = result.standard_td_pick;
       const line = pick.line || 0.5;
       const tdLabel = line === 0.5 ? 'Anytime TD' : `${line + 0.5}+ TDs`;
-      mnfPicks.push({
+      tnfPicks.push({
         sport: 'NFL',
         player: pick.player,
         team: pick.team,
@@ -398,13 +445,13 @@ async function main() {
         line: line,
         bet: 'over',
         odds: pick.odds,
-        confidence: 0.75, // Higher confidence for MNF standard pick
+        confidence: 0.75, // Higher confidence for TNF standard pick
         rationale: pick.rationale,
         matchup: pick.matchup || matchup,
         td_category: 'standard',
-        mnf_pick: true, // Flag to identify MNF picks
-        time: formatGameTimeEST(mnfGame.commence_time),
-        commence_time: mnfGame.commence_time
+        tnf_pick: true, // Flag to identify TNF picks
+        time: formatGameTimeEST(tnfGame.commence_time),
+        commence_time: tnfGame.commence_time
       });
     }
 
@@ -412,7 +459,7 @@ async function main() {
       const pick = result.longshot_td_pick;
       const line = pick.line || 0.5;
       const tdLabel = line === 0.5 ? 'Anytime TD' : `${line + 0.5}+ TDs`;
-      mnfPicks.push({
+      tnfPicks.push({
         sport: 'NFL',
         player: pick.player,
         team: pick.team,
@@ -424,15 +471,15 @@ async function main() {
         rationale: pick.rationale,
         matchup: pick.matchup || matchup,
         td_category: 'underdog',
-        mnf_pick: true, // Flag to identify MNF picks
-        time: formatGameTimeEST(mnfGame.commence_time),
-        commence_time: mnfGame.commence_time
+        tnf_pick: true, // Flag to identify TNF picks
+        time: formatGameTimeEST(tnfGame.commence_time),
+        commence_time: tnfGame.commence_time
       });
     }
 
     if (result.first_td_pick) {
       const pick = result.first_td_pick;
-      mnfPicks.push({
+      tnfPicks.push({
         sport: 'NFL',
         player: pick.player,
         team: pick.team,
@@ -444,9 +491,9 @@ async function main() {
         rationale: pick.rationale,
         matchup: pick.matchup || matchup,
         td_category: 'first_td',
-        mnf_pick: true, // Flag to identify MNF picks
-        time: formatGameTimeEST(mnfGame.commence_time),
-        commence_time: mnfGame.commence_time
+        tnf_pick: true, // Flag to identify TNF picks
+        time: formatGameTimeEST(tnfGame.commence_time),
+        commence_time: tnfGame.commence_time
       });
     }
 
@@ -459,11 +506,11 @@ async function main() {
 
     let existingPicks = [];
     if (existingData?.picks) {
-      // Remove any existing MNF picks (to avoid duplicates on re-run)
-      existingPicks = existingData.picks.filter(p => !p.mnf_pick);
+      // Remove any existing TNF picks (to avoid duplicates on re-run)
+      existingPicks = existingData.picks.filter(p => !p.tnf_pick);
     }
 
-    const mergedPicks = [...existingPicks, ...mnfPicks];
+    const mergedPicks = [...existingPicks, ...tnfPicks];
 
     // Delete and re-insert
     await supabase.from('prop_picks').delete().eq('date', dateParam);
@@ -479,17 +526,16 @@ async function main() {
     if (insertError) {
       console.error(`❌ Insert error: ${insertError.message}`);
     } else {
-      console.log(`✅ Stored ${mnfPicks.length} MNF TD picks (1 standard + 1 longshot + 1 first TD)`);
+      console.log(`✅ Stored ${tnfPicks.length} TNF TD picks (1 standard + 1 longshot + 1 first TD)`);
     }
   }
 
-  console.log(`\n🏁 Monday Night Football TD Picks Complete.\n`);
+  console.log(`\n🏁 Thursday Night Football TD Picks Complete.\n`);
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error('MNF TD runner crashed:', error);
+    console.error('TNF TD runner crashed:', error);
     process.exit(1);
   });
-

@@ -324,12 +324,23 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         throw error;
       }
 
-      // Process existing entries to include high confidence picks
+      // Sports that use 2-per-game rule (no confidence filtering needed)
+      const twoPerGameSports = ['NBA', 'NHL', 'EPL'];
+      
+      // Process existing entries
       const processedEntries = data.map(entry => {
         if (entry.picks && Array.isArray(entry.picks) && entry.picks.length > 0) {
-          // Filter for confident picks (0.55 or higher) and exclude -200 or worse odds
-          const confidencePicks = entry.picks.filter(pick => {
-            if (pick.confidence < 0.55) return false;
+          // Filter picks based on sport-specific rules:
+          // - NBA/NHL/EPL: No confidence filter (2-per-game rule)
+          // - NFL/other: Apply 0.55 confidence threshold
+          const filteredPicks = entry.picks.filter(pick => {
+            const sport = pick.sport || 'unknown';
+            const usesTwoPerGame = twoPerGameSports.includes(sport);
+            
+            // Skip confidence filter for 2-per-game sports
+            if (!usesTwoPerGame && pick.confidence < 0.55) return false;
+            
+            // Always filter out very poor odds
             const odds = pick.odds || 0;
             if (typeof odds === 'number' && odds <= -200) return false;
             return true;
@@ -337,14 +348,14 @@ Respond with ONLY a JSON array of your best prop picks in this format:
 
           return {
             ...entry,
-            picks: confidencePicks,
+            picks: filteredPicks,
             originalPickCount: entry.picks.length
           };
         }
         return entry;
       });
 
-      console.log(`Found ${data.length} entries for ${dateString}, filtered to 55%+ confidence, excluding ≤-200 odds`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered (2-per-game for NBA/NHL/EPL, 55%+ conf for others), excluding ≤-200 odds`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
@@ -576,15 +587,27 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         return oddsOK;
       });
 
-      // Filter by confidence threshold - 0.55 minimum for all picks
-      const highConf = validOdds.filter(p => p.confidence >= 0.55);
-
-      // Sort by confidence (highest first) and take only the top 5 per game
-      const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
-      const topFivePicks = sortedByConfidence.slice(0, 5);
+      // Sport-specific selection rules:
+      // - NBA/NHL/EPL: 2-per-game rule (exactly 2 most confident picks, no confidence threshold)
+      // - NFL: Use confidence threshold (0.55 minimum) and take top 5
+      const usesTwoPerGame = ['basketball_nba', 'icehockey_nhl', 'soccer_epl'].includes(sportKey);
+      
+      let selectedPicks;
+      if (usesTwoPerGame) {
+        // 2-per-game rule: Sort by confidence and take top 2 (no threshold)
+        const sortedByConfidence = [...validOdds].sort((a, b) => b.confidence - a.confidence);
+        selectedPicks = sortedByConfidence.slice(0, 2);
+        console.log(`Using 2-per-game rule for ${sportKey}: selecting top 2 from ${validOdds.length} valid props`);
+      } else {
+        // NFL/other sports: Filter by confidence threshold (0.55 minimum) and take top 5
+        const highConf = validOdds.filter(p => p.confidence >= 0.55);
+        const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
+        selectedPicks = sortedByConfidence.slice(0, 5);
+        console.log(`Using confidence filter for ${sportKey}: ${highConf.length} picks above 0.55, taking top 5`);
+      }
 
       // Enhance picks with team info, EV calculation, and time
-      const enhancedPicks = topFivePicks.map(pick => {
+      const enhancedPicks = selectedPicks.map(pick => {
         // The pick already has all the fields we need from OpenAI
         // Just ensure we have all the required fields
         const leagueLabel = sportKey === 'basketball_nba' ? 'NBA'
@@ -630,7 +653,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
       });
 
       console.log(
-        `Generated prop picks summary: Original: ${playerProps.length}, Valid: ${valid.length}, HighConf: ${highConf.length}, Final: ${enhancedPicks.length}`
+        `Generated prop picks summary: Original: ${playerProps.length}, Valid: ${valid.length}, Selected: ${selectedPicks.length}, Final: ${enhancedPicks.length}`
       );
 
       return enhancedPicks;
@@ -664,11 +687,22 @@ Respond with ONLY a JSON array of your best prop picks in this format:
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Filter the picks by confidence threshold (0.55 minimum) and exclude ≤-200 odds
-      // DON'T slice here - let frontend handle per-sport slicing
+      // Sports that use 2-per-game rule (no confidence filtering needed - already curated)
+      const twoPerGameSports = ['NBA', 'NHL', 'EPL'];
+      
+      // Filter the picks:
+      // - NBA/NHL/EPL: No confidence filter (2-per-game rule already applied during generation)
+      // - NFL/other: Apply confidence threshold (0.55 minimum)
+      // - All sports: Exclude ≤-200 odds
       const filteredData = data.map(record => {
         const filtered = record.picks.filter(pick => {
-          if (pick.confidence < 0.55) return false;
+          const sport = pick.sport || 'unknown';
+          const usesTwoPerGame = twoPerGameSports.includes(sport);
+          
+          // Skip confidence filter for 2-per-game sports
+          if (!usesTwoPerGame && pick.confidence < 0.55) return false;
+          
+          // Always filter out very poor odds
           const odds = pick.odds || 0;
           if (typeof odds === 'number' && odds <= -200) return false;
           return true;
@@ -684,7 +718,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         acc[p.sport || 'unknown'] = (acc[p.sport || 'unknown'] || 0) + 1;
         return acc;
       }, {});
-      console.log(`After filtering (>= 0.55 conf, not ≤-200 odds): ${allPicks.length} picks by sport:`, sportCounts);
+      console.log(`After filtering: ${allPicks.length} picks by sport:`, sportCounts);
       
       return filteredData || [];
     } catch (error) {

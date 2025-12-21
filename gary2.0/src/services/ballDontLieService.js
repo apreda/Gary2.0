@@ -717,13 +717,39 @@ const ballDontLieService = {
       if (!teamId) return [];
       const cacheKey = `nhl_team_players_${teamId}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players${buildQuery({ 
-          team_ids: [teamId], 
-          seasons: [season],
-          per_page: 100
-        })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
+        let allPlayers = [];
+        let cursor = null;
+
+        do {
+          const params = {
+            team_ids: [teamId],
+            seasons: [season],
+            per_page: 100
+          };
+          if (cursor) {
+            params.cursor = cursor;
+          }
+
+          const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players${buildQuery(params)}`;
+          const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+
+          const players = response.data?.data || [];
+          allPlayers = allPlayers.concat(players);
+
+          // Check for pagination - according to docs, meta.next_cursor indicates more results
+          cursor = response.data?.meta?.next_cursor || null;
+        } while (cursor);
+
+        // Filter to only players currently on this team for this season
+        // Each player has a "teams" array showing their team history
+        const currentPlayers = allPlayers.filter(player => {
+          return player.teams && player.teams.some(teamEntry =>
+            teamEntry.id === teamId && teamEntry.season === season
+          );
+        });
+
+        console.log(`[Ball Don't Lie] NHL team ${teamId} season ${season}: ${currentPlayers.length} active players`);
+        return currentPlayers;
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] nhl getNhlTeamPlayers error:', e.message);
@@ -1348,14 +1374,123 @@ const ballDontLieService = {
   },
 
   /**
+   * Get the starting QB from team roster/depth chart (PREFERRED METHOD)
+   * Uses BDL's /teams/<ID>/roster endpoint which has depth chart positions
+   * depth=1 is the starter, depth=2 is backup, etc.
+   * Also checks injury_status to automatically promote backup if starter is out
+   * 
+   * @param {number} teamId - BDL team ID
+   * @param {number} season - Season year (e.g., 2025)
+   * @returns {Object|null} - { id, name, firstName, lastName, team, depth, injuryStatus, isBackup }
+   */
+  async getStartingQBFromDepthChart(teamId, season = 2025) {
+    try {
+      if (!teamId) return null;
+      
+      // Get the team roster with depth chart
+      const roster = await this.getNflTeamRoster(teamId, season);
+      if (!roster || roster.length === 0) {
+        console.warn(`[Ball Don't Lie] No roster data for team ${teamId}`);
+        return null;
+      }
+      
+      // Filter to QBs only
+      const qbs = roster.filter(entry => 
+        entry.position === 'QB' || 
+        entry.player?.position_abbreviation === 'QB' ||
+        entry.player?.position === 'Quarterback'
+      );
+      
+      if (qbs.length === 0) {
+        console.warn(`[Ball Don't Lie] No QBs found in roster for team ${teamId}`);
+        return null;
+      }
+      
+      // Sort by depth (1 = starter, 2 = backup, etc.)
+      qbs.sort((a, b) => (a.depth || 99) - (b.depth || 99));
+      
+      // Check if depth=1 QB is injured/out
+      const starterEntry = qbs.find(q => q.depth === 1);
+      const backupEntry = qbs.find(q => q.depth === 2);
+      
+      // Injury statuses that mean the player is OUT
+      const isOut = (status) => {
+        if (!status) return false;
+        const s = status.toLowerCase();
+        return s.includes('out') || s.includes('ir') || s.includes('injured reserve') || 
+               s.includes('doubtful') || s.includes('pup');
+      };
+      
+      let selectedQB = starterEntry;
+      let isBackupStarting = false;
+      
+      // If starter is injured/out, use backup
+      if (starterEntry && isOut(starterEntry.injury_status)) {
+        const starterName = `${starterEntry.player?.first_name} ${starterEntry.player?.last_name}`;
+        console.log(`[Ball Don't Lie] ⚠️ Depth chart starter ${starterName} is ${starterEntry.injury_status} - checking backup`);
+        
+        if (backupEntry && !isOut(backupEntry.injury_status)) {
+          selectedQB = backupEntry;
+          isBackupStarting = true;
+          const backupName = `${backupEntry.player?.first_name} ${backupEntry.player?.last_name}`;
+          console.log(`[Ball Don't Lie] ✓ Using backup QB: ${backupName}`);
+        } else {
+          // Even if injured, return the starter info so we have something
+          console.log(`[Ball Don't Lie] ⚠️ No healthy backup available, using injured starter info`);
+        }
+      }
+      
+      if (!selectedQB) {
+        console.warn(`[Ball Don't Lie] Could not determine starting QB for team ${teamId}`);
+        return null;
+      }
+      
+      const player = selectedQB.player;
+      const result = {
+        id: player?.id,
+        firstName: player?.first_name,
+        lastName: player?.last_name,
+        name: `${player?.first_name} ${player?.last_name}`,
+        position: player?.position || 'Quarterback',
+        positionAbbr: player?.position_abbreviation || 'QB',
+        team: player?.team?.full_name || player?.team?.name,
+        teamAbbr: player?.team?.abbreviation,
+        teamId: teamId,
+        jerseyNumber: player?.jersey_number,
+        college: player?.college,
+        experience: player?.experience,
+        age: player?.age,
+        depth: selectedQB.depth,
+        injuryStatus: selectedQB.injury_status,
+        isBackup: isBackupStarting,
+        // Note: Depth chart doesn't have stats - need to fetch separately
+        passingYards: null,
+        passingTds: null,
+        gamesPlayed: null
+      };
+      
+      const statusLabel = isBackupStarting ? 'BACKUP Starting QB' : 'Starting QB';
+      const injuryNote = selectedQB.injury_status ? ` (${selectedQB.injury_status})` : '';
+      console.log(`[Ball Don't Lie] ${statusLabel} from depth chart for team ${teamId}: ${result.name}${injuryNote}`);
+      
+      return result;
+    } catch (e) {
+      console.error(`[Ball Don't Lie] getStartingQBFromDepthChart error for team ${teamId}:`, e.message);
+      return null;
+    }
+  },
+
+  /**
    * Get the starting QB for an NFL/NCAAF team based on season stats (most passing yards)
+   * FALLBACK METHOD - use getStartingQBFromDepthChart as primary
    * @param {number} teamId - BDL team ID
    * @param {number} season - Season year (e.g., 2025)
    * @param {string} sportKey - Sport key ('americanfootball_nfl' or 'americanfootball_ncaaf')
    * @param {number} ttlMinutes - Cache TTL
+   * @param {Set<string>} excludeNames - Set of QB names (lowercase) to exclude (e.g., injured/IR players)
    * @returns {Object|null} - { id, name, firstName, lastName, team, passingYards, passingTds, qbRating, ... }
    */
-  async getTeamStartingQB(teamId, season = 2025, sportKey = 'americanfootball_nfl', ttlMinutes = 60) {
+  async getTeamStartingQB(teamId, season = 2025, sportKey = 'americanfootball_nfl', ttlMinutes = 60, excludeNames = null) {
     try {
       if (!teamId) return null;
       
@@ -1364,8 +1499,10 @@ const ballDontLieService = {
       const apiPath = isNCAAF ? 'ncaaf/v1/season_stats' : 'nfl/v1/season_stats';
       const sportLabel = isNCAAF ? 'ncaaf' : 'nfl';
       
-      const cacheKey = `${sportLabel}_starting_qb_${teamId}_${season}`;
-      return await getCachedOrFetch(cacheKey, async () => {
+      // If we have exclusions, skip cache and fetch fresh to apply filtering
+      const hasExclusions = excludeNames && excludeNames.size > 0;
+      
+      const fetchQB = async () => {
         // Fetch all player season stats for the team
         const url = `${BALLDONTLIE_API_BASE_URL}/${apiPath}${buildQuery({ 
           season, 
@@ -1376,14 +1513,45 @@ const ballDontLieService = {
         const allStats = response.data?.data || [];
         
         // Filter to QBs only (position = "Quarterback" or position_abbreviation = "QB")
-        const qbStats = allStats.filter(p => 
+        let qbStats = allStats.filter(p => 
           p.player?.position === 'Quarterback' || 
           p.player?.position_abbreviation === 'QB' ||
           p.player?.position?.toLowerCase() === 'qb'
         );
         
+        // Track if we actually excluded a meaningful starter
+        let actuallyExcludedStarter = false;
+        
+        // Filter out excluded names (injured/IR QBs) - but only if they have meaningful stats
+        // If a QB has been out all season (0 passing yards), they weren't the starter anyway
+        if (hasExclusions) {
+          const originalCount = qbStats.length;
+          qbStats = qbStats.filter(p => {
+            const fullName = `${p.player?.first_name || ''} ${p.player?.last_name || ''}`.toLowerCase().trim();
+            const passingYards = p.passing_yards || 0;
+            const gamesPlayed = p.games_played || 0;
+            const isExcluded = excludeNames.has(fullName);
+            
+            if (isExcluded) {
+              // Only exclude if they actually played this season (had significant stats)
+              // If they have <100 passing yards or 0 games, they weren't the starter anyway
+              if (passingYards < 100 || gamesPlayed === 0) {
+                console.log(`[Ball Don't Lie] Skipping ${fullName} - injured but wasn't playing anyway (${passingYards} yds, ${gamesPlayed} GP)`);
+                return true; // Keep them in the list, but they won't be selected as starter due to low yards
+              }
+              console.log(`[Ball Don't Lie] ⚠️ Excluding ${fullName} from starting QB consideration (injured/IR, was starter with ${passingYards} yds)`);
+              actuallyExcludedStarter = true;
+              return false; // Exclude this QB - they were the starter but are now out
+            }
+            return true; // Not excluded
+          });
+          if (qbStats.length < originalCount) {
+            console.log(`[Ball Don't Lie] Filtered out ${originalCount - qbStats.length} injured QB(s), ${qbStats.length} remaining`);
+          }
+        }
+        
         if (qbStats.length === 0) {
-          console.warn(`[Ball Don't Lie] No QBs found for ${sportLabel.toUpperCase()} team ${teamId} in ${season}`);
+          console.warn(`[Ball Don't Lie] No available QBs found for ${sportLabel.toUpperCase()} team ${teamId} in ${season}`);
           return null;
         }
         
@@ -1405,12 +1573,22 @@ const ballDontLieService = {
           passingInterceptions: starter.passing_interceptions,
           passingCompletionPct: starter.passing_completion_pct,
           qbRating: starter.qbr || starter.qb_rating,
-          gamesPlayed: starter.games_played
+          gamesPlayed: starter.games_played,
+          isBackup: actuallyExcludedStarter // Flag to indicate this is a backup QB (only if we actually excluded the starter)
         };
         
-        console.log(`[Ball Don't Lie] Starting QB for ${sportLabel.toUpperCase()} team ${teamId}: ${result.name} (${result.passingYards} pass yds)`);
+        const starterLabel = actuallyExcludedStarter ? 'BACKUP Starting QB' : 'Starting QB';
+        console.log(`[Ball Don't Lie] ${starterLabel} for ${sportLabel.toUpperCase()} team ${teamId}: ${result.name} (${result.passingYards} pass yds)`);
         return result;
-      }, ttlMinutes);
+      };
+      
+      // Skip cache if we have exclusions, otherwise use cache
+      if (hasExclusions) {
+        return await fetchQB();
+      }
+      
+      const cacheKey = `${sportLabel}_starting_qb_${teamId}_${season}`;
+      return await getCachedOrFetch(cacheKey, fetchQB, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] getTeamStartingQB error for team ${teamId}:`, e.message);
       return null;

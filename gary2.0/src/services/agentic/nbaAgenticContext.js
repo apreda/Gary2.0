@@ -317,8 +317,32 @@ export async function buildNbaAgenticContext(game, options = {}) {
     away: calcRecentForm(awayRecent, awayTeam.id, 5)
   };
 
+  // Long-term injuries that should NOT count as edges or contradictions
+  // (These are already priced in, not actionable for today's game)
+  const LONG_TERM_INJURY_KEYWORDS = [
+    'out for season', 'season-ending', 'out indefinitely', 'out all year',
+    'ruled out for 2025', 'not expected to return', 'out for the year'
+  ];
+
+  /**
+   * Check if an injury should be ignored (long-term, not an edge)
+   */
+  const isLongTermInjury = (injuryDescription) => {
+    if (!injuryDescription) return false;
+    const lower = injuryDescription.toLowerCase();
+    return LONG_TERM_INJURY_KEYWORDS.some(kw => lower.includes(kw));
+  };
+
+  // Format injuries - filter out Available status and long-term injuries
+  // (Only show actionable injuries that affect today's game)
   const notableInjuries = (injuries || [])
-    .filter((injury) => injury?.status && injury.status !== 'Available')
+    .filter((injury) => {
+      // Exclude Available players
+      if (!injury?.status || injury.status === 'Available') return false;
+      // Exclude long-term injuries (season-ending, etc.) - these are already priced in
+      if (isLongTermInjury(injury.description)) return false;
+      return true;
+    })
     .map((injury) => ({
       player: `${injury?.player?.first_name || ''} ${injury?.player?.last_name || ''}`.trim(),
       status: injury?.status,
@@ -336,20 +360,37 @@ export async function buildNbaAgenticContext(game, options = {}) {
   let richContext = null;
   try {
     const dateStr = commenceDate.toISOString().slice(0, 10);
+    console.log('[Agentic][NBA] Fetching Perplexity rich context (venue, tournament, trends)...');
     richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nba', dateStr);
+    if (richContext?.venue) {
+      console.log(`[Agentic][NBA] ✓ Venue from Perplexity: ${richContext.venue}`);
+    }
+    if (richContext?.tournament_context) {
+      console.log(`[Agentic][NBA] ✓ Tournament context: ${richContext.tournament_context}`);
+    }
+    if (richContext?.is_neutral_site) {
+      console.log(`[Agentic][NBA] ✓ Neutral site game detected`);
+    }
   } catch (error) {
     console.warn('[Agentic][NBA] Perplexity rich context failed:', error.message);
   }
+
+  // Determine actual game location (use Perplexity venue if available, especially for neutral sites)
+  const isNeutralSite = richContext?.is_neutral_site === true;
+  const actualVenue = richContext?.venue || `${homeTeam.city || ''} (${homeTeam.conference} ${homeTeam.division})`;
+  const tournamentContext = richContext?.tournament_context || null;
 
   const gameSummary = {
     gameId: `nba-${game.id}`,
     sport: 'basketball_nba',
     league: 'NBA',
-    matchup: `${game.away_team} @ ${game.home_team}`,
+    matchup: isNeutralSite ? `${game.away_team} vs ${game.home_team}` : `${game.away_team} @ ${game.home_team}`,
     homeTeam: homeTeam.full_name,
     awayTeam: awayTeam.full_name,
     tipoff: formatGameTimeEST(game.commence_time),
-    location: `${homeTeam.city || ''} (${homeTeam.conference} ${homeTeam.division})`,
+    location: actualVenue,
+    isNeutralSite,
+    tournamentContext,
     odds: {
       spread: marketSnapshot.spread,
       moneyline: marketSnapshot.moneyline
@@ -361,7 +402,8 @@ export async function buildNbaAgenticContext(game, options = {}) {
     narrative: {
       home: formatBasics(homeTeam).streak ? `Streak: ${formatBasics(homeTeam).streak}` : '',
       away: formatBasics(awayTeam).streak ? `Streak: ${formatBasics(awayTeam).streak}` : '',
-      notes: richContext?.summary || null
+      notes: richContext?.summary || null,
+      tournamentNote: tournamentContext ? `🏆 ${tournamentContext}` : null
     }
   };
 

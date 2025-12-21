@@ -54,12 +54,15 @@ export default function GaryProps() {
       
       if (selectedSport === 'NFL TDs') {
         // Special filter for NFL TD scorer picks only
-        // Sort by category first (standard before underdog), then by time
+        // Sort by category first (standard → underdog → first_td), then by time
+        const categoryOrder = { 'standard': 0, 'underdog': 1, 'first_td': 2 };
         filteredPicks = allPicks
           .filter(p => p.td_category !== undefined)
           .sort((a, b) => {
-            if (a.td_category !== b.td_category) {
-              return a.td_category === 'standard' ? -1 : 1;
+            const orderA = categoryOrder[a.td_category] ?? 3;
+            const orderB = categoryOrder[b.td_category] ?? 3;
+            if (orderA !== orderB) {
+              return orderA - orderB;
             }
             return parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time);
           });
@@ -268,23 +271,29 @@ export default function GaryProps() {
         
         {/* NFL TDs Description Banner */}
         {selectedSport === 'NFL TDs' && (
-          <div className="text-center mb-4 bg-[#1a1a1a] border border-[#22c55e]/30 rounded-lg p-4 max-w-2xl mx-auto">
+          <div className="text-center mb-4 bg-[#1a1a1a] border border-[#22c55e]/30 rounded-lg p-4 max-w-3xl mx-auto">
             <div className="flex items-center justify-center gap-2 mb-2">
               <span className="text-lg">🏈</span>
               <span className="text-white font-bold">Gary's TD Scorer Picks</span>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-3 gap-3 text-sm">
               <div className="text-left">
                 <span className="inline-block px-2 py-1 bg-blue-600/20 text-blue-400 font-semibold rounded text-xs mb-1">
                   ✅ Standard (5 picks)
                 </span>
-                <p className="text-gray-400 text-xs">Gary's highest-confidence TD scorers based on usage, matchups & red zone data.</p>
+                <p className="text-gray-400 text-xs">Gary's highest-confidence TD scorers based on usage & matchups.</p>
               </div>
               <div className="text-left">
                 <span className="inline-block px-2 py-1 bg-green-600/20 text-green-400 font-semibold rounded text-xs mb-1">
                   🎰 Longshots (5 picks)
                 </span>
-                <p className="text-gray-400 text-xs">Value plays at +200 or better. Higher risk, bigger payouts if they hit!</p>
+                <p className="text-gray-400 text-xs">Value plays at +200 or better. Higher risk, bigger payouts!</p>
+              </div>
+              <div className="text-left">
+                <span className="inline-block px-2 py-1 bg-purple-600/20 text-purple-400 font-semibold rounded text-xs mb-1">
+                  🥇 First TD (3 picks)
+                </span>
+                <p className="text-gray-400 text-xs">Players most likely to score the first TD of their game.</p>
               </div>
             </div>
           </div>
@@ -336,11 +345,13 @@ export default function GaryProps() {
                                   letterSpacing: '0.05em',
                                   background: pick.td_category === 'underdog' 
                                     ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' 
+                                    : pick.td_category === 'first_td'
+                                    ? 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)'
                                     : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                                   color: '#fff',
                                   boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
                                 }}>
-                                  {pick.td_category === 'underdog' ? '🎰 Longshot' : '🏈 Standard'}
+                                  {pick.td_category === 'underdog' ? '🎰 Longshot' : pick.td_category === 'first_td' ? '🥇 First TD' : '🏈 Standard'}
                                 </div>
                               )}
                               
@@ -356,8 +367,10 @@ export default function GaryProps() {
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gary's Pick</div>
                                 <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2, color: '#bfa142', wordWrap: 'break-word', wordBreak: 'break-word'}}>
                                   {pick.td_category ? (
-                                    // TD scorer picks - show as "Player to Score TD"
-                                    `${pick.player} to Score TD`
+                                    // TD scorer picks - show appropriate label
+                                    pick.td_category === 'first_td' 
+                                      ? `${pick.player} First TD Scorer`
+                                      : `${pick.player} to Score TD`
                                   ) : pick.player && pick.bet && pick.prop ? (
                                     `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)} ${pick.line || ''}`.trim()
                                   ) : (
@@ -419,7 +432,7 @@ export default function GaryProps() {
                                     </p>
                                     <p style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0 }}>
                                       {pick.td_category 
-                                        ? (pick.td_category === 'underdog' ? '🎰 Value' : '✅ Chalk')
+                                        ? (pick.td_category === 'underdog' ? '🎰 Value' : pick.td_category === 'first_td' ? '🥇 1st TD' : '✅ Chalk')
                                         : (pick.confidence ? `${Math.round(pick.confidence * 100)}%` : 'N/A')}
                                     </p>
                                   </div>
@@ -429,7 +442,7 @@ export default function GaryProps() {
                                       fontSize: '0.85rem', 
                                       fontWeight: 700, 
                                       margin: 0,
-                                      color: pick.td_category === 'underdog' ? '#22c55e' : 'inherit'
+                                      color: pick.td_category === 'underdog' ? '#22c55e' : pick.td_category === 'first_td' ? '#a855f7' : 'inherit'
                                     }}>
                                       {pick.odds ? (
                                         typeof pick.odds === 'number' ?

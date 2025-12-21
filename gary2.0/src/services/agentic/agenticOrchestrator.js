@@ -6,10 +6,11 @@
  */
 
 import OpenAI from 'openai';
-import { toolDefinitions, formatTokenMenu } from './tools/toolDefinitions.js';
+import { toolDefinitions, formatTokenMenu, getTokensForSport } from './tools/toolDefinitions.js';
 import { fetchStats } from './tools/statRouter.js';
 import { getConstitution } from './constitution/index.js';
 import { buildScoutReport } from './scoutReport/scoutReportBuilder.js';
+import { ballDontLieService } from '../ballDontLieService.js';
 
 // Lazy-initialize OpenAI client
 let openai = null;
@@ -39,45 +40,91 @@ const CONFIG = {
  */
 export async function analyzeGame(game, sport, options = {}) {
   const startTime = Date.now();
-  const homeTeam = game.home_team;
-  const awayTeam = game.away_team;
-  
+  let homeTeam = game.home_team;
+  let awayTeam = game.away_team;
+
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`🐻 GARY AGENTIC ANALYSIS: ${awayTeam} @ ${homeTeam}`);
   console.log(`Sport: ${sport}`);
   console.log(`${'═'.repeat(70)}\n`);
-  
+
   try {
     // Step 1: Build the scout report (Level 1 context)
     console.log('[Orchestrator] Building scout report...');
     const scoutReportData = await buildScoutReport(game, sport);
-    
+
     // Handle both old (string) and new (object) formats
     const scoutReport = typeof scoutReportData === 'string' ? scoutReportData : scoutReportData.text;
     const injuries = typeof scoutReportData === 'object' ? scoutReportData.injuries : null;
-    
+    // Extract venue context (for NBA Cup, neutral site games, CFP games, etc.)
+    const venueContext = typeof scoutReportData === 'object' ? {
+      venue: scoutReportData.venue,
+      isNeutralSite: scoutReportData.isNeutralSite,
+      tournamentContext: scoutReportData.tournamentContext,
+      gameSignificance: scoutReportData.gameSignificance,
+      // CFP-specific fields for NCAAF
+      cfpRound: scoutReportData.cfpRound,
+      homeSeed: scoutReportData.homeSeed,
+      awaySeed: scoutReportData.awaySeed
+    } : null;
+
     // Step 2: Get the constitution for this sport
     const constitution = getConstitution(sport);
-    
+
     // Step 3: Build the system prompt
     const systemPrompt = buildSystemPrompt(constitution, sport);
-    
+
     // Step 4: Build the initial user message
     const userMessage = buildUserMessage(scoutReport, homeTeam, awayTeam);
-    
+
     // Step 5: Run the agent loop
-    const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options);
-    
+    // Include game time for weather forecasting (only fetch weather within 36h of game time)
+    const enrichedOptions = {
+      ...options,
+      gameTime: game.commence_time || null
+    };
+    const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
+
+    // NCAAB: normalize display team names to full school names (avoid mascot-only like "Tigers")
+    if (sport === 'basketball_ncaab') {
+      try {
+        const [homeResolved, awayResolved] = await Promise.all([
+          ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.home_team).catch(() => null),
+          ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.away_team).catch(() => null)
+        ]);
+        if (homeResolved?.full_name) homeTeam = homeResolved.full_name;
+        if (awayResolved?.full_name) awayTeam = awayResolved.full_name;
+      } catch {
+        // ignore - fall back to original strings
+      }
+    }
+
     // Add injuries to result for storage
     if (injuries) {
       result.injuries = injuries;
     }
-    
+
+    // Add venue context (for NBA Cup, neutral site games, CFP games, etc.)
+    if (venueContext) {
+      result.venue = venueContext.venue;
+      result.isNeutralSite = venueContext.isNeutralSite;
+      result.tournamentContext = venueContext.tournamentContext;
+      result.gameSignificance = venueContext.gameSignificance;
+      // CFP-specific fields for NCAAF
+      result.cfpRound = venueContext.cfpRound;
+      result.homeSeed = venueContext.homeSeed;
+      result.awaySeed = venueContext.awaySeed;
+    }
+
+    // Ensure result contains the canonical matchup strings used by the UI
+    result.homeTeam = homeTeam;
+    result.awayTeam = awayTeam;
+
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`\n[Orchestrator] Analysis complete in ${elapsed}s`);
-    
+
     return result;
-    
+
   } catch (error) {
     console.error(`[Orchestrator] Error analyzing game:`, error);
     return {
@@ -109,7 +156,7 @@ the flow of the game, and explain WHY your pick is going to cash.
 
 - **Confident but not cocky**: You've done the work, you trust the numbers
 - **Storytelling**: Paint a picture - "I see Donovan Mitchell carving up that Portland Trail Blazers defense..."
-- **Specific**: Name players by full name, cite exact stats, use FULL TEAM NAMES always
+- **Specific**: Name players by full name, cite exact stats
 - **Persuasive**: You're convincing ME to tail this pick
 - **Natural**: Sound like a real analyst, not an AI with canned phrases
 
@@ -134,12 +181,6 @@ GOOD EXAMPLES:
 - "This spread is too wide. [Underdog] has been competitive in every road game this month."
 - "[Player] being out changes everything about this matchup."
 - "Two teams trending in opposite directions meet tonight, and the market hasn't caught up."
-
-## 🚨 FULL TEAM NAMES REQUIRED 🚨
-ALWAYS use the FULL TEAM NAME. Never use just mascots or abbreviations.
-❌ WRONG: "their loss to the Lions" / "the Cowboys couldn't score"
-✅ RIGHT: "their loss to the Detroit Lions" / "the Dallas Cowboys couldn't score"
-Readers need to know EXACTLY which team you're referencing. City + Team Name every time.
 
 ## CORE PRINCIPLES
 
@@ -257,9 +298,15 @@ When you have sufficient evidence and are ready to finalize, output this JSON:
 \`\`\`json
 {
   "pick": "Team Name ML -150" or "Team Name +3.5 -110",
-  "type": "spread" or "moneyline" or "total",
+  "type": "spread" or "moneyline",
   "odds": -150,
   "confidence": 0.XX,
+  "confidence_calc": "0.55 base + 0.06 (factor) - 0.05 (factor) = 0.XX",
+  "thesis_type": "clear_read" or "found_angle" or "educated_lean" or "coin_flip",
+  "thesis_mechanism": "One specific sentence explaining WHY this team wins/covers",
+  "supporting_factors": ["factor1", "factor2", "factor3"],
+  "contradicting_factors_major": ["star_player_out", "back_to_back"],
+  "contradicting_factors_minor": ["slight_pace_disadvantage"],
   "homeTeam": "Home Team Name",
   "awayTeam": "Away Team Name",
   "spread": -3.5,
@@ -270,6 +317,57 @@ When you have sufficient evidence and are ready to finalize, output this JSON:
   "rationale": "Your GARY-STYLE analysis - see requirements below"
 }
 \`\`\`
+
+### THESIS TYPE CATEGORIES (CRITICAL - BE HONEST)
+
+Your thesis_type reflects the QUALITY of your reasoning, not your certainty about winning:
+
+**clear_read** - Use when:
+- 3+ key stats all point the same direction
+- Large gaps in efficiency/record metrics
+- You can articulate a specific mechanism: "They win because X, Y, AND Z"
+- Example: "Houston's elite defense (110.0) meets New Orleans' worst-in-league offense (107.2). With Murray out, Pelicans have no answer."
+
+**found_angle** - Use when:
+- Stats are mixed or close overall
+- BUT you identified ONE specific factor that tips the game
+- Usually tied to: key injury, specific matchup, situational edge
+- Example: "Stats look even, but their backup center can't guard Wembanyama. That's the game."
+
+**educated_lean** - Use when:
+- Stats slightly favor one side
+- No specific mechanism identified
+- You're essentially saying "they're probably better"
+- BE HONEST: If you cannot articulate WHY they win beyond "better numbers," this is you
+
+**coin_flip** - Use when:
+- Stats are truly even
+- You do not have a strong read
+- You are making a pick because you have to, not because you see something
+
+**thesis_mechanism** explains WHY this team wins/covers. Can be multi-factor - games are complex!
+- GOOD: "Boston's home court, turnover edge, and offensive rebounding combine against a Miami team on a back-to-back with a 1-4 skid."
+- GOOD: "Their 3PT defense is elite (32.1%) against an opponent that shoots 41% from deep, plus rest advantage."
+- BAD: "They are the better team and should cover." (Too vague - this is educated_lean territory)
+
+NOTE: If a player has been OUT for 3+ weeks, their absence is NOT an angle - the team's stats already reflect playing without them. Only RECENT injuries (last 1-2 weeks) create edges.
+
+**supporting_factors**: List the stats/factors that support your pick (e.g., "defensive_rating_gap", "key_injury", "home_record")
+
+**contradicting_factors_major**: List MAJOR factors that could flip the outcome:
+- Star player out (e.g., "trae_young_out", "mahomes_limited")
+- Back-to-back / severe rest disadvantage
+- Significant cold streak (5+ game losing streak)
+- Major injury to key position
+- Road favorite laying big points against desperate team
+
+**contradicting_factors_minor**: List minor concerns unlikely to change the outcome:
+- Single recent loss
+- Slight statistical disadvantages (turnover rate, pace mismatch)
+- Minor role player injuries
+- Small home/away splits difference
+
+Be HONEST about major contradictions - they help you (and us) gauge pick quality.
 
 **NOTE:** The stats will be extracted from your rationale's TALE OF THE TAPE section automatically.
 Do NOT include a "stats" field in your JSON - it causes parsing issues.
@@ -308,27 +406,13 @@ Before mentioning ANY player, check the injury report in your scout report.
 ❌ BAD: "Jayden Daniels will run all over this defense" (when Daniels is questionable/out)
 ✅ GOOD: "With Jayden Daniels questionable, Washington's offense loses its biggest weapon..."
 
-### STAT FORMATTING RULE (REQUIRED)
-EVERY claim about a team or player MUST include a stat in parentheses.
-You CANNOT make a claim without backing it up with a number.
-
-✅ "This Lions offensive line is elite (ranked #3 in pass blocking, allowing just 1.2 sacks per game)"
-✅ "Goff has been surgical at home (72.4% completion rate, 9 TDs to 1 INT in last 4 home games)"
-✅ "Minnesota's defense has been stout (allowing 18.2 PPG, 3rd in the NFL)"
-
-❌ "This Lions offensive line is elite" (NO STAT - NOT ALLOWED)
-❌ "Minnesota's defense has been playing well lately" (VAGUE - NOT ALLOWED)
-❌ "Goff has a 72.4% completion rate" (stat without context - needs explanation first)
-
-RULE: If you can't cite a specific stat, don't make the claim.
-
 ### DEPTH REQUIREMENT
 Your analysis should be 300-500 words minimum. Short, vague analysis is NOT acceptable.
 You should request AT LEAST 6-8 different stat categories before making your pick.
-Every paragraph should have 2-3 specific stats in parentheses backing up your claims.
+Back up your claims with specific numbers and context.
 
 ❌ TOO SHORT: "Tampa Bay at home against a struggling Saints team is the spot to be."
-✅ GOOD DEPTH: "Tampa Bay at home is a different animal this year (7-2 at Raymond James, averaging 28.4 PPG). Baker Mayfield has been dialed in (68.2% completion, 24 TDs to just 8 INTs) and this receiving corps with Mike Evans and Chris Godwin creates mismatches that New Orleans' secondary (allowing 7.8 YPA, 27th in the league) simply can't handle."
+✅ GOOD DEPTH: "Tampa Bay at home is a different animal this year - they're 7-2 at Raymond James, averaging 28.4 PPG. Baker Mayfield has been dialed in with a 68.2% completion rate, 24 TDs to just 8 INTs, and this receiving corps with Mike Evans and Chris Godwin creates mismatches that New Orleans' secondary simply can't handle, allowing 7.8 YPA which ranks 27th in the league."
 Every analysis must have a DIFFERENT opening that's specific to THIS game's storyline.
 
 GOOD EXAMPLES:
@@ -368,16 +452,19 @@ Examples:
 "Only way this misses is if Portland gets hot from deep and Cleveland sleepwalks - 
 and I don't see that happening at Rocket Mortgage FieldHouse."
 
-CONFIDENCE SCALE:
-- 0.60-0.65: I like it, but there's real risk
-- 0.66-0.72: This is a strong play - multiple factors align
-- 0.73-0.80: I'm pounding this - massive edge
-- 0.81+: Rare - absolute lock, run to the window
+CONFIDENCE SCORE (0.50 - 1.00):
+
+Based on your advanced sports betting knowledge, provide a confidence score reflecting your TRUE CONVICTION in this pick. Use the full 0.50-1.00 range. Trust your judgment - you know which factors matter and how to weigh them.
+
+BETTING SPOTS MATTER: Consider situational factors like rest disadvantage (back-to-backs, 3 games in 4 days), travel, lookahead spots (big game coming up), letdown spots (coming off emotional win), revenge games, etc. A good "spot" can make or break a pick - but only if the line hasn't already adjusted for it.
+
+INJURY CONTEXT: Only treat an injury as an "angle" if it's RECENT (last 1-2 weeks). If a star player has been out for an extended period, the team's stats already reflect playing without them - that's not an edge, that's just reality.
+
 `.trim();
 }
 
 /**
- * Build the PASS 1 user message - Initial hypothesis
+ * Build the PASS 1 user message - Gather stats, DO NOT pick a side yet
  * Only gives instructions for the FIRST pass to prevent instruction contamination
  */
 function buildPass1Message(scoutReport, homeTeam, awayTeam) {
@@ -387,72 +474,117 @@ function buildPass1Message(scoutReport, homeTeam, awayTeam) {
 ${scoutReport}
 
 ══════════════════════════════════════════════════════════════════════
-## YOUR TASK: PASS 1 - FORM YOUR HYPOTHESIS
+## YOUR TASK: PASS 1 - GATHER DATA (DO NOT PICK A SIDE YET)
 
-You have just received this matchup. You have NO statistical data yet.
+You have the scout report above. Now you need STATS before forming any opinion.
 
 **INSTRUCTIONS:**
-1. **READ THE INJURY REPORT FIRST.** Who is OUT/DOUBTFUL? This shapes everything.
-2. **Read the scout report.** What's the narrative? What's the edge?
-3. **Form your initial hypothesis.** What specific mismatch will decide this game?
-4. **Request your first wave of stats.** Call the \`fetch_stats\` tool for **6-8 categories** to PROVE your hypothesis.
+1. **NOTE THE KEY FACTORS from the scout report:**
+   - Injuries: Who is OUT? How impactful? (Remember: long-term injuries = NOT an angle)
+   - Rest/Spot: Any back-to-backs? Rest advantages?
+   - Narrative: Any revenge games, streaks, or situational edges?
 
-**MINIMUM STATS REQUIRED:** You MUST request at least 6 different stat categories.
-Think about: offensive efficiency, defensive efficiency, recent form, specific player stats,
-red zone performance, turnover margin, pace/tempo, home/away splits.
+2. **DO NOT PICK A SIDE YET.** You need stats first.
 
-**THINK OUT LOUD** - Tell me what you're seeing and what you expect to find.
+3. **REQUEST STATS** to investigate this matchup - get what you need:
+   - Efficiency metrics (offensive/defensive ratings, net rating)
+   - Shooting and scoring patterns
+   - Recent form and trends
+   - Home/away performance
+   - Any matchup-specific stats relevant to this game
 
-**ACTION:** Do NOT output a pick yet. Call the fetch_stats tool to get your data.
+**CRITICAL:** You are GATHERING EVIDENCE, not building a case for one side.
+Stay neutral. Let the stats + scout report TOGETHER determine your pick.
+
+**ACTION:** Call the fetch_stats tool for the categories you need. Do NOT output a pick yet.
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 }
 
 /**
- * Build the PASS 2 message - Analyze and go deeper
+ * Build the PASS 2 message - Analyze both sides as a neutral analyst
  * Injected AFTER Gary receives the first wave of stats
  */
 function buildPass2Message() {
   return `
 ══════════════════════════════════════════════════════════════════════
-## PASS 2 - ANALYZE & DIG DEEPER
+## PASS 2 - ANALYZE & FORM YOUR PREDICTION (NOW you have data)
 
-You now have your first wave of stats. Time to think critically.
+You now have the scout report AND your first wave of stats.
+Time to analyze both sides as a NEUTRAL ANALYST.
 
 **INSTRUCTIONS:**
-1. **Verify your hypothesis.** Do these numbers support what you expected?
-2. **Look for surprises.** What's different than you expected? Any red flags?
-3. **BUILD YOUR CASE.** You need enough stats to write a DETAILED analysis.
+1. **COMBINE SCOUT REPORT + STATS:**
+   - Which factors from the scout report (injuries, rest, spot) are confirmed by stats?
+   - Which stats reveal something you didn't expect?
+   - Are there any RED FLAGS that make one side risky?
 
-**DEPTH CHECK:** Do you have enough stats to write 4+ paragraphs with 2-3 stats each?
-If NOT, request MORE stats now. Your final rationale needs specific numbers for EVERY claim.
+2. **ANALYZE BOTH SIDES (BE A NEUTRAL ANALYST):**
+   - What do the stats and factors say about the HOME team?
+   - What do the stats and factors say about the AWAY team?
+   - Where do the numbers actually point?
 
-**ACTION:** Call fetch_stats for 4-6 MORE categories to complete your analysis:
-- Player-specific stats (QB performance, key defenders)
-- Situational stats (red zone, third down, turnover margin)
-- Recent trends (last 3-5 games performance)
-- Head-to-head or divisional history if relevant
+3. **FORM YOUR PREDICTION:**
+   - Based on ALL the evidence, how do you see this game playing out?
+   - Which side would you stake your money on?
+   - What are the KEY FACTORS driving your prediction?
+   - Be specific - "they're better" isn't analysis
 
-**THINK OUT LOUD** about what the data is telling you and what gaps remain.
+4. **IDENTIFY FACTORS AGAINST YOUR PREDICTION:**
+   - What factors work against your prediction?
+   - Request additional stats to get a complete picture
+
+5. **GET MORE DATA IF NEEDED** - Request additional stats to:
+   - Fill gaps in your analysis
+   - Test your prediction against contradicting evidence
+   - Build a complete picture
+
+**IMPORTANT:** It's okay if you don't see a clear side to bet.
+Good gamblers are SELECTIVE - they don't bet every game.
+If the evidence is mixed or it feels like a coin flip, note that now.
+No pick IS a valid outcome.
+
+**ACTION:** Call fetch_stats for any additional categories you need.
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 }
 
 /**
- * Build the PASS 3 message - Final synthesis
+ * Build the PASS 3 message - Consider full picture and finalize prediction
  * Injected AFTER Gary has all the stats he needs
  */
 function buildPass3Message() {
   return `
 ══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL SYNTHESIS
+## PASS 3 - CONSIDER FULL PICTURE & FINALIZE
 
-You have all your data. Time to make the call.
+You have your prediction and all your data. Now consider the FULL PICTURE.
 
-**BEFORE YOU PICK, ASK YOURSELF:**
-- "Am I being too obvious? What is the market seeing?"
-- "What's the STRONGEST argument against my pick?"
-- "Am I confident enough to put money on this?"
+**STEP 1: CONSIDER THE FULL PICTURE**
+- Review the factors that SUPPORT your prediction
+- Review the factors that work AGAINST your prediction
+- Are the contradictions significant enough to change your mind?
+
+**STEP 2: MAKE YOUR FINAL PREDICTION**
+1. If the evidence clearly supports one side → Make the pick
+2. If the contradictions are too strong → Switch sides
+3. **PASS** on this game → This is a VALID outcome
+   - If you wouldn't confidently stake your own money, don't force a pick
+   - Good gamblers sit out games that are too close to call
+   - Use thesis_type: "coin_flip" and we'll filter it out
+   - This is NOT a failure - it's discipline
+
+**STEP 3: ASSIGN CONFIDENCE**
+- How confident are you in this prediction?
+- This is about how CLEAR the evidence is, not how much you "like" the pick
+- Use the full 0.50-1.00 range based on YOUR judgment of the evidence
+- Trust your analysis - you know what the numbers say and how meaningful they are
+- If you're genuinely uncertain, a lower confidence or PASS is the right call
+
+**FINAL GUT CHECK:**
+- "Would I stake my own money on this?" If NO → pass or lower confidence
+- "What's the STRONGEST argument against my pick?" (must list as contradiction)
+- "Is the line already pricing in what I see?" If YES → less confident
 
 **NOW OUTPUT YOUR FINAL PICK:**
 
@@ -484,7 +616,7 @@ INVENTING A SINGLE GAME SCORE MAKES YOUR ENTIRE ANALYSIS WORTHLESS AND DESTROYS 
 5. **EXPLAIN stats in plain English** - "they're shooting an elite 54.8% effective rate"
 6. **TELL THE STORY THROUGH PLAYERS** - Name names! "Jalen Brunson's 27 PPG..."
 7. **NO PREFACE CLICHÉS** - NEVER say "The numbers don't lie", "Here's how I see it", "Lock this in", "This screams value"
-8. **FULL TEAM NAMES** - ALWAYS use City + Team Name (e.g., "Detroit Lions", never just "the Lions")
+8. **PLAYER-INJURY CROSS-REFERENCE** - Never describe injured players as active contributors
 
 🚨 **RULE 8: PLAYER-INJURY CROSS-REFERENCE (CRITICAL!)** 🚨
 Before naming ANY player in your narrative, CHECK THE INJURY REPORT from the scout report:
@@ -518,14 +650,19 @@ Key Injuries           [names]              [names]
 
 The arrow (← or →) shows which side has the advantage for that stat.
 
+### VENUE CONTEXT
+- Only mention "neutral court/site" if the game IS on a neutral court (NBA Cup knockout, NCAA tournament, etc.)
+- Your rationale should flow from the TOTALITY of your analysis, not be dominated by any single factor
+
 Gary's Take
 🚨 **ONE UNIFIED SECTION - STORY MODE** 🚨
-Since stats are displayed above in Tale of the Tape, write ONE concise narrative section.
+Since stats are displayed above in Tale of the Tape, write ONE narrative section.
 
 RULES:
 - Reference stats by NAME not values (users see the numbers above)
-- Keep it SHORT: 2-3 paragraphs max, ~100-150 words total
-- Name key players and explain the matchup
+- LENGTH: 3-4 paragraphs, ~250-350 words (enough to tell the story, not a novel)
+- Name key players and explain the matchup dynamics
+- Explain WHY your pick wins - the mechanism, not just "they're better"
 - End with a confident closing sentence that includes the pick
 
 ❌ DON'T: "Boston's +4.1 net rating (119.1 offense, 115.0 defense) vs Washington's -10.3..."
@@ -578,14 +715,14 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userMessage }
   ];
-  
+
   let iteration = 0;
   const toolCallHistory = [];
-  
+
   while (iteration < CONFIG.maxIterations) {
     iteration++;
     console.log(`\n[Orchestrator] Iteration ${iteration}/${CONFIG.maxIterations}`);
-    
+
     // Call OpenAI with tools - GPT-5.1 with high reasoning
     const response = await getOpenAI().chat.completions.create({
       model: CONFIG.model,
@@ -596,27 +733,441 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       // GPT-5.1 deep reasoning parameters
       reasoning_effort: 'high' // Enable "o1-style" deep thinking
     });
-    
+
     const message = response.choices[0].message;
     const finishReason = response.choices[0].finish_reason;
-    
+
     // Log token usage
     if (response.usage) {
       console.log(`[Orchestrator] Tokens - Prompt: ${response.usage.prompt_tokens}, Completion: ${response.usage.completion_tokens}`);
     }
-    
+
     // Check if Gary requested tool calls
     if (message.tool_calls && message.tool_calls.length > 0) {
       console.log(`[Orchestrator] Gary requested ${message.tool_calls.length} stat(s):`);
-      
+
       // Add Gary's message to history
       messages.push(message);
-      
+
       // Process each tool call
       for (const toolCall of message.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments);
+        const functionName = toolCall.function.name;
+
+        // Handle fetch_nfl_player_stats tool (advanced player stats)
+        if (functionName === 'fetch_nfl_player_stats') {
+          console.log(`  → [NFL_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
+
+          try {
+            const { ballDontLieService } = await import('../ballDontLieService.js');
+
+            let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
+
+            // Get team ID first
+            const teams = await ballDontLieService.getTeams('americanfootball_nfl');
+            const team = teams.find(t =>
+              t.full_name?.toLowerCase().includes(args.team.toLowerCase()) ||
+              t.name?.toLowerCase().includes(args.team.toLowerCase()) ||
+              t.location?.toLowerCase().includes(args.team.toLowerCase())
+            );
+
+            if (!team) {
+              statResult.error = `Team "${args.team}" not found`;
+            } else {
+              const season = 2025;
+
+              if (args.stat_type === 'PASSING') {
+                const data = await ballDontLieService.getNflAdvancedPassingStats({ season });
+                // Filter by team and optionally player
+                statResult.data = (data || [])
+                  .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
+                  .filter(p => !args.player_name ||
+                    `${p.player?.first_name} ${p.player?.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()))
+                  .slice(0, 5)
+                  .map(p => ({
+                    player: `${p.player?.first_name} ${p.player?.last_name}`,
+                    position: p.player?.position_abbreviation,
+                    gamesPlayed: p.games_played,
+                    completionPct: p.completion_percentage?.toFixed(1),
+                    completionAboveExpected: p.completion_percentage_above_expectation?.toFixed(1),
+                    avgTimeToThrow: p.avg_time_to_throw?.toFixed(2),
+                    aggressiveness: p.aggressiveness?.toFixed(1),
+                    avgAirYards: p.avg_intended_air_yards?.toFixed(1),
+                    passingYards: p.pass_yards,
+                    passingTDs: p.pass_touchdowns,
+                    interceptions: p.interceptions,
+                    passerRating: p.passer_rating?.toFixed(1)
+                  }));
+              } else if (args.stat_type === 'RUSHING') {
+                const data = await ballDontLieService.getNflAdvancedRushingStats({ season });
+                statResult.data = (data || [])
+                  .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
+                  .filter(p => !args.player_name ||
+                    `${p.player?.first_name} ${p.player?.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()))
+                  .slice(0, 5)
+                  .map(p => ({
+                    player: `${p.player?.first_name} ${p.player?.last_name}`,
+                    position: p.player?.position_abbreviation,
+                    rushAttempts: p.rush_attempts,
+                    rushYards: p.rush_yards,
+                    rushTDs: p.rush_touchdowns,
+                    yardsOverExpected: p.rush_yards_over_expected?.toFixed(1),
+                    yardsOverExpectedPerAtt: p.rush_yards_over_expected_per_att?.toFixed(2),
+                    efficiency: p.efficiency?.toFixed(2),
+                    avgTimeToLOS: p.avg_time_to_los?.toFixed(2),
+                    avgRushYards: p.avg_rush_yards?.toFixed(1)
+                  }));
+              } else if (args.stat_type === 'RECEIVING') {
+                const data = await ballDontLieService.getNflAdvancedReceivingStats({ season });
+                statResult.data = (data || [])
+                  .filter(p => p.player?.team?.id === team.id || p.player?.team?.full_name === team.full_name)
+                  .filter(p => !args.player_name ||
+                    `${p.player?.first_name} ${p.player?.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()))
+                  .slice(0, 8)
+                  .map(p => ({
+                    player: `${p.player?.first_name} ${p.player?.last_name}`,
+                    position: p.player?.position_abbreviation,
+                    targets: p.targets,
+                    receptions: p.receptions,
+                    catchPct: p.catch_percentage?.toFixed(1),
+                    yards: p.yards,
+                    recTDs: p.rec_touchdowns,
+                    avgSeparation: p.avg_separation?.toFixed(2),
+                    avgYAC: p.avg_yac?.toFixed(1),
+                    yacAboveExpected: p.avg_yac_above_expectation?.toFixed(1),
+                    avgCushion: p.avg_cushion?.toFixed(1),
+                    avgIntendedAirYards: p.avg_intended_air_yards?.toFixed(1)
+                  }));
+              }
+
+              if (statResult.data.length === 0) {
+                statResult.message = `No ${args.stat_type.toLowerCase()} stats found for ${team.full_name}`;
+              }
+            }
+
+            // Store in history
+            toolCallHistory.push({
+              token: `NFL_PLAYER_STATS:${args.stat_type}`,
+              timestamp: Date.now(),
+              homeValue: statResult.data?.length || 0,
+              awayValue: 'players',
+              rawResult: statResult
+            });
+
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: JSON.stringify(statResult, null, 2)
+            });
+          } catch (error) {
+            console.error('[Orchestrator] Error fetching NFL player stats:', error.message);
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: JSON.stringify({ error: error.message, stat_type: args.stat_type })
+            });
+          }
+
+          continue; // Skip the regular fetch_stats handling
+        }
+
+        // Handle fetch_nhl_player_stats tool
+        if (functionName === 'fetch_nhl_player_stats') {
+          console.log(`  → [NHL_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
+
+          try {
+            const { ballDontLieService } = await import('../ballDontLieService.js');
+
+            let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
+            const season = 2024; // 2024-25 season
+
+            // Get team ID first
+            const teams = await ballDontLieService.getTeams('icehockey_nhl');
+            const team = teams.find(t =>
+              t.full_name?.toLowerCase().includes(args.team.toLowerCase()) ||
+              t.tricode?.toLowerCase() === args.team.toLowerCase()
+            );
+
+            if (!team && args.stat_type !== 'LEADERS') {
+              statResult.error = `Team "${args.team}" not found`;
+            } else if (args.stat_type === 'LEADERS') {
+              // Get league leaders for a specific stat
+              const leaderType = args.leader_type || 'points';
+              const leaders = await ballDontLieService.getNhlPlayerStatsLeaders(season, leaderType);
+              statResult.data = (leaders || []).slice(0, 10).map(l => ({
+                player: l.player?.full_name,
+                team: l.player?.teams?.[0]?.full_name || 'Unknown',
+                position: l.player?.position_code,
+                stat: l.name,
+                value: l.value
+              }));
+            } else {
+              // Get players for the team
+              const players = await ballDontLieService.getNhlTeamPlayers(team.id, season);
+
+              if (args.stat_type === 'SKATERS') {
+                // Filter to skaters (non-goalies)
+                const skaters = players.filter(p => p.position_code !== 'G');
+
+                // Get stats for each skater (limit to 10)
+                const skatersToFetch = args.player_name
+                  ? skaters.filter(p => p.full_name?.toLowerCase().includes(args.player_name.toLowerCase()))
+                  : skaters.slice(0, 10);
+
+                const statsPromises = skatersToFetch.map(async (player) => {
+                  try {
+                    const stats = await ballDontLieService.getNhlPlayerSeasonStats(player.id, season);
+                    const statsObj = {};
+                    (stats || []).forEach(s => { statsObj[s.name] = s.value; });
+                    return {
+                      player: player.full_name,
+                      position: player.position_code,
+                      gamesPlayed: statsObj.games_played || 0,
+                      goals: statsObj.goals || 0,
+                      assists: statsObj.assists || 0,
+                      points: statsObj.points || 0,
+                      plusMinus: statsObj.plus_minus || 0,
+                      shootingPct: statsObj.shooting_pct ? (statsObj.shooting_pct * 100).toFixed(1) : null,
+                      timeOnIcePerGame: statsObj.time_on_ice_per_game || null,
+                      powerPlayGoals: statsObj.power_play_goals || 0,
+                      powerPlayPoints: statsObj.power_play_points || 0
+                    };
+                  } catch (e) {
+                    return null;
+                  }
+                });
+
+                const results = await Promise.all(statsPromises);
+                statResult.data = results.filter(r => r !== null).sort((a, b) => b.points - a.points);
+
+              } else if (args.stat_type === 'GOALIES') {
+                // Filter to goalies
+                const goalies = players.filter(p => p.position_code === 'G');
+
+                const goaliesToFetch = args.player_name
+                  ? goalies.filter(p => p.full_name?.toLowerCase().includes(args.player_name.toLowerCase()))
+                  : goalies.slice(0, 3);
+
+                const statsPromises = goaliesToFetch.map(async (player) => {
+                  try {
+                    const stats = await ballDontLieService.getNhlPlayerSeasonStats(player.id, season);
+                    const statsObj = {};
+                    (stats || []).forEach(s => { statsObj[s.name] = s.value; });
+                    return {
+                      player: player.full_name,
+                      gamesPlayed: statsObj.games_played || 0,
+                      gamesStarted: statsObj.games_started || 0,
+                      wins: statsObj.wins || 0,
+                      losses: statsObj.losses || 0,
+                      otLosses: statsObj.ot_losses || 0,
+                      savePct: statsObj.save_pct ? (statsObj.save_pct * 100).toFixed(1) : null,
+                      goalsAgainstAvg: statsObj.goals_against_average?.toFixed(2) || null,
+                      shutouts: statsObj.shutouts || 0,
+                      saves: statsObj.saves || 0,
+                      goalsAgainst: statsObj.goals_against || 0
+                    };
+                  } catch (e) {
+                    return null;
+                  }
+                });
+
+                const results = await Promise.all(statsPromises);
+                statResult.data = results.filter(r => r !== null).sort((a, b) => b.gamesPlayed - a.gamesPlayed);
+              }
+
+              if (statResult.data.length === 0) {
+                statResult.message = `No ${args.stat_type.toLowerCase()} stats found for ${team?.full_name || args.team}`;
+              }
+            }
+
+            // Store in history
+            toolCallHistory.push({
+              token: `NHL_PLAYER_STATS:${args.stat_type}`,
+              timestamp: Date.now(),
+              homeValue: statResult.data?.length || 0,
+              awayValue: 'players',
+              rawResult: statResult
+            });
+
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: JSON.stringify(statResult, null, 2)
+            });
+          } catch (error) {
+            console.error('[Orchestrator] Error fetching NHL player stats:', error.message);
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: JSON.stringify({ error: error.message, stat_type: args.stat_type })
+            });
+          }
+
+          continue; // Skip the regular fetch_stats handling
+        }
+
+        // Handle fetch_ncaaf_player_stats tool
+        if (functionName === 'fetch_ncaaf_player_stats') {
+          console.log(`  → [NCAAF_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
+
+          try {
+            const { ballDontLieService } = await import('../ballDontLieService.js');
+
+            let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
+            const season = 2025;
+
+            // Get team ID first
+            const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+            const team = teams.find(t =>
+              t.full_name?.toLowerCase().includes(args.team.toLowerCase()) ||
+              t.abbreviation?.toLowerCase() === args.team.toLowerCase() ||
+              t.city?.toLowerCase().includes(args.team.toLowerCase())
+            );
+
+            if (!team && args.stat_type !== 'RANKINGS') {
+              statResult.error = `Team "${args.team}" not found`;
+            } else if (args.stat_type === 'RANKINGS') {
+              // Get AP Poll rankings
+              const rankings = await ballDontLieService.getNcaafRankings(season);
+              statResult.data = (rankings || []).slice(0, 25).map(r => ({
+                rank: r.rank,
+                team: r.team?.full_name,
+                record: r.record,
+                points: r.points,
+                trend: r.trend
+              }));
+            } else {
+              // Get player season stats for the team
+              const seasonStats = await ballDontLieService.getNcaafPlayerSeasonStats(team.id, season);
+
+              if (args.stat_type === 'OFFENSE') {
+                // Filter offensive players (QBs, RBs, WRs, TEs)
+                let offensePlayers = seasonStats.filter(s =>
+                  s.passing_yards > 0 || s.rushing_yards > 0 || s.receiving_yards > 0
+                );
+
+                if (args.player_name) {
+                  offensePlayers = offensePlayers.filter(s =>
+                    s.player?.first_name?.toLowerCase().includes(args.player_name.toLowerCase()) ||
+                    s.player?.last_name?.toLowerCase().includes(args.player_name.toLowerCase())
+                  );
+                }
+
+                statResult.data = offensePlayers.slice(0, 15).map(s => ({
+                  player: `${s.player?.first_name} ${s.player?.last_name}`,
+                  position: s.player?.position_abbreviation,
+                  jersey: s.player?.jersey_number,
+                  passingYards: s.passing_yards || 0,
+                  passingTDs: s.passing_touchdowns || 0,
+                  passingINTs: s.passing_interceptions || 0,
+                  qbRating: s.passing_rating?.toFixed(1) || null,
+                  rushingYards: s.rushing_yards || 0,
+                  rushingTDs: s.rushing_touchdowns || 0,
+                  rushingAvg: s.rushing_avg?.toFixed(1) || null,
+                  receptions: s.receptions || 0,
+                  receivingYards: s.receiving_yards || 0,
+                  receivingTDs: s.receiving_touchdowns || 0
+                }));
+
+              } else if (args.stat_type === 'DEFENSE') {
+                // Filter defensive players
+                let defensePlayers = seasonStats.filter(s =>
+                  s.total_tackles > 0 || s.sacks > 0 || s.interceptions > 0
+                );
+
+                if (args.player_name) {
+                  defensePlayers = defensePlayers.filter(s =>
+                    s.player?.first_name?.toLowerCase().includes(args.player_name.toLowerCase()) ||
+                    s.player?.last_name?.toLowerCase().includes(args.player_name.toLowerCase())
+                  );
+                }
+
+                statResult.data = defensePlayers.slice(0, 15).map(s => ({
+                  player: `${s.player?.first_name} ${s.player?.last_name}`,
+                  position: s.player?.position_abbreviation,
+                  jersey: s.player?.jersey_number,
+                  tackles: s.total_tackles || 0,
+                  soloTackles: s.solo_tackles || 0,
+                  tacklesForLoss: s.tackles_for_loss || 0,
+                  sacks: s.sacks || 0,
+                  interceptions: s.interceptions || 0,
+                  passesDefended: s.passes_defended || 0
+                }));
+              }
+
+              if (statResult.data.length === 0) {
+                statResult.message = `No ${args.stat_type.toLowerCase()} stats found for ${team?.full_name || args.team}`;
+              }
+            }
+
+            // Store in history
+            toolCallHistory.push({
+              token: `NCAAF_PLAYER_STATS:${args.stat_type}`,
+              timestamp: Date.now(),
+              homeValue: statResult.data?.length || 0,
+              awayValue: 'players',
+              rawResult: statResult
+            });
+
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: JSON.stringify(statResult, null, 2)
+            });
+          } catch (error) {
+            console.error('[Orchestrator] Error fetching NCAAF player stats:', error.message);
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: JSON.stringify({ error: error.message, stat_type: args.stat_type })
+            });
+          }
+
+          continue; // Skip the regular fetch_stats handling
+        }
+
         console.log(`  → [${args.token}] for ${sport}`);
-        
+
+        // Enforce per-sport token menu (prevents cross-sport aliases from polluting NCAAB cards)
+        const resolveMenuSport = (s) => {
+          const v = String(s || '').toLowerCase();
+          if (v.includes('ncaab')) return 'NCAAB';
+          if (v.includes('ncaaf')) return 'NCAAF';
+          if (v.includes('nfl')) return 'NFL';
+          if (v.includes('nba')) return 'NBA';
+          if (v.includes('nhl')) return 'NHL';
+          if (v.includes('epl')) return 'EPL';
+          // Tool schema uses these values; fall back to NBA
+          return 'NBA';
+        };
+
+        const menuSport = resolveMenuSport(args.sport || sport);
+        const allowedTokens = getTokensForSport(menuSport);
+        if (Array.isArray(allowedTokens) && allowedTokens.length > 0 && !allowedTokens.includes(args.token)) {
+          const statResult = {
+            error: `Token "${args.token}" is not allowed for ${menuSport}. Use the provided ${menuSport} token menu.`,
+            sport: args.sport || sport,
+            token: args.token,
+            allowedTokens: allowedTokens
+          };
+
+          // Store the attempted call (helps debugging why something didn't show)
+          toolCallHistory.push({
+            token: args.token,
+            timestamp: Date.now(),
+            homeValue: 'N/A',
+            awayValue: 'N/A',
+            rawResult: statResult
+          });
+
+          messages.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            content: JSON.stringify(statResult, null, 2)
+          });
+          continue;
+        }
+
         // Fetch the stats
         const statResult = await fetchStats(
           args.sport || sport,
@@ -625,17 +1176,17 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           awayTeam,
           options
         );
-        
+
         // Extract key values from stat result for structured storage
         const extractStatValues = (result, token) => {
           if (!result) return { home: 'N/A', away: 'N/A' };
-          
+
           // Try common field patterns
-          const homeVal = result.home_value ?? result.homeValue ?? result.home ?? 
-                          result[homeTeam] ?? result.home_team ?? 'N/A';
-          const awayVal = result.away_value ?? result.awayValue ?? result.away ?? 
-                          result[awayTeam] ?? result.away_team ?? 'N/A';
-          
+          const homeVal = result.home_value ?? result.homeValue ?? result.home ??
+            result[homeTeam] ?? result.home_team ?? 'N/A';
+          const awayVal = result.away_value ?? result.awayValue ?? result.away ??
+            result[awayTeam] ?? result.away_team ?? 'N/A';
+
           // For complex results, try to extract meaningful values
           if (homeVal === 'N/A' && typeof result === 'object') {
             // Look for home/away in nested structure
@@ -650,12 +1201,12 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
               }
             }
           }
-          
+
           return { home: homeVal, away: awayVal };
         };
-        
+
         const values = extractStatValues(statResult, args.token);
-        
+
         // Store with values for structured display
         toolCallHistory.push({
           token: args.token,
@@ -664,7 +1215,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           awayValue: values.away,
           rawResult: statResult // Keep raw result for debugging
         });
-        
+
         // Add tool result to conversation
         messages.push({
           tool_call_id: toolCall.id,
@@ -672,7 +1223,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           content: JSON.stringify(statResult, null, 2)
         });
       }
-      
+
       // STATE-BASED PROMPTING: Inject the next pass instructions
       // This prevents "instruction contamination" where the model skips steps
       if (iteration === 1) {
@@ -690,17 +1241,43 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
         });
         console.log(`[Orchestrator] Injected Pass 3 (Final) instructions`);
       }
-      
+
       // Continue the loop for Gary to process the stats
       continue;
     }
-    
+
+    // ENFORCEMENT: Gary must request stats in early iterations before finishing
+    // This prevents premature exits without proper analysis
+    const MIN_ITERATIONS_BEFORE_FINISH = 3;
+    const MIN_STATS_REQUIRED = 5;
+
+    if (iteration < MIN_ITERATIONS_BEFORE_FINISH || toolCallHistory.length < MIN_STATS_REQUIRED) {
+      console.log(`[Orchestrator] ⚠️ Gary tried to finish early (iteration ${iteration}, ${toolCallHistory.length} stats)`);
+      console.log(`[Orchestrator] Requiring minimum ${MIN_ITERATIONS_BEFORE_FINISH} iterations and ${MIN_STATS_REQUIRED} stats`);
+
+      // Add message to history and prompt Gary to continue analysis
+      messages.push(message);
+      messages.push({
+        role: 'user',
+        content: `You must request more stats before making your final pick. You've only gathered ${toolCallHistory.length} stats so far. 
+
+Use the get_stat tool to request at least ${MIN_STATS_REQUIRED - toolCallHistory.length} more stats to properly analyze this matchup. Consider:
+- Efficiency metrics (offensive/defensive ratings, EPA)
+- Recent form and trends
+- Key player stats
+- Situational factors (home/away splits, rest days)
+
+Do NOT output your final pick yet. Request more stats first.`
+      });
+      continue;
+    }
+
     // Gary is done - parse the final response
     console.log(`[Orchestrator] Gary finished analysis (${finishReason})`);
-    
+
     // Try to extract JSON from the response
     const pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport);
-    
+
     if (pick) {
       pick.toolCallHistory = toolCallHistory;
       pick.iterations = iteration;
@@ -719,7 +1296,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       };
     }
   }
-  
+
   // Max iterations reached
   return {
     error: 'Max iterations reached without final pick',
@@ -736,7 +1313,35 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
  */
 function parseGaryResponse(content, homeTeam, awayTeam, sport) {
   if (!content) return null;
+
+  // First, check if Gary is explicitly passing on this game
+  const lowerContent = content.toLowerCase();
+  const passIndicators = [
+    'i\'m passing', 'im passing', 'i am passing',
+    'no pick', 'passing on this',
+    'too close to call', 'genuine coin flip',
+    'cannot recommend', 'can\'t recommend',
+    'sitting this one out', 'sit this one out'
+  ];
   
+  const isPass = passIndicators.some(indicator => lowerContent.includes(indicator));
+  if (isPass) {
+    console.log('[Orchestrator] Gary explicitly passed on this game');
+    // Return a coin_flip pick that will be filtered out
+    return {
+      pick: 'PASS',
+      type: 'spread',
+      odds: 0,
+      confidence: 0.50,
+      thesis_type: 'coin_flip',
+      thesis_mechanism: 'Gary passed - game too close to call',
+      supporting_factors: [],
+      contradicting_factors_major: ['no_clear_edge'],
+      contradicting_factors_minor: [],
+      rationale: content.substring(0, 500)
+    };
+  }
+
   // Try to find JSON in the response
   const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonMatch) {
@@ -757,7 +1362,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
       }
     }
   }
-  
+
   // Try to find raw JSON object
   const rawJsonMatch = content.match(/\{[\s\S]*?"pick"[\s\S]*?\}/);
   if (rawJsonMatch) {
@@ -780,7 +1385,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -794,7 +1399,7 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     // If spread placeholder, try to determine actual pick from context
     pickText = pickText.replace(/[+-]X\.X/g, 'ML');
   }
-  
+
   // FIX: If pick says "Team spread -110" without actual number, insert the spread value
   if (pickText.toLowerCase().includes(' spread ') && parsed.spread) {
     const spreadNum = parseFloat(parsed.spread);
@@ -804,7 +1409,7 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
       pickText = pickText.replace(/\s+spread\s+/i, ` ${spreadStr} `);
     }
   }
-  
+
   // Ensure pick text includes odds if not already present
   const odds = parsed.odds || parsed.spreadOdds || parsed.moneylineHome || parsed.moneylineAway || -110;
   if (!pickText.includes('-1') && !pickText.includes('+1') && !pickText.includes('-2') && !pickText.includes('+2')) {
@@ -816,7 +1421,7 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
       }
     }
   }
-  
+
   // Final validation: if pick text is too short or missing team name, reconstruct it
   if (pickText.length < 10 || !pickText.match(/[A-Za-z]{3,}/)) {
     // Reconstruct pick text from available data
@@ -834,12 +1439,34 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
       pickText = `${team} ${spreadStr} ${spreadOddsStr}`;
     }
   }
-  
+
+  // Normalize contradicting_factors to always be { major: [], minor: [] }
+  let contradictions = { major: [], minor: [] };
+  // New flat format: contradicting_factors_major and contradicting_factors_minor
+  if (parsed.contradicting_factors_major || parsed.contradicting_factors_minor) {
+    contradictions.major = parsed.contradicting_factors_major || [];
+    contradictions.minor = parsed.contradicting_factors_minor || [];
+  }
+  // Legacy: nested object format
+  else if (parsed.contradicting_factors && typeof parsed.contradicting_factors === 'object' && !Array.isArray(parsed.contradicting_factors)) {
+    contradictions.major = parsed.contradicting_factors.major || [];
+    contradictions.minor = parsed.contradicting_factors.minor || [];
+  }
+  // Legacy: simple array format (treat as minor)
+  else if (Array.isArray(parsed.contradicting_factors)) {
+    contradictions.minor = parsed.contradicting_factors;
+  }
+
   return {
     pick: pickText.trim(),
     type: parsed.type || 'spread',
     odds: odds,
     confidence: parseFloat(parsed.confidence) || 0.60,
+    // Thesis-based classification (new system)
+    thesis_type: parsed.thesis_type || null,
+    thesis_mechanism: parsed.thesis_mechanism || null,
+    supporting_factors: parsed.supporting_factors || [],
+    contradicting_factors: contradictions,
     homeTeam: parsed.homeTeam || homeTeam,
     awayTeam: parsed.awayTeam || awayTeam,
     league: normalizeSportToLeague(sport),
@@ -878,20 +1505,20 @@ function normalizeSportToLeague(sport) {
  */
 export async function analyzeGames(games, sport, options = {}) {
   const results = [];
-  
+
   for (let i = 0; i < games.length; i++) {
     const game = games[i];
-    console.log(`\n[${ i + 1}/${games.length}] Processing: ${game.away_team} @ ${game.home_team}`);
-    
+    console.log(`\n[${i + 1}/${games.length}] Processing: ${game.away_team} @ ${game.home_team}`);
+
     const result = await analyzeGame(game, sport, options);
     results.push(result);
-    
+
     // Small delay between games to avoid rate limits
     if (i < games.length - 1) {
       await sleep(1000);
     }
   }
-  
+
   return results;
 }
 

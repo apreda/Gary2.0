@@ -6,6 +6,7 @@
  */
 
 // NBA Stat Tokens
+// NOTE: Only include tokens that have REAL fetchers - no misleading placeholders
 const NBA_TOKENS = [
   // Standings & Records
   'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING',
@@ -21,11 +22,11 @@ const NBA_TOKENS = [
   // Defense
   'PAINT_DEFENSE', 'PERIMETER_DEFENSE', 'TRANSITION_DEFENSE',
   // Situational
-  'REST_SITUATION', 'CLUTCH_STATS', 'QUARTER_SPLITS',
-  // Players
-  'TOP_PLAYERS', 'INJURIES', 'LINEUP_DATA', 'USAGE_RATES',
-  // History
-  'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS', 'VS_ELITE_TEAMS', 'ATS_TRENDS',
+  'REST_SITUATION', 'CLUTCH_STATS',
+  // Players (TOP_PLAYERS includes scoring which reflects usage)
+  'TOP_PLAYERS', 'INJURIES',
+  // History (only tokens with real data)
+  'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS', 'VS_ELITE_TEAMS',
   // Advanced
   'LUCK_ADJUSTED', 'SCHEDULE_STRENGTH'
 ];
@@ -79,28 +80,45 @@ const NCAAB_TOKENS = [
   'TOP_PLAYERS', 'INJURIES'
 ];
 
-// NCAAF Stat Tokens
+// NCAAF Stat Tokens - now with Perplexity-based advanced stats (BDL lacks most NCAAF analytics)
 const NCAAF_TOKENS = [
-  // SP+ / Advanced
-  'SP_PLUS_RATINGS', 'SP_PLUS_TREND', 'FEI_RATINGS',
-  // Efficiency
-  'OFFENSIVE_EPA', 'DEFENSIVE_EPA', 'SUCCESS_RATE', 'EXPLOSIVENESS',
-  // Havoc
-  'HAVOC_RATE', 'HAVOC_ALLOWED',
-  // Talent
-  'TALENT_COMPOSITE', 'BLUE_CHIP_RATIO', 'TRANSFER_PORTAL',
-  // Line Play
-  'OL_RANKINGS', 'DL_RANKINGS', 'STUFF_RATE',
-  // Situational
-  'RED_ZONE', 'THIRD_DOWN', 'FOURTH_DOWN',
-  // Special Teams
-  'SPECIAL_TEAMS_RATING', 'FIELD_POSITION',
-  // Context
-  'MOTIVATION_CONTEXT', 'WEATHER', 'HOME_FIELD', 'NIGHT_GAME',
+  // ===== ADVANCED ANALYTICS (Perplexity-based - BDL doesn't have these) =====
+  // SP+ / Opponent-Adjusted Efficiency (CRITICAL for CFP analysis)
+  'NCAAF_SP_PLUS',           // Bill Connelly's SP+ ratings - overall, offense, defense
+  'NCAAF_FPI',               // ESPN Football Power Index
+  'NCAAF_EPA_ADVANCED',      // Expected Points Added per play
+  'NCAAF_OPPONENT_ADJUSTED', // FPI, Sagarin, SP+ - adjusted for opponent quality
+  
+  // Havoc & Disruption (G5 upset potential)
+  'NCAAF_HAVOC_RATE',        // TFLs, forced fumbles, INTs - critical for G5 upsets
+  
+  // Explosiveness & Big Plays
+  'NCAAF_EXPLOSIVENESS',     // 20+, 30+, 50+ yard plays - P4 vs G5 talent gap indicator
+  
+  // Efficiency Breakdowns
+  'NCAAF_RUSHING_EFFICIENCY', // Yards per carry, stuff rate, line yards
+  'NCAAF_PASSING_EFFICIENCY', // Completion %, YPA, QB rating
+  'NCAAF_RED_ZONE',          // Red zone scoring %, TD %
+  
+  // ===== SCHEDULE STRENGTH & CONFERENCE (CFP Critical) =====
+  'NCAAF_STRENGTH_OF_SCHEDULE', // SOS ranking, opponent win%, Power 4 vs G5 opponents
+  'NCAAF_CONFERENCE_STRENGTH',  // Conference tier, avg conference rating
+  'NCAAF_VS_POWER_OPPONENTS',   // Record/stats vs Power 4 teams specifically
+  'NCAAF_TRAVEL_FATIGUE',       // Distance traveled, time zones crossed, rest days
+  
+  // ===== BASIC STATS (BDL - these work) =====
+  'OFFENSIVE_EPA',           // BDL: passing/rushing yards per game (labeled as EPA for simplicity)
+  'DEFENSIVE_EPA',           // BDL: opp passing/rushing yards
+  'STANDINGS',               // BDL: wins, losses, conference record
+  'RECENT_FORM',             // BDL: recent game results
+  
+  // Legacy tokens (aliased to new Perplexity fetchers)
+  'SP_PLUS_RATINGS', 'FEI_RATINGS', 'HAVOC_RATE', 'RED_ZONE',
+  'STRENGTH_OF_SCHEDULE', 'OPPONENT_ADJUSTED', 'CONFERENCE_STRENGTH',
+  'VS_POWER_OPPONENTS', 'TRAVEL_FATIGUE',
+  
   // Players
-  'QB_STATS', 'RB_STATS', 'WR_STATS', 'DEFENSIVE_STARS', 'INJURIES',
-  // Historical
-  'RECENT_FORM', 'CONFERENCE_RECORD', 'VS_RANKED', 'ATS_TRENDS'
+  'TOP_PLAYERS', 'INJURIES'
 ];
 
 // NHL Stat Tokens (BETA - uses BDL + Perplexity for advanced stats)
@@ -209,6 +227,107 @@ Typical analysis needs 2-5 stat categories.`,
           }
         },
         required: ["sport", "token"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_nfl_player_stats",
+      description: `Fetches advanced NFL player statistics for deeper analysis.
+Use this when you need detailed player-level metrics beyond what's in the scout report.
+Available stat types:
+- PASSING: Completion % above expected, aggressiveness, avg time to throw, air yards
+- RUSHING: Rush yards over expected, efficiency, avg time to LOS
+- RECEIVING: Separation, YAC above expectation, catch percentage, cushion
+Only use for NFL games when you need specific player matchup analysis.`,
+      parameters: {
+        type: "object",
+        properties: {
+          stat_type: {
+            type: "string",
+            enum: ["PASSING", "RUSHING", "RECEIVING"],
+            description: "The type of advanced stats to fetch"
+          },
+          team: {
+            type: "string",
+            description: "Team name to filter results (returns top players for that team)"
+          },
+          player_name: {
+            type: "string",
+            description: "Optional: specific player name to search for"
+          }
+        },
+        required: ["stat_type", "team"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_nhl_player_stats",
+      description: `Fetches NHL player statistics for deeper analysis.
+Use this when you need detailed player-level metrics beyond what's in the scout report.
+Available stat types:
+- SKATERS: Goals, assists, points, plus/minus, shooting %, time on ice
+- GOALIES: Save %, GAA, wins, losses, shutouts
+- LEADERS: League leaders by stat category (points, goals, saves, etc.)
+Only use for NHL games when you need specific player analysis.`,
+      parameters: {
+        type: "object",
+        properties: {
+          stat_type: {
+            type: "string",
+            enum: ["SKATERS", "GOALIES", "LEADERS"],
+            description: "The type of stats to fetch"
+          },
+          team: {
+            type: "string",
+            description: "Team name to filter results (returns players for that team)"
+          },
+          leader_type: {
+            type: "string",
+            enum: ["points", "goals", "assists", "save_pct", "wins", "shutouts", "plus_minus"],
+            description: "For LEADERS type: which stat to get league leaders for"
+          },
+          player_name: {
+            type: "string",
+            description: "Optional: specific player name to search for"
+          }
+        },
+        required: ["stat_type", "team"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_ncaaf_player_stats",
+      description: `Fetches NCAAF player statistics for deeper analysis.
+Use this when you need detailed player-level metrics beyond what's in the scout report.
+Available stat types:
+- OFFENSE: Passing yards/TDs, rushing yards/TDs, receiving yards/TDs
+- DEFENSE: Tackles, sacks, interceptions, tackles for loss
+- RANKINGS: AP Poll rankings for both teams
+Only use for NCAAF games when you need specific player analysis.`,
+      parameters: {
+        type: "object",
+        properties: {
+          stat_type: {
+            type: "string",
+            enum: ["OFFENSE", "DEFENSE", "RANKINGS"],
+            description: "The type of stats to fetch"
+          },
+          team: {
+            type: "string",
+            description: "Team name to filter results (returns players for that team)"
+          },
+          player_name: {
+            type: "string",
+            description: "Optional: specific player name to search for"
+          }
+        },
+        required: ["stat_type", "team"]
       }
     }
   }
