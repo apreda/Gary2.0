@@ -6,37 +6,46 @@ struct SettingsView: View {
     @State private var animateIn = false
     
     var body: some View {
-        ZStack {
-            // Background - matches homepage
-            LiquidGlassBackground()
-            
-            // Content - respects safe area
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Header
-                    Text("Settings")
-                        .font(.system(size: 28, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.top, 8) // Extra padding after safe area
-                        .opacity(animateIn ? 1 : 0)
-                        .offset(y: animateIn ? 0 : 20)
-                    
-                    // App Info Card
-                    appInfoCard
-                        .opacity(animateIn ? 1 : 0)
-                        .offset(y: animateIn ? 0 : 20)
-                        .animation(.easeOut(duration: 0.5).delay(0.1), value: animateIn)
-                    
-                    // Legal Section
-                    legalSection
-                        .opacity(animateIn ? 1 : 0)
-                        .offset(y: animateIn ? 0 : 20)
-                        .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+        NavigationStack {
+            ZStack {
+                // Background - matches homepage
+                LiquidGlassBackground()
+                
+                // Content - respects safe area
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        // Header
+                        Text("Settings")
+                            .font(.system(size: 28, weight: .heavy))
+                            .tracking(-0.5)
+                            .foregroundStyle(GaryColors.gold)
+                            .padding(.top, 8) // Extra padding after safe area
+                            .opacity(animateIn ? 1 : 0)
+                            .offset(y: animateIn ? 0 : 20)
+                        
+                        // App Info Card
+                        appInfoCard
+                            .opacity(animateIn ? 1 : 0)
+                            .offset(y: animateIn ? 0 : 20)
+                            .animation(.easeOut(duration: 0.5).delay(0.1), value: animateIn)
+                        
+                        // About Section (What's New / Changelog)
+                        aboutSection
+                            .opacity(animateIn ? 1 : 0)
+                            .offset(y: animateIn ? 0 : 20)
+                            .animation(.easeOut(duration: 0.5).delay(0.15), value: animateIn)
+                        
+                        // Legal Section
+                        legalSection
+                            .opacity(animateIn ? 1 : 0)
+                            .offset(y: animateIn ? 0 : 20)
+                            .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100) // Space for floating tab bar
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 100) // Space for floating tab bar
             }
+            .navigationBarHidden(true)
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {
@@ -83,6 +92,53 @@ struct SettingsView: View {
                         )
                 )
         )
+    }
+    
+    // MARK: - About Section
+    
+    private var aboutSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(GaryColors.gold)
+                Text("ABOUT")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+            
+            VStack(spacing: 2) {
+                NavigationLink(destination: ChangelogView()) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                            .frame(width: 32, height: 32)
+                            .background(Color(hex: "#1A1A1C"))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        
+                        Text("What's New")
+                            .font(.subheadline)
+                            .foregroundStyle(.white)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(GaryColors.gold.opacity(0.5))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(hex: "#0D0D0F"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
+        }
     }
     
     // MARK: - Legal Section

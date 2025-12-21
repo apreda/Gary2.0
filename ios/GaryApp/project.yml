@@ -1,6 +1,10 @@
 name: GaryApp
 options:
   minimumXcodeGenVersion: 2.32.0
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    version: 11.0.0
 settings:
   base:
     DEVELOPMENT_TEAM: SFBTX6KPLM
@@ -8,7 +12,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     INFOPLIST_FILE: Info.plist
     IPHONEOS_DEPLOYMENT_TARGET: 16.0
-    MARKETING_VERSION: 1.3.0
+    MARKETING_VERSION: 1.8.0
     CURRENT_PROJECT_VERSION: 1
 targets:
   GaryApp:
@@ -20,11 +24,18 @@ targets:
           - "*.xcodeproj"
           - "*.xcworkspace"
           - project.yml
+    dependencies:
+      - package: Firebase
+        product: FirebaseMessaging
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES
         TARGETED_DEVICE_FAMILY: "1"
+    entitlements:
+      path: GaryApp.entitlements
+      properties:
+        aps-environment: development
     scheme:
       testTargets: []

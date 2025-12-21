@@ -9,7 +9,9 @@
 /* Begin PBXBuildFile section */
 		0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 14B79AC926AD34DD865A8E0D /* Assets.xcassets */; };
 		11082D2682BC0FFD484F133E /* AccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04419532DA2B9AE61A7A7B47 /* AccessView.swift */; };
+		A1B2C3D4E5F6789012345678 /* ChangelogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F67890123456789A /* ChangelogView.swift */; };
 		40771064325B4E728A735AEA /* GaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49489C7FC0ABE55881B19E13 /* GaryApp.swift */; };
+		44FB25CBEB7324D5CDF9CAB7 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 19246C9DB6761505C046FD73 /* FirebaseMessaging */; };
 		5A432D05492831EB727B31A7 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE32BA2E5208CC9E994A26A /* Models.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
 		B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */ = {isa = PBXBuildFile; fileRef = 4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */; };
@@ -17,12 +19,16 @@
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
 		D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58C162EF98D65308171329E2 /* SupabaseAPI.swift */; };
 		F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26AE11992E449EB95857D6E3 /* SettingsView.swift */; };
+		FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 423887686C6839DEC44C0DEA /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		04419532DA2B9AE61A7A7B47 /* AccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessView.swift; sourceTree = "<group>"; };
+		089A2D29640F62FFCD6A4769 /* GaryApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GaryApp.entitlements; sourceTree = "<group>"; };
+		B2C3D4E5F67890123456789A /* ChangelogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogView.swift; sourceTree = "<group>"; };
 		14B79AC926AD34DD865A8E0D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		26AE11992E449EB95857D6E3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		423887686C6839DEC44C0DEA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		44D1E52AFB4EED7E97F55C36 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		49489C7FC0ABE55881B19E13 /* GaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryApp.swift; sourceTree = "<group>"; };
 		4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AppStoreMetadata.md; sourceTree = "<group>"; };
@@ -33,6 +39,17 @@
 		ECE32BA2E5208CC9E994A26A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F0616A3C8A2F0268B8A05C4D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FE30AD194F573DEA5E2DAD74 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				44FB25CBEB7324D5CDF9CAB7 /* FirebaseMessaging in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		02F13D03245A29657A46163C /* Products */ = {
@@ -49,8 +66,11 @@
 				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
 				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
 				14B79AC926AD34DD865A8E0D /* Assets.xcassets */,
+				B2C3D4E5F67890123456789A /* ChangelogView.swift */,
 				C76D962853397848F9631A85 /* ContentView.swift */,
+				089A2D29640F62FFCD6A4769 /* GaryApp.entitlements */,
 				49489C7FC0ABE55881B19E13 /* GaryApp.swift */,
+				423887686C6839DEC44C0DEA /* GoogleService-Info.plist */,
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
 				ECE32BA2E5208CC9E994A26A /* Models.swift */,
 				F0616A3C8A2F0268B8A05C4D /* Secrets.swift */,
@@ -79,6 +99,7 @@
 			buildPhases = (
 				7119331DA617EFB8F15E3E78 /* Sources */,
 				257D2E950608B14CB89B1681 /* Resources */,
+				FE30AD194F573DEA5E2DAD74 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -86,6 +107,7 @@
 			);
 			name = GaryApp;
 			packageProductDependencies = (
+				19246C9DB6761505C046FD73 /* FirebaseMessaging */,
 			);
 			productName = GaryApp;
 			productReference = E22C3B2D38BB04B17570FDF1 /* GaryApp.app */;
@@ -98,7 +120,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					75398D566F3FB74B46B3657E = {
+						DevelopmentTeam = SFBTX6KPLM;
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = 3997767653906A86391684B2 /* Build configuration list for PBXProject "GaryApp" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -110,6 +138,9 @@
 			);
 			mainGroup = 91E7769BD9DC37D8974535EF;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				333152C5F459BE3101ADA03F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -125,6 +156,7 @@
 			files = (
 				B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */,
 				0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */,
+				FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -136,6 +168,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
+				A1B2C3D4E5F6789012345678 /* ChangelogView.swift in Sources */,
 				CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */,
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
 				5A432D05492831EB727B31A7 /* Models.swift in Sources */,
@@ -206,13 +239,14 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.6.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -224,26 +258,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = GaryApp.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Gary A.I";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
@@ -299,12 +323,13 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.6.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -316,29 +341,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = GaryApp.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = SFBTX6KPLM;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Gary A.I";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "GaryAI App Store";
 				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
@@ -365,6 +377,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		333152C5F459BE3101ADA03F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = exactVersion;
+				version = 11.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		19246C9DB6761505C046FD73 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 333152C5F459BE3101ADA03F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7682647F094B545A05D740D5 /* Project object */;
 }

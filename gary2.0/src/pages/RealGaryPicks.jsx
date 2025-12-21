@@ -53,22 +53,75 @@ const getCollegeSchoolName = (teamName) => {
   return words.slice(0, -1).join(' '); // "San Diego State Aztecs" → "San Diego State"
 };
 
+// Gold color for seedings - matches Gary brand
+const GARY_GOLD = '#FFD700';
+
 // Helper to format matchup display based on league
-const formatMatchupDisplay = (pick) => {
+const formatMatchupDisplay = (pick, withStyledSeedings = false) => {
   if (!pick?.homeTeam || !pick?.awayTeam) {
     return pick?.game || 'TBD';
   }
   
   const league = pick?.league?.toUpperCase() || '';
   const isCollege = league === 'NCAAB' || league === 'NCAAF';
+  const isCFP = pick?.cfpRound || pick?.tournamentContext?.toLowerCase()?.includes('cfp');
   
   if (isCollege) {
     // Use school names for college sports
-    return `${getCollegeSchoolName(pick.awayTeam)} @ ${getCollegeSchoolName(pick.homeTeam)}`;
+    const awayName = getCollegeSchoolName(pick.awayTeam);
+    const homeName = getCollegeSchoolName(pick.homeTeam);
+    
+    // For CFP games, return JSX with styled seedings (gold color, no parentheses, smaller font)
+    if (isCFP && withStyledSeedings && (pick.awaySeed || pick.homeSeed)) {
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.25rem', flexWrap: 'wrap' }}>
+          {pick.awaySeed && (
+            <span style={{ color: GARY_GOLD, fontSize: '0.9em', fontWeight: 700 }}>
+              {pick.awaySeed}
+            </span>
+          )}
+          <span>{awayName}</span>
+          <span style={{ opacity: 0.6 }}>@</span>
+          <span>{homeName}</span>
+          {pick.homeSeed && (
+            <span style={{ color: GARY_GOLD, fontSize: '0.9em', fontWeight: 700 }}>
+              {pick.homeSeed}
+            </span>
+          )}
+        </span>
+      );
+    }
+    
+    return `${awayName} @ ${homeName}`;
   } else {
     // Use mascots for pro sports (current behavior)
     return `${pick.awayTeam.split(' ').pop()} @ ${pick.homeTeam.split(' ').pop()}`;
   }
+};
+
+// Helper to check if a pick is a CFP game
+const isCFPGame = (pick) => {
+  if (!pick) return false;
+  const league = pick?.league?.toUpperCase() || '';
+  if (league !== 'NCAAF') return false;
+  return pick?.cfpRound || pick?.tournamentContext?.toLowerCase()?.includes('cfp') || 
+         pick?.tournamentContext?.toLowerCase()?.includes('playoff');
+};
+
+// Helper to get CFP round label
+const getCfpRoundLabel = (pick) => {
+  if (!isCFPGame(pick)) return null;
+  
+  if (pick?.cfpRound) {
+    return pick.cfpRound.replace('CFP ', '');
+  }
+  
+  const ctx = pick?.tournamentContext?.toLowerCase() || '';
+  if (ctx.includes('championship')) return 'Championship';
+  if (ctx.includes('semifinal')) return 'Semifinal';
+  if (ctx.includes('quarterfinal')) return 'Quarterfinal';
+  if (ctx.includes('first round')) return 'First Round';
+  return 'Playoff';
 };
 
 // Integrated Analysis Component - Gary's Take main, Risks at bottom, Stats overlay
@@ -1829,9 +1882,47 @@ function RealGaryPicks() {
                                                 fontWeight: 600,
                                                 opacity: 0.9
                                               }}>
-                                                {formatMatchupDisplay(pick)}
+                                                {formatMatchupDisplay(pick, true)}
                                               </div>
+                                              {/* Venue for CFP/NFL games */}
+                                              {pick.venue && (
+                                                <div style={{ 
+                                                  fontSize: '0.75rem', 
+                                                  opacity: 0.7,
+                                                  color: accentColor,
+                                                  marginTop: '0.25rem',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '0.25rem'
+                                                }}>
+                                                  📍 {pick.venue}
+                                                </div>
+                                              )}
                                             </div>
+                                            
+                                            {/* CFP Badge */}
+                                            {isCFPGame(pick) && (
+                                              <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '0.4rem',
+                                                padding: '0.35rem 0.65rem',
+                                                background: 'rgba(249, 115, 22, 0.2)',
+                                                borderRadius: '6px',
+                                                border: '1px solid rgba(249, 115, 22, 0.3)'
+                                              }}>
+                                                <span style={{ fontSize: '0.85rem' }}>🏆</span>
+                                                <span style={{ 
+                                                  fontSize: '0.7rem', 
+                                                  fontWeight: 700, 
+                                                  color: '#F97316',
+                                                  textTransform: 'uppercase',
+                                                  letterSpacing: '0.05em'
+                                                }}>
+                                                  CFP {getCfpRoundLabel(pick)}
+                                                </span>
+                                              </div>
+                                            )}
                                           </div>
                                           
                                           {/* The main pick display */}

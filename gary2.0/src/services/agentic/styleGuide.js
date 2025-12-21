@@ -52,6 +52,19 @@ const STYLE_GUIDES = {
       'Foul Trouble: High [FT_RATE] + thin depth means late-game collapses—note the risk.',
       '3-Point Lottery: High [3PT_DEPENDENCY] teams are great dogs (variance) but scary favorites (cold shooting).'
     ]
+  },
+  icehockey_nhl: {
+    label: 'NHL: Possession & Goaltending League',
+    goldenRule: 'Goals are random; Corsi/xG and goaltending are truth.',
+    tokenMenu: ['CORSI_XG', 'SPECIAL_TEAMS', 'GOALIE_MATCHUP', 'SHOT_METRICS', 'FIVE_ON_FIVE', 'PDO_LUCK', 'REST_FATIGUE', 'RECENT_FORM'],
+    heuristics: [
+      'Puck Line Value: Always evaluate +1.5 AND moneyline—NHL games are close (~50% decided by 1 goal). Puck line +1.5 hits ~70% for dogs.',
+      'Goalie Swing: Starter vs backup moves lines 15-30 cents. Elite goalie (SV% >.920) in a close game = trust the ML.',
+      'PDO Regression: Team PDO > 102 with weak shot metrics = fade. PDO < 98 with strong Corsi = bounce-back candidate.',
+      'Special Teams Edge: PP% > 24% vs PK% < 76% = serious scoring advantage. Check mismatch first.',
+      'Back-to-Back Fade: Road team on B2B loses 0.5-1 goals of value. Home B2B is less impactful (~0.3 goals).',
+      'Avoid Juicy Lines: Never take puck line at -200 or worse odds—the juice kills long-term edge.'
+    ]
   }
 };
 

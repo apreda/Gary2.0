@@ -981,19 +981,28 @@ export const oddsService = {
 
                     if (match && match.bookmakers && match.bookmakers.length > 0) {
                       console.log(`[Odds Service] Merged Odds API odds into BDL game: ${bdlGame.home_team} vs ${bdlGame.away_team} (Matched via mascot)`);
+                      
+                      // CRITICAL: Re-extract odds using BDL team names as reference
+                      // Odds API may have home/away in different order than BDL
+                      const extractedOdds = extractOddsFromBookmakers(
+                        match.bookmakers, 
+                        bdlGame.home_team,  // Use BDL's home team
+                        bdlGame.away_team   // Use BDL's away team
+                      );
+                      
                       return {
                         ...bdlGame,
                         bookmakers: match.bookmakers,
-                        // Copy extracted odds fields from the Odds API game
-                        moneyline_home: match.moneyline_home,
-                        moneyline_away: match.moneyline_away,
-                        spread_home: match.spread_home,
-                        spread_away: match.spread_away,
-                        spread_home_odds: match.spread_home_odds,
-                        spread_away_odds: match.spread_away_odds,
-                        total: match.total,
-                        total_over_odds: match.total_over_odds,
-                        total_under_odds: match.total_under_odds,
+                        // Use re-extracted odds with correct team order
+                        moneyline_home: extractedOdds.moneyline_home,
+                        moneyline_away: extractedOdds.moneyline_away,
+                        spread_home: extractedOdds.spread_home,
+                        spread_away: extractedOdds.spread_away,
+                        spread_home_odds: extractedOdds.spread_home_odds,
+                        spread_away_odds: extractedOdds.spread_away_odds,
+                        total: extractedOdds.total,
+                        total_over_odds: extractedOdds.total_over_odds,
+                        total_under_odds: extractedOdds.total_under_odds,
                         source: 'merged_odds_api'
                       };
                     }

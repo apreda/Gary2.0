@@ -160,17 +160,45 @@ export async function runAgenticPropsCli({
     return;
   }
 
+  // CRITICAL: Deduplicate by player + prop_type to prevent multiple picks on same player/stat
+  // This happens when different sportsbooks offer different lines for the same prop
+  // Keep only the highest confidence pick for each player+prop combination
+  const dedupeKey = (pick) => {
+    // Extract base prop type (e.g., "pass_yds" from "pass_yds 205.5")
+    const propType = (pick.prop || '').split(' ')[0].toLowerCase();
+    return `${(pick.player || '').toLowerCase()}_${propType}`;
+  };
+
+  const deduped = new Map();
+  for (const pick of allPropPicks) {
+    const key = dedupeKey(pick);
+    const existing = deduped.get(key);
+    
+    // Keep the pick with higher confidence, or if equal, the one with better EV
+    if (!existing || 
+        (pick.confidence || 0) > (existing.confidence || 0) ||
+        ((pick.confidence || 0) === (existing.confidence || 0) && (pick.ev || 0) > (existing.ev || 0))) {
+      deduped.set(key, pick);
+    }
+  }
+
+  const dedupedPicks = Array.from(deduped.values());
+  
+  if (dedupedPicks.length < allPropPicks.length) {
+    console.log(`\n🔄 Deduplication: ${allPropPicks.length} → ${dedupedPicks.length} picks (removed ${allPropPicks.length - dedupedPicks.length} duplicates)`);
+  }
+
   // Sort by confidence and EV
-  const sortedPicks = allPropPicks.sort((a, b) => {
+  const sortedPicks = dedupedPicks.sort((a, b) => {
     const confDiff = (b.confidence || 0) - (a.confidence || 0);
     if (confDiff !== 0) return confDiff;
     return (b.ev || 0) - (a.ev || 0);
   });
 
-  // Store ALL picks that meet the 75% confidence threshold (no artificial limit)
+  // Use all picks from pipeline (NBA/NHL/EPL use 2-per-game rule, NFL uses confidence filter)
   const topPicks = sortedPicks;
 
-  console.log(`\n🏆 ${topPicks.length} Picks (70%+ confidence):`);
+  console.log(`\n🏆 ${topPicks.length} Picks:`);
   topPicks.forEach((pick, i) => {
     const conf = (pick.confidence * 100).toFixed(0);
     console.log(`   ${i + 1}. ${pick.player}: ${pick.bet.toUpperCase()} ${pick.prop} (${pick.odds}) - ${conf}% conf`);

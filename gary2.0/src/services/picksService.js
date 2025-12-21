@@ -279,7 +279,21 @@ async function storeDailyPicksInDatabase(picks) {
         statsUsed: pick.statsUsed || [],
         statsData: pick.statsData || [], // Full stat values for Tale of the Tape
         injuries: pick.injuries || null, // Structured injury data from BDL
-        commence_time: pick.commence_time || null
+        commence_time: pick.commence_time || null,
+        // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
+        venue: pick.venue || null,
+        isNeutralSite: pick.isNeutralSite || false,
+        tournamentContext: pick.tournamentContext || null,
+        gameSignificance: pick.gameSignificance || null,
+        // CFP-specific fields for NCAAF
+        cfpRound: pick.cfpRound || null,
+        homeSeed: pick.homeSeed || null,
+        awaySeed: pick.awaySeed || null,
+        // Thesis-based classification (new filtering system)
+        thesis_type: pick.thesis_type || null,
+        thesis_mechanism: pick.thesis_mechanism || null,
+        supporting_factors: pick.supporting_factors || [],
+        contradicting_factors: pick.contradicting_factors || null
       };
       
       // Add the generated pick ID
@@ -309,7 +323,21 @@ async function storeDailyPicksInDatabase(picks) {
       statsData: pick.statsData || [], // Full stat values for Tale of the Tape
       injuries: pick.injuries || null, // Structured injury data from BDL
       commence_time: pick.commence_time || null,
-      gameTime: pick.gameTime || null
+      gameTime: pick.gameTime || null,
+      // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
+      venue: pick.venue || null,
+      isNeutralSite: pick.isNeutralSite || false,
+      tournamentContext: pick.tournamentContext || null,
+      gameSignificance: pick.gameSignificance || null,
+      // CFP-specific fields for NCAAF
+      cfpRound: pick.cfpRound || null,
+      homeSeed: pick.homeSeed || null,
+      awaySeed: pick.awaySeed || null,
+      // Thesis-based classification (new filtering system)
+      thesis_type: pick.thesis_type || null,
+      thesis_mechanism: pick.thesis_mechanism || null,
+      supporting_factors: pick.supporting_factors || [],
+      contradicting_factors: pick.contradicting_factors || null
     };
     
     // Add the generated pick ID
@@ -334,13 +362,21 @@ async function storeDailyPicksInDatabase(picks) {
     }
     
     // Filter out picks with odds <= -200 (too juicy, not worth the risk)
-    const odds = pick.odds || pick.line_odds || 0;
-    if (typeof odds === 'number' && odds <= -200) {
-      console.log(`❌ FILTERING OUT ${sport} pick with odds ${odds} (≤ -200 too juicy)`);
+    let oddsRaw = pick.odds || pick.line_odds || 0;
+    let oddsNum = 0;
+    if (typeof oddsRaw === 'number') {
+      oddsNum = oddsRaw;
+    } else if (typeof oddsRaw === 'string') {
+      // Handle string odds like "-245", "+105", "-110"
+      const parsed = parseInt(oddsRaw.replace(/[^0-9-+]/g, ''), 10);
+      oddsNum = Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (oddsNum <= -200) {
+      console.log(`❌ FILTERING OUT ${sport} pick with odds ${oddsRaw} (≤ -200 too juicy)`);
       return false;
     }
     
-    console.log(`✅ Including ${sport} pick with confidence ${confidence}, odds ${odds}`);
+    console.log(`✅ Including ${sport} pick with confidence ${confidence}, odds ${oddsRaw}`);
     return true;
   });
 

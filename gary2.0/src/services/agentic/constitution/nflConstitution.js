@@ -54,11 +54,13 @@ QB play drives NFL outcomes:
 - Stats to verify: [QB_STATS] [INJURIES]
 
 ### WEATHER IMPACT
-Weather significantly affects certain game styles:
-- Wind > 15mph = kills deep passing, favors running teams
-- Cold < 30°F = ball harder to catch, favors defense
-- Rain/Snow = turnovers more likely, unders more likely
-- Stats to verify: [WEATHER]
+ONLY mention weather in your rationale if it's a SIGNIFICANT factor:
+- Temp < 32°F = significant (affects grip, ball handling, catching)
+- Wind > 15mph = significant (affects kicking, deep passing)
+- Rain/Snow = significant (affects turnovers, footing)
+- Normal/mild conditions = DO NOT MENTION weather in your rationale
+- IMPORTANT: Weather forecasts 2+ days before game time are unreliable - if weather data shows "forecast not available yet", do not speculate about weather
+- Stats to verify: [WEATHER] (only if conditions are extreme)
 
 ### HOME FIELD ADVANTAGE
 NFL home field is worth ~2.5-3 points:

@@ -108,12 +108,26 @@ Key factors for corners taken:
 - Tackles: Underpriced for ball-winning midfielders
 - Cards: High variance, bet sparingly
 
+### SELECTION RULE: 2 PICKS PER GAME
+
+**CRITICAL**: You must select EXACTLY 2 prop picks from each game.
+
+These are the 2 picks you'd put your REPUTATION on. Quality over quantity.
+- Analyze all available props thoroughly
+- Identify which 2 props have the strongest edge and highest reliability
+- These should be your MOST CONFIDENT selections - not just any picks, but picks you'd bet your credibility on
+- No minimum confidence threshold - but you should feel strongly about both picks
+
+**Do NOT**:
+- Pick more than 2 props per game
+- Pick fewer than 2 props per game (unless absolutely no valid props exist)
+- Pick props just to fill the quota - be selective
+
 ### CONFIDENCE CALIBRATION
 
 - 75%+ confidence: Strong xG edge + lineup confirmed + home advantage
 - 65-74% confidence: Good matchup, minor rotation concerns
 - 55-64% confidence: Slight edge, lineup uncertainty
-- Below 55%: Pass on the prop
 
 ### RED FLAGS - WHEN TO PASS
 

@@ -168,6 +168,158 @@ function extractStatsDataFromContext(context, sportKey) {
     }
   }
   
+  // NHL-specific stats mapping
+  // iOS app expects specific field names in snake_case format
+  if (sportKey === 'icehockey_nhl') {
+    // Corsi/xG (advanced possession metrics) - maps to CORSI_FOR_PCT token which uses shots_for field
+    if (tokenData.corsi_xg && hasValidData(tokenData.corsi_xg.home, tokenData.corsi_xg.away)) {
+      const h = tokenData.corsi_xg.home;
+      const a = tokenData.corsi_xg.away;
+      if (h.corsiForPct !== null && a.corsiForPct !== null) {
+        statsData.push({
+          token: 'CORSI_FOR_PCT',
+          home: { shots_for: fmt(h.corsiForPct, '%'), team: homeTeam },
+          away: { shots_for: fmt(a.corsiForPct, '%'), team: awayTeam }
+        });
+      }
+      if (h.pdo !== null && a.pdo !== null) {
+        statsData.push({
+          token: 'PDO',
+          home: { shots_for: fmt(h.pdo), team: homeTeam },
+          away: { shots_for: fmt(a.pdo), team: awayTeam }
+        });
+      }
+    }
+    
+    // Special Teams (PP%, PK%) - iOS expects power_play_pct and penalty_kill_pct fields
+    if (tokenData.special_teams && hasValidData(tokenData.special_teams.home, tokenData.special_teams.away)) {
+      const h = tokenData.special_teams.home;
+      const a = tokenData.special_teams.away;
+      if (h.ppPct !== null && a.ppPct !== null) {
+        statsData.push({
+          token: 'POWER_PLAY_PCT',
+          home: { power_play_pct: fmt(h.ppPct, '%'), team: homeTeam },
+          away: { power_play_pct: fmt(a.ppPct, '%'), team: awayTeam }
+        });
+      }
+      if (h.pkPct !== null && a.pkPct !== null) {
+        statsData.push({
+          token: 'PENALTY_KILL_PCT',
+          home: { penalty_kill_pct: fmt(h.pkPct, '%'), team: homeTeam },
+          away: { penalty_kill_pct: fmt(a.pkPct, '%'), team: awayTeam }
+        });
+      }
+    }
+    
+    // Goalie Matchup - iOS expects save_pct and gaa fields
+    if (tokenData.goalie_matchup && (tokenData.goalie_matchup.home?.starter || tokenData.goalie_matchup.away?.starter)) {
+      const h = tokenData.goalie_matchup.home || {};
+      const a = tokenData.goalie_matchup.away || {};
+      if (h.savePct !== null || a.savePct !== null) {
+        statsData.push({
+          token: 'SAVE_PCT',
+          home: { 
+            save_pct: h.savePct ? fmt(h.savePct) : 'N/A', 
+            team: homeTeam 
+          },
+          away: { 
+            save_pct: a.savePct ? fmt(a.savePct) : 'N/A', 
+            team: awayTeam 
+          }
+        });
+      }
+      if (h.gaa !== null || a.gaa !== null) {
+        statsData.push({
+          token: 'GOALS_AGAINST_AVG',
+          home: { 
+            gaa: h.gaa ? fmt(h.gaa) : 'N/A',
+            goals_against_avg: h.gaa ? fmt(h.gaa) : 'N/A',
+            team: homeTeam 
+          },
+          away: { 
+            gaa: a.gaa ? fmt(a.gaa) : 'N/A',
+            goals_against_avg: a.gaa ? fmt(a.gaa) : 'N/A',
+            team: awayTeam 
+          }
+        });
+      }
+    }
+    
+    // Shot Metrics - iOS expects shots_for and differential fields
+    if (tokenData.shot_metrics && hasValidData(tokenData.shot_metrics.home, tokenData.shot_metrics.away)) {
+      const h = tokenData.shot_metrics.home;
+      const a = tokenData.shot_metrics.away;
+      if (h.shotsForPerGame !== null && a.shotsForPerGame !== null) {
+        statsData.push({
+          token: 'SHOTS_FOR',
+          home: { shots_for: fmt(h.shotsForPerGame), team: homeTeam },
+          away: { shots_for: fmt(a.shotsForPerGame), team: awayTeam }
+        });
+      }
+      if (h.shotDifferential !== null && a.shotDifferential !== null) {
+        const hDiff = parseFloat(h.shotDifferential);
+        const aDiff = parseFloat(a.shotDifferential);
+        statsData.push({
+          token: 'SHOT_DIFFERENTIAL',
+          home: { differential: hDiff >= 0 ? `+${hDiff}` : `${hDiff}`, team: homeTeam },
+          away: { differential: aDiff >= 0 ? `+${aDiff}` : `${aDiff}`, team: awayTeam }
+        });
+      }
+    }
+    
+    // Scoring - iOS expects goals_for_per_game and goals_against_per_game fields
+    if (tokenData.scoring && hasValidData(tokenData.scoring.home, tokenData.scoring.away)) {
+      const h = tokenData.scoring.home;
+      const a = tokenData.scoring.away;
+      if (h.goalsForPerGame !== null && a.goalsForPerGame !== null) {
+        statsData.push({
+          token: 'GOALS_FOR',
+          home: { goals_for_per_game: fmt(h.goalsForPerGame), team: homeTeam },
+          away: { goals_for_per_game: fmt(a.goalsForPerGame), team: awayTeam }
+        });
+      }
+      if (h.goalsAgainstPerGame !== null && a.goalsAgainstPerGame !== null) {
+        statsData.push({
+          token: 'GOALS_AGAINST',
+          home: { goals_against_per_game: fmt(h.goalsAgainstPerGame), team: homeTeam },
+          away: { goals_against_per_game: fmt(a.goalsAgainstPerGame), team: awayTeam }
+        });
+      }
+    }
+    
+    // Recent Form - iOS expects last_5 field
+    if (tokenData.recent_form) {
+      const h = tokenData.recent_form.home;
+      const a = tokenData.recent_form.away;
+      if (h?.record && a?.record) {
+        statsData.push({
+          token: 'RECENT_FORM',
+          home: { last_5: h.record, team: homeTeam },
+          away: { last_5: a.record, team: awayTeam }
+        });
+      }
+    }
+    
+    // Rest/Fatigue - iOS expects overall field for REST_SITUATION token
+    if (tokenData.rest_fatigue) {
+      const h = tokenData.rest_fatigue.home || {};
+      const a = tokenData.rest_fatigue.away || {};
+      if (h.restDays !== undefined && a.restDays !== undefined) {
+        statsData.push({
+          token: 'REST_SITUATION',
+          home: { 
+            overall: h.backToBack ? 'B2B' : `${h.restDays} days rest`,
+            team: homeTeam 
+          },
+          away: { 
+            overall: a.backToBack ? 'B2B' : `${a.restDays} days rest`,
+            team: awayTeam 
+          }
+        });
+      }
+    }
+  }
+  
   return statsData;
 }
 

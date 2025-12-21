@@ -628,28 +628,75 @@ function Home() {
         // Always show today's picks (EST), no fallback to yesterday
         
         // Query Supabase for picks using the determined date
+        // Check both daily_picks AND weekly_nfl_picks (NFL picks are in weekly table)
         console.log(`Home: Querying picks for date: ${queryDate}`);
-        const { data, error } = await supabase
-          .from("daily_picks")
-          .select("picks, date")
-          .eq("date", queryDate)
-          .maybeSingle();
+        const [dailyResult, nflResult] = await Promise.all([
+          supabase.from("daily_picks").select("picks, date").eq("date", queryDate).maybeSingle(),
+          supabase.from("weekly_nfl_picks").select("picks, week, season").eq("season", 2025).order("week", { ascending: false }).limit(1).maybeSingle()
+        ]);
           
-        if (error) {
-          console.error("Error fetching picks:", error);
-          return;
+        if (dailyResult.error) {
+          console.error("Error fetching daily picks:", dailyResult.error);
+        }
+        if (nflResult.error) {
+          console.error("Error fetching NFL picks:", nflResult.error);
         }
         
-        // If we have picks, get the top one with highest confidence
-        if (data && data.picks) {
-          const picksArray = typeof data.picks === "string" ? JSON.parse(data.picks) : data.picks;
+        // Combine picks from both sources
+        let allPicks = [];
+        if (dailyResult.data?.picks) {
+          const dailyPicks = typeof dailyResult.data.picks === "string" ? JSON.parse(dailyResult.data.picks) : dailyResult.data.picks;
+          allPicks = allPicks.concat(dailyPicks);
+        }
+        if (nflResult.data?.picks) {
+          const nflPicks = typeof nflResult.data.picks === "string" ? JSON.parse(nflResult.data.picks) : nflResult.data.picks;
+          allPicks = allPicks.concat(nflPicks);
+        }
+        
+        // If we have picks, get the top one based on thesis quality (new system)
+        // MANUAL OVERRIDE: If a pick has is_top_pick: true, use it first
+        // Otherwise: Priority: clear_read with fewest major contradictions > found_angle > confidence
+        if (allPicks.length > 0) {
+          // Check for manual override first (checks all picks from both sources)
+          const manualTopPick = allPicks.find(pick => pick && pick.is_top_pick === true);
+          if (manualTopPick) {
+            setFeaturedPicks([manualTopPick]);
+            return;
+          }
           
-          // Sort by confidence (high to low) and get only top 1 pick
-          const topPicks = picksArray.filter(pick => pick && pick.confidence).sort((a, b) => {
-            const aConf = typeof a.confidence === 'number' ? a.confidence : parseFloat(a.confidence) || 0;
-            const bConf = typeof b.confidence === 'number' ? b.confidence : parseFloat(b.confidence) || 0;
-            return bConf - aConf;
-          }).slice(0, 1); // RESTORED slice to limit to top 1 pick for home page display only
+          // Score picks based on thesis quality
+          const scorePick = (pick) => {
+            if (!pick) return -1;
+            const thesisType = pick.thesis_type;
+            const majorCount = pick.contradicting_factors?.major?.length || 0;
+            const confidence = typeof pick.confidence === 'number' ? pick.confidence : parseFloat(pick.confidence) || 0;
+            
+            // Priority scoring:
+            // clear_read with 0 majors = 1000
+            // clear_read with 1 major = 900
+            // clear_read with 2 majors = 800
+            // found_angle with 0 majors = 700
+            // found_angle with 1 major = 600
+            // found_angle with 2 majors = 500
+            // Then add confidence as tiebreaker (0-100)
+            
+            let baseScore = 0;
+            if (thesisType === 'clear_read') {
+              baseScore = 1000 - (majorCount * 100);
+            } else if (thesisType === 'found_angle') {
+              baseScore = 700 - (majorCount * 100);
+            } else {
+              // Fallback to confidence for old picks without thesis_type
+              baseScore = confidence * 10;
+            }
+            
+            return baseScore + confidence;
+          };
+          
+          const topPicks = allPicks
+            .filter(pick => pick && (pick.confidence || pick.thesis_type))
+            .sort((a, b) => scorePick(b) - scorePick(a))
+            .slice(0, 1);
           
           setFeaturedPicks(topPicks);
         } else {

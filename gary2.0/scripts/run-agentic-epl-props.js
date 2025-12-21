@@ -16,8 +16,8 @@ runAgenticPropsCli({
   leagueLabel: 'EPL',
   buildContext: buildEplPropsAgenticContext,
   windowHours: 24 * 7,  // EPL weekly schedule - look 7 days ahead
-  propsPerGame: 5,
-  limitDefault: 5  // Number of games to process
+  propsPerGame: 2,  // 2-per-game rule: exactly 2 most confident picks per game
+  limitDefault: 5   // Number of games to process
 })
   .then(() => process.exit(0))
   .catch((error) => {

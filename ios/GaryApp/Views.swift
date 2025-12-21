@@ -1,6 +1,31 @@
 import SwiftUI
 import WebKit
 
+// MARK: - Performance Helpers
+
+/// Detects if device needs performance optimizations based on hardware capability
+enum PerformanceMode {
+    /// Full effects for high-end devices (iOS 18+ or ProMotion displays)
+    case full
+    /// Lighter effects for older/slower devices
+    case lite
+    
+    static var current: PerformanceMode {
+        // iOS 18+ devices are generally powerful enough for full effects
+        // iOS 17 and below (including iPhone 14 on iOS 17) get lite mode
+        if #available(iOS 18.0, *) {
+            return .full
+        } else {
+            return .lite
+        }
+    }
+    
+    /// Whether to use expensive effects like blend modes and multiple shadows
+    var useExpensiveEffects: Bool {
+        self == .full
+    }
+}
+
 // MARK: - Async Helpers
 
 /// Execute an async operation with a timeout
@@ -153,118 +178,170 @@ extension View {
         .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
     }
     
-    /// Gold gradient glass
+    /// Gold gradient glass - Full design on iOS 16+, lighter on older
     func goldGlass(cornerRadius: CGFloat = 12) -> some View {
         self.background {
-            ZStack {
-                // Gold gradient background (light gold to darker gold)
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                GaryColors.lightGold.opacity(0.3),
-                                GaryColors.gold.opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            if PerformanceMode.current.useExpensiveEffects {
+                // Full design for iOS 16+
+                ZStack {
+                    // Gold gradient background (light gold to darker gold)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    GaryColors.lightGold.opacity(0.3),
+                                    GaryColors.gold.opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                
-                // Gold gradient border
+                    
+                    // Gold gradient border
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                }
+            } else {
+                // Lighter version for iOS 15 and below
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
+                    .fill(GaryColors.gold.opacity(0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.4), lineWidth: 0.8)
                     )
             }
         }
     }
     
-    /// Gold gradient glass circle
+    /// Gold gradient glass circle - Full design on iOS 16+, lighter on older
     func goldGlassCircle() -> some View {
         self.background {
-            ZStack {
-                // Gold gradient background (light gold to darker gold)
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                GaryColors.lightGold.opacity(0.3),
-                                GaryColors.gold.opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            if PerformanceMode.current.useExpensiveEffects {
+                // Full design for iOS 16+
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    GaryColors.lightGold.opacity(0.3),
+                                    GaryColors.gold.opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                
-                // Gold gradient border
+                    
+                    Circle()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                }
+            } else {
+                // Lighter version for iOS 15 and below
                 Circle()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [GaryColors.lightGold.opacity(0.6), GaryColors.gold.opacity(0.4)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
+                    .fill(GaryColors.gold.opacity(0.15))
+                    .overlay(
+                        Circle()
+                            .stroke(GaryColors.gold.opacity(0.4), lineWidth: 0.8)
                     )
             }
         }
     }
     
-    /// Premium liquid glass button with gold tint
+    /// Premium liquid glass button - Full design on iOS 16+, lighter on older
     func liquidGlassButton(cornerRadius: CGFloat = 12) -> some View {
         self.background {
-            ZStack {
-                // 1. Base glass with subtle gold tint
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                
-                // 2. Gold-tinted overlay
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                GaryColors.gold.opacity(0.15),
-                                GaryColors.gold.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            if PerformanceMode.current.useExpensiveEffects {
+                // Full design for iOS 16+
+                ZStack {
+                    // 1. Base glass with subtle gold tint
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    
+                    // 2. Gold-tinted overlay
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    GaryColors.gold.opacity(0.15),
+                                    GaryColors.gold.opacity(0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                
-                // 3. Liquid shine (top highlight)
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.5), .white.opacity(0.0)],
-                            startPoint: .top,
-                            endPoint: .center
+                    
+                    // 3. Liquid shine (top highlight)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.5), .white.opacity(0.0)],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
                         )
-                    )
-                    .blendMode(.overlay)
-                
-                // 4. Premium gold edge
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                GaryColors.lightGold.opacity(0.6),
-                                GaryColors.gold.opacity(0.3),
-                                GaryColors.gold.opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                        .blendMode(.overlay)
+                    
+                    // 4. Premium gold edge
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    GaryColors.lightGold.opacity(0.6),
+                                    GaryColors.gold.opacity(0.3),
+                                    GaryColors.gold.opacity(0.1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+            } else {
+                // Lighter version for iOS 15 and below
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(GaryColors.gold.opacity(0.1))
+                    
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1)
+                }
             }
         }
-        .shadow(color: GaryColors.gold.opacity(0.2), radius: 12, y: 6)
-        .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+        .modifier(ConditionalShadow(
+            color: GaryColors.gold.opacity(0.2),
+            radius: 12,
+            y: 6
+        ))
+    }
+}
+
+/// Applies shadow only on iOS 16+ for performance
+struct ConditionalShadow: ViewModifier {
+    let color: Color
+    let radius: CGFloat
+    let y: CGFloat
+    
+    func body(content: Content) -> some View {
+        if PerformanceMode.current.useExpensiveEffects {
+            content
+                .shadow(color: color, radius: radius, y: y)
+                .shadow(color: .black.opacity(0.15), radius: radius * 0.67, y: y * 0.67)
+        } else {
+            content
+        }
     }
 }
 
@@ -437,7 +514,7 @@ struct HomeView: View {
                             
                             HeroBenefitCard(title: "Fan Brain", text: "The qualitative factors that pure stat models miss. Revenge Games (emotional edge from last loss), Trap Alerts (suspicious line movement), Letdown Spots (flat after emotional win), and Lookahead Spots (big game next week trap).", badge: "SOFT FACTORS")
                             
-                            HeroBenefitCard(title: "Confidence Score", text: "Every pick gets an unbiased confidence score from 0.50 to 1.00. Gary can't inflate his own numbers—we filter out picks below our threshold so only the strongest analysis makes it through. What you see is genuine conviction, not marketing.", badge: "HONEST RATINGS")
+                            HeroBenefitCard(title: "Thesis-Based Filtering", text: "Every pick must have a clear thesis—a specific reason WHY this team wins. Gary categorizes his reasoning quality and we only publish picks where he found a clear read or a specific angle. No vague 'they should win' picks make it through.", badge: "HONEST RATINGS")
                         }
                     }
                     .padding(16)
@@ -473,7 +550,42 @@ struct HomeView: View {
             // Then load data
             loading = true
             let date = SupabaseAPI.todayEST()
-            freePick = try? await SupabaseAPI.fetchAllPicks(date: date).first
+            let allPicks = try? await SupabaseAPI.fetchAllPicks(date: date)
+            
+            // Select Top Pick: Check for is_top_pick first, then use thesis-based scoring
+            if let picks = allPicks, !picks.isEmpty {
+                // 1. Check for manual override (is_top_pick: true)
+                if let manualTopPick = picks.first(where: { $0.is_top_pick == true }) {
+                    freePick = manualTopPick
+                } else {
+                    // 2. Use thesis-based scoring (same as web app)
+                    let scoredPicks = picks.compactMap { pick -> (pick: GaryPick, score: Double)? in
+                        guard let thesisType = pick.thesis_type else {
+                            // Fallback to confidence for old picks
+                            let conf = pick.confidence ?? 0
+                            return (pick, conf * 10)
+                        }
+                        
+                        let majorCount = pick.contradicting_factors?.major?.count ?? 0
+                        let confidence = pick.confidence ?? 0
+                        
+                        var baseScore: Double = 0
+                        if thesisType == "clear_read" {
+                            baseScore = 1000 - (Double(majorCount) * 100)
+                        } else if thesisType == "found_angle" {
+                            baseScore = 700 - (Double(majorCount) * 100)
+                        } else {
+                            baseScore = confidence * 10
+                        }
+                        
+                        return (pick, baseScore + confidence)
+                    }.sorted { $0.score > $1.score }
+                    
+                    freePick = scoredPicks.first?.pick ?? picks.first
+                }
+            } else {
+                freePick = nil
+            }
             loading = false
         }
     }
@@ -608,7 +720,7 @@ struct SportFilterBar: View {
                                 if isSelected {
                                     Capsule()
                                         .fill(sport.accentColor)
-                                        .shadow(color: sport.accentColor.opacity(0.4), radius: 8, y: 4)
+                                        .modifier(ConditionalCapsuleShadow(color: sport.accentColor.opacity(0.4)))
                                 } else {
                                     Capsule()
                                         .fill(.white.opacity(0.06))
@@ -933,16 +1045,20 @@ struct GaryPropsView: View {
     /// TD picks grouped by category for section headers
     private var tdPicksByCategory: [(category: String, label: String, picks: [PropPick])] {
         guard selectedSport == .nflTDs else { return [] }
-        
+
         let standardPicks = filteredProps.filter { $0.tdCategory == "standard" }
         let underdogPicks = filteredProps.filter { $0.tdCategory == "underdog" }
-        
+        let firstTDPicks = filteredProps.filter { $0.tdCategory == "first_td" }
+
         var result: [(category: String, label: String, picks: [PropPick])] = []
         if !standardPicks.isEmpty {
             result.append(("standard", "Regular", standardPicks))
         }
         if !underdogPicks.isEmpty {
             result.append(("underdog", "Value", underdogPicks))
+        }
+        if !firstTDPicks.isEmpty {
+            result.append(("first_td", "First TD", firstTDPicks))
         }
         return result
     }
@@ -1075,12 +1191,16 @@ struct GaryPropsView: View {
                                     // Section Header
                                     HStack {
                                         Rectangle()
-                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : Color(hex: "#22C55E").opacity(0.6))
+                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : 
+                                                  group.category == "underdog" ? Color(hex: "#22C55E").opacity(0.6) : 
+                                                  Color(hex: "#A855F7").opacity(0.6))  // Purple for first_td
                                             .frame(width: 30, height: 2)
-                                        
+
                                         Text(group.label)
                                             .font(.system(size: 14, weight: .bold))
-                                            .foregroundStyle(group.category == "standard" ? Color(hex: "#3B82F6") : Color(hex: "#22C55E"))
+                                            .foregroundStyle(group.category == "standard" ? Color(hex: "#3B82F6") : 
+                                                           group.category == "underdog" ? Color(hex: "#22C55E") : 
+                                                           Color(hex: "#A855F7"))  // Purple for first_td
                                         
                                         if group.category == "underdog" {
                                             Text("• +200 or better")
@@ -1089,11 +1209,13 @@ struct GaryPropsView: View {
                                         }
                                         
                                         Rectangle()
-                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : Color(hex: "#22C55E").opacity(0.6))
+                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : 
+                                                  group.category == "underdog" ? Color(hex: "#22C55E").opacity(0.6) : 
+                                                  Color(hex: "#A855F7").opacity(0.6))  // Purple for first_td
                                             .frame(height: 2)
                                     }
                                     .padding(.horizontal, 20)
-                                    .padding(.top, group.category == "underdog" ? 12 : 4)
+                                    .padding(.top, group.category == "standard" ? 4 : 12)
                                     
                                     // TD Picks in this category
                                     ForEach(group.picks) { prop in
@@ -1361,7 +1483,7 @@ struct BillfoldView: View {
                             if isSelected {
                                 Capsule()
                                     .fill(sport.accentColor)
-                                    .shadow(color: sport.accentColor.opacity(0.4), radius: 6, y: 3)
+                                    .modifier(ConditionalCapsuleShadow(color: sport.accentColor.opacity(0.4)))
                             } else {
                                 Capsule()
                                     .fill(Color(hex: "#1A1A1E"))
@@ -1733,27 +1855,40 @@ struct HeroBenefitCard: View {
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "#1A1814"), Color(hex: "#141416")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
+            Group {
+                if PerformanceMode.current.useExpensiveEffects {
+                    // Full design for iOS 16+
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(
+                        .fill(
                             LinearGradient(
-                                colors: [GaryColors.gold.opacity(0.5), GaryColors.gold.opacity(0.2)],
+                                colors: [Color(hex: "#1A1814"), Color(hex: "#141416")],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.5
+                            )
                         )
-                )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [GaryColors.gold.opacity(0.5), GaryColors.gold.opacity(0.2)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.5
+                                )
+                        )
+                        .shadow(color: GaryColors.gold.opacity(0.1), radius: 20, y: 8)
+                } else {
+                    // Lighter version for iOS 15 and below
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color(hex: "#171514"))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(GaryColors.gold.opacity(0.35), lineWidth: 1.5)
+                        )
+                }
+            }
         )
-        .shadow(color: GaryColors.gold.opacity(0.1), radius: 20, y: 8)
     }
 }
 
@@ -1781,7 +1916,7 @@ struct KPICard: View {
                         .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
                 )
         )
-        .shadow(color: GaryColors.gold.opacity(0.1), radius: 12, y: 4)
+        .modifier(ConditionalShadow(color: GaryColors.gold.opacity(0.1), radius: 12, y: 4))
     }
 }
 
@@ -1860,6 +1995,32 @@ struct PickCardMobile: View {
         pick.isNBACup
     }
     
+    /// Check if this is an NCAAF game
+    private var isNCAAF: Bool {
+        pick.league?.uppercased() == "NCAAF"
+    }
+    
+    /// Check if this is a CFP (College Football Playoff) game
+    private var isCFP: Bool {
+        pick.isCFP
+    }
+    
+    /// Get CFP round label (First Round, Quarterfinal, Semifinal, Championship)
+    private var cfpRoundLabel: String? {
+        guard isCFP else { return nil }
+        if let round = pick.cfpRound, !round.isEmpty {
+            return round.replacingOccurrences(of: "CFP ", with: "")
+        }
+        if let ctx = pick.tournamentContext?.lowercased() {
+            if ctx.contains("championship") { return "Championship" }
+            if ctx.contains("semifinal") { return "Semifinal" }
+            if ctx.contains("quarterfinal") { return "Quarterfinal" }
+            if ctx.contains("first round") { return "First Round" }
+            return "Playoff"
+        }
+        return "Playoff"
+    }
+    
     /// Check if this is an NFL special game (divisional, primetime, etc.)
     private var nflGameContext: String? {
         guard isNFL, let ctx = pick.tournamentContext, !ctx.isEmpty else { return nil }
@@ -1930,147 +2091,186 @@ struct PickCardMobile: View {
         Sport.from(league: pick.league).isBeta
     }
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Header Row - Icon left, Time right
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: Sport.from(league: pick.league).icon)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.75))
-                        .padding(10)
-                        .goldGlassCircle()
-                    
-                    // NBA CUP badge for In-Season Tournament games
-                    if isNBACup {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trophy.fill")
-                                .font(.system(size: 8, weight: .bold))
-                            Text("NBA CUP")
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(GaryColors.gold.opacity(0.2))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                    
-                    // NFL game context badge (Divisional, TNF, SNF, MNF)
-                    if let nflContext = nflGameContext {
-                        HStack(spacing: 4) {
-                            Image(systemName: nflContextIcon)
-                                .font(.system(size: 8, weight: .bold))
-                            Text(nflContext.uppercased())
-                                .font(.system(size: 8, weight: .bold))
-                        }
-                        .foregroundStyle(accentColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(accentColor.opacity(0.2))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                    
-                    // BETA badge for sports with limited analytics
-                    if isBetaSport {
-                        Text("BETA")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Color.orange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Color.orange.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                }
+    // MARK: - Extracted Sub-Views (fixes type-checking timeout)
+    
+    @ViewBuilder
+    private var headerBadges: some View {
+        // NBA CUP badge
+        if isNBACup {
+            HStack(spacing: 4) {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 8, weight: .bold))
+                Text("NBA CUP")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(GaryColors.gold)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(GaryColors.gold.opacity(0.2))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        
+        // NFL game context badge
+        if let nflContext = nflGameContext {
+            HStack(spacing: 5) {
+                Image(systemName: nflContextIcon)
+                    .font(.system(size: 10, weight: .bold))
+                Text(nflContext.uppercased())
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(accentColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(accentColor.opacity(0.2))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+        
+        // CFP badge
+        if isCFP, let cfpLabel = cfpRoundLabel {
+            HStack(spacing: 5) {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 10, weight: .bold))
+                Text("CFP \(cfpLabel)")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(.red)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.red.opacity(0.2))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+        
+        // BETA badge
+        if isBetaSport {
+            Text("BETA")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(Color.orange)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.orange.opacity(0.2))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+    }
+    
+    @ViewBuilder
+    private var headerRow: some View {
+        HStack {
+            HStack(spacing: 8) {
+                Image(systemName: Sport.from(league: pick.league).icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.75))
+                    .padding(10)
+                    .goldGlassCircle()
                 
-                Spacer()
-                
-                if let time = pick.displayTime {
-                    Text(Formatters.formatCommenceTime(time))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.75))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .goldGlass(cornerRadius: 8)
-                }
+                headerBadges
             }
             
-            // Teams - Soft white with truncation for long names (always short names for matchup)
-            // For NCAAB/NCAAF: shows school names (e.g., "Nebraska @ Illinois")
-            // For pro sports: shows mascots (e.g., "Thunder @ Lakers")
-            VStack(spacing: 6) {
-                HStack {
+            Spacer()
+            
+            if let time = pick.displayTime {
+                Text(Formatters.formatCommenceTime(time))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.75))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .goldGlass(cornerRadius: 8)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var teamsSection: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 0) {
+                // Away team with optional CFP seed
+                HStack(spacing: 4) {
+                    if isCFP, let awaySeed = pick.awaySeed {
+                        Text("#\(awaySeed)")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                    }
                     Text(Formatters.shortTeamName(pick.awayTeam, league: pick.league))
                         .font(.title3.bold())
                         .foregroundStyle(Color.white.opacity(0.75))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Spacer()
-                    // Show "vs" for neutral site, "@" for regular games
-                    Text(pick.isNeutralSite == true ? "vs" : "@")
-                        .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.5))
-                        .layoutPriority(1)
-                    Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // @ sign - fixed width
+                Text(pick.isNeutralSite == true ? "vs" : "@")
+                    .font(.caption)
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .frame(width: 40)
+                
+                // Home team with optional CFP seed
+                HStack(spacing: 4) {
                     Text(Formatters.shortTeamName(pick.homeTeam, league: pick.league))
                         .font(.title3.bold())
                         .foregroundStyle(Color.white.opacity(0.75))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                }
-                
-                // Venue (when available - e.g., NBA Cup neutral site games)
-                if let venue = pick.venue, !venue.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 11))
-                        Text(venue)
-                            .font(.system(size: 12, weight: .medium))
+                    if isCFP, let homeSeed = pick.homeSeed {
+                        Text("#\(homeSeed)")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
                     }
-                    .foregroundStyle(Color.white.opacity(0.5))
                 }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .padding(.vertical, 4)
             
-            // Divider
-            Rectangle()
-                .fill(accentColor.opacity(0.3))
-                .frame(height: 1)
+            // Venue
+            if let venue = pick.venue, !venue.isEmpty {
+                HStack(spacing: 5) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 13))
+                    Text(venue)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundStyle(accentColor)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+    
+    @ViewBuilder
+    private var pickTextSection: some View {
+        HStack(alignment: .center) {
+            Text(pickParts.pick)
+                .foregroundStyle(GaryColors.gold)
+                .font(.system(size: 22, weight: .heavy))
+                .lineLimit(2)
+                .minimumScaleFactor(0.6)
             
-            // Pick Text with Odds aligned horizontally (KEEP GOLD for actual pick)
-            HStack(alignment: .center) {
-                Text(pickParts.pick)
-                    .foregroundStyle(GaryColors.gold)
-                    .font(.system(size: 22, weight: .heavy))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.6) // Allow more shrinking for long college team names
-                
+            Spacer()
+            
+            if !pickParts.odds.isEmpty {
+                Text(pickParts.odds)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.75))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .goldGlass(cornerRadius: 8)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var confidenceBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.caption)
+                Text("Confidence")
+                    .font(.caption)
                 Spacer()
-                
-                // Odds badge - soft white, unbold
-                if !pickParts.odds.isEmpty {
-                    Text(pickParts.odds)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.75))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .goldGlass(cornerRadius: 8)
-                }
             }
+            .foregroundStyle(.secondary)
             
-            // Confidence Bar (KEEP AS-IS)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.caption)
-                    Text("Confidence")
-                        .font(.caption)
-                    Spacer()
-                    Text("\(Formatters.confidencePercent(pick.confidence))%")
-                        .font(.caption.bold())
-                }
-                .foregroundStyle(.secondary)
-                
+            // iOS 16+: Use GeometryReader for precise sizing
+            // iOS 15 and below: Use scaleEffect to avoid layout recalculations
+            if PerformanceMode.current.useExpensiveEffects {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
@@ -2081,7 +2281,40 @@ struct PickCardMobile: View {
                     }
                 }
                 .frame(height: 6)
+            } else {
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(accentColor.opacity(isNFL ? 0.05 : 0.25))
+                        .frame(height: 6)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(accentColor)
+                        .frame(height: 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .scaleEffect(x: CGFloat(pick.confidence ?? 0), y: 1, anchor: .leading)
+                }
+                .frame(height: 6)
             }
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header Row - Icon left, Time right
+            headerRow
+            
+            // Teams section
+            teamsSection
+            
+            // Divider
+            Rectangle()
+                .fill(accentColor.opacity(0.3))
+                .frame(height: 1)
+            
+            // Pick Text with Odds
+            pickTextSection
+            
+            // Confidence Bar
+            confidenceBar
             
             // Analysis Button - soft white, unbold
             Button {
@@ -2105,28 +2338,69 @@ struct PickCardMobile: View {
         }
         .padding(18)
         .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(GaryColors.cardBg)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            LinearGradient(
-                                colors: [accentColor.opacity(0.6), accentColor.opacity(0.2)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
-                        )
-                )
-                .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
-                .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+            if PerformanceMode.current.useExpensiveEffects {
+                // Full design for iOS 16+
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(GaryColors.cardBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [accentColor.opacity(0.6), accentColor.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                    )
+                    .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
+                    .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+            } else {
+                // Lighter version for iOS 15 and below
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(GaryColors.cardBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(accentColor.opacity(0.4), lineWidth: 1.5)
+                    )
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 4)
+            }
         }
+        .modifier(PerformanceOptimizer()) // Applies drawingGroup only on older iOS
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 isPressed = pressing
             }
         }, perform: {})
+    }
+}
+
+/// Applies performance optimizations only on older iOS versions
+struct PerformanceOptimizer: ViewModifier {
+    func body(content: Content) -> some View {
+        if PerformanceMode.current.useExpensiveEffects {
+            // iOS 16+: No rasterization needed, GPU handles it well
+            content
+        } else {
+            // iOS 15 and below: Rasterize to offscreen buffer for smoother scrolling
+            content
+                .compositingGroup()
+                .drawingGroup()
+        }
+    }
+}
+
+/// Applies shadow on capsules only on iOS 16+
+struct ConditionalCapsuleShadow: ViewModifier {
+    let color: Color
+    
+    func body(content: Content) -> some View {
+        if PerformanceMode.current.useExpensiveEffects {
+            content.shadow(color: color, radius: 8, y: 4)
+        } else {
+            content
+        }
     }
 }
 
@@ -2228,15 +2502,28 @@ struct PropCardMobile: View {
         }
         .padding(18)
         .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(GaryColors.cardBg)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(accentColor.opacity(0.4), lineWidth: 1)
-                )
-                .shadow(color: accentColor.opacity(0.1), radius: 16, y: 8)
-                .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+            if PerformanceMode.current.useExpensiveEffects {
+                // Full design for iOS 16+
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(GaryColors.cardBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(accentColor.opacity(0.4), lineWidth: 1)
+                    )
+                    .shadow(color: accentColor.opacity(0.1), radius: 16, y: 8)
+                    .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+            } else {
+                // Lighter version for iOS 15 and below
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(GaryColors.cardBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(accentColor.opacity(0.4), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 4)
+            }
         }
+        .modifier(PerformanceOptimizer())
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
@@ -2474,6 +2761,56 @@ struct TaleOfTapeSection: View {
     
     private let greenAccent = Color(hex: "#4ade80")
     
+    // MARK: - Injury Helper Functions (extracted to fix type-checking)
+    
+    /// Abbreviate injury status
+    private func statusAbbrev(_ status: String?) -> String {
+        guard let s = status?.lowercased() else { return "" }
+        if s.contains("out") { return "OUT" }
+        if s.contains("injured reserve") || s == "ir" || s.contains("ltir") { return "IR" }
+        if s.contains("doubtful") { return "D" }
+        if s.contains("questionable") { return "Q" }
+        if s.contains("probable") { return "P" }
+        if s.contains("day-to-day") || s.contains("dtd") { return "DTD" }
+        return ""
+    }
+    
+    /// Get status color (red for OUT/IR/D, orange for Q/DTD)
+    private func statusColor(_ abbrev: String) -> Color {
+        switch abbrev {
+        case "OUT", "IR", "D": return .red.opacity(0.9)
+        case "Q", "DTD", "P": return .orange.opacity(0.9)
+        default: return .red.opacity(0.9)
+        }
+    }
+    
+    /// Validate injury name (filter out corrupt entries)
+    private func isValidInjuryName(_ name: String?) -> Bool {
+        guard let n = name, n.count >= 4 else { return false }
+        let lower = n.lowercased()
+        // Reject names that are clearly parsing errors
+        if n.contains("\n") || n.contains("\r") { return false }
+        if lower.hasPrefix("day") || lower.hasPrefix("out") || lower.hasPrefix("questionable") { return false }
+        // Reject concatenated garbage (e.g., "Tari EasonFStatusOut Eason")
+        if lower.contains("fstatus") || lower.contains("statusout") || lower.contains("status") { return false }
+        // Reject names that are too long (likely concatenation errors)
+        if n.count > 35 { return false }
+        return true
+    }
+    
+    /// Sort priority for injury status
+    private func sortPriority(_ abbrev: String) -> Int {
+        switch abbrev {
+        case "OUT": return 0
+        case "IR": return 1
+        case "D": return 2
+        case "Q": return 3
+        case "DTD": return 4
+        case "P": return 5
+        default: return 6
+        }
+    }
+    
     /// Left side is always Gary's pick
     private var leftTeam: String { garyPickedHome ? homeTeam : awayTeam }
     private var rightTeam: String { garyPickedHome ? awayTeam : homeTeam }
@@ -2563,12 +2900,18 @@ struct TaleOfTapeSection: View {
             "WR_TE_STATS": "Pass Yards",
             "DEFENSIVE_PLAYMAKERS": "Pts Allowed",
             "SPECIAL_TEAMS": "Record",
-            "EXPLOSIVENESS": "Big Plays",
-            "HAVOC_RATE": "Havoc Rate",
+            "EXPLOSIVENESS": "Yds/Play",
+            "HAVOC_RATE": "Sacks",
             "HAVOC_ALLOWED": "Opp Havoc",
             "PASSING_TDS": "Pass TDs",
             "INTERCEPTIONS": "INTs",
             "RUSHING_TDS": "Rush TDs",
+            "RED_ZONE": "3rd Down %",
+            "WR_STATS": "Recv YPG",
+            "DEFENSIVE_STARS": "Def PPG",
+            "SPECIAL_TEAMS_RATING": "Record",
+            "TALENT_COMPOSITE": "Talent",
+            "FIELD_POSITION": "Yards/G",
             // NEW: Individual NFL stat tokens (flattened)
             "POINTS_PER_GAME": "Points/Game",
             "PPG": "Points/Game",
@@ -2768,63 +3111,21 @@ struct TaleOfTapeSection: View {
                 
                 // Injuries Row
                 if let injuries = injuries {
-                    // Helper to abbreviate status
-                    let statusAbbrev: (String?) -> String = { status in
-                        guard let s = status?.lowercased() else { return "" }
-                        if s.contains("out") { return "OUT" }
-                        if s.contains("injured reserve") || s == "ir" || s.contains("ltir") { return "IR" }
-                        if s.contains("doubtful") { return "D" }
-                        if s.contains("questionable") { return "Q" }
-                        if s.contains("probable") { return "P" }
-                        if s.contains("day-to-day") || s.contains("dtd") { return "DTD" }
-                        return ""
-                    }
-                    
-                    // Helper to get status color (red for OUT/IR/D, orange for Q/DTD)
-                    let statusColor: (String) -> Color = { abbrev in
-                        switch abbrev {
-                        case "OUT", "IR", "D": return .red.opacity(0.9)
-                        case "Q", "DTD", "P": return .orange.opacity(0.9)
-                        default: return .red.opacity(0.9)
-                        }
-                    }
-                    
                     // Get injuries with status (name, abbreviation)
-                    // Filter out corrupt entries (names with newlines, too short, or starting with common words)
-                    let isValidName: (String?) -> Bool = { name in
-                        guard let n = name, n.count >= 4 else { return false }
-                        let lower = n.lowercased()
-                        // Reject names that are clearly parsing errors
-                        if n.contains("\n") || n.contains("\r") { return false }
-                        if lower.hasPrefix("day") || lower.hasPrefix("out") || lower.hasPrefix("questionable") { return false }
-                        return true
-                    }
-                    
                     let homeInjuriesList: [(name: String, status: String)] = (injuries.home ?? []).compactMap { injury in
-                        guard isValidName(injury.name), let name = injury.name else { return nil }
+                        guard isValidInjuryName(injury.name), let name = injury.name else { return nil }
                         let abbrev = statusAbbrev(injury.status)
                         guard !abbrev.isEmpty else { return nil }
                         return (name, abbrev)
                     }
                     let awayInjuriesList: [(name: String, status: String)] = (injuries.away ?? []).compactMap { injury in
-                        guard isValidName(injury.name), let name = injury.name else { return nil }
+                        guard isValidInjuryName(injury.name), let name = injury.name else { return nil }
                         let abbrev = statusAbbrev(injury.status)
                         guard !abbrev.isEmpty else { return nil }
                         return (name, abbrev)
                     }
                     
                     // Sort: OUT/IR/D first, then Q/DTD
-                    let sortPriority: (String) -> Int = { abbrev in
-                        switch abbrev {
-                        case "OUT": return 0
-                        case "IR": return 1
-                        case "D": return 2
-                        case "Q": return 3
-                        case "DTD": return 4
-                        case "P": return 5
-                        default: return 6
-                        }
-                    }
                     let homeSorted = homeInjuriesList.sorted { sortPriority($0.status) < sortPriority($1.status) }
                     let awaySorted = awayInjuriesList.sorted { sortPriority($0.status) < sortPriority($1.status) }
                     
@@ -2913,10 +3214,6 @@ struct TaleOfTapeSection: View {
     
     /// Compare two stat values to determine if home is better
     private func compareValues(_ home: String, _ away: String, token: String) -> Bool {
-        // Extract numeric values
-        let homeNum = Double(home.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "-", with: "")) ?? 0
-        let awayNum = Double(away.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "-", with: "")) ?? 0
-        
         // For defensive stats, lower is better
         let lowerIsBetter = [
             "DEFENSIVE_RATING", "TURNOVER_RATE", "PAINT_DEFENSE",
@@ -2927,28 +3224,49 @@ struct TaleOfTapeSection: View {
             "OPP_POINTS_PER_GAME", "OPP_PPG", "OPP_YARDS_PER_GAME", "OPP_YPG",
             "GIVEAWAYS", "INTERCEPTIONS", "INTS"
         ].contains(token)
+
+        // For records like "5-18", "16-7", compare wins (first number)
+        // Applies to RECORD, HOME, AWAY, HOME_AWAY_SPLITS, SPECIAL_TEAMS, etc.
+        let recordTokens = ["RECORD", "HOME", "AWAY", "HOME_RECORD", "AWAY_RECORD",
+                           "PACE_HOME_AWAY", "HOME_AWAY_SPLITS", "SPECIAL_TEAMS",
+                           "SPECIAL_TEAMS_RATING", "ATS_RECORD", "OU_RECORD"]
         
-        // For records like "5-18", compare wins
-        if token == "PACE_HOME_AWAY" || token == "HOME_AWAY_SPLITS" || token == "SPECIAL_TEAMS" {
+        // Also detect record format automatically (X-Y where X and Y are numbers)
+        let isRecordFormat: (String) -> Bool = { val in
+            let parts = val.components(separatedBy: "-")
+            return parts.count == 2 && Int(parts[0]) != nil && Int(parts[1]) != nil
+        }
+        
+        if recordTokens.contains(token) || (isRecordFormat(home) && isRecordFormat(away)) {
             let homeWins = Int(home.components(separatedBy: "-").first ?? "0") ?? 0
             let awayWins = Int(away.components(separatedBy: "-").first ?? "0") ?? 0
             return homeWins > awayWins
         }
-        
+
         // For Last 5 / RECENT_FORM (e.g., "WWWWW" vs "LLWLL"), count wins
         if token == "RECENT_FORM" || token == "LAST_5" {
             let homeWins = home.uppercased().filter { $0 == "W" }.count
             let awayWins = away.uppercased().filter { $0 == "W" }.count
             return homeWins > awayWins
         }
-        
+
         // For turnover margin and point diff, handle positive/negative
-        if token == "TURNOVER_MARGIN" || token == "TURNOVER_DIFF" || token == "POINT_DIFF" {
+        if token == "TURNOVER_MARGIN" || token == "TURNOVER_DIFF" || token == "POINT_DIFF" || token == "NET_RATING" {
             let homeVal = Double(home) ?? 0
             let awayVal = Double(away) ?? 0
             return homeVal > awayVal
         }
+
+        // Extract numeric values for standard comparisons
+        // Remove % and handle negative numbers properly
+        let cleanNum: (String) -> Double = { val in
+            let cleaned = val.replacingOccurrences(of: "%", with: "")
+            return Double(cleaned) ?? 0
+        }
         
+        let homeNum = cleanNum(home)
+        let awayNum = cleanNum(away)
+
         return lowerIsBetter ? homeNum < awayNum : homeNum > awayNum
     }
 }
@@ -3668,7 +3986,12 @@ struct PropAnalysisSheet: View {
     
     private var categoryLabel: String? {
         guard let cat = prop.tdCategory else { return nil }
-        return cat == "standard" ? "Regular Pick" : "Value Pick (+200+)"
+        switch cat {
+        case "standard": return "Regular Pick"
+        case "underdog": return "Value Pick (+200+)"
+        case "first_td": return "🥇 First TD"
+        default: return nil
+        }
     }
     
     var body: some View {

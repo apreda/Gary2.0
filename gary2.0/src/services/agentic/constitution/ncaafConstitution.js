@@ -97,11 +97,40 @@ CFB teams vary wildly in finishing ability:
 - Red zone defense can flip games
 - Stats to verify: [RED_ZONE] [GOAL_LINE]
 
+### CONFERENCE TIERS - CONTEXT, NOT DESTINY
+Conference tiers reflect TYPICAL talent/resource differences:
+
+**Tier 1 (Elite Power 4):** SEC, Big Ten
+- Top recruiting, deepest rosters, NFL talent pipelines
+- Home field can be 5-7 points (Death Valley, The Shoe, etc.)
+
+**Tier 2 (Power 4):** Big 12, ACC
+- Strong programs, good recruiting depth
+- Competitive with Tier 1 but less consistent
+
+**Tier 3 (Upper G5):** AAC, Mountain West  
+- Best of Group of 5, occasional NY6 contenders
+- Can upset unprepared P4 teams
+
+**Tier 4 (Lower G5):** MAC, Sun Belt, C-USA
+- Limited recruiting reach, smaller budgets
+- "MACtion" chaos factor in weeknight games
+
+**TIER GAP GUIDELINES:**
+- Same tier: Normal analysis, focus on matchups
+- 1 tier gap: Slight edge to higher tier, but very beatable
+- 2 tier gap: Noticeable talent disparity, look for situational spots
+- 3 tier gap: Significant mismatch ON PAPER - focus on spread value
+
+Conference tiers reflect recruiting power and quality of opponents faced.
+Stats can look different across conferences - putting up 30 PPG in the MAC
+is different than doing so in the SEC. The same applies to defensive stats,
+efficiency metrics, etc. Use this context when interpreting the numbers.
+
 ### CONFERENCE PLAY ADJUSTMENTS
 Conference opponents know each other:
 - Familiarity breeds closer games
 - Non-conference records can be misleading
-- P5 vs G5 = typically 7+ point gap in talent
 - Stats to verify: [CONFERENCE_RECORD] [VS_RANKED]
 
 ### REGRESSION FACTORS
@@ -110,6 +139,87 @@ CFB teams regress to talent level:
 - Close game dominance (>3-0 in one-score games) = unsustainable
 - Turnover luck regresses hard
 - Stats to verify: [TURNOVER_LUCK] [CLOSE_GAME_RECORD]
+
+### ═══════════════════════════════════════════════════════════════════
+### 12-TEAM COLLEGE FOOTBALL PLAYOFF (CFP) CONTEXT - CRITICAL FOR DEC/JAN
+### ═══════════════════════════════════════════════════════════════════
+
+**RANKED VS RANKED MATCHUPS** (Elimination Games):
+- In the 12-team Playoff era, ranked vs ranked = elimination trial
+- Public tends to OVER-BET home favorites by 1.5-2 points in these games
+- UNDER trend: 58% Under rate in ranked vs ranked (conservative coaching, "don't lose it" mentality)
+- High-stakes = longer drives, fewer explosive gambles, ball security emphasis
+- Stats to verify: [VS_RANKED] [H2H_HISTORY]
+
+**CFP FIRST ROUND - ON-CAMPUS GAMES** (Seeds #5-12):
+- First round is at HIGHER SEED'S HOME STADIUM (not neutral like old bowls)
+- Home field IS live, but public often overvalues it
+- Seeds 5-8 host Seeds 9-12
+- Travel, environment, and crowd are real factors
+- BUT: Road teams in playoff have "nothing to lose" mentality
+
+**THE "RUST VS REST" TRAP** (Top 4 Seeds with Byes):
+- In inaugural 12-team playoff (2024-25), bye teams went 0-4 in Quarterfinals
+- 3+ weeks off = "rust" can outweigh rest advantage
+- Hot team that just won > cold team that's been waiting
+- Watch for this when betting Quarterfinals (Jan 1)
+
+**THE REMATCH FACTOR** (CFP-Era Sharp Angle):
+- If these teams played earlier this season, MAJOR factor
+- Team that LOST game 1 covers 58% in game 2 (coaching adjustments)
+- Film study advantage goes to loser who's seen the "cards"
+- Motivation/revenge factor is real
+- BUT: Don't overweight if game 1 was close - could go either way again
+
+**COACHING DISTRACTION FACTOR** (Portal Window Risk):
+- Check if any coach has accepted a new job mid-season
+- Coaches with one foot out the door = player buy-in issues
+- Transfer portal window (Dec-Jan) creates roster uncertainty
+- Players sitting out for NFL Draft = check injury reports
+- Stats to verify: [MOTIVATION_CONTEXT]
+
+**GROUP OF FIVE IN CFP** (The "Luster Gap"):
+- G5 teams in CFP face massive talent gaps vs P4 blue bloods
+- Lines often 20+ points in these matchups
+- G5 teams CAN cover with scheme, motivation, and chaos
+- But straight-up wins are rare (bet spread, not ML)
+- **CRITICAL STATS FOR P4 vs G5 MATCHUPS:**
+  - [STRENGTH_OF_SCHEDULE] - Did the G5 team face ANY Power 4 opponents?
+  - [OPPONENT_ADJUSTED] - FPI/SP+ ratings account for opponent quality
+  - [CONFERENCE_STRENGTH] - Compare Big Ten/SEC avg vs Sun Belt/MAC avg
+  - [VS_POWER_OPPONENTS] - G5 team's actual record vs P4 teams (often 0-1 or 1-1)
+  - [TRAVEL_FATIGUE] - G5 teams often travel cross-country to P4 home stadiums
+
+**OPPONENT-ADJUSTED ANALYSIS** (Critical for CFP):
+- RAW STATS LIE IN CFP MATCHUPS. A G5 defense looks great until you realize it's against Sun Belt offenses.
+- ESPN FPI and SP+ are OPPONENT-ADJUSTED - they weight performance by opponent quality
+- FPI rating gap > 15 points = massive efficiency mismatch
+- SP+ gap > 20 = likely blowout regardless of raw stats
+- Success Rate vs Quality Competition: How did the G5 team do in their ONE Power 4 game?
+- If a G5 team has ZERO Power 4 wins, they're playing in the dark vs elite talent
+- Stats to verify: [OPPONENT_ADJUSTED] [STRENGTH_OF_SCHEDULE]
+
+**HAVOC AS EQUALIZER** (G5 Upset Path):
+- High Havoc Rate (>15%) is how G5 teams compete with P4 talent
+- Turnovers, TFLs, and sacks can neutralize talent gap
+- If P4 QB has turnover issues AND G5 has high havoc = value on G5
+- BUT: Havoc against Sun Belt QBs is NOT same as vs Heisman-caliber P4 QBs
+- Stats to verify: [HAVOC_RATE] [HAVOC_ALLOWED]
+
+**TRAVEL & ENVIRONMENT** (First Round Factor):
+- CFP First Round = Home team has MASSIVE environment advantage
+- Cross-country travel (2800+ miles, 3 time zones) = 2-3 point handicap
+- G5 players often haven't played in 80,000+ seat stadiums
+- Noise, atmosphere, hostile crowd = rattles young players
+- Stats to verify: [TRAVEL_FATIGUE] [HOME_FIELD]
+
+**CFP BETTING SUMMARY:**
+- Ranked vs Ranked: Look for public-inflated home favorites, lean Under
+- First Round: On-campus, home field matters but not as much as public thinks
+- Rematch: Back the team that lost game 1 to cover
+- Bye Teams: Be skeptical of rusty top-4 seeds in Quarterfinals
+- G5 Underdogs: Take the points, not the ML - but CHECK opponent-adjusted stats first
+- P4 vs G5: Don't trust raw stats - use FPI/SP+ and check vs_power_opponents record
 `;
 
 export default NCAAF_CONSTITUTION;

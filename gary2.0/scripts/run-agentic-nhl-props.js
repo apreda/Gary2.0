@@ -15,9 +15,9 @@ runAgenticPropsCli({
   sportKey: 'icehockey_nhl',
   leagueLabel: 'NHL',
   buildContext: buildNhlPropsAgenticContext,
-  windowHours: 48,  // NHL - look 48 hours ahead
-  propsPerGame: 5,
-  limitDefault: 5  // Number of games to process
+  windowHours: 16,  // NHL daily schedule - today's games only
+  propsPerGame: 2,  // 2-per-game rule: exactly 2 most confident picks per game
+  limitDefault: 15  // Number of games to process (NHL can have many games per day)
 })
   .then(() => process.exit(0))
   .catch((error) => {

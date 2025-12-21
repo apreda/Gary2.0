@@ -21,6 +21,14 @@ These possession/chance-quality metrics are the best predictors in hockey:
 - Team significantly underperforming xG = bounce-back candidate
 - Stats to verify: [CORSI_FOR_PCT] [EXPECTED_GOALS] [SHOT_METRICS]
 
+### HIGH-DANGER CHANCES (HDC) - BET THE PROCESS
+Goals in hockey are "noisy" but chances are repeatable:
+- Teams in top 10 for HDC will eventually convert, even if not scoring now
+- Creating chances right in front of the crease = repeatable skill
+- If team has high HDC but low goals, they're due for positive regression
+- "Bet the process, not the results" - sharps love high-HDC underdogs
+- Stats to verify: [SHOT_METRICS] [EXPECTED_GOALS]
+
 ### PDO - THE LUCK INDICATOR
 PDO = team shooting% + team save% (league average = 100):
 - PDO > 102 = running hot, expect regression DOWN
@@ -38,13 +46,16 @@ Power play and penalty kill are critical differentiators:
 - Compare team PP% vs opponent PK% for scoring edge
 - Stats to verify: [POWER_PLAY_PCT] [PENALTY_KILL_PCT] [SPECIAL_TEAMS]
 
-### GOALTENDING - STEALS & DISASTERS
-Goalie matchups swing NHL lines by 15-30 cents:
+### GOALTENDING - THE TANDEM ERA (2025 Critical Factor)
+Hockey has moved away from "star goalie plays 70 games" - it's now a TANDEM LEAGUE:
 - Save% > .920 = elite starter (trust in close games)
 - Save% .910-.920 = league average
-- Save% < .905 = significant liability
-- Goals Saved Above Expected (GSAx) = true quality measure
+- Save% < .900 = significant liability (FADE the favorite if backup has sub-.900)
+- Goals Saved Above Expected (GSAx) = true quality measure - better than raw SV%
+- **GOALIE CONFIRMATION IS CRITICAL**: If starter vs backup is unclear, game is unpredictable
+- Best tandems (2025): TOR (Stolarz/Woll), NJD (Markstrom/Allen), NYR (Shesterkin/backup)
 - Back-to-back starts = fatigue factor (-0.010 to save%)
+- **KEY RULE**: If favorite's backup goalie (sub-.900 SV%) is starting = FADE or skip
 - Stats to verify: [GOALIE_STATS] [SAVE_PCT] [GOALS_AGAINST_AVG]
 
 ### SHOT VOLUME - CORSI PROXY
@@ -90,6 +101,20 @@ Key player availability matters:
 - Top-line forward out = reduced offense
 - Top-pair defenseman out = PP/PK impact
 - Stats to verify: [INJURIES] [LINEUP_CHANGES]
+
+### BET TYPE SELECTION - PUCK LINE VS MONEYLINE
+Always evaluate BOTH puck line (+1.5/-1.5) and moneyline:
+- Prefer PUCK LINE +1.5 when:
+  - Underdog has strong underlying metrics but inconsistent finishing
+  - Close game expected (tight goalie matchup)
+  - Road team with good shot metrics against home favorite
+  - Odds are +120 or better on the +1.5
+- Prefer MONEYLINE when:
+  - Dog has legitimate upset potential (plus money ML)
+  - Favorite's edge is large enough to win by 2+ (rare in NHL)
+  - One-goal games are likely (~50% of NHL games)
+- AVOID: Puck line bets with odds worse than -200 (too juicy)
+- NHL games are typically close - puck line +1.5 hits ~70% for dogs
 `;
 
 export default NHL_CONSTITUTION;

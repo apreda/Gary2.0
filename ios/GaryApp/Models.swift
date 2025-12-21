@@ -65,8 +65,80 @@ struct GaryPick: Identifiable, Codable {
     let statsData: [StatData]?
     let statsUsed: [String]?
     let injuries: TeamInjuries?
+    // Venue and tournament context (for NBA Cup, neutral site games, CFP games, etc.)
+    let venue: String?
+    let isNeutralSite: Bool?
+    let tournamentContext: String?
+    let gameSignificance: String?
+    // CFP-specific fields for NCAAF
+    let cfpRound: String?
+    let homeSeed: Int?
+    let awaySeed: Int?
+    // Thesis-based classification (new filtering system)
+    let thesis_type: String?  // "clear_read", "found_angle", "educated_lean", "coin_flip"
+    let thesis_mechanism: String?  // One-sentence explanation of WHY this team wins
+    let supporting_factors: [String]?
+    let contradicting_factors: ContradictingFactors?
+    // Manual Top Pick override
+    let is_top_pick: Bool?
+    
+// MARK: - Contradicting Factors (major/minor categorization)
+struct ContradictingFactors: Codable {
+    let major: [String]?
+    let minor: [String]?
+    
+    /// Total count of all contradictions
+    var totalCount: Int {
+        (major?.count ?? 0) + (minor?.count ?? 0)
+    }
+    
+    /// Parse from dictionary (handles both old array format and new object format)
+    static func from(value: Any?) -> ContradictingFactors? {
+        guard let value = value else { return nil }
+        
+        // New format: { major: [...], minor: [...] }
+        if let dict = value as? [String: Any] {
+            return ContradictingFactors(
+                major: dict["major"] as? [String],
+                minor: dict["minor"] as? [String]
+            )
+        }
+        
+        // Legacy format: simple array - treat as minor
+        if let array = value as? [String] {
+            return ContradictingFactors(major: nil, minor: array)
+        }
+        
+        return nil
+    }
+}
     
     var id: String { pick_id ?? UUID().uuidString }
+    
+    /// Check if this is an NBA Cup game
+    var isNBACup: Bool {
+        guard let ctx = tournamentContext?.lowercased() else { return false }
+        return ctx.contains("nba cup") || ctx.contains("in-season tournament")
+    }
+    
+    /// Check if this is a CFP (College Football Playoff) game
+    var isCFP: Bool {
+        guard let ctx = tournamentContext?.lowercased() else { return false }
+        return ctx.contains("cfp") || ctx.contains("college football playoff") || cfpRound != nil
+    }
+    
+    /// Get the seed for a team (by checking if it's home or away)
+    func getSeed(forTeam team: String?) -> Int? {
+        guard let team = team else { return nil }
+        let teamLower = team.lowercased()
+        if let home = homeTeam?.lowercased(), teamLower.contains(home) || home.contains(teamLower) {
+            return homeSeed
+        }
+        if let away = awayTeam?.lowercased(), teamLower.contains(away) || away.contains(teamLower) {
+            return awaySeed
+        }
+        return nil
+    }
     
     /// Get display time - prefer commence_time, fallback to time
     var displayTime: String? {
@@ -104,7 +176,19 @@ struct GaryPick: Identifiable, Codable {
             commence_time: dict["commence_time"] as? String,
             statsData: statsDataArray,
             statsUsed: dict["statsUsed"] as? [String],
-            injuries: injuriesData
+            injuries: injuriesData,
+            venue: dict["venue"] as? String,
+            isNeutralSite: dict["isNeutralSite"] as? Bool,
+            tournamentContext: dict["tournamentContext"] as? String,
+            gameSignificance: dict["gameSignificance"] as? String,
+            cfpRound: dict["cfpRound"] as? String,
+            homeSeed: dict["homeSeed"] as? Int,
+            awaySeed: dict["awaySeed"] as? Int,
+            thesis_type: dict["thesis_type"] as? String,
+            thesis_mechanism: dict["thesis_mechanism"] as? String,
+            supporting_factors: dict["supporting_factors"] as? [String],
+            contradicting_factors: ContradictingFactors.from(value: dict["contradicting_factors"]),
+            is_top_pick: dict["is_top_pick"] as? Bool
         )
     }
 }
@@ -142,6 +226,8 @@ struct StatValues: Codable {
     let efgPct: String?
     let threePct: String?
     let threeMadePerGame: String?
+    let threeAttemptedPerGame: String?
+    let gamesPlayed: String?
     let tovRate: String?
     let turnoversPerGame: String?
     let orebRate: String?
@@ -172,6 +258,23 @@ struct StatValues: Codable {
     let interceptions: String?
     let rushingTds: String?
     let last5: String?
+    // Additional NFL flattened stats
+    let takeaways: String?
+    let giveaways: String?
+    let sacks: String?
+    let pointDiff: String?
+    let yardsPerAttempt: String?
+    let yardsPerPlay: String?
+    let receivingYardsPerGame: String?
+    let receivingTds: String?
+    let yardsPerCatch: String?
+    let longestPass: String?
+    let longestRush: String?
+    let temperature: String?
+    let feelsLike: String?
+    let windSpeed: String?
+    let conditions: String?
+    let impact: String?
     // NCAAB/NCAAF specific stats (pointsPerGame already defined above)
     let assistsPerGame: String?
     let reboundsPerGame: String?
@@ -181,6 +284,14 @@ struct StatValues: Codable {
     let fgmPerGame: String?
     let fgaPerGame: String?
     let drebPerGame: String?
+    // NCAAB enriched stats
+    let tempo: String?
+    let apRank: String?
+    let coachesRank: String?
+    let conferenceRecord: String?
+    let netRank: String?
+    let sosRank: String?
+    let kenpomRank: String?
     // NHL-specific stats
     let goalsForPerGame: String?
     let goalsAgainstPerGame: String?
@@ -206,6 +317,8 @@ struct StatValues: Codable {
             efgPct: dict["efg_pct"] as? String,
             threePct: dict["three_pct"] as? String,
             threeMadePerGame: dict["three_made_per_game"] as? String,
+            threeAttemptedPerGame: dict["three_attempted_per_game"] as? String,
+            gamesPlayed: dict["games_played"] as? String,
             tovRate: dict["tov_rate"] as? String,
             turnoversPerGame: dict["turnovers_per_game"] as? String,
             orebRate: dict["oreb_rate"] as? String,
@@ -236,6 +349,23 @@ struct StatValues: Codable {
             interceptions: dict["interceptions"] as? String ?? (dict["interceptions"] as? NSNumber)?.stringValue,
             rushingTds: dict["rushing_tds"] as? String ?? (dict["rushing_tds"] as? NSNumber)?.stringValue,
             last5: dict["last_5"] as? String,
+            // Additional NFL flattened stats
+            takeaways: dict["takeaways"] as? String ?? (dict["takeaways"] as? NSNumber)?.stringValue,
+            giveaways: dict["giveaways"] as? String ?? (dict["giveaways"] as? NSNumber)?.stringValue,
+            sacks: dict["sacks"] as? String ?? (dict["sacks"] as? NSNumber)?.stringValue,
+            pointDiff: dict["point_diff"] as? String ?? (dict["point_diff"] as? NSNumber)?.stringValue,
+            yardsPerAttempt: dict["yards_per_attempt"] as? String ?? (dict["yards_per_attempt"] as? NSNumber)?.stringValue,
+            yardsPerPlay: dict["yards_per_play"] as? String ?? (dict["yards_per_play"] as? NSNumber)?.stringValue,
+            receivingYardsPerGame: dict["receiving_yards_per_game"] as? String ?? (dict["receiving_yards_per_game"] as? NSNumber)?.stringValue,
+            receivingTds: dict["receiving_tds"] as? String ?? (dict["receiving_tds"] as? NSNumber)?.stringValue,
+            yardsPerCatch: dict["yards_per_catch"] as? String ?? (dict["yards_per_catch"] as? NSNumber)?.stringValue,
+            longestPass: dict["longest_pass"] as? String ?? (dict["longest_pass"] as? NSNumber)?.stringValue,
+            longestRush: dict["longest_rush"] as? String ?? (dict["longest_rush"] as? NSNumber)?.stringValue,
+            temperature: dict["temperature"] as? String,
+            feelsLike: dict["feels_like"] as? String,
+            windSpeed: dict["wind_speed"] as? String,
+            conditions: dict["conditions"] as? String,
+            impact: dict["impact"] as? String,
             // NCAAB/NCAAF specific stats (pointsPerGame already assigned above)
             assistsPerGame: dict["assists_per_game"] as? String ?? (dict["assists_per_game"] as? NSNumber)?.stringValue,
             reboundsPerGame: dict["rebounds_per_game"] as? String ?? (dict["rebounds_per_game"] as? NSNumber)?.stringValue,
@@ -245,6 +375,14 @@ struct StatValues: Codable {
             fgmPerGame: dict["fgm_per_game"] as? String ?? (dict["fgm_per_game"] as? NSNumber)?.stringValue,
             fgaPerGame: dict["fga_per_game"] as? String ?? (dict["fga_per_game"] as? NSNumber)?.stringValue,
             drebPerGame: dict["dreb_per_game"] as? String ?? (dict["dreb_per_game"] as? NSNumber)?.stringValue,
+            // NCAAB enriched stats
+            tempo: dict["tempo"] as? String ?? (dict["tempo"] as? NSNumber)?.stringValue,
+            apRank: dict["ap_rank"] as? String ?? (dict["ap_rank"] as? NSNumber)?.stringValue,
+            coachesRank: dict["coaches_rank"] as? String ?? (dict["coaches_rank"] as? NSNumber)?.stringValue,
+            conferenceRecord: dict["conference_record"] as? String,
+            netRank: dict["net_rank"] as? String ?? (dict["net_rank"] as? NSNumber)?.stringValue,
+            sosRank: dict["sos_rank"] as? String ?? (dict["sos_rank"] as? NSNumber)?.stringValue,
+            kenpomRank: dict["kenpom_rank"] as? String ?? (dict["kenpom_rank"] as? NSNumber)?.stringValue,
             // NHL-specific stats
             goalsForPerGame: dict["goals_for_per_game"] as? String ?? (dict["goals_for_per_game"] as? NSNumber)?.stringValue,
             goalsAgainstPerGame: dict["goals_against_per_game"] as? String ?? (dict["goals_against_per_game"] as? NSNumber)?.stringValue,
@@ -269,13 +407,27 @@ struct StatValues: Codable {
         case "PACE", "PACE_LAST_10": return pace ?? "N/A"
         case "PACE_HOME_AWAY", "HOME_AWAY_SPLITS", "SPECIAL_TEAMS": return overall ?? "N/A"
         case "EFG_PCT", "OPP_EFG_PCT", "PAINT_SCORING": return efgPct ?? "N/A"
-        case "THREE_PT_SHOOTING", "PERIMETER_DEFENSE": return threePct ?? "N/A"
-        case "TURNOVER_RATE": return turnoversPerGame ?? tovRate ?? "N/A"
+        case "THREE_PT_SHOOTING", "PERIMETER_DEFENSE", "THREE_PCT": return threePct ?? "N/A"
+        case "TURNOVER_RATE", "TOV_RATE": return turnoversPerGame ?? tovRate ?? "N/A"
+        case "TURNOVERS_PER_GAME": return turnoversPerGame ?? "N/A"
         case "OREB_RATE": return orebPerGame ?? orebRate ?? "N/A"
+        case "OREB_PER_GAME": return orebPerGame ?? "N/A"
         case "FT_RATE": return ftRate ?? "N/A"
-        case "CLUTCH_STATS": return closeRecord ?? "N/A"
+        case "FT_PCT": return ftPct ?? "N/A"
+        case "FTA_PER_GAME": return ftaPerGame ?? "N/A"
+        case "CLUTCH_STATS", "CLOSE_RECORD": return closeRecord ?? "N/A"
+        case "CLOSE_WIN_PCT": return closeWinPct ?? "N/A"
+        case "CLOSE_GAMES": return closeGames != nil ? String(closeGames!) : "N/A"
         case "RECENT_FORM": return last5 ?? "N/A"
-        // NFL/NCAAF stats
+        // Additional NBA stats
+        case "TRUE_SHOOTING_PCT": return trueShootingPct ?? "N/A"
+        case "THREE_MADE_PER_GAME": return threeMadePerGame ?? "N/A"
+        case "THREE_ATTEMPTED_PER_GAME": return threeAttemptedPerGame ?? threePct ?? "N/A"
+        case "OVERALL": return overall ?? "N/A"
+        case "HOME_RECORD": return homeRecord ?? "N/A"
+        case "AWAY_RECORD": return awayRecord ?? "N/A"
+        case "GAMES_PLAYED": return gamesPlayed ?? overall ?? "N/A"
+        // NFL/NCAAF bundled stats (legacy)
         case "OFFENSIVE_EPA", "SUCCESS_RATE": return totalYardsPerGame ?? yardsPerGame ?? pointsPerGame ?? "N/A"
         case "DEFENSIVE_EPA": return oppTotalYards ?? oppYardsPerGame ?? "N/A"
         case "SUCCESS_RATE_OFFENSE", "EXPLOSIVE_PLAYS": return yardsPerGame ?? totalYardsPerGame ?? "N/A"
@@ -284,17 +436,52 @@ struct StatValues: Codable {
         case "TURNOVER_MARGIN": return turnoverDiff ?? "N/A"
         case "QB_STATS": return qbRating ?? "N/A"
         case "PRESSURE_RATE": return completionPct ?? "N/A"
-        case "RED_ZONE_OFFENSE", "THIRD_DOWN": return thirdDownPct ?? "N/A"
+        case "RED_ZONE_OFFENSE", "RED_ZONE", "THIRD_DOWN": return thirdDownPct ?? "N/A"
         case "RED_ZONE_DEFENSE": return thirdDownPct ?? "N/A"
         case "FOURTH_DOWN": return fourthDownPct ?? "N/A"
         case "OL_RANKINGS": return rushingYardsPerGame ?? "N/A"
         case "DL_RANKINGS": return oppRushingYards ?? "N/A"
-        case "RB_STATS": return yardsPerCarry ?? "N/A"
-        case "WR_TE_STATS": return yardsPerGame ?? "N/A"
-        case "DEFENSIVE_PLAYMAKERS": return oppPointsPerGame ?? "N/A"
-        case "PASSING_TDS": return passingTds ?? "N/A"
-        case "INTERCEPTIONS": return interceptions ?? "N/A"
-        case "RUSHING_TDS": return rushingTds ?? "N/A"
+        case "RB_STATS": return yardsPerCarry ?? rushingYardsPerGame ?? "N/A"
+        case "WR_STATS", "WR_TE_STATS": return receivingYardsPerGame ?? yardsPerGame ?? "N/A"
+        case "DEFENSIVE_PLAYMAKERS", "DEFENSIVE_STARS": return oppPointsPerGame ?? "N/A"
+        // NCAAF-specific advanced stats
+        case "EXPLOSIVENESS": return yardsPerPlay ?? totalYardsPerGame ?? "N/A"
+        case "HAVOC_RATE": return sacks ?? "N/A"
+        case "SPECIAL_TEAMS_RATING": return overall ?? "N/A"
+        case "TALENT_COMPOSITE": return overall ?? "N/A"
+        case "FIELD_POSITION": return yardsPerGame ?? "N/A"
+        // NEW: Individual NFL stat tokens (flattened)
+        case "POINTS_PER_GAME", "PPG": return pointsPerGame ?? "N/A"
+        case "YARDS_PER_GAME", "YPG", "TOTAL_YARDS_PER_GAME": return yardsPerGame ?? totalYardsPerGame ?? "N/A"
+        case "YARDS_PER_PLAY": return yardsPerPlay ?? yardsPerGame ?? "N/A"
+        case "OPP_POINTS_PER_GAME", "OPP_PPG": return oppPointsPerGame ?? "N/A"
+        case "OPP_YARDS_PER_GAME", "OPP_YPG": return oppYardsPerGame ?? "N/A"
+        case "POINT_DIFF": return pointDiff ?? "N/A"
+        case "THIRD_DOWN_PCT": return thirdDownPct ?? "N/A"
+        case "FOURTH_DOWN_PCT": return fourthDownPct ?? "N/A"
+        case "TURNOVER_DIFF": return turnoverDiff ?? "N/A"
+        case "TAKEAWAYS": return takeaways ?? "N/A"
+        case "GIVEAWAYS": return giveaways ?? "N/A"
+        case "SACKS": return sacks ?? "N/A"
+        case "QB_RATING": return qbRating ?? "N/A"
+        case "COMPLETION_PCT": return completionPct ?? "N/A"
+        case "YARDS_PER_ATTEMPT": return yardsPerAttempt ?? yardsPerGame ?? "N/A"
+        case "PASSING_TDS", "PASS_TDS": return passingTds ?? "N/A"
+        case "INTERCEPTIONS", "INTS": return interceptions ?? "N/A"
+        case "RUSHING_TDS", "RUSH_TDS": return rushingTds ?? "N/A"
+        case "RUSHING_YARDS_PER_GAME", "RUSH_YPG": return rushingYardsPerGame ?? "N/A"
+        case "YARDS_PER_CARRY": return yardsPerCarry ?? "N/A"
+        case "RECEIVING_YARDS_PER_GAME", "RECV_YPG": return receivingYardsPerGame ?? "N/A"
+        case "RECEIVING_TDS", "RECV_TDS": return receivingTds ?? "N/A"
+        case "YARDS_PER_CATCH": return yardsPerCatch ?? "N/A"
+        case "LONGEST_PASS": return longestPass ?? "N/A"
+        case "LONGEST_RUSH": return longestRush ?? "N/A"
+        // Weather stats
+        case "TEMPERATURE": return temperature ?? "N/A"
+        case "FEELS_LIKE": return feelsLike ?? "N/A"
+        case "WIND_SPEED": return windSpeed ?? "N/A"
+        case "CONDITIONS": return conditions ?? "N/A"
+        case "IMPACT": return impact ?? "N/A"
         // NCAAB/NCAAF specific stats
         case "SCORING": return pointsPerGame ?? "N/A"
         case "ASSISTS": return assistsPerGame ?? "N/A"
@@ -302,6 +489,16 @@ struct StatValues: Codable {
         case "STEALS": return stealsPerGame ?? "N/A"
         case "BLOCKS": return blocksPerGame ?? "N/A"
         case "FG_PCT": return fgPct ?? efgPct ?? "N/A"
+        // NCAAB enriched tokens
+        case "NCAAB_EFG_PCT": return efgPct ?? "N/A"
+        case "NCAAB_TEMPO": return tempo ?? "N/A"
+        case "NCAAB_OFFENSIVE_RATING": return offensiveRating ?? "N/A"
+        case "NCAAB_AP_RANKING": return apRank ?? "N/A"
+        case "NCAAB_COACHES_RANKING": return coachesRank ?? "N/A"
+        case "NCAAB_CONFERENCE_RECORD": return conferenceRecord ?? "N/A"
+        case "NCAAB_NET_RANKING": return netRank ?? "N/A"
+        case "NCAAB_STRENGTH_OF_SCHEDULE": return sosRank ?? "N/A"
+        case "NCAAB_KENPOM_RATINGS": return kenpomRank ?? "N/A"
         // NHL-specific stats
         case "GOALS_FOR": return goalsForPerGame ?? "N/A"
         case "GOALS_AGAINST": return goalsAgainstPerGame ?? "N/A"
