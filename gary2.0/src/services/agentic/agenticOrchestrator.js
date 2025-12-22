@@ -2,10 +2,12 @@
  * Agentic Orchestrator
  * 
  * This is the main agent loop that runs Gary.
- * Uses OpenAI Function Calling (Tools) to let Gary request specific stats.
+ * Uses Function Calling (Tools) to let Gary request specific stats.
+ * Supports both OpenAI (GPT-5.1) and Gemini (Gemini 3 Deep Think) providers.
  */
 
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { toolDefinitions, formatTokenMenu, getTokensForSport } from './tools/toolDefinitions.js';
 import { fetchStats } from './tools/statRouter.js';
 import { getConstitution } from './constitution/index.js';
@@ -25,15 +27,60 @@ function getOpenAI() {
   return openai;
 }
 
-// Configuration - Uses env var or defaults to gpt-5.1
+// Lazy-initialize Gemini client
+let gemini = null;
+function getGemini() {
+  if (!gemini) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY environment variable is required');
+    }
+    gemini = new GoogleGenerativeAI(apiKey);
+  }
+  return gemini;
+}
+
+// Sport-specific provider routing
+// NBA stays on GPT-5.1 (proven, working), everything else uses Gemini 3 Deep Think
+function getProviderForSport(sport) {
+  if (sport === 'basketball_nba') {
+    return 'openai';
+  }
+  return 'gemini';
+}
+
+function getModelForProvider(provider) {
+  if (provider === 'openai') {
+    return process.env.OPENAI_MODEL || 'gpt-5.1';
+  }
+  return process.env.GEMINI_MODEL || 'gemini-3-pro-preview'; // Gemini 3 Deep Think
+}
+
+// Base configuration - provider/model set dynamically per sport
 const CONFIG = {
-  model: process.env.OPENAI_MODEL || 'gpt-5.1', // GPT-5.1 with high reasoning
-  maxIterations: 6, // Allow multiple reasoning passes
+  maxIterations: 8, // Allow multiple reasoning passes
   maxTokens: 16000, // Increased to prevent truncation of detailed responses
-  // GPT-5.1 specific settings
-  reasoning: { effort: 'high' }, // Enable deep "o1-style" thinking
-  text: { verbosity: 'high' } // Allow detailed responses
+  // Gemini 3 Deep Think settings
+  gemini: {
+    thinkingLevel: 'high', // Deep Think mode - enables advanced reasoning
+    temperature: 1.0, // Recommended for Gemini 3 series
+  },
+  // OpenAI/GPT-5.1 settings
+  openai: {
+    reasoning: { effort: 'high' },
+    text: { verbosity: 'high' }
+  }
 };
+
+// Gemini safety settings - BLOCK_NONE for sports content (allows sports slang)
+const GEMINI_SAFETY_SETTINGS = [
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+];
+
+console.log(`[Orchestrator] Sport-based routing enabled: NBA→GPT-5.1, Others→Gemini 3 Deep Think`);
 
 /**
  * Main entry point - analyze a game and generate a pick
@@ -486,17 +533,19 @@ You have the scout report above. Now you need STATS before forming any opinion.
 
 2. **DO NOT PICK A SIDE YET.** You need stats first.
 
-3. **REQUEST STATS** to investigate this matchup - get what you need:
-   - Efficiency metrics (offensive/defensive ratings, net rating)
+3. **REQUEST STATS** to build a complete picture of this matchup:
+   - Efficiency metrics (offensive/defensive ratings, net rating, EPA)
    - Shooting and scoring patterns
-   - Recent form and trends
-   - Home/away performance
+   - Recent form and trends (last 5-10 games)
+   - Home/away performance splits
+   - Pace and tempo stats
+   - Turnover and rebounding metrics
    - Any matchup-specific stats relevant to this game
 
 **CRITICAL:** You are GATHERING EVIDENCE, not building a case for one side.
 Stay neutral. Let the stats + scout report TOGETHER determine your pick.
 
-**ACTION:** Call the fetch_stats tool for the categories you need. Do NOT output a pick yet.
+**ACTION:** Call the get_stat tool for ALL the stat categories you need to make a well-informed pick. A thorough analysis typically requires multiple stat categories - request everything relevant in one batch. Do NOT output a pick yet.
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 }
@@ -535,16 +584,16 @@ Time to analyze both sides as a NEUTRAL ANALYST.
    - Request additional stats to get a complete picture
 
 5. **GET MORE DATA IF NEEDED** - Request additional stats to:
-   - Fill gaps in your analysis
+   - Fill gaps in your analysis (recent form, situational splits)
    - Test your prediction against contradicting evidence
-   - Build a complete picture
+   - Build a complete picture with pace, turnover, and efficiency metrics
 
 **IMPORTANT:** It's okay if you don't see a clear side to bet.
 Good gamblers are SELECTIVE - they don't bet every game.
 If the evidence is mixed or it feels like a coin flip, note that now.
 No pick IS a valid outcome.
 
-**ACTION:** Call fetch_stats for any additional categories you need.
+**ACTION:** Request any additional stat categories you need to complete your analysis. If you have gaps, fill them now.
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 }
@@ -708,9 +757,173 @@ function buildUserMessage(scoutReport, homeTeam, awayTeam) {
 }
 
 /**
+ * Call Gemini API and return OpenAI-compatible response format
+ * Handles message conversion, tool calling, and response transformation
+ * Uses Gemini 3 Deep Think with thinking_level: "high"
+ */
+async function callGemini(messages, tools, modelName = 'gemini-3-pro-preview') {
+  const genAI = getGemini();
+  
+  // Convert OpenAI tools to Gemini function declarations
+  const functionDeclarations = tools.map(tool => {
+    if (tool.type === 'function') {
+      return {
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters
+      };
+    }
+    return null;
+  }).filter(Boolean);
+
+  // Get the model with Gemini 3 Deep Think configuration
+  const model = genAI.getGenerativeModel({
+    model: modelName,
+    tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
+    safetySettings: GEMINI_SAFETY_SETTINGS,
+    generationConfig: {
+      temperature: CONFIG.gemini.temperature,
+      maxOutputTokens: CONFIG.maxTokens,
+      // Gemini 3 Deep Think - enable high reasoning
+      thinkingConfig: {
+        thinkingBudget: 24576 // Allow deep thinking
+      }
+    }
+  });
+
+  // Convert OpenAI messages to Gemini format
+  let systemInstruction = '';
+  const contents = [];
+  
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemInstruction += (systemInstruction ? '\n\n' : '') + msg.content;
+    } else if (msg.role === 'user') {
+      contents.push({
+        role: 'user',
+        parts: [{ text: msg.content }]
+      });
+    } else if (msg.role === 'assistant') {
+      // Handle assistant messages that might have tool_calls
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        const parts = [];
+        if (msg.content) {
+          parts.push({ text: msg.content });
+        }
+        for (const tc of msg.tool_calls) {
+          parts.push({
+            functionCall: {
+              name: tc.function.name,
+              args: JSON.parse(tc.function.arguments)
+            }
+          });
+        }
+        contents.push({ role: 'model', parts });
+      } else {
+        contents.push({
+          role: 'model',
+          parts: [{ text: msg.content || '' }]
+        });
+      }
+    } else if (msg.role === 'tool') {
+      // Handle tool responses
+      contents.push({
+        role: 'function',
+        parts: [{
+          functionResponse: {
+            name: msg.name || msg.tool_call_id || 'tool_response',
+            response: { content: msg.content }
+          }
+        }]
+      });
+    }
+  }
+
+  // Create chat session with system instruction
+  const chat = model.startChat({
+    history: contents.slice(0, -1), // All but the last message
+    systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined
+  });
+
+  // Send the last message and get response
+  const lastMessage = contents[contents.length - 1];
+  const lastContent = lastMessage?.parts?.map(p => p.text || '').join('') || '';
+  
+  console.log(`[Gemini] Sending request to ${modelName}...`);
+  const startTime = Date.now();
+  
+  const result = await chat.sendMessage(lastContent);
+  const response = await result.response;
+  
+  const duration = Date.now() - startTime;
+  console.log(`[Gemini] Response received in ${duration}ms`);
+
+  // Convert Gemini response to OpenAI-compatible format
+  const candidate = response.candidates?.[0];
+  const parts = candidate?.content?.parts || [];
+  
+  // Debug: log what we got back
+  if (parts.length === 0) {
+    console.log(`[Gemini] WARNING: No parts in response. Candidate:`, JSON.stringify(candidate, null, 2).slice(0, 500));
+  }
+  
+  // Check for ALL function calls (Gemini can return multiple in parallel)
+  const functionCallParts = parts.filter(p => p.functionCall);
+  const textParts = parts.filter(p => p.text).map(p => p.text);
+  
+  // Build tool_calls array for ALL function calls
+  let toolCalls = undefined;
+  if (functionCallParts.length > 0) {
+    toolCalls = functionCallParts.map((fc, index) => ({
+      id: `call_${Date.now()}_${index}`,
+      type: 'function',
+      function: {
+        name: fc.functionCall.name,
+        arguments: JSON.stringify(fc.functionCall.args || {})
+      }
+    }));
+    console.log(`[Gemini] Found ${functionCallParts.length} parallel function call(s)`);
+  }
+
+  // Build OpenAI-compatible response
+  const openaiResponse = {
+    choices: [{
+      index: 0,
+      message: {
+        role: 'assistant',
+        content: functionCallParts.length > 0 ? null : textParts.join(''),
+        tool_calls: toolCalls
+      },
+      finish_reason: functionCallParts.length > 0 ? 'tool_calls' : 
+                     candidate?.finishReason === 'STOP' ? 'stop' : 
+                     candidate?.finishReason?.toLowerCase() || 'stop'
+    }],
+    usage: {
+      prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
+      completion_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+      total_tokens: response.usageMetadata?.totalTokenCount || 0
+    }
+  };
+
+  // Log token usage
+  if (openaiResponse.usage) {
+    console.log(`[Gemini] Tokens - Prompt: ${openaiResponse.usage.prompt_tokens}, Completion: ${openaiResponse.usage.completion_tokens}`);
+  }
+
+  return openaiResponse;
+}
+
+/**
  * Run the agent loop - handles tool calls and conversation flow
+ * Uses sport-based provider routing: NBA→GPT-5.1, Others→Gemini 3 Deep Think
  */
 async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
+  // Sport-based provider routing
+  const provider = getProviderForSport(sport);
+  const model = getModelForProvider(provider);
+  
+  console.log(`[Orchestrator] Using ${provider.toUpperCase()} (${model}) for ${sport}`);
+
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userMessage }
@@ -721,18 +934,24 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
   while (iteration < CONFIG.maxIterations) {
     iteration++;
-    console.log(`\n[Orchestrator] Iteration ${iteration}/${CONFIG.maxIterations}`);
+    console.log(`\n[Orchestrator] Iteration ${iteration}/${CONFIG.maxIterations} (${provider})`);
 
-    // Call OpenAI with tools - GPT-5.1 with high reasoning
-    const response = await getOpenAI().chat.completions.create({
-      model: CONFIG.model,
-      messages,
-      tools: toolDefinitions,
-      tool_choice: 'auto',
-      max_completion_tokens: CONFIG.maxTokens, // GPT-5.1 uses max_completion_tokens
-      // GPT-5.1 deep reasoning parameters
-      reasoning_effort: 'high' // Enable "o1-style" deep thinking
-    });
+    let response;
+    
+    if (provider === 'gemini') {
+      // Call Gemini 3 Deep Think with tools
+      response = await callGemini(messages, toolDefinitions, model);
+    } else {
+      // Call OpenAI/GPT-5.1 with tools
+      response = await getOpenAI().chat.completions.create({
+        model: model,
+        messages,
+        tools: toolDefinitions,
+        tool_choice: 'auto',
+        max_completion_tokens: CONFIG.maxTokens,
+        reasoning_effort: CONFIG.openai.reasoning.effort
+      });
+    }
 
     const message = response.choices[0].message;
     const finishReason = response.choices[0].finish_reason;
@@ -740,6 +959,18 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
     // Log token usage
     if (response.usage) {
       console.log(`[Orchestrator] Tokens - Prompt: ${response.usage.prompt_tokens}, Completion: ${response.usage.completion_tokens}`);
+    }
+
+    // Handle empty response from Gemini (common when model is confused)
+    if (provider === 'gemini' && !message.content && !message.tool_calls) {
+      console.log(`[Orchestrator] ⚠️ Gemini returned empty response - prompting for more stats`);
+      
+      // Add a nudge to get Gemini back on track
+      messages.push({
+        role: 'user',
+        content: `I notice you didn't respond. Please use the get_stat tool to request stats for this matchup. You've gathered ${toolCallHistory.length} stats so far. Request more stats like PACE, RECENT_FORM, or TURNOVER_STATS to complete your analysis.`
+      });
+      continue;
     }
 
     // Check if Gary requested tool calls
@@ -1246,31 +1477,8 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       continue;
     }
 
-    // ENFORCEMENT: Gary must request stats in early iterations before finishing
-    // This prevents premature exits without proper analysis
-    const MIN_ITERATIONS_BEFORE_FINISH = 3;
-    const MIN_STATS_REQUIRED = 5;
-
-    if (iteration < MIN_ITERATIONS_BEFORE_FINISH || toolCallHistory.length < MIN_STATS_REQUIRED) {
-      console.log(`[Orchestrator] ⚠️ Gary tried to finish early (iteration ${iteration}, ${toolCallHistory.length} stats)`);
-      console.log(`[Orchestrator] Requiring minimum ${MIN_ITERATIONS_BEFORE_FINISH} iterations and ${MIN_STATS_REQUIRED} stats`);
-
-      // Add message to history and prompt Gary to continue analysis
-      messages.push(message);
-      messages.push({
-        role: 'user',
-        content: `You must request more stats before making your final pick. You've only gathered ${toolCallHistory.length} stats so far. 
-
-Use the get_stat tool to request at least ${MIN_STATS_REQUIRED - toolCallHistory.length} more stats to properly analyze this matchup. Consider:
-- Efficiency metrics (offensive/defensive ratings, EPA)
-- Recent form and trends
-- Key player stats
-- Situational factors (home/away splits, rest days)
-
-Do NOT output your final pick yet. Request more stats first.`
-      });
-      continue;
-    }
+    // No minimum enforcement - Gary calls what he needs organically
+    // The prompts encourage comprehensive stat gathering naturally
 
     // Gary is done - parse the final response
     console.log(`[Orchestrator] Gary finished analysis (${finishReason})`);
