@@ -2583,6 +2583,290 @@ const FETCHERS = {
     }
   },
 
+  // ===== QUARTER SCORING TRENDS (NFL) =====
+  // Shows Q1, Q2, Q3, Q4 scoring breakdown - fast starters vs closers
+  QUARTER_SCORING: async (bdlSport, home, away, season) => {
+    const homeName = home.full_name || home.name || 'Home';
+    const awayName = away.full_name || away.name || 'Away';
+    console.log(`[Stat Router] Fetching QUARTER_SCORING for ${awayName} @ ${homeName} (${bdlSport})`);
+    
+    try {
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 20 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 20 })
+      ]);
+      
+      // Filter to completed games only
+      const completedHomeGames = (homeGames || []).filter(g => g.status === 'Final' || g.status === 'final');
+      const completedAwayGames = (awayGames || []).filter(g => g.status === 'Final' || g.status === 'final');
+      
+      const calcQuarterStats = (games, teamId, teamName) => {
+        if (!games || games.length === 0) return null;
+        
+        let q1Scored = 0, q2Scored = 0, q3Scored = 0, q4Scored = 0;
+        let q1Allowed = 0, q2Allowed = 0, q3Allowed = 0, q4Allowed = 0;
+        let gamesWithQuarters = 0;
+        
+        for (const game of games) {
+          const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+          
+          // Get quarter scores based on whether team is home or away
+          const teamQ1 = isHome ? game.home_team_q1 : game.visitor_team_q1;
+          const teamQ2 = isHome ? game.home_team_q2 : game.visitor_team_q2;
+          const teamQ3 = isHome ? game.home_team_q3 : game.visitor_team_q3;
+          const teamQ4 = isHome ? game.home_team_q4 : game.visitor_team_q4;
+          
+          const oppQ1 = isHome ? game.visitor_team_q1 : game.home_team_q1;
+          const oppQ2 = isHome ? game.visitor_team_q2 : game.home_team_q2;
+          const oppQ3 = isHome ? game.visitor_team_q3 : game.home_team_q3;
+          const oppQ4 = isHome ? game.visitor_team_q4 : game.home_team_q4;
+          
+          // Only count games with quarter data
+          if (teamQ1 !== null && teamQ2 !== null && teamQ3 !== null && teamQ4 !== null) {
+            q1Scored += teamQ1 || 0;
+            q2Scored += teamQ2 || 0;
+            q3Scored += teamQ3 || 0;
+            q4Scored += teamQ4 || 0;
+            q1Allowed += oppQ1 || 0;
+            q2Allowed += oppQ2 || 0;
+            q3Allowed += oppQ3 || 0;
+            q4Allowed += oppQ4 || 0;
+            gamesWithQuarters++;
+          }
+        }
+        
+        if (gamesWithQuarters === 0) return null;
+        
+        const avgQ1 = (q1Scored / gamesWithQuarters).toFixed(1);
+        const avgQ2 = (q2Scored / gamesWithQuarters).toFixed(1);
+        const avgQ3 = (q3Scored / gamesWithQuarters).toFixed(1);
+        const avgQ4 = (q4Scored / gamesWithQuarters).toFixed(1);
+        const avg1H = ((q1Scored + q2Scored) / gamesWithQuarters).toFixed(1);
+        const avg2H = ((q3Scored + q4Scored) / gamesWithQuarters).toFixed(1);
+        
+        const avgQ1Allowed = (q1Allowed / gamesWithQuarters).toFixed(1);
+        const avgQ2Allowed = (q2Allowed / gamesWithQuarters).toFixed(1);
+        const avgQ3Allowed = (q3Allowed / gamesWithQuarters).toFixed(1);
+        const avgQ4Allowed = (q4Allowed / gamesWithQuarters).toFixed(1);
+        
+        // Determine team profile
+        const q1Diff = parseFloat(avgQ1) - parseFloat(avgQ1Allowed);
+        const q4Diff = parseFloat(avgQ4) - parseFloat(avgQ4Allowed);
+        const firstHalfDiff = parseFloat(avg1H) - ((parseFloat(avgQ1Allowed) + parseFloat(avgQ2Allowed)));
+        const secondHalfDiff = parseFloat(avg2H) - ((parseFloat(avgQ3Allowed) + parseFloat(avgQ4Allowed)));
+        
+        let profile = [];
+        if (q1Diff >= 3) profile.push('FAST STARTER (+' + q1Diff.toFixed(1) + ' Q1)');
+        if (q1Diff <= -3) profile.push('SLOW STARTER (' + q1Diff.toFixed(1) + ' Q1)');
+        if (q4Diff >= 3) profile.push('STRONG CLOSER (+' + q4Diff.toFixed(1) + ' Q4)');
+        if (q4Diff <= -3) profile.push('FADES LATE (' + q4Diff.toFixed(1) + ' Q4)');
+        if (secondHalfDiff - firstHalfDiff >= 5) profile.push('SECOND HALF TEAM');
+        if (firstHalfDiff - secondHalfDiff >= 5) profile.push('FIRST HALF TEAM');
+        
+        return {
+          team: teamName,
+          games_analyzed: gamesWithQuarters,
+          scoring: { Q1: avgQ1, Q2: avgQ2, Q3: avgQ3, Q4: avgQ4, '1H': avg1H, '2H': avg2H },
+          allowed: { Q1: avgQ1Allowed, Q2: avgQ2Allowed, Q3: avgQ3Allowed, Q4: avgQ4Allowed },
+          differential: { Q1: q1Diff.toFixed(1), Q4: q4Diff.toFixed(1), '1H': firstHalfDiff.toFixed(1), '2H': secondHalfDiff.toFixed(1) },
+          profile: profile.length > 0 ? profile.join(', ') : 'BALANCED'
+        };
+      };
+      
+      return {
+        category: 'Quarter-by-Quarter Scoring Trends',
+        home: calcQuarterStats(completedHomeGames, home.id, homeName),
+        away: calcQuarterStats(completedAwayGames, away.id, awayName),
+        insight: 'Use this to identify fast starters vs slow starters, and closers vs faders. Key for 1H/2H betting angles.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching QUARTER_SCORING:`, error.message);
+      return { category: 'Quarter Scoring', error: 'Data unavailable' };
+    }
+  },
+
+  // ===== FIRST HALF TRENDS =====
+  // Teams that start hot vs cold - halftime lead %
+  FIRST_HALF_TRENDS: async (bdlSport, home, away, season) => {
+    const homeName = home.full_name || home.name || 'Home';
+    const awayName = away.full_name || away.name || 'Away';
+    console.log(`[Stat Router] Fetching FIRST_HALF_TRENDS for ${awayName} @ ${homeName} (${bdlSport})`);
+    
+    try {
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 20 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 20 })
+      ]);
+      
+      const completedHomeGames = (homeGames || []).filter(g => g.status === 'Final' || g.status === 'final');
+      const completedAwayGames = (awayGames || []).filter(g => g.status === 'Final' || g.status === 'final');
+      
+      const calcFirstHalfStats = (games, teamId, teamName) => {
+        if (!games || games.length === 0) return null;
+        
+        let leadingAtHalf = 0, trailingAtHalf = 0, tiedAtHalf = 0;
+        let totalFirstHalfScored = 0, totalFirstHalfAllowed = 0;
+        let winsWhenLeading = 0, winsWhenTrailing = 0;
+        let gamesWithData = 0;
+        
+        for (const game of games) {
+          const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+          
+          const teamQ1 = isHome ? game.home_team_q1 : game.visitor_team_q1;
+          const teamQ2 = isHome ? game.home_team_q2 : game.visitor_team_q2;
+          const oppQ1 = isHome ? game.visitor_team_q1 : game.home_team_q1;
+          const oppQ2 = isHome ? game.visitor_team_q2 : game.home_team_q2;
+          
+          const teamFinal = isHome ? game.home_team_score : game.visitor_team_score;
+          const oppFinal = isHome ? game.visitor_team_score : game.home_team_score;
+          
+          if (teamQ1 !== null && teamQ2 !== null && oppQ1 !== null && oppQ2 !== null) {
+            const team1H = (teamQ1 || 0) + (teamQ2 || 0);
+            const opp1H = (oppQ1 || 0) + (oppQ2 || 0);
+            
+            totalFirstHalfScored += team1H;
+            totalFirstHalfAllowed += opp1H;
+            gamesWithData++;
+            
+            const won = teamFinal > oppFinal;
+            
+            if (team1H > opp1H) {
+              leadingAtHalf++;
+              if (won) winsWhenLeading++;
+            } else if (team1H < opp1H) {
+              trailingAtHalf++;
+              if (won) winsWhenTrailing++;
+            } else {
+              tiedAtHalf++;
+            }
+          }
+        }
+        
+        if (gamesWithData === 0) return null;
+        
+        const avg1HScored = (totalFirstHalfScored / gamesWithData).toFixed(1);
+        const avg1HAllowed = (totalFirstHalfAllowed / gamesWithData).toFixed(1);
+        const leadPct = ((leadingAtHalf / gamesWithData) * 100).toFixed(0);
+        const closeRate = leadingAtHalf > 0 ? ((winsWhenLeading / leadingAtHalf) * 100).toFixed(0) : 'N/A';
+        const comebackRate = trailingAtHalf > 0 ? ((winsWhenTrailing / trailingAtHalf) * 100).toFixed(0) : 'N/A';
+        
+        return {
+          team: teamName,
+          games_analyzed: gamesWithData,
+          avg_1H_scored: avg1HScored,
+          avg_1H_allowed: avg1HAllowed,
+          leading_at_half: `${leadingAtHalf}/${gamesWithData} (${leadPct}%)`,
+          trailing_at_half: `${trailingAtHalf}/${gamesWithData}`,
+          close_out_rate: closeRate !== 'N/A' ? `${closeRate}% when leading at half` : 'N/A',
+          comeback_rate: comebackRate !== 'N/A' ? `${comebackRate}% when trailing at half` : 'N/A'
+        };
+      };
+      
+      return {
+        category: 'First Half Scoring Trends',
+        home: calcFirstHalfStats(completedHomeGames, home.id, homeName),
+        away: calcFirstHalfStats(completedAwayGames, away.id, awayName),
+        insight: 'Shows which team starts faster and their close-out rate when leading at halftime.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching FIRST_HALF_TRENDS:`, error.message);
+      return { category: 'First Half Trends', error: 'Data unavailable' };
+    }
+  },
+
+  // ===== SECOND HALF TRENDS =====
+  // Closers vs faders - 4th quarter dominance
+  SECOND_HALF_TRENDS: async (bdlSport, home, away, season) => {
+    const homeName = home.full_name || home.name || 'Home';
+    const awayName = away.full_name || away.name || 'Away';
+    console.log(`[Stat Router] Fetching SECOND_HALF_TRENDS for ${awayName} @ ${homeName} (${bdlSport})`);
+    
+    try {
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 20 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 20 })
+      ]);
+      
+      const completedHomeGames = (homeGames || []).filter(g => g.status === 'Final' || g.status === 'final');
+      const completedAwayGames = (awayGames || []).filter(g => g.status === 'Final' || g.status === 'final');
+      
+      const calcSecondHalfStats = (games, teamId, teamName) => {
+        if (!games || games.length === 0) return null;
+        
+        let total2HScored = 0, total2HAllowed = 0;
+        let totalQ4Scored = 0, totalQ4Allowed = 0;
+        let won2ndHalf = 0, lost2ndHalf = 0;
+        let wonQ4 = 0, lostQ4 = 0;
+        let gamesWithData = 0;
+        
+        for (const game of games) {
+          const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+          
+          const teamQ3 = isHome ? game.home_team_q3 : game.visitor_team_q3;
+          const teamQ4 = isHome ? game.home_team_q4 : game.visitor_team_q4;
+          const oppQ3 = isHome ? game.visitor_team_q3 : game.home_team_q3;
+          const oppQ4 = isHome ? game.visitor_team_q4 : game.home_team_q4;
+          
+          if (teamQ3 !== null && teamQ4 !== null && oppQ3 !== null && oppQ4 !== null) {
+            const team2H = (teamQ3 || 0) + (teamQ4 || 0);
+            const opp2H = (oppQ3 || 0) + (oppQ4 || 0);
+            const teamQ4Score = teamQ4 || 0;
+            const oppQ4Score = oppQ4 || 0;
+            
+            total2HScored += team2H;
+            total2HAllowed += opp2H;
+            totalQ4Scored += teamQ4Score;
+            totalQ4Allowed += oppQ4Score;
+            gamesWithData++;
+            
+            if (team2H > opp2H) won2ndHalf++;
+            else if (team2H < opp2H) lost2ndHalf++;
+            
+            if (teamQ4Score > oppQ4Score) wonQ4++;
+            else if (teamQ4Score < oppQ4Score) lostQ4++;
+          }
+        }
+        
+        if (gamesWithData === 0) return null;
+        
+        const avg2HScored = (total2HScored / gamesWithData).toFixed(1);
+        const avg2HAllowed = (total2HAllowed / gamesWithData).toFixed(1);
+        const avgQ4Scored = (totalQ4Scored / gamesWithData).toFixed(1);
+        const avgQ4Allowed = (totalQ4Allowed / gamesWithData).toFixed(1);
+        const q4Diff = (totalQ4Scored - totalQ4Allowed) / gamesWithData;
+        
+        let closerProfile = 'NEUTRAL';
+        if (q4Diff >= 3) closerProfile = 'STRONG CLOSER';
+        else if (q4Diff >= 1.5) closerProfile = 'SOLID CLOSER';
+        else if (q4Diff <= -3) closerProfile = 'FADES LATE';
+        else if (q4Diff <= -1.5) closerProfile = 'STRUGGLES TO CLOSE';
+        
+        return {
+          team: teamName,
+          games_analyzed: gamesWithData,
+          avg_2H_scored: avg2HScored,
+          avg_2H_allowed: avg2HAllowed,
+          avg_Q4_scored: avgQ4Scored,
+          avg_Q4_allowed: avgQ4Allowed,
+          Q4_differential: q4Diff >= 0 ? `+${q4Diff.toFixed(1)}` : q4Diff.toFixed(1),
+          won_2nd_half: `${won2ndHalf}/${gamesWithData}`,
+          won_Q4: `${wonQ4}/${gamesWithData}`,
+          closer_profile: closerProfile
+        };
+      };
+      
+      return {
+        category: 'Second Half & 4th Quarter Trends',
+        home: calcSecondHalfStats(completedHomeGames, home.id, homeName),
+        away: calcSecondHalfStats(completedAwayGames, away.id, awayName),
+        insight: 'Shows which team closes games better. Critical for live betting and late-game situations.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching SECOND_HALF_TRENDS:`, error.message);
+      return { category: 'Second Half Trends', error: 'Data unavailable' };
+    }
+  },
+
   // ===== HEAD-TO-HEAD HISTORY =====
   H2H_HISTORY: async (bdlSport, home, away, season) => {
     const homeName = home.full_name || home.name || 'Home';
