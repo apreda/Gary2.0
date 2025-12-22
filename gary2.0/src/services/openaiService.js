@@ -1,6 +1,6 @@
 /**
- * OpenAI service for generating sports analysis and picks
- * This service uses OpenAI to generate Gary's betting analysis and recommendations
+ * LLM service for generating sports analysis and picks
+ * This service supports both OpenAI (GPT-5.1) and Gemini (Gemini 3 Deep Think)
  * Provides betting insights through the legendary Gary the Grizzly Bear character
  * Deployment: 2025-05-19
  */
@@ -8,23 +8,38 @@ import axios from 'axios';
 import { apiCache } from '../utils/apiCache.js';
 import { requestQueue } from '../utils/requestQueue.js';
 
+// Determine LLM provider - defaults to Gemini
+const LLM_PROVIDER = (() => {
+  try { return process.env.LLM_PROVIDER || 'gemini'; } catch { return 'gemini'; }
+})();
+
 // Determine proxy URL (works in browser, serverless, and local dev)
-const resolveProxyUrl = () => {
+const resolveProxyUrl = (provider = LLM_PROVIDER) => {
   try {
-    const explicit = process.env.OPENAI_PROXY_URL;
+    // If provider is gemini, use gemini proxy
+    const proxyPath = provider === 'gemini' ? '/api/gemini-proxy' : '/api/openai-proxy';
+    
+    const explicit = provider === 'gemini' ? process.env.GEMINI_PROXY_URL : process.env.OPENAI_PROXY_URL;
     if (explicit) return explicit;
+    
     let base = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
     if (base) {
       if (!base.startsWith('http')) base = `https://${base}`;
-      return `${base}/api/openai-proxy`;
+      return `${base}${proxyPath}`;
     }
   } catch {}
-  return '/api/openai-proxy';
+  return LLM_PROVIDER === 'gemini' ? '/api/gemini-proxy' : '/api/openai-proxy';
 };
 
-const OPENAI_PROXY_URL = resolveProxyUrl();
+const PROXY_URL = resolveProxyUrl();
+const OPENAI_PROXY_URL = resolveProxyUrl('openai'); // Keep for backwards compatibility
+const GEMINI_PROXY_URL = resolveProxyUrl('gemini');
 const OPENAI_DIRECT_URL = 'https://api.openai.com/v1/chat/completions';
+const GEMINI_DIRECT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const OPENAI_SERVER_KEY = (() => { try { return process.env.OPENAI_API_KEY; } catch { return undefined; } })();
+const GEMINI_SERVER_KEY = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
+
+console.log(`[LLM Service] Provider: ${LLM_PROVIDER}, Proxy: ${PROXY_URL}`);
 
 const openaiServiceInstance = {
   /**
@@ -33,35 +48,45 @@ const openaiServiceInstance = {
   initialized: true, // Always true since we use proxy
   
   /**
+   * Current LLM provider
+   */
+  provider: LLM_PROVIDER,
+  
+  /**
    * Initialize the service (no longer needs API key on client side)
    */
   init: function() {
-    console.log('✅ OpenAI service initialized with secure proxy');
+    console.log(`✅ LLM service initialized with ${LLM_PROVIDER} provider via secure proxy`);
     this.initialized = true;
     return this;
   },
   
   /**
-   * Default model for OpenAI
+   * Default model - varies by provider
    */
-  DEFAULT_MODEL: (typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5.1',
+  DEFAULT_MODEL: LLM_PROVIDER === 'gemini'
+    ? ((typeof process !== 'undefined' && process.env && process.env.GEMINI_MODEL) || 'gemini-3-pro-preview')
+    : ((typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5.1'),
   
   /**
-   * Generate a response from OpenAI using secure proxy
-   * @param {Array} messages - The messages to send to OpenAI
-   * @param {Object} options - Configuration options for the OpenAI API
+   * Generate a response from LLM (OpenAI or Gemini) using secure proxy
+   * @param {Array} messages - The messages to send to the LLM
+   * @param {Object} options - Configuration options for the API
    * @returns {Promise<string>} - The generated response
    */
   generateResponse: async function(messages, options = {}) {
     try {
-      console.log('Generating response from OpenAI via secure proxy...');
+      const provider = options.provider || LLM_PROVIDER;
+      console.log(`Generating response from ${provider} via secure proxy...`);
       
-      const { temperature = 0.5, maxTokens = 6000 } = options;
+      // Gemini prefers temperature 1.0, OpenAI can use lower
+      const defaultTemp = provider === 'gemini' ? 1.0 : 0.5;
+      const { temperature = defaultTemp, maxTokens = 6000 } = options;
       
       console.log(`Request messages count: ${messages.length}, ` + 
-                 `Temp: ${temperature}, MaxTokens: ${maxTokens}`);
+                 `Temp: ${temperature}, MaxTokens: ${maxTokens}, Provider: ${provider}`);
       
-      // Payload
+      // Payload - same format works for both via the proxies
       const requestData = {
         model: options.model || this.DEFAULT_MODEL,
         messages: messages,
@@ -69,28 +94,38 @@ const openaiServiceInstance = {
         max_tokens: maxTokens,
       };
       
+      // Select the appropriate proxy URL
+      const proxyUrl = provider === 'gemini' ? GEMINI_PROXY_URL : OPENAI_PROXY_URL;
+      
       // First try proxy
       let response;
       try {
-        response = await axios.post(OPENAI_PROXY_URL, requestData, {
+        response = await axios.post(proxyUrl, requestData, {
           headers: { 'Content-Type': 'application/json' },
-          timeout: 120000
+          timeout: 180000 // Extended timeout for Gemini deep thinking
         });
       } catch (proxyErr) {
         // If proxy fails (401/404/5xx) and server key is available, fall back to direct call (server only)
         const status = proxyErr?.response?.status;
         if (status === 400) {
           // Surface proxy error details to console to debug payload/model issues
-          try { console.error('[OPENAI PROXY 400]', JSON.stringify(proxyErr.response.data)); } catch {}
+          try { console.error(`[${provider.toUpperCase()} PROXY 400]`, JSON.stringify(proxyErr.response.data)); } catch {}
         }
         const isServer = typeof window === 'undefined';
-        const canFallback = isServer && OPENAI_SERVER_KEY;
-        if (canFallback) {
-          response = await axios.post(OPENAI_DIRECT_URL, requestData, {
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_SERVER_KEY}` },
-            timeout: 120000
-          });
+        
+        // Fallback to OpenAI direct if provider is openai
+        if (provider === 'openai') {
+          const canFallback = isServer && OPENAI_SERVER_KEY;
+          if (canFallback) {
+            response = await axios.post(OPENAI_DIRECT_URL, requestData, {
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_SERVER_KEY}` },
+              timeout: 120000
+            });
+          } else {
+            throw proxyErr;
+          }
         } else {
+          // For Gemini, just throw the error (direct API calls need different format)
           throw proxyErr;
         }
       }
@@ -280,21 +315,91 @@ You must work through these four steps every time. They happen mentally, but the
 
 The rationale field is where you expose these four sections. The JSON schema itself must remain unchanged.
 
+=== VALUE & RISK TOLERANCE FRAMEWORK ===
+
+Your job is to find the BEST VALUE, not just pick winners. This requires 
+balancing three factors:
+
+1. **PROBABILITY** - What's the actual chance this bet wins?
+2. **ODDS** - What are you getting paid if it wins?
+3. **RISK** - What are you risking vs what you stand to gain?
+
+Think strategically about risk/reward:
+- Laying points requires winning by margin - adds risk
+- Taking plus money only requires winning outright - removes margin risk
+- In close games, the underdog ML often offers better risk-adjusted value
+
+Value exists when the odds don't match the true probability:
+- If a game is truly 50/50 but one side is +300, that's value
+- If a game is 60/40 but the favorite is -200, that's poor value
+- But value alone isn't enough - you must have legitimate reasons why 
+  the bet can win (matchup advantages, injuries, rest, etc.)
+
+When evaluating close games:
+- Consider: "Do I need this team to win by X points, or just to win?"
+- If the spread is small (-3.5 or less) and the game is competitive, 
+  the underdog ML may offer better risk-adjusted value
+- But you still need real analysis - value without reasoning is gambling
+
+UNDERDOG SPREADS AS INSURANCE:
+- Taking an underdog spread (+5.5, +7, etc.) can be valuable when you're 
+  unsure if they'll win outright but see a path to victory
+- This is "insurance" - you get the points, and if they win outright, 
+  you still cash
+- Example: If a game looks close and the underdog is +5.5, you're getting 
+  insurance against a close loss while still having a chance to win outright
+- This can be just as valuable as taking a -150 ML favorite, especially 
+  when you're not confident in the favorite's margin
+
+HYPOTHESIS-BASED PICKS:
+- Sometimes a strong hypothesis to test is smarter than taking the 
+  statistically likely team on paper
+- If you can develop a theory based on recent wins, travel factors, 
+  rest advantages, or matchup edges, that's a valid basis for a pick
+- The stats don't always have to be overwhelming - important stats that 
+  support your hypothesis are enough
+- Your confidence should naturally reflect your conviction level
+
+Remember: Your goal is long-term profitability through value, not just 
+picking favorites. Sometimes the best value is on the underdog, even 
+if they're less likely to win outright. Value + legitimate analysis = 
+good bet. Value without analysis = gambling. Analysis without value = 
+poor ROI.
+
 === BETTING PICK RULES ===
 
 SPREAD vs MONEYLINE DECISION:
-- Analyze the data and choose the bet type that offers the BEST COMBINATION of winning probability and ROI
-- If you believe a team will win by a comfortable margin that exceeds the spread, take the spread for better odds
-- If you believe a team will win but the margin might be close, take the moneyline for safety
-- Compare odds between spread and moneyline to determine which offers better value
-- Base decision purely on statistical analysis and expected game flow
+- Evaluate both sides: favorite spread vs underdog ML
+- Consider risk/reward: laying points adds margin risk, plus money removes it
+- For favorites: If ML is -165 or better (less negative), consider whether 
+  the ML offers better value than laying points - the ML removes margin risk 
+  and preserves win rate, but if you're confident they win by more than the 
+  spread, the spread may still be the better play
+- For close games: Underdog ML often offers better value when spread is 
+  -3.5 or less, but you still need legitimate analysis for why they can win
+- Always ask: "What's the best value here, not just who wins?"
 
-ODDS LIMITS (APPLIES TO ALL SPORTS):
-- Do NOT return a moneyline favorite pick priced worse than -200 (e.g., -201, -220, -900 are NOT allowed).
-- If your read is on the favorite but ML is worse than -200, evaluate the SPREAD for that side and take it if the matchup supports covering.
-- If the favorite’s spread is shaky at fair juice, consider the OTHER SIDE (including underdog ML) when the value is superior.
-- Do NOT be afraid of underdogs regardless of odds; if the analysis shows real value, you can take the plus-money ML or the points.
-- The goal is best value: choose between spread vs ML accordingly, and never output ML favorites below -200.
+LARGE SPREADS:
+- Favorites laying -10.5 or more points face high backdoor cover risk
+- Consider whether the underdog spread or ML offers better value
+- These large spreads often indicate mismatches, but garbage time scoring 
+  can flip results
+- Evaluate if the favorite truly needs to win by that margin, or if 
+  alternative bets offer better risk-adjusted value
+
+ODDS LIMITS:
+- Do NOT return a moneyline favorite pick priced worse than -200
+- If favorite ML is worse than -200, evaluate the spread instead
+- If favorite spread is shaky, consider the underdog ML when value exists
+- Do NOT be afraid of underdogs - value often exists on the other side
+
+VALUE REQUIREMENT:
+- You must have legitimate analysis for why your pick can win
+- Value alone (good odds) is not enough - you need real reasons
+- But analysis alone (good reasoning) isn't enough - you need value too
+- The best bets combine both: value odds + legitimate win path
+- Hypothesis-based picks are valid when supported by important factors 
+  (recent form, travel, rest, matchup edges) even if stats aren't overwhelming
 
 FORMATTING REQUIREMENTS:
 - Pick field MUST follow: "Team Name BetType Odds" (e.g., "New York Knicks -4.5 -105" or "Miami Heat ML +150")
