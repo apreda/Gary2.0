@@ -52,7 +52,12 @@ const NFL_TOKENS = [
   // Context
   'WEATHER', 'QB_WEATHER_HISTORY', 'REST_SITUATION', 'DIVISION_RECORD', 'PRIMETIME_RECORD',
   // Historical
-  'H2H_HISTORY', 'ATS_TRENDS', 'RECENT_FORM'
+  'H2H_HISTORY', 'ATS_TRENDS', 'RECENT_FORM',
+  // Quarter/Half Scoring Trends (NEW)
+  'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown - fast starters vs closers
+  'FIRST_HALF_TRENDS',    // 1st half scoring patterns - teams that start hot/cold
+  'SECOND_HALF_TRENDS',   // 2nd half/4th quarter scoring - closers vs faders
+  'HOME_AWAY_SPLITS'      // Home vs road performance
 ];
 
 // NCAAB Stat Tokens - unique fetchers with calculated values + Perplexity advanced stats
