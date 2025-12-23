@@ -22,11 +22,15 @@ const NBA_TOKENS = [
   // Defense
   'PAINT_DEFENSE', 'PERIMETER_DEFENSE', 'TRANSITION_DEFENSE',
   // Situational
-  'REST_SITUATION', 'CLUTCH_STATS',
+  'REST_SITUATION', 'CLUTCH_STATS', 'BACK_TO_BACK',
   // Players (TOP_PLAYERS includes scoring which reflects usage)
   'TOP_PLAYERS', 'INJURIES',
   // History (only tokens with real data)
   'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS', 'VS_ELITE_TEAMS',
+  // Quarter/Half Scoring Trends (NEW - same as NFL)
+  'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown - fast starters vs closers
+  'FIRST_HALF_SCORING',   // 1st half scoring patterns - teams that jump out early
+  'SECOND_HALF_SCORING',  // 2nd half/4th quarter scoring - teams that close strong
   // Advanced
   'LUCK_ADJUSTED', 'SCHEDULE_STRENGTH'
 ];
@@ -79,51 +83,41 @@ const NCAAB_TOKENS = [
   'NCAAB_NET_RANKING',       // NCAA NET ranking
   'NCAAB_STRENGTH_OF_SCHEDULE', // SOS ranking
   'NCAAB_QUAD_RECORD',       // Quad 1-4 records
+  // Half Scoring Trends (BDL has home_score_h1, home_score_h2, etc.)
+  'NCAAB_FIRST_HALF_TRENDS',  // 1st half scoring patterns - fast starters vs slow starters
+  'NCAAB_SECOND_HALF_TRENDS', // 2nd half scoring - closers vs faders
   // Context (BDL)
-  'HOME_AWAY_SPLITS', 'RECENT_FORM',
+  'HOME_AWAY_SPLITS', 'RECENT_FORM', 'H2H_HISTORY',
   // Players (BDL)
   'TOP_PLAYERS', 'INJURIES'
 ];
 
-// NCAAF Stat Tokens - now with Perplexity-based advanced stats (BDL lacks most NCAAF analytics)
+// NCAAF Stat Tokens - BDL-based tokens that work (Perplexity is broken with 401 errors)
+// BDL NCAAF has: team_season_stats with passing/rushing yards, TDs, opponent yards
 const NCAAF_TOKENS = [
-  // ===== ADVANCED ANALYTICS (Perplexity-based - BDL doesn't have these) =====
-  // SP+ / Opponent-Adjusted Efficiency (CRITICAL for CFP analysis)
-  'NCAAF_SP_PLUS',           // Bill Connelly's SP+ ratings - overall, offense, defense
-  'NCAAF_FPI',               // ESPN Football Power Index
-  'NCAAF_EPA_ADVANCED',      // Expected Points Added per play
-  'NCAAF_OPPONENT_ADJUSTED', // FPI, Sagarin, SP+ - adjusted for opponent quality
+  // ===== PRIMARY STATS (BDL team_season_stats - THESE WORK) =====
+  'NCAAF_PASSING_OFFENSE',    // BDL: passing_yards, passing_yards_per_game, passing_touchdowns
+  'NCAAF_RUSHING_OFFENSE',    // BDL: rushing_yards, rushing_yards_per_game, rushing_touchdowns
+  'NCAAF_TOTAL_OFFENSE',      // BDL: combined passing + rushing stats
+  'NCAAF_DEFENSE',            // BDL: opp_passing_yards, opp_rushing_yards
+  'NCAAF_SCORING',            // BDL: calculated from TDs and game data
+  'NCAAF_TURNOVER_MARGIN',    // BDL: passing_interceptions
   
-  // Havoc & Disruption (G5 upset potential)
-  'NCAAF_HAVOC_RATE',        // TFLs, forced fumbles, INTs - critical for G5 upsets
+  // ===== GAME DATA (BDL games endpoint - WORKS) =====
+  'RECENT_FORM',              // BDL: recent game results and scores
+  'SCORING',                  // BDL: points per game from game data
+  'TURNOVER_MARGIN',          // BDL: from game stats
   
-  // Explosiveness & Big Plays
-  'NCAAF_EXPLOSIVENESS',     // 20+, 30+, 50+ yard plays - P4 vs G5 talent gap indicator
+  // ===== STANDARD TOKENS (work across sports) =====
+  'HOME_AWAY_SPLITS',         // BDL: home vs away performance
+  'H2H_HISTORY',              // BDL: head-to-head history
   
-  // Efficiency Breakdowns
-  'NCAAF_RUSHING_EFFICIENCY', // Yards per carry, stuff rate, line yards
-  'NCAAF_PASSING_EFFICIENCY', // Completion %, YPA, QB rating
-  'NCAAF_RED_ZONE',          // Red zone scoring %, TD %
+  // ===== PLAYER STATS (BDL player_season_stats - WORKS) =====
+  'TOP_PLAYERS',              // BDL: key players and their stats
+  'INJURIES',                 // BDL: injury report
   
-  // ===== SCHEDULE STRENGTH & CONFERENCE (CFP Critical) =====
-  'NCAAF_STRENGTH_OF_SCHEDULE', // SOS ranking, opponent win%, Power 4 vs G5 opponents
-  'NCAAF_CONFERENCE_STRENGTH',  // Conference tier, avg conference rating
-  'NCAAF_VS_POWER_OPPONENTS',   // Record/stats vs Power 4 teams specifically
-  'NCAAF_TRAVEL_FATIGUE',       // Distance traveled, time zones crossed, rest days
-  
-  // ===== BASIC STATS (BDL - these work) =====
-  'OFFENSIVE_EPA',           // BDL: passing/rushing yards per game (labeled as EPA for simplicity)
-  'DEFENSIVE_EPA',           // BDL: opp passing/rushing yards
-  'STANDINGS',               // BDL: wins, losses, conference record
-  'RECENT_FORM',             // BDL: recent game results
-  
-  // Legacy tokens (aliased to new Perplexity fetchers)
-  'SP_PLUS_RATINGS', 'FEI_RATINGS', 'HAVOC_RATE', 'RED_ZONE',
-  'STRENGTH_OF_SCHEDULE', 'OPPONENT_ADJUSTED', 'CONFERENCE_STRENGTH',
-  'VS_POWER_OPPONENTS', 'TRAVEL_FATIGUE',
-  
-  // Players
-  'TOP_PLAYERS', 'INJURIES'
+  // NOTE: Advanced analytics (SP+, EPA, etc.) are provided via Gemini Grounding
+  // in the Scout Report, not via stat tokens. Perplexity API has auth issues.
 ];
 
 // NHL Stat Tokens (BETA - uses BDL + Perplexity for advanced stats)
@@ -333,6 +327,26 @@ Only use for NCAAF games when you need specific player analysis.`,
           }
         },
         required: ["stat_type", "team"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_narrative_context",
+      description: `Fetches real-time narrative context, storylines, or player-specific news for the matchup.
+Use this to find the "why" behind the numbers, discover player significance (like high-impact rookies), 
+or identify narrative momentum (e.g., revenge spots, birthday performance, "hot streaks").
+Example queries: "Dallas Mavericks rookie Cooper Flagg impact", "Luka Doncic narrative momentum", "Revenge spot for team X vs team Y".`,
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The factual search query to discover storylines or player news"
+          }
+        },
+        required: ["query"]
       }
     }
   }

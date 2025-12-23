@@ -18,7 +18,7 @@ node scripts/pickManager.js
 - `NODE_ENV`: Environment (e.g., 'development', 'production')
 - `SUPABASE_URL`: Supabase project URL
 - `SUPABASE_KEY`: Supabase API key
-- `OPENAI_API_KEY`: OpenAI API key
+- `GEMINI_API_KEY`: Gemini 3 Deep Think API key
 
 ### `testPickGeneration.js`
 

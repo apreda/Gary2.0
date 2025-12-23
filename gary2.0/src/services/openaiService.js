@@ -1,25 +1,39 @@
 /**
  * LLM service for generating sports analysis and picks
- * This service supports both OpenAI (GPT-5.1) and Gemini (Gemini 3 Deep Think)
+ * Now using Gemini 3 Deep Think exclusively (GPT-5.1 removed Dec 2025)
  * Provides betting insights through the legendary Gary the Grizzly Bear character
- * Deployment: 2025-05-19
  */
 import axios from 'axios';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { apiCache } from '../utils/apiCache.js';
 import { requestQueue } from '../utils/requestQueue.js';
 
-// Determine LLM provider - defaults to Gemini
-const LLM_PROVIDER = (() => {
-  try { return process.env.LLM_PROVIDER || 'gemini'; } catch { return 'gemini'; }
-})();
+// LLM provider - Gemini 3 Deep Think
+const LLM_PROVIDER = 'gemini';
+// Gemini 3 Pro (default for regular picks) - can be overridden per request
+const GEMINI_MODEL_DEFAULT = process.env.GEMINI_MODEL || 'gemini-3-pro-preview';
+// Gemini 3 Flash - Pro-grade at lightning speeds (for props when Pro has quota issues)
+const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
+
+// Direct Gemini SDK for local/server runs
+let geminiClient = null;
+const GEMINI_SERVER_KEY = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
+
+function getGeminiClient() {
+  if (!geminiClient && GEMINI_SERVER_KEY) {
+    geminiClient = new GoogleGenerativeAI(GEMINI_SERVER_KEY);
+  }
+  return geminiClient;
+}
+
+// Determine if we should use direct SDK (server/local) or proxy (browser)
+const USE_DIRECT_SDK = typeof process !== 'undefined' && GEMINI_SERVER_KEY;
 
 // Determine proxy URL (works in browser, serverless, and local dev)
-const resolveProxyUrl = (provider = LLM_PROVIDER) => {
+const resolveProxyUrl = () => {
   try {
-    // If provider is gemini, use gemini proxy
-    const proxyPath = provider === 'gemini' ? '/api/gemini-proxy' : '/api/openai-proxy';
-    
-    const explicit = provider === 'gemini' ? process.env.GEMINI_PROXY_URL : process.env.OPENAI_PROXY_URL;
+    const proxyPath = '/api/gemini-proxy';
+    const explicit = process.env.GEMINI_PROXY_URL;
     if (explicit) return explicit;
     
     let base = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
@@ -28,18 +42,14 @@ const resolveProxyUrl = (provider = LLM_PROVIDER) => {
       return `${base}${proxyPath}`;
     }
   } catch {}
-  return LLM_PROVIDER === 'gemini' ? '/api/gemini-proxy' : '/api/openai-proxy';
+  return '/api/gemini-proxy';
 };
 
 const PROXY_URL = resolveProxyUrl();
-const OPENAI_PROXY_URL = resolveProxyUrl('openai'); // Keep for backwards compatibility
-const GEMINI_PROXY_URL = resolveProxyUrl('gemini');
-const OPENAI_DIRECT_URL = 'https://api.openai.com/v1/chat/completions';
+const GEMINI_PROXY_URL = PROXY_URL;
 const GEMINI_DIRECT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const OPENAI_SERVER_KEY = (() => { try { return process.env.OPENAI_API_KEY; } catch { return undefined; } })();
-const GEMINI_SERVER_KEY = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
 
-console.log(`[LLM Service] Provider: ${LLM_PROVIDER}, Proxy: ${PROXY_URL}`);
+console.log(`[LLM Service] Provider: ${LLM_PROVIDER}, Mode: ${USE_DIRECT_SDK ? 'Direct SDK' : 'Proxy'}, ${USE_DIRECT_SDK ? 'API Key: ✓' : 'Proxy: ' + PROXY_URL}`);
 
 const openaiServiceInstance = {
   /**
@@ -77,12 +87,118 @@ const openaiServiceInstance = {
   generateResponse: async function(messages, options = {}) {
     try {
       const provider = options.provider || LLM_PROVIDER;
-      console.log(`Generating response from ${provider} via secure proxy...`);
       
-      // Gemini prefers temperature 1.0, OpenAI can use lower
-      const defaultTemp = provider === 'gemini' ? 1.0 : 0.5;
+      // Gemini prefers temperature 1.0-1.1 for Deep Think
+      const defaultTemp = provider === 'gemini' ? 1.1 : 0.5;
       const { temperature = defaultTemp, maxTokens = 6000 } = options;
       
+      // Allow model override (e.g., props use Flash when Pro has quota issues)
+      const modelToUse = options.model || GEMINI_MODEL_DEFAULT;
+      
+      // Use direct SDK for server/local runs (when GEMINI_API_KEY is available)
+      if (USE_DIRECT_SDK && getGeminiClient()) {
+        console.log(`Generating response from ${modelToUse} via direct SDK...`);
+        console.log(`Request messages count: ${messages.length}, Temp: ${temperature}, MaxTokens: ${maxTokens}`);
+        
+        const model = getGeminiClient().getGenerativeModel({
+          model: modelToUse,
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+          ],
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+          }
+        });
+        
+        // Convert OpenAI-style messages to Gemini format
+        let systemInstruction = '';
+        const geminiContents = [];
+        
+        for (const msg of messages) {
+          if (msg.role === 'system') {
+            systemInstruction += (systemInstruction ? '\n\n' : '') + msg.content;
+          } else {
+            geminiContents.push({
+              role: msg.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: msg.content }]
+            });
+          }
+        }
+        
+        // If no user message, add a placeholder
+        if (geminiContents.length === 0) {
+          geminiContents.push({ role: 'user', parts: [{ text: systemInstruction || 'Analyze this.' }] });
+          systemInstruction = '';
+        }
+        
+        // Gemini expects systemInstruction as a Content object with parts array
+        const chatConfig = {
+          history: geminiContents.slice(0, -1)
+        };
+        
+        if (systemInstruction) {
+          chatConfig.systemInstruction = {
+            parts: [{ text: systemInstruction }]
+          };
+        }
+        
+        const chatSession = model.startChat(chatConfig);
+        
+        const lastMessage = geminiContents[geminiContents.length - 1];
+        
+        try {
+          const result = await chatSession.sendMessage(lastMessage.parts[0].text);
+          
+          // Debug: Check response structure
+          const candidates = result.response.candidates || [];
+          console.log(`[Gemini SDK] Response has ${candidates.length} candidates`);
+          
+          if (candidates.length > 0) {
+            const parts = candidates[0].content?.parts || [];
+            console.log(`[Gemini SDK] First candidate has ${parts.length} parts`);
+            if (parts.length > 0) {
+              console.log(`[Gemini SDK] First part preview: ${(parts[0].text || '').substring(0, 200)}...`);
+            }
+            
+            // Check for safety ratings
+            const finishReason = candidates[0].finishReason;
+            if (finishReason && finishReason !== 'STOP') {
+              console.warn(`[Gemini SDK] Unusual finish reason: ${finishReason}`);
+            }
+          }
+          
+          const content = result.response.text();
+          
+          if (!content || content.trim().length === 0) {
+            // Log the full response for debugging
+            console.error(`[Gemini SDK] Empty response. Candidates:`, JSON.stringify(candidates, null, 2).substring(0, 500));
+            throw new Error('Gemini returned empty content');
+          }
+          
+          // Process response
+          console.log('\n🔍 Gemini SDK response received.');
+          try {
+            const parsed = JSON.parse(content);
+            return JSON.stringify(parsed, null, 2);
+          } catch {
+            return content;
+          }
+        } catch (geminiErr) {
+          // Log full error for debugging
+          console.error(`[Gemini SDK Error]`, geminiErr.message);
+          if (geminiErr.response) {
+            console.error(`[Gemini SDK] Error response:`, JSON.stringify(geminiErr.response).substring(0, 500));
+          }
+          throw geminiErr;
+        }
+      }
+      
+      // Fallback to proxy for browser/no API key
+      console.log(`Generating response from ${provider} via secure proxy...`);
       console.log(`Request messages count: ${messages.length}, ` + 
                  `Temp: ${temperature}, MaxTokens: ${maxTokens}, Provider: ${provider}`);
       
@@ -94,40 +210,19 @@ const openaiServiceInstance = {
         max_tokens: maxTokens,
       };
       
-      // Select the appropriate proxy URL
-      const proxyUrl = provider === 'gemini' ? GEMINI_PROXY_URL : OPENAI_PROXY_URL;
-      
-      // First try proxy
+      // Use Gemini proxy
       let response;
       try {
-        response = await axios.post(proxyUrl, requestData, {
+        response = await axios.post(GEMINI_PROXY_URL, requestData, {
           headers: { 'Content-Type': 'application/json' },
           timeout: 180000 // Extended timeout for Gemini deep thinking
         });
       } catch (proxyErr) {
-        // If proxy fails (401/404/5xx) and server key is available, fall back to direct call (server only)
         const status = proxyErr?.response?.status;
         if (status === 400) {
-          // Surface proxy error details to console to debug payload/model issues
-          try { console.error(`[${provider.toUpperCase()} PROXY 400]`, JSON.stringify(proxyErr.response.data)); } catch {}
+          try { console.error(`[GEMINI PROXY 400]`, JSON.stringify(proxyErr.response.data)); } catch {}
         }
-        const isServer = typeof window === 'undefined';
-        
-        // Fallback to OpenAI direct if provider is openai
-        if (provider === 'openai') {
-          const canFallback = isServer && OPENAI_SERVER_KEY;
-          if (canFallback) {
-            response = await axios.post(OPENAI_DIRECT_URL, requestData, {
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_SERVER_KEY}` },
-              timeout: 120000
-            });
-          } else {
-            throw proxyErr;
-          }
-        } else {
-          // For Gemini, just throw the error (direct API calls need different format)
-          throw proxyErr;
-        }
+        throw proxyErr;
       }
       
       // Extract assistant content from either Chat Completions or Responses API
@@ -157,9 +252,9 @@ const openaiServiceInstance = {
       if (!content || String(content).trim().length === 0) {
         try {
           const retryMax = Math.min((maxTokens || 800) * 2, 3200);
-          console.warn(`[OpenAI] Empty content. Retrying once with max_tokens=${retryMax}...`);
+          console.warn(`[Gemini] Empty content. Retrying once with max_tokens=${retryMax}...`);
           const retryReq = { ...requestData, max_tokens: retryMax };
-          const retryRes = await axios.post(OPENAI_PROXY_URL, retryReq, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
+          const retryRes = await axios.post(GEMINI_PROXY_URL, retryReq, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
           const rd = retryRes.data || {};
           let fallback;
           if (rd?.choices?.[0]?.message?.content) fallback = rd.choices[0].message.content;
@@ -1296,5 +1391,7 @@ IMPORTANT: Always use the full team name (e.g., 'Cleveland Guardians') rather th
 // Initialize and then export the service
 openaiServiceInstance.init();
 
+// Export Flash model ID for props to use when Pro has quota issues
+export const GEMINI_FLASH_MODEL = GEMINI_MODEL_FLASH;
 export { openaiServiceInstance as openaiService };
 export default openaiServiceInstance;

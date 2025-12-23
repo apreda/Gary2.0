@@ -14,6 +14,7 @@
 import { ballDontLieService } from '../ballDontLieService.js';
 import { perplexityService } from '../perplexityService.js';
 import { formatGameTimeEST, buildMarketSnapshot, parseGameDate } from './sharedUtils.js';
+import { fetchGroundedContext } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -617,10 +618,10 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     console.log(`[NFL Props Context] ⚠️ SHORT WEEK detected: ${shortWeekInfo.type} - ${shortWeekInfo.impact}`);
   }
 
-  // Parallel fetch: injuries, player IDs/teams, defensive matchups, weather
-  console.log('[NFL Props Context] Fetching parallel data: injuries, player IDs/teams, defense matchups, weather...');
+  // Parallel fetch: injuries, player IDs/teams, defensive matchups, weather, narrative context
+  console.log('[NFL Props Context] Fetching parallel data: injuries, player IDs/teams, defense matchups, weather, narrative context...');
   
-  const [injuries, playerResolution, defensiveMatchups, weather] = await Promise.all([
+  const [injuries, playerResolution, defensiveMatchups, weather, groundedContext] = await Promise.all([
     // Injuries from BDL
     teamIds.length > 0 
       ? ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5).catch(() => [])
@@ -636,8 +637,21 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     }),
     
     // Weather (if outdoor game)
-    perplexityService.getNFLGameWeather(game.home_team, game.away_team, null, dateStr).catch(() => null)
+    perplexityService.getNFLGameWeather(game.home_team, game.away_team, null, dateStr).catch(() => null),
+    
+    // NARRATIVE CONTEXT via Gemini Grounding - Critical for storylines, player significance
+    // Use Flash model for props to avoid Pro quota issues
+    fetchGroundedContext(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(e => {
+      console.warn('[NFL Props Context] Gemini Grounding failed:', e.message);
+      return null;
+    })
   ]);
+  
+  // Extract narrative context for props
+  const narrativeContext = groundedContext?.groundedRaw || null;
+  if (narrativeContext) {
+    console.log(`[NFL Props Context] ✓ Got narrative context (${narrativeContext.length} chars) from Gemini Grounding`);
+  }
   
   // Extract the playerIdMap from the resolution result
   const { playerIdMap, playerTeamMap } = playerResolution;
@@ -723,6 +737,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   console.log(`   - Defensive matchups: ${defensiveMatchups?._isDefault ? 'DEFAULTS' : 'LIVE DATA'}`);
   console.log(`   - Weather: ${weather ? `${weather.temperature}°F, ${weather.conditions}` : 'N/A'}`);
   console.log(`   - Short week: ${shortWeekInfo.isShortWeek ? shortWeekInfo.type : 'No'}`);
+  console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
 
   return {
     gameSummary,
@@ -732,13 +747,15 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     playerStats,
     playerGameLogs,
     defensiveMatchups,
+    narrativeContext, // CRITICAL: Gemini Grounding context (storylines, player significance)
     meta: {
       homeTeam: homeTeam?.full_name || game.home_team,
       awayTeam: awayTeam?.full_name || game.away_team,
       season,
       gameTime: game.commence_time,
       playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,
-      hasDefensiveData: !defensiveMatchups?._isDefault
+      hasDefensiveData: !defensiveMatchups?._isDefault,
+      hasNarrativeContext: !!narrativeContext
     }
   };
 }

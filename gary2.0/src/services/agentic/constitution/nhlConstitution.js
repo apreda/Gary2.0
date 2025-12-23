@@ -102,6 +102,39 @@ Key player availability matters:
 - Top-pair defenseman out = PP/PK impact
 - Stats to verify: [INJURIES] [LINEUP_CHANGES]
 
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (LTIR, out most/all of season)** = Team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to bet for or against a team. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors (e.g., "Both teams are missing key stars" if one star has been out all year).
+  → Example: If a star forward has been on LTIR since October, team's record/stats ARE their baseline.
+- **RECENT injuries (last 1-2 weeks)** = POTENTIAL edge.
+  → Team hasn't fully adjusted, opponent may not have game-planned for absence.
+  → Line may not fully reflect the loss.
+- **MID-SEASON (3-8 weeks)** = Team has likely adjusted, but still relevant.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as betting edges or factors that might cause variance.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your thesis must focus on the players who are ACTUALLY playing and how their RECENT form or matchup data suggests an edge.
+
+### THE NARRATIVE EDGE
+Hockey has deep psychological and narrative roots that advanced stats (Corsi/xG) sometimes overlook:
+- **Momentum Shifts**: Look for teams on a "losing skid" narrative, or "revenge games" for traded players.
+- **Rookie Surge**: Young players often have a "breakout" period where their impact exceeds their season-long Corsi profile.
+- **Locker Room & Intangibles**: Use **fetch_narrative_context** to find storylines like coaching changes, "player birthdays", or internal team drama that might affect effort.
+- **Rule**: Integrate these storylines into your rationale when they help explain variance that stats alone cannot.
+
+### ROSTER VERIFICATION (CRITICAL)
+Hockey has frequent trades, call-ups, and roster moves:
+- **ONLY mention players explicitly listed in the scout report roster section**
+- **DO NOT assume a player is on a team** - they may have been traded or sent to AHL
+- Call-ups from AHL can change lineups significantly
+- If unsure about a player, do not mention specific names
+- Focus on team-level stats when player data is unclear
+
+⚠️ NEVER assume a player's team - the NHL has many mid-season trades. Always verify.
+
 ### BET TYPE SELECTION - PUCK LINE VS MONEYLINE
 Always evaluate BOTH puck line (+1.5/-1.5) and moneyline:
 - Prefer PUCK LINE +1.5 when:

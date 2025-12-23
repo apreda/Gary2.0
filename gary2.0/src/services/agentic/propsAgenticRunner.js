@@ -3,7 +3,10 @@
  * 3-stage pipeline for player prop analysis
  * Supports multiple sports via constitution parameter
  */
-import { openaiService } from '../openaiService.js';
+import { openaiService, GEMINI_FLASH_MODEL } from '../openaiService.js';
+
+// Props use Gemini 3 Flash for speed (Pro may have quota issues)
+const PROPS_MODEL = GEMINI_FLASH_MODEL;
 import { safeJsonParse } from './agenticUtils.js';
 import { NFL_PROPS_CONSTITUTION } from './constitution/nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './constitution/nbaPropsConstitution.js';
@@ -29,7 +32,7 @@ function getConstitution(sportLabel) {
  * Stage 1: Props Hypothesis
  * Form initial hypotheses about which props have value
  */
-async function runPropsHypothesisStage({ gameSummary, propCandidates, playerStats, sportLabel = 'NFL', tokenData = {} }) {
+async function runPropsHypothesisStage({ gameSummary, propCandidates, playerStats, sportLabel = 'NFL', tokenData = {}, narrativeContext = null }) {
   const constitution = getConstitution(sportLabel);
   
   // Sport-specific instructions for using season stats
@@ -62,44 +65,50 @@ Example analysis:
 ` : '';
 
   const systemPrompt = `
-You are Stage 1 of the Gary Props Pipeline: "The Scout"
-
-Your job is to identify the BEST player prop opportunities in this game.
+You are Gary the Bear, scouting player props for this game.
 
 ${constitution}
 ${statsGuidance}
 
 ## YOUR TASK
-1. Review the available prop candidates and player stats
-2. Form hypotheses about which players are likely to exceed or fall short of their lines
-3. Identify 3-5 top prop opportunities based on matchup, usage, and line value
-4. Request specific data tokens to validate your hypotheses
+Look at the player stats provided and identify 3-5 players who stand out to you.
 
-## RESPONSE FORMAT (STRICT JSON)
+Think about it like you're breaking down each player's situation:
+- What's this player averaging this season?
+- How have they been playing lately - hot, cold, or steady?
+- Does this matchup favor them or hurt them?
+- Is the line set too low or too high based on what you see?
+
+## RESPONSE FORMAT (STRICT JSON - REQUIRED)
+You MUST respond with ONLY valid JSON. No text before or after. Start with \`\`\`json and end with \`\`\`.
+
+\`\`\`json
 {
   "top_opportunities": [
     {
       "player": "Player Name",
       "prop_type": "${sportLabel === 'NBA' ? 'points' : sportLabel === 'NHL' ? 'shots_on_goal' : 'pass_yds'}",
-      "line": ${sportLabel === 'NBA' ? '24.5' : sportLabel === 'NHL' ? '2.5' : '245.5'},
-      "lean": "over" or "under",
-      "hypothesis": "One sentence explaining why - MUST reference the player's season average",
-      "season_avg": ${sportLabel === 'NHL' ? '"3.2 SOG/G"' : sportLabel === 'NBA' ? '"28.5 PPG"' : '"N/A"'},
-      "edge_vs_line": ${sportLabel === 'NHL' || sportLabel === 'NBA' ? '"+2.0"' : '"N/A"'},
-      "confidence": 0.50-0.85
+      "line": 24.5,
+      "lean": "over",
+      "take": "Your quick take on this player - why you like them in this spot"
     }
   ],
-  "requested_tokens": ["player_stats", "opponent_vs_position", "game_script"],
-  "game_script_expectation": "Brief note on expected game flow",
-  "concerns": ["Brief concern 1", "Brief concern 2"]
+  "game_context": "Brief note on how you see this game playing out",
+  "concerns": ["Any concerns worth noting"]
 }
+\`\`\`
+
+CRITICAL: Output ONLY the JSON block above. No introduction, no preamble, no analysis outside the JSON.
 
 Guidelines:
-- Focus on props with odds better than -130
-- Analyze ALL prop types available (${sportLabel === 'NBA' ? 'points, rebounds, assists, threes, blocks, steals' : sportLabel === 'NHL' ? 'shots_on_goal, goals, assists, points' : 'pass yards, rush yards, receiving yards, receptions, TDs'}) - pick whichever props have the BEST EDGE regardless of type
-- Consider game script heavily
-- Flag any injury concerns
-${(sportLabel === 'NHL' || sportLabel === 'NBA') ? '- ALWAYS cite the player season average in your hypothesis' : ''}
+- Look at ALL stat types (${sportLabel === 'NBA' ? 'points, rebounds, assists, threes, blocks, steals, PRA' : sportLabel === 'NHL' ? 'shots, goals, assists, points' : 'pass yards, rush yards, receiving yards'})
+- If a player's season average is way above their line, that's interesting
+- Factor in recent form
+- USE the live game context if provided - it includes critical info like:
+  * Player role changes (e.g., "Zion coming off bench" means less minutes = lower totals)
+  * Rising stars or rookies to watch (e.g., "Cooper Flagg's emergence")
+  * Injury impacts on teammates (e.g., "with X out, Y gets more touches")
+  * Team situation changes that affect player usage
 `;
 
   // Enhanced prop candidates with season stats for NHL and NBA
@@ -121,12 +130,19 @@ ${(sportLabel === 'NHL' || sportLabel === 'NBA') ? '- ALWAYS cite the player sea
     return base;
   });
 
+  // Include narrative context if available (e.g., Zion off bench, player significance)
+  const narrativeSection = narrativeContext ? `
+LIVE GAME CONTEXT (from Gemini Grounding):
+${narrativeContext.substring(0, 2000)}
+` : '';
+
   const userContent = JSON.stringify({
     matchup: gameSummary.matchup,
     tipoff: gameSummary.tipoff,
     odds: gameSummary.odds,
     propCandidates: enhancedCandidates,
-    playerStatsPreview: playerStats.substring(0, 3000)
+    playerStatsPreview: playerStats.substring(0, 3000),
+    liveContext: narrativeSection || null
   });
 
   const messages = [
@@ -135,8 +151,9 @@ ${(sportLabel === 'NHL' || sportLabel === 'NBA') ? '- ALWAYS cite the player sea
   ];
 
   const raw = await openaiService.generateResponse(messages, {
-    temperature: 0.4,
-    maxTokens: 1200
+    model: PROPS_MODEL, // Gemini 3 Flash for props (faster, avoids Pro quota issues)
+    temperature: 1.0,
+    maxTokens: 8000
   });
 
   const parsed = safeJsonParse(raw, null);
@@ -146,76 +163,56 @@ ${(sportLabel === 'NHL' || sportLabel === 'NBA') ? '- ALWAYS cite the player sea
 
   return {
     top_opportunities: Array.isArray(parsed.top_opportunities) ? parsed.top_opportunities.slice(0, 5) : [],
-    requested_tokens: Array.isArray(parsed.requested_tokens) ? parsed.requested_tokens : [],
-    game_script_expectation: parsed.game_script_expectation || '',
+    game_context: parsed.game_context || parsed.game_script_expectation || '',
     concerns: Array.isArray(parsed.concerns) ? parsed.concerns.slice(0, 3) : []
   };
 }
 
 /**
  * Stage 2: Props Investigator
- * Validate hypotheses with detailed data including recent form and consistency
+ * Dig deeper into the scouted props with detailed stats
  */
 async function runPropsInvestigatorStage({ gameSummary, hypothesis, tokenData, propCandidates }) {
   const systemPrompt = `
-You are Stage 2 of the Gary Props Pipeline: "The Analyst"
-
-You receive the Scout's hypotheses and must validate them with data.
+You are Gary the Bear, digging deeper into the props you scouted.
 
 ## YOUR TASK
-1. Evaluate each prop hypothesis against the provided stats
-2. Check recent form (last 5-10 games) - is the player hot, cold, or steady?
-3. Check consistency - high variance players are riskier
-4. Check home/away splits if relevant to the matchup
-5. Produce evidence bullets that support or contradict each lean
-6. Calculate the EDGE: (season avg - line) or (recent avg - line)
-7. Flag any props that should be dropped due to weak evidence
+For each player you identified in Stage 1, look at the detailed stats and ask yourself:
+- Does the season average support this pick?
+- How has this player been playing lately? Hot streak or slump?
+- Is this player consistent or all over the place game to game?
+- Does playing at home/away matter for them?
 
-## ENHANCED VALIDATION CRITERIA
-- EDGE CHECK: Is the player's average at least +0.5 (NBA pts) or +0.3 (NHL SOG) above the line for OVER?
-- FORM CHECK: Is the player trending up or down in the last 5 games?
-- CONSISTENCY CHECK: High variance (consistency < 50%) = add risk factor
-- SPLITS CHECK: Does home/away split favor or hurt this pick?
+If the numbers back up your initial take, keep the prop. If not, drop it and explain why.
 
-## RESPONSE FORMAT (STRICT JSON)
+## RESPONSE FORMAT (STRICT JSON - REQUIRED)
+You MUST respond with ONLY valid JSON. No text before or after. Start with \`\`\`json and end with \`\`\`.
+
+\`\`\`json
 {
   "validated_props": [
     {
       "player": "Player Name",
       "prop_type": "points",
       "line": 24.5,
-      "lean": "over" or "under",
-      "confidence": 0.55-0.85,
-      "edge": "+3.7",
-      "form": "hot" or "cold" or "steady",
-      "consistency": "HIGH" or "MED" or "LOW",
-      "evidence": [
-        {"stat": "Season avg", "value": "28.2 PPG", "impact": "supports"},
-        {"stat": "L5 avg", "value": "29.4 PPG", "impact": "supports"},
-        {"stat": "Recent games", "value": "4/5 over line", "impact": "supports"},
-        {"stat": "Home split", "value": "30.1 PPG at home", "impact": "supports"}
-      ]
+      "lean": "over",
+      "confidence": 0.65,
+      "reasoning": "Brief explanation of what you found in the stats - 1-2 sentences about why this still looks good"
     }
   ],
   "dropped_props": [
-    {"player": "Name", "reason": "Why dropped - e.g., edge too thin (+0.3), inconsistent (LOW), cold streak"}
-  ],
-  "gaps": ["Any missing data noted"]
+    {"player": "Name", "reason": "Why you're backing off this one"}
+  ]
 }
+\`\`\`
 
-Guidelines:
-- Only keep props with strong evidence (2+ supporting factors)
-- REQUIRE edge of at least +0.5 (NBA) or +0.3 (NHL) for OVER picks
-- Boost confidence if recent form AND season avg both support the pick
-- PENALIZE confidence for LOW consistency players
-- Drop props where player is in a clear cold streak (< season avg in L5)
-- Note any injury/weather concerns
+CRITICAL: Output ONLY the JSON block above. No introduction, no analysis paragraphs, no commentary outside the JSON.
 `;
 
   const userContent = JSON.stringify({
     matchup: gameSummary.matchup,
-    hypotheses: hypothesis.top_opportunities,
-    game_script: hypothesis.game_script_expectation,
+    scouted_props: hypothesis.top_opportunities,
+    game_context: hypothesis.game_context,
     data: {
       player_stats: tokenData.player_stats,
       prop_lines: tokenData.prop_lines,
@@ -230,8 +227,9 @@ Guidelines:
   ];
 
   const raw = await openaiService.generateResponse(messages, {
-    temperature: 0.35,
-    maxTokens: 1400
+    model: PROPS_MODEL, // Gemini 3 Flash for props
+    temperature: 1.0,
+    maxTokens: 8000
   });
 
   const parsed = safeJsonParse(raw, null);
@@ -251,74 +249,73 @@ const TWO_PER_GAME_SPORTS = ['NBA', 'NHL', 'EPL'];
 
 /**
  * Stage 3: Props Judge
- * Render final prop picks with full rationale
+ * Render final prop picks with organic, Gary-style rationale
  */
 async function runPropsJudgeStage({ gameSummary, investigation, playerProps, sportLabel = 'NFL' }) {
   // Sport-specific pick counts: NBA/NHL/EPL = exactly 2, NFL = 3-5
   const usesTwoPerGame = TWO_PER_GAME_SPORTS.includes(sportLabel);
   const pickCountText = usesTwoPerGame ? 'exactly 2' : '3-5';
   const maxPicks = usesTwoPerGame ? 2 : 5;
-  const qualityEmphasis = usesTwoPerGame 
-    ? `These are the 2 picks you'd put your reputation on - your MOST CONFIDENT selections from this game.`
-    : '';
-
-  // Sport-specific stat references
-  const statExamples = sportLabel === 'NBA' 
-    ? { avg: '28.2 PPG', line: '24.5 pts', edge: '+3.7', stat: 'pts' }
-    : sportLabel === 'NHL'
-    ? { avg: '3.2 SOG/G', line: '2.5 shots', edge: '+0.7', stat: 'sog' }
-    : { avg: '267 yds/g', line: '245.5 yds', edge: '+21.5', stat: 'yds' };
 
   const systemPrompt = `
-You are Stage 3 of the Gary Props Pipeline: "The Judge"
+You are Gary the Bear, finalizing your player prop picks.
 
-You render the final prop picks with complete rationale.
+Write rationales like you're explaining your pick to a friend - conversational, insightful, and rooted in what you see happening on the court/ice. NO betting jargon.
 
 ## YOUR TASK
 1. Review the validated props from the Analyst
-2. Select the TOP ${pickCountText} best prop bets${usesTwoPerGame ? ' - NO MORE, NO LESS' : ''}
-3. Attach the actual odds from the prop lines
-4. Write clear rationale for each pick using the ENHANCED format below
+2. Select the TOP ${pickCountText} props${usesTwoPerGame ? ' - these are your most confident selections' : ''}
+3. Write an ORGANIC rationale for each pick (5-7 sentences) - like a sports analyst, not a bettor
+4. Provide 3-4 KEY STATS bullets that support your pick
 
-${qualityEmphasis}
+## RATIONALE STYLE - CRITICAL
 
-## ENHANCED RATIONALE FORMAT
+Write like Gary explains regular game picks - conversational and story-driven. This should be 5-7 sentences that paint the full picture.
 
-Your rationale MUST follow this structure for each pick:
+NEVER USE:
+❌ "THE EDGE" / "WHY IT HITS" / "THE RISK" headers
+❌ "Line X | Season Avg: Y | Edge: +Z" format
+❌ Betting jargon (line movement, EV, edge, sharp money, fade, steam)
+❌ Data scientist language (convergence of factors, metrics indicate)
 
-THE EDGE: Line ${statExamples.line} | Season Avg: ${statExamples.avg} (${statExamples.edge} cushion) | Recent Form: L5 avg X.X (Y/5 games over line)
+ALWAYS USE:
+✅ Natural, conversational tone (5-7 sentences)
+✅ Player names and specific context
+✅ What you actually see happening in this game
+✅ Simple explanation of why this player will exceed/fall short of the number
+✅ Paint the whole picture - context, matchup, recent form, and conclusion
 
-WHY IT HITS: [2-3 sentences explaining the convergence of factors - matchup, recent form, consistency, usage]
+EXAMPLE RATIONALE (NBA rebounds prop):
+"Jarrett Allen is about to feast on the glass tonight. With Evan Mobley sidelined, the Cavaliers are down their second-best rebounder, and that workload has to go somewhere. Allen has been an absolute monster all season, pulling down nearly 11 boards per game, and he's going to be the only true big man Cleveland trusts in crunch time. The Hornets are one of the worst rebounding teams in the league, ranking dead last in offensive boards and bottom-five in overall rebounding rate. When you combine Allen's motor, his positional advantage, and the extra minutes he'll see without Mobley, this feels like one of the safest props on the board tonight. Give me the over."
 
-THE RISK: [One realistic failure scenario]
-
-CONFIDENCE: XX% | Edge: ${statExamples.edge} | Form: Hot/Cold/Steady
+EXAMPLE KEY_STATS (for the above):
+["Averaging 10.8 RPG this season (career high)", "Mobley out = extra 4-5 boards available per game", "Charlotte ranks 28th in defensive rebounding rate"]
 
 ## RESPONSE FORMAT (STRICT JSON)
 {
   "picks": [
     {
       "player": "Player Name",
-      "team": "Team Name",
-      "prop": "${statExamples.stat} ${statExamples.line.split(' ')[0]}",
-      "line": ${parseFloat(statExamples.line)},
+      "team": "Team Name", 
+      "prop": "pts 25.5",
+      "line": 25.5,
       "bet": "over",
       "odds": -110,
       "confidence": 0.65-0.85,
-      "rationale": "THE EDGE: Line ${statExamples.line} | Season Avg: ${statExamples.avg} (${statExamples.edge} cushion) | Recent Form: L5 avg X.X (4/5 over line)\\n\\nWHY IT HITS: [Your analysis of why this hits]\\n\\nTHE RISK: [One scenario where this misses]\\n\\nCONFIDENCE: 72% | Edge: ${statExamples.edge} | Form: Hot"
+      "rationale": "Your organic, conversational analysis - 5-7 sentences explaining why you like this pick. Paint the full picture: context, recent form, matchup advantage, and your confident conclusion.",
+      "key_stats": ["Stat 1 that supports your pick", "Stat 2 that supports your pick", "Stat 3 that supports your pick"]
     }
   ]
 }
 
-## CRITICAL GUIDELINES
-- ${usesTwoPerGame ? `EXACTLY ${maxPicks} picks per game - quality over quantity` : `Maximum ${maxPicks} picks per game`}
-- Confidence reflects estimated win probability
-- Only pick props with odds better than -140
-- ALWAYS calculate and show the edge (season avg vs line)
-- ALWAYS mention recent form trend (hot/cold/steady) based on last 5 games
-- If a player has LOW consistency (high variance), note it as a risk factor
-- Consider home/away splits if the data shows significant differences${usesTwoPerGame ? `
-- Pick ONLY your 2 most reliable props - the ones you are MOST confident will hit` : ''}
+## GUIDELINES
+- ${usesTwoPerGame ? `EXACTLY ${maxPicks} picks - your most confident ones` : `Up to ${maxPicks} picks`}
+- Rationale should be 5-7 sentences, reading like sports commentary
+- key_stats should be 3-4 bullet points with the most compelling stats
+- Reference the player's recent performance naturally
+- Explain the matchup in plain terms
+- End with a confident take on why this hits${usesTwoPerGame ? `
+- These should be picks you'd confidently tell a friend about` : ''}
 `;
 
   // Build a lookup map for odds
@@ -350,8 +347,9 @@ CONFIDENCE: XX% | Edge: ${statExamples.edge} | Form: Hot/Cold/Steady
   ];
 
   const raw = await openaiService.generateResponse(messages, {
-    temperature: 0.4,
-    maxTokens: 1600
+    model: PROPS_MODEL, // Gemini 3 Flash for props
+    temperature: 1.0,
+    maxTokens: 8000
   });
 
   const parsed = safeJsonParse(raw, null);
@@ -398,12 +396,16 @@ export async function runAgenticPropsPipeline({
   const context = await buildContext(game, playerProps, options);
 
   console.log(`[Agentic Props][${sportLabel}] Stage 1: Hypothesis for ${context.gameSummary.matchup}`);
+  if (context.narrativeContext) {
+    console.log(`[Agentic Props][${sportLabel}] ✓ Including narrative context (Zion bench role, player storylines, etc.)`);
+  }
   const stage1 = await runPropsHypothesisStage({
     gameSummary: context.gameSummary,
     propCandidates: context.propCandidates,
     playerStats: context.playerStats,
     sportLabel,
-    tokenData: context.tokenData // Pass tokenData for NHL season stats
+    tokenData: context.tokenData, // Pass tokenData for NHL season stats
+    narrativeContext: context.narrativeContext // Pass Gemini Grounding context
   });
   console.log(`[Agentic Props][${sportLabel}] Found ${stage1.top_opportunities.length} opportunities`);
 

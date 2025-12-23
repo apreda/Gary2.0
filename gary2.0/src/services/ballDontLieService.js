@@ -95,6 +95,18 @@ function buildQuery(params = {}) {
 }
 
 /**
+ * Get the current NHL/NBA season year for BDL API
+ * BDL uses the starting year of the season (e.g., 2025 for 2025-26 season)
+ * Seasons start in October (month 9), so Oct-Dec = new season, Jan-Sep = previous year's season
+ * @returns {number} - Season year (e.g., 2025 for current 2025-26 season)
+ */
+function getCurrentNhlSeason() {
+  const currentMonth = new Date().getMonth(); // 0-indexed
+  const currentYear = new Date().getFullYear();
+  return currentMonth >= 9 ? currentYear : currentYear - 1;
+}
+
+/**
  * Normalize team/school names for fuzzy matching (handles "Univ.", punctuation, spacing)
  */
 function normalizeName(value) {
@@ -712,7 +724,7 @@ const ballDontLieService = {
    * @param {number} season - Season year (e.g., 2024 for 2024-25 season)
    * @returns {Array} - Player objects with position, name, etc.
    */
-  async getNhlTeamPlayers(teamId, season = 2024, ttlMinutes = 30) {
+  async getNhlTeamPlayers(teamId, season = getCurrentNhlSeason(), ttlMinutes = 30) {
     try {
       if (!teamId) return [];
       const cacheKey = `nhl_team_players_${teamId}_${season}`;
@@ -765,7 +777,7 @@ const ballDontLieService = {
    * @param {number} season - Season year
    * @returns {Array} - Array of { name, value } stat objects
    */
-  async getNhlPlayerSeasonStats(playerId, season = 2024, ttlMinutes = 30) {
+  async getNhlPlayerSeasonStats(playerId, season = getCurrentNhlSeason(), ttlMinutes = 30) {
     try {
       if (!playerId) return [];
       const cacheKey = `nhl_player_season_stats_${playerId}_${season}`;
@@ -788,7 +800,7 @@ const ballDontLieService = {
    * @param {string} type - Stat type (points, goals, assists, etc.)
    * @returns {Array} - Array of leader objects
    */
-  async getNhlPlayerStatsLeaders(season = 2024, type = 'points', ttlMinutes = 60) {
+  async getNhlPlayerStatsLeaders(season = getCurrentNhlSeason(), type = 'points', ttlMinutes = 60) {
     try {
       const cacheKey = `nhl_player_stats_leaders_${season}_${type}`;
       return await getCachedOrFetch(cacheKey, async () => {
@@ -1236,14 +1248,19 @@ const ballDontLieService = {
           try {
             const logs = await getCachedOrFetch(cacheKey, async () => {
               // Fetch player's game stats using the stats endpoint
+              // NOTE: BDL NFL stats API requires "seasons[]" (array format), not "season"
               const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery({
                 player_ids: [playerId],
-                season,
+                seasons: [season], // CRITICAL: Must use seasons[] array format per BDL docs
                 per_page: numGames + 5 // Fetch extra to ensure we have enough
               })}`;
               
               const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-              const gameStats = (response.data?.data || []).slice(0, numGames);
+              // CRITICAL: Sort by game date descending to get most recent games first
+              const allStats = (response.data?.data || [])
+                .filter(g => g.game?.date) // Ensure valid date
+                .sort((a, b) => new Date(b.game.date) - new Date(a.game.date));
+              const gameStats = allStats.slice(0, numGames);
               
               if (gameStats.length === 0) return null;
               
@@ -1381,14 +1398,23 @@ const ballDontLieService = {
    * 
    * @param {number} teamId - BDL team ID
    * @param {number} season - Season year (e.g., 2025)
+   * @param {string} sportKey - Sport key ('americanfootball_nfl' or 'americanfootball_ncaaf')
    * @returns {Object|null} - { id, name, firstName, lastName, team, depth, injuryStatus, isBackup }
    */
-  async getStartingQBFromDepthChart(teamId, season = 2025) {
+  async getStartingQBFromDepthChart(teamId, season = 2025, sportKey = 'americanfootball_nfl') {
     try {
       if (!teamId) return null;
       
-      // Get the team roster with depth chart
-      const roster = await this.getNflTeamRoster(teamId, season);
+      // Get the team roster with depth chart - use correct roster function for sport
+      const isNCAAF = sportKey === 'americanfootball_ncaaf' || sportKey === 'NCAAF';
+      let roster;
+      if (isNCAAF) {
+        // NCAAF uses getNcaafTeamPlayers (BDL doesn't have depth chart for NCAAF)
+        roster = await this.getNcaafTeamPlayers(teamId);
+      } else {
+        // NFL has proper depth chart roster
+        roster = await this.getNflTeamRoster(teamId, season);
+      }
       if (!roster || roster.length === 0) {
         console.warn(`[Ball Don't Lie] No roster data for team ${teamId}`);
         return null;
@@ -2179,11 +2205,14 @@ const ballDontLieService = {
           return resp?.data || [];
         }
         // HTTP fallback for sports with documented injuries endpoints
+        // NOTE: NCAAF/NCAAB injuries may not be supported by BDL - will return empty gracefully
         const endpointMap = {
           basketball_nba: 'nba/v1/player_injuries',
           basketball_wnba: 'wnba/v1/player_injuries',
           americanfootball_nfl: 'nfl/v1/player_injuries',
-          icehockey_nhl: 'nhl/v1/player_injuries'
+          icehockey_nhl: 'nhl/v1/player_injuries',
+          americanfootball_ncaaf: 'ncaaf/v1/player_injuries', // May not be supported - Gemini Grounding is primary source
+          basketball_ncaab: 'ncaab/v1/player_injuries' // May not be supported - Gemini Grounding is primary source
         };
         const path = endpointMap[sportKey];
         if (!path) {

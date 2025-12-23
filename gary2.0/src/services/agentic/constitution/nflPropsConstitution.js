@@ -163,33 +163,26 @@ Key factors for 1st TD scorer (typically +300 to +2000 odds):
 1. **Line shopping matters**: +EV often in odds, not just line
 2. **Regression is real**: Players on hot/cold streaks regress
 3. **Matchup > recent form**: Bad defense beats recent struggles
-4. **Injuries ripple**: WR1 out = WR2 sees more targets
+4. **Injuries ripple**: WR1 out = WR2 sees more targets. **CRITICAL**: Only use **RECENT** injuries as ripple factors. If WR1 has been out all season, WR2's stats already reflect his increased role.
 5. **Weather kills passing**: Wind and cold favor unders
 6. **Game script drives volume**: Trailing = pass, leading = run
 7. **Avoid heavy favorites' props**: Less need to throw when up big
 8. **Target share > yards/reception**: Volume is more stable
 
-### CONFIDENCE CALIBRATION (ENHANCED)
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (OUT all/most of season)** = Player and team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to take a prop. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors.
+  → Example: If the star WR has been on IR since Week 2, the QB's passing yards L5 avg ALREADY reflects his absence. Citing it as a reason for an Under is a mistake.
+- **RECENT injuries (last 1-2 weeks)** = REAL EDGE.
+  → The ripple effect (e.g., more targets for others) is NOT yet fully reflected in long-term stats.
+  → This is where the value is.
 
-**75%+ confidence** (STRONG BET):
-- L5 edge > 10% of line
-- Favorable defense matchup (bottom 10 in that category)
-- HIGH consistency player
-- Game script supports the play
-- No injury concerns
-
-**70-74% confidence** (SOLID PLAY):
-- L5 edge > 5% of line
-- Average or better defense matchup
-- MED+ consistency player
-- At least 2 supporting factors
-
-**65-69% confidence** (PLAYABLE):
-- L5 edge 3-5% of line
-- Matchup is neutral or better
-- One strong supporting factor (elite matchup OR hot form)
-
-**Below 65%**: PASS on the prop
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as factors that might cause variance or create edges.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your analysis must focus on the players who are ACTUALLY playing.
 
 ### DEFENSE RANKING INTERPRETATION
 

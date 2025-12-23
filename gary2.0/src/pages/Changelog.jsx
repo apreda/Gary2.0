@@ -4,6 +4,20 @@ import { ArrowLeft, Sparkles, Bug, Zap, Wrench, Gift, Rocket } from 'lucide-reac
 
 const changelogEntries = [
   {
+    version: "1.0.6",
+    date: "December 22, 2025",
+    type: "feature",
+    title: "Gemini 3 Deep Think + Google Search Grounding",
+    changes: [
+      "Migrated all sports to Gemini 3 Deep Think (replaced GPT-5.1)",
+      "Added Google Search Grounding for live context (injuries, weather, roster verification)",
+      "Enhanced NFL injury reporting with duration context (RECENT vs SEASON-LONG)",
+      "Improved QB change detection - now flags when historical records don't apply",
+      "Optimized stat fetching - deduplicated redundant API calls to save costs",
+      "Fixed Perplexity injury parsing bug that assigned players to wrong teams"
+    ]
+  },
+  {
     version: "1.0.5",
     date: "December 18, 2025",
     type: "update",

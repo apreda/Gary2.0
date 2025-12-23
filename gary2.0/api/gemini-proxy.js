@@ -119,8 +119,8 @@ export default async function handler(req, res) {
       maxOutputTokens: max_tokens || 8192,
       responseMimeType: 'application/json', // Request JSON output
       // Gemini 3 Deep Think - enable high reasoning
-      thinkingConfig: {
-        thinkingBudget: 24576 // Allow deep thinking for complex sports analysis
+      thinking_config: {
+        include_thoughts: true
       }
     };
 

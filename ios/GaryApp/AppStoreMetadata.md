@@ -37,7 +37,7 @@ Gary analyzes thousands of data points across NFL, NBA, NCAAB, NCAAF, MLB, and N
 • The Odds API — Real-time odds from major sportsbooks
 • Sports Database APIs — Comprehensive stats and schedules
 • Perplexity AI — Deep research and context
-• GPT-4 Mini — Intelligent analysis and reasoning
+• Gemini 3 Deep Think — Intelligent analysis and reasoning
 
 📊 FEATURES:
 

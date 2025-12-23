@@ -303,6 +303,17 @@ struct StatValues: Codable {
     let savePct: String?
     let goalsAgainstAvg: String?
     let faceoffPct: String?
+    // NCAAF BDL-specific stats (new format from stat router)
+    let totalYpg: String?
+    let passingYpg: String?
+    let rushingYpg: String?
+    let totalTds: String?
+    let interceptionsThrown: String?
+    let oppPassingYards: String?
+    let passingYards: String?
+    let rushingYards: String?
+    let totalYards: String?
+    let passingInts: String?
     
     static func from(dict: [String: Any]) -> StatValues {
         StatValues(
@@ -393,7 +404,18 @@ struct StatValues: Codable {
             shotDifferential: dict["differential"] as? String ?? (dict["differential"] as? NSNumber)?.stringValue,
             savePct: dict["save_pct"] as? String ?? (dict["save_pct"] as? NSNumber)?.stringValue,
             goalsAgainstAvg: dict["goals_against_avg"] as? String ?? (dict["goals_against_avg"] as? NSNumber)?.stringValue ?? (dict["gaa"] as? NSNumber)?.stringValue,
-            faceoffPct: dict["faceoff_pct"] as? String ?? (dict["faceoff_pct"] as? NSNumber)?.stringValue
+            faceoffPct: dict["faceoff_pct"] as? String ?? (dict["faceoff_pct"] as? NSNumber)?.stringValue,
+            // NCAAF BDL-specific stats (from stat router)
+            totalYpg: dict["total_ypg"] as? String ?? (dict["total_ypg"] as? NSNumber)?.stringValue,
+            passingYpg: dict["passing_ypg"] as? String ?? (dict["passing_ypg"] as? NSNumber)?.stringValue,
+            rushingYpg: dict["rushing_ypg"] as? String ?? (dict["rushing_ypg"] as? NSNumber)?.stringValue,
+            totalTds: dict["total_tds"] as? String ?? (dict["total_tds"] as? NSNumber)?.stringValue,
+            interceptionsThrown: dict["interceptions_thrown"] as? String ?? (dict["interceptions_thrown"] as? NSNumber)?.stringValue,
+            oppPassingYards: dict["opp_passing_yards"] as? String ?? (dict["opp_passing_yards"] as? NSNumber)?.stringValue,
+            passingYards: dict["passing_yards"] as? String ?? (dict["passing_yards"] as? NSNumber)?.stringValue,
+            rushingYards: dict["rushing_yards"] as? String ?? (dict["rushing_yards"] as? NSNumber)?.stringValue,
+            totalYards: dict["total_yards"] as? String ?? (dict["total_yards"] as? NSNumber)?.stringValue,
+            passingInts: dict["passing_ints"] as? String ?? (dict["passing_ints"] as? NSNumber)?.stringValue
         )
     }
     
@@ -499,6 +521,14 @@ struct StatValues: Codable {
         case "NCAAB_NET_RANKING": return netRank ?? "N/A"
         case "NCAAB_STRENGTH_OF_SCHEDULE": return sosRank ?? "N/A"
         case "NCAAB_KENPOM_RATINGS": return kenpomRank ?? "N/A"
+        // NCAAF BDL stat tokens
+        case "NCAAF_TOTAL_OFFENSE": return totalYpg ?? totalYardsPerGame ?? yardsPerGame ?? "N/A"
+        case "NCAAF_PASSING_OFFENSE": return passingYpg ?? "N/A"
+        case "NCAAF_RUSHING_OFFENSE": return rushingYpg ?? rushingYardsPerGame ?? "N/A"
+        case "NCAAF_SCORING": return totalTds ?? "N/A"
+        case "NCAAF_DEFENSE": return oppTotalYards ?? oppYardsPerGame ?? "N/A"
+        case "NCAAF_TURNOVER_MARGIN": return interceptionsThrown ?? interceptions ?? turnoverDiff ?? "N/A"
+        case "NCAAF_RED_ZONE_OFFENSE": return thirdDownPct ?? "N/A"
         // NHL-specific stats
         case "GOALS_FOR": return goalsForPerGame ?? "N/A"
         case "GOALS_AGAINST": return goalsAgainstPerGame ?? "N/A"
@@ -566,10 +596,11 @@ struct PropPick: Identifiable, Codable {
     let commence_time: String?  // ISO format for sorting/grouping by game time
     let tdCategory: String?  // "standard" or "underdog" for TD scorer picks
     let matchup: String?     // Game matchup for TD picks
+    let key_stats: [String]?  // 3-4 bullet points with key stats supporting the pick
     
     // CodingKeys to map snake_case from JSON
     enum CodingKeys: String, CodingKey {
-        case player, team, prop, bet, odds, confidence, analysis, league, sport, line, time, matchup
+        case player, team, prop, bet, odds, confidence, analysis, league, sport, line, time, matchup, key_stats
         case commence_time = "commence_time"
         case tdCategory = "td_category"
     }
@@ -607,7 +638,16 @@ struct PropPick: Identifiable, Codable {
     
     /// Parse from dictionary (for manual JSON parsing)
     static func from(dict: [String: Any]) -> PropPick? {
-        PropPick(
+        // Handle key_stats which may come as NSArray from JSON deserialization
+        var keyStats: [String]? = nil
+        if let statsArray = dict["key_stats"] as? [String] {
+            keyStats = statsArray
+        } else if let statsArray = dict["key_stats"] as? [Any] {
+            // Convert NSArray elements to strings
+            keyStats = statsArray.compactMap { $0 as? String }
+        }
+        
+        return PropPick(
             player: dict["player"] as? String,
             team: dict["team"] as? String,
             prop: dict["prop"] as? String,
@@ -621,7 +661,8 @@ struct PropPick: Identifiable, Codable {
             time: dict["time"] as? String,
             commence_time: dict["commence_time"] as? String,
             tdCategory: dict["td_category"] as? String,
-            matchup: dict["matchup"] as? String
+            matchup: dict["matchup"] as? String,
+            key_stats: keyStats
         )
     }
 }

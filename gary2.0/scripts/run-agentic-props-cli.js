@@ -54,6 +54,7 @@ export async function runAgenticPropsCli({
   const limit = Number.parseInt(args.limit || process.env.AGENTIC_PROPS_LIMIT || String(limitDefault), 10);
   const nocache = args.nocache === '1' || args.nocache === 'true';
   const shouldStore = args.store === '1' || args.store === 'true' || process.env.AGENTIC_STORE === '1';
+  const matchupFilter = args.matchup || null;
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
@@ -61,6 +62,7 @@ export async function runAgenticPropsCli({
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}`);
+  if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
   console.log(`${'='.repeat(50)}\n`);
 
   // Fetch upcoming games
@@ -72,8 +74,13 @@ export async function runAgenticPropsCli({
     .filter((game) => {
       const tip = new Date(game.commence_time).getTime();
       if (Number.isNaN(tip) || tip <= now) return false;
-      if (windowMs != null) {
-        return tip <= now + windowMs;
+      if (windowMs != null && tip > now + windowMs) return false;
+      // Apply matchup filter if provided
+      if (matchupFilter) {
+        const matchupLower = matchupFilter.toLowerCase();
+        const homeMatch = game.home_team.toLowerCase().includes(matchupLower);
+        const awayMatch = game.away_team.toLowerCase().includes(matchupLower);
+        if (!homeMatch && !awayMatch) return false;
       }
       return true;
     })

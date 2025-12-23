@@ -16,11 +16,25 @@ const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY;
  * Main router function - fetches stats based on token
  */
 // Perplexity-only tokens that don't need BDL team lookup
+// NOTE: NCAAF advanced tokens REMOVED - Perplexity has auth issues and Gemini Grounding
+// in the Scout Report provides better live context for NCAAF (coaching changes, portal, injuries)
 const PERPLEXITY_ONLY_TOKENS = [
+  // NCAAF tokens removed - rely on Gemini Grounding in Scout Report instead
+];
+
+// Tokens that should return N/A immediately (Perplexity-dependent and broken)
+// Gemini Grounding in Scout Report provides this context instead
+const DEPRECATED_PERPLEXITY_TOKENS = [
+  // NCAAF Perplexity tokens - use Gemini Grounding instead
   'NCAAF_SP_PLUS', 'NCAAF_FPI', 'NCAAF_EPA_ADVANCED', 'NCAAF_HAVOC_RATE',
   'NCAAF_EXPLOSIVENESS', 'NCAAF_RUSHING_EFFICIENCY', 'NCAAF_PASSING_EFFICIENCY',
   'NCAAF_RED_ZONE', 'NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH',
-  'NCAAF_VS_POWER_OPPONENTS', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED'
+  'NCAAF_VS_POWER_OPPONENTS', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED',
+  // NCAAB Perplexity tokens - use Gemini Grounding instead
+  'NCAAB_KENPOM_RATINGS',
+  'NCAAB_NET_RANKING',
+  'NCAAB_STRENGTH_OF_SCHEDULE',
+  'NCAAB_QUAD_RECORD'
 ];
 
 export async function fetchStats(sport, token, homeTeam, awayTeam, options = {}) {
@@ -30,10 +44,23 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   
   console.log(`[Stat Router] Fetching ${token} for ${awayTeam} @ ${homeTeam} (${sport})`);
   
+  // Check for deprecated Perplexity tokens - return N/A immediately
+  // These rely on Perplexity which has auth issues; Gemini Grounding in Scout Report provides context instead
+  const sportSpecificToken = `${normalizedSport}_${token}`;
+  if (DEPRECATED_PERPLEXITY_TOKENS.includes(token) || DEPRECATED_PERPLEXITY_TOKENS.includes(sportSpecificToken)) {
+    console.log(`[Stat Router] Skipping ${token} - deprecated Perplexity token, using Gemini Grounding context instead`);
+    return { 
+      token, 
+      sport, 
+      homeValue: 'N/A (use Gemini Grounding context)', 
+      awayValue: 'N/A (use Gemini Grounding context)',
+      note: 'Advanced analytics provided via Gemini Grounding in Scout Report'
+    };
+  }
+  
   try {
     // Check for sport-specific fetcher first (e.g., EPL_TOP_SCORERS for EPL)
     let fetcher = null;
-    const sportSpecificToken = `${normalizedSport}_${token}`;
     if (FETCHERS[sportSpecificToken]) {
       fetcher = FETCHERS[sportSpecificToken];
       console.log(`[Stat Router] Using sport-specific fetcher: ${sportSpecificToken}`);
@@ -908,10 +935,14 @@ const FETCHERS = {
     }
     
     // For other sports, use getTeamSeasonStats
-    const [homeStats, awayStats] = await Promise.all([
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
     ]);
+    
+    // BDL returns an array - extract first item
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
     
     // BDL NCAAB uses fg3_pct, fg3m, fg3a; NBA uses three_pct, three_made_per_game, etc.
     return {
@@ -1505,7 +1536,243 @@ const FETCHERS = {
     }
   },
 
-  // ===== NCAAF SCHEDULE STRENGTH & CONFERENCE CONTEXT (CFP Critical) =====
+  // ===== NCAAF BDL-BASED STATS (THESE WORK - use team_season_stats) =====
+  
+  NCAAF_PASSING_OFFENSE: async (bdlSport, home, away, season) => {
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      console.log(`[Stat Router] Fetching NCAAF Passing Offense for ${awayTeamName} @ ${homeTeamName} via BDL`);
+      
+      // Fetch team season stats from BDL (note: function expects object with teamId, season)
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: home.id, season }),
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: away.id, season })
+      ]);
+      
+      // BDL returns an array - extract first item
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      
+      return {
+        category: 'Passing Offense',
+        source: 'Ball Don\'t Lie',
+        home: {
+          team: homeTeamName,
+          passing_yards: homeStats?.passing_yards || 'N/A',
+          passing_ypg: homeStats?.passing_yards_per_game?.toFixed(1) || 'N/A',
+          passing_tds: homeStats?.passing_touchdowns || 'N/A',
+          passing_ints: homeStats?.passing_interceptions || 'N/A'
+        },
+        away: {
+          team: awayTeamName,
+          passing_yards: awayStats?.passing_yards || 'N/A',
+          passing_ypg: awayStats?.passing_yards_per_game?.toFixed(1) || 'N/A',
+          passing_tds: awayStats?.passing_touchdowns || 'N/A',
+          passing_ints: awayStats?.passing_interceptions || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Passing Offense fetch failed:', error.message);
+      return { error: error.message, home: { team: home.full_name }, away: { team: away.full_name } };
+    }
+  },
+
+  NCAAF_RUSHING_OFFENSE: async (bdlSport, home, away, season) => {
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      console.log(`[Stat Router] Fetching NCAAF Rushing Offense for ${awayTeamName} @ ${homeTeamName} via BDL`);
+      
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: home.id, season }),
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: away.id, season })
+      ]);
+      
+      // BDL returns an array - extract first item
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      
+      return {
+        category: 'Rushing Offense',
+        source: 'Ball Don\'t Lie',
+        home: {
+          team: homeTeamName,
+          rushing_yards: homeStats?.rushing_yards || 'N/A',
+          rushing_ypg: homeStats?.rushing_yards_per_game?.toFixed(1) || 'N/A',
+          rushing_tds: homeStats?.rushing_touchdowns || 'N/A'
+        },
+        away: {
+          team: awayTeamName,
+          rushing_yards: awayStats?.rushing_yards || 'N/A',
+          rushing_ypg: awayStats?.rushing_yards_per_game?.toFixed(1) || 'N/A',
+          rushing_tds: awayStats?.rushing_touchdowns || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Rushing Offense fetch failed:', error.message);
+      return { error: error.message, home: { team: home.full_name }, away: { team: away.full_name } };
+    }
+  },
+
+  NCAAF_TOTAL_OFFENSE: async (bdlSport, home, away, season) => {
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      console.log(`[Stat Router] Fetching NCAAF Total Offense for ${awayTeamName} @ ${homeTeamName} via BDL`);
+      
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: home.id, season }),
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: away.id, season })
+      ]);
+      
+      // BDL returns an array - extract first item
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      
+      const homeTotalYds = (homeStats?.passing_yards || 0) + (homeStats?.rushing_yards || 0);
+      const awayTotalYds = (awayStats?.passing_yards || 0) + (awayStats?.rushing_yards || 0);
+      const homeTotalYpg = ((homeStats?.passing_yards_per_game || 0) + (homeStats?.rushing_yards_per_game || 0));
+      const awayTotalYpg = ((awayStats?.passing_yards_per_game || 0) + (awayStats?.rushing_yards_per_game || 0));
+      
+      return {
+        category: 'Total Offense',
+        source: 'Ball Don\'t Lie',
+        home: {
+          team: homeTeamName,
+          total_yards: homeTotalYds || 'N/A',
+          total_ypg: homeTotalYpg?.toFixed(1) || 'N/A',
+          passing_ypg: homeStats?.passing_yards_per_game?.toFixed(1) || 'N/A',
+          rushing_ypg: homeStats?.rushing_yards_per_game?.toFixed(1) || 'N/A'
+        },
+        away: {
+          team: awayTeamName,
+          total_yards: awayTotalYds || 'N/A',
+          total_ypg: awayTotalYpg?.toFixed(1) || 'N/A',
+          passing_ypg: awayStats?.passing_yards_per_game?.toFixed(1) || 'N/A',
+          rushing_ypg: awayStats?.rushing_yards_per_game?.toFixed(1) || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Total Offense fetch failed:', error.message);
+      return { error: error.message, home: { team: home.full_name }, away: { team: away.full_name } };
+    }
+  },
+
+  NCAAF_DEFENSE: async (bdlSport, home, away, season) => {
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      console.log(`[Stat Router] Fetching NCAAF Defense for ${awayTeamName} @ ${homeTeamName} via BDL`);
+      
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: home.id, season }),
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: away.id, season })
+      ]);
+      
+      // BDL returns an array - extract first item
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      
+      return {
+        category: 'Defense (Yards Allowed)',
+        source: 'Ball Don\'t Lie',
+        home: {
+          team: homeTeamName,
+          opp_passing_yards: homeStats?.opp_passing_yards || 'N/A',
+          opp_rushing_yards: homeStats?.opp_rushing_yards || 'N/A',
+          opp_total_yards: ((homeStats?.opp_passing_yards || 0) + (homeStats?.opp_rushing_yards || 0)) || 'N/A'
+        },
+        away: {
+          team: awayTeamName,
+          opp_passing_yards: awayStats?.opp_passing_yards || 'N/A',
+          opp_rushing_yards: awayStats?.opp_rushing_yards || 'N/A',
+          opp_total_yards: ((awayStats?.opp_passing_yards || 0) + (awayStats?.opp_rushing_yards || 0)) || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Defense fetch failed:', error.message);
+      return { error: error.message, home: { team: home.full_name }, away: { team: away.full_name } };
+    }
+  },
+
+  NCAAF_SCORING: async (bdlSport, home, away, season) => {
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      console.log(`[Stat Router] Fetching NCAAF Scoring for ${awayTeamName} @ ${homeTeamName} via BDL`);
+      
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: home.id, season }),
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: away.id, season })
+      ]);
+      
+      // BDL returns an array - extract first item
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      
+      // Calculate TDs from passing + rushing (approximate scoring)
+      const homeTotalTds = (homeStats?.passing_touchdowns || 0) + (homeStats?.rushing_touchdowns || 0);
+      const awayTotalTds = (awayStats?.passing_touchdowns || 0) + (awayStats?.rushing_touchdowns || 0);
+      
+      return {
+        category: 'Scoring (Touchdowns)',
+        source: 'Ball Don\'t Lie',
+        home: {
+          team: homeTeamName,
+          passing_tds: homeStats?.passing_touchdowns || 'N/A',
+          rushing_tds: homeStats?.rushing_touchdowns || 'N/A',
+          total_tds: homeTotalTds || 'N/A'
+        },
+        away: {
+          team: awayTeamName,
+          passing_tds: awayStats?.passing_touchdowns || 'N/A',
+          rushing_tds: awayStats?.rushing_touchdowns || 'N/A',
+          total_tds: awayTotalTds || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Scoring fetch failed:', error.message);
+      return { error: error.message, home: { team: home.full_name }, away: { team: away.full_name } };
+    }
+  },
+
+  NCAAF_TURNOVER_MARGIN: async (bdlSport, home, away, season) => {
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      console.log(`[Stat Router] Fetching NCAAF Turnover Data for ${awayTeamName} @ ${homeTeamName} via BDL`);
+      
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: home.id, season }),
+        ballDontLieService.getTeamSeasonStats('americanfootball_ncaaf', { teamId: away.id, season })
+      ]);
+      
+      // BDL returns an array - extract first item
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      
+      return {
+        category: 'Turnovers',
+        source: 'Ball Don\'t Lie',
+        home: {
+          team: homeTeamName,
+          interceptions_thrown: homeStats?.passing_interceptions || 'N/A'
+        },
+        away: {
+          team: awayTeamName,
+          interceptions_thrown: awayStats?.passing_interceptions || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Turnover fetch failed:', error.message);
+      return { error: error.message, home: { team: home.full_name }, away: { team: away.full_name } };
+    }
+  },
+
+  // ===== LEGACY NCAAF TOKENS (Perplexity-based - DEPRECATED due to 401 errors) =====
+  // These are kept for backwards compatibility but return N/A
+  // Advanced analytics are now provided via Gemini Grounding in Scout Report
   
   NCAAF_STRENGTH_OF_SCHEDULE: async (bdlSport, home, away, season) => {
     try {
@@ -4986,6 +5253,10 @@ const ALIASES = {
   QUARTER_SPLITS: 'RECENT_FORM',
   // LINEUP_DATA only available once game starts (BDL limitation) - not useful for pre-game
   LINEUP_DATA: 'TOP_PLAYERS',
+  // NBA-specific aliases for quarter scoring (point to NFL implementations - same BDL structure)
+  FIRST_HALF_SCORING: 'FIRST_HALF_TRENDS',
+  SECOND_HALF_SCORING: 'SECOND_HALF_TRENDS',
+  BACK_TO_BACK: 'REST_SITUATION',
   // USAGE_RATES has its own fetcher now - no alias needed
   // VS_ELITE_TEAMS has its own fetcher now - no alias needed
   // H2H_HISTORY has its own fetcher now - no alias needed

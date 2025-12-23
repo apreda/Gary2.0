@@ -47,12 +47,29 @@ Different defenses struggle against different offenses:
 - Poor transition defense vs fast-paced team = trouble for defense
 - Stats to verify: [PAINT_DEFENSE] [PERIMETER_DEFENSE] [PAINT_SCORING] [THREE_PT_SHOOTING]
 
-### INJURY IMPACT
-Star player injuries swing lines 3-7 points:
-- Top-10 player out = 4-6 point swing
-- Secondary star out = 2-3 point swing
-- Role player out = rarely significant unless it's the backup
-- Stats to verify: [INJURIES] [TOP_PLAYERS] [USAGE_RATES]
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (OUT all/most of season)** = Team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to bet for or against a team. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors (e.g., "Both teams are missing key stars" if one star has been out all year).
+  → Example: If Kyrie Irving has been out since October, Dallas's record/stats ARE their baseline without him. Citing his absence as a negative or a "wash" is statistically illiterate.
+- **RECENT injuries (last 1-2 weeks)** = Team still adjusting, potential edge.
+  → Market may not have fully priced in the impact.
+  → Stats may not yet reflect the absence.
+- **MID-SEASON injuries (3-8 weeks)** = Team has adjusted, use judgment.
+- **INDEFINITE/NO TIMETABLE** = Treat as SEASON-LONG.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as betting edges or factors that might cause variance.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your thesis must focus on the players who are ACTUALLY playing and how their RECENT form or matchup data suggests an edge.
+
+### THE NARRATIVE EDGE
+Betting is an art, not just a spreadsheet. Raw season stats often miss the "why" behind team performance:
+- **Storylines & Momentum**: Look for "revenge games", player milestones, or recent narrative shifts (e.g., a team playing harder after a coaching change).
+- **Player Significance**: Not all players are captured by PPG. Identify high-impact rookies (like 2025's Cooper Flagg) or defensive anchors whose value is felt but not always seen in counting stats.
+- **Context is Key**: If season stats don't explain a recent surge or slump, use the **fetch_narrative_context** tool to find the missing piece.
+- **Rule**: If a high-impact player (like a star rookie) is playing but has a low season PPG, his significance must be organically factored into your rationale.
 
 ### HOME COURT ADVANTAGE
 NBA home court is worth ~2.5-3 points on average:
@@ -67,6 +84,22 @@ Look for letdown and lookahead spots:
 - 4th game in 5 nights = fatigue spot
 - Stats to verify: [RECENT_FORM] [SCHEDULE_STRENGTH]
 
+### HEAD-TO-HEAD HISTORY (RECENT)
+Some teams just have another team's number:
+- If Team A has won last 3-4 meetings = psychological edge
+- Check the margins - close games or blowouts?
+- Revenge games matter - team that lost last meeting often extra motivated
+- Only look at RECENT history (this season, maybe last) - rosters change
+- Stats to verify: [H2H_HISTORY]
+
+### QUARTER/HALF SCORING PATTERNS
+Teams have tendencies in how they start and finish games:
+- FAST STARTERS: Score big in Q1/Q2, may fade late - good for 1H bets
+- SLOW STARTERS: Come on strong in Q3/Q4 - better for full game/2H
+- CLOSERS: Teams that protect leads and win close games
+- FADERS: Teams that blow leads in 4th quarter
+- Stats to verify: [QUARTER_SCORING] [FIRST_HALF_SCORING] [SECOND_HALF_SCORING]
+
 ### CLUTCH PERFORMANCE
 Some teams consistently close games, others collapse:
 - Strong clutch teams (top 10) can be trusted in close games
@@ -78,7 +111,18 @@ Teams that are "lucky" will regress:
 - Record significantly better than Pythagorean expectation = lucky
 - High close-game win rate (>60%) = often unsustainable
 - Stats to verify: [LUCK_ADJUSTED] [CLOSE_GAME_RECORD]
+
+### ROSTER VERIFICATION (CRITICAL)
+The NBA has frequent trades, releases, and player movement:
+- **ONLY mention players explicitly listed in the scout report roster section**
+- **DO NOT assume a player is on a team** - they may have been traded
+- If unsure, do not mention specific player names
+- Focus on team-level stats when player data is unclear
+
+⚠️ ABSOLUTE RULE: If a player is not in the "CURRENT ROSTERS" section of the scout report,
+DO NOT mention them in your analysis. They may no longer be on the team.
 `;
+
 
 export default NBA_CONSTITUTION;
 

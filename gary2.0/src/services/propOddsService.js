@@ -11,7 +11,10 @@ import { ballDontLieService } from './ballDontLieService.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
 
-// Define player prop markets by sport
+// Only fetch from major US sportsbooks to reduce API token usage
+const ALLOWED_BOOKMAKERS = ['draftkings', 'fanduel'];
+
+// Define player prop markets by sport (limited to reduce API usage)
 const PROP_MARKETS = {
   basketball_nba: [
     'player_points',
@@ -19,7 +22,9 @@ const PROP_MARKETS = {
     'player_assists',
     'player_threes',
     'player_blocks',
-    'player_steals'
+    'player_steals',
+    'player_points_rebounds_assists',  // PRA combo
+    'player_points_rebounds'            // PR combo
   ],
   americanfootball_nfl: [
     // Full game NFL player prop markets (expanded coverage)
@@ -83,17 +88,15 @@ const PROP_MARKETS = {
     'pitcher_record_a_win'
   ],
   icehockey_nhl: [
-    // NHL player props from The Odds API
+    // NHL player props from The Odds API (limited to reduce API usage)
     'player_points',
     'player_power_play_points',
     'player_assists',
     'player_blocked_shots',
     'player_shots_on_goal',
     'player_goals',
-    'player_total_saves',
-    'player_goal_scorer_anytime',
-    'player_goal_scorer_first',
-    'player_goal_scorer_last'
+    'player_total_saves'
+    // Goal scorer props removed to reduce token usage
   ],
   soccer_epl: [
     // Soccer player props - shots, goals, assists
@@ -499,14 +502,18 @@ export const propOddsService = {
               regions: 'us',
               markets: market, // Just one market at a time
               oddsFormat: 'american',
-              dateFormat: 'iso'
+              dateFormat: 'iso',
+              bookmakers: ALLOWED_BOOKMAKERS.join(',')  // Only DraftKings & FanDuel
             }
           });
           
           if (propResponse.data && 
               propResponse.data.bookmakers && 
               propResponse.data.bookmakers.length > 0) {
-            const bookmakers = propResponse.data.bookmakers;
+            // Filter to only allowed bookmakers (belt & suspenders - API param should handle this)
+            const bookmakers = propResponse.data.bookmakers.filter(
+              bk => ALLOWED_BOOKMAKERS.includes(bk.key)
+            );
             for (const bookmaker of bookmakers) {
               for (const bkMarket of bookmaker.markets) {
                 if (bkMarket.key !== market) continue;

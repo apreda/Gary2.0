@@ -168,32 +168,11 @@ async function checkQuestionablePlayers(sportKey, homeTeam, awayTeam) {
       }
     }
     
-    // SKIP RULES:
-    // 1. Key franchise player has concerning status
+    // SKIP RULES (ORGANIC):
+    // We no longer force-skip games with questionable players.
+    // Instead, we pass the info to Gary and let him decide if the uncertainty is too high.
     if (keyPlayerIssue) {
-      const posStr = keyPlayerPosition ? ` (${keyPlayerPosition})` : '';
-      return { 
-        skip: true, 
-        reason: `Key player ${keyPlayerIssue}${posStr} is ${keyPlayerStatus} - too much uncertainty` 
-      };
-    }
-    
-    // 2. Either team has too many questionable players
-    // For NCAAF, we don't use this rule (only care about key players OUT/DOUBTFUL)
-    if (sportKey !== 'americanfootball_ncaaf') {
-      const questionableThreshold = sportKey.includes('football') ? 5 : 3;
-      if (homeQuestionable >= questionableThreshold) {
-        return { 
-          skip: true, 
-          reason: `${homeTeam} has ${homeQuestionable} questionable players - too many unknowns` 
-        };
-      }
-      if (awayQuestionable >= questionableThreshold) {
-        return { 
-          skip: true, 
-          reason: `${awayTeam} has ${awayQuestionable} questionable players - too many unknowns` 
-        };
-      }
+      console.log(`[Questionable Check] ⚠️ Key player ${keyPlayerIssue} is ${keyPlayerStatus} - letting Gary evaluate organically.`);
     }
     
     return { skip: false, reason: null };
@@ -447,7 +426,7 @@ if (sportsToRun.length === 0) {
 // Check environment variables
 function checkEnv() {
   const checks = [
-    { name: 'OPENAI_API_KEY', alts: ['VITE_OPENAI_API_KEY'] },
+    { name: 'GEMINI_API_KEY', alts: [] },  // Gemini 3 Deep Think (replaced OpenAI)
     { name: 'SUPABASE_URL', alts: ['VITE_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL'] },
     { name: 'SUPABASE_SERVICE_ROLE_KEY', alts: ['SUPABASE_SERVICE_KEY', 'VITE_SUPABASE_SERVICE_ROLE_KEY'] }
   ];
@@ -865,18 +844,18 @@ async function main() {
 
         // Skip deduplication checks if --force flag is set (for re-running specific games)
         if (!forceRerun) {
-          // FIRST: Check in-memory set (prevents race conditions within same run)
-          if (processedGamesThisSession.has(gameKey)) {
-            console.log(`⏭️  Already processed in this session: "${gameKey}"`);
-            continue;
-          }
+        // FIRST: Check in-memory set (prevents race conditions within same run)
+        if (processedGamesThisSession.has(gameKey)) {
+          console.log(`⏭️  Already processed in this session: "${gameKey}"`);
+          continue;
+        }
 
-          // SECOND: Check database for existing pick
-          const existingPick = await checkExistingPick(config.name, game.home_team, game.away_team);
-          if (existingPick) {
-            console.log(`⏭️  Already have pick for this game: "${existingPick}"`);
-            processedGamesThisSession.add(gameKey); // Mark as processed
-            continue;
+        // SECOND: Check database for existing pick
+        const existingPick = await checkExistingPick(config.name, game.home_team, game.away_team);
+        if (existingPick) {
+          console.log(`⏭️  Already have pick for this game: "${existingPick}"`);
+          processedGamesThisSession.add(gameKey); // Mark as processed
+          continue;
           }
         } else {
           console.log(`🔄 Force re-run enabled - skipping deduplication for "${gameKey}"`);
@@ -1055,8 +1034,9 @@ async function main() {
           };
 
           if (result.toolCallHistory) {
-            // NCAAB: keep token-level rows (avoid flattening into token=TURNOVERS_PER_GAME, etc.)
-            if (config.key === 'basketball_ncaab') {
+            // NCAAB & NCAAF: keep token-level rows (avoid flattening into token=TURNOVERS_PER_GAME, etc.)
+            // This preserves the full stat objects so the frontend can extract the right field
+            if (config.key === 'basketball_ncaab' || config.key === 'americanfootball_ncaaf') {
               for (const t of result.toolCallHistory) {
                 if (!t?.token) continue;
 
@@ -1314,7 +1294,7 @@ async function main() {
             'EPL': 0.60     // Match calibration
           };
           const MIN_CONFIDENCE = CONFIDENCE_BY_SPORT[config.name] ?? 0.64;
-          const MAX_FAVORITE_SPREAD = -13.5; // Filter out favorites laying more than 13.5 (NBA)
+          const MAX_FAVORITE_SPREAD = -9.5; // Filter out NBA double-digit spreads (-10, -11, etc.)
 
           const qualifiedPicks = sportPicks.filter(p => {
             const confidence = typeof p.confidence === 'number' ? p.confidence : 0;
@@ -1339,13 +1319,13 @@ async function main() {
               return false;
             }
 
-            // 5. NBA: Filter out massive favorite spreads (garbage time variance)
+            // 5. NBA: Filter out double-digit favorite spreads (-10 or more)
             if (config.name === 'NBA' && p.type === 'spread') {
               const spreadMatch = p.pick.match(/([+-]?\d+\.?\d*)\s*[+-]\d+$/);
               if (spreadMatch) {
                 const spreadValue = parseFloat(spreadMatch[1]);
                 if (spreadValue < MAX_FAVORITE_SPREAD) {
-                  console.log(`  ❌ Filtered: ${p.pick} (spread ${spreadValue} exceeds ${MAX_FAVORITE_SPREAD} - garbage time risk)`);
+                  console.log(`  ❌ Filtered: ${p.pick} (spread ${spreadValue} is double-digit - too much variance)`);
                   return false;
                 }
               }

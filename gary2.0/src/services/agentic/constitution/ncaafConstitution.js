@@ -51,6 +51,15 @@ QB play swings college games dramatically:
 - First-time starters = volatility
 - Stats to verify: [QB_STATS] [INJURIES]
 
+### CRITICAL: QB CHANGE IMPACT ON HISTORICAL RECORDS
+When a team changes QBs mid-season, THEIR PREVIOUS RECORD IS MISLEADING:
+- Example: If Team X has a 6-1 home record with QB1, but QB1 is now hurt and QB2 is starting...
+  → That 6-1 home record is IRRELEVANT for betting purposes
+  → Team X with QB2 is essentially a different team
+- Stats built with one QB don't transfer to the next
+- **CHECK THE SCOUT REPORT** for current starting QB
+- **DISCOUNT historical records** if QB changed recently
+
 ### MOTIVATION & EMOTIONAL FACTORS
 CFB motivation matters more than any other sport:
 - Rivalry games = throw out the records
@@ -89,6 +98,34 @@ Transfer portal reshapes rosters:
 - Key portal losses = holes to fill
 - Early season = new pieces still gelling
 - Stats to verify: [TRANSFER_PORTAL] [TOP_PLAYERS]
+
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (out most/all of season)** = Team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to bet for or against a team. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors (e.g., "Both teams are missing key stars" if one star has been out all year).
+  → Example: If the starting RB has been out since Week 2, team's record/stats ARE their baseline. Citing his absence as a negative or a "wash" is statistically illiterate.
+- **RECENT injuries (last 1-2 weeks)** = POTENTIAL edge.
+  → Team hasn't fully adjusted, opponent may not have game-planned for absence.
+  → Line may not fully reflect the loss.
+- **MID-SEASON (3-8 weeks)** = Team has likely adjusted, but still relevant context.
+- **INDEFINITE/NO TIMETABLE** = Treat as SEASON-LONG.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as betting edges or factors that might cause variance.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your thesis must focus on the players who are ACTUALLY playing and how their RECENT form or matchup data suggests an edge.
+
+### ROSTER VERIFICATION (CRITICAL)
+College football has massive roster changes every season:
+- **ONLY mention players explicitly listed in the scout report roster section**
+- **DO NOT assume a player is on a team** - transfer portal is CONSTANT
+- Players transfer, declare for NFL draft, or opt out of bowl games
+- NFL draft declarations = players may sit out late-season games
+- If unsure about a player, do not mention specific names
+- Focus on team-level stats when player data is unclear
+
+⚠️ NEVER assume a player's team in 2025 college football. The portal changes everything.
 
 ### RED ZONE & FINISHING DRIVES
 CFB teams vary wildly in finishing ability:

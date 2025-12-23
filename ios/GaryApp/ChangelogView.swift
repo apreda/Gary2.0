@@ -53,6 +53,46 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "1.9.1",
+        date: "December 23, 2025",
+        type: .improvement,
+        title: "College Sports Analytics Upgrade",
+        changes: [
+            "Enhanced NCAAB analysis with real-time KenPom, NET rankings, and strength of schedule",
+            "Improved NCAAF Tale of the Tape with accurate team stats display",
+            "Upgraded prop analysis UI - key stats now appear at the top for quick scanning",
+            "Picks now reset at 3am EST instead of midnight (late games stay visible longer)",
+            "Added 'Coming Soon' placeholder on Home when daily picks are generating",
+            "Better college basketball conference filtering for higher quality picks"
+        ]
+    ),
+    ChangelogEntry(
+        version: "1.9",
+        date: "December 22, 2025",
+        type: .improvement,
+        title: "App Performance & Data Accuracy",
+        changes: [
+            "Removed fallback logic - picks now refresh daily (no stale data)",
+            "Removed all debug print statements for cleaner production logs",
+            "Improved data freshness - app shows empty state when no picks exist for current day/week",
+            "Code cleanup - removed 100+ lines of unused fallback code"
+        ]
+    ),
+    ChangelogEntry(
+        version: "1.0.6",
+        date: "December 22, 2025",
+        type: .feature,
+        title: "Gemini 3 Deep Think + Google Search Grounding",
+        changes: [
+            "Migrated all sports to Gemini 3 Deep Think (replaced GPT-5.1)",
+            "Added Google Search Grounding for live context (injuries, weather, roster verification)",
+            "Enhanced NFL injury reporting with duration context (RECENT vs SEASON-LONG)",
+            "Improved QB change detection - now flags when historical records don't apply",
+            "Optimized stat fetching - deduplicated redundant API calls to save costs",
+            "Fixed Perplexity injury parsing bug that assigned players to wrong teams"
+        ]
+    ),
+    ChangelogEntry(
         version: "1.0.5",
         date: "December 18, 2025",
         type: .update,
@@ -122,7 +162,7 @@ let changelogEntries: [ChangelogEntry] = [
             "Initial release of Gary A.I.",
             "Support for 7 sports: NFL, NBA, NCAAF, NCAAB, NHL, MLB, EPL",
             "Daily AI-generated picks with detailed analysis",
-            "GPT-5.1 powered reasoning engine",
+            "Gemini 3 Deep Think powered reasoning engine",
             "Perplexity integration for real-time data",
             "Odds API integration for live betting lines",
             "Free to use - no paywall, no sign-up required"

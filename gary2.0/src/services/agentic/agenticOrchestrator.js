@@ -6,26 +6,12 @@
  * Supports both OpenAI (GPT-5.1) and Gemini (Gemini 3 Deep Think) providers.
  */
 
-import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { toolDefinitions, formatTokenMenu, getTokensForSport } from './tools/toolDefinitions.js';
 import { fetchStats } from './tools/statRouter.js';
 import { getConstitution } from './constitution/index.js';
 import { buildScoutReport } from './scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../ballDontLieService.js';
-
-// Lazy-initialize OpenAI client
-let openai = null;
-function getOpenAI() {
-  if (!openai) {
-    const apiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is required');
-    }
-    openai = new OpenAI({ apiKey });
-  }
-  return openai;
-}
 
 // Lazy-initialize Gemini client
 let gemini = null;
@@ -35,17 +21,14 @@ function getGemini() {
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY environment variable is required');
     }
-    gemini = new GoogleGenerativeAI(apiKey);
+    gemini = new GoogleGenerativeAI(apiKey, "v1beta");
   }
   return gemini;
 }
 
-// Sport-specific provider routing
-// NBA stays on GPT-5.1 (proven, working), everything else uses Gemini 3 Deep Think
+// All sports now use Gemini 3 Deep Think
+// GPT-5.1 no longer needed
 function getProviderForSport(sport) {
-  if (sport === 'basketball_nba') {
-    return 'openai';
-  }
   return 'gemini';
 }
 
@@ -53,7 +36,7 @@ function getModelForProvider(provider) {
   if (provider === 'openai') {
     return process.env.OPENAI_MODEL || 'gpt-5.1';
   }
-  return process.env.GEMINI_MODEL || 'gemini-3-pro-preview'; // Gemini 3 Deep Think
+  return process.env.GEMINI_MODEL || 'gemini-3-pro-preview'; // Gemini 3 Pro for regular picks
 }
 
 // Base configuration - provider/model set dynamically per sport
@@ -62,8 +45,13 @@ const CONFIG = {
   maxTokens: 16000, // Increased to prevent truncation of detailed responses
   // Gemini 3 Deep Think settings
   gemini: {
-    thinkingLevel: 'high', // Deep Think mode - enables advanced reasoning
-    temperature: 1.0, // Recommended for Gemini 3 series
+    temperature: 1.1, // Set between 1.0 and 1.2 for creative picks
+    // Grounding with Google Search - enables live context searches
+    grounding: {
+      enabled: true,
+      dynamicThreshold: 0.3, // Aggressive - search frequently for live data
+      mode: 'MODE_DYNAMIC'   // Only search when model is unsure
+    }
   },
   // OpenAI/GPT-5.1 settings
   openai: {
@@ -80,7 +68,7 @@ const GEMINI_SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
 ];
 
-console.log(`[Orchestrator] Sport-based routing enabled: NBA→GPT-5.1, Others→Gemini 3 Deep Think`);
+console.log(`[Orchestrator] All sports using Gemini 3 Deep Think with Google Search Grounding`);
 
 /**
  * Main entry point - analyze a game and generate a pick
@@ -759,7 +747,7 @@ function buildUserMessage(scoutReport, homeTeam, awayTeam) {
 /**
  * Call Gemini API and return OpenAI-compatible response format
  * Handles message conversion, tool calling, and response transformation
- * Uses Gemini 3 Deep Think with thinking_level: "high"
+ * Uses Gemini 3 Deep Think with thinking_level: "high" and Google Search Grounding
  */
 async function callGemini(messages, tools, modelName = 'gemini-3-pro-preview') {
   const genAI = getGemini();
@@ -776,17 +764,37 @@ async function callGemini(messages, tools, modelName = 'gemini-3-pro-preview') {
     return null;
   }).filter(Boolean);
 
+  // Build tools array
+  // NOTE: Gemini 3 does NOT support google_search + functionDeclarations together
+  // Grounding is handled in the Scout Report phase; main analysis uses function calling only
+  const geminiTools = [];
+  
+  // Add BDL stat functions for Gary's analysis
+  if (functionDeclarations.length > 0) {
+    geminiTools.push({ functionDeclarations });
+    // Can't use grounding when function calling is enabled
+    if (CONFIG.gemini.grounding?.enabled) {
+      console.log(`[Gemini] Note: Grounding disabled in analysis (incompatible with function calling) - handled in Scout Report`);
+    }
+  } else if (CONFIG.gemini.grounding?.enabled) {
+    // Only enable grounding if no function declarations (fallback case)
+    geminiTools.push({
+      google_search: {}
+    });
+    console.log(`[Gemini] Google Search Grounding enabled (no functions)`);
+  }
+
   // Get the model with Gemini 3 Deep Think configuration
   const model = genAI.getGenerativeModel({
     model: modelName,
-    tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
+    tools: geminiTools.length > 0 ? geminiTools : undefined,
     safetySettings: GEMINI_SAFETY_SETTINGS,
     generationConfig: {
       temperature: CONFIG.gemini.temperature,
       maxOutputTokens: CONFIG.maxTokens,
       // Gemini 3 Deep Think - enable high reasoning
       thinkingConfig: {
-        thinkingBudget: 24576 // Allow deep thinking
+        includeThoughts: true
       }
     }
   });
@@ -861,6 +869,26 @@ async function callGemini(messages, tools, modelName = 'gemini-3-pro-preview') {
   // Convert Gemini response to OpenAI-compatible format
   const candidate = response.candidates?.[0];
   const parts = candidate?.content?.parts || [];
+  
+  // Check if Grounding was used - log search queries for transparency
+  const groundingMetadata = candidate?.groundingMetadata;
+  if (groundingMetadata) {
+    const searchQueries = groundingMetadata.webSearchQueries || [];
+    const groundingChunks = groundingMetadata.groundingChunks || [];
+    
+    if (searchQueries.length > 0) {
+      console.log(`[Gemini Grounding] 🔍 Searched for: "${searchQueries.join('", "')}"`);
+    }
+    if (groundingChunks.length > 0) {
+      console.log(`[Gemini Grounding] 📰 Found ${groundingChunks.length} source(s) for context`);
+      // Log first few sources for debugging
+      groundingChunks.slice(0, 3).forEach((chunk, i) => {
+        const title = chunk.web?.title || chunk.retrievedContext?.title || 'Unknown';
+        const uri = chunk.web?.uri || chunk.retrievedContext?.uri || '';
+        console.log(`[Gemini Grounding]    ${i + 1}. ${title} ${uri ? `(${uri.slice(0, 60)}...)` : ''}`);
+      });
+    }
+  }
   
   // Debug: log what we got back
   if (parts.length === 0) {
@@ -975,15 +1003,75 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
     // Check if Gary requested tool calls
     if (message.tool_calls && message.tool_calls.length > 0) {
-      console.log(`[Orchestrator] Gary requested ${message.tool_calls.length} stat(s):`);
+      // Deduplicate tool calls - Gemini sometimes requests the same stat multiple times
+      const seenStats = new Set();
+      const uniqueToolCalls = message.tool_calls.filter(tc => {
+        try {
+          const args = JSON.parse(tc.function.arguments);
+          // Key based on function name + stat identifier (token for fetch_stats, stat_type for player stats)
+          const key = `${tc.function.name}:${args.token || args.stat_type || 'unknown'}`;
+          if (seenStats.has(key)) {
+            return false; // Skip duplicate
+          }
+          seenStats.add(key);
+          return true;
+        } catch {
+          return true; // Keep if can't parse
+        }
+      });
+      
+      const dupeCount = message.tool_calls.length - uniqueToolCalls.length;
+      if (dupeCount > 0) {
+        console.log(`[Orchestrator] Deduplicated ${dupeCount} duplicate stat request(s)`);
+      }
+      
+      console.log(`[Orchestrator] Gary requested ${uniqueToolCalls.length} stat(s):`);
 
-      // Add Gary's message to history
+      // Add Gary's message to history (with all calls for context)
       messages.push(message);
 
-      // Process each tool call
-      for (const toolCall of message.tool_calls) {
+      // Process each unique tool call
+      for (const toolCall of uniqueToolCalls) {
         const args = JSON.parse(toolCall.function.arguments);
         const functionName = toolCall.function.name;
+
+        // Handle fetch_narrative_context tool (storylines, player news, context)
+        if (functionName === 'fetch_narrative_context') {
+          console.log(`  → [NARRATIVE_CONTEXT] for query: "${args.query}"`);
+
+          try {
+            const { perplexityService } = await import('../perplexityService.js');
+            const searchResult = await perplexityService.search(args.query, {
+              temperature: 0.1,
+              maxTokens: 1000
+            });
+
+            if (searchResult?.success && searchResult?.data) {
+              const toolResponse = {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                name: functionName,
+                content: JSON.stringify({
+                  query: args.query,
+                  results: searchResult.data
+                })
+              };
+              messages.push(toolResponse);
+              console.log(`    ✓ Found narrative context (${searchResult.data.length} chars)`);
+            } else {
+              throw new Error('Search failed or returned no data');
+            }
+          } catch (e) {
+            console.error(`    ❌ narrative_context error:`, e.message);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify({ error: `Search failed: ${e.message}. Fall back to other stats.` })
+            });
+          }
+          continue;
+        }
 
         // Handle fetch_nfl_player_stats tool (advanced player stats)
         if (functionName === 'fetch_nfl_player_stats') {
@@ -1110,7 +1198,11 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             const { ballDontLieService } = await import('../ballDontLieService.js');
 
             let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
-            const season = 2024; // 2024-25 season
+            // NHL season: Use starting year of season (e.g., 2025 for 2025-26 season)
+            // Oct (month 9) onwards = new season starts
+            const currentMonth = new Date().getMonth(); // 0-indexed
+            const currentYear = new Date().getFullYear();
+            const season = currentMonth >= 9 ? currentYear : currentYear - 1;
 
             // Get team ID first
             const teams = await ballDontLieService.getTeams('icehockey_nhl');
@@ -1484,7 +1576,31 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
     console.log(`[Orchestrator] Gary finished analysis (${finishReason})`);
 
     // Try to extract JSON from the response
-    const pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport);
+    let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport);
+
+    // If pick is null (invalid rationale), retry once with explicit instruction
+    if (!pick && iteration < maxIterations) {
+      console.log(`[Orchestrator] ⚠️ Invalid or missing rationale - requesting full analysis...`);
+      
+      messages.push({
+        role: 'assistant',
+        content: message.content
+      });
+      
+      messages.push({
+        role: 'user',
+        content: `Your response is missing a complete rationale. Please provide your FULL analysis with:
+1. A complete "TALE OF THE TAPE" comparison
+2. "Gary's Take" section with 3-4 paragraphs explaining your reasoning
+3. Clear discussion of the key stats that support your pick
+4. Acknowledgment of any risks or contradicting factors
+
+Output your complete pick JSON with the full rationale in the "rationale" field. Do NOT use placeholders like "See detailed analysis below" - write the actual analysis.`
+      });
+      
+      iteration++;
+      continue; // Retry
+    }
 
     if (pick) {
       pick.toolCallHistory = toolCallHistory;
@@ -1492,7 +1608,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       pick.rawAnalysis = message.content;
       return pick;
     } else {
-      // If no valid JSON, return the raw analysis
+      // If no valid JSON after retry, return the raw analysis
       return {
         error: 'Could not parse pick from response',
         rawAnalysis: message.content,
@@ -1550,6 +1666,18 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
     };
   }
 
+  // Helper to fix common JSON issues from Gemini
+  const fixJsonString = (jsonStr) => {
+    // Fix 1: Remove + prefix from numeric values (e.g., "+610" -> "610")
+    // This handles cases like "moneylineAway": +610 which is invalid JSON
+    let fixed = jsonStr.replace(/:\s*\+(\d+)/g, ': $1');
+    
+    // Fix 2: Remove stats array if present (can cause parsing issues)
+    fixed = fixed.replace(/"stats"\s*:\s*\[[\s\S]*?\],?/g, '');
+    
+    return fixed;
+  };
+
   // Try to find JSON in the response
   const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonMatch) {
@@ -1559,14 +1687,14 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
       return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
     } catch (e) {
       console.warn('[Orchestrator] Failed to parse JSON from code block:', e.message);
-      // Try to fix common issues - remove stats array if it's causing problems
+      // Try to fix common Gemini JSON issues
       try {
-        const withoutStats = jsonStr.replace(/"stats"\s*:\s*\[[\s\S]*?\],?/g, '');
-        const parsed = JSON.parse(withoutStats);
-        console.log('[Orchestrator] Parsed JSON after removing stats field');
+        const fixedJson = fixJsonString(jsonStr);
+        const parsed = JSON.parse(fixedJson);
+        console.log('[Orchestrator] Parsed JSON after fixing Gemini formatting issues');
         return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
       } catch (e2) {
-        console.warn('[Orchestrator] Still failed after removing stats:', e2.message);
+        console.warn('[Orchestrator] Still failed after fixes:', e2.message);
       }
     }
   }
@@ -1580,14 +1708,14 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
       return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
     } catch (e) {
       console.warn('[Orchestrator] Failed to parse raw JSON:', e.message);
-      // Try to fix common issues
+      // Try to fix common Gemini JSON issues
       try {
-        const withoutStats = jsonStr.replace(/"stats"\s*:\s*\[[\s\S]*?\],?/g, '');
-        const parsed = JSON.parse(withoutStats);
-        console.log('[Orchestrator] Parsed JSON after removing stats field');
+        const fixedJson = fixJsonString(jsonStr);
+        const parsed = JSON.parse(fixedJson);
+        console.log('[Orchestrator] Parsed JSON after fixing Gemini formatting issues');
         return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
       } catch (e2) {
-        console.warn('[Orchestrator] Still failed after removing stats:', e2.message);
+        console.warn('[Orchestrator] Still failed after fixes:', e2.message);
         // Log a snippet of the problematic JSON
         console.log('[Orchestrator] JSON snippet:', jsonStr.substring(0, 500));
       }
@@ -1665,6 +1793,31 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     contradictions.minor = parsed.contradicting_factors;
   }
 
+  // Get rationale and validate it
+  let rationale = parsed.rationale || parsed.analysis || '';
+  
+  // Check for placeholder/invalid rationales - these should NOT happen
+  const invalidRationales = [
+    'see detailed analysis',
+    'see analysis below',
+    'detailed analysis below',
+    'analysis below',
+    'see above',
+    'see below',
+    'tbd',
+    'to be determined'
+  ];
+  
+  const lowerRationale = rationale.toLowerCase().trim();
+  const isInvalidRationale = invalidRationales.some(inv => lowerRationale.includes(inv)) || 
+                             rationale.length < 100; // Must be at least 100 chars for a real analysis
+  
+  // Flag invalid rationales - the retry logic in runAgentLoop will handle this
+  if (isInvalidRationale) {
+    console.log(`[Orchestrator] ⚠️ Invalid rationale detected (length: ${rationale.length}) - will retry`);
+    return null; // Return null to trigger retry
+  }
+
   return {
     pick: pickText.trim(),
     type: parsed.type || 'spread',
@@ -1679,7 +1832,7 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     awayTeam: parsed.awayTeam || awayTeam,
     league: normalizeSportToLeague(sport),
     sport: sport,
-    rationale: parsed.rationale || parsed.analysis || '',
+    rationale: rationale,
     // Include odds from Gary's output
     spread: parsed.spread,
     spreadOdds: parsed.spreadOdds || -110,
