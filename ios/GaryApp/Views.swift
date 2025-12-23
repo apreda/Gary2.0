@@ -657,14 +657,8 @@ struct HomeView: View {
             // Content - respects safe area
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    // Hero Section - Dynamic image based on Gary's performance
-                    VStack(spacing: 4) {
-                        Image(heroImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 200, height: 200)
-                            .shadow(color: heroImageGlow.opacity(0.5), radius: 24)
-                        
+                    // Header - Brand
+                    VStack(spacing: 2) {
                         Text("GARY A.I.")
                             .font(.system(size: 26, weight: .heavy))
                             .tracking(-0.5)
@@ -675,6 +669,13 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(.top, 8)
+                    
+                    // Hero Image - Dynamic based on Gary's performance
+                    Image(heroImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200, height: 200)
+                        .shadow(color: heroImageGlow.opacity(0.5), radius: 24)
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
