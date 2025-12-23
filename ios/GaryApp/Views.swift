@@ -515,9 +515,9 @@ struct PerformanceBanner: View {
                         }
                     }
                     
-                    // Mood Label
+                    // Mood Label - explains the hero image
                     Text(moodLabel)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 17, weight: .heavy))
                         .foregroundStyle(moodGradient)
                 }
                 
