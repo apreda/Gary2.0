@@ -843,3 +843,208 @@ struct StringOrNumber: Decodable {
         }
     }
 }
+
+// MARK: - DFS (Gary's Fantasy) Models
+
+/// Represents a complete DFS lineup for a platform/sport combination
+struct DFSLineup: Identifiable, Decodable {
+    let id: String?
+    let date: String
+    let platform: String  // "draftkings" or "fanduel"
+    let sport: String     // "NBA" or "NFL"
+    let salary_cap: Int
+    let total_salary: Int
+    let projected_points: Double
+    let lineup: [DFSPlayer]
+    let gary_notes: String?
+    
+    var displayId: String { id ?? "\(platform)-\(sport)-\(date)" }
+    
+    /// Formatted salary display (e.g., "$49,700 / $50,000")
+    var salaryDisplay: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.maximumFractionDigits = 0
+        let used = formatter.string(from: NSNumber(value: total_salary)) ?? "$\(total_salary)"
+        let cap = formatter.string(from: NSNumber(value: salary_cap)) ?? "$\(salary_cap)"
+        return "\(used) / \(cap)"
+    }
+    
+    /// Salary remaining under cap
+    var salaryRemaining: Int {
+        salary_cap - total_salary
+    }
+    
+    /// Platform display name
+    var platformDisplayName: String {
+        platform == "draftkings" ? "DraftKings" : "FanDuel"
+    }
+    
+    /// Parse from dictionary
+    static func from(dict: [String: Any]) -> DFSLineup? {
+        guard let date = dict["date"] as? String,
+              let platform = dict["platform"] as? String,
+              let sport = dict["sport"] as? String,
+              let salaryCap = dict["salary_cap"] as? Int,
+              let totalSalary = dict["total_salary"] as? Int,
+              let projectedPoints = dict["projected_points"] as? Double else {
+            return nil
+        }
+        
+        // Parse lineup array
+        var players: [DFSPlayer] = []
+        if let lineupArray = dict["lineup"] as? [[String: Any]] {
+            players = lineupArray.compactMap { DFSPlayer.from(dict: $0) }
+        }
+        
+        return DFSLineup(
+            id: dict["id"] as? String,
+            date: date,
+            platform: platform,
+            sport: sport,
+            salary_cap: salaryCap,
+            total_salary: totalSalary,
+            projected_points: projectedPoints,
+            lineup: players,
+            gary_notes: dict["gary_notes"] as? String
+        )
+    }
+}
+
+/// Represents a single player slot in a DFS lineup
+struct DFSPlayer: Identifiable, Decodable {
+    let position: String      // "QB", "RB", "WR", etc.
+    let player: String        // Player name
+    let team: String          // Team abbreviation
+    let salary: Int           // Salary in dollars
+    let projected_pts: Double // Projected fantasy points
+    let pivots: [DFSPivot]    // Alternative player options
+    
+    var id: String { "\(position)-\(player)-\(team)" }
+    
+    /// Formatted salary (e.g., "$7,800")
+    var salaryFormatted: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
+    }
+    
+    /// Parse from dictionary
+    static func from(dict: [String: Any]) -> DFSPlayer? {
+        guard let position = dict["position"] as? String,
+              let player = dict["player"] as? String,
+              let team = dict["team"] as? String,
+              let salary = dict["salary"] as? Int,
+              let projectedPts = dict["projected_pts"] as? Double else {
+            return nil
+        }
+        
+        // Parse pivots array
+        var pivots: [DFSPivot] = []
+        if let pivotsArray = dict["pivots"] as? [[String: Any]] {
+            pivots = pivotsArray.compactMap { DFSPivot.from(dict: $0) }
+        }
+        
+        return DFSPlayer(
+            position: position,
+            player: player,
+            team: team,
+            salary: salary,
+            projected_pts: projectedPts,
+            pivots: pivots
+        )
+    }
+}
+
+/// Represents a pivot (alternative) player option
+struct DFSPivot: Identifiable, Decodable {
+    let tier: String          // "direct", "mid", "budget"
+    let tierLabel: String?    // "Direct Swap", "Mid Value", "Budget Play"
+    let tierDescription: String? // "Similar ceiling", "Save ~$1K", "Punt spot"
+    let player: String
+    let team: String
+    let salary: Int
+    let projected_pts: Double
+    let salaryDiff: Int?      // Difference from starter's salary
+    
+    var id: String { "\(tier)-\(player)-\(team)" }
+    
+    /// Formatted salary (e.g., "$7,800")
+    var salaryFormatted: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
+    }
+    
+    /// Formatted salary difference (e.g., "+$100" or "-$1,200")
+    var salaryDiffFormatted: String {
+        guard let diff = salaryDiff else { return "" }
+        let sign = diff >= 0 ? "+" : ""
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.maximumFractionDigits = 0
+        if let formatted = formatter.string(from: NSNumber(value: abs(diff))) {
+            return diff >= 0 ? "+\(formatted)" : "-\(formatted)"
+        }
+        return "\(sign)$\(diff)"
+    }
+    
+    /// Display label for the tier
+    var displayLabel: String {
+        tierLabel ?? tier.capitalized
+    }
+    
+    /// Color for tier badge
+    var tierColor: String {
+        switch tier {
+        case "direct": return "#3B82F6" // Blue
+        case "mid": return "#F59E0B"    // Amber
+        case "budget": return "#10B981" // Green
+        default: return "#6B7280"       // Gray
+        }
+    }
+    
+    /// Parse from dictionary
+    static func from(dict: [String: Any]) -> DFSPivot? {
+        guard let tier = dict["tier"] as? String,
+              let player = dict["player"] as? String,
+              let team = dict["team"] as? String,
+              let salary = dict["salary"] as? Int,
+              let projectedPts = dict["projected_pts"] as? Double else {
+            return nil
+        }
+        
+        return DFSPivot(
+            tier: tier,
+            tierLabel: dict["tierLabel"] as? String,
+            tierDescription: dict["tierDescription"] as? String,
+            player: player,
+            team: team,
+            salary: salary,
+            projected_pts: projectedPts,
+            salaryDiff: dict["salaryDiff"] as? Int
+        )
+    }
+}
+
+/// DFS Platform enum for toggle
+enum DFSPlatform: String, CaseIterable {
+    case draftkings = "draftkings"
+    case fanduel = "fanduel"
+    
+    var displayName: String {
+        switch self {
+        case .draftkings: return "DraftKings"
+        case .fanduel: return "FanDuel"
+        }
+    }
+    
+    var abbreviation: String {
+        switch self {
+        case .draftkings: return "DK"
+        case .fanduel: return "FD"
+        }
+    }
+}
