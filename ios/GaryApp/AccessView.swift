@@ -69,7 +69,7 @@ struct AccessView: View {
                         ],
                         spacing: 10
                     ) {
-                        TechChip(icon: "brain.head.profile", text: "GPT 5.1")
+                        TechChip(icon: "brain.head.profile", text: "Gemini 3")
                         TechChip(icon: "arrow.triangle.2.circlepath", text: "Agentic AI")
                         TechChip(icon: "chart.line.uptrend.xyaxis", text: "Odds API")
                         TechChip(icon: "magnifyingglass", text: "Perplexity")

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Supabase API Client
 
@@ -22,13 +23,23 @@ enum SupabaseAPI {
     // MARK: - Date Utilities
     
     /// Current date in EST timezone (YYYY-MM-DD format)
+    /// Picks reset at 3am EST instead of midnight to keep late-night games visible
     static func todayEST() -> String {
-        formatDateEST(Date())
-    }
-    
-    private static func yesterdayEST() -> String {
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-        return formatDateEST(yesterday)
+        guard let tz = TimeZone(identifier: "America/New_York") else { return formatDateEST(Date()) }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        
+        let now = Date()
+        let hour = cal.component(.hour, from: now)
+        
+        // Before 3am EST, show previous day's picks
+        if hour < 3 {
+            if let yesterday = cal.date(byAdding: .day, value: -1, to: now) {
+                return formatDateEST(yesterday)
+            }
+        }
+        
+        return formatDateEST(now)
     }
     
     private static func formatDateEST(_ date: Date) -> String {
@@ -42,11 +53,118 @@ enum SupabaseAPI {
         return String(format: "%04d-%02d-%02d", year, month, day)
     }
     
-    private static func isBefore10amEST() -> Bool {
-        guard let tz = TimeZone(identifier: "America/New_York") else { return false }
+    /// Yesterday's date in EST timezone (YYYY-MM-DD format)
+    static func yesterdayEST() -> String {
+        guard let tz = TimeZone(identifier: "America/New_York") else { return "" }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
-        return cal.component(.hour, from: Date()) < 10
+        
+        let now = Date()
+        if let yesterday = cal.date(byAdding: .day, value: -1, to: now) {
+            return formatDateEST(yesterday)
+        }
+        return formatDateEST(now)
+    }
+    
+    /// Fetch yesterday's game pick record (wins, losses, pushes) - excludes props
+    static func fetchYesterdayGameRecord() async throws -> (wins: Int, losses: Int, pushes: Int) {
+        let yesterday = yesterdayEST()
+        let results = try await fetchAllGameResults(since: yesterday)
+        
+        // Filter to exactly yesterday's date
+        let yesterdayResults = results.filter { $0.game_date == yesterday }
+        
+        var wins = 0
+        var losses = 0
+        var pushes = 0
+        
+        for result in yesterdayResults {
+            switch result.result?.lowercased() {
+            case "won", "win", "w":
+                wins += 1
+            case "lost", "loss", "l":
+                losses += 1
+            case "push", "p":
+                pushes += 1
+            default:
+                break
+            }
+        }
+        
+        return (wins, losses, pushes)
+    }
+    
+    /// Sport record for yesterday's breakdown
+    struct SportRecord: Identifiable {
+        let id = UUID()
+        let league: String
+        let wins: Int
+        let losses: Int
+        let pushes: Int
+        
+        var total: Int { wins + losses }
+        var winRate: Double { total > 0 ? Double(wins) / Double(total) : 0 }
+        
+        var icon: String {
+            switch league.uppercased() {
+            case "NBA": return "basketball.fill"
+            case "NFL": return "football.fill"
+            case "NHL": return "hockey.puck.fill"
+            case "NCAAB": return "basketball.fill"
+            case "NCAAF": return "football.fill"
+            case "EPL": return "soccerball"
+            case "MLB": return "baseball.fill"
+            default: return "sportscourt.fill"
+            }
+        }
+        
+        var color: Color {
+            switch league.uppercased() {
+            case "NBA": return Color(hex: "#3B82F6")
+            case "NFL": return Color(hex: "#22C55E")
+            case "NHL": return Color(hex: "#00A3E0")
+            case "NCAAB": return Color(hex: "#F97316")
+            case "NCAAF": return Color(hex: "#DC2626")
+            case "EPL": return Color(hex: "#8B5CF6")
+            case "MLB": return Color(hex: "#0EA5E9")
+            default: return GaryColors.gold
+            }
+        }
+    }
+    
+    /// Fetch yesterday's game record broken down by sport
+    static func fetchYesterdayBySport() async throws -> [SportRecord] {
+        let yesterday = yesterdayEST()
+        let results = try await fetchAllGameResults(since: yesterday)
+        
+        // Filter to exactly yesterday's date
+        let yesterdayResults = results.filter { $0.game_date == yesterday }
+        
+        // Group by league
+        var sportStats: [String: (wins: Int, losses: Int, pushes: Int)] = [:]
+        
+        for result in yesterdayResults {
+            let league = result.league?.uppercased() ?? "OTHER"
+            var current = sportStats[league] ?? (0, 0, 0)
+            
+            switch result.result?.lowercased() {
+            case "won", "win", "w":
+                current.wins += 1
+            case "lost", "loss", "l":
+                current.losses += 1
+            case "push", "p":
+                current.pushes += 1
+            default:
+                break
+            }
+            
+            sportStats[league] = current
+        }
+        
+        // Convert to SportRecord array, sorted by total games
+        return sportStats.map { league, stats in
+            SportRecord(league: league, wins: stats.wins, losses: stats.losses, pushes: stats.pushes)
+        }.sorted { $0.total > $1.total }
     }
     
     /// Get NFL week start date (Monday) for a given date
@@ -85,6 +203,7 @@ enum SupabaseAPI {
     // MARK: - Daily Picks (Non-NFL sports)
     
     /// Fetch daily picks for a specific date (excludes NFL)
+    /// Returns empty array if no picks exist for the given date - NO FALLBACK
     static func fetchDailyPicks(date: String) async throws -> [GaryPick] {
         let url = buildURL(table: "daily_picks", query: [
             URLQueryItem(name: "select", value: "picks::text,date"),
@@ -95,13 +214,7 @@ enum SupabaseAPI {
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
         
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
-        guard let row = rows.first else {
-            // Fallback to yesterday before 10am EST
-            if isBefore10amEST() {
-                return try await fetchDailyPicks(date: yesterdayEST())
-            }
-            return []
-        }
+        guard let row = rows.first else { return [] }
         
         return parsePicksRow(row.picks)
     }
@@ -109,11 +222,15 @@ enum SupabaseAPI {
     // MARK: - Weekly NFL Picks
     
     /// Fetch NFL picks for the current week
+    /// Gets the most recent week's picks (NFL weeks run Thu-Mon, so Monday games are still previous week)
+    /// Returns empty array if no picks exist - NO FALLBACK
     static func fetchWeeklyNFLPicks() async throws -> [GaryPick] {
-        let weekStart = getNFLWeekStart()
+        let currentYear = Calendar.current.component(.year, from: Date())
         let url = buildURL(table: "weekly_nfl_picks", query: [
             URLQueryItem(name: "select", value: "picks::text,week_start,week_number,season"),
-            URLQueryItem(name: "week_start", value: "eq.\(weekStart)")
+            URLQueryItem(name: "season", value: "eq.\(currentYear)"),
+            URLQueryItem(name: "order", value: "week_start.desc"),
+            URLQueryItem(name: "limit", value: "1")
         ])
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
@@ -125,32 +242,7 @@ enum SupabaseAPI {
             return parsePicksRow(row.picks)
         }
         
-        // Fallback: try previous week on Sunday/Monday
-        return try await fetchPreviousWeekNFLPicks()
-    }
-    
-    private static func fetchPreviousWeekNFLPicks() async throws -> [GaryPick] {
-        guard let tz = TimeZone(identifier: "America/New_York") else { return [] }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = tz
-        
-        let weekday = cal.component(.weekday, from: Date())
-        guard weekday <= 2, // Sunday or Monday
-              let lastWeek = cal.date(byAdding: .day, value: -7, to: Date()) else {
-            return []
-        }
-        
-        let prevWeekStart = getNFLWeekStart(for: lastWeek)
-        let url = buildURL(table: "weekly_nfl_picks", query: [
-            URLQueryItem(name: "select", value: "picks::text,week_start,week_number,season"),
-            URLQueryItem(name: "week_start", value: "eq.\(prevWeekStart)")
-        ])
-        
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
-        let rows = try JSONDecoder().decode([WeeklyNFLPicksRow].self, from: data)
-        return rows.first.map { parsePicksRow($0.picks) } ?? []
+        return []
     }
     
     // MARK: - Combined Picks
@@ -172,6 +264,7 @@ enum SupabaseAPI {
     // MARK: - Prop Picks
     
     /// Fetch prop picks for a specific date
+    /// Returns empty array if no picks exist for the given date - NO FALLBACK
     static func fetchPropPicks(date: String) async throws -> [PropPick] {
         let url = buildURL(table: "prop_picks", query: [
             URLQueryItem(name: "select", value: "*"),
@@ -211,62 +304,6 @@ enum SupabaseAPI {
             }
         }
         
-        // If no picks for today, try fallback
-        if allPicks.isEmpty {
-            if isBefore10amEST() {
-                return try await fetchPropPicks(date: yesterdayEST())
-            }
-            return try await fetchLatestPropPicks()
-        }
-        
-        print("PropPicks: Loaded \(allPicks.count) picks for \(date)")
-        return allPicks
-    }
-    
-    private static func fetchLatestPropPicks() async throws -> [PropPick] {
-        let url = buildURL(table: "prop_picks", query: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "date.desc"),
-            URLQueryItem(name: "limit", value: "10")
-        ])
-        
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
-        // Parse as array of dictionaries to get row-level league
-        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        
-        var allPicks: [PropPick] = []
-        
-        for row in jsonArray {
-            let rowLeague = row["league"] as? String
-            
-            // Get picks from the row
-            var picksData: [[String: Any]] = []
-            if let picksArray = row["picks"] as? [[String: Any]] {
-                picksData = picksArray
-            } else if let picksString = row["picks"] as? String,
-                      let data = picksString.data(using: .utf8),
-                      let parsed = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                picksData = parsed
-            }
-            
-            // Parse each pick, inheriting league from row if not in pick
-            for var pickDict in picksData {
-                if pickDict["league"] == nil && pickDict["sport"] == nil {
-                    pickDict["league"] = rowLeague
-                }
-                if let pick = PropPick.from(dict: pickDict) {
-                    allPicks.append(pick)
-                }
-            }
-            
-            // Return as soon as we have picks
-            if !allPicks.isEmpty {
-                return allPicks
-            }
-        }
-        
         return allPicks
     }
     
@@ -287,16 +324,12 @@ enum SupabaseAPI {
         let url = buildURL(table: "game_results", query: query)
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            print("GameResults fetch failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
         
         let decoder = JSONDecoder()
         do {
             return try decoder.decode([GameResult].self, from: data)
         } catch {
-            print("GameResults decode error: \(error)")
             return []
         }
     }
@@ -316,10 +349,7 @@ enum SupabaseAPI {
         let url = buildURL(table: "nfl_results", query: query)
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            print("NFLResults fetch failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
         
         let decoder = JSONDecoder()
         do {
@@ -327,7 +357,6 @@ enum SupabaseAPI {
             // Convert to GameResult for unified display
             return nflResults.map { $0.toGameResult() }
         } catch {
-            print("NFLResults decode error: \(error)")
             return []
         }
     }
@@ -360,21 +389,12 @@ enum SupabaseAPI {
         let url = buildURL(table: "prop_results", query: query)
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            print("PropResults fetch failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
-        
-        // Debug: print raw response
-        if let jsonStr = String(data: data, encoding: .utf8) {
-            print("PropResults raw response (first 500 chars): \(String(jsonStr.prefix(500)))")
-        }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
         
         let decoder = JSONDecoder()
         do {
             return try decoder.decode([PropResult].self, from: data)
         } catch {
-            print("PropResults decode error: \(error)")
             return []
         }
     }

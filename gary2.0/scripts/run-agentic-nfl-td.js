@@ -17,8 +17,9 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 // Dynamic imports after env is loaded
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
-const { openaiService } = await import('../src/services/openaiService.js');
+const { openaiService, GEMINI_FLASH_MODEL } = await import('../src/services/openaiService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
+const { fetchGroundedContext } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -82,7 +83,7 @@ function getBalancedOptions(props, maxPerGame = 8, totalMax = 80) {
 /**
  * Run Gary's TD Scorer Analysis
  */
-async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups) {
+async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups, narrativeContext = '') {
   // Split into standard odds and underdog odds (+200 or better)
   const standardTDs = allTDProps.filter(p => p.odds < 200);
   const underdogTDs = allTDProps.filter(p => p.odds >= 200);
@@ -207,7 +208,8 @@ IMPORTANT:
       odds: p.odds,
       matchup: p.matchup
     })),
-    player_context: playerStats.substring(0, 5000)  // Increased context size
+    player_context: playerStats.substring(0, 5000),  // Player stats from BDL
+    live_context: narrativeContext.substring(0, 3000)  // Live narrative from Gemini Grounding
   });
 
   const messages = [
@@ -215,9 +217,10 @@ IMPORTANT:
     { role: 'user', content: userContent }
   ];
 
-  console.log(`\n🤖 Gary analyzing TD scorers...`);
+  console.log(`\n🤖 Gary analyzing TD scorers (using Flash)...`);
   
   const raw = await openaiService.generateResponse(messages, {
+    model: GEMINI_FLASH_MODEL, // Use Flash for TD props (high volume)
     temperature: 0.5,
     maxTokens: 2500
   });
@@ -241,11 +244,13 @@ async function main() {
   const args = parseArgs();
   const shouldStore = args.store === '1' || args.store === 'true';
   const nocache = args.nocache === '1';
+  const matchupFilter = args.matchup || null; // Filter for specific matchup (e.g., "49ers")
 
   console.log(`\n🏈 NFL Touchdown Scorer Picks`);
   console.log(`${'='.repeat(50)}`);
   console.log(`📅 Date: ${getESTDate()}`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}`);
+  if (matchupFilter) console.log(`🎯 Matchup Filter: ${matchupFilter}`);
   console.log(`${'='.repeat(50)}\n`);
 
   // Fetch NFL games
@@ -253,12 +258,23 @@ async function main() {
   const now = Date.now();
   const windowMs = 7 * 24 * 60 * 60 * 1000; // 7 days for NFL
 
-  const filteredGames = games
+  let filteredGames = games
     .filter(g => {
       const tip = new Date(g.commence_time).getTime();
       return !Number.isNaN(tip) && tip > now && tip <= now + windowMs;
-    })
-    .slice(0, 10);
+    });
+  
+  // Apply matchup filter if specified (e.g., --matchup="49ers")
+  if (matchupFilter) {
+    const lowerFilter = matchupFilter.toLowerCase();
+    filteredGames = filteredGames.filter(g => 
+      g.home_team.toLowerCase().includes(lowerFilter) ||
+      g.away_team.toLowerCase().includes(lowerFilter)
+    );
+    console.log(`🎯 Filtered to ${filteredGames.length} game(s) matching "${matchupFilter}"`);
+  }
+  
+  filteredGames = filteredGames.slice(0, 10);
 
   console.log(`Found ${filteredGames.length} NFL games.\n`);
 
@@ -335,14 +351,28 @@ async function main() {
   console.log(`\n🏈 Games to analyze: ${gameMatchups.length}`);
   gameMatchups.forEach((m, i) => console.log(`   ${i + 1}. ${m}`));
 
-  // Get player stats for context (from ALL games, not just first 3)
+  // Get player stats AND narrative context for each game
+  let narrativeContext = '';
   try {
     const { formatNFLPlayerStats } = await import('../src/services/nflPlayerPropsService.js');
-    console.log(`\n📊 Fetching player stats from all ${filteredGames.length} games...`);
+    console.log(`\n📊 Fetching player stats and narrative context from all ${filteredGames.length} games...`);
+    
     for (const game of filteredGames) {
+      const matchupLabel = `${game.away_team} @ ${game.home_team}`;
       try {
+        // Fetch player stats
         const stats = await formatNFLPlayerStats(game.home_team, game.away_team);
-        playerStats += `\n=== ${game.away_team} @ ${game.home_team} ===\n${stats}\n`;
+        playerStats += `\n=== ${matchupLabel} ===\n${stats}\n`;
+        
+        // Fetch narrative context via Gemini Grounding (using Flash for props)
+        const dateStr = new Date(game.commence_time).toLocaleDateString('en-US', { 
+          month: 'long', day: 'numeric', year: 'numeric' 
+        });
+        const grounded = await fetchGroundedContext(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(() => null);
+        if (grounded?.groundedRaw) {
+          narrativeContext += `\n=== ${matchupLabel} - Live Context ===\n${grounded.groundedRaw.substring(0, 1500)}\n`;
+          console.log(`   ✅ Got narrative context for ${matchupLabel}`);
+        }
       } catch (e) {
         // Continue if one game fails
       }
@@ -351,8 +381,8 @@ async function main() {
     console.warn('Could not fetch player stats:', e.message);
   }
 
-  // Run Gary's analysis with game matchups for diversity
-  const result = await runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups);
+  // Run Gary's analysis with game matchups and narrative context
+  const result = await runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups, narrativeContext);
 
   if (!result) {
     console.error('❌ Failed to get TD picks from Gary');

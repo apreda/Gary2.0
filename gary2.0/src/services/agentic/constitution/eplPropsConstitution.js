@@ -98,7 +98,22 @@ Key factors for corners taken:
 7. **Derby matches**: More intense = more tackles, cards, shots
 8. **European hangover**: Midweek CL/EL = fatigue in weekend games
 9. **Time on pitch**: Check for recent substitutions and minute loads
-10. **Injury returns**: Players returning may be on limited minutes
+10. **Injury returns**: Players returning may be on limited minutes. **CRITICAL**: Only use **RECENT** injuries as ripple factors. If a teammate has been out all season, the target player's stats/usage already reflect his increased role.
+
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (OUT all/most of season)** = Player and team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to take a prop. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors.
+  → Example: If the star striker has been out since August, the winger's assist stats/xG per 90 ALREADY reflect his absence. Citing it as a reason for an UNDER is a mistake.
+- **RECENT injuries (last 1-2 matches)** = REAL EDGE.
+  → The ripple effect (e.g., more usage for others) is NOT yet fully reflected in long-term stats.
+  → This is where the value is.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as factors that might cause variance or create edges.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your analysis must focus on the players who are ACTUALLY playing.
 
 ### EPL PROP-SPECIFIC ODDS VALUE
 
@@ -122,12 +137,6 @@ These are the 2 picks you'd put your REPUTATION on. Quality over quantity.
 - Pick more than 2 props per game
 - Pick fewer than 2 props per game (unless absolutely no valid props exist)
 - Pick props just to fill the quota - be selective
-
-### CONFIDENCE CALIBRATION
-
-- 75%+ confidence: Strong xG edge + lineup confirmed + home advantage
-- 65-74% confidence: Good matchup, minor rotation concerns
-- 55-64% confidence: Slight edge, lineup uncertainty
 
 ### RED FLAGS - WHEN TO PASS
 

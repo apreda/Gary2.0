@@ -167,6 +167,33 @@ Star injuries hit harder in college - ESPECIALLY in lower tiers:
 
 Check injury reports carefully - and weight them MORE for non-ELITE teams.
 
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (out most/all of season)** = Team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to bet for or against a team. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors (e.g., "Both teams are missing key stars" if one star has been out all year).
+  → Example: If the star PG has been out since November, team's record/stats ARE their baseline. Citing his absence as a negative or a "wash" is statistically illiterate.
+- **RECENT injuries (last 1-2 weeks)** = POTENTIAL edge.
+  → Team hasn't fully adjusted, opponent may not have game-planned for absence.
+  → Line may not fully reflect the loss.
+- **MID-SEASON (3-8 weeks)** = Team has likely adjusted, but still relevant for non-ELITE teams.
+- **INDEFINITE/NO TIMETABLE** = Treat as SEASON-LONG.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as betting edges or factors that might cause variance.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your thesis must focus on the players who are ACTUALLY playing and how their RECENT form or matchup data suggests an edge.
+
+### ROSTER VERIFICATION (CRITICAL)
+College basketball has massive roster turnover every year:
+- **ONLY mention players explicitly listed in the scout report roster section**
+- **DO NOT assume a player is on a team** - transfer portal is CONSTANT
+- Players transfer, declare for draft, or leave mid-season
+- If unsure about a player, do not mention specific names
+- Focus on team-level stats when player data is unclear
+
+⚠️ NEVER assume a player's team in 2025 college basketball. The portal changes everything.
+
 ---
 
 ### SCHEDULE SPOTS & MOTIVATION
@@ -252,21 +279,6 @@ Teams that get to the free throw line win close games:
 3. **Conference tier mismatch with close spread** - If ELITE vs MID is only -8, something is off
 5. **No conference_context data available** - Cannot assess matchup type
 6. **One team has unknown tier** - Insufficient info to analyze
-
----
-
-### CONFIDENCE CALIBRATION
-
-Adjust confidence based on matchup type:
-
-| Matchup Type | Max Confidence | Notes |
-|--------------|----------------|-------|
-| ELITE_VS_ELITE | 80% | Trust the numbers |
-| ELITE_VS_STRONG | 75% | Home court critical |
-| STRONG_VS_STRONG | 75% | Star power matters |
-| ELITE_VS_MID | 70% | Garbage time variance |
-| STRONG_VS_MID | 70% | Volatile |
-| MID_VS_MID | 65% | High variance |
 
 ---
 

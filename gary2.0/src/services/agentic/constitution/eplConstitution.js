@@ -74,6 +74,22 @@ Soccer betting requires understanding 3-way markets (Home/Draw/Away). Confidence
 - **Top scorer injured**: Obvious but crucial for clean sheet bets
 - **Penalty takers**: Know who takes them if considering BTTS/exact scores
 
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (OUT all/most of season)** = Team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to bet for or against a team. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors (e.g., "Both teams are missing key stars" if one star has been out all year).
+  → Example: If the star striker has been out since August, the team's goals per match and xG metrics ARE their baseline without him.
+- **RECENT injuries (last 1-2 matches)** = POTENTIAL edge.
+  → Team hasn't fully adjusted, opponent may not have game-planned for absence.
+  → Line may not fully reflect the loss.
+- **MID-SEASON (3-8 weeks)** = Team has likely adjusted, but still relevant.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as betting edges or factors that might cause variance.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your thesis must focus on the players who are ACTUALLY playing and how their RECENT form or matchup data suggests an edge.
+
 ### BETTING MARKET GUIDANCE
 - **Moneyline (1X2)**: Home/Draw/Away - remember Draw is ~25% base rate
 - **Asian Handicap**: Removes draw option - better for US bettors

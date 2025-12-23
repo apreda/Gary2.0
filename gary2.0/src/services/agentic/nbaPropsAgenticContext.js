@@ -14,6 +14,7 @@
 import { ballDontLieService } from '../ballDontLieService.js';
 import { perplexityService } from '../perplexityService.js';
 import { formatGameTimeEST, buildMarketSnapshot, parseGameDate } from './sharedUtils.js';
+import { fetchGroundedContext } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'basketball_nba';
 
@@ -50,31 +51,48 @@ function groupPropsByPlayer(props) {
 
 /**
  * Get top prop candidates based on line value and odds quality
+ * LIMITED: Only top 7 players per team to reduce API token usage
  */
-function getTopPropCandidates(props, maxPlayers = 15) {
+function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
   const grouped = groupPropsByPlayer(props);
   
   // Score each player by number of props and odds quality
+  // NOTE: No bias toward any specific prop type - Gary decides organically
   const scored = grouped.map(player => {
     const avgOdds = player.props.reduce((sum, p) => {
       const odds = p.over_odds || p.under_odds || -110;
       return sum + odds;
     }, 0) / player.props.length;
     
-    // Prioritize players with points props (most common)
-    const hasPointsProp = player.props.some(p => 
-      p.type === 'points' || p.type?.includes('points')
-    );
+    // Prop variety bonus - reward players with multiple prop types available
+    const uniquePropTypes = new Set(player.props.map(p => p.type)).size;
     
     return {
       ...player,
-      score: player.props.length * 10 + (avgOdds > -110 ? 20 : 0) + (hasPointsProp ? 15 : 0)
+      score: player.props.length * 10 + (avgOdds > -110 ? 20 : 0) + (uniquePropTypes * 5)
     };
   });
   
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxPlayers);
+  // Group by team and take top N from each
+  const byTeam = {};
+  for (const player of scored) {
+    const team = player.team || 'Unknown';
+    if (!byTeam[team]) byTeam[team] = [];
+    byTeam[team].push(player);
+  }
+  
+  // Sort each team's players and take top N
+  const result = [];
+  for (const team of Object.keys(byTeam)) {
+    const teamPlayers = byTeam[team]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxPlayersPerTeam);
+    result.push(...teamPlayers);
+  }
+  
+  console.log(`[NBA Props] Filtered to top ${maxPlayersPerTeam} players per team: ${result.length} total candidates`);
+  
+  return result.sort((a, b) => b.score - a.score);
 }
 
 /**
@@ -95,49 +113,78 @@ function formatPropsInjuries(injuries = []) {
 
 /**
  * Resolve player IDs from prop data or by searching BDL
+ * CRITICAL: Also stores player's actual team to prevent wrong team assignment
+ * Returns: { playerName: { id, team } }
  */
-async function resolvePlayerIds(propCandidates, teamIds, season) {
-  const playerIdMap = {}; // name -> id
+async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, awayTeamName) {
+  const playerIdMap = {}; // name -> { id, team }
   
-  // First, collect any player_ids already in the props
-  for (const candidate of propCandidates) {
-    if (candidate.playerId) {
-      playerIdMap[candidate.player.toLowerCase()] = candidate.playerId;
-    }
-  }
+  // CRITICAL: Do NOT trust pre-populated playerId from Odds API
+  // Always verify against BDL roster to prevent players from other teams slipping through
+  // E.g., De'Aaron Fox (Kings) should not appear in OKC @ SAS game props
   
-  // For players without IDs, try to resolve via BDL players endpoint
-  const unresolvedNames = propCandidates
-    .filter(c => !playerIdMap[c.player.toLowerCase()])
-    .map(c => c.player);
+  // Get all player names - we'll validate ALL of them against the roster
+  const allPlayerNames = propCandidates.map(c => c.player);
   
-  if (unresolvedNames.length > 0 && teamIds.length > 0) {
+  if (allPlayerNames.length > 0 && teamIds.length > 0) {
     try {
-      // Fetch players for these teams
+      // Fetch players for ONLY these two teams - this is our source of truth
       const playersResponse = await ballDontLieService.getPlayersGeneric(SPORT_KEY, {
         team_ids: teamIds,
         per_page: 100
       }).catch(() => []);
       
-      // Match by name (case-insensitive)
+      // Build team ID to name mapping
+      const teamIdToName = {};
+      if (teamIds[0]) teamIdToName[teamIds[0]] = homeTeamName;
+      if (teamIds[1]) teamIdToName[teamIds[1]] = awayTeamName;
+      
+      // Build a lookup from BDL roster - these are the ONLY valid players
+      const bdlRoster = new Map();
       for (const player of playersResponse) {
         const fullName = player.full_name || `${player.first_name} ${player.last_name}`;
         const normalizedName = fullName.toLowerCase().trim();
+        const lastName = (player.last_name || '').toLowerCase().trim();
+        const playerTeamId = player.team?.id || player.team_id;
+        const playerTeam = teamIdToName[playerTeamId] || player.team?.full_name || 'Unknown';
         
-        for (const unresolvedName of unresolvedNames) {
-          const candidateNormalized = unresolvedName.toLowerCase().trim();
-          if (normalizedName === candidateNormalized ||
-              normalizedName.includes(candidateNormalized) ||
-              candidateNormalized.includes(normalizedName)) {
-            playerIdMap[unresolvedName.toLowerCase()] = player.id;
+        bdlRoster.set(normalizedName, { id: player.id, team: playerTeam });
+        // Also store by last name for fuzzy matching
+        if (lastName && !bdlRoster.has(lastName)) {
+          bdlRoster.set(lastName, { id: player.id, team: playerTeam });
+        }
+      }
+      
+      // Match prop candidates against BDL roster
+      for (const candidateName of allPlayerNames) {
+        const candidateNormalized = candidateName.toLowerCase().trim();
+        
+        // Try exact match first
+        if (bdlRoster.has(candidateNormalized)) {
+          playerIdMap[candidateNormalized] = bdlRoster.get(candidateNormalized);
+          continue;
+        }
+        
+        // Try substring match against roster
+        for (const [rosterName, playerData] of bdlRoster) {
+          if (rosterName === candidateNormalized ||
+              rosterName.includes(candidateNormalized) ||
+              candidateNormalized.includes(rosterName)) {
+            playerIdMap[candidateNormalized] = playerData;
             break;
           }
         }
       }
       
-      console.log(`[NBA Props Context] Resolved ${Object.keys(playerIdMap).length}/${propCandidates.length} player IDs`);
+      console.log(`[NBA Props Context] Validated ${Object.keys(playerIdMap).length}/${allPlayerNames.length} players against ${homeTeamName} + ${awayTeamName} roster`);
+      
+      // Log players that aren't on either team (will be filtered out)
+      const invalidPlayers = allPlayerNames.filter(name => !playerIdMap[name.toLowerCase()]);
+      if (invalidPlayers.length > 0) {
+        console.log(`[NBA Props Context] ⚠️ FILTERED OUT ${invalidPlayers.length} players NOT on ${homeTeamName} or ${awayTeamName}: ${invalidPlayers.slice(0, 5).join(', ')}${invalidPlayers.length > 5 ? '...' : ''}`);
+      }
     } catch (e) {
-      console.warn('[NBA Props Context] Failed to resolve player IDs:', e.message);
+      console.warn('[NBA Props Context] Failed to validate player roster:', e.message);
     }
   }
   
@@ -148,7 +195,8 @@ async function resolvePlayerIds(propCandidates, teamIds, season) {
  * Fetch season stats for all prop candidates
  */
 async function fetchPlayerSeasonStats(playerIdMap, season) {
-  const playerIds = Object.values(playerIdMap).filter(id => id);
+  // Extract just the IDs from the playerIdMap (now stores { id, team })
+  const playerIds = Object.values(playerIdMap).map(p => p?.id || p).filter(id => id);
   
   if (playerIds.length === 0) {
     console.warn('[NBA Props Context] No player IDs to fetch stats for');
@@ -172,7 +220,8 @@ async function fetchPlayerSeasonStats(playerIdMap, season) {
  * Includes consistency metrics, home/away splits, and recent form
  */
 async function fetchPlayerGameLogs(playerIdMap) {
-  const playerIds = Object.values(playerIdMap).filter(id => id);
+  // Extract just the IDs from the playerIdMap (now stores { id, team })
+  const playerIds = Object.values(playerIdMap).map(p => p?.id || p).filter(id => id);
   
   if (playerIds.length === 0) {
     console.warn('[NBA Props Context] No player IDs to fetch game logs for');
@@ -300,22 +349,26 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
         statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
         
-        // Add recent form if available
+        // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
-          statsText += `  Recent PTS: ${formatRecentGames(logs, 'pts')}\n`;
           
-          // Consistency scores (higher = more reliable)
+          // Show recent games for ALL prop types - no bias toward any stat
+          statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}]\n`;
+          
+          // Consistency scores for ALL stat types - Gary decides which matters
           if (logs.consistency) {
-            const ptsConsistency = parseFloat(logs.consistency.pts);
-            const consistencyLabel = ptsConsistency >= 0.7 ? 'HIGH' : ptsConsistency >= 0.5 ? 'MED' : 'LOW';
-            statsText += `  Consistency: ${consistencyLabel} (${(ptsConsistency * 100).toFixed(0)}%)\n`;
+            const ptsC = logs.consistency.pts ? (parseFloat(logs.consistency.pts) * 100).toFixed(0) : 'N/A';
+            const rebC = logs.consistency.reb ? (parseFloat(logs.consistency.reb) * 100).toFixed(0) : 'N/A';
+            const astC = logs.consistency.ast ? (parseFloat(logs.consistency.ast) * 100).toFixed(0) : 'N/A';
+            statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}%\n`;
           }
           
-          // Home/Away splits if available
+          // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
-            statsText += `  Splits: Home ${logs.splits.home.pts} PPG (${logs.splits.home.games}g) | Away ${logs.splits.away.pts} PPG (${logs.splits.away.games}g)\n`;
+            statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST (${logs.splits.home.games}g)\n`;
+            statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST (${logs.splits.away.games}g)\n`;
           }
         }
         
@@ -344,22 +397,26 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
         statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
         
-        // Add recent form if available
+        // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
-          statsText += `  Recent PTS: ${formatRecentGames(logs, 'pts')}\n`;
           
-          // Consistency scores
+          // Show recent games for ALL prop types - no bias toward any stat
+          statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}]\n`;
+          
+          // Consistency scores for ALL stat types - Gary decides which matters
           if (logs.consistency) {
-            const ptsConsistency = parseFloat(logs.consistency.pts);
-            const consistencyLabel = ptsConsistency >= 0.7 ? 'HIGH' : ptsConsistency >= 0.5 ? 'MED' : 'LOW';
-            statsText += `  Consistency: ${consistencyLabel} (${(ptsConsistency * 100).toFixed(0)}%)\n`;
+            const ptsC = logs.consistency.pts ? (parseFloat(logs.consistency.pts) * 100).toFixed(0) : 'N/A';
+            const rebC = logs.consistency.reb ? (parseFloat(logs.consistency.reb) * 100).toFixed(0) : 'N/A';
+            const astC = logs.consistency.ast ? (parseFloat(logs.consistency.ast) * 100).toFixed(0) : 'N/A';
+            statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}%\n`;
           }
           
-          // Home/Away splits
+          // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
-            statsText += `  Splits: Home ${logs.splits.home.pts} PPG (${logs.splits.home.games}g) | Away ${logs.splits.away.pts} PPG (${logs.splits.away.games}g)\n`;
+            statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST (${logs.splits.home.games}g)\n`;
+            statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST (${logs.splits.away.games}g)\n`;
           }
         }
         
@@ -476,19 +533,49 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
-  // Process prop candidates first
-  const propCandidates = getTopPropCandidates(playerProps, 15);
+  // Process prop candidates first - limit to top 7 players per team
+  const propCandidates = getTopPropCandidates(playerProps, 7);
   
-  // Parallel fetch: injuries and player ID resolution
-  const [injuries, playerIdMap] = await Promise.all([
+  // Parallel fetch: injuries, player IDs, AND narrative context via Gemini Grounding
+  console.log('[NBA Props Context] Fetching injuries, player IDs, and narrative context...');
+  const [injuries, playerIdMap, groundedContext] = await Promise.all([
     // Injuries from BDL
     teamIds.length > 0 
       ? ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5).catch(() => [])
       : Promise.resolve([]),
     
-    // Resolve player IDs from BDL
-    resolvePlayerIds(propCandidates, teamIds, season)
+    // Resolve player IDs from BDL - also validates players are on one of the two teams
+    resolvePlayerIds(propCandidates, teamIds, season, game.home_team, game.away_team),
+    
+    // NARRATIVE CONTEXT via Gemini Grounding - Critical for props like "Zion off bench", "Cooper Flagg rise"
+    // Use Flash model for props to avoid Pro quota issues
+    fetchGroundedContext(game.home_team, game.away_team, 'NBA', dateStr, { useFlash: true }).catch(e => {
+      console.warn('[NBA Props Context] Gemini Grounding failed:', e.message);
+      return null;
+    })
   ]);
+  
+  // Extract narrative context for props
+  const narrativeContext = groundedContext?.groundedRaw || null;
+  if (narrativeContext) {
+    console.log(`[NBA Props Context] ✓ Got narrative context (${narrativeContext.length} chars) from Gemini Grounding`);
+  }
+  
+  // CRITICAL: Filter prop candidates to only include players verified on either team
+  // This prevents players like "Anthony Davis" from appearing in DAL @ NOP props
+  const validatedCandidates = propCandidates.filter(c => {
+    const playerData = playerIdMap[c.player.toLowerCase()];
+    if (playerData) {
+      // Update the candidate's team with verified team from BDL
+      c.team = playerData.team;
+      return true;
+    }
+    return false; // Filter out players not on either team
+  });
+  
+  if (validatedCandidates.length < propCandidates.length) {
+    console.log(`[NBA Props Context] Validated ${validatedCandidates.length}/${propCandidates.length} players (filtered out players not on ${game.away_team} or ${game.home_team})`);
+  }
 
   // NOW fetch player season stats AND game logs in parallel (requires player IDs)
   console.log('[NBA Props Context] Fetching BDL player season stats and game logs...');
@@ -497,10 +584,10 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     fetchPlayerGameLogs(playerIdMap)
   ]);
   
-  // Log stats coverage
+  // Log stats coverage (use validated candidates)
   const playersWithStats = Object.keys(playerSeasonStats).length;
   const playersWithLogs = Object.keys(playerGameLogs).length;
-  const totalCandidates = propCandidates.length;
+  const totalCandidates = validatedCandidates.length;
   console.log(`[NBA Props Context] Player stats coverage: ${playersWithStats}/${totalCandidates} players`);
   console.log(`[NBA Props Context] Player game logs coverage: ${playersWithLogs}/${totalCandidates} players`);
 
@@ -517,25 +604,26 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   );
 
   // Build player stats text with REAL player data and recent form
+  // Use validatedCandidates which only includes players on either team
   const playerStats = buildPlayerStatsText(
     game.home_team,
     game.away_team,
-    propCandidates,
+    validatedCandidates,
     playerSeasonStats,
     playerIdMap,
     formattedInjuries,
-    playerGameLogs // NEW: Pass game logs for recent form
+    playerGameLogs // Pass game logs for recent form
   );
 
   // Build token data with enhanced player info and game logs
   const tokenData = buildPropsTokenSlices(
     playerStats,
-    propCandidates,
+    validatedCandidates,
     formattedInjuries,
     marketSnapshot,
     playerSeasonStats,
     playerIdMap,
-    playerGameLogs // NEW: Pass game logs
+    playerGameLogs // Pass game logs
   );
 
   // Build game summary with B2B info
@@ -553,7 +641,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
       moneyline: marketSnapshot.moneyline
     },
     propCount: playerProps.length,
-    topCandidates: propCandidates.map(p => p.player).slice(0, 6),
+    topCandidates: validatedCandidates.map(p => p.player).slice(0, 6),
     playerStatsAvailable: playersWithStats > 0,
     // B2B detection - important for fatigue impact on props
     backToBack: {
@@ -563,26 +651,29 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   };
 
   console.log(`[NBA Props Context] ✓ Built context:`);
-  console.log(`   - ${propCandidates.length} player candidates`);
+  console.log(`   - ${validatedCandidates.length} player candidates (verified on team)`);
   console.log(`   - ${playersWithStats} players with season stats`);
   console.log(`   - ${playersWithLogs} players with game logs`);
   console.log(`   - ${formattedInjuries.length} injuries`);
+  console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
 
   return {
     gameSummary,
     tokenData,
     playerProps,
-    propCandidates,
+    propCandidates: validatedCandidates, // Only return validated players on either team
     playerStats,
     playerSeasonStats,
-    playerGameLogs, // NEW: Include game logs in return
+    playerGameLogs, // Include game logs in return
+    narrativeContext, // CRITICAL: Gemini Grounding context (e.g., Zion off bench, Cooper Flagg rise)
     meta: {
       homeTeam: homeTeam?.full_name || game.home_team,
       awayTeam: awayTeam?.full_name || game.away_team,
       season,
       gameTime: game.commence_time,
       playerStatsCoverage: `${playersWithStats}/${totalCandidates}`,
-      playerLogsCoverage: `${playersWithLogs}/${totalCandidates}` // NEW
+      playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,
+      hasNarrativeContext: !!narrativeContext
     }
   };
 }

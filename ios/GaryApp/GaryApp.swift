@@ -25,19 +25,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
     
     private func requestNotificationPermissions(_ application: UIApplication) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if let error = error {
-                print("Error requesting notification permissions: \(error)")
-                return
-            }
-            
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
             if granted {
                 DispatchQueue.main.async {
                     application.registerForRemoteNotifications()
                 }
-                print("Notification permissions granted")
-            } else {
-                print("Notification permissions denied")
             }
         }
     }
@@ -48,23 +40,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         // Pass device token to Firebase
         Messaging.messaging().apnsToken = deviceToken
-        
-        let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
-        print("APNs device token: \(tokenString)")
     }
     
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("Failed to register for remote notifications: \(error)")
+        // Silent fail - push notifications won't work but app continues
     }
     
     // MARK: - MessagingDelegate
     
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        print("FCM registration token: \(token)")
         
-        // Send token to your backend
+        // Send token to backend
         Task {
             await sendTokenToBackend(token)
         }
@@ -72,9 +60,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     private func sendTokenToBackend(_ token: String) async {
         // Store token in Supabase for sending push notifications
-        // Use upsert semantics via PostgREST:
-        // - Prefer: resolution=merge-duplicates
-        // - on_conflict=device_token (unique constraint)
         guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/push_tokens?on_conflict=device_token") else { return }
         
         var request = URLRequest(url: url)
@@ -92,19 +77,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (_, response) = try await URLSession.shared.data(for: request)
-            
-            if let httpResponse = response as? HTTPURLResponse {
-                // 200/201: inserted or updated (upsert)
-                // 409: token already exists (defensive, in case upsert isn't applied somewhere)
-                if httpResponse.statusCode == 201 || httpResponse.statusCode == 200 || httpResponse.statusCode == 409 {
-                    print("Successfully registered push token with backend")
-                } else {
-                    print("Failed to register push token: HTTP \(httpResponse.statusCode)")
-                }
-            }
+            _ = try await URLSession.shared.data(for: request)
         } catch {
-            print("Error sending token to backend: \(error)")
+            // Silent fail - token registration failed but app continues
         }
     }
     
@@ -122,12 +97,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        let userInfo = response.notification.request.content.userInfo
-        print("User tapped notification: \(userInfo)")
-        
         // Handle deep linking or navigation based on notification data
-        // You can add custom logic here to navigate to specific screens
-        
+        // Future: Add custom logic here to navigate to specific screens
         completionHandler()
     }
 }

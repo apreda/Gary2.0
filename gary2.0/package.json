@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",
+    "@google/generative-ai": "^0.24.1",
     "@react-spring/three": "^9.7.5",
     "@react-three/drei": "^9.88.7",
     "@react-three/fiber": "^9.1.2",

@@ -535,6 +535,15 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'EXPLOSIVENESS': 'Big Plays',
                 'HAVOC_RATE': 'Havoc Rate',
                 'HAVOC_ALLOWED': 'Opp Havoc',
+                // NCAAF BDL Stats
+                'NCAAF_TOTAL_OFFENSE': 'Total YPG',
+                'NCAAF_PASSING_OFFENSE': 'Pass YPG',
+                'NCAAF_RUSHING_OFFENSE': 'Rush YPG',
+                'NCAAF_SCORING': 'Total TDs',
+                'NCAAF_DEFENSE': 'Def Yds',
+                'NCAAF_TURNOVER_MARGIN': 'INTs',
+                'NCAAF_RED_ZONE_OFFENSE': 'Red Zone',
+                'TURNOVER_MARGIN': 'INTs',
                 // Derived stats
                 'PASSING_TDS': 'Pass TDs',
                 'INTERCEPTIONS': 'INTs',
@@ -637,6 +646,22 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'SP_PLUS_RATINGS': 'net_rating',
                   'SUCCESS_RATE': 'total_yards_per_game',
                   'DL_RANKINGS': 'opp_rushing_yards',
+                  'RECORD': 'record',
+                  'LAST_5': 'last_5',
+                  'SUMMARY': 'summary',
+                  'STANDINGS': 'record',
+                  'TEAM_RECORD': 'record',
+                  // NCAAF Team Stats - match actual BDL stored field names
+                  'NCAAF_TOTAL_OFFENSE': 'total_ypg',
+                  'NCAAF_PASSING_OFFENSE': 'passing_ypg',
+                  'NCAAF_RUSHING_OFFENSE': 'rushing_ypg',
+                  'NCAAF_SCORING': 'total_tds',
+                  'NCAAF_DEFENSE': 'opp_total_yards',
+                  'NCAAF_TURNOVER_MARGIN': 'interceptions_thrown',
+                  'NCAAF_RED_ZONE_OFFENSE': 'red_zone_pct',
+                  'NCAAF_PLAYER_STATS:OFFENSE': 'passing_yards',
+                  // NCAAF additional turnover
+                  'TURNOVER_MARGIN': 'interceptions_thrown',
                   // New derived stats for cleaner display
                   'PASSING_TDS': 'passing_tds',
                   'INTERCEPTIONS': 'interceptions',
@@ -1150,8 +1175,10 @@ function RealGaryPicks() {
           // It's Monday - only show games happening today (Monday Night Football)
           console.log('[Picks] Monday detected - filtering NFL picks to today\'s games only');
           nflPicks = nflPicks.filter(pick => {
-            if (!pick.gameTime) return false;
-            const pickGameDate = toESTDate(pick.gameTime);
+            // Check both gameTime and commence_time (Supabase uses commence_time)
+            const gameDateTime = pick.gameTime || pick.commence_time;
+            if (!gameDateTime) return false;
+            const pickGameDate = toESTDate(gameDateTime);
             const isToday = pickGameDate === todayEST;
             console.log(`[Picks] NFL game ${pick.awayTeam} @ ${pick.homeTeam}: gameDate=${pickGameDate}, today=${todayEST}, showing=${isToday}`);
             return isToday;

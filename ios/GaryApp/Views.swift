@@ -441,12 +441,192 @@ struct LiquidGlassBackground: View {
     }
 }
 
+// MARK: - Performance Banner (Yesterday's Game Picks Record)
+
+struct PerformanceBanner: View {
+    let wins: Int
+    let losses: Int
+    let pushes: Int
+    let sportBreakdown: [SupabaseAPI.SportRecord]
+    
+    private var total: Int { wins + losses }
+    private var winRate: Double { total > 0 ? Double(wins) / Double(total) : 0 }
+    
+    private var moodGradient: LinearGradient {
+        if winRate >= 0.80 {
+            // Fire - Red/Orange flame
+            return LinearGradient(colors: [Color(hex: "#EF4444"), Color(hex: "#F97316")], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if winRate >= 0.70 {
+            // Cooking - Orange/Amber
+            return LinearGradient(colors: [Color(hex: "#F97316"), Color(hex: "#F59E0B")], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if winRate >= 0.60 {
+            // Beer - Gold/Green (celebratory)
+            return LinearGradient(colors: [Color(hex: "#F59E0B"), Color(hex: "#10B981")], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if winRate >= 0.50 {
+            // Worried - Yellow/Amber (cautious)
+            return LinearGradient(colors: [Color(hex: "#EAB308"), Color(hex: "#CA8A04")], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if winRate >= 0.40 {
+            // Ice Cold - Light blue/Cyan
+            return LinearGradient(colors: [Color(hex: "#06B6D4"), Color(hex: "#0891B2")], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else {
+            // Doomsday - Dark blue/Purple
+            return LinearGradient(colors: [Color(hex: "#6366F1"), Color(hex: "#4F46E5")], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+    
+    private var moodLabel: String {
+        if winRate >= 0.80 { return "The Bear Is Feasting" }
+        else if winRate >= 0.70 { return "Gary's Cooking" }
+        else if winRate >= 0.60 { return "The Process Works" }
+        else if winRate >= 0.50 { return "Grinding" }
+        else if winRate >= 0.40 { return "Ice Cold" }
+        else { return "Bounce Back Loading" }
+    }
+    
+    private var moodImage: String {
+        if winRate >= 0.80 { return "GaryFire" }
+        else if winRate >= 0.70 { return "GaryCooking" }
+        else if winRate >= 0.60 { return "GaryBeer" }
+        else if winRate >= 0.50 { return "GaryWorried" }
+        else if winRate >= 0.40 { return "GaryIceCold" }
+        else { return "GaryDoomsday" }
+    }
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Main Record Row
+            HStack(spacing: 14) {
+                // Gary's mood-based image
+                Image(moodImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+                    .shadow(color: (winRate >= 0.5 ? Color.green : Color.orange).opacity(0.4), radius: 8)
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    // Record
+                    HStack(spacing: 6) {
+                        Text("\(wins)-\(losses)")
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                        
+                        Text("YESTERDAY")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(0.5)
+                        
+                        if pushes > 0 {
+                            Text("• \(pushes)P")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    
+                    // Mood Label
+                    Text(moodLabel)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(moodGradient)
+                }
+                
+                Spacer()
+                
+                // Win rate indicator
+                VStack(spacing: 2) {
+                    Text("\(Int(winRate * 100))%")
+                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .foregroundStyle(winRate >= 0.5 ? Color(hex: "#10B981") : Color(hex: "#EF4444"))
+                    
+                    Text("WIN RATE")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .tracking(0.5)
+                }
+            }
+            
+            // Sport-by-Sport Breakdown
+            if !sportBreakdown.isEmpty {
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                
+                HStack(spacing: 0) {
+                    ForEach(Array(sportBreakdown.prefix(4).enumerated()), id: \.element.id) { index, sport in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.1))
+                                .frame(width: 1, height: 30)
+                        }
+                        
+                        SportMiniCard(sport: sport)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: "#0A0A0C"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.5), GaryColors.gold.opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .shadow(color: GaryColors.gold.opacity(0.15), radius: 16, x: 0, y: 4)
+        .shadow(color: GaryColors.gold.opacity(0.08), radius: 32, x: 0, y: 8)
+    }
+}
+
+// MARK: - Sport Mini Card (for breakdown)
+
+struct SportMiniCard: View {
+    let sport: SupabaseAPI.SportRecord
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            // Sport icon
+            Image(systemName: sport.icon)
+                .font(.system(size: 14))
+                .foregroundStyle(sport.color)
+            
+            // Record
+            HStack(spacing: 2) {
+                Text("\(sport.wins)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(sport.wins > 0 ? Color(hex: "#10B981") : .secondary)
+                Text("-")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                Text("\(sport.losses)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    // Always subtle gray for losses - keeps focus on the green wins
+                    .foregroundStyle(Color.white.opacity(0.35))
+            }
+            
+            // League name
+            Text(sport.league)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.3)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 // MARK: - Home View
 
 struct HomeView: View {
     @State private var freePick: GaryPick?
     @State private var loading = true
     @State private var animateIn = false
+    @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
+    @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
     
     var body: some View {
         ZStack {
@@ -476,6 +656,20 @@ struct HomeView: View {
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
+                    // Yesterday's Performance Banner (Game Picks only)
+                    if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
+                        PerformanceBanner(
+                            wins: yesterdayRecord.wins,
+                            losses: yesterdayRecord.losses,
+                            pushes: yesterdayRecord.pushes,
+                            sportBreakdown: sportBreakdown
+                        )
+                        .padding(.horizontal, 16)
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 25)
+                        .animation(.easeOut(duration: 0.6).delay(0.15), value: animateIn)
+                    }
+                    
                     // Today's Free Pick
                     if let pick = freePick {
                         VStack(alignment: .leading, spacing: 12) {
@@ -495,6 +689,57 @@ struct HomeView: View {
                         .opacity(animateIn ? 1 : 0)
                         .offset(y: animateIn ? 0 : 30)
                         .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+                    } else if !loading {
+                        // Placeholder when no picks available yet
+                        VStack(spacing: 16) {
+                            HStack {
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(GaryColors.goldGradient)
+                                Text("TODAY'S TOP PICK")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 4)
+                            
+                            VStack(spacing: 20) {
+                                Image(systemName: "clock.badge.questionmark")
+                                    .font(.system(size: 50))
+                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
+                                
+                                VStack(spacing: 8) {
+                                    Text("Top Pick Coming Soon")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                    
+                                    Text("Gary is analyzing today's games.\nCheck back shortly!")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(Color(hex: "#0D0D0F"))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [GaryColors.gold.opacity(0.3), GaryColors.gold.opacity(0.1)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 0.5
+                                            )
+                                    )
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 30)
+                        .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                     }
                     
                     // The Bears Brain Section - How Gary Works
@@ -506,15 +751,17 @@ struct HomeView: View {
                             .padding(.horizontal, 4)
                         
                         VStack(spacing: 14) {
-                            HeroBenefitCard(title: "3-Stage Agentic Pipeline", text: "Every pick goes through three autonomous stages: (1) Hypothesis — form a sharp thesis on the game, (2) Investigation — pull 30+ metrics and test the theory, (3) The Judge — lock only when numbers converge. Only picks that survive all three stages make it to your screen.", badge: "HOW IT WORKS")
+                            HeroBenefitCard(title: "Deep Thinking AI Engine", text: "Powered by Google's Gemini with extended reasoning capabilities. Gary doesn't just pattern match—he thinks through each game step by step, weighing offensive efficiency vs defensive matchups, rest advantages, and historical trends before forming a thesis.", badge: "THE BRAIN")
                             
-                            HeroBenefitCard(title: "Sport-Specific Constitutions", text: "Gary doesn't dump stats—he requests them. For each game, he identifies which metrics actually matter for that matchup and pulls only the relevant data from 30+ available tokens per sport. NFL might need weather and EPA. NBA might need pace and rest. The constitution guides what to look for—the intelligence decides what to use.", badge: "TAILORED ANALYSIS")
+                            HeroBenefitCard(title: "Live Search Grounding", text: "Every analysis starts with a real-time web search for breaking news: injuries (by player name and status), weather forecasts, lineup changes, coaching updates, and late-breaking roster moves. Gary sees what happened in the last 24 hours, not last week.", badge: "REAL-TIME INTEL")
                             
-                            HeroBenefitCard(title: "Scout Report Builder", text: "Before the pipeline starts, Gary builds a comprehensive scout report: injuries by name, weather conditions, travel & rest factors, venue data, breaking news, bullpen usage, live odds movement, and lineup changes.", badge: "REAL-TIME INTEL")
+                            HeroBenefitCard(title: "30+ Stats Per Sport", text: "Gary pulls from professional sports databases: offensive/defensive ratings, pace, turnover rates, rebounding margins, shooting splits, home/away records, recent form, and head-to-head history. Each pick shows the actual Tale of the Tape comparison.", badge: "THE DATA")
                             
-                            HeroBenefitCard(title: "Fan Brain", text: "The qualitative factors that pure stat models miss. Revenge Games (emotional edge from last loss), Trap Alerts (suspicious line movement), Letdown Spots (flat after emotional win), and Lookahead Spots (big game next week trap).", badge: "SOFT FACTORS")
+                            HeroBenefitCard(title: "Sport-Specific Focus", text: "NFL: weather impact, QB matchups, red zone efficiency. NBA: pace differentials, back-to-back fatigue, rest days. NHL: goalie save %, special teams, Corsi. NCAAF: transfer portal losses, bowl motivation. Gary knows what moves the needle for each league.", badge: "TAILORED ANALYSIS")
                             
-                            HeroBenefitCard(title: "Thesis-Based Filtering", text: "Every pick must have a clear thesis—a specific reason WHY this team wins. Gary categorizes his reasoning quality and we only publish picks where he found a clear read or a specific angle. No vague 'they should win' picks make it through.", badge: "HONEST RATINGS")
+                            HeroBenefitCard(title: "The Human Edge", text: "Revenge games when a star faces his old team. Trap spots after emotional wins. Lookahead situations before marquee matchups. Public betting percentages creating line value. The factors that pure models miss but sharp bettors exploit.", badge: "SOFT FACTORS")
+                            
+                            HeroBenefitCard(title: "Thesis-Based Selection", text: "Every pick requires a specific thesis—not just 'Team A is better' but WHY they cover tonight. Gary grades his own reasoning and only publishes picks where he found a clear structural edge or exploitable angle. No confidence, no pick.", badge: "QUALITY FILTER")
                         }
                     }
                     .padding(16)
@@ -545,6 +792,16 @@ struct HomeView: View {
             // Start animation immediately so content is visible
             withAnimation(.easeOut(duration: 0.8)) {
                 animateIn = true
+            }
+            
+            // Fetch yesterday's game record for the performance banner
+            if let record = try? await SupabaseAPI.fetchYesterdayGameRecord() {
+                yesterdayRecord = record
+            }
+            
+            // Fetch sport-by-sport breakdown
+            if let breakdown = try? await SupabaseAPI.fetchYesterdayBySport() {
+                sportBreakdown = breakdown
             }
             
             // Then load data
@@ -994,7 +1251,7 @@ struct GaryPicksView: View {
             }
             picks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
         } catch {
-            print("Picks load error: \(error)")
+            // Silent fail - empty state will show
         }
         
         await MainActor.run {
@@ -1282,7 +1539,7 @@ struct GaryPropsView: View {
                 try await SupabaseAPI.fetchPropPicks(date: date)
             }
         } catch {
-            print("Props load error: \(error)")
+            // Silent fail - empty state will show
             props = []
         }
         
@@ -2958,6 +3215,14 @@ struct TaleOfTapeSection: View {
             "STEALS": "Steals/G",
             "BLOCKS": "Blocks/G",
             "FG_PCT": "FG%",
+            // NCAAF BDL stats
+            "NCAAF_TOTAL_OFFENSE": "Total YPG",
+            "NCAAF_PASSING_OFFENSE": "Pass YPG",
+            "NCAAF_RUSHING_OFFENSE": "Rush YPG",
+            "NCAAF_SCORING": "Total TDs",
+            "NCAAF_DEFENSE": "Def Yds",
+            "NCAAF_TURNOVER_MARGIN": "INTs",
+            "NCAAF_RED_ZONE_OFFENSE": "Red Zone",
             // NCAAB enriched
             "NCAAB_EFG_PCT": "eFG%",
             "NCAAB_TEMPO": "Tempo",
@@ -4115,10 +4380,37 @@ struct PropAnalysisSheet: View {
                                     .tracking(1)
                                     .opacity(0.8)
                                 
-                                // Cleaned paragraphs with dividers
+                                // Content container with bullets FIRST, then paragraphs
                                 VStack(alignment: .leading, spacing: 0) {
                                     let paragraphs = cleanPropAnalysis(analysis)
                                     
+                                    // Key Stats Bullets FIRST (if available)
+                                    if let keyStats = prop.key_stats, !keyStats.isEmpty {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            ForEach(keyStats, id: \.self) { stat in
+                                                HStack(alignment: .top, spacing: 10) {
+                                                    Circle()
+                                                        .fill(greenAccent)
+                                                        .frame(width: 5, height: 5)
+                                                        .padding(.top, 6)
+                                                    Text(stat)
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.white.opacity(0.85))
+                                                        .lineSpacing(3)
+                                                }
+                                            }
+                                        }
+                                        .padding(.vertical, 14)
+                                        
+                                        // Divider after bullets if there are paragraphs
+                                        if !paragraphs.isEmpty {
+                                            Rectangle()
+                                                .fill(accentColor.opacity(0.5))
+                                                .frame(height: 1)
+                                        }
+                                    }
+                                    
+                                    // Cleaned paragraphs AFTER bullets
                                     ForEach(Array(paragraphs.enumerated()), id: \.offset) { index, para in
                                         VStack(alignment: .leading, spacing: 0) {
                                             Text(para)

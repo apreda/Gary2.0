@@ -1,8 +1,12 @@
 import { ballDontLieService } from '../ballDontLieService.js';
 import { perplexityService } from '../perplexityService.js';
 import { formatGameTimeEST, buildMarketSnapshot, calcRestInfo, calcRecentForm, parseGameDate } from './sharedUtils.js';
+import { fetchGroundedContext } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'americanfootball_ncaaf';
+
+// BDL uses 2025 for the 2025-2026 college football season
+const NCAAF_SEASON = 2025;
 
 /**
  * NCAAF Conference Tier Mapping (2024-25 Season)
@@ -231,7 +235,8 @@ const buildCollegeMetrics = (map = {}) => {
 
 export async function buildNcaafAgenticContext(game, options = {}) {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
-  const season = commenceDate.getFullYear();
+  // Use fixed season (BDL uses 2025 for the 2025-2026 college football season)
+  const season = NCAAF_SEASON;
 
   const [homeTeam, awayTeam] = await Promise.all([
     ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team),
@@ -245,8 +250,18 @@ export async function buildNcaafAgenticContext(game, options = {}) {
   lookbackStart.setDate(lookbackStart.getDate() - 28);
   const startStr = lookbackStart.toISOString().slice(0, 10);
   const endStr = commenceDate.toISOString().slice(0, 10);
+  const dateStr = commenceDate.toISOString().slice(0, 10);
 
-  const [homeRecent, awayRecent, injuries, standings, homeSeasonRows, awaySeasonRows] = await Promise.all([
+  // Check if this is bowl season (Dec 14 - Jan 15) - affects context priority
+  const month = commenceDate.getMonth();
+  const day = commenceDate.getDate();
+  const isBowlSeason = (month === 11 && day >= 14) || (month === 0 && day <= 15);
+  
+  if (isBowlSeason) {
+    console.log(`[NCAAF] 🏈 BOWL SEASON DETECTED - Player opt-outs are CRITICAL for this game`);
+  }
+
+  const [homeRecent, awayRecent, injuries, standings, homeSeasonRows, awaySeasonRows, groundedContext] = await Promise.all([
     ballDontLieService.getGames(
       SPORT_KEY,
       { seasons: [season], team_ids: [homeTeam.id], start_date: startStr, end_date: endStr, per_page: 50 },
@@ -260,7 +275,12 @@ export async function buildNcaafAgenticContext(game, options = {}) {
     ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] }, options.nocache ? 0 : 5),
     ballDontLieService.getStandingsGeneric(SPORT_KEY, { season }),
     ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season, postseason: false }),
-    ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season, postseason: false })
+    ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season, postseason: false }),
+    // NARRATIVE CONTEXT via Gemini Grounding - CRITICAL for bowl games with player opt-outs
+    fetchGroundedContext(game.home_team, game.away_team, 'NCAAF', dateStr, { useFlash: false }).catch(e => {
+      console.warn('[NCAAF Context] Gemini Grounding failed:', e.message);
+      return null;
+    })
   ]);
 
   const restInfo = {
@@ -288,12 +308,40 @@ export async function buildNcaafAgenticContext(game, options = {}) {
 
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [], homeTeam.full_name, awayTeam.full_name);
 
-  let richContext = null;
-  try {
-    const dateStr = commenceDate.toISOString().slice(0, 10);
-    richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'ncaaf', dateStr);
-  } catch (error) {
-    console.warn('[Agentic][NCAAF] Perplexity context failed:', error.message);
+  // Extract narrative context from Gemini Grounding (preferred) or fallback to Perplexity
+  let narrativeContext = null;
+  let playerOptOuts = null;
+  
+  if (groundedContext?.groundedRaw) {
+    narrativeContext = groundedContext.groundedRaw;
+    console.log(`[NCAAF Context] ✓ Got narrative context (${narrativeContext.length} chars) from Gemini Grounding`);
+    
+    // Extract player opt-outs from grounded context (bowl game critical)
+    if (isBowlSeason) {
+      const optOutMatches = narrativeContext.match(/opt[- ]?out|sitting out|skipping|declared for (?:the )?(?:NFL )?draft|not playing/gi);
+      if (optOutMatches) {
+        console.log(`[NCAAF Context] ⚠️ Found ${optOutMatches.length} potential player opt-out mentions`);
+        playerOptOuts = {
+          mentionCount: optOutMatches.length,
+          rawContext: narrativeContext
+        };
+      }
+    }
+  } else {
+    // Fallback to Perplexity if Gemini Grounding fails
+    try {
+      const richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'ncaaf', dateStr);
+      narrativeContext = richContext?.summary || null;
+      console.log(`[NCAAF Context] Fallback to Perplexity: ${narrativeContext ? 'got context' : 'no context'}`);
+    } catch (error) {
+      console.warn('[Agentic][NCAAF] Perplexity fallback failed:', error.message);
+    }
+  }
+  
+  // For bowl games, construct special opt-out warning if context mentions opt-outs
+  let bowlOptOutWarning = null;
+  if (isBowlSeason && playerOptOuts?.mentionCount > 0) {
+    bowlOptOutWarning = `⚠️ BOWL GAME WARNING: ${playerOptOuts.mentionCount} potential player opt-out mentions detected in live context. Review narrative carefully for missing key players.`;
   }
 
   const buildMotivationSpot = (rest) => ({
@@ -357,6 +405,7 @@ export async function buildNcaafAgenticContext(game, options = {}) {
     awayTeam: awayTeam.full_name,
     tipoff: formatGameTimeEST(game.commence_time),
     location: homeTeam.city || homeTeam.full_name,
+    isBowlGame: isBowlSeason,
     conferenceTier: {
       home: `${conferenceTierContext.home.conference} (Tier ${conferenceTierContext.home.tier} - ${conferenceTierContext.home.tierLabel})`,
       away: `${conferenceTierContext.away.conference} (Tier ${conferenceTierContext.away.tier} - ${conferenceTierContext.away.tierLabel})`,
@@ -369,9 +418,10 @@ export async function buildNcaafAgenticContext(game, options = {}) {
     },
     records,
     narrative: {
-      home: richContext?.home_storyline || null,
-      away: richContext?.away_storyline || null,
-      notes: richContext?.summary || null
+      // Use Gemini Grounding context (primary) for full narrative
+      fullContext: narrativeContext || null,
+      bowlOptOutWarning: bowlOptOutWarning || null,
+      notes: narrativeContext ? 'Live context from Gemini Grounding (bowl game player opt-outs tracked)' : 'No live context available'
     }
   };
 
@@ -384,7 +434,9 @@ export async function buildNcaafAgenticContext(game, options = {}) {
       awayTeam,
       season,
       window: { start: startStr, end: endStr },
-      richKeyFindings: richContext?.key_findings || []
+      isBowlSeason,
+      groundedContext: narrativeContext ? true : false,
+      playerOptOutsDetected: playerOptOuts?.mentionCount || 0
     }
   };
 }

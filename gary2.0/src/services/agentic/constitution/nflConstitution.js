@@ -53,6 +53,30 @@ QB play drives NFL outcomes:
 - Backup QB = typically 3-7 point swing
 - Stats to verify: [QB_STATS] [INJURIES]
 
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (OUT all/most of season)** = Team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to bet for or against a team. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors (e.g., "Both teams are missing key stars" if one star has been out all year).
+  → Example: If the star WR has been on IR since Week 2, the team's passing efficiency stats ARE their baseline without him.
+- **RECENT injuries (last 1-2 weeks)** = Team still adjusting, potential edge.
+  → Market may not have fully priced in the impact.
+  → Stats may not yet reflect the absence.
+- **MID-SEASON injuries (3-8 weeks)** = Team has adjusted, use judgment.
+- **INDEFINITE/NO TIMETABLE** = Treat as SEASON-LONG.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as betting edges or factors that might cause variance.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your thesis must focus on the players who are ACTUALLY playing and how their RECENT form or matchup data suggests an edge.
+
+### THE NARRATIVE EDGE
+NFL games are driven by storylines and psychological factors that hard stats can miss:
+- **Narrative Momentum**: Look for "revenge spots" (players facing former teams), historical rivalries, or teams playing for a specific milestone.
+- **Rookie & Youth Impact**: High-impact rookies (like 2025 draft picks) may have low season-long stats but high recent significance. 
+- **The "Why"**: If a team's EPA doesn't match their recent record, use **fetch_narrative_context** to discover if there's a locker room storyline, a change in play-calling, or other intangible factors.
+- **Rule**: Your rationale should organically reflect these narratives if they provide a clearer picture than the raw numbers.
+
 ### WEATHER IMPACT
 ONLY mention weather in your rationale if it's a SIGNIFICANT factor:
 - Temp < 32°F = significant (affects grip, ball handling, catching)

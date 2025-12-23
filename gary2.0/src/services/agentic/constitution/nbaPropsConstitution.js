@@ -147,6 +147,25 @@ Apply same threshold logic: combined avg should be notably above/below line.
 
 ---
 
+### INJURY IMPACTS & RIPPLE EFFECTS
+1. **Injuries ripple**: If a teammate is OUT, use the Usage Rate increase to justify an OVER.
+2. **CRITICAL**: Only use **RECENT** injuries as ripple factors. If a teammate has been out all season, the target player's stats/usage already reflect his increased role.
+
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (OUT all/most of season)** = Player and team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to take a prop. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors.
+  → Example: If Kyrie Irving has been out since October, Dallas's usage rates and PPG averages ALREADY reflect his absence. Citing it as a reason for a Luka Doncic OVER is a mistake.
+- **RECENT injuries (last 1-2 weeks)** = REAL EDGE.
+  → The ripple effect (e.g., more usage for others) is NOT yet fully reflected in long-term stats.
+  → This is where the value is.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as factors that might cause variance or create edges.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your analysis must focus on the players who are ACTUALLY playing.
+
 ### KEY STAT-BASED DECISION RULES
 
 1. **ALWAYS check the season average first** - This is your baseline
@@ -240,15 +259,6 @@ Apply same threshold logic: combined avg should be notably above/below line.
 - Player's average is within ±0.5 of the line for points (coin flip)
 - You don't have season stats for the player
 - Player is questionable or just returned from injury
-
----
-
-### CONFIDENCE CALIBRATION
-
-- 80%+ confidence: Average ≥ line + 2.0 (pts) or +1.5 (other), favorable matchup, no concerns
-- 70-79% confidence: Average ≥ line + 1.0, decent matchup
-- 60-69% confidence: Average ≥ line + 0.5, some concerns present
-- <60% confidence: Consider passing - edge is too thin
 
 ---
 

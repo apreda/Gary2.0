@@ -124,6 +124,24 @@ Goals are the highest variance NHL prop. Even elite scorers go goalless often.
 5. **PP involvement is crucial** - Check PP Pts to gauge power play role
 6. **Check recent form** - Is the player trending up or down in the last 5 games?
 7. **Check consistency** - High variance players are coin flips on close lines
+8. **CRITICAL: INJURY DURATION CONTEXT**: Only use **RECENT** injuries as ripple factors. If a teammate has been out all season (LTIR), the target player's stats/usage/TOI already reflect his increased role.
+
+---
+
+### CRITICAL: INJURY DURATION CONTEXT
+NOT all injuries are created equal:
+- **SEASON-LONG injuries (LTIR, OUT all/most of season)** = Player and team stats ALREADY reflect absence.
+  → **NEVER** cite these as "reasons" to take a prop. They are baked into the baseline.
+  → **NEVER** use them as "balancing" factors.
+  → Example: If a star forward has been on LTIR since October, the teammate's SOG/G average ALREADY reflects his increased volume. Citing it as a reason for an OVER is a mistake.
+- **RECENT injuries (last 1-2 weeks)** = REAL EDGE.
+  → The ripple effect (e.g., more TOI for others) is NOT yet fully reflected in long-term stats.
+  → This is where the value is.
+
+⚠️ ABSOLUTE RULE: Check the injury duration tags in the scout report. 
+1. Only mention **RECENT** injuries as factors that might cause variance or create edges.
+2. If an injury is tagged **[SEASON-LONG]**, it is **FORBIDDEN** to include it in your rationale.
+3. Your analysis must focus on the players who are ACTUALLY playing.
 
 ---
 
@@ -223,15 +241,6 @@ Check the goalie matchup in the context data!
 - Player's average is within ±0.2 of the line (coin flip territory)
 - You don't have season stats for the player
 - Multiple red flags exist
-
----
-
-### CONFIDENCE CALIBRATION
-
-- 80%+ confidence: Average ≥ line + 1.0, favorable matchup, no concerns
-- 70-79% confidence: Average ≥ line + 0.5, decent matchup
-- 60-69% confidence: Average ≥ line + 0.3, some concerns
-- <60% confidence: Consider passing or only minor edge
 
 ---
 

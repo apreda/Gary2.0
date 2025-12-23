@@ -998,6 +998,7 @@ const propToStatField = {
   'reb': 'reb',  // Handle abbreviated "reb" prop type
   'assists': 'ast',
   'asts': 'ast',
+  'ast': 'ast',  // Handle abbreviated "ast" prop type
   'threes': 'fg3m',
   '3pm': 'fg3m',
   'threepointers': 'fg3m',
@@ -1068,7 +1069,7 @@ const sportSpecificFields = {
   'NBA': { 'assists': 'ast', 'points': 'pts' },
   'NCAAB': { 'assists': 'ast', 'points': 'pts' },
   'CBB': { 'assists': 'ast', 'points': 'pts' },
-  'NHL': { 'points': 'points', 'assists': 'assists_nhl' },
+  'NHL': { 'points': 'points', 'pts': 'points', 'assists': 'assists_nhl' },
   'NFL': { 'assists': 'ast' },  // NFL doesn't have assists, but just in case
   'EPL': { 'points': 'goals' }  // Soccer doesn't really have points prop
 };

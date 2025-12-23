@@ -24,9 +24,7 @@ function getEnvVar(key, defaultValue = '') {
 export const configLoader = {
   // Variables to hold API credentials
   odds_api_key: getEnvVar('VITE_ODDS_API_KEY', ''),
-  // Never load OpenAI keys on the client; proxy uses server-side OPENAI_API_KEY only
-  openai_api_key: '',
-  openai_base_url: 'https://api.openai.com/v1',
+  // LLM keys loaded server-side only (GEMINI_API_KEY)
   // Never expose Perplexity key in browser; proxy uses server-side PERPLEXITY_API_KEY only
   perplexity_api_key: '',
   loaded: false,
@@ -76,23 +74,6 @@ export const configLoader = {
   getOddsApiKey: async function() {
     await this.load();
     return this.odds_api_key;
-  },
-
-  /**
-   * Get the OpenAI API key - primary AI provider
-   * @returns {Promise<string>} - The OpenAI API key
-   */
-  getOpenaiApiKey: async function() {
-    // Intentionally return empty on client; server should read process.env.OPENAI_API_KEY
-    return '';
-  },
-
-  /**
-   * Get the OpenAI base URL
-   */
-  getOpenaiBaseUrl: async function() {
-    await this.load();
-    return this.openai_base_url;
   },
 
   /**
