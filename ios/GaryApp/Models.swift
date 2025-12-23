@@ -913,12 +913,14 @@ struct DFSLineup: Identifiable, Decodable {
 
 /// Represents a single player slot in a DFS lineup
 struct DFSPlayer: Identifiable, Decodable {
-    let position: String      // "QB", "RB", "WR", etc.
-    let player: String        // Player name
-    let team: String          // Team abbreviation
-    let salary: Int           // Salary in dollars
-    let projected_pts: Double // Projected fantasy points
-    let pivots: [DFSPivot]    // Alternative player options
+    let position: String          // "QB", "RB", "WR", etc.
+    let player: String            // Player name
+    let team: String              // Team abbreviation
+    let salary: Int               // Salary in dollars
+    let projected_pts: Double     // Projected fantasy points
+    let rationale: String?        // Gary's reasoning for this pick
+    let supportingStats: [DFSStat]? // 3-4 stats backing up the pick
+    let pivots: [DFSPivot]        // Alternative player options
     
     var id: String { "\(position)-\(player)-\(team)" }
     
@@ -928,6 +930,11 @@ struct DFSPlayer: Identifiable, Decodable {
         formatter.numberStyle = .currency
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
+    }
+    
+    /// Has rationale to display
+    var hasRationale: Bool {
+        rationale != nil && !(rationale?.isEmpty ?? true)
     }
     
     /// Parse from dictionary
@@ -946,14 +953,39 @@ struct DFSPlayer: Identifiable, Decodable {
             pivots = pivotsArray.compactMap { DFSPivot.from(dict: $0) }
         }
         
+        // Parse supporting stats array
+        var supportingStats: [DFSStat] = []
+        if let statsArray = dict["supportingStats"] as? [[String: Any]] {
+            supportingStats = statsArray.compactMap { DFSStat.from(dict: $0) }
+        }
+        
         return DFSPlayer(
             position: position,
             player: player,
             team: team,
             salary: salary,
             projected_pts: projectedPts,
+            rationale: dict["rationale"] as? String,
+            supportingStats: supportingStats.isEmpty ? nil : supportingStats,
             pivots: pivots
         )
+    }
+}
+
+/// Represents a supporting stat for player rationale
+struct DFSStat: Identifiable, Decodable {
+    let label: String   // "PPG", "RPG", "Value", etc.
+    let value: String   // "25.3", "4.2x", etc.
+    
+    var id: String { "\(label)-\(value)" }
+    
+    /// Parse from dictionary
+    static func from(dict: [String: Any]) -> DFSStat? {
+        guard let label = dict["label"] as? String,
+              let value = dict["value"] as? String else {
+            return nil
+        }
+        return DFSStat(label: label, value: value)
     }
 }
 
