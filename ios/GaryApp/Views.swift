@@ -493,44 +493,44 @@ struct PerformanceBanner: View {
     }
     
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
             // Main Record Row - Compact, no image (hero shows mood)
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     // Record + Yesterday
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Text("\(wins)-\(losses)")
-                            .font(.system(size: 28, weight: .heavy, design: .rounded))
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                         
                         Text("YESTERDAY")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.secondary)
                             .tracking(0.5)
                         
                         if pushes > 0 {
                             Text("• \(pushes)P")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.tertiary)
                         }
                     }
                     
                     // Mood Label
                     Text(moodLabel)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(moodGradient)
                 }
                 
                 Spacer()
                 
                 // Win rate indicator
-                VStack(spacing: 2) {
+                VStack(spacing: 1) {
                     Text("\(Int(winRate * 100))%")
-                        .font(.system(size: 26, weight: .black, design: .rounded))
+                        .font(.system(size: 20, weight: .black, design: .rounded))
                         .foregroundStyle(winRate >= 0.5 ? Color(hex: "#10B981") : Color(hex: "#EF4444"))
                     
                     Text("WIN RATE")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.tertiary)
                         .tracking(0.5)
                 }
@@ -539,14 +539,14 @@ struct PerformanceBanner: View {
             // Sport-by-Sport Breakdown
             if !sportBreakdown.isEmpty {
                 Divider()
-                    .background(Color.white.opacity(0.12))
+                    .background(Color.white.opacity(0.1))
                 
                 HStack(spacing: 0) {
                     ForEach(Array(sportBreakdown.prefix(4).enumerated()), id: \.element.id) { index, sport in
                         if index > 0 {
                             Rectangle()
-                                .fill(Color.white.opacity(0.12))
-                                .frame(width: 1, height: 36)
+                                .fill(Color.white.opacity(0.1))
+                                .frame(width: 1, height: 28)
                         }
                         
                         SportMiniCard(sport: sport)
@@ -555,7 +555,7 @@ struct PerformanceBanner: View {
                 }
             }
         }
-        .padding(16)
+        .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(hex: "#0A0A0C"))
@@ -582,33 +582,33 @@ struct SportMiniCard: View {
     let sport: SupabaseAPI.SportRecord
     
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 3) {
             // Sport icon
             Image(systemName: sport.icon)
-                .font(.system(size: 16))
+                .font(.system(size: 12))
                 .foregroundStyle(sport.color)
             
             // Record
-            HStack(spacing: 2) {
+            HStack(spacing: 1) {
                 Text("\(sport.wins)")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(sport.wins > 0 ? Color(hex: "#10B981") : .secondary)
                 Text("-")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.tertiary)
                 Text("\(sport.losses)")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     // Always subtle gray for losses - keeps focus on the green wins
                     .foregroundStyle(Color.white.opacity(0.35))
             }
             
             // League name
             Text(sport.league)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .tracking(0.3)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
 }
 
@@ -662,11 +662,11 @@ struct HomeView: View {
                         Image(heroImage)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 160, height: 160)
-                            .shadow(color: heroImageGlow.opacity(0.4), radius: 20)
+                            .frame(width: 200, height: 200)
+                            .shadow(color: heroImageGlow.opacity(0.5), radius: 24)
                         
                         Text("GARY A.I.")
-                            .font(.system(size: 24, weight: .heavy))
+                            .font(.system(size: 26, weight: .heavy))
                             .tracking(-0.5)
                             .foregroundStyle(GaryColors.goldGradient)
                         
