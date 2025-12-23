@@ -265,18 +265,56 @@ export default async function handler(req, res) {
 
 /**
  * Build Gary's commentary notes for the lineup
+ * Includes narrative context - what makes Gary more than just a "math bot"
  */
 function buildGaryNotes(context, lineup) {
   const notes = [];
   
+  // Top narrative targets
+  if (context.targetPlayers?.length > 0) {
+    const targets = context.targetPlayers.slice(0, 3);
+    const inLineup = targets.filter(t => 
+      lineup.lineup.some(p => p.player.toLowerCase().includes(t.name?.toLowerCase()))
+    );
+    if (inLineup.length > 0) {
+      notes.push(`🎯 Narrative plays in lineup: ${inLineup.map(t => 
+        `${t.name} (${t.reason})`
+      ).join(', ')}`);
+    }
+  }
+  
+  // Players to fade that we avoided
+  if (context.fadePlayers?.length > 0) {
+    const faded = context.fadePlayers.slice(0, 2);
+    notes.push(`⚠️ Fading today: ${faded.map(f => 
+      `${f.name} (${f.reason})`
+    ).join(', ')}`);
+  }
+  
   // Mention late scratches if any
   if (context.lateScratches?.length > 0) {
-    notes.push(`Late scratches factored in: ${context.lateScratches.join(', ')}`);
+    notes.push(`📝 Late scratches factored in: ${context.lateScratches.join(', ')}`);
   }
   
   // Mention weather if NFL
   if (context.weatherAlerts?.length > 0) {
-    notes.push(`Weather watch: ${context.weatherAlerts.join('; ')}`);
+    notes.push(`🌧️ Weather watch: ${context.weatherAlerts.join('; ')}`);
+  }
+  
+  // QB changes (NFL specific)
+  if (context.qbChanges?.length > 0) {
+    notes.push(`🔄 QB changes: ${context.qbChanges.join(', ')}`);
+  }
+  
+  // Game narrative highlights
+  if (context.narratives?.length > 0) {
+    const highTotal = context.narratives.find(n => 
+      (n.vegas_total > 225 && context.sport === 'NBA') || 
+      (n.vegas_total > 50 && context.sport === 'NFL')
+    );
+    if (highTotal) {
+      notes.push(`🔥 Shootout alert: ${highTotal.game} (O/U ${highTotal.vegas_total}) - stack opportunity`);
+    }
   }
   
   // Value play callout
@@ -285,13 +323,13 @@ function buildGaryNotes(context, lineup) {
   , lineup.lineup[0]);
   
   if (cheapestStarter) {
-    notes.push(`Value play: ${cheapestStarter.player} at $${cheapestStarter.salary} could unlock salary elsewhere`);
+    notes.push(`💰 Value play: ${cheapestStarter.player} at $${cheapestStarter.salary.toLocaleString()} unlocks salary elsewhere`);
   }
   
   // Salary remaining
-  const remaining = lineup.salary_cap - lineup.total_salary;
+  const remaining = (lineup.salary_cap || PLATFORM_CONSTRAINTS?.[context.platform]?.[context.sport]?.salaryCap || 50000) - lineup.total_salary;
   if (remaining > 0) {
-    notes.push(`$${remaining} remaining under cap - room for pivots if needed`);
+    notes.push(`📊 $${remaining.toLocaleString()} remaining under cap - room for pivots`);
   }
   
   return notes.join('\n');

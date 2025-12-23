@@ -55,14 +55,15 @@ export const PLATFORM_CONSTRAINTS = {
     },
     NFL: {
       salaryCap: 60000,
-      rosterSize: 9,
-      positions: ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'DST'],
+      rosterSize: 10, // FanDuel includes Kickers!
+      positions: ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DST'],
       positionRules: {
         QB: { count: 1, eligible: ['QB'] },
         RB: { count: 2, eligible: ['RB'] },
         WR: { count: 3, eligible: ['WR'] },
         TE: { count: 1, eligible: ['TE'] },
         FLEX: { count: 1, eligible: ['RB', 'WR', 'TE'] },
+        K: { count: 1, eligible: ['K'] },
         DST: { count: 1, eligible: ['DST'] }
       }
     }
@@ -106,8 +107,26 @@ export function calculateProjectedPoints(player, sport, platform) {
 
 /**
  * NBA fantasy points calculation
- * DraftKings: 1 pt, 1.25 reb, 1.5 ast, 2 stl, 2 blk, -0.5 TO, +1.5 3PM, +1.5 DD, +3 TD
- * FanDuel: 1 pt, 1.2 reb, 1.5 ast, 3 stl, 3 blk, -1 TO
+ * 
+ * DraftKings NBA Scoring:
+ * - Point: 1 pt
+ * - 3-Point Made: +0.5 bonus
+ * - Rebound: 1.25 pts
+ * - Assist: 1.5 pts
+ * - Steal: 2 pts
+ * - Block: 2 pts
+ * - Turnover: -0.5 pts
+ * - Double-Double: +1.5 bonus
+ * - Triple-Double: +3 bonus
+ * 
+ * FanDuel NBA Scoring:
+ * - Point: 1 pt
+ * - Rebound: 1.2 pts
+ * - Assist: 1.5 pts
+ * - Steal: 3 pts (higher than DK!)
+ * - Block: 3 pts (higher than DK!)
+ * - Turnover: -1 pt (more punishing)
+ * - No DD/TD bonuses
  */
 function calculateNBAProjection(player, platform) {
   const stats = player.seasonStats || player;
@@ -117,55 +136,165 @@ function calculateNBAProjection(player, platform) {
   const spg = stats.spg || stats.stl || 0;
   const bpg = stats.bpg || stats.blk || 0;
   const topg = stats.topg || stats.turnover || 1.5; // Default TO estimate
-  const tpm = stats.tpg || stats.fg3m || 0;
+  const tpm = stats.tpg || stats.fg3m || 0; // 3-pointers made per game
   
   if (platform === 'draftkings') {
-    let pts = ppg + (rpg * 1.25) + (apg * 1.5) + (spg * 2) + (bpg * 2) - (topg * 0.5) + (tpm * 0.5);
-    // Bonus estimates for double-doubles (rough heuristic)
-    if (ppg >= 10 && rpg >= 10) pts += 1.5;
-    if (ppg >= 10 && apg >= 10) pts += 1.5;
+    // DK: +0.5 for each 3PM, DD/TD bonuses
+    let pts = ppg + (tpm * 0.5) + (rpg * 1.25) + (apg * 1.5) + (spg * 2) + (bpg * 2) - (topg * 0.5);
+    
+    // Double-Double bonus estimate (if 2+ categories hit 10+)
+    const ddCategories = [ppg >= 10, rpg >= 10, apg >= 10, spg >= 10, bpg >= 10].filter(Boolean).length;
+    if (ddCategories >= 2) pts += 1.5;
+    if (ddCategories >= 3) pts += 1.5; // Triple-double adds another +1.5 (total +3)
+    
     return Math.round(pts * 10) / 10;
   } else {
-    // FanDuel
+    // FanDuel: Steals/Blocks worth 3 pts, TO -1, no bonuses
+    // This makes defensive specialists MORE valuable on FD (e.g., Wembanyama)
     return Math.round((ppg + (rpg * 1.2) + (apg * 1.5) + (spg * 3) + (bpg * 3) - topg) * 10) / 10;
   }
 }
 
 /**
  * NFL fantasy points calculation
- * DraftKings scoring rules
+ * 
+ * DraftKings NFL Scoring (Full PPR):
+ * - Passing TD: 4 pts
+ * - Passing Yards: 1 pt per 25 yds (0.04/yd)
+ * - Interception: -1 pt
+ * - Rushing TD: 6 pts
+ * - Rushing Yards: 1 pt per 10 yds (0.1/yd)
+ * - Reception: 1 pt (Full PPR)
+ * - Receiving TD: 6 pts
+ * - Receiving Yards: 1 pt per 10 yds
+ * - Fumble Lost: -1 pt
+ * - 300+ Passing Yards Bonus: +3 pts
+ * - 100+ Rushing Yards Bonus: +3 pts
+ * - 100+ Receiving Yards Bonus: +3 pts
+ * 
+ * FanDuel NFL Scoring (Half PPR):
+ * - Same as DK EXCEPT:
+ * - Reception: 0.5 pts (Half PPR)
+ * - Fumble Lost: -2 pts (more punishing)
+ * - NO yardage bonuses
  */
 function calculateNFLProjection(player, platform) {
   const stats = player.seasonStats || player;
-  const position = player.position || '';
+  const position = (player.position || '').toUpperCase();
   
   // QB scoring
   if (position === 'QB') {
-    const passYds = stats.pass_yards_pg || stats.passYards || 0;
-    const passTds = stats.pass_tds_pg || stats.passTDs || 0;
-    const ints = stats.ints_pg || stats.interceptions || 0;
-    const rushYds = stats.rush_yards_pg || stats.rushYards || 0;
-    const rushTds = stats.rush_tds_pg || stats.rushTDs || 0;
+    const passYds = stats.passing_yards_per_game || stats.pass_yards_pg || stats.passYards || 0;
+    const passTds = stats.passing_touchdowns || stats.pass_tds_pg || stats.passTDs || 0;
+    const ints = stats.passing_interceptions || stats.ints_pg || stats.interceptions || 0;
+    const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || stats.rushYards || 0;
+    const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || stats.rushTDs || 0;
+    const fumblesLost = stats.rushing_fumbles_lost || stats.fumbles_lost || 0;
+    
+    let pts = (passYds * 0.04) + (passTds * 4) - (ints * 1) + (rushYds * 0.1) + (rushTds * 6);
     
     if (platform === 'draftkings') {
-      return Math.round((passYds * 0.04 + passTds * 4 - ints * 1 + rushYds * 0.1 + rushTds * 6) * 10) / 10;
+      pts -= (fumblesLost * 1);
+      // 300+ passing yards bonus
+      if (passYds >= 300) pts += 3;
+      if (rushYds >= 100) pts += 3;
     } else {
-      return Math.round((passYds * 0.04 + passTds * 4 - ints * 1 + rushYds * 0.1 + rushTds * 6) * 10) / 10;
+      // FanDuel: -2 per fumble lost, no bonuses
+      pts -= (fumblesLost * 2);
     }
+    
+    return Math.round(pts * 10) / 10;
   }
   
-  // RB/WR/TE scoring
-  const rushYds = stats.rush_yards_pg || stats.rushYards || 0;
-  const rushTds = stats.rush_tds_pg || stats.rushTDs || 0;
-  const recYds = stats.rec_yards_pg || stats.recYards || 0;
-  const recTds = stats.rec_tds_pg || stats.recTDs || 0;
-  const receptions = stats.receptions_pg || stats.receptions || 0;
+  // RB scoring
+  if (position === 'RB') {
+    const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || stats.rushYards || 0;
+    const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || stats.rushTDs || 0;
+    const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
+    const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
+    const receptions = stats.receptions || stats.receptions_pg || 0;
+    const fumblesLost = stats.rushing_fumbles_lost || stats.fumbles_lost || 0;
+    
+    let pts = (rushYds * 0.1) + (rushTds * 6) + (recYds * 0.1) + (recTds * 6);
+    
+    if (platform === 'draftkings') {
+      pts += (receptions * 1); // Full PPR
+      pts -= (fumblesLost * 1);
+      if (rushYds >= 100) pts += 3;
+      if (recYds >= 100) pts += 3;
+    } else {
+      pts += (receptions * 0.5); // Half PPR
+      pts -= (fumblesLost * 2);
+    }
+    
+    return Math.round(pts * 10) / 10;
+  }
+  
+  // WR scoring
+  if (position === 'WR') {
+    const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
+    const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
+    const receptions = stats.receptions || stats.receptions_pg || 0;
+    const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || 0;
+    const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || 0;
+    const fumblesLost = stats.receiving_fumbles_lost || stats.fumbles_lost || 0;
+    
+    let pts = (recYds * 0.1) + (recTds * 6) + (rushYds * 0.1) + (rushTds * 6);
+    
+    if (platform === 'draftkings') {
+      pts += (receptions * 1); // Full PPR - makes slot receivers valuable
+      pts -= (fumblesLost * 1);
+      if (recYds >= 100) pts += 3;
+    } else {
+      pts += (receptions * 0.5); // Half PPR - favors TD threats over volume
+      pts -= (fumblesLost * 2);
+    }
+    
+    return Math.round(pts * 10) / 10;
+  }
+  
+  // TE scoring (same as WR)
+  if (position === 'TE') {
+    const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
+    const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
+    const receptions = stats.receptions || stats.receptions_pg || 0;
+    const fumblesLost = stats.receiving_fumbles_lost || stats.fumbles_lost || 0;
+    
+    let pts = (recYds * 0.1) + (recTds * 6);
+    
+    if (platform === 'draftkings') {
+      pts += (receptions * 1);
+      pts -= (fumblesLost * 1);
+      if (recYds >= 100) pts += 3;
+    } else {
+      pts += (receptions * 0.5);
+      pts -= (fumblesLost * 2);
+    }
+    
+    return Math.round(pts * 10) / 10;
+  }
+  
+  // DST scoring (simplified)
+  if (position === 'DST' || position === 'DEF') {
+    // Base 10 pts, adjusted by points allowed
+    return 8.0; // Placeholder - DST projections are complex
+  }
+  
+  // K (Kicker) - FanDuel only
+  if (position === 'K') {
+    return 7.0; // Placeholder
+  }
+  
+  // Default fallback
+  const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || stats.rushYards || 0;
+  const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || stats.rushTDs || 0;
+  const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
+  const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
+  const receptions = stats.receptions || stats.receptions_pg || 0;
   
   if (platform === 'draftkings') {
-    // DK: 1 PPR
     return Math.round((rushYds * 0.1 + rushTds * 6 + recYds * 0.1 + recTds * 6 + receptions * 1) * 10) / 10;
   } else {
-    // FD: 0.5 PPR
     return Math.round((rushYds * 0.1 + rushTds * 6 + recYds * 0.1 + recTds * 6 + receptions * 0.5) * 10) / 10;
   }
 }
