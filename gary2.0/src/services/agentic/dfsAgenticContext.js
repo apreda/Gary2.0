@@ -295,20 +295,87 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       const teamIds = new Set();
       for (const game of games) {
         if (game.home_team?.id) teamIds.add(game.home_team.id);
+        if (game.visitor_team?.id) teamIds.add(game.visitor_team.id);
         if (game.away_team?.id) teamIds.add(game.away_team.id);
       }
       
-      // Fetch players (NFL has different API structure)
+      // Fetch active players for these teams
       const players = await ballDontLieService.getPlayersGeneric('americanfootball_nfl', {
         team_ids: Array.from(teamIds),
         per_page: 150
       });
       
-      return players.map(p => ({
-        name: `${p.first_name} ${p.last_name}`,
-        team: p.team?.abbreviation || p.team?.name || 'UNK',
-        position: p.position || 'FLEX'
-      }));
+      // Get current NFL season (regular season runs Sept-Feb)
+      const now = new Date();
+      const season = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      
+      // Fetch NFL season stats from BDL
+      // BDL NFL Season Stats provides: passing_yards, rushing_yards, receiving_yards, 
+      // passing_touchdowns, rushing_touchdowns, receiving_touchdowns, receptions, etc.
+      const playerIds = players.map(p => p.id).filter(Boolean).slice(0, 50);
+      let seasonStats = [];
+      
+      try {
+        // BDL NFL season_stats endpoint - fetch in parallel batches
+        const batchSize = 10;
+        for (let i = 0; i < playerIds.length; i += batchSize) {
+          const batch = playerIds.slice(i, i + batchSize);
+          const batchResults = await Promise.all(
+            batch.map(pid => 
+              ballDontLieService.getNflPlayerSeasonStats?.({ playerId: pid, season })
+                .catch(() => [])
+            )
+          );
+          seasonStats.push(...batchResults.flat());
+        }
+      } catch (e) {
+        console.warn(`[DFS Context] NFL season stats fetch failed: ${e.message}`);
+      }
+      
+      // Create stats map
+      const statsMap = new Map();
+      (seasonStats || []).forEach(entry => {
+        const pid = entry?.player?.id;
+        if (pid) statsMap.set(pid, entry);
+      });
+      
+      return players.map(p => {
+        const stats = statsMap.get(p.id) || {};
+        const position = (p.position_abbreviation || p.position || '').toUpperCase();
+        
+        // Map BDL NFL stats to our DFS format
+        // Fields from BDL docs: passing_yards_per_game, passing_touchdowns, passing_interceptions,
+        // rushing_yards_per_game, rushing_touchdowns, receptions, receiving_yards_per_game, etc.
+        return {
+          name: `${p.first_name} ${p.last_name}`,
+          team: p.team?.abbreviation || p.team?.name || 'UNK',
+          position: position === 'QUARTERBACK' ? 'QB' :
+                   position === 'RUNNING BACK' ? 'RB' :
+                   position === 'WIDE RECEIVER' ? 'WR' :
+                   position === 'TIGHT END' ? 'TE' :
+                   position || 'FLEX',
+          seasonStats: {
+            // QB stats
+            passing_yards_per_game: stats.passing_yards_per_game || 0,
+            passing_touchdowns: stats.passing_touchdowns || 0,
+            passing_interceptions: stats.passing_interceptions || 0,
+            passing_completion_pct: stats.passing_completion_pct || 0,
+            // Rushing stats
+            rushing_yards_per_game: stats.rushing_yards_per_game || 0,
+            rushing_touchdowns: stats.rushing_touchdowns || 0,
+            rushing_attempts: stats.rushing_attempts || 0,
+            rushing_fumbles_lost: stats.rushing_fumbles_lost || 0,
+            // Receiving stats
+            receptions: stats.receptions || 0,
+            receiving_yards_per_game: stats.receiving_yards_per_game || 0,
+            receiving_touchdowns: stats.receiving_touchdowns || 0,
+            receiving_targets: stats.receiving_targets || 0,
+            receiving_fumbles_lost: stats.receiving_fumbles_lost || 0,
+            // Games played
+            games_played: stats.games_played || 0
+          }
+        };
+      });
     }
     
     return [];
@@ -384,6 +451,152 @@ function normalizePlayerName(name) {
 }
 
 /**
+ * Fetch DFS narrative context using Gemini Grounding
+ * This is what separates Gary from a "math bot" - understanding the STORY
+ * 
+ * Key narratives to identify:
+ * - Revenge games (vs former teams)
+ * - Injury impacts (elevated usage rates)
+ * - Back-to-back situations (fatigue)
+ * - Weather/dome factors (NFL)
+ * - Vegas lines (high-scoring games)
+ * - Hot streaks (recent performance)
+ * - Minutes/usage trends
+ * - Historical matchups vs defenses
+ */
+export async function fetchDFSNarrativeContext(sport, slateDate, games = []) {
+  const genAI = getGeminiClient();
+  if (!genAI) {
+    console.log('[DFS Context] Gemini not available - skipping narrative context');
+    return { narratives: [], targetPlayers: [], fadePlayers: [] };
+  }
+  
+  const gameDescriptions = games.map(g => 
+    `${g.visitor_team || g.away_team} @ ${g.home_team}`
+  ).join(', ');
+  
+  const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-2.0-flash';
+  
+  try {
+    console.log(`[DFS Context] 📖 Fetching narrative context for ${sport} games`);
+    
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      tools: [{ google_search: {} }],
+      safetySettings: SAFETY_SETTINGS
+    });
+    
+    const prompt = sport === 'NBA' 
+      ? `Search for DFS narrative context for tonight's NBA games on ${slateDate}:
+${gameDescriptions}
+
+Identify and return as JSON:
+{
+  "game_narratives": [
+    {
+      "game": "Team @ Team",
+      "vegas_total": 225.5,
+      "narratives": [
+        "Specific narrative (revenge game, injury impact, etc)"
+      ]
+    }
+  ],
+  "target_players": [
+    {
+      "name": "Player Name",
+      "team": "TM",
+      "reason": "Why they're a strong DFS play today",
+      "narrative_type": "injury_boost|revenge|hot_streak|usage_spike|matchup"
+    }
+  ],
+  "fade_players": [
+    {
+      "name": "Player Name", 
+      "team": "TM",
+      "reason": "Why to avoid in DFS",
+      "narrative_type": "rest|blowout_risk|tough_matchup|cold_streak"
+    }
+  ]
+}
+
+Focus on:
+1. **Usage Rate Spikes**: Key player OUT = teammate gets +15-25% usage boost
+2. **Revenge Games**: Players facing former teams (extra motivation)
+3. **Back-to-Backs**: 2nd night of B2B = fade veterans, target role players
+4. **Vegas Totals**: Games >230 = stack opportunities, <215 = lower ceilings
+5. **Hot Streaks**: Players exceeding season average by 20%+ in last 5 games
+6. **Minutes Trends**: Recent increases (30+ min last 3 games vs 25 season avg)`
+
+      : `Search for DFS narrative context for today's NFL games on ${slateDate}:
+${gameDescriptions}
+
+Identify and return as JSON:
+{
+  "game_narratives": [
+    {
+      "game": "Team @ Team",
+      "vegas_total": 48.5,
+      "weather": "Dome/Clear/Rain/Wind",
+      "narratives": [
+        "Specific narrative (injury impact, revenge game, etc)"
+      ]
+    }
+  ],
+  "target_players": [
+    {
+      "name": "Player Name",
+      "team": "TM",
+      "position": "QB/RB/WR/TE",
+      "reason": "Why they're a strong DFS play today",
+      "narrative_type": "injury_boost|revenge|hot_streak|usage_spike|matchup|weather_benefit"
+    }
+  ],
+  "fade_players": [
+    {
+      "name": "Player Name",
+      "team": "TM", 
+      "reason": "Why to avoid in DFS",
+      "narrative_type": "weather|tough_matchup|game_script|cold_streak"
+    }
+  ]
+}
+
+Focus on:
+1. **Injury Boosts**: WR1 OUT = WR2/WR3 target share spike
+2. **Weather**: Wind >15mph = fade deep passers, target RBs
+3. **Game Script**: Heavy favorites run more, trailing teams pass more
+4. **Red Zone Usage**: Who gets the TDs (goal-line backs, red zone WRs)
+5. **Revenge Games**: Players vs former teams
+6. **Vegas Totals**: Games >50 = shootout stacks, <40 = game stacks risky`;
+
+    const startTime = Date.now();
+    const result = await model.generateContent(prompt);
+    const duration = Date.now() - startTime;
+    
+    console.log(`[DFS Context] ✅ Narrative context fetched in ${duration}ms`);
+    
+    const text = result.response.text();
+    
+    // Parse JSON response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        narratives: parsed.game_narratives || [],
+        targetPlayers: parsed.target_players || [],
+        fadePlayers: parsed.fade_players || []
+      };
+    }
+    
+    return { narratives: [], targetPlayers: [], fadePlayers: [] };
+    
+  } catch (error) {
+    console.error(`[DFS Context] Narrative context error: ${error.message}`);
+    return { narratives: [], targetPlayers: [], fadePlayers: [] };
+  }
+}
+
+/**
  * Get teams playing on a specific date
  * @param {string} sport - 'NBA' or 'NFL'
  * @param {string} dateStr - Date YYYY-MM-DD
@@ -445,14 +658,25 @@ export async function buildDFSContext(platform, sport, dateStr) {
     };
   }
   
-  // Parallel fetch: BDL stats + Gemini Grounding salaries
-  const [bdlPlayers, groundedData] = await Promise.all([
+  // Get game info for narrative context
+  const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
+  const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr] }, 5) || [];
+  const gameList = games.map(g => ({
+    home_team: g.home_team?.abbreviation || g.home_team?.name,
+    visitor_team: g.visitor_team?.abbreviation || g.visitor_team?.name,
+    away_team: g.away_team?.abbreviation || g.away_team?.name
+  }));
+  
+  // Parallel fetch: BDL stats + Gemini Grounding salaries + Narrative context
+  const [bdlPlayers, groundedData, narrativeContext] = await Promise.all([
     fetchPlayerStatsFromBDL(sport, dateStr),
-    fetchDFSSalariesWithGrounding(platform, sport, slateDate, teams)
+    fetchDFSSalariesWithGrounding(platform, sport, slateDate, teams),
+    fetchDFSNarrativeContext(sport, slateDate, gameList)
   ]);
   
   console.log(`[DFS Context] BDL players: ${bdlPlayers.length}`);
   console.log(`[DFS Context] Grounded players: ${groundedData.players?.length || 0}`);
+  console.log(`[DFS Context] Narratives: ${narrativeContext.narratives?.length || 0} games, ${narrativeContext.targetPlayers?.length || 0} targets`);
   
   // Merge data sources
   const mergedPlayers = mergePlayerData(bdlPlayers, groundedData.players || []);
@@ -467,9 +691,17 @@ export async function buildDFSContext(platform, sport, dateStr) {
     date: dateStr,
     slateDate,
     players: mergedPlayers,
-    gamesCount: Math.ceil(teams.length / 2),
+    gamesCount: games.length,
+    games: gameList,
+    // Late-breaking info
     lateScratches: groundedData.late_scratches || [],
     weatherAlerts: groundedData.weather_alerts || [],
+    qbChanges: groundedData.qb_changes || [],
+    // Narrative context (what separates Gary from a math bot)
+    narratives: narrativeContext.narratives || [],
+    targetPlayers: narrativeContext.targetPlayers || [],
+    fadePlayers: narrativeContext.fadePlayers || [],
+    // Metadata
     groundingUsed: groundedData.groundingUsed,
     buildTimeMs: duration
   };
@@ -477,6 +709,7 @@ export async function buildDFSContext(platform, sport, dateStr) {
 
 export default {
   fetchDFSSalariesWithGrounding,
+  fetchDFSNarrativeContext,
   fetchPlayerStatsFromBDL,
   mergePlayerData,
   getTeamsPlayingToday,
