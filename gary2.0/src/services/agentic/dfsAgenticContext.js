@@ -54,18 +54,25 @@ export async function fetchDFSSalariesWithGrounding(platform, sport, slateDate, 
   const platformName = platform === 'draftkings' ? 'DraftKings' : 'FanDuel';
   const teamsStr = teams.length > 0 ? teams.join(', ') : 'all teams';
   
-  // Use Flash model for DFS (high volume, avoid quota issues)
-  const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-2.0-flash';
+  // Use Gemini 3 Flash for DFS - high volume, fast, with Google Search grounding
+  // Per memory: Use gemini-3-flash-preview for high-volume operations like player props/DFS
+  const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
   
   try {
     console.log(`[DFS Context] 🔍 Fetching ${platformName} ${sport} salaries for ${slateDate}`);
+    console.log(`[DFS Context] Using model: ${modelName} with temp 1.1 for high reasoning`);
     
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{
         google_search: {} // Gemini grounding with Google Search
       }],
-      safetySettings: SAFETY_SETTINGS
+      safetySettings: SAFETY_SETTINGS,
+      generationConfig: {
+        temperature: 1.1, // High reasoning temperature for DFS analysis
+        topP: 0.95,
+        maxOutputTokens: 8192
+      }
     });
     
     let prompt;
@@ -246,16 +253,23 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
         per_page: 100
       });
       
-      // Get current season
+      // Get current NBA season (2025-26 season = 2025)
+      // NBA season starts in October, so Oct-Dec = current year, Jan-Sept = previous year
       const now = new Date();
-      const season = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth(); // 0-indexed (0 = Jan, 11 = Dec)
+      const season = currentMonth >= 9 ? currentYear : currentYear - 1;
       
-      // Fetch season averages
+      console.log(`[DFS Context] Fetching NBA season ${season}-${season + 1} stats`);
+      
+      // Fetch season averages from BDL
       const playerIds = players.map(p => p.id).filter(Boolean).slice(0, 100);
       const seasonAverages = await ballDontLieService.getNbaSeasonAverages({
         season,
         player_ids: playerIds
       });
+      
+      console.log(`[DFS Context] Retrieved ${seasonAverages?.length || 0} player season averages`);
       
       // Merge stats with players
       const statsMap = new Map();
@@ -305,9 +319,14 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
         per_page: 150
       });
       
-      // Get current NFL season (regular season runs Sept-Feb)
+      // Get current NFL season (2025 season runs Sept 2025 - Feb 2026)
+      // NFL season starts in September, so Sept-Dec = current year, Jan-Aug = previous year
       const now = new Date();
-      const season = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth(); // 0-indexed (0 = Jan, 11 = Dec)
+      const season = currentMonth >= 8 ? currentYear : currentYear - 1;
+      
+      console.log(`[DFS Context] Fetching NFL ${season} season stats`);
       
       // Fetch NFL season stats from BDL
       // BDL NFL Season Stats provides: passing_yards, rushing_yards, receiving_yards, 
@@ -475,15 +494,22 @@ export async function fetchDFSNarrativeContext(sport, slateDate, games = []) {
     `${g.visitor_team || g.away_team} @ ${g.home_team}`
   ).join(', ');
   
-  const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-2.0-flash';
+  // Use Gemini 3 Flash for narrative context with grounding
+  const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
   
   try {
     console.log(`[DFS Context] 📖 Fetching narrative context for ${sport} games`);
+    console.log(`[DFS Context] Using model: ${modelName} with temp 1.1 for narrative analysis`);
     
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ google_search: {} }],
-      safetySettings: SAFETY_SETTINGS
+      safetySettings: SAFETY_SETTINGS,
+      generationConfig: {
+        temperature: 1.1, // High reasoning for narrative insights
+        topP: 0.95,
+        maxOutputTokens: 8192
+      }
     });
     
     const prompt = sport === 'NBA' 

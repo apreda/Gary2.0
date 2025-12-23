@@ -493,44 +493,44 @@ struct PerformanceBanner: View {
     }
     
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             // Main Record Row - Compact, no image (hero shows mood)
             HStack {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     // Record + Yesterday
-                    HStack(spacing: 6) {
+                    HStack(spacing: 7) {
                         Text("\(wins)-\(losses)")
-                            .font(.system(size: 24, weight: .heavy, design: .rounded))
+                            .font(.system(size: 26, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                         
                         Text("YESTERDAY")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.secondary)
                             .tracking(0.5)
                         
                         if pushes > 0 {
                             Text("• \(pushes)P")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.tertiary)
                         }
                     }
                     
                     // Mood Label - explains the hero image
                     Text(moodLabel)
-                        .font(.system(size: 16, weight: .heavy))
+                        .font(.system(size: 17, weight: .heavy))
                         .foregroundStyle(moodGradient)
                 }
                 
                 Spacer()
                 
                 // Win rate indicator
-                VStack(spacing: 1) {
+                VStack(spacing: 2) {
                     Text("\(Int(winRate * 100))%")
-                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .font(.system(size: 24, weight: .black, design: .rounded))
                         .foregroundStyle(winRate >= 0.5 ? Color(hex: "#10B981") : Color(hex: "#EF4444"))
                     
                     Text("WIN RATE")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.tertiary)
                         .tracking(0.5)
                 }
@@ -539,14 +539,14 @@ struct PerformanceBanner: View {
             // Sport-by-Sport Breakdown
             if !sportBreakdown.isEmpty {
                 Divider()
-                    .background(Color.white.opacity(0.1))
+                    .background(Color.white.opacity(0.12))
                 
                 HStack(spacing: 0) {
                     ForEach(Array(sportBreakdown.prefix(4).enumerated()), id: \.element.id) { index, sport in
                         if index > 0 {
                             Rectangle()
-                                .fill(Color.white.opacity(0.1))
-                                .frame(width: 1, height: 34)
+                                .fill(Color.white.opacity(0.12))
+                                .frame(width: 1, height: 38)
                         }
                         
                         SportMiniCard(sport: sport)
@@ -555,7 +555,7 @@ struct PerformanceBanner: View {
                 }
             }
         }
-        .padding(14)
+        .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(hex: "#0A0A0C"))
@@ -582,28 +582,28 @@ struct SportMiniCard: View {
     let sport: SupabaseAPI.SportRecord
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 5) {
             // League name as header
             Text(sport.league)
-                .font(.system(size: 11, weight: .heavy))
+                .font(.system(size: 12, weight: .heavy))
                 .foregroundStyle(sport.color)
                 .tracking(0.3)
             
             // Record
             HStack(spacing: 2) {
                 Text("\(sport.wins)")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(sport.wins > 0 ? Color(hex: "#10B981") : .secondary)
                 Text("-")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.tertiary)
                 Text("\(sport.losses)")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     // Always subtle gray for losses - keeps focus on the green wins
                     .foregroundStyle(Color.white.opacity(0.35))
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
     }
 }
 
@@ -669,8 +669,8 @@ struct HomeView: View {
                     Image(heroImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 250, height: 250)
-                        .shadow(color: heroImageGlow.opacity(0.5), radius: 30)
+                        .frame(width: 238, height: 238)
+                        .shadow(color: heroImageGlow.opacity(0.5), radius: 28)
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
@@ -5168,6 +5168,11 @@ struct LineupPositionRow: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     
+    /// Has content to show when expanded
+    private var hasExpandableContent: Bool {
+        !player.pivots.isEmpty || player.hasRationale
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Main Row
@@ -5208,7 +5213,7 @@ struct LineupPositionRow: View {
                         .frame(width: 40, alignment: .trailing)
                     
                     // Expand Chevron
-                    if !player.pivots.isEmpty {
+                    if hasExpandableContent {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(GaryColors.gold.opacity(0.7))
@@ -5222,16 +5227,65 @@ struct LineupPositionRow: View {
             }
             .buttonStyle(.plain)
             
-            // Expanded Pivots
-            if isExpanded && !player.pivots.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(player.pivots) { pivot in
-                        PivotRow(pivot: pivot)
+            // Expanded Content
+            if isExpanded && hasExpandableContent {
+                VStack(spacing: 12) {
+                    // Gary's Rationale Section
+                    if let rationale = player.rationale, !rationale.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Rationale text
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "lightbulb.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(GaryColors.gold)
+                                
+                                Text(rationale)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            
+                            // Supporting Stats Row
+                            if let stats = player.supportingStats, !stats.isEmpty {
+                                HStack(spacing: 8) {
+                                    ForEach(stats) { stat in
+                                        StatBadge(stat: stat, position: player.position)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color(hex: "#1A1A1D"))
+                        )
+                        .padding(.horizontal, 14)
+                    }
+                    
+                    // Pivot Alternatives
+                    if !player.pivots.isEmpty {
+                        VStack(spacing: 0) {
+                            // Pivots header
+                            HStack {
+                                Text("ALTERNATIVES")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .tracking(1)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 6)
+                            
+                            ForEach(player.pivots) { pivot in
+                                PivotRow(pivot: pivot)
+                            }
+                        }
+                        .padding(.leading, 34)
+                        .padding(.trailing, 14)
                     }
                 }
-                .padding(.leading, 48)
-                .padding(.trailing, 14)
-                .padding(.bottom, 8)
+                .padding(.bottom, 12)
             }
         }
         .background(
@@ -5252,6 +5306,7 @@ struct LineupPositionRow: View {
         case "TE": return Color(hex: "#F59E0B") // Amber
         case "FLEX", "FLX": return Color(hex: "#8B5CF6") // Purple
         case "DST", "DEF": return Color(hex: "#6B7280") // Gray
+        case "K": return Color(hex: "#A855F7") // Purple for Kicker
         case "PG": return Color(hex: "#EF4444")
         case "SG": return Color(hex: "#F59E0B")
         case "SF": return Color(hex: "#3B82F6")
@@ -5262,6 +5317,42 @@ struct LineupPositionRow: View {
         case "UTIL": return Color(hex: "#6366F1") // Indigo
         default: return Color(hex: "#6B7280")
         }
+    }
+}
+
+// MARK: - Stat Badge
+
+struct StatBadge: View {
+    let stat: DFSStat
+    let position: String
+    
+    private var badgeColor: Color {
+        switch stat.label {
+        case "Value": return GaryColors.gold
+        case "PPG", "Pass YPG": return Color(hex: "#EF4444")
+        case "RPG", "Rush YPG": return Color(hex: "#22C55E")
+        case "APG", "Rec": return Color(hex: "#3B82F6")
+        case "SPG", "BPG": return Color(hex: "#8B5CF6")
+        case "3PM": return Color(hex: "#F59E0B")
+        default: return Color(hex: "#6B7280")
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(stat.label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.7))
+            Text(stat.value)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(badgeColor)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(badgeColor.opacity(0.15))
+        )
     }
 }
 
