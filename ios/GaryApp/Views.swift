@@ -493,51 +493,44 @@ struct PerformanceBanner: View {
     }
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Main Record Row
-            HStack(spacing: 20) {
-                // Gary's mood-based image - BIG and prominent
-                Image(moodImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 90, height: 90)
-                    .shadow(color: (winRate >= 0.5 ? Color.green : Color.orange).opacity(0.6), radius: 16)
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    // Record
-                    HStack(spacing: 10) {
+        VStack(spacing: 14) {
+            // Main Record Row - Compact, no image (hero shows mood)
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Record + Yesterday
+                    HStack(spacing: 8) {
                         Text("\(wins)-\(losses)")
-                            .font(.system(size: 36, weight: .heavy, design: .rounded))
+                            .font(.system(size: 28, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                         
                         Text("YESTERDAY")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.secondary)
                             .tracking(0.5)
                         
                         if pushes > 0 {
                             Text("• \(pushes)P")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.tertiary)
                         }
                     }
                     
                     // Mood Label
                     Text(moodLabel)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(moodGradient)
                 }
                 
                 Spacer()
                 
                 // Win rate indicator
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     Text("\(Int(winRate * 100))%")
-                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .font(.system(size: 26, weight: .black, design: .rounded))
                         .foregroundStyle(winRate >= 0.5 ? Color(hex: "#10B981") : Color(hex: "#EF4444"))
                     
                     Text("WIN RATE")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.tertiary)
                         .tracking(0.5)
                 }
@@ -546,14 +539,14 @@ struct PerformanceBanner: View {
             // Sport-by-Sport Breakdown
             if !sportBreakdown.isEmpty {
                 Divider()
-                    .background(Color.white.opacity(0.15))
+                    .background(Color.white.opacity(0.12))
                 
                 HStack(spacing: 0) {
                     ForEach(Array(sportBreakdown.prefix(4).enumerated()), id: \.element.id) { index, sport in
                         if index > 0 {
                             Rectangle()
-                                .fill(Color.white.opacity(0.15))
-                                .frame(width: 1, height: 44)
+                                .fill(Color.white.opacity(0.12))
+                                .frame(width: 1, height: 36)
                         }
                         
                         SportMiniCard(sport: sport)
@@ -562,7 +555,7 @@ struct PerformanceBanner: View {
                 }
             }
         }
-        .padding(22)
+        .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(hex: "#0A0A0C"))
@@ -589,33 +582,33 @@ struct SportMiniCard: View {
     let sport: SupabaseAPI.SportRecord
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 5) {
             // Sport icon
             Image(systemName: sport.icon)
-                .font(.system(size: 20))
+                .font(.system(size: 16))
                 .foregroundStyle(sport.color)
             
             // Record
-            HStack(spacing: 3) {
+            HStack(spacing: 2) {
                 Text("\(sport.wins)")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(sport.wins > 0 ? Color(hex: "#10B981") : .secondary)
                 Text("-")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.tertiary)
                 Text("\(sport.losses)")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     // Always subtle gray for losses - keeps focus on the green wins
                     .foregroundStyle(Color.white.opacity(0.35))
             }
             
             // League name
             Text(sport.league)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .tracking(0.3)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
     }
 }
 
@@ -628,6 +621,34 @@ struct HomeView: View {
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
     
+    // Dynamic hero image based on yesterday's performance
+    private var heroImage: String {
+        let total = yesterdayRecord.wins + yesterdayRecord.losses
+        guard total > 0 else { return "GaryCoin" } // Default when no data
+        
+        let winRate = Double(yesterdayRecord.wins) / Double(total)
+        if winRate >= 0.80 { return "GaryFire" }
+        else if winRate >= 0.70 { return "GaryCooking" }
+        else if winRate >= 0.60 { return "GaryBeer" }
+        else if winRate >= 0.50 { return "GaryWorried" }
+        else if winRate >= 0.40 { return "GaryIceCold" }
+        else { return "GaryDoomsday" }
+    }
+    
+    // Glow color for hero image shadow
+    private var heroImageGlow: Color {
+        let total = yesterdayRecord.wins + yesterdayRecord.losses
+        guard total > 0 else { return GaryColors.gold }
+        
+        let winRate = Double(yesterdayRecord.wins) / Double(total)
+        if winRate >= 0.80 { return Color(hex: "#EF4444") } // Red/fire
+        else if winRate >= 0.70 { return Color(hex: "#F97316") } // Orange
+        else if winRate >= 0.60 { return Color(hex: "#10B981") } // Green
+        else if winRate >= 0.50 { return Color(hex: "#EAB308") } // Yellow
+        else if winRate >= 0.40 { return Color(hex: "#06B6D4") } // Cyan
+        else { return Color(hex: "#6366F1") } // Purple
+    }
+    
     var body: some View {
         ZStack {
             // Background - ignores safe area (fills entire screen)
@@ -636,23 +657,24 @@ struct HomeView: View {
             // Content - respects safe area
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    // Hero Section - Compact to make room for performance banner
-                    VStack(spacing: 0) {
-                        Image("GaryCoin") // Transparent coin image, no added background
+                    // Hero Section - Dynamic image based on Gary's performance
+                    VStack(spacing: 4) {
+                        Image(heroImage)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 120, height: 120)
+                            .frame(width: 160, height: 160)
+                            .shadow(color: heroImageGlow.opacity(0.4), radius: 20)
                         
                         Text("GARY A.I.")
-                            .font(.system(size: 22, weight: .heavy))
+                            .font(.system(size: 24, weight: .heavy))
                             .tracking(-0.5)
                             .foregroundStyle(GaryColors.goldGradient)
                         
                         Text("Intelligent Sports Analysis")
-                            .font(.caption)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 4)
+                    .padding(.top, 8)
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
