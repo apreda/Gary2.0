@@ -399,6 +399,66 @@ enum SupabaseAPI {
         }
     }
     
+    // MARK: - DFS Lineups (Gary's Fantasy)
+    
+    /// Fetch DFS lineups for a specific date
+    /// Returns lineups for both platforms (DraftKings, FanDuel) and available sports
+    static func fetchDFSLineups(date: String) async throws -> [DFSLineup] {
+        let url = buildURL(table: "dfs_lineups", query: [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "order", value: "platform.asc,sport.asc")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        
+        // Parse as array of dictionaries
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        
+        return jsonArray.compactMap { DFSLineup.from(dict: $0) }
+    }
+    
+    /// Fetch DFS lineups for a specific platform
+    static func fetchDFSLineups(date: String, platform: DFSPlatform) async throws -> [DFSLineup] {
+        let url = buildURL(table: "dfs_lineups", query: [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "platform", value: "eq.\(platform.rawValue)"),
+            URLQueryItem(name: "order", value: "sport.asc")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        
+        // Parse as array of dictionaries
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        
+        return jsonArray.compactMap { DFSLineup.from(dict: $0) }
+    }
+    
+    /// Fetch a specific DFS lineup by platform and sport
+    static func fetchDFSLineup(date: String, platform: DFSPlatform, sport: String) async throws -> DFSLineup? {
+        let url = buildURL(table: "dfs_lineups", query: [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "platform", value: "eq.\(platform.rawValue)"),
+            URLQueryItem(name: "sport", value: "eq.\(sport)")
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+        
+        // Parse as array of dictionaries
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let first = jsonArray.first else { return nil }
+        
+        return DFSLineup.from(dict: first)
+    }
+    
     // MARK: - Parsing Helpers
     
     private static func parsePicksRow(_ picks: PicksValue<GaryPick>?) -> [GaryPick] {

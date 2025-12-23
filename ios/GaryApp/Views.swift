@@ -669,8 +669,8 @@ struct HomeView: View {
                     Image(heroImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 200, height: 200)
-                        .shadow(color: heroImageGlow.opacity(0.5), radius: 24)
+                        .frame(width: 230, height: 230)
+                        .shadow(color: heroImageGlow.opacity(0.5), radius: 28)
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
@@ -4846,5 +4846,531 @@ enum Formatters {
         
         // Fallback: truncate to max length
         return String(team.prefix(maxLength))
+    }
+}
+
+// MARK: - Gary's Fantasy View (DFS Lineups)
+
+struct GaryFantasyView: View {
+    @State private var lineups: [DFSLineup] = []
+    @State private var loading = true
+    @State private var selectedPlatform: DFSPlatform = .draftkings
+    @State private var selectedSport: String = "NBA"
+    @State private var expandedPositions: Set<String> = []
+    
+    // Available sports based on loaded lineups
+    private var availableSports: [String] {
+        let sports = Set(lineups.filter { $0.platform == selectedPlatform.rawValue }.map { $0.sport })
+        return Array(sports).sorted()
+    }
+    
+    // Current lineup for selected platform/sport
+    private var currentLineup: DFSLineup? {
+        lineups.first { $0.platform == selectedPlatform.rawValue && $0.sport == selectedSport }
+    }
+    
+    var body: some View {
+        ZStack {
+            // Background
+            LiquidGlassBackground()
+            
+            // Content
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 8) {
+                    Text("Gary's Fantasy")
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.5)
+                        .foregroundStyle(GaryColors.goldGradient)
+                    
+                    Text("Daily Fantasy Lineups")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                
+                // Platform Toggle (DraftKings / FanDuel)
+                DFSPlatformToggle(selected: $selectedPlatform)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+                
+                // Sport Filter (NBA / NFL)
+                if !availableSports.isEmpty {
+                    DFSSportFilter(selected: $selectedSport, available: availableSports)
+                        .padding(.bottom, 16)
+                }
+                
+                // Content
+                if loading {
+                    Spacer()
+                    ProgressView()
+                        .tint(GaryColors.gold)
+                        .scaleEffect(1.2)
+                    Spacer()
+                } else if let lineup = currentLineup {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 16) {
+                            // Lineup Summary Card
+                            LineupSummaryCard(lineup: lineup)
+                                .padding(.horizontal, 16)
+                            
+                            // Position Rows
+                            ForEach(lineup.lineup) { player in
+                                LineupPositionRow(
+                                    player: player,
+                                    isExpanded: expandedPositions.contains(player.id),
+                                    onToggle: {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            if expandedPositions.contains(player.id) {
+                                                expandedPositions.remove(player.id)
+                                            } else {
+                                                expandedPositions.insert(player.id)
+                                            }
+                                        }
+                                    }
+                                )
+                                .padding(.horizontal, 16)
+                            }
+                            
+                            // Gary's Notes
+                            if let notes = lineup.gary_notes, !notes.isEmpty {
+                                GaryNotesCard(notes: notes)
+                                    .padding(.horizontal, 16)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.bottom, 100) // Space for tab bar
+                    }
+                    .refreshable {
+                        await loadLineups()
+                    }
+                } else {
+                    // No lineup available
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 50))
+                            .foregroundStyle(GaryColors.gold.opacity(0.5))
+                        Text("No \(selectedPlatform.displayName) \(selectedSport) lineup today")
+                            .foregroundStyle(.secondary)
+                        Text("Check back when games are scheduled")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 24)
+                    Spacer()
+                }
+            }
+        }
+        .task {
+            await loadLineups()
+        }
+        .onChange(of: selectedPlatform) { _ in
+            // Auto-select first available sport when platform changes
+            if let first = availableSports.first, !availableSports.contains(selectedSport) {
+                selectedSport = first
+            }
+        }
+    }
+    
+    private func loadLineups() async {
+        await MainActor.run { loading = true }
+        
+        let date = SupabaseAPI.todayEST()
+        
+        do {
+            let fetched = try await withTimeout(seconds: 15) {
+                try await SupabaseAPI.fetchDFSLineups(date: date)
+            }
+            await MainActor.run {
+                lineups = fetched
+                // Auto-select first available sport
+                if let first = availableSports.first, !availableSports.contains(selectedSport) {
+                    selectedSport = first
+                }
+                loading = false
+            }
+        } catch {
+            await MainActor.run {
+                lineups = []
+                loading = false
+            }
+        }
+    }
+}
+
+// MARK: - DFS Platform Toggle
+
+struct DFSPlatformToggle: View {
+    @Binding var selected: DFSPlatform
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(DFSPlatform.allCases, id: \.self) { platform in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selected = platform
+                    }
+                } label: {
+                    Text(platform.displayName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(selected == platform ? .white : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background {
+                            if selected == platform {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(GaryColors.gold)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(hex: "#1A1A1C"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                )
+        )
+    }
+}
+
+// MARK: - DFS Sport Filter
+
+struct DFSSportFilter: View {
+    @Binding var selected: String
+    let available: [String]
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(available, id: \.self) { sport in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selected = sport
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: sportIcon(for: sport))
+                            .font(.system(size: 12))
+                        Text(sport)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(selected == sport ? GaryColors.gold : .secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(selected == sport ? GaryColors.gold.opacity(0.15) : Color.clear)
+                            .overlay(
+                                Capsule()
+                                    .stroke(selected == sport ? GaryColors.gold.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 0.5)
+                            )
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+    
+    private func sportIcon(for sport: String) -> String {
+        switch sport {
+        case "NBA": return "basketball.fill"
+        case "NFL": return "football.fill"
+        default: return "sportscourt.fill"
+        }
+    }
+}
+
+// MARK: - Lineup Summary Card
+
+struct LineupSummaryCard: View {
+    let lineup: DFSLineup
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Header
+            HStack {
+                Text("GARY'S OPTIMAL LINEUP")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(GaryColors.gold)
+                
+                Spacer()
+                
+                Text(lineup.sport)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.1))
+                    )
+            }
+            
+            // Stats Row
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Salary")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(lineup.salaryDisplay)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                
+                Spacer()
+                
+                Rectangle()
+                    .fill(GaryColors.gold.opacity(0.3))
+                    .frame(width: 1, height: 30)
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Projected")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(String(format: "%.1f pts", lineup.projected_points))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(GaryColors.gold)
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: "#0D0D0F"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.4), GaryColors.gold.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+        )
+    }
+}
+
+// MARK: - Lineup Position Row (Expandable)
+
+struct LineupPositionRow: View {
+    let player: DFSPlayer
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Main Row
+            Button(action: onToggle) {
+                HStack(spacing: 12) {
+                    // Position Badge
+                    Text(player.position)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(positionColor(player.position))
+                        )
+                    
+                    // Player Info
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(player.player)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(player.team)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Salary
+                    Text(player.salaryFormatted)
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                    
+                    // Projected Points
+                    Text(String(format: "%.1f", player.projected_pts))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(GaryColors.gold)
+                        .frame(width: 40, alignment: .trailing)
+                    
+                    // Expand Chevron
+                    if !player.pivots.isEmpty {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold.opacity(0.7))
+                            .frame(width: 20)
+                    } else {
+                        Color.clear.frame(width: 20)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            // Expanded Pivots
+            if isExpanded && !player.pivots.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(player.pivots) { pivot in
+                        PivotRow(pivot: pivot)
+                    }
+                }
+                .padding(.leading, 48)
+                .padding(.trailing, 14)
+                .padding(.bottom, 8)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(hex: "#0D0D0F"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+        )
+    }
+    
+    private func positionColor(_ position: String) -> Color {
+        switch position {
+        case "QB": return Color(hex: "#EF4444") // Red
+        case "RB": return Color(hex: "#22C55E") // Green
+        case "WR": return Color(hex: "#3B82F6") // Blue
+        case "TE": return Color(hex: "#F59E0B") // Amber
+        case "FLEX", "FLX": return Color(hex: "#8B5CF6") // Purple
+        case "DST", "DEF": return Color(hex: "#6B7280") // Gray
+        case "PG": return Color(hex: "#EF4444")
+        case "SG": return Color(hex: "#F59E0B")
+        case "SF": return Color(hex: "#3B82F6")
+        case "PF": return Color(hex: "#22C55E")
+        case "C": return Color(hex: "#8B5CF6")
+        case "G": return Color(hex: "#EC4899") // Pink
+        case "F": return Color(hex: "#14B8A6") // Teal
+        case "UTIL": return Color(hex: "#6366F1") // Indigo
+        default: return Color(hex: "#6B7280")
+        }
+    }
+}
+
+// MARK: - Pivot Row
+
+struct PivotRow: View {
+    let pivot: DFSPivot
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // Connector line
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(tierColor.opacity(0.3))
+                    .frame(width: 1, height: 24)
+                Circle()
+                    .fill(tierColor)
+                    .frame(width: 6, height: 6)
+            }
+            
+            // Tier Badge
+            Text(tierAbbreviation)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(tierColor.opacity(0.8))
+                )
+            
+            // Player Info
+            VStack(alignment: .leading, spacing: 0) {
+                Text(pivot.player)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                Text(pivot.team)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            // Salary with diff
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(pivot.salaryFormatted)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.8))
+                if let diff = pivot.salaryDiff, diff != 0 {
+                    Text(pivot.salaryDiffFormatted)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(diff > 0 ? Color(hex: "#EF4444") : Color(hex: "#22C55E"))
+                }
+            }
+            
+            // Projected Points
+            Text(String(format: "%.1f", pivot.projected_pts))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(GaryColors.gold.opacity(0.8))
+                .frame(width: 36, alignment: .trailing)
+        }
+        .padding(.vertical, 6)
+    }
+    
+    private var tierColor: Color {
+        Color(hex: pivot.tierColor)
+    }
+    
+    private var tierAbbreviation: String {
+        switch pivot.tier {
+        case "direct": return "SWAP"
+        case "mid": return "MID"
+        case "budget": return "VALUE"
+        default: return pivot.tier.uppercased().prefix(4).description
+        }
+    }
+}
+
+// MARK: - Gary Notes Card
+
+struct GaryNotesCard: View {
+    let notes: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(GaryColors.gold)
+                Text("GARY'S NOTES")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(GaryColors.gold)
+            }
+            
+            Text(notes)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .lineSpacing(4)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#0D0D0F"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                )
+        )
     }
 }

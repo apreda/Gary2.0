@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab: Int = 0
+    @State private var showingSettings = false
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -19,7 +20,7 @@ struct ContentView: View {
                 case 3:
                     BillfoldView()
                 case 4:
-                    SettingsView()
+                    GaryFantasyView()
                 default:
                     HomeView()
                 }
@@ -33,7 +34,71 @@ struct ContentView: View {
             
             // Compact Floating Tab Bar
             CompactTabBar(selectedTab: $selectedTab)
+            
+            // Three-dot Settings Menu (top-right)
+            VStack {
+                HStack {
+                    Spacer()
+                    SettingsMenuButton(showingSettings: $showingSettings)
+                        .padding(.top, 8)
+                        .padding(.trailing, 16)
+                }
+                Spacer()
+            }
         }
+        .sheet(isPresented: $showingSettings) {
+            SettingsSheetView()
+        }
+    }
+}
+
+// MARK: - Settings Menu Button (Three-dot)
+
+struct SettingsMenuButton: View {
+    @Binding var showingSettings: Bool
+    
+    var body: some View {
+        Button {
+            showingSettings = true
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(GaryColors.gold)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Circle()
+                                .stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.5)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Settings Sheet View (Wraps SettingsView for sheet presentation)
+
+struct SettingsSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            SettingsView()
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -47,7 +112,7 @@ struct CompactTabBar: View {
         ("list.bullet.rectangle.fill", "Picks"),
         ("sportscourt.fill", "Props"),
         ("wallet.pass.fill", "Billfold"),
-        ("gearshape.fill", "Settings")
+        ("trophy.fill", "Fantasy")
     ]
     
     var body: some View {
