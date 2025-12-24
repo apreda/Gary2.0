@@ -820,8 +820,34 @@ struct HomeView: View {
             let date = SupabaseAPI.todayEST()
             let allPicks = try? await SupabaseAPI.fetchAllPicks(date: date)
             
+            // Filter to only TODAY's games (not tomorrow's NFL, etc.)
+            let todayOnlyPicks: [GaryPick]? = allPicks?.filter { pick in
+                guard let commenceTime = pick.commence_time else { return true }
+                
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let formatterNoFrac = ISO8601DateFormatter()
+                formatterNoFrac.formatOptions = [.withInternetDateTime]
+                
+                guard let gameDate = formatter.date(from: commenceTime) ?? formatterNoFrac.date(from: commenceTime) else {
+                    return true
+                }
+                
+                // Get today's date range in EST
+                var estCalendar = Calendar.current
+                estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+                let now = Date()
+                let todayStart = estCalendar.startOfDay(for: now)
+                guard let todayEnd = estCalendar.date(byAdding: .day, value: 1, to: todayStart) else {
+                    return true
+                }
+                
+                // Only include games happening TODAY
+                return gameDate >= todayStart && gameDate < todayEnd
+            }
+            
             // Select Top Pick: Check for is_top_pick first, then use thesis-based scoring
-            if let picks = allPicks, !picks.isEmpty {
+            if let picks = todayOnlyPicks, !picks.isEmpty {
                 // 1. Check for manual override (is_top_pick: true)
                 if let manualTopPick = picks.first(where: { $0.is_top_pick == true }) {
                     freePick = manualTopPick
@@ -4980,6 +5006,143 @@ enum Formatters {
 // MARK: - Gary's Fantasy View (DFS Lineups)
 
 struct GaryFantasyView: View {
+    @State private var animateIn = false
+    
+    var body: some View {
+        ZStack {
+            // Background
+            LiquidGlassBackground()
+            
+            // Coming Soon Content
+            VStack(spacing: 0) {
+                Spacer()
+                
+                VStack(spacing: 24) {
+                    // Icon with glow
+                    ZStack {
+                        // Glow effect
+                        Circle()
+                            .fill(GaryColors.gold.opacity(0.2))
+                            .frame(width: 140, height: 140)
+                            .blur(radius: 30)
+                        
+                        // Icon background
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "#1A1A1C"), Color(hex: "#0D0D0F")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 100, height: 100)
+                            .overlay(
+                                Circle()
+                                    .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1)
+                            )
+                        
+                        // Trophy icon
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(GaryColors.goldGradient)
+                    }
+                    .scaleEffect(animateIn ? 1 : 0.8)
+                    .opacity(animateIn ? 1 : 0)
+                    
+                    // Title
+                    VStack(spacing: 8) {
+                        Text("Gary's Fantasy")
+                            .font(.system(size: 28, weight: .heavy))
+                            .tracking(-0.5)
+                            .foregroundStyle(GaryColors.goldGradient)
+                        
+                        Text("Daily Fantasy Lineups")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 10)
+                    
+                    // Coming Soon Badge
+                    HStack(spacing: 8) {
+                        Image(systemName: "hammer.fill")
+                            .font(.system(size: 14))
+                        Text("COMING SOON")
+                            .font(.system(size: 14, weight: .bold))
+                            .tracking(1)
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(GaryColors.gold.opacity(0.15))
+                            .overlay(
+                                Capsule()
+                                    .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                    .opacity(animateIn ? 1 : 0)
+                    .scaleEffect(animateIn ? 1 : 0.9)
+                    
+                    // Description
+                    VStack(spacing: 16) {
+                        Text("Gary is building optimal DFS lineups for DraftKings & FanDuel")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                        
+                        // Features preview
+                        VStack(alignment: .leading, spacing: 12) {
+                            FeaturePreviewRow(icon: "sportscourt.fill", text: "NBA & NFL Daily Lineups")
+                            FeaturePreviewRow(icon: "dollarsign.circle.fill", text: "Salary-Optimized Rosters")
+                            FeaturePreviewRow(icon: "arrow.triangle.swap", text: "Gary's Swaps & Alternatives")
+                            FeaturePreviewRow(icon: "brain.head.profile", text: "AI-Powered Analysis")
+                        }
+                        .padding(.top, 8)
+                    }
+                    .padding(.horizontal, 32)
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 15)
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
+                Spacer()
+            }
+            .padding(.bottom, 80) // Space for tab bar
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                animateIn = true
+            }
+        }
+    }
+}
+
+// Feature preview row for Coming Soon
+struct FeaturePreviewRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(GaryColors.gold)
+                .frame(width: 24)
+            
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.7))
+            
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Full GaryFantasyView (Hidden for now)
+struct GaryFantasyViewFull: View {
     @State private var lineups: [DFSLineup] = []
     @State private var loading = true
     @State private var selectedPlatform: DFSPlatform = .draftkings
