@@ -999,8 +999,19 @@ struct DFSPivot: Identifiable, Decodable {
     let salary: Int
     let projected_pts: Double
     let salaryDiff: Int?      // Difference from starter's salary
+    let rationale: String?    // Why this is a good alternative
     
     var id: String { "\(tier)-\(player)-\(team)" }
+    
+    /// Is this swap saving money?
+    var savesMoney: Bool {
+        (salaryDiff ?? 0) < 0
+    }
+    
+    /// Is this swap costing more?
+    var costsMore: Bool {
+        (salaryDiff ?? 0) > 0
+    }
     
     /// Formatted salary (e.g., "$7,800")
     var salaryFormatted: String {
@@ -1056,7 +1067,8 @@ struct DFSPivot: Identifiable, Decodable {
             team: team,
             salary: salary,
             projected_pts: projectedPts,
-            salaryDiff: dict["salaryDiff"] as? Int
+            salaryDiff: dict["salaryDiff"] as? Int,
+            rationale: dict["rationale"] as? String
         )
     }
 }

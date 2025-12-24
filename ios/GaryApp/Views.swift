@@ -708,8 +708,8 @@ struct HomeView: View {
                         .offset(y: animateIn ? 0 : 30)
                         .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                     } else if !loading {
-                        // Placeholder when no picks available yet
-                        VStack(spacing: 16) {
+                        // Placeholder - Blurred mock pick card
+                        VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "star.fill")
                                     .foregroundStyle(GaryColors.goldGradient)
@@ -720,39 +720,32 @@ struct HomeView: View {
                             }
                             .padding(.horizontal, 4)
                             
-                            VStack(spacing: 20) {
-                                Image(systemName: "clock.badge.questionmark")
-                                    .font(.system(size: 50))
-                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
+                            // Blurred mock pick card with overlay
+                            ZStack {
+                                // Mock Pick Card (blurred)
+                                MockPickCard()
+                                    .blur(radius: 12)
                                 
-                                VStack(spacing: 8) {
-                                    Text("Top Pick Coming Soon")
-                                        .font(.system(size: 18, weight: .semibold))
+                                // Dark overlay for better text readability
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(Color.black.opacity(0.4))
+                                
+                                // "Picks Generated Daily" overlay
+                                VStack(spacing: 12) {
+                                    Image(systemName: "clock.fill")
+                                        .font(.system(size: 36))
+                                        .foregroundStyle(GaryColors.gold)
+                                    
+                                    Text("Picks Generated Daily")
+                                        .font(.system(size: 18, weight: .bold))
                                         .foregroundStyle(.white)
                                     
-                                    Text("Gary is analyzing today's games.\nCheck back shortly!")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                        .multilineTextAlignment(.center)
+                                    Text("Check back soon for today's analysis")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.white.opacity(0.7))
                                 }
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 40)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .fill(Color(hex: "#0D0D0F"))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: [GaryColors.gold.opacity(0.3), GaryColors.gold.opacity(0.1)],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 0.5
-                                            )
-                                    )
-                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
                         .padding(.horizontal, 16)
                         .opacity(animateIn ? 1 : 0)
@@ -2243,6 +2236,142 @@ struct GaryLogo: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Mock Pick Card (Blurred Placeholder)
+
+struct MockPickCard: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header Row
+            HStack {
+                // Sport icon placeholder
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 32, height: 32)
+                
+                // Sport badge
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(GaryColors.gold.opacity(0.2))
+                    .frame(width: 50, height: 22)
+                
+                Spacer()
+                
+                // Time badge
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 80, height: 26)
+            }
+            .padding(.bottom, 14)
+            
+            // Teams Row
+            HStack {
+                // Away team
+                VStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.15))
+                        .frame(width: 80, height: 18)
+                }
+                
+                Spacer()
+                
+                // @ symbol
+                Text("@")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.3))
+                
+                Spacer()
+                
+                // Home team
+                VStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.15))
+                        .frame(width: 80, height: 18)
+                }
+            }
+            .padding(.bottom, 8)
+            
+            // Venue
+            HStack {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(GaryColors.gold.opacity(0.4))
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 120, height: 12)
+            }
+            .padding(.bottom, 16)
+            
+            Divider()
+                .background(GaryColors.gold.opacity(0.2))
+                .padding(.bottom, 14)
+            
+            // Pick Row
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(GaryColors.gold.opacity(0.3))
+                        .frame(width: 140, height: 22)
+                    
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 100, height: 14)
+                }
+                
+                Spacer()
+                
+                // Odds badge
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(GaryColors.gold.opacity(0.15))
+                    .frame(width: 60, height: 32)
+            }
+            .padding(.bottom, 14)
+            
+            // Confidence bar
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.3))
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 70, height: 10)
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.15))
+                        .frame(width: 30, height: 12)
+                }
+                
+                // Progress bar
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(GaryColors.gold.opacity(0.1))
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(GaryColors.gold.opacity(0.4))
+                            .frame(width: geo.size.width * 0.75)
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(hex: "#0D0D0F"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.4), GaryColors.gold.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+        )
     }
 }
 
@@ -5193,7 +5322,6 @@ struct LineupPositionRow: View {
                         Text(player.player)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                            .lineLimit(1)
                         Text(player.team)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
@@ -5341,13 +5469,13 @@ struct StatBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(stat.label)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.7))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.8))
             Text(stat.value)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(badgeColor)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .background(
             Capsule()
@@ -5360,62 +5488,131 @@ struct StatBadge: View {
 
 struct PivotRow: View {
     let pivot: DFSPivot
+    @State private var isExpanded = false
     
     var body: some View {
-        HStack(spacing: 8) {
-            // Connector line
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(tierColor.opacity(0.3))
-                    .frame(width: 1, height: 24)
-                Circle()
-                    .fill(tierColor)
-                    .frame(width: 6, height: 6)
-            }
-            
-            // Tier Badge
-            Text(tierAbbreviation)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(tierColor.opacity(0.8))
-                )
-            
-            // Player Info
-            VStack(alignment: .leading, spacing: 0) {
-                Text(pivot.player)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                Text(pivot.team)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-            
-            // Salary with diff
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(pivot.salaryFormatted)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.8))
-                if let diff = pivot.salaryDiff, diff != 0 {
-                    Text(pivot.salaryDiffFormatted)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(diff > 0 ? Color(hex: "#EF4444") : Color(hex: "#22C55E"))
+        VStack(spacing: 0) {
+            // Main Row - Tappable to expand
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
                 }
+            }) {
+                HStack(spacing: 8) {
+                    // Connector line
+                    HStack(spacing: 0) {
+                        Rectangle()
+                            .fill(tierColor.opacity(0.3))
+                            .frame(width: 1, height: 24)
+                        Circle()
+                            .fill(tierColor)
+                            .frame(width: 6, height: 6)
+                    }
+                    
+                    // Tier Badge
+                    Text(tierAbbreviation)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(tierColor.opacity(0.8))
+                        )
+                    
+                    // Player Info
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(pivot.player)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                        Text(pivot.team)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Salary Difference (color-coded text, no box)
+                    if let diff = pivot.salaryDiff, diff != 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: diff < 0 ? "arrow.down" : "arrow.up")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text(pivot.salaryDiffFormatted)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        }
+                        .foregroundStyle(diff < 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                    }
+                    
+                    // Salary
+                    Text(pivot.salaryFormatted)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 50, alignment: .trailing)
+                    
+                    // Projected Points
+                    Text(String(format: "%.1f", pivot.projected_pts))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(GaryColors.gold.opacity(0.8))
+                        .frame(width: 32, alignment: .trailing)
+                    
+                    // Expand indicator (if has rationale)
+                    if pivot.rationale != nil {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold.opacity(0.5))
+                            .frame(width: 14)
+                    }
+                }
+                .padding(.vertical, 6)
             }
+            .buttonStyle(.plain)
             
-            // Projected Points
-            Text(String(format: "%.1f", pivot.projected_pts))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(GaryColors.gold.opacity(0.8))
-                .frame(width: 36, alignment: .trailing)
+            // Expanded Rationale
+            if isExpanded, let rationale = pivot.rationale, !rationale.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    // Vertical line connector
+                    Rectangle()
+                        .fill(tierColor.opacity(0.2))
+                        .frame(width: 1)
+                        .padding(.leading, 3)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "lightbulb.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(GaryColors.gold)
+                            Text("Why swap?")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(GaryColors.gold)
+                        }
+                        
+                        Text(rationale)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(tierColor.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(tierColor.opacity(0.2), lineWidth: 0.5)
+                            )
+                    )
+                }
+                .padding(.leading, 20)
+                .padding(.trailing, 4)
+                .padding(.bottom, 6)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
+            }
         }
-        .padding(.vertical, 6)
     }
     
     private var tierColor: Color {
