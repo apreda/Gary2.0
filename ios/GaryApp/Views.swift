@@ -669,8 +669,8 @@ struct HomeView: View {
                     Image(heroImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 238, height: 238)
-                        .shadow(color: heroImageGlow.opacity(0.5), radius: 28)
+                        .frame(width: 262, height: 262)
+                        .shadow(color: heroImageGlow.opacity(0.5), radius: 30)
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 20)
                     
@@ -1028,45 +1028,44 @@ struct GaryPicksView: View {
             }
         }
         
-        // Filter NFL picks on Mondays to only show today's games (MNF)
-        let filterNFLForMonday: ([GaryPick]) -> [GaryPick] = { picks in
+        // Filter out games that have already started (for all sports)
+        let filterPastGames: ([GaryPick]) -> [GaryPick] = { picks in
             let now = Date()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             
-            // Get current day of week in EST
-            var estCalendar = Calendar.current
-            estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-            let dayOfWeek = estCalendar.component(.weekday, from: now) // 1 = Sunday, 2 = Monday
-            
-            // If not Monday, return all picks
-            guard dayOfWeek == 2 else { return picks }
-            
-            // It's Monday - filter NFL picks to only today's games
-            let todayStart = estCalendar.startOfDay(for: now)
-            let todayEnd = estCalendar.date(byAdding: .day, value: 1, to: todayStart) ?? now
+            // Also try without fractional seconds
+            let formatterNoFrac = ISO8601DateFormatter()
+            formatterNoFrac.formatOptions = [.withInternetDateTime]
             
             return picks.filter { pick in
-                // Non-NFL picks pass through
-                guard (pick.league ?? "").uppercased() == "NFL" else { return true }
-                
-                // NFL picks: check if game is today
-                guard let commenceTime = pick.commence_time,
-                      let gameDate = ISO8601DateFormatter().date(from: commenceTime) else {
-                    return false
+                guard let commenceTime = pick.commence_time else {
+                    // No time specified, show the pick
+                    return true
                 }
                 
-                return gameDate >= todayStart && gameDate < todayEnd
+                // Try parsing with both formatters
+                let gameDate = formatter.date(from: commenceTime) ?? formatterNoFrac.date(from: commenceTime)
+                
+                guard let gameDate = gameDate else {
+                    // Couldn't parse date, show the pick
+                    return true
+                }
+                
+                // Only show picks for games that haven't started yet
+                return gameDate > now
             }
         }
         
-        // Apply Monday filter to all picks
-        let mondayFiltered = filterNFLForMonday(allPicks)
+        // Apply past games filter to all picks
+        let upcomingPicks = filterPastGames(allPicks)
         
         // For "All" tab: interleave picks by sport (NBA, NFL, NCAAB, NHL, NCAAF, EPL, repeat)
         // This gives users variety as they scroll instead of all picks from one sport first
         guard selectedSport != .all else {
-            return interleaveBySport(mondayFiltered)
+            return interleaveBySport(upcomingPicks)
         }
-        return sortByTime(mondayFiltered.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
+        return sortByTime(upcomingPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
     }
     
     /// Interleave picks by sport in round-robin order
