@@ -655,15 +655,15 @@ struct HomeView: View {
                     // Header - Brand
                     VStack(spacing: 2) {
                         Text("GARY A.I.")
-                            .font(.system(size: 26, weight: .heavy))
+                            .font(.system(size: 31, weight: .heavy))
                             .tracking(-0.5)
                             .foregroundStyle(GaryColors.goldGradient)
                         
                         Text("Intelligent Sports Analysis")
-                            .font(.subheadline)
+                            .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 2)
                     
                     // Hero Image - Dynamic based on Gary's performance
                     Image(heroImage)
