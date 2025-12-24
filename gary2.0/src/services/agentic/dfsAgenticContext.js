@@ -37,6 +37,40 @@ const SAFETY_SETTINGS = [
 ];
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * DFS MODEL CONFIGURATION - Gemini 3 Flash for Gary's Fantasy
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Model: gemini-3-flash-preview (high volume, low latency for DFS)
+ * Temperature: 1.1 (High Creativity/Variance for diverse lineup builds)
+ * Reasoning_Level: HIGH (Enable full chain-of-thought thinking blocks)
+ * Grounding: ENABLED (Use Google Search tool for all sports/real-time data)
+ * 
+ * This configuration enables Gary to:
+ * - Search for live DraftKings/FanDuel salaries via Google
+ * - Find injury reports and late scratches
+ * - Discover narrative context (revenge games, usage spikes, etc.)
+ * - Generate creative lineup strategies with high variance
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const DFS_MODEL_CONFIG = {
+  model: process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview',
+  temperature: 1.1,
+  reasoningLevel: 'HIGH',
+  grounding: 'ENABLED',
+  maxOutputTokens: 8192,
+  topP: 0.95
+};
+
+console.log(`[DFS Context] Initialized with MODEL_CONFIG:`, {
+  model: DFS_MODEL_CONFIG.model,
+  temp: DFS_MODEL_CONFIG.temperature,
+  reasoning: DFS_MODEL_CONFIG.reasoningLevel,
+  grounding: DFS_MODEL_CONFIG.grounding
+});
+
+/**
  * Fetch DFS salaries and injury data using Gemini Grounding
  * @param {string} platform - 'draftkings' or 'fanduel'
  * @param {string} sport - 'NBA' or 'NFL'
@@ -54,24 +88,25 @@ export async function fetchDFSSalariesWithGrounding(platform, sport, slateDate, 
   const platformName = platform === 'draftkings' ? 'DraftKings' : 'FanDuel';
   const teamsStr = teams.length > 0 ? teams.join(', ') : 'all teams';
   
-  // Use Gemini 3 Flash for DFS - high volume, fast, with Google Search grounding
-  // Per memory: Use gemini-3-flash-preview for high-volume operations like player props/DFS
-  const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
-  
+  // Apply DFS_MODEL_CONFIG for salary fetching
   try {
     console.log(`[DFS Context] 🔍 Fetching ${platformName} ${sport} salaries for ${slateDate}`);
-    console.log(`[DFS Context] Using model: ${modelName} with temp 1.1 for high reasoning`);
+    console.log(`[DFS Context] MODEL_CONFIG: ${DFS_MODEL_CONFIG.model} | temp=${DFS_MODEL_CONFIG.temperature} | reasoning=${DFS_MODEL_CONFIG.reasoningLevel} | grounding=${DFS_MODEL_CONFIG.grounding}`);
     
     const model = genAI.getGenerativeModel({
-      model: modelName,
+      model: DFS_MODEL_CONFIG.model,
       tools: [{
-        google_search: {} // Gemini grounding with Google Search
+        google_search: {} // Grounding: ENABLED - Use Google Search for all sports/real-time data
       }],
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 1.1, // High reasoning temperature for DFS analysis
-        topP: 0.95,
-        maxOutputTokens: 8192
+        temperature: DFS_MODEL_CONFIG.temperature,
+        topP: DFS_MODEL_CONFIG.topP,
+        maxOutputTokens: DFS_MODEL_CONFIG.maxOutputTokens,
+        // Reasoning_Level: HIGH - Enable full chain-of-thought thinking blocks
+        thinkingConfig: {
+          includeThoughts: true
+        }
       }
     });
     
@@ -494,21 +529,23 @@ export async function fetchDFSNarrativeContext(sport, slateDate, games = []) {
     `${g.visitor_team || g.away_team} @ ${g.home_team}`
   ).join(', ');
   
-  // Use Gemini 3 Flash for narrative context with grounding
-  const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
-  
+  // Apply DFS_MODEL_CONFIG for narrative context
   try {
     console.log(`[DFS Context] 📖 Fetching narrative context for ${sport} games`);
-    console.log(`[DFS Context] Using model: ${modelName} with temp 1.1 for narrative analysis`);
+    console.log(`[DFS Context] MODEL_CONFIG: ${DFS_MODEL_CONFIG.model} | temp=${DFS_MODEL_CONFIG.temperature} | reasoning=${DFS_MODEL_CONFIG.reasoningLevel} | grounding=${DFS_MODEL_CONFIG.grounding}`);
     
     const model = genAI.getGenerativeModel({
-      model: modelName,
-      tools: [{ google_search: {} }],
+      model: DFS_MODEL_CONFIG.model,
+      tools: [{ google_search: {} }], // Grounding: ENABLED
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 1.1, // High reasoning for narrative insights
-        topP: 0.95,
-        maxOutputTokens: 8192
+        temperature: DFS_MODEL_CONFIG.temperature,
+        topP: DFS_MODEL_CONFIG.topP,
+        maxOutputTokens: DFS_MODEL_CONFIG.maxOutputTokens,
+        // Reasoning_Level: HIGH - Enable thinking blocks
+        thinkingConfig: {
+          includeThoughts: true
+        }
       }
     });
     
