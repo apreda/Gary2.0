@@ -1,5 +1,6 @@
 import { ballDontLieService } from '../ballDontLieService.js';
-import { perplexityService } from '../perplexityService.js';
+import { getGroundedRichContext, getGroundedWeather, geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
+// Context sourced from Gemini 3 Flash Grounding
 import { formatGameTimeEST, buildMarketSnapshot, calcRestInfo, calcRecentForm, parseGameDate } from './sharedUtils.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
@@ -222,55 +223,40 @@ export async function buildNflAgenticContext(game, options = {}) {
   
   try {
     const dateStr = commenceDate.toISOString().slice(0, 10);
-    richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nfl', dateStr);
+    richContext = await getGroundedRichContext(game.home_team, game.away_team, 'nfl', dateStr);
     
-    // Extract weather from rich context
-    if (richContext?.weather) {
-      weatherConditions = richContext.weather;
-      console.log(`[Agentic][NFL] Weather from rich context for ${game.away_team} @ ${game.home_team}:`, weatherConditions);
-    }
-    
-    // FALLBACK: If no weather from rich context OR if parsing fails, use dedicated weather fetch
-    let weatherData = weatherConditions ? parseNflWeather(weatherConditions) : null;
-    if (!weatherData || weatherData.temp === null) {
-      console.log(`[Agentic][NFL] Rich context weather insufficient, fetching dedicated NFL weather...`);
-      const dedicatedWeather = await perplexityService.getNFLGameWeather(
-        game.home_team,
-        game.away_team,
-        null,
-        'tonight'
-      );
-      if (dedicatedWeather && dedicatedWeather.temperature !== null) {
-        const tempStr = `${dedicatedWeather.temperature}°F`;
-        const windStr = dedicatedWeather.wind_speed ? `, wind ${dedicatedWeather.wind_speed} mph` : '';
-        const condStr = dedicatedWeather.conditions ? `, ${dedicatedWeather.conditions}` : '';
-        const domeStr = dedicatedWeather.is_dome ? ' (Dome stadium)' : '';
-        weatherConditions = `${tempStr}${windStr}${condStr}${domeStr}`;
-        console.log(`[Agentic][NFL] Dedicated weather result: ${weatherConditions}`);
-        weatherData = parseNflWeather(weatherConditions);
+    // Fetch weather via Gemini Grounding
+    const groundedWeather = await getGroundedWeather(game.home_team, game.away_team, dateStr);
+    if (groundedWeather) {
+      const tempStr = groundedWeather.temperature ? `${groundedWeather.temperature}°F` : '';
+      const windStr = groundedWeather.wind || '';
+      const condStr = groundedWeather.conditions || '';
+      const domeStr = groundedWeather.isDome ? ' (Dome stadium)' : '';
+      weatherConditions = `${tempStr}${windStr ? ', ' + windStr : ''}${condStr ? ', ' + condStr : ''}${domeStr}`;
+      console.log(`[Agentic][NFL] Weather from Grounding: ${weatherConditions}`);
+      
+      // Check if adverse conditions
+      const temp = groundedWeather.temperature;
+      const isAdverse = !groundedWeather.isDome && 
+        ((temp && temp < 40) || 
+         condStr.toLowerCase().includes('snow') || 
+         condStr.toLowerCase().includes('rain'));
+      
+      // Fetch QB weather performance if adverse conditions detected
+      if (isAdverse) {
+        console.log(`[Agentic][NFL] Adverse weather detected, fetching QB weather analysis...`);
+        const qbQuery = `NFL QB performance history in adverse weather for ${game.away_team} @ ${game.home_team}:
+Current conditions: ${weatherConditions}
+For each team's starting QB, analyze their historical performance in similar conditions (cold/rain/snow/wind).`;
         
-        // Skip weather analysis if dome
-        if (dedicatedWeather.is_dome) {
-          console.log(`[Agentic][NFL] Dome stadium - weather won't affect gameplay`);
-          weatherData.isAdverse = false;
+        const qbResult = await geminiGroundingSearch(qbQuery, { temperature: 0.2, maxTokens: 1500 });
+        if (qbResult?.success) {
+          qbWeatherAnalysis = { raw: qbResult.data };
         }
       }
     }
-    
-    // Fetch QB weather performance if adverse conditions detected
-    if (weatherData?.isAdverse) {
-      console.log(`[Agentic][NFL] Adverse weather (${weatherData.type}), fetching QB weather performance...`);
-      // Note: Would need QB names from roster - using team names as fallback for agentic context
-      qbWeatherAnalysis = await perplexityService.getQBWeatherPerformance(
-        `${game.home_team} QB`,
-        `${game.away_team} QB`,
-        game.home_team,
-        game.away_team,
-        weatherData
-      );
-    }
   } catch (error) {
-    console.warn('[Agentic][NFL] Perplexity context failed:', error.message);
+    console.warn('[Agentic][NFL] Grounding context failed:', error.message);
   }
 
   const records = buildRecordMap(standings, homeTeam, awayTeam);

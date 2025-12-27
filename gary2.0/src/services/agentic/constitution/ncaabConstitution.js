@@ -293,6 +293,32 @@ Before making a pick, verify:
 6. ✓ Is this a "buy game" or meaningful matchup?
 
 If spreadReliability is VERY_LOW or data quality is poor, strongly consider PASSING.
+
+### 🎯 NCAAB ML CONVICTION CHECK
+Before taking the spread on an underdog, STOP and ask:
+
+1. "Do I believe this team WINS outright?"
+   - YES → Take the ML. College hoops upsets happen ALL THE TIME.
+   - NO → Spread is correct.
+
+2. "What's the ML price?"
+   - +120 to +180 = Strong value if you believe they WIN
+   - +180 to +250 = Excellent value with real upset thesis
+   - +250+ = Only with maximum conviction
+
+3. "What's my thesis mechanism?"
+   - "They keep it close" → Spread
+   - "Home court advantage + star player carries them" → ML
+   - "Chaos, tempo control, and hot shooting" → ML
+
+4. "Am I being a scared bettor?"
+   - The spread feels safe because you can be WRONG and still win
+   - But if you're RIGHT that they WIN, you're leaving money on the table
+
+**THE VALUE RULE:**
+- March Madness is built on upsets. College basketball rewards conviction.
+- A +160 underdog that wins 38% of the time is HUGELY profitable
+- If your rationale says "this team wins," put your money where your mouth is
 `;
 
 export default NCAAB_CONSTITUTION;

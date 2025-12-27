@@ -1,7 +1,6 @@
 import { supabase } from '../supabaseClient.js';
 import { createClient } from '@supabase/supabase-js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { perplexityService } from './perplexityService.js';
 import { pickResultsAnalyzer } from './pickResultsAnalyzer.js';
 import { oddsService } from './oddsService.js';
 import { garyPerformanceService } from './garyPerformanceService.js';
@@ -233,133 +232,8 @@ export const resultsCheckerService = {
         }
       }
       
-      // 3. Use Perplexity as last resort
-      try {
-        console.log('Using Perplexity as fallback for game result');
-        const formattedDate = new Date(date).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric'
-        });
-        
-        // Use a more specific query format to get exactly what we need
-        const query = `What was the final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Respond with ONLY: [Team1] [Score1], [Team2] [Score2].`;
-        
-        const result = await perplexityService.fetchRealTimeInfo(query);
-        console.log(`Perplexity response for ${awayTeam} @ ${homeTeam}: "${result}"`);
-        
-        if (result) {
-          console.log(`Successfully extracted score: ${result}`);
-          
-          // Try multiple patterns to handle different response formats
-          
-          // Pattern 1: Direct score pattern (digits-digits)
-          const directScorePattern = /(\d+)\s*[-:]\s*(\d+)/;
-          const directMatch = result.match(directScorePattern);
-          
-          if (directMatch && directMatch.length >= 3) {
-            console.log(`Found direct score pattern: ${directMatch[1]}-${directMatch[2]}`);
-            const score1 = Number(directMatch[1]);
-            const score2 = Number(directMatch[2]);
-            
-            // Since we don't know which is home/away in this format, match with team names
-            return {
-              homeScore: score2, // Assuming second score is home
-              awayScore: score1, // Assuming first score is away
-              winner: score2 > score1 ? homeTeam : awayTeam,
-              final_score: `${score1}-${score2}`,
-              source: 'Perplexity-Direct'
-            };
-          }
-          
-          // Pattern 2: Team name and score pattern like "Detroit Tigers 5, Toronto Blue Jays 4"
-          const teamScorePattern = /([A-Za-z][A-Za-z\s\.\-']+)\s*(\d+)\s*,\s*([A-Za-z][A-Za-z\s\.\-']+)\s*(\d+)/i;
-          const teamMatch = result.match(teamScorePattern);
-          
-          if (teamMatch && teamMatch.length >= 5) {
-            console.log(`Found team name and score pattern`);
-            const team1 = teamMatch[1].trim();
-            const score1 = Number(teamMatch[2]);
-            const team2 = teamMatch[3].trim();
-            const score2 = Number(teamMatch[4]);
-            
-            console.log(`Team 1: ${team1} (${score1}), Team 2: ${team2} (${score2})`);
-            
-            // Determine which team is home vs away
-            let homeTeamName = homeTeam;
-            let awayTeamName = awayTeam;
-            
-            // The strings might be null or undefined, so add safety checks
-            const safeHomeTeam = (homeTeamName || '').toLowerCase();
-            const safeAwayTeam = (awayTeamName || '').toLowerCase();
-            const safeTeam1 = (team1 || '').toLowerCase();
-            const safeTeam2 = (team2 || '').toLowerCase();
-            
-            let homeMatchesTeam1 = safeTeam1.includes(safeHomeTeam) || safeHomeTeam.includes(safeTeam1);
-            let homeMatchesTeam2 = safeTeam2.includes(safeHomeTeam) || safeHomeTeam.includes(safeTeam2);
-            
-            if (homeMatchesTeam1) {
-              return {
-                homeScore: score1,
-                awayScore: score2,
-                winner: score1 > score2 ? homeTeam : awayTeam,
-                final_score: `${score2}-${score1}`,
-                source: 'Perplexity-Teams'
-              };
-            } else if (homeMatchesTeam2) {
-              return {
-                homeScore: score2,
-                awayScore: score1,
-                winner: score2 > score1 ? homeTeam : awayTeam,
-                final_score: `${score1}-${score2}`,
-                source: 'Perplexity-Teams'
-              };
-            } else {
-              // If matching is unclear, try another approach - look for words like "at"
-              const isHomeSecond = result.includes(' at ') || result.includes(' @ ');
-              
-              if (isHomeSecond) {
-                return {
-                  homeScore: score2,
-                  awayScore: score1,
-                  winner: score2 > score1 ? homeTeam : awayTeam,
-                  final_score: `${score1}-${score2}`,
-                  source: 'Perplexity-AtFormat'
-                };
-              } else {
-                // If all else fails, make a best guess based on which team was mentioned first
-                return {
-                  homeScore: score2,
-                  awayScore: score1,
-                  winner: score2 > score1 ? homeTeam : awayTeam,
-                  final_score: `${score1}-${score2}`,
-                  source: 'Perplexity-Guess'
-                };
-              }
-            }
-          }
-          
-          // Pattern 3: Just extract all numbers as possible scores
-          const allNumbers = result.match(/\d+/g);
-          if (allNumbers && allNumbers.length >= 2) {
-            console.log(`Found numbers in response: ${allNumbers[0]}, ${allNumbers[1]}`);
-            const score1 = Number(allNumbers[0]);
-            const score2 = Number(allNumbers[1]);
-            
-            return {
-              homeScore: score2, // Assume second number is home score
-              awayScore: score1, // Assume first number is away score
-              winner: score2 > score1 ? homeTeam : awayTeam,
-              final_score: `${score1}-${score2}`,
-              source: 'Perplexity-Numbers'
-            };
-          }
-        }
-      } catch (error) {
-        console.error('Perplexity error:', error);
-      }
-      
-      console.log(`Could not find score for ${league} game: ${awayTeam} @ ${homeTeam}`);
+      // Using only Odds API and BDL for scores
+      console.log(`Could not find score for ${league} game: ${awayTeam} @ ${homeTeam} from Odds API or BDL`);
       return null;
     } catch (error) {
       console.error(`Error fetching game result: ${error.message}`);
@@ -537,12 +411,12 @@ export const resultsCheckerService = {
       const scores = {};
       let missingGames = [];
 
-      // 1. Perplexity primary
+      // 1. Try Odds API first
       try {
-        // Use direct method call with proper reference
-        const perplexityScores = await resultsCheckerService.getScoresFromPerplexity(date, picks);
-        if (perplexityScores?.success && Object.keys(perplexityScores.scores || {}).length > 0) {
-          Object.assign(scores, perplexityScores.scores);
+        // Use direct method call with proper reference - this now uses Odds API internally
+        const apiScores = await resultsCheckerService.getScoresFromOddsApi(date, picks);
+        if (apiScores?.success && Object.keys(apiScores.scores || {}).length > 0) {
+          Object.assign(scores, apiScores.scores);
           const foundPicks = new Set(Object.keys(scores));
           missingGames = picks.filter(pick => !foundPicks.has(pick.pick || pick.originalPick));
           if (missingGames.length === 0) {
@@ -552,7 +426,7 @@ export const resultsCheckerService = {
           missingGames = [...picks];
         }
       } catch (err) {
-        console.error('Perplexity failed', err);
+        console.error('Odds API score fetch failed', err);
         missingGames = [...picks];
       }
 
@@ -592,249 +466,12 @@ export const resultsCheckerService = {
         }
       }
 
-      // 3. Final Perplexity pass if still missing
+      // Log any missing games (no additional fallback available)
       if (missingGames.length > 0) {
-        try {
-          console.log('Making final attempt with Perplexity for remaining games...');
-          // Use the perplexityService reference to call the function correctly
-          const perplexityPromises = missingGames.map(async pick => {
-            try {
-              // Extract team names if not explicitly provided
-              const pickStr = pick.pick || pick.originalPick || '';
-              let homeTeam = pick.home_team;
-              let awayTeam = pick.away_team;
-              const league = pick.league || 'NBA';
-              
-              if (!homeTeam || !awayTeam) {
-                // Extract team names from the pick string if not provided
-                const teamMatch = pickStr.match(/([A-Za-z. ]+)\s+(?:@|vs\.?)\s+([A-Za-z. ]+)/i);
-                if (teamMatch && teamMatch.length >= 3) {
-                  awayTeam = teamMatch[1].trim();
-                  homeTeam = teamMatch[2].trim();
-                } else {
-                  // If can't extract both teams, use what we can find
-                  const singleTeamMatch = pickStr.match(/^([A-Za-z. ]+)/i);
-                  const pickTeam = singleTeamMatch ? singleTeamMatch[1].trim() : '';
-                  
-                  if (!homeTeam && !awayTeam) {
-                    // If we don't have either, use the extracted team as both for searching
-                    homeTeam = pickTeam;
-                    awayTeam = pickTeam;
-                  } else if (!homeTeam) {
-                    homeTeam = pickTeam;
-                  } else if (!awayTeam) {
-                    awayTeam = pickTeam;
-                  }
-                }
-              }
-              
-              console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
-              
-              // Use the exact date provided in the query
-              const gameDate = new Date(date);
-              const formattedDate = gameDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-              
-              // Use Perplexity directly for this specific score lookup
-              const query = `What was the final score of the ${league} game involving ${awayTeam} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
-              
-              // Call perplexity directly instead of trying to use getScoresFromPerplexity
-              const perplexityResponse = await perplexityService.fetchRealTimeInfo(query, {
-                model: 'sonar',
-                temperature: 0.1,
-                maxTokens: 150
-              });
-              
-              let result = { success: false };
-              
-              if (perplexityResponse) {
-                // Try to extract the score using multiple patterns
-                // Pattern 1: Standard format with scores between team names
-                const scorePattern1 = /([A-Za-z\s.]+)\s*(\d+)[^\d]+(\d+)\s*([A-Za-z\s.]+)/i;
-                // Pattern 2: Comma-separated format like "Team A 5, Team B 3"
-                const scorePattern2 = /([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)\s*,\s*([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)/i;
-                
-                // Try each pattern in sequence
-                let scoreMatch = perplexityResponse.match(scorePattern1);
-                if (!scoreMatch) {
-                  scoreMatch = perplexityResponse.match(scorePattern2);
-                }
-                
-                if (scoreMatch && scoreMatch.length >= 5) {
-                  console.log(`Successfully extracted score: ${scoreMatch[0]}`);
-                  // Check if we matched against scorePattern2 (comma-separated format)
-                  const isCommaFormat = scoreMatch[0].includes(',');
-                  
-                  let firstTeam, secondTeam, firstScore, secondScore;
-                  
-                  if (isCommaFormat) {
-                    // In comma format, team names and scores are in different positions
-                    // "Team A 5, Team B 3" => first = A, first score = 5, second = B, second score = 3
-                    firstTeam = scoreMatch[1].trim();
-                    firstScore = parseInt(scoreMatch[2]);
-                    secondTeam = scoreMatch[3].trim();
-                    secondScore = parseInt(scoreMatch[4]);
-                  } else {
-                    // Standard format: "Team A 5 - 3 Team B"
-                    firstTeam = scoreMatch[1].trim();
-                    secondTeam = scoreMatch[4].trim();
-                    firstScore = parseInt(scoreMatch[2]);
-                    secondScore = parseInt(scoreMatch[3]);
-                  }
-                  
-                  // Add safety checks for undefined homeTeam, awayTeam, or firstTeam
-                  const safeHomeTeam = homeTeam ? homeTeam.toLowerCase() : '';
-                  const safeAwayTeam = awayTeam ? awayTeam.toLowerCase() : '';
-                  const safeFirstTeam = firstTeam ? firstTeam.toLowerCase() : '';
-                  const safeSecondTeam = secondTeam ? secondTeam.toLowerCase() : '';
-                  
-                  // Determine home/away scores using safer comparisons
-                  let homeScore, awayScore;
-                  
-                  // Try to match team names
-                  const firstMatchesHome = safeFirstTeam.includes(safeHomeTeam) || safeHomeTeam.includes(safeFirstTeam);
-                  const secondMatchesHome = safeSecondTeam.includes(safeHomeTeam) || safeHomeTeam.includes(safeSecondTeam);
-                  
-                  if (firstMatchesHome) {
-                    homeScore = firstScore;
-                    awayScore = secondScore;
-                  } else if (secondMatchesHome) {
-                    homeScore = secondScore;
-                    awayScore = firstScore;
-                  } else {
-                    // If no matches, make best guess (assume second team is home)
-                    homeScore = secondScore;
-                    awayScore = firstScore;
-                  }
-                  
-                  result = {
-                    success: true,
-                    scores: {
-                      [pickStr]: {
-                        home_team: homeTeam || 'Unknown',
-                        away_team: awayTeam || 'Unknown',
-                        home_score: homeScore,
-                        away_score: awayScore,
-                        league: league,
-                        final: true,
-                        source: 'Perplexity'
-                      }
-                    }
-                  };
-                } else {
-                  console.log(`Could not extract score pattern from response: ${perplexityResponse}`);
-                }
-              }
-              
-              return { 
-                pick: pick.pick || pick.originalPick, 
-                pickData: pick,
-                result,
-                processedTeams: { homeTeam, awayTeam, league }
-              };
-            } catch (err) {
-              console.error(`Error getting scores for ${pick.pick || pick.originalPick}:`, err);
-              return { pick: pick.pick || pick.originalPick, result: { success: false } };
-            }
-          });
-          
-          const perplexityResults = await Promise.all(perplexityPromises);
-          const finalPerplexityScores = { success: true, scores: {} };
-          
-          perplexityResults.forEach(({ pick, pickData, result, processedTeams }) => {
-            if (result && result.success && result.scores) {
-              // Extract the score data
-              const scores = result.scores;
-              
-              // Determine if the bet won by checking which team was picked
-              let betResult = 'unknown';
-              
-              if (pickData) {
-                const pickedTeam = pickData.pick?.split(/\s+/)[0] || '';
-                const spreadMatch = pickData.pick?.match(/([+-]?\d+(\.\d+)?)/i);
-                const hasSpread = spreadMatch && spreadMatch.length > 0;
-                const spread = hasSpread ? parseFloat(spreadMatch[0]) : 0;
-                
-                // Check if we're dealing with a spread bet or moneyline
-                if (hasSpread) {
-                  // It's a spread bet
-                  const isPicked = (team) => {
-                    // Add safety checks for undefined variables
-                    if (!pickedTeam || !team) return false;
-                    const safePickedTeam = String(pickedTeam).toLowerCase();
-                    const safeTeam = String(team).toLowerCase();
-                    return safePickedTeam.includes(safeTeam);
-                  };
-                  let homeScore = parseInt(scores.home_score);
-                  let awayScore = parseInt(scores.away_score);
-                  
-                  // Determine if home or away team was picked
-                  if (isPicked(scores.home_team)) {
-                    // Home team picked with spread
-                    const adjustedScore = homeScore + spread;
-                    if (adjustedScore > awayScore) {
-                      betResult = 'won';
-                    } else if (adjustedScore < awayScore) {
-                      betResult = 'lost';
-                    } else {
-                      betResult = 'push';
-                    }
-                  } else if (isPicked(scores.away_team)) {
-                    // Away team picked with spread
-                    const adjustedScore = awayScore + spread;
-                    if (adjustedScore > homeScore) {
-                      betResult = 'won';
-                    } else if (adjustedScore < homeScore) {
-                      betResult = 'lost';
-                    } else {
-                      betResult = 'push';
-                    }
-                  }
-                } else {
-                  // It's a moneyline bet
-                  const isPicked = (team) => {
-                    // Add safety checks for undefined variables
-                    if (!pickedTeam || !team) return false;
-                    const safePickedTeam = String(pickedTeam).toLowerCase();
-                    const safeTeam = String(team).toLowerCase();
-                    return safePickedTeam.includes(safeTeam);
-                  };
-                  
-                  if (isPicked(scores.home_team)) {
-                    // Home team picked
-                    betResult = scores.home_score > scores.away_score ? 'won' : 'lost';
-                  } else if (isPicked(scores.away_team)) {
-                    // Away team picked
-                    betResult = scores.away_score > scores.home_score ? 'won' : 'lost';
-                  }
-                }
-              }
-              
-              // Add the determined result to the scores object
-              finalPerplexityScores.scores[pick] = {
-                ...scores,
-                result: betResult,
-                final_score: `${scores.away_score}-${scores.home_score}`,
-                processed_teams: processedTeams
-              };
-            }
-          });
-          
-          if (finalPerplexityScores && finalPerplexityScores.success) {
-            Object.assign(scores, finalPerplexityScores.scores || {});
-            
-            // Remove found games from missingGames
-            Object.keys(finalPerplexityScores.scores || {}).forEach(foundPick => {
-              const index = missingGames.findIndex(p => 
-                (p.pick || p.originalPick) === foundPick
-              );
-              if (index !== -1) {
-                missingGames.splice(index, 1);
-              }
-            });
-          }
-        } catch (finalError) {
-          console.error('Final Perplexity attempt failed:', finalError);
-        }
+        console.log(`⚠️ Still missing scores for ${missingGames.length} games after Odds API and BDL lookups`);
+        missingGames.forEach(pick => {
+          console.log(`  - ${pick.pick || pick.originalPick} (${pick.league || 'Unknown'})`);
+        });
       }
 
       return {
@@ -847,7 +484,9 @@ export const resultsCheckerService = {
     }
   },
 
-  generatePerplexityQuery: (homeTeam, awayTeam, date) => {
+  // DEPRECATED: generateScoreQuery - Legacy function
+  // Keeping stub for backward compatibility
+  generateScoreQuery: (homeTeam, awayTeam, date) => {
     // Don't query if both teams are the same or if one is a placeholder
     if (homeTeam === awayTeam || homeTeam === "Opponent" || awayTeam === "Opponent") {
       return null;
@@ -855,29 +494,23 @@ export const resultsCheckerService = {
     
     // Format date for human-readability
     const gameDate = new Date(date);
-    const month = gameDate.toLocaleString('default', { month: 'long' });
-    const day = gameDate.getDate();
-    const year = gameDate.getFullYear();
-    const humanDate = `${month} ${day}, ${year}`;
-
-      // Use the exact date provided, not yesterday
     const formattedMonth = gameDate.toLocaleString('default', { month: 'short' });
     const formattedDay = gameDate.getDate();
+    const year = gameDate.getFullYear();
 
-    return `ONLY FACTUAL INFO: What was the EXACT final score of the game between ${awayTeam} and ${homeTeam} on ${formattedMonth} ${formattedDay}, ${year}? Respond in this JSON format only: {"home_score": X, "away_score": Y, "home_team": "${homeTeam}", "away_team": "${awayTeam}"}`;
+    return `What was the final score of the game between ${awayTeam} and ${homeTeam} on ${formattedMonth} ${formattedDay}, ${year}?`;
   },
 
-  getScoresFromPerplexity: async (date, picks) => {
+  getScoresFromOddsApi: async (date, picks) => {
     const scores = {};
     
-    // Try getting scores from The Odds API first
+    // Get scores from The Odds API
     console.log('Getting scores from The Odds API...');
     let oddsApiScores = {};
-    // Scores are now sourced from The Odds API helper; no additional caches needed
     
     try {
-      // Try fetching from The Odds API first
-      const leagues = ['nba', 'nhl', 'mlb'];
+      // Fetch from The Odds API for supported leagues
+      const leagues = ['nba', 'nhl', 'mlb', 'nfl'];
       for (const league of leagues) {
         try {
           console.log(`Fetching ${league.toUpperCase()} scores from The Odds API for ${date}`);
@@ -895,8 +528,7 @@ export const resultsCheckerService = {
                 const homeScore = game.scores?.home || 0;
                 const awayScore = game.scores?.away || 0;
                 
-                // Store by matchup
-                oddsApiScores[matchup] = {
+                const scoreData = {
                   home_team: homeTeam,
                   away_team: awayTeam,
                   home_score: homeScore,
@@ -906,26 +538,14 @@ export const resultsCheckerService = {
                   source: 'TheOddsAPI'
                 };
                 
-                // Also store by team names for easier lookup
-                oddsApiScores[homeTeam] = {
-                  home_team: homeTeam,
-                  away_team: awayTeam,
-                  home_score: homeScore,
-                  away_score: awayScore,
-                  league: league.toUpperCase(),
-                  final: true,
-                  source: 'TheOddsAPI'
-                };
+                // Store by matchup and team names for easier lookup
+                oddsApiScores[matchup] = scoreData;
+                oddsApiScores[homeTeam] = scoreData;
+                oddsApiScores[awayTeam] = scoreData;
                 
-                oddsApiScores[awayTeam] = {
-                  home_team: homeTeam,
-                  away_team: awayTeam,
-                  home_score: homeScore,
-                  away_score: awayScore,
-                  league: league.toUpperCase(),
-                  final: true,
-                  source: 'TheOddsAPI'
-                };
+                // Also store normalized team names (lowercase)
+                oddsApiScores[homeTeam.toLowerCase()] = scoreData;
+                oddsApiScores[awayTeam.toLowerCase()] = scoreData;
               }
             });
           }
@@ -934,376 +554,73 @@ export const resultsCheckerService = {
         }
       }
       
-      // Add any games found to our scores object
       if (Object.keys(oddsApiScores).length > 0) {
-        console.log(`Found ${Object.keys(oddsApiScores).length} total games from The Odds API`);
-        Object.assign(scores, oddsApiScores);
+        console.log(`Found ${Object.keys(oddsApiScores).length} total game entries from The Odds API`);
       } else {
-        console.log('No games found from The Odds API, will try Perplexity as fallback');
+        console.log('No games found from The Odds API');
       }
     } catch (oddsApiError) {
       console.error('Error fetching from The Odds API:', oddsApiError.message);
     }
 
-    // Process each pick
+    // Process each pick and match to Odds API scores
     for (const pick of picks) {
       const pickText = pick.pick || '';
-      const league = pick.league || 'NHL'; // Default to NHL
+      const league = pick.league || 'NHL';
 
-      // Extract clean team name from formatted pick
-      let teamName = '';
-      
       // Extract teams from the pick if it has @ format
       const teams = pickText.split(' @ ');
       if (teams.length === 2) {
-        // Use both teams for better query
         const homeTeam = teams[1].trim();
         const awayTeam = teams[0].trim();
-        console.log(`Looking up results for ${awayTeam} @ ${homeTeam} (${league})`);
-        
-        // If we can't find scores via the helper, fall back to Perplexity
-        // Just defining matchupKey for logging purposes
         const matchupKey = `${awayTeam} @ ${homeTeam}`;
         
-        // If we can't find scores in the database, use Perplexity as a fallback
-        console.log(`No scores found in database for ${matchupKey}, using Perplexity as fallback`);
-        
-        // Create a focused query to get the final score
-        const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        const query = `What was the final score of the ${league} game: ${awayTeam} at ${homeTeam} on ${formattedDate}? Include the exact score for both teams. Do NOT add any explanation, just provide the team names and score.`;
-        
-        try {
-          const result = await perplexityService.fetchRealTimeInfo(query, {
-            model: 'sonar',
-            temperature: 0.1,
-            maxTokens: 150
-          });
-          
-          if (result) {
-            // Try to parse the result using multiple regex patterns
-            // Escape regex special characters in team names
-            const escAwayTeam = awayTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const escHomeTeam = homeTeam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            
-            // Pattern 1: Standard format with scores between team names
-            const scorePattern1 = new RegExp(`(${escAwayTeam}|${escHomeTeam})\\s*(\\d+)[^\\d]+(\\d+)\\s*(${escHomeTeam}|${escAwayTeam})`, 'i');
-            // Pattern 2: Comma-separated format like "Team A 5, Team B 3"
-            const scorePattern2 = new RegExp(`(${escAwayTeam}|${escHomeTeam})\\s*(\\d+)\\s*,\\s*(${escHomeTeam}|${escAwayTeam})\\s*(\\d+)`, 'i');
-            // Pattern 3: Generic comma-separated format when team names may not match exactly
-            const scorePattern3 = /([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)\s*,\s*([A-Za-z][A-Za-z\s.\-']+)\s*(\d+)/i;
-            
-            // Try each pattern in sequence
-            let scoreMatch = result.match(scorePattern1);
-            if (!scoreMatch) {
-              scoreMatch = result.match(scorePattern2);
-            }
-            if (!scoreMatch) {
-              scoreMatch = result.match(scorePattern3);
-            }
-            
-            if (scoreMatch && scoreMatch.length >= 5) {
-              // Determine which team is home and which is away
-              // Check if we matched against a comma-separated format
-              const isCommaFormat = scoreMatch[0].includes(',');
-              
-              let firstTeam, secondTeam, firstScore, secondScore;
-              
-              if (isCommaFormat) {
-                // In comma format, team names and scores are in different positions
-                // "Team A 5, Team B 3" => first = A, first score = 5, second = B, second score = 3
-                firstTeam = scoreMatch[1].trim();
-                firstScore = parseInt(scoreMatch[2]);
-                secondTeam = scoreMatch[3].trim();
-                secondScore = parseInt(scoreMatch[4]);
-              } else {
-                // Standard format: "Team A 5 - 3 Team B"
-                firstTeam = scoreMatch[1].trim();
-                secondTeam = scoreMatch[4].trim();
-                firstScore = parseInt(scoreMatch[2]);
-                secondScore = parseInt(scoreMatch[3]);
-              }
-              
-              let homeScore, awayScore;
-              
-              if (firstTeam.toLowerCase().includes(homeTeam.toLowerCase())) {
-                homeScore = firstScore;
-                awayScore = secondScore;
-              } else {
-                homeScore = secondScore;
-                awayScore = firstScore;
-              }
-              
-              scores[pickText] = {
-                home_team: homeTeam,
-                away_team: awayTeam,
-                home_score: homeScore,
-                away_score: awayScore,
-                league,
-                final: true,
-                source: 'Perplexity'
-              };
-              
-              console.log(`Successfully extracted score for ${awayTeam} @ ${homeTeam}: ${awayScore}-${homeScore}`);
-            } else {
-              console.error(`Could not find score pattern in Perplexity response: ${result}`);
-            }
-          }
-        } catch (error) {
-          console.error(`Error with Perplexity API: ${error.message}`);
+        // Try to find in oddsApiScores
+        if (oddsApiScores[matchupKey]) {
+          scores[pickText] = oddsApiScores[matchupKey];
+          console.log(`Found score for ${matchupKey}`);
+        } else if (oddsApiScores[homeTeam]) {
+          scores[pickText] = oddsApiScores[homeTeam];
+          console.log(`Found score by home team: ${homeTeam}`);
+        } else if (oddsApiScores[awayTeam]) {
+          scores[pickText] = oddsApiScores[awayTeam];
+          console.log(`Found score by away team: ${awayTeam}`);
+        } else {
+          console.log(`No score found for ${matchupKey} in Odds API data`);
         }
       } else {
-        // This is a formatted pick like "Team +1.5 -110"
-        // Extract team name by removing betting elements
-        teamName = pickText
-          .replace(/\s+[+-]?\d+(\.\d+)?\s+[+-]\d+$/, '') // Remove spread and odds
-          .replace(/\s+ML\s+[+-]\d+$/, '')               // Remove ML and odds
-          .replace(/\s+[+-]\d+$/, '')                    // Remove just odds
-          .replace(/\s+OVER\s+.*$/i, '')                 // Remove OVER
-          .replace(/\s+UNDER\s+.*$/i, '')                // Remove UNDER
+        // Extract team name from formatted pick
+        const teamName = pickText
+          .replace(/\s+[+-]?\d+(\.\d+)?\s+[+-]\d+$/, '')
+          .replace(/\s+ML\s+[+-]\d+$/, '')
+          .replace(/\s+[+-]\d+$/, '')
+          .replace(/\s+OVER\s+.*$/i, '')
+          .replace(/\s+UNDER\s+.*$/i, '')
           .trim();
           
-        console.log(`Extracted team name "${teamName}" from pick: ${pickText}`);
-        
-        // Odds API helper did not find a match; defer to Perplexity
-        // We use The Odds API as primary source and Perplexity as fallback
-        
-        // If we still don't have a match, use Perplexity as a fallback
-        if (!scores[pickText]) {
-          console.log(`No scores found in database for ${teamName}, using Perplexity as fallback`);
-          
-          // Create a query to find games involving this team
-          console.log(`Raw date value received in getScoresFromPerplexity: ${date}, type: ${typeof date}`);
-          
-          // DEBUG: Parse the date string manually to avoid timezone issues
-          let gameDate;
-          if (typeof date === 'string' && date.includes('-')) {
-            // Parse YYYY-MM-DD format manually to avoid timezone issues
-            const [year, month, day] = date.split('-').map(num => parseInt(num, 10));
-            // Note: month is 0-indexed in JavaScript Date
-            gameDate = new Date(year, month - 1, day);
-            console.log(`Date parsed manually: ${year}-${month}-${day} → ${gameDate.toISOString()}`);
+        // Try to match team name
+        if (oddsApiScores[teamName]) {
+          scores[pickText] = oddsApiScores[teamName];
+          console.log(`Found score for ${teamName}`);
+        } else if (oddsApiScores[teamName.toLowerCase()]) {
+          scores[pickText] = oddsApiScores[teamName.toLowerCase()];
+          console.log(`Found score for ${teamName} (normalized)`);
+        } else {
+          // Try partial match
+          const matchingKey = Object.keys(oddsApiScores).find(key => 
+            key.toLowerCase().includes(teamName.toLowerCase()) ||
+            teamName.toLowerCase().includes(key.toLowerCase())
+          );
+          if (matchingKey) {
+            scores[pickText] = oddsApiScores[matchingKey];
+            console.log(`Found score for ${teamName} via partial match: ${matchingKey}`);
           } else {
-            gameDate = new Date(date);
-          }
-          
-          // Format the date properly - use Eastern Time since all sports schedules use ET
-          const formattedDate = gameDate.toLocaleDateString('en-US', { 
-            month: 'long', 
-            day: 'numeric', 
-            year: 'numeric',
-            timeZone: 'America/New_York'  // Use Eastern Time for sports schedules
-          });
-          console.log(`Querying for scores on date: ${formattedDate}`);
-          const query = `What was the final score of the ${league} game involving ${teamName} on ${formattedDate}? Include the names of both teams and their scores. Respond with only the team names and the score.`;
-          
-          try {
-            const result = await perplexityService.fetchRealTimeInfo(query, {
-              model: 'sonar',
-              temperature: 0.1,
-              maxTokens: 150
-            });
-            
-            if (result) {
-              // Try to find team names and scores with enhanced regex patterns
-              // Try JSON format first
-              let match = null;
-              
-              try {
-                const jsonMatch = result.match(/\{[^\}]+\}/g);
-                if (jsonMatch) {
-                  const jsonData = JSON.parse(jsonMatch[0]);
-                  if (jsonData.home_score !== undefined && jsonData.away_score !== undefined) {
-                    return {
-                      away_team: jsonData.away_team,
-                      home_team: jsonData.home_team,
-                      away_score: parseInt(jsonData.away_score),
-                      home_score: parseInt(jsonData.home_score),
-                      league,
-                      final: true,
-                      source: 'Perplexity JSON'
-                    };
-                  }
-                }
-              } catch (jsonError) {
-                console.log('Not a valid JSON response, trying text patterns');
-              }
-              
-              // Try multiple regex patterns to handle different formatting
-              const patterns = [
-                // Pattern 1: Team A 3 - 2 Team B
-                /(\w[\w\s.\-']+\w)\s+(\d+)\s*[-–]\s*(\d+)\s+(\w[\w\s.\-']+\w)/i,
-                
-                // Pattern 2: Team A defeated Team B 3-2
-                /(\w[\w\s.\-']+\w)\s+(?:defeated|beat|won against)\s+(\w[\w\s.\-']+\w)\s+(?:by a score of|with a score of|)\s*(\d+)\s*[-–]\s*(\d+)/i,
-                
-                // Pattern 3: The final score was Team A 3, Team B 2
-                /(?:final score|score)\s+(?:was|:|is)?\s*(\w[\w\s.\-']+\w)\s+(\d+)(?:,|\s+)\s*(\w[\w\s.\-']+\w)\s+(\d+)/i,
-                
-                // Pattern 4: Team A X, Team B Y (comma-separated format)
-                /([\w\s.\-']+)\s+(\d+)\s*,\s*([\w\s.\-']+)\s+(\d+)/i,
-                
-                // Pattern 5: Another comma variation with possible period at end
-                /([\w\s.\-']+)\s+(\d+),\s*([\w\s.\-']+)\s+(\d+)\.*/i,
-
-                // Pattern 6: Simple Team A X - Y Team B without requiring spaces around dash
-                /([\w\s.\-']+)\s(\d+)[-–](\d+)\s([\w\s.\-']+)/i,
-
-                // Pattern 7: Handle "Team A X - Team B Y" format
-                /([\w\s.\-']+)\s(\d+)\s*[-–]\s*([\w\s.\-']+)\s(\d+)/i
-              ];
-              
-              // Try each pattern until we find a match
-              for (const pattern of patterns) {
-                const patternMatch = result.match(pattern);
-                if (patternMatch && patternMatch.length >= 5) {
-                  match = patternMatch;
-                  break;
-                }
-              }
-              
-              // If no match yet, try a simpler pattern to just extract numbers
-              if (!match) {
-                const simpleScorePattern = /(\d+)\s*[-–]\s*(\d+)/i;
-                const simpleMatch = result.match(simpleScorePattern);
-                
-                if (simpleMatch) {
-                  // We found scores but not team names, use the teamName we have
-                  const score1 = parseInt(simpleMatch[1]);
-                  const score2 = parseInt(simpleMatch[2]);
-                  
-                  // For simple score patterns, try to extract full teams from the text
-                  const teamsRegex = /([A-Z][A-Za-z\s.]+)\s+(?:vs|versus|@|at|against|and)\s+([A-Z][A-Za-z\s.]+)/i;
-                  const teamsMatch = result.match(teamsRegex);
-                  
-                  let teamA = '';
-                  let teamB = '';
-                  
-                  if (teamsMatch && teamsMatch.length >= 3) {
-                    teamA = teamsMatch[1].trim();
-                    teamB = teamsMatch[2].trim();
-                  } else {
-                    teamA = teamName;
-                    
-                    // Try to find the opponent team name
-                    const potentialTeams = [];
-                    for (const word of result.split(/\s+/)) {
-                      if (word.length > 3 && !teamName.toLowerCase().includes(word.toLowerCase()) && 
-                          !/^\d+$/.test(word) && !/^[\W_]+$/.test(word) && 
-                          /^[A-Z]/.test(word)) {
-                        potentialTeams.push(word);
-                      }
-                    }
-                    
-                    if (potentialTeams.length > 0) {
-                      teamB = potentialTeams.join(' ');
-                    } else {
-                      teamB = 'Opponent';
-                    }
-                  }
-                  
-                  // Determine home vs away using text analysis
-                  const isTeamAway = result.toLowerCase().includes('away') && 
-                                     result.toLowerCase().includes(teamName.toLowerCase());
-                  
-                  // Verify the scores are valid
-                  if (isNaN(score1) || isNaN(score2)) {
-                    console.error(`Invalid scores for simple pattern: score1=${score1}, score2=${score2}`);
-                    continue;
-                  }
-                  
-                  if (isTeamAway) {
-                    return {
-                      away_team: teamA,
-                      home_team: teamB,
-                      away_score: score1,
-                      home_score: score2,
-                      league,
-                      final: true,
-                      source: 'Perplexity Simple'
-                    };
-                  } else {
-                    return {
-                      away_team: teamB,
-                      home_team: teamA,
-                      away_score: score2,
-                      home_score: score1,
-                      league,
-                      final: true,
-                      source: 'Perplexity Simple'
-                    };
-                  }
-                }
-              }
-              
-              if (match && match.length >= 5) {
-                // Extract team names and scores
-                let teamA = match[1].trim();
-                let scoreA = match[2] ? parseInt(match[2]) : null;
-                let teamB = match[3].trim();
-                let scoreB = match[4] ? parseInt(match[4]) : null;
-                
-                // Verify we have valid numbers for scores
-                if (isNaN(scoreA) || isNaN(scoreB)) {
-                  console.error(`Invalid scores extracted: scoreA=${scoreA}, scoreB=${scoreB}`);
-                  // Try to swap positions if pattern 7 was matched (Team A X - Team B Y)
-                  if (isNaN(scoreB) && !isNaN(parseInt(match[4] || ''))) {
-                    // This might be pattern 7 format
-                    teamA = match[1].trim();
-                    scoreA = parseInt(match[2] || 0);
-                    teamB = match[3].trim();
-                    scoreB = parseInt(match[4] || 0);
-                  }
-                }
-                
-                // Double-check score validity after potential correction
-                if (isNaN(scoreA) || isNaN(scoreB)) {
-                  console.error(`Still invalid scores after correction: scoreA=${scoreA}, scoreB=${scoreB}`);
-                  continue;
-                }
-                
-                // Create a proper score object with correct team name matching
-                scores[pickText] = {
-                  home_team: teamB,  // Second team is usually the home team in most formats
-                  away_team: teamA,  // First team is usually the away team
-                  home_score: scoreB,
-                  away_score: scoreA,
-                  league,
-                  final: true,
-                  source: 'Perplexity'
-                };
-                
-                // If our search team is clearly the home team, swap if needed
-                if (teamName.toLowerCase().includes('home') || 
-                    (teamB.toLowerCase().includes(teamName.toLowerCase()) &&
-                     !teamA.toLowerCase().includes(teamName.toLowerCase()))) {
-                  // Keep as is - teamB is correctly the home team
-                } else if (teamA.toLowerCase().includes(teamName.toLowerCase()) &&
-                           !teamB.toLowerCase().includes(teamName.toLowerCase())) {
-                  // Swap teams - our search team is in position A but should be home
-                  scores[pickText] = {
-                    home_team: teamA,
-                    away_team: teamB,
-                    home_score: scoreA,
-                    away_score: scoreB,
-                    league,
-                    final: true,
-                    source: 'Perplexity'
-                  };
-                }
-                
-                console.log(`Successfully extracted score for ${teamName}: ${scores[pickText].away_team} ${scores[pickText].away_score} - ${scores[pickText].home_team} ${scores[pickText].home_score}`);
-              } else {
-                console.error(`Could not find score pattern in Perplexity response: ${result}`);
-              }
-            }
-          } catch (error) {
-            console.error(`Error with Perplexity API: ${error.message}`);
+            console.log(`No score found for ${teamName}`);
           }
         }
       }
     }
     
-    // Log the final scores we've collected
     console.log('Final collected scores:', JSON.stringify(scores, null, 2));
 
     return {

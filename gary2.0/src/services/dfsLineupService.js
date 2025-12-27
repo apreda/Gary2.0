@@ -16,14 +16,15 @@ export const PLATFORM_CONSTRAINTS = {
       rosterSize: 8,
       positions: ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'],
       positionRules: {
-        PG: { count: 1, eligible: ['PG'] },
-        SG: { count: 1, eligible: ['SG'] },
-        SF: { count: 1, eligible: ['SF'] },
-        PF: { count: 1, eligible: ['PF'] },
-        C: { count: 1, eligible: ['C'] },
-        G: { count: 1, eligible: ['PG', 'SG'] },
-        F: { count: 1, eligible: ['SF', 'PF'] },
-        UTIL: { count: 1, eligible: ['PG', 'SG', 'SF', 'PF', 'C'] }
+        // BDL uses "G" for guards, "F" for forwards - map accordingly
+        PG: { count: 1, eligible: ['PG', 'G'] },
+        SG: { count: 1, eligible: ['SG', 'G'] },
+        SF: { count: 1, eligible: ['SF', 'F', 'G-F', 'F-G'] },
+        PF: { count: 1, eligible: ['PF', 'F', 'F-C', 'C-F'] },
+        C: { count: 1, eligible: ['C', 'F-C', 'C-F'] },
+        G: { count: 1, eligible: ['PG', 'SG', 'G', 'G-F', 'F-G'] },
+        F: { count: 1, eligible: ['SF', 'PF', 'F', 'F-C', 'C-F', 'G-F', 'F-G'] },
+        UTIL: { count: 1, eligible: ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'G-F', 'F-G', 'F-C', 'C-F'] }
       }
     },
     NFL: {
@@ -46,11 +47,12 @@ export const PLATFORM_CONSTRAINTS = {
       rosterSize: 9,
       positions: ['PG', 'PG', 'SG', 'SG', 'SF', 'SF', 'PF', 'PF', 'C'],
       positionRules: {
-        PG: { count: 2, eligible: ['PG'] },
-        SG: { count: 2, eligible: ['SG'] },
-        SF: { count: 2, eligible: ['SF'] },
-        PF: { count: 2, eligible: ['PF'] },
-        C: { count: 1, eligible: ['C'] }
+        // BDL uses "G" for guards, "F" for forwards - map accordingly
+        PG: { count: 2, eligible: ['PG', 'G'] },
+        SG: { count: 2, eligible: ['SG', 'G'] },
+        SF: { count: 2, eligible: ['SF', 'F', 'G-F', 'F-G'] },
+        PF: { count: 2, eligible: ['PF', 'F', 'F-C', 'C-F'] },
+        C: { count: 1, eligible: ['C', 'F-C', 'C-F'] }
       }
     },
     NFL: {
@@ -70,17 +72,18 @@ export const PLATFORM_CONSTRAINTS = {
   }
 };
 
-// Pivot tier configurations
+// Pivot tier configurations - alternatives for users to consider
+// Gary picks his BEST lineup; these are just other options at different price points
 const PIVOT_TIERS = {
   direct: {
     label: 'Direct Swap',
     description: 'Similar ceiling',
-    salaryRange: { min: -300, max: 300 }
+    salaryRange: { min: -500, max: 500 }
   },
   mid: {
     label: 'Mid Value',
     description: 'Save ~$1K',
-    salaryRange: { min: -1200, max: -500 }
+    salaryRange: { min: -1500, max: -500 }
   },
   budget: {
     label: 'Budget Play',
@@ -88,6 +91,160 @@ const PIVOT_TIERS = {
     salaryRange: { min: -Infinity, max: -1500 }
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DFS VALUE EQUATIONS - Key metrics for optimal lineup building
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Calculate VALUE SCORE - Points per $1K of salary
+ * This is the core DFS metric for identifying value plays
+ * 
+ * Target: 5x is baseline, 6x+ is elite value
+ * 
+ * @param {number} projectedPts - Projected fantasy points
+ * @param {number} salary - Player salary
+ * @returns {number} Value score (points per $1K)
+ */
+export function calculateValueScore(projectedPts, salary) {
+  if (!salary || salary <= 0) return 0;
+  return Math.round((projectedPts / (salary / 1000)) * 100) / 100;
+}
+
+/**
+ * Calculate CEILING SCORE - Max upside potential
+ * Based on best recent performance × situation multiplier
+ * 
+ * @param {Object} player - Player with recent game data
+ * @param {Object} context - DFS context (matchup, usage, etc.)
+ * @returns {number} Ceiling score
+ */
+export function calculateCeilingScore(player, context = {}) {
+  const baseProjection = player.projected_pts || player.projectedPts || 0;
+  
+  // Situation multipliers
+  let multiplier = 1.0;
+  
+  // Hot streak boost (+15% ceiling)
+  if (context.recentForm === 'hot' || player.recentForm === 'hot') {
+    multiplier += 0.15;
+  }
+  
+  // Revenge game boost (+10%)
+  if (context.isRevenge || player.isRevenge) {
+    multiplier += 0.10;
+  }
+  
+  // Usage spike boost (+20%)
+  if (context.usageBoost || player.usageBoost) {
+    multiplier += 0.20;
+  }
+  
+  // Good DvP matchup boost (+10%)
+  if (context.dvpRank && context.dvpRank <= 8) {
+    multiplier += 0.10;
+  }
+  
+  // Back-to-back reduction (-10%)
+  if (context.isB2B || player.isB2B) {
+    multiplier -= 0.10;
+  }
+  
+  return Math.round(baseProjection * multiplier * 10) / 10;
+}
+
+/**
+ * Calculate FLOOR SCORE - Minimum expected output
+ * Based on worst recent performance (injury-adjusted)
+ * 
+ * @param {Object} player - Player with recent game data
+ * @param {Object} context - DFS context
+ * @returns {number} Floor score
+ */
+export function calculateFloorScore(player, context = {}) {
+  const baseProjection = player.projected_pts || player.projectedPts || 0;
+  
+  // Default floor is 70% of projection
+  let floorPct = 0.70;
+  
+  // High-volume players have higher floor (+10%)
+  if (player.snapPct && player.snapPct >= 85) {
+    floorPct += 0.10;
+  }
+  
+  // Cold streak lowers floor (-10%)
+  if (context.recentForm === 'cold' || player.recentForm === 'cold') {
+    floorPct -= 0.10;
+  }
+  
+  // Blowout risk lowers floor (may sit 4th quarter) (-15%)
+  if (context.blowoutRisk || player.blowoutRisk) {
+    floorPct -= 0.15;
+  }
+  
+  // Bad weather lowers floor for skill positions (-10%)
+  if (context.weatherImpact === 'negative' || player.weatherImpact === 'negative') {
+    floorPct -= 0.10;
+  }
+  
+  return Math.round(baseProjection * floorPct * 10) / 10;
+}
+
+/**
+ * Calculate CONSISTENCY RATING - How reliable is this player?
+ * Higher = more consistent (good for cash games)
+ * Lower = more volatile (boom/bust for GPPs)
+ * 
+ * Formula: 1 - (stdDev / mean)
+ * 
+ * @param {number} mean - Average fantasy points
+ * @param {number} stdDev - Standard deviation of fantasy points
+ * @returns {number} Consistency rating (0-1)
+ */
+export function calculateConsistencyRating(mean, stdDev) {
+  if (!mean || mean <= 0) return 0;
+  const rating = 1 - (stdDev / mean);
+  return Math.max(0, Math.min(1, Math.round(rating * 100) / 100));
+}
+
+/**
+ * Determine RECENT FORM based on last 5 games vs season average
+ * 
+ * @param {number} last5Avg - Average fantasy points last 5 games
+ * @param {number} seasonAvg - Season average fantasy points
+ * @returns {string} 'hot' | 'cold' | 'neutral'
+ */
+export function determineRecentForm(last5Avg, seasonAvg) {
+  if (!seasonAvg || seasonAvg <= 0) return 'neutral';
+  
+  const ratio = last5Avg / seasonAvg;
+  
+  if (ratio >= 1.20) return 'hot';    // 20%+ above average
+  if (ratio <= 0.80) return 'cold';   // 20%+ below average
+  return 'neutral';
+}
+
+/**
+ * Calculate all DFS metrics for a player
+ * 
+ * @param {Object} player - Player with projection and context
+ * @param {Object} context - DFS context (matchup, form, etc.)
+ * @returns {Object} All DFS metrics
+ */
+export function calculateDFSMetrics(player, context = {}) {
+  const projectedPts = player.projected_pts || player.projectedPts || 0;
+  const salary = player.salary || 0;
+  
+  return {
+    valueScore: calculateValueScore(projectedPts, salary),
+    ceilingScore: calculateCeilingScore(player, context),
+    floorScore: calculateFloorScore(player, context),
+    // Consistency requires historical data - estimate based on projection
+    consistencyRating: player.consistencyRating || 0.75,
+    // Form from context
+    recentForm: context.recentForm || player.recentForm || 'neutral'
+  };
+}
 
 /**
  * Calculate fantasy points projection for a player
@@ -97,6 +254,22 @@ const PIVOT_TIERS = {
  * @returns {number} Projected fantasy points
  */
 export function calculateProjectedPoints(player, sport, platform) {
+  // ⭐ If BDL already provided fantasy points, use them (most accurate)
+  const bdlFpts = player.seasonStats?.fpts || player.fpts || 0;
+  if (bdlFpts > 0) {
+    // BDL uses DraftKings scoring - adjust for FanDuel if needed
+    if (platform === 'fanduel' && sport === 'NBA') {
+      // FanDuel values steals/blocks higher (3 pts vs 2 pts)
+      // Rough adjustment: +5% for defensive players
+      const spg = player.seasonStats?.spg || 0;
+      const bpg = player.seasonStats?.bpg || 0;
+      if (spg + bpg >= 2) {
+        return Math.round(bdlFpts * 1.05 * 10) / 10;
+      }
+    }
+    return Math.round(bdlFpts * 10) / 10;
+  }
+  
   if (sport === 'NBA') {
     return calculateNBAProjection(player, platform);
   } else if (sport === 'NFL') {
@@ -135,8 +308,16 @@ function calculateNBAProjection(player, platform) {
   const apg = stats.apg || stats.ast || 0;
   const spg = stats.spg || stats.stl || 0;
   const bpg = stats.bpg || stats.blk || 0;
-  const topg = stats.topg || stats.turnover || 1.5; // Default TO estimate
+  // Only apply turnover penalty if we have actual stats
+  const hasStats = ppg > 0 || rpg > 0 || apg > 0;
+  const topg = hasStats ? (stats.topg || stats.turnover || 1.5) : 0;
   const tpm = stats.tpg || stats.fg3m || 0; // 3-pointers made per game
+  
+  // If no stats at all, return 0 instead of negative
+  if (!hasStats) {
+    console.warn(`[DFS] No stats for ${player.name} - cannot project`);
+    return 0;
+  }
   
   if (platform === 'draftkings') {
     // DK: +0.5 for each 3PM, DD/TD bonuses
@@ -157,6 +338,9 @@ function calculateNBAProjection(player, platform) {
 
 /**
  * NFL fantasy points calculation
+ * 
+ * ⚠️ CRITICAL: BDL returns SEASON TOTALS for TDs/receptions, not per-game!
+ * We must divide by games_played to get per-game projections.
  * 
  * DraftKings NFL Scoring (Full PPR):
  * - Passing TD: 4 pts
@@ -182,25 +366,32 @@ function calculateNFLProjection(player, platform) {
   const stats = player.seasonStats || player;
   const position = (player.position || '').toUpperCase();
   
+  // ⭐ CRITICAL FIX: BDL returns SEASON TOTALS for TDs/receptions
+  // We must divide by games_played to get per-game averages
+  const gamesPlayed = stats.games_played || 16; // Default to 16 if not specified
+  
   // QB scoring
   if (position === 'QB') {
-    const passYds = stats.passing_yards_per_game || stats.pass_yards_pg || stats.passYards || 0;
-    const passTds = stats.passing_touchdowns || stats.pass_tds_pg || stats.passTDs || 0;
-    const ints = stats.passing_interceptions || stats.ints_pg || stats.interceptions || 0;
-    const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || stats.rushYards || 0;
-    const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || stats.rushTDs || 0;
-    const fumblesLost = stats.rushing_fumbles_lost || stats.fumbles_lost || 0;
+    // Yards per game (already per-game from BDL)
+    const passYpg = stats.passing_yards_per_game || 0;
+    const rushYpg = stats.rushing_yards_per_game || 0;
     
-    let pts = (passYds * 0.04) + (passTds * 4) - (ints * 1) + (rushYds * 0.1) + (rushTds * 6);
+    // TDs and INTs are SEASON TOTALS - convert to per-game
+    const passTdPg = (stats.passing_touchdowns || 0) / gamesPlayed;
+    const intsPg = (stats.passing_interceptions || 0) / gamesPlayed;
+    const rushTdPg = (stats.rushing_touchdowns || 0) / gamesPlayed;
+    const fumblesLostPg = (stats.rushing_fumbles_lost || 0) / gamesPlayed;
+    
+    let pts = (passYpg * 0.04) + (passTdPg * 4) - (intsPg * 1) + (rushYpg * 0.1) + (rushTdPg * 6);
     
     if (platform === 'draftkings') {
-      pts -= (fumblesLost * 1);
-      // 300+ passing yards bonus
-      if (passYds >= 300) pts += 3;
-      if (rushYds >= 100) pts += 3;
+      pts -= (fumblesLostPg * 1);
+      // 300+ passing yards bonus (approximate based on average)
+      if (passYpg >= 300) pts += 3;
+      if (rushYpg >= 100) pts += 3;
     } else {
       // FanDuel: -2 per fumble lost, no bonuses
-      pts -= (fumblesLost * 2);
+      pts -= (fumblesLostPg * 2);
     }
     
     return Math.round(pts * 10) / 10;
@@ -208,23 +399,26 @@ function calculateNFLProjection(player, platform) {
   
   // RB scoring
   if (position === 'RB') {
-    const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || stats.rushYards || 0;
-    const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || stats.rushTDs || 0;
-    const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
-    const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
-    const receptions = stats.receptions || stats.receptions_pg || 0;
-    const fumblesLost = stats.rushing_fumbles_lost || stats.fumbles_lost || 0;
+    // Yards per game (already per-game from BDL)
+    const rushYpg = stats.rushing_yards_per_game || 0;
+    const recYpg = stats.receiving_yards_per_game || 0;
     
-    let pts = (rushYds * 0.1) + (rushTds * 6) + (recYds * 0.1) + (recTds * 6);
+    // Season totals - convert to per-game
+    const rushTdPg = (stats.rushing_touchdowns || 0) / gamesPlayed;
+    const recTdPg = (stats.receiving_touchdowns || 0) / gamesPlayed;
+    const recPg = (stats.receptions || 0) / gamesPlayed;
+    const fumblesLostPg = (stats.rushing_fumbles_lost || 0) / gamesPlayed;
+    
+    let pts = (rushYpg * 0.1) + (rushTdPg * 6) + (recYpg * 0.1) + (recTdPg * 6);
     
     if (platform === 'draftkings') {
-      pts += (receptions * 1); // Full PPR
-      pts -= (fumblesLost * 1);
-      if (rushYds >= 100) pts += 3;
-      if (recYds >= 100) pts += 3;
+      pts += (recPg * 1); // Full PPR
+      pts -= (fumblesLostPg * 1);
+      if (rushYpg >= 100) pts += 3;
+      if (recYpg >= 100) pts += 3;
     } else {
-      pts += (receptions * 0.5); // Half PPR
-      pts -= (fumblesLost * 2);
+      pts += (recPg * 0.5); // Half PPR
+      pts -= (fumblesLostPg * 2);
     }
     
     return Math.round(pts * 10) / 10;
@@ -232,22 +426,25 @@ function calculateNFLProjection(player, platform) {
   
   // WR scoring
   if (position === 'WR') {
-    const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
-    const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
-    const receptions = stats.receptions || stats.receptions_pg || 0;
-    const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || 0;
-    const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || 0;
-    const fumblesLost = stats.receiving_fumbles_lost || stats.fumbles_lost || 0;
+    // Yards per game (already per-game from BDL)
+    const recYpg = stats.receiving_yards_per_game || 0;
+    const rushYpg = stats.rushing_yards_per_game || 0;
     
-    let pts = (recYds * 0.1) + (recTds * 6) + (rushYds * 0.1) + (rushTds * 6);
+    // Season totals - convert to per-game
+    const recTdPg = (stats.receiving_touchdowns || 0) / gamesPlayed;
+    const rushTdPg = (stats.rushing_touchdowns || 0) / gamesPlayed;
+    const recPg = (stats.receptions || 0) / gamesPlayed;
+    const fumblesLostPg = (stats.receiving_fumbles_lost || 0) / gamesPlayed;
+    
+    let pts = (recYpg * 0.1) + (recTdPg * 6) + (rushYpg * 0.1) + (rushTdPg * 6);
     
     if (platform === 'draftkings') {
-      pts += (receptions * 1); // Full PPR - makes slot receivers valuable
-      pts -= (fumblesLost * 1);
-      if (recYds >= 100) pts += 3;
+      pts += (recPg * 1); // Full PPR - makes slot receivers valuable
+      pts -= (fumblesLostPg * 1);
+      if (recYpg >= 100) pts += 3;
     } else {
-      pts += (receptions * 0.5); // Half PPR - favors TD threats over volume
-      pts -= (fumblesLost * 2);
+      pts += (recPg * 0.5); // Half PPR - favors TD threats over volume
+      pts -= (fumblesLostPg * 2);
     }
     
     return Math.round(pts * 10) / 10;
@@ -255,20 +452,23 @@ function calculateNFLProjection(player, platform) {
   
   // TE scoring (same as WR)
   if (position === 'TE') {
-    const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
-    const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
-    const receptions = stats.receptions || stats.receptions_pg || 0;
-    const fumblesLost = stats.receiving_fumbles_lost || stats.fumbles_lost || 0;
+    // Yards per game (already per-game from BDL)
+    const recYpg = stats.receiving_yards_per_game || 0;
     
-    let pts = (recYds * 0.1) + (recTds * 6);
+    // Season totals - convert to per-game
+    const recTdPg = (stats.receiving_touchdowns || 0) / gamesPlayed;
+    const recPg = (stats.receptions || 0) / gamesPlayed;
+    const fumblesLostPg = (stats.receiving_fumbles_lost || 0) / gamesPlayed;
+    
+    let pts = (recYpg * 0.1) + (recTdPg * 6);
     
     if (platform === 'draftkings') {
-      pts += (receptions * 1);
-      pts -= (fumblesLost * 1);
-      if (recYds >= 100) pts += 3;
+      pts += (recPg * 1);
+      pts -= (fumblesLostPg * 1);
+      if (recYpg >= 100) pts += 3;
     } else {
-      pts += (receptions * 0.5);
-      pts -= (fumblesLost * 2);
+      pts += (recPg * 0.5);
+      pts -= (fumblesLostPg * 2);
     }
     
     return Math.round(pts * 10) / 10;
@@ -276,26 +476,27 @@ function calculateNFLProjection(player, platform) {
   
   // DST scoring (simplified)
   if (position === 'DST' || position === 'DEF') {
-    // Base 10 pts, adjusted by points allowed
-    return 8.0; // Placeholder - DST projections are complex
+    // Base 8 pts - DST projections vary widely by matchup
+    return 8.0;
   }
   
   // K (Kicker) - FanDuel only
   if (position === 'K') {
-    return 7.0; // Placeholder
+    // Kickers average ~8 pts per game
+    return 8.0;
   }
   
-  // Default fallback
-  const rushYds = stats.rushing_yards_per_game || stats.rush_yards_pg || stats.rushYards || 0;
-  const rushTds = stats.rushing_touchdowns || stats.rush_tds_pg || stats.rushTDs || 0;
-  const recYds = stats.receiving_yards_per_game || stats.rec_yards_pg || stats.recYards || 0;
-  const recTds = stats.receiving_touchdowns || stats.rec_tds_pg || stats.recTDs || 0;
-  const receptions = stats.receptions || stats.receptions_pg || 0;
+  // Default fallback for unknown positions
+  const rushYpg = stats.rushing_yards_per_game || 0;
+  const recYpg = stats.receiving_yards_per_game || 0;
+  const rushTdPg = (stats.rushing_touchdowns || 0) / gamesPlayed;
+  const recTdPg = (stats.receiving_touchdowns || 0) / gamesPlayed;
+  const recPg = (stats.receptions || 0) / gamesPlayed;
   
   if (platform === 'draftkings') {
-    return Math.round((rushYds * 0.1 + rushTds * 6 + recYds * 0.1 + recTds * 6 + receptions * 1) * 10) / 10;
+    return Math.round((rushYpg * 0.1 + rushTdPg * 6 + recYpg * 0.1 + recTdPg * 6 + recPg * 1) * 10) / 10;
   } else {
-    return Math.round((rushYds * 0.1 + rushTds * 6 + recYds * 0.1 + recTds * 6 + receptions * 0.5) * 10) / 10;
+    return Math.round((rushYpg * 0.1 + rushTdPg * 6 + recYpg * 0.1 + recTdPg * 6 + recPg * 0.5) * 10) / 10;
   }
 }
 
@@ -325,11 +526,13 @@ export function findPivotAlternatives(starter, playerPool, sport, platform) {
     return ptsB - ptsA;
   });
   
-  // Find best player for each tier
+  // Find best alternative player for each tier
+  // These are OPTIONS for users - Gary already picked his best lineup
   for (const [tier, config] of Object.entries(PIVOT_TIERS)) {
     const salaryDiffMin = config.salaryRange.min;
     const salaryDiffMax = config.salaryRange.max;
     
+    // Find highest-projected player within this salary range
     const candidate = sortedPool.find(p => {
       const diff = p.salary - starterSalary;
       return diff >= salaryDiffMin && diff <= salaryDiffMax;
@@ -367,54 +570,126 @@ export function optimizeLineup(players, constraints, sport, platform) {
   const usedPlayers = new Set();
   let totalSalary = 0;
   
-  // Group players by position
+  // ⭐ FIX: Create a mapping of which positions each player can fill
+  // BDL uses generic positions (G, F, C) so we need to map them to DFS slots
+  const positionEligibility = {
+    // NBA - Specific positions
+    'PG': ['PG', 'G', 'UTIL'],
+    'SG': ['SG', 'G', 'UTIL'],
+    'SF': ['SF', 'F', 'UTIL'],
+    'PF': ['PF', 'F', 'UTIL'],
+    'C': ['C', 'UTIL'],
+    // NBA - Generic positions from BDL
+    'G': ['PG', 'SG', 'G', 'UTIL'],  // Guards can fill PG, SG, G, UTIL
+    'F': ['SF', 'PF', 'F', 'UTIL'],  // Forwards can fill SF, PF, F, UTIL
+    'G-F': ['SG', 'SF', 'G', 'F', 'UTIL'],  // Combo guard-forward
+    'F-G': ['SG', 'SF', 'G', 'F', 'UTIL'],  // Combo forward-guard
+    'F-C': ['PF', 'C', 'F', 'UTIL'],  // Combo forward-center
+    'C-F': ['PF', 'C', 'F', 'UTIL'],  // Combo center-forward
+    // NFL
+    'QB': ['QB'],
+    'RB': ['RB', 'FLEX'],
+    'WR': ['WR', 'FLEX'],
+    'TE': ['TE', 'FLEX'],
+    'K': ['K'],
+    'DST': ['DST'],
+    'DEF': ['DST']
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 1: CALCULATE PROJECTED POINTS FOR ALL PLAYERS FIRST
+  // ═══════════════════════════════════════════════════════════════════════════
+  // We need to calculate projections BEFORE sorting so we can rank by ceiling
+  for (const player of players) {
+    if (!player.projected_pts || player.projected_pts === 0) {
+      player.projected_pts = calculateProjectedPoints(player, sport, platform);
+    }
+  }
+  
+  // Group players by ALL positions they can fill
   const playersByPosition = {};
   for (const player of players) {
     const pos = player.position?.toUpperCase();
     if (!pos) continue;
-    if (!playersByPosition[pos]) playersByPosition[pos] = [];
-    playersByPosition[pos].push(player);
+    
+    // Get all slots this player can fill
+    const eligibleSlots = positionEligibility[pos] || [pos];
+    for (const slot of eligibleSlots) {
+      if (!playersByPosition[slot]) playersByPosition[slot] = [];
+      playersByPosition[slot].push(player);
+    }
   }
   
-  // Sort players in each position by value (pts per $1000)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 2: SORT BY PROJECTED POINTS (MAXIMIZE TOTAL CEILING)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Gary's goal is to build the highest-scoring lineup possible under the cap.
+  // NOT to maximize "value" (pts/$1000) - that leaves money on the table.
+  // Sort by projected points to get the best players first.
+  // ═══════════════════════════════════════════════════════════════════════════
   for (const pos in playersByPosition) {
     playersByPosition[pos].sort((a, b) => {
-      const valueA = (a.projected_pts || 0) / (a.salary / 1000);
-      const valueB = (b.projected_pts || 0) / (b.salary / 1000);
-      return valueB - valueA;
+      const ptsA = a.projected_pts || 0;
+      const ptsB = b.projected_pts || 0;
+      // Sort by PROJECTED POINTS (highest first) - Gary wants the best players
+      return ptsB - ptsA;
     });
   }
   
-  // Track position counts
-  const positionCounts = {};
+  // ⭐ FIX: Fill specific positions first, flex positions last
+  // This prevents using a star player in UTIL when they should be in their position
+  const sortedPositions = [...positions].sort((a, b) => {
+    const flexSlots = ['G', 'F', 'UTIL', 'FLEX'];
+    const aIsFlex = flexSlots.includes(a);
+    const bIsFlex = flexSlots.includes(b);
+    if (aIsFlex && !bIsFlex) return 1; // Flex goes last
+    if (!aIsFlex && bIsFlex) return -1;
+    return 0;
+  });
+  
+  // Calculate minimum salary to reserve for remaining positions
+  // This prevents overspending early and leaving no room for flex
+  const MIN_SALARY_PER_POSITION = sport === 'NFL' ? 3500 : 3800;
   
   // Fill each position slot
-  for (const posSlot of positions) {
+  for (let i = 0; i < sortedPositions.length; i++) {
+    const posSlot = sortedPositions[i];
     const rule = positionRules[posSlot];
     if (!rule) continue;
     
-    // Find best available player for this slot
-    let bestPlayer = null;
-    let bestValue = -1;
+    // Calculate remaining positions to fill (after this one)
+    const remainingPositions = sortedPositions.length - i - 1;
+    const reservedSalary = remainingPositions * MIN_SALARY_PER_POSITION;
+    const maxSalaryForThisSlot = salaryCap - totalSalary - reservedSalary;
     
-    for (const eligiblePos of rule.eligible) {
-      const candidates = playersByPosition[eligiblePos] || [];
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FIND HIGHEST-CEILING PLAYER THAT FITS THE SALARY CONSTRAINT
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Gary picks the BEST projected player that fits, not the best "value"
+    let bestPlayer = null;
+    let bestPts = -1;
+    
+    // Candidates are already sorted by projected_pts (highest first)
+    const candidates = playersByPosition[posSlot] || [];
+    
+    for (const player of candidates) {
+      // Skip if already used
+      if (usedPlayers.has(player.name)) continue;
       
-      for (const player of candidates) {
-        // Skip if already used
-        if (usedPlayers.has(player.name)) continue;
-        
-        // Skip if would exceed salary cap
-        if (totalSalary + player.salary > salaryCap) continue;
-        
-        // Skip if player is OUT
-        if (player.status === 'OUT') continue;
-        
-        const value = (player.projected_pts || 0) / (player.salary / 1000);
-        if (value > bestValue) {
-          bestValue = value;
-          bestPlayer = player;
-        }
+      // Skip if would exceed available salary (cap minus reserved)
+      if (player.salary > maxSalaryForThisSlot) continue;
+      
+      // Skip if player is OUT
+      if (player.status === 'OUT') continue;
+      
+      // Skip if no salary (invalid player)
+      if (!player.salary || player.salary <= 0) continue;
+      
+      // ⭐ CHANGED: Pick by PROJECTED POINTS, not value
+      const pts = player.projected_pts || 0;
+      if (pts > bestPts) {
+        bestPts = pts;
+        bestPlayer = player;
       }
     }
     
@@ -433,7 +708,11 @@ export function optimizeLineup(players, constraints, sport, platform) {
         projected_pts: bestPlayer.projected_pts || calculateProjectedPoints(bestPlayer, sport, platform),
         rationale,
         supportingStats,
-        pivots: [] // Will be filled later
+        pivots: [], // Will be filled later
+        // Include DFS context data
+        ownership: bestPlayer.ownership,
+        recentForm: bestPlayer.recentForm,
+        dvpRank: bestPlayer.dvpRank
       });
     }
   }
@@ -441,7 +720,7 @@ export function optimizeLineup(players, constraints, sport, platform) {
   return {
     lineup,
     totalSalary,
-    projectedPoints: lineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0)
+    projectedPoints: Math.round(lineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0) * 10) / 10
   };
 }
 
@@ -606,17 +885,26 @@ export async function generateDFSLineup({ platform, sport, players }) {
     projected_pts: p.projected_pts || calculateProjectedPoints(p, sport, platform)
   }));
   
-  // Optimize lineup
-  const { lineup, totalSalary, projectedPoints } = optimizeLineup(
+  // Step 1: Initial greedy optimization
+  const initialResult = optimizeLineup(
     playersWithProjections,
     constraints,
     sport,
     platform
   );
   
-  // Add pivots to each position
+  // Step 2: Gary's 2-round self-review (salary efficiency + ownership)
+  const reviewedResult = selfReviewLineup(
+    initialResult.lineup,
+    playersWithProjections,
+    constraints,
+    sport,
+    platform
+  );
+  
+  // Step 3: Add pivots to the reviewed lineup
   const lineupWithPivots = addPivotsToLineup(
-    lineup,
+    reviewedResult.lineup,
     playersWithProjections,
     constraints,
     sport,
@@ -627,9 +915,177 @@ export async function generateDFSLineup({ platform, sport, players }) {
     platform,
     sport,
     salary_cap: constraints.salaryCap,
-    total_salary: totalSalary,
-    projected_points: Math.round(projectedPoints * 10) / 10,
+    total_salary: reviewedResult.totalSalary,
+    projected_points: Math.round(reviewedResult.projectedPoints * 10) / 10,
     lineup: lineupWithPivots
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * GARY'S SELF-REVIEW OPTIMIZATION (2 Rounds)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * After building the initial greedy lineup, Gary reviews it twice:
+ * 
+ * ROUND 1: SALARY EFFICIENCY
+ * - Check if money was left on the table
+ * - Upgrade weak spots with remaining salary
+ * - Ensure we're maximizing total projected points
+ * 
+ * ROUND 2: OWNERSHIP & CONTRARIAN VALUE  
+ * - Identify chalk plays (high ownership)
+ * - Consider swapping to similar-projected but lower-owned alternatives
+ * - Balance ceiling vs floor based on contest type
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+export function selfReviewLineup(lineup, playerPool, constraints, sport, platform) {
+  const { salaryCap } = constraints;
+  let currentLineup = [...lineup];
+  let totalSalary = currentLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
+  let totalPts = currentLineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0);
+  
+  console.log(`\n[Gary Self-Review] 🔍 Starting review...`);
+  console.log(`[Gary Self-Review] Initial: $${totalSalary}/${salaryCap} | ${totalPts.toFixed(1)} pts`);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ROUND 1: SALARY EFFICIENCY - Upgrade weak spots with remaining salary
+  // ═══════════════════════════════════════════════════════════════════════════
+  const remainingSalary = salaryCap - totalSalary;
+  if (remainingSalary >= 500) {
+    console.log(`[Gary Self-Review] 💰 Round 1: $${remainingSalary} unspent - looking for upgrades...`);
+    
+    // Sort lineup by projected points (lowest first = weakest spots)
+    const sortedByPts = [...currentLineup].sort((a, b) => 
+      (a.projected_pts || 0) - (b.projected_pts || 0)
+    );
+    
+    // Try to upgrade weakest positions
+    for (const weakSpot of sortedByPts.slice(0, 3)) { // Check 3 weakest spots
+      const position = weakSpot.position;
+      const currentPts = weakSpot.projected_pts || 0;
+      const currentSalary = weakSpot.salary || 0;
+      const maxUpgradeSalary = currentSalary + remainingSalary;
+      
+      // Find better player at same position within budget
+      const upgrades = playerPool.filter(p => {
+        if (p.name === weakSpot.player) return false; // Skip current player
+        if (currentLineup.some(l => l.player === p.name)) return false; // Already in lineup
+        if (p.status === 'OUT' || p.status === 'DOUBTFUL') return false;
+        if (!p.salary || p.salary > maxUpgradeSalary) return false;
+        
+        // Check position eligibility
+        const playerPos = (p.position || '').toUpperCase();
+        const slotPos = position.toUpperCase();
+        const canFill = playerPos === slotPos || 
+          (slotPos === 'FLEX' && ['RB', 'WR', 'TE'].includes(playerPos)) ||
+          (slotPos === 'UTIL' && ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F'].includes(playerPos)) ||
+          (slotPos === 'G' && ['PG', 'SG', 'G'].includes(playerPos)) ||
+          (slotPos === 'F' && ['SF', 'PF', 'F'].includes(playerPos));
+        
+        if (!canFill) return false;
+        
+        const upgradePts = p.projected_pts || calculateProjectedPoints(p, sport, platform);
+        return upgradePts > currentPts + 1; // Must be at least 1pt better
+      }).sort((a, b) => (b.projected_pts || 0) - (a.projected_pts || 0));
+      
+      if (upgrades.length > 0) {
+        const upgrade = upgrades[0];
+        const upgradePts = upgrade.projected_pts || calculateProjectedPoints(upgrade, sport, platform);
+        const ptsGain = upgradePts - currentPts;
+        const costIncrease = upgrade.salary - currentSalary;
+        
+        // Only upgrade if it's a meaningful improvement
+        if (ptsGain >= 2 && costIncrease <= remainingSalary) {
+          console.log(`[Gary Self-Review] ⬆️ UPGRADE: ${weakSpot.player} → ${upgrade.name} (+${ptsGain.toFixed(1)} pts, +$${costIncrease})`);
+          
+          // Apply upgrade
+          const idx = currentLineup.findIndex(p => p.player === weakSpot.player);
+          if (idx !== -1) {
+            currentLineup[idx] = {
+              ...currentLineup[idx],
+              player: upgrade.name,
+              team: upgrade.team,
+              salary: upgrade.salary,
+              projected_pts: upgradePts
+            };
+            totalSalary += costIncrease;
+            totalPts += ptsGain;
+          }
+        }
+      }
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ROUND 2: OWNERSHIP & CONTRARIAN VALUE
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log(`[Gary Self-Review] 🎯 Round 2: Checking ownership for contrarian opportunities...`);
+  
+  // Identify high-ownership (chalk) plays
+  const chalkPlays = currentLineup.filter(p => {
+    const ownership = p.ownership || playerPool.find(pp => pp.name === p.player)?.ownership || 0;
+    return ownership >= 25; // 25%+ ownership = chalk
+  });
+  
+  if (chalkPlays.length >= 4) {
+    console.log(`[Gary Self-Review] ⚠️ ${chalkPlays.length} chalk plays detected - considering contrarian swaps`);
+    
+    // Try to swap ONE chalk play for a lower-owned alternative
+    for (const chalk of chalkPlays.slice(0, 2)) { // Only consider swapping up to 2
+      const chalkOwnership = chalk.ownership || 
+        playerPool.find(p => p.name === chalk.player)?.ownership || 30;
+      const chalkPts = chalk.projected_pts || 0;
+      
+      // Find lower-owned alternative with similar projection
+      const contrarians = playerPool.filter(p => {
+        if (p.name === chalk.player) return false;
+        if (currentLineup.some(l => l.player === p.name)) return false;
+        if (p.status === 'OUT' || p.status === 'DOUBTFUL') return false;
+        
+        const ownership = p.ownership || 15;
+        const pts = p.projected_pts || calculateProjectedPoints(p, sport, platform);
+        
+        // Must be lower owned and within 2 pts of chalk
+        return ownership < chalkOwnership - 10 && 
+               pts >= chalkPts - 2 &&
+               p.salary <= chalk.salary + 300; // Small salary flexibility
+      }).sort((a, b) => {
+        // Sort by projected points (prefer higher upside)
+        return (b.projected_pts || 0) - (a.projected_pts || 0);
+      });
+      
+      if (contrarians.length > 0) {
+        const contrarian = contrarians[0];
+        const contrarianOwn = contrarian.ownership || 15;
+        const contrarianPts = contrarian.projected_pts || calculateProjectedPoints(contrarian, sport, platform);
+        
+        console.log(`[Gary Self-Review] 🎲 CONTRARIAN OPTION: ${chalk.player} (${chalkOwnership}% own) → ${contrarian.name} (${contrarianOwn}% own)`);
+        console.log(`[Gary Self-Review]    Points diff: ${(contrarianPts - chalkPts).toFixed(1)} | Salary diff: $${contrarian.salary - chalk.salary}`);
+        
+        // Store as alternative but don't auto-swap (let Gary's notes mention it)
+        chalk.contrarianAlt = {
+          player: contrarian.name,
+          team: contrarian.team,
+          salary: contrarian.salary,
+          projected_pts: contrarianPts,
+          ownership: contrarianOwn
+        };
+      }
+    }
+  }
+  
+  // Recalculate totals
+  totalSalary = currentLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
+  totalPts = currentLineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0);
+  
+  console.log(`[Gary Self-Review] ✅ Final: $${totalSalary}/${salaryCap} | ${totalPts.toFixed(1)} pts\n`);
+  
+  return {
+    lineup: currentLineup,
+    totalSalary,
+    projectedPoints: totalPts
   };
 }
 

@@ -20,13 +20,11 @@ function getEnvVar(key, defaultValue = '') {
 
 /**
  * Config loading service to ensure API keys are available in all environments
+ * Note: LLM keys (GEMINI_API_KEY) are loaded server-side only
  */
 export const configLoader = {
   // Variables to hold API credentials
   odds_api_key: getEnvVar('VITE_ODDS_API_KEY', ''),
-  // LLM keys loaded server-side only (GEMINI_API_KEY)
-  // Never expose Perplexity key in browser; proxy uses server-side PERPLEXITY_API_KEY only
-  perplexity_api_key: '',
   loaded: false,
 
   /**
@@ -38,14 +36,11 @@ export const configLoader = {
       return;
     }
 
-    // If we already have the odds (client-safe) and other non-sensitive keys, just use those
+    // If we already have the odds (client-safe) key, just use it
     const oddsApiKey = getEnvVar('VITE_ODDS_API_KEY');
     
     if (oddsApiKey) {
       this.odds_api_key = oddsApiKey;
-      // Do not load Perplexity key in the browser
-      this.perplexity_api_key = '';
-      
       this.loaded = true;
       console.log('Using environment variables for non-sensitive API keys');
       return;
@@ -74,13 +69,5 @@ export const configLoader = {
   getOddsApiKey: async function() {
     await this.load();
     return this.odds_api_key;
-  },
-
-  /**
-   * Get the Perplexity API key
-   */
-  getPerplexityApiKey: async function() {
-    await this.load();
-    return this.perplexity_api_key;
   }
 };

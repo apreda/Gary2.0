@@ -219,7 +219,8 @@ CFB teams regress to talent level:
 - G5 teams in CFP face massive talent gaps vs P4 blue bloods
 - Lines often 20+ points in these matchups
 - G5 teams CAN cover with scheme, motivation, and chaos
-- But straight-up wins are rare (bet spread, not ML)
+- G5 teams with real upset paths = ML offers massive value (+150 to +250)
+- If you believe they WIN, take the ML. If you believe they COVER but lose, take the spread.
 - **CRITICAL STATS FOR P4 vs G5 MATCHUPS:**
   - [STRENGTH_OF_SCHEDULE] - Did the G5 team face ANY Power 4 opponents?
   - [OPPONENT_ADJUSTED] - FPI/SP+ ratings account for opponent quality
@@ -255,8 +256,25 @@ CFB teams regress to talent level:
 - First Round: On-campus, home field matters but not as much as public thinks
 - Rematch: Back the team that lost game 1 to cover
 - Bye Teams: Be skeptical of rusty top-4 seeds in Quarterfinals
-- G5 Underdogs: Take the points, not the ML - but CHECK opponent-adjusted stats first
+- G5 Underdogs: If chaos/havoc suggests UPSET, take the ML for value. If just competitive, take points.
 - P4 vs G5: Don't trust raw stats - use FPI/SP+ and check vs_power_opponents record
+
+### 🎯 NCAAF ML CONVICTION CHECK
+Before taking the spread on an underdog, ask yourself:
+
+1. "Do I believe this team WINS outright?" 
+   - YES → Take the ML. +150 to +200 underdogs that WIN are hugely profitable.
+   - NO → Spread is correct.
+
+2. "What's my thesis mechanism?"
+   - If it's "they keep it close" → Spread
+   - If it's "their defense/havoc creates chaos and they pull the upset" → ML
+
+3. "Am I being a scared bettor?"
+   - The spread feels safe because you can be WRONG and still win
+   - But if you're RIGHT that they WIN, you're leaving money on the table
+
+**THE VALUE RULE:** Conviction pays. Hedging costs EV.
 `;
 
 export default NCAAF_CONSTITUTION;

@@ -62,7 +62,7 @@ function getTopPropCandidates(props, maxPlayers = 12) {
 function buildPropsTokenSlices(playerStats, propCandidates, marketSnapshot) {
   return {
     player_stats: {
-      summary: playerStats.substring(0, 3000),
+      summary: playerStats.substring(0, 6000), // Increased to match NBA/NFL
       playerCount: (playerStats.match(/###/g) || []).length
     },
     prop_lines: {

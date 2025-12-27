@@ -274,51 +274,12 @@ const gameResultsService = {
           }
         }
       } catch (oddsError) {
-        console.warn('Error getting game result from Odds API, falling back to Perplexity:', oddsError);
+        console.warn('Error getting game result from Odds API:', oddsError);
       }
       
-      // If Odds API fails or doesn't have the data, try Perplexity API
-      try {
-        const { perplexityService } = await import('./perplexityService.js');
-        
-        // Yesterday's date for checking results
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const dateStr = yesterday.toISOString().split('T')[0];
-        
-        // Get result from Perplexity
-        const perplexityResult = await perplexityService.getScoresFromPerplexity(
-          pick.home_team,
-          pick.away_team,
-          pick.sport,
-          dateStr
-        );
-        
-        if (perplexityResult.success && perplexityResult.scores) {
-          const scores = perplexityResult.scores;
-          const finalScore = `${scores.away_score}-${scores.home_score}`;
-          
-          // Determine if bet won or lost
-          const betEvaluation = gameResultsService.evaluateBetResult(pick, {
-            scores: {
-              home_score: scores.home_score,
-              away_score: scores.away_score
-            }
-          });
-          
-          return {
-            success: true,
-            data: {
-              result: betEvaluation.won ? 'won' : 'lost',
-              final_score: finalScore
-            }
-          };
-        }
-      } catch (perplexityError) {
-        console.error('Error getting game result from Perplexity:', perplexityError);
-      }
-      
-      return { success: false, error: 'Could not retrieve game results from any sources' };
+      // Odds API is the primary source for game scores
+      // If it fails, return failure (we don't use fallback services for official scores)
+      return { success: false, error: 'Could not retrieve game results from Odds API' };
     } catch (error) {
       console.error('Error in getGameResultFromOddsAPI:', error);
       return { success: false, error: error.message || error };

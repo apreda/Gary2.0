@@ -306,7 +306,7 @@ const openaiServiceInstance = {
   /**
    * Generates Gary's detailed sports betting analysis
    * @param {object} gameData - The game data from sports API
-   * @param {string} newsData - The latest news and trends from Perplexity
+   * @param {string} newsData - The latest news and trends from real-time search
    * @param {object} options - Additional options for the analysis
    * @returns {Promise<string>} - Gary's detailed analysis
    */
@@ -1167,7 +1167,7 @@ PICK DECISION:
         }
       }
       
-      // 6. Include game context from Perplexity if available
+      // 6. Include game context from Gemini Grounding if available
       if (gameData?.gameContext) {
         statsSection += 'GAME CONTEXT AND STORYLINES:\n';
         

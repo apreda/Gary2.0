@@ -1,6 +1,5 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
@@ -85,15 +84,8 @@ export async function generateEPLPicks(options = {}) {
         oddsData = { bookmaker: bookmaker.title, markets: bookmaker.markets };
       }
 
-      // Perplexity key findings
-      let richKeyFindings = [];
-      try {
-        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
-        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'epl', dateStr);
-        if (Array.isArray(rich?.key_findings)) {
-          richKeyFindings = rich.key_findings.slice(0, 4);
-        }
-      } catch {}
+      // Rich context now provided by Gemini Grounding in the agentic pipeline
+      const richKeyFindings = [];
 
       const gameObj = {
         id: gameId,

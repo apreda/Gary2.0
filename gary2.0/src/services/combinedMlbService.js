@@ -3,12 +3,11 @@
  * This service combines data from all three data sources:
  * 1. MLB Team Stats API for comprehensive team statistics (PRIORITY 1)
  * 2. MLB Stats API for pitcher data (PRIORITY 2)
- * 3. Perplexity for game context, storylines, and other relevant data
+ * 3. Gemini Grounding for game context, storylines, and other relevant data
  */
 import { ballDontLieService } from './ballDontLieService.js';
 import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
 import { mlbTeamStatsService } from './mlbTeamStatsService.js';
-import { perplexityService } from './perplexityService.js';
 import { oddsService } from './oddsService.js';
 
 const combinedMlbService = {
@@ -380,22 +379,8 @@ const combinedMlbService = {
         console.error(`[Combined MLB Service] Error getting hitter stats: ${hitterError.message}`);
       }
 
-      // 6. Get game context from Perplexity (rich structured JSON) and keep only key findings
-      let gameContext = {};
-      try {
-        gameContext = await perplexityService.getRichGameContext(homeTeamName, awayTeamName, 'mlb', date);
-        if (!gameContext || Object.keys(gameContext).length === 0) {
-          throw new Error('Perplexity returned empty context');
-        } else {
-          // Keep only 3-4 key findings to pass to OpenAI, avoid info dump
-          const findings = Array.isArray(gameContext.key_findings) ? gameContext.key_findings.slice(0, 4) : [];
-          gameContext = { key_findings: findings };
-        }
-      } catch (contextError) {
-        console.error(`[Combined MLB Service] Error getting rich game context: ${contextError.message}`);
-        // Explicitly surface missing context rather than silently substituting
-        gameContext = { key_findings: [] };
-      }
+      // 6. Game context now provided by Gemini Grounding in the agentic pipeline
+      const gameContext = { key_findings: [] };
 
       // 7. Get odds data with improved team name matching
       let oddsData = null;

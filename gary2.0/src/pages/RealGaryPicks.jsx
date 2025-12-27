@@ -525,7 +525,7 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                 'NCAAB_AP_RANKING': 'AP Rank',
                 'NCAAB_COACHES_RANKING': 'Coaches Rank',
                 'NCAAB_CONFERENCE_RECORD': 'Conf Record',
-                // NCAAB Advanced (Perplexity)
+                // NCAAB Advanced (Gemini Grounding)
                 'NCAAB_KENPOM_RATINGS': 'KenPom',
                 'NCAAB_NET_RANKING': 'NET Rank',
                 'NCAAB_STRENGTH_OF_SCHEDULE': 'SOS',

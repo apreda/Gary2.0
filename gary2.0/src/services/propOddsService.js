@@ -6,7 +6,6 @@
 import axios from 'axios';
 import { configLoader } from './configLoader.js';
 import { oddsService } from './oddsService.js';
-import { perplexityService } from './perplexityService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 
 const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
@@ -452,30 +451,10 @@ export const propOddsService = {
       
       console.log(`✅ Found matching game with ID: ${game.id}, scheduled for ${new Date(game.commence_time).toLocaleString()}`);
       
-      // If no Odds API key, skip directly to Perplexity fallback (no hard failure)
+      // If no Odds API key, return empty array
       if (!useOddsApi) {
-        console.log('🔄 No Odds API key configured. Using Perplexity fallback for player prop lines...');
-        try {
-          let sportShortName;
-          switch (sport) {
-            case 'basketball_nba': sportShortName = 'nba'; break;
-            case 'baseball_mlb': sportShortName = 'mlb'; break;
-            case 'icehockey_nhl': sportShortName = 'nhl'; break;
-            case 'americanfootball_nfl': sportShortName = 'nfl'; break;
-            default: sportShortName = sport.split('_').pop();
-          }
-          const matchup = `${homeTeam} vs ${awayTeam}`;
-          const perplexityProps = await propOddsService.getPlayerPropsFromSportsbooks(sportShortName, matchup);
-          if (perplexityProps && perplexityProps.length > 0) {
-            console.log(`✅ Successfully retrieved ${perplexityProps.length} props via Perplexity`);
-            return perplexityProps;
-          }
-          console.warn('⚠️ Perplexity prop extraction returned no results');
-          return [];
-        } catch (e) {
-          console.error('❌ Perplexity fallback failed:', e?.message || e);
-          return [];
-        }
+        console.log('⚠️ No Odds API key configured. Cannot fetch player props.');
+        return [];
       }
       
       // Odds API path (only if key is available)
@@ -651,203 +630,27 @@ export const propOddsService = {
   },
 
   /**
-   * Get player props from sportsbooks via Perplexity if The Odds API data is not available
-   * This serves as a fallback solution using web search and AI to parse the data
-   * @param {string} sport - Sport key (e.g., 'nba', 'mlb')
-   * @param {string} game - Game description (e.g., 'Warriors vs Timberwolves')
-   * @returns {Promise<Array>} - Array of player props from sportsbooks formatted like The Odds API data
+   * Get player props from sportsbooks - DEPRECATED
+   * Use The Odds API for player props instead
+   * @deprecated Use The Odds API directly
    */
   getPlayerPropsFromSportsbooks: async (sport, game) => {
-    try {
-      console.log(`🔍 Attempting to fetch player props for ${sport} game: ${game} from sportsbooks via Perplexity...`);
-      
-      // Split the game string to get team names
-      const [homeTeam, awayTeam] = game.split(' vs ').map(team => team.trim());
-      
-      // Sport-specific prop types for the query
-      let propTypesExample = 'hits, home runs, total bases, strikeouts';
-      let leagueName = 'MLB';
-      if (sport === 'nba' || sport === 'basketball_nba') {
-        propTypesExample = 'points, rebounds, assists, 3-pointers made, blocks, steals';
-        leagueName = 'NBA';
-      } else if (sport === 'nfl' || sport === 'americanfootball_nfl') {
-        propTypesExample = 'passing yards, rushing yards, receiving yards, receptions, touchdowns';
-        leagueName = 'NFL';
-      }
-      
-      console.log(`Trying to get ${leagueName} prop data from Perplexity for ${game}...`);
-      
-      // Create a well-structured query for Perplexity
-      const propQuery = `
-        Find the current player props for the ${leagueName} game: ${game} today. 
-        For each available prop bet, provide:
-        1. Player name
-        2. Team (${homeTeam} or ${awayTeam})
-        3. Prop type (${propTypesExample}, etc.)
-        4. Line value (the number set for over/under)
-        5. Over odds (American format)
-        6. Under odds (American format)
-        
-        Format the data in a structured way that can be parsed, preferably in JSON like this sample format:
-        [{
-          "player": "Player Name",
-          "team": "Team Name",
-          "prop_type": "points",
-          "line": 24.5,
-          "over_odds": -110,
-          "under_odds": -110
-        }]
-        
-        Include at least 15-20 different player props if available, with a mix of different prop types.
-        Only include props for this specific game. Use data from major sportsbooks like DraftKings, FanDuel, BetMGM.
-      `;
-
-      // Use Perplexity to get the data (with Sonar model for structured data)
-      const insights = await perplexityService.fetchRealTimeInfo(propQuery, {
-        model: 'sonar',
-        temperature: 0.2,
-        maxTokens: 2000
-      });
-      
-      if (!insights) {
-        throw new Error('No response from Perplexity');
-      }
-      
-      console.log(`Got response from Perplexity, parsing structured prop data...`);
-      
-      // Try to extract JSON from the response using the internal method
-      const propData = propOddsService.extractStructuredPropsFromText(insights, sport, homeTeam, awayTeam);
-      
-      if (propData && propData.length > 0) {
-        console.log(`✅ Successfully parsed ${propData.length} prop bets from Perplexity response`);
-        
-        // Log the prop types we found
-        const propTypes = [...new Set(propData.map(p => p.prop_type))];
-        console.log(`Prop types found: ${propTypes.join(', ')}`);
-        
-        return propData;
-      }
-      
-      // If JSON extraction fails, try backup direct queries (sport-specific)
-      const directQueries = [
-        `List today's ${leagueName} player prop bets for ${game} with odds in JSON format`,
-        `What are the current ${leagueName} player props for ${game} with their odds?`
-      ];
-      
-      for (const query of directQueries) {
-        console.log(`Trying backup query: ${query}`);
-        const backupResponse = await perplexityService.fetchRealTimeInfo(query, {
-          model: 'sonar',
-          temperature: 0.1,
-          maxTokens: 1500
-        });
-        
-        if (backupResponse) {
-          const backupData = propOddsService.extractStructuredPropsFromText(backupResponse, sport, homeTeam, awayTeam);
-          if (backupData && backupData.length > 0) {
-            console.log(`✅ Successfully parsed ${backupData.length} prop bets from backup query`);
-            return backupData;
-          }
-        }
-      }
-      
-      console.log(`❌ No player props data found from sportsbooks for ${game}`);
-      throw new Error(`Could not find current player props for ${game} from sportsbooks`);
-    } catch (error) {
-      console.error(`❌ Error fetching player props from sportsbooks:`, error.message);
-      throw error;
-    }
+    console.log(`⚠️ getPlayerPropsFromSportsbooks is deprecated - use The Odds API for ${sport} props`);
+    return [];
   },
   
   /**
-   * Extract structured prop data from Perplexity text response
-   * @private
-   * @param {string} text - The text to extract props from
-   * @param {string} sport - Sport key
-   * @param {string} homeTeam - Home team name 
-   * @param {string} awayTeam - Away team name
-   * @returns {Array} - Array of structured prop objects
+   * Extract structured prop data - DEPRECATED
+   * @deprecated No longer used
    */
   extractStructuredPropsFromText: (text, sport, homeTeam, awayTeam) => {
-    try {
-      // First, try to extract JSON directly
-      const jsonMatches = text.match(/```(?:json)?([\s\S]*?)```|\[\s*{[\s\S]*?}\s*\]/g);
-      
-      if (jsonMatches && jsonMatches.length > 0) {
-        for (const match of jsonMatches) {
-          try {
-            // Clean up the match to extract just the JSON content
-            const cleanJson = match.replace(/```(?:json)?|```/g, '').trim();
-            const parsed = JSON.parse(cleanJson);
-            
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              // Validate and standardize the prop data
-              const validProps = parsed.filter(prop => {
-                return prop.player && prop.prop_type && 
-                       (prop.line !== undefined) && 
-                       (prop.over_odds !== undefined || prop.under_odds !== undefined);
-              }).map(prop => ({
-                player: prop.player,
-                team: prop.team || propOddsService.determineTeam(prop.player, homeTeam, awayTeam),
-                prop_type: propOddsService.standardizePropType(prop.prop_type, sport),
-                line: parseFloat(prop.line),
-                over_odds: typeof prop.over_odds === 'string' ? parseInt(prop.over_odds) : prop.over_odds,
-                under_odds: typeof prop.under_odds === 'string' ? parseInt(prop.under_odds) : prop.under_odds
-              }));
-              
-              if (validProps.length > 0) {
-                return validProps;
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to parse JSON match:', e.message);
-          }
-        }
-      }
-      
-      // If JSON parsing fails, try to extract props using regex patterns
-      console.log('Attempting to extract props using regex patterns...');
-      const props = [];
-      
-      // Pattern for MLB-style lines: "Player Name (Team) Over/Under 1.5 Hits (-110/+120)"
-      const mlbPattern = /([\w\s.'-]+)\s*(?:\(([\w\s.]+)\))?\s*(Over|Under)\s*([0-9.]+)\s*([\w\s]+)\s*\(([-+][0-9]+)(?:\/([-+][0-9]+))?\)/gi;
-      let mlbMatch;
-      
-      while ((mlbMatch = mlbPattern.exec(text)) !== null) {
-        const [_, playerName, teamName, position, lineValue, propType, firstOdds, secondOdds] = mlbMatch;
-        
-        // Determine over/under odds based on position
-        const overOdds = position.toLowerCase() === 'over' ? parseInt(firstOdds) : (secondOdds ? parseInt(secondOdds) : null);
-        const underOdds = position.toLowerCase() === 'under' ? parseInt(firstOdds) : (secondOdds ? parseInt(secondOdds) : null);
-        
-        props.push({
-          player: playerName.trim(),
-          team: teamName ? teamName.trim() : propOddsService.determineTeam(playerName, homeTeam, awayTeam),
-          prop_type: propOddsService.standardizePropType(propType.trim(), sport),
-          line: parseFloat(lineValue),
-          over_odds: overOdds,
-          under_odds: underOdds
-        });
-      }
-      
-      // Additional pattern for table-style formatting
-      const tablePattern = /([\w\s.'-]+)\s*\|\s*([\w\s.]+)\s*\|\s*([\w\s]+)\s*\|\s*([0-9.]+)\s*\|\s*([-+][0-9]+)\s*\|\s*([-+][0-9]+)/gi;
-      let tableMatch;
-      
-      while ((tableMatch = tablePattern.exec(text)) !== null) {
-        const [_, playerName, teamName, propType, lineValue, overOdds, underOdds] = tableMatch;
-        
-        props.push({
-          player: playerName.trim(),
-          team: teamName.trim(),
-          prop_type: propOddsService.standardizePropType(propType.trim(), sport),
-          line: parseFloat(lineValue),
-          over_odds: parseInt(overOdds),
-          under_odds: parseInt(underOdds)
-        });
-      }
-      
-      // Filter out any invalid props
+    console.log('⚠️ extractStructuredPropsFromText is deprecated');
+    return [];
+  },
+
+  /**
+   * Filter out any invalid props - kept for backwards compatibility
+   * @private
       const validProps = props.filter(prop => (
         prop.player && 
         prop.prop_type && 

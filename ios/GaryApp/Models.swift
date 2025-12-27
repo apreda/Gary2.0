@@ -922,6 +922,47 @@ struct DFSPlayer: Identifiable, Decodable {
     let supportingStats: [DFSStat]? // 3-4 stats backing up the pick
     let pivots: [DFSPivot]        // Alternative player options
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NEW DFS METRICS - Enhanced data for smarter lineup decisions
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /// Projected ownership % (for contrarian plays)
+    let ownership: Double?
+    
+    /// Value score (points per $1K salary) - 5x is baseline, 6x+ is elite
+    let valueScore: Double?
+    
+    /// Recent form: "hot" (last 5 > season avg), "cold" (below), "neutral"
+    let recentForm: String?
+    
+    /// Defense vs Position rank (1 = worst defense/easiest matchup, 30 = toughest)
+    let dvpRank: Int?
+    
+    /// Is this a revenge game (vs former team)?
+    let isRevenge: Bool?
+    
+    /// Is this a back-to-back game? (may rest/underperform)
+    let isB2B: Bool?
+    
+    /// Usage boost when teammate is out
+    let usageBoost: String?
+    
+    /// Blowout risk (starters may sit in 4th quarter)
+    let blowoutRisk: Bool?
+    
+    // NFL-specific fields
+    /// Snap count percentage (opportunity indicator)
+    let snapPct: Int?
+    
+    /// Target share percentage (% of team's targets)
+    let targetShare: Double?
+    
+    /// Red zone targets (TD upside indicator)
+    let redZoneTargets: Int?
+    
+    /// Weather impact: "none", "positive", "negative"
+    let weatherImpact: String?
+    
     var id: String { "\(position)-\(player)-\(team)" }
     
     /// Formatted salary (e.g., "$7,800")
@@ -935,6 +976,56 @@ struct DFSPlayer: Identifiable, Decodable {
     /// Has rationale to display
     var hasRationale: Bool {
         rationale != nil && !(rationale?.isEmpty ?? true)
+    }
+    
+    /// Is this player a value play? (5x+ value score)
+    var isValuePlay: Bool {
+        (valueScore ?? 0) >= 5.0
+    }
+    
+    /// Is this player elite value? (6x+ value score)
+    var isEliteValue: Bool {
+        (valueScore ?? 0) >= 6.0
+    }
+    
+    /// Is this a low-owned contrarian play? (<8% ownership)
+    var isContrarian: Bool {
+        guard let own = ownership else { return false }
+        return own < 8.0
+    }
+    
+    /// Is this a chalk play? (>20% ownership)
+    var isChalk: Bool {
+        guard let own = ownership else { return false }
+        return own >= 20.0
+    }
+    
+    /// Is the player on a hot streak?
+    var isHot: Bool {
+        recentForm == "hot"
+    }
+    
+    /// Is the player on a cold streak?
+    var isCold: Bool {
+        recentForm == "cold"
+    }
+    
+    /// Has a favorable matchup? (DvP rank 1-10)
+    var hasFavorableMatchup: Bool {
+        guard let rank = dvpRank else { return false }
+        return rank <= 10
+    }
+    
+    /// Formatted ownership (e.g., "12.5%")
+    var ownershipFormatted: String {
+        guard let own = ownership else { return "" }
+        return String(format: "%.1f%%", own)
+    }
+    
+    /// Formatted value score (e.g., "5.2x")
+    var valueScoreFormatted: String {
+        guard let vs = valueScore else { return "" }
+        return String(format: "%.1fx", vs)
     }
     
     /// Parse from dictionary
@@ -967,7 +1058,20 @@ struct DFSPlayer: Identifiable, Decodable {
             projected_pts: projectedPts,
             rationale: dict["rationale"] as? String,
             supportingStats: supportingStats.isEmpty ? nil : supportingStats,
-            pivots: pivots
+            pivots: pivots,
+            // New DFS metrics
+            ownership: dict["ownership"] as? Double,
+            valueScore: dict["valueScore"] as? Double,
+            recentForm: dict["recentForm"] as? String,
+            dvpRank: dict["dvpRank"] as? Int,
+            isRevenge: dict["isRevenge"] as? Bool,
+            isB2B: dict["isB2B"] as? Bool,
+            usageBoost: dict["usageBoost"] as? String,
+            blowoutRisk: dict["blowoutRisk"] as? Bool,
+            snapPct: dict["snapPct"] as? Int,
+            targetShare: dict["targetShare"] as? Double,
+            redZoneTargets: dict["redZoneTargets"] as? Int,
+            weatherImpact: dict["weatherImpact"] as? String
         )
     }
 }
@@ -1021,17 +1125,13 @@ struct DFSPivot: Identifiable, Decodable {
         return formatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
     }
     
-    /// Formatted salary difference (e.g., "+$100" or "-$1,200")
+    /// Formatted salary difference (e.g., "$100" or "$1,200") - no sign, arrow shows direction
     var salaryDiffFormatted: String {
         guard let diff = salaryDiff else { return "" }
-        let sign = diff >= 0 ? "+" : ""
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.maximumFractionDigits = 0
-        if let formatted = formatter.string(from: NSNumber(value: abs(diff))) {
-            return diff >= 0 ? "+\(formatted)" : "-\(formatted)"
-        }
-        return "\(sign)$\(diff)"
+        return formatter.string(from: NSNumber(value: abs(diff))) ?? "$\(abs(diff))"
     }
     
     /// Display label for the tier

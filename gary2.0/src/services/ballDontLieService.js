@@ -97,13 +97,14 @@ function buildQuery(params = {}) {
 /**
  * Get the current NHL/NBA season year for BDL API
  * BDL uses the starting year of the season (e.g., 2025 for 2025-26 season)
- * Seasons start in October (month 9), so Oct-Dec = new season, Jan-Sep = previous year's season
+ * NHL/NBA seasons run Oct-June, so Jul-Dec = current season year, Jan-June = previous year
  * @returns {number} - Season year (e.g., 2025 for current 2025-26 season)
  */
 function getCurrentNhlSeason() {
-  const currentMonth = new Date().getMonth(); // 0-indexed
+  const currentMonth = new Date().getMonth() + 1; // 1-indexed for consistency
   const currentYear = new Date().getFullYear();
-  return currentMonth >= 9 ? currentYear : currentYear - 1;
+  // NHL season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+  return currentMonth >= 10 ? currentYear : currentYear - 1;
 }
 
 /**
@@ -669,10 +670,16 @@ const ballDontLieService = {
    * GET /nfl/v1/teams/<ID>/roster
    * Returns players organized by position with depth (1=starter, 2=backup, etc.)
    * @param {number} teamId - BDL team ID
-   * @param {number} season - Season year (defaults to 2025)
+   * @param {number} season - Season year (calculated dynamically if not provided)
    * @returns {Array} - Roster entries with player info, position, depth, injury_status
    */
-  async getNflTeamRoster(teamId, season = 2025, ttlMinutes = 30) {
+  async getNflTeamRoster(teamId, season = null, ttlMinutes = 30) {
+    // Calculate dynamic NFL season: Aug-Feb spans years
+    if (!season) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      season = month <= 7 ? year - 1 : year;
+    }
     try {
       if (!teamId) return [];
       const cacheKey = `nfl_team_roster_${teamId}_${season}`;
@@ -692,13 +699,19 @@ const ballDontLieService = {
    * GET /nfl/v1/season_stats
    * Returns player season stats for a specific team
    * @param {number} teamId - BDL team ID
-   * @param {number} season - Season year
+   * @param {number} season - Season year (calculated dynamically if not provided)
    * @param {boolean} postseason - Include postseason stats
    * @returns {Array} - Player season stats
    */
-  async getNflSeasonStatsByTeam(teamId, season = 2025, postseason = false, ttlMinutes = 15) {
+  async getNflSeasonStatsByTeam(teamId, season = null, postseason = false, ttlMinutes = 15) {
+    // Calculate dynamic NFL season: Aug-Feb spans years
+    if (!season) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      season = month <= 7 ? year - 1 : year;
+    }
     try {
-      if (!teamId || !season) return [];
+      if (!teamId) return [];
       const cacheKey = `nfl_season_stats_team_${teamId}_${season}_${postseason}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/season_stats${buildQuery({ 
@@ -844,10 +857,16 @@ const ballDontLieService = {
    * GET /ncaaf/v1/player_season_stats?team_ids[]=<ID>&season=<season>
    * Returns season statistics for players on a specific team
    * @param {number} teamId - BDL team ID
-   * @param {number} season - Season year (e.g., 2025)
+   * @param {number} season - Season year (calculated dynamically if not provided)
    * @returns {Array} - Array of player season stat objects
    */
-  async getNcaafPlayerSeasonStats(teamId, season = 2025, ttlMinutes = 30) {
+  async getNcaafPlayerSeasonStats(teamId, season = null, ttlMinutes = 30) {
+    // Calculate dynamic NCAAF season: Aug-Feb spans years
+    if (!season) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      season = month <= 7 ? year - 1 : year;
+    }
     try {
       if (!teamId) return [];
       const cacheKey = `ncaaf_player_season_stats_${teamId}_${season}`;
@@ -870,11 +889,17 @@ const ballDontLieService = {
    * NCAAF Rankings
    * GET /ncaaf/v1/rankings?season=<season>
    * Returns AP Poll rankings
-   * @param {number} season - Season year
+   * @param {number} season - Season year (calculated dynamically if not provided)
    * @param {number} week - Optional week number
    * @returns {Array} - Array of ranking objects
    */
-  async getNcaafRankings(season = 2025, week = null, ttlMinutes = 60) {
+  async getNcaafRankings(season = null, week = null, ttlMinutes = 60) {
+    // Calculate dynamic NCAAF season: Aug-Feb spans years
+    if (!season) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      season = month <= 7 ? year - 1 : year;
+    }
     try {
       const cacheKey = `ncaaf_rankings_${season}_${week || 'current'}`;
       return await getCachedOrFetch(cacheKey, async () => {
@@ -1006,6 +1031,82 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] nba getNbaSeasonAverages error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA game lineups (starting lineups + bench)
+   * IMPORTANT: Lineup data is only available starting from the 2025 NBA season
+   * and only once the game has begun.
+   * @param {Array<number>} gameIds - Array of game IDs
+   * @returns {Promise<Array>} - Array of lineup entries with player, team, and starter status
+   */
+  async getNbaLineups(gameIds, ttlMinutes = 5) {
+    try {
+      if (!gameIds || gameIds.length === 0) return [];
+      
+      const cacheKey = `nba_lineups_${gameIds.sort().join(',')}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = { 'game_ids[]': gameIds.slice(0, 10), per_page: 100 };
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/lineups${buildQuery(params)}`;
+        console.log(`[Ball Don't Lie] Fetching NBA lineups for games: ${gameIds.join(', ')}`);
+        
+        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const lineups = Array.isArray(resp?.data?.data) ? resp.data.data : [];
+        
+        console.log(`[Ball Don't Lie] Retrieved ${lineups.length} lineup entries`);
+        return lineups;
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getNbaLineups error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA live box scores for current day's games
+   * Returns real-time updated scores and player stats
+   * @param {string} date - Date in YYYY-MM-DD format (defaults to today)
+   * @returns {Promise<Array>} - Array of live box score data
+   */
+  async getNbaLiveBoxScores(date = null, ttlMinutes = 1) {
+    try {
+      const today = date || new Date().toISOString().slice(0, 10);
+      const cacheKey = `nba_live_box_scores_${today}`;
+      
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/box_scores/live`;
+        console.log(`[Ball Don't Lie] Fetching live NBA box scores`);
+        
+        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getNbaLiveBoxScores error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA box scores for a specific date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Array>} - Array of box score data with full player stats
+   */
+  async getNbaBoxScores(date, ttlMinutes = 10) {
+    try {
+      if (!date) return [];
+      
+      const cacheKey = `nba_box_scores_${date}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/box_scores?date=${date}`;
+        console.log(`[Ball Don't Lie] Fetching NBA box scores for ${date}`);
+        
+        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getNbaBoxScores error:', e.message);
       return [];
     }
   },
@@ -1227,11 +1328,17 @@ const ballDontLieService = {
    * Get NFL player game logs (last N games) for prop analysis
    * Similar to NBA's getNbaPlayerGameLogsBatch - includes consistency, trends, splits
    * @param {Array<number>} playerIds - Array of BDL player IDs
-   * @param {number} season - Season year
+   * @param {number} season - Season year (calculated dynamically if not provided)
    * @param {number} numGames - Number of recent games to fetch (default 5)
    * @returns {Object} - Map of playerId -> game log data with stats and trends
    */
-  async getNflPlayerGameLogsBatch(playerIds, season = 2025, numGames = 5, ttlMinutes = 15) {
+  async getNflPlayerGameLogsBatch(playerIds, season = null, numGames = 5, ttlMinutes = 15) {
+    // Calculate dynamic NFL season: Aug-Feb spans years
+    if (!season) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      season = month <= 7 ? year - 1 : year;
+    }
     try {
       if (!Array.isArray(playerIds) || playerIds.length === 0) return {};
       
@@ -1397,11 +1504,17 @@ const ballDontLieService = {
    * Also checks injury_status to automatically promote backup if starter is out
    * 
    * @param {number} teamId - BDL team ID
-   * @param {number} season - Season year (e.g., 2025)
+   * @param {number} season - Season year (calculated dynamically if not provided)
    * @param {string} sportKey - Sport key ('americanfootball_nfl' or 'americanfootball_ncaaf')
    * @returns {Object|null} - { id, name, firstName, lastName, team, depth, injuryStatus, isBackup }
    */
-  async getStartingQBFromDepthChart(teamId, season = 2025, sportKey = 'americanfootball_nfl') {
+  async getStartingQBFromDepthChart(teamId, season = null, sportKey = 'americanfootball_nfl') {
+    // Calculate dynamic NFL/NCAAF season: Aug-Feb spans years
+    if (!season) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      season = month <= 7 ? year - 1 : year;
+    }
     try {
       if (!teamId) return null;
       
@@ -1432,38 +1545,52 @@ const ballDontLieService = {
         return null;
       }
       
-      // Sort by depth (1 = starter, 2 = backup, etc.)
+      // Sort by depth (1 = starter, 2 = backup, 3 = 3rd string, etc.)
       qbs.sort((a, b) => (a.depth || 99) - (b.depth || 99));
       
-      // Check if depth=1 QB is injured/out
-      const starterEntry = qbs.find(q => q.depth === 1);
-      const backupEntry = qbs.find(q => q.depth === 2);
-      
       // Injury statuses that mean the player is OUT
+      // BDL uses single-letter codes: "O" = Out, "D" = Doubtful, "Q" = Questionable, "IR" = Injured Reserve
       const isOut = (status) => {
         if (!status) return false;
-        const s = status.toLowerCase();
+        const s = status.toLowerCase().trim();
+        // Single letter codes
+        if (s === 'o' || s === 'd' || s === 'ir') return true;
+        // Full word matches
         return s.includes('out') || s.includes('ir') || s.includes('injured reserve') || 
                s.includes('doubtful') || s.includes('pup');
       };
       
-      let selectedQB = starterEntry;
+      // Find the first HEALTHY QB in the depth chart
+      // Iterate through depth=1, depth=2, depth=3, etc. until we find one not injured
+      let selectedQB = null;
       let isBackupStarting = false;
+      const injuredQBs = [];
       
-      // If starter is injured/out, use backup
-      if (starterEntry && isOut(starterEntry.injury_status)) {
-        const starterName = `${starterEntry.player?.first_name} ${starterEntry.player?.last_name}`;
-        console.log(`[Ball Don't Lie] ⚠️ Depth chart starter ${starterName} is ${starterEntry.injury_status} - checking backup`);
+      for (const qb of qbs) {
+        const qbName = `${qb.player?.first_name} ${qb.player?.last_name}`;
         
-        if (backupEntry && !isOut(backupEntry.injury_status)) {
-          selectedQB = backupEntry;
-          isBackupStarting = true;
-          const backupName = `${backupEntry.player?.first_name} ${backupEntry.player?.last_name}`;
-          console.log(`[Ball Don't Lie] ✓ Using backup QB: ${backupName}`);
-        } else {
-          // Even if injured, return the starter info so we have something
-          console.log(`[Ball Don't Lie] ⚠️ No healthy backup available, using injured starter info`);
+        if (isOut(qb.injury_status)) {
+          injuredQBs.push({ name: qbName, status: qb.injury_status, depth: qb.depth });
+          console.log(`[Ball Don't Lie] ⚠️ Depth ${qb.depth} QB ${qbName} is ${qb.injury_status} - checking next`);
+          continue;
         }
+        
+        // Found a healthy (or at least not OUT) QB
+        selectedQB = qb;
+        isBackupStarting = qb.depth > 1;
+        
+        if (isBackupStarting) {
+          const depthLabel = qb.depth === 2 ? 'Backup' : `${qb.depth}${qb.depth === 3 ? 'rd' : 'th'} String`;
+          console.log(`[Ball Don't Lie] ✓ Using ${depthLabel} QB: ${qbName} (depth=${qb.depth})`);
+        }
+        break;
+      }
+      
+      // If no healthy QB found, log all injured and use the top of depth chart anyway
+      if (!selectedQB) {
+        console.log(`[Ball Don't Lie] ⚠️ All QBs appear injured:`, injuredQBs.map(q => `${q.name} (${q.status})`).join(', '));
+        selectedQB = qbs[0]; // Use depth=1 even if injured
+        console.log(`[Ball Don't Lie] ⚠️ Using depth=1 ${selectedQB?.player?.first_name} ${selectedQB?.player?.last_name} despite injury`);
       }
       
       if (!selectedQB) {
@@ -1510,13 +1637,19 @@ const ballDontLieService = {
    * Get the starting QB for an NFL/NCAAF team based on season stats (most passing yards)
    * FALLBACK METHOD - use getStartingQBFromDepthChart as primary
    * @param {number} teamId - BDL team ID
-   * @param {number} season - Season year (e.g., 2025)
+   * @param {number} season - Season year (calculated dynamically if not provided)
    * @param {string} sportKey - Sport key ('americanfootball_nfl' or 'americanfootball_ncaaf')
    * @param {number} ttlMinutes - Cache TTL
    * @param {Set<string>} excludeNames - Set of QB names (lowercase) to exclude (e.g., injured/IR players)
    * @returns {Object|null} - { id, name, firstName, lastName, team, passingYards, passingTds, qbRating, ... }
    */
-  async getTeamStartingQB(teamId, season = 2025, sportKey = 'americanfootball_nfl', ttlMinutes = 60, excludeNames = null) {
+  async getTeamStartingQB(teamId, season = null, sportKey = 'americanfootball_nfl', ttlMinutes = 60, excludeNames = null) {
+    // Calculate dynamic NFL/NCAAF season: Aug-Feb spans years
+    if (!season) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      season = month <= 7 ? year - 1 : year;
+    }
     try {
       if (!teamId) return null;
       
@@ -1704,10 +1837,10 @@ const ballDontLieService = {
         let queryParams = { ...params };
         if (sportKey === 'soccer_epl' && !queryParams.season) {
           const now = new Date();
-          const month = now.getMonth();
+          const month = now.getMonth() + 1; // 1-indexed for consistency
           const year = now.getFullYear();
-          // EPL season: Aug-Dec = current year, Jan-Jul = previous year
-          queryParams.season = month >= 7 ? year : year - 1;
+          // EPL season: Aug(8)-Dec(12) = current year, Jan(1)-Jul(7) = previous year
+          queryParams.season = month >= 8 ? year : year - 1;
         }
         
         const qs = Object.keys(queryParams).length > 0 ? buildQuery(queryParams) : '';
@@ -1752,9 +1885,10 @@ const ballDontLieService = {
           let qs = '';
           if (sportKey === 'soccer_epl') {
             const now = new Date();
-            const month = now.getMonth();
+            const month = now.getMonth() + 1; // 1-indexed for consistency
             const year = now.getFullYear();
-            const season = month >= 7 ? year : year - 1;
+            // EPL season: Aug(8)-Dec(12) = current year, Jan(1)-Jul(7) = previous year
+            const season = month >= 8 ? year : year - 1;
             qs = `?season=${season}`;
           }
           const url = `https://api.balldontlie.io/${path}${qs}`;
@@ -2035,6 +2169,54 @@ const ballDontLieService = {
   },
 
   /**
+   * Team season stats - generic batch version for multiple team IDs
+   * More flexible API that matches the MCP function signature
+   * NFL: /nfl/v1/team_season_stats?team_ids[]=X&team_ids[]=Y&season=XXXX
+   */
+  async getTeamSeasonStatsGeneric(sportKey, { team_ids = [], season, postseason = false } = {}, ttlMinutes = 30) {
+    try {
+      if (!team_ids || team_ids.length === 0 || !season) {
+        return [];
+      }
+      
+      const cacheKey = `${sportKey}_team_season_stats_batch_${team_ids.join('_')}_${season}_${postseason}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Build query with team_ids array
+        const params = new URLSearchParams();
+        team_ids.forEach(id => params.append('team_ids[]', id));
+        params.append('season', season);
+        if (postseason) params.append('postseason', 'true');
+        
+        let endpoint = null;
+        if (sportKey === 'americanfootball_nfl') {
+          endpoint = 'nfl/v1/team_season_stats';
+        } else if (sportKey === 'americanfootball_ncaaf') {
+          endpoint = 'ncaaf/v1/team_season_stats';
+        } else if (sportKey === 'basketball_ncaab') {
+          endpoint = 'ncaab/v1/team_season_stats';
+        } else {
+          console.warn(`[Ball Don't Lie] getTeamSeasonStatsGeneric not supported for ${sportKey}`);
+          return [];
+        }
+        
+        const url = `https://api.balldontlie.io/${endpoint}?${params.toString()}`;
+        console.log(`[Ball Don't Lie] Fetching team season stats: ${url}`);
+        
+        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status} ${text}`);
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] ${sportKey} getTeamSeasonStatsGeneric error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
    * Leaders endpoints (NBA/NHL/NCAAB) via HTTP fallback
    */
   async getLeadersGeneric(sportKey, { season, type, postseason = false } = {}, ttlMinutes = 30) {
@@ -2205,18 +2387,17 @@ const ballDontLieService = {
           return resp?.data || [];
         }
         // HTTP fallback for sports with documented injuries endpoints
-        // NOTE: NCAAF/NCAAB injuries may not be supported by BDL - will return empty gracefully
+        // NOTE: NHL/NCAAF/NCAAB injuries NOT supported by BDL - Gemini Grounding is primary source
         const endpointMap = {
           basketball_nba: 'nba/v1/player_injuries',
           basketball_wnba: 'wnba/v1/player_injuries',
-          americanfootball_nfl: 'nfl/v1/player_injuries',
-          icehockey_nhl: 'nhl/v1/player_injuries',
-          americanfootball_ncaaf: 'ncaaf/v1/player_injuries', // May not be supported - Gemini Grounding is primary source
-          basketball_ncaab: 'ncaab/v1/player_injuries' // May not be supported - Gemini Grounding is primary source
+          americanfootball_nfl: 'nfl/v1/player_injuries'
+          // NHL: No BDL injuries endpoint (404 confirmed) - use Gemini Grounding instead
+          // NCAAF/NCAAB: No BDL injuries endpoint - use Gemini Grounding instead
         };
         const path = endpointMap[sportKey];
         if (!path) {
-          // Not supported: return empty without throwing
+          // NCAAF/NCAAB: Return empty silently - Gemini Grounding provides opt-out/injury context
           return [];
         }
         const qs = buildQuery(params);
@@ -2366,8 +2547,8 @@ const ballDontLieService = {
     const currentMonth = new Date().getMonth() + 1; // 1-12
     const currentYear = new Date().getFullYear();
     
-    // CRITICAL FIX: For May 2025, we want 2024 season (2024-25 NBA season)
-    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    const actualSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
     
     console.log(`🏀 [SEASON DEBUG] Current date: ${new Date().toISOString()}, Month: ${currentMonth}, Year: ${currentYear}, Using season: ${actualSeason}`);
     
@@ -2435,7 +2616,8 @@ const ballDontLieService = {
    */
   async getNbaSeasonAveragesSDKLegacy(season = new Date().getFullYear(), teamIds = []) {
     const currentMonth = new Date().getMonth() + 1;
-    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    const actualSeason = currentMonth >= 10 ? season : season - 1;
     
     try {
       const cacheKey = `nba_season_averages_sdk_legacy_${actualSeason}_${teamIds.join('_')}`;
@@ -2540,7 +2722,8 @@ const ballDontLieService = {
    */
   async getNbaStandings(season = new Date().getFullYear()) {
     const currentMonth = new Date().getMonth() + 1;
-    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    const actualSeason = currentMonth >= 10 ? season : season - 1;
     
     try {
       const cacheKey = `nba_standings_${actualSeason}`;
@@ -2568,7 +2751,8 @@ const ballDontLieService = {
   async getActivePlayoffTeams(season = new Date().getFullYear()) {
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
-    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    const actualSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
     
     console.log(`🏀 [SEASON DEBUG] Input season: ${season}, Current month: ${currentMonth}, Calculated actualSeason: ${actualSeason}`);
     
@@ -2676,7 +2860,8 @@ const ballDontLieService = {
   async getNbaPlayoffSeries(season = new Date().getFullYear(), teamA, teamB) {
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
-    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    const actualSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
     
     try {
       const cacheKey = `nba_playoff_series_${actualSeason}_${teamA}_${teamB}`;
@@ -2790,7 +2975,8 @@ const ballDontLieService = {
   async getNbaPlayoffPlayerStats(homeTeam, awayTeam, season = new Date().getFullYear()) {
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
-    const actualSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    const actualSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
     
     try {
       console.log(`🏀 [Ball Don't Lie] Getting playoff player stats for ${awayTeam} @ ${homeTeam} (${actualSeason} season)`);
@@ -3129,7 +3315,8 @@ const ballDontLieService = {
    */
   async generateNbaPlayoffReport(season = new Date().getFullYear(), teamA, teamB) {
     const currentMonth = new Date().getMonth() + 1;
-    const actualSeason = currentMonth <= 6 ? season - 1 : season;
+    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    const actualSeason = currentMonth >= 10 ? season : season - 1;
     
     try {
       console.log(`🏀 [Ball Don't Lie] Generating NBA playoff report for ${actualSeason} season`);
@@ -3439,7 +3626,8 @@ const ballDontLieService = {
       
       const currentMonth = new Date().getMonth() + 1;
       const nowYear = new Date().getFullYear();
-      const playoffSeason = season || (currentMonth <= 6 ? nowYear - 1 : nowYear);
+      // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+      const playoffSeason = season || (currentMonth >= 10 ? nowYear : nowYear - 1);
       console.log(`🏀 Using season: ${playoffSeason} (real-only)`);
       
       // Attempt to fetch real team season stats from the SDK; if not supported, return []
@@ -4592,9 +4780,10 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         // Calculate EPL season: Aug-Dec = current year, Jan-Jul = previous year
         const targetDate = new Date(dateStr);
-        const month = targetDate.getMonth(); // 0-indexed
+        const month = targetDate.getMonth() + 1; // 1-indexed for consistency
         const year = targetDate.getFullYear();
-        const season = month >= 7 ? year : year - 1;
+        // EPL season: Aug(8)-Dec(12) = current year, Jan(1)-Jul(7) = previous year
+        const season = month >= 8 ? year : year - 1;
         
         // EPL season runs Aug-May with 38 matchweeks
         // Week estimation: Aug 10 is roughly week 1, each week is ~7 days
@@ -4658,9 +4847,10 @@ const ballDontLieService = {
       
       // Calculate current EPL season
       const now = new Date();
-      const month = now.getMonth();
+      const month = now.getMonth() + 1; // 1-indexed for consistency
       const year = now.getFullYear();
-      const season = month >= 7 ? year : year - 1;
+      // EPL season: Aug(8)-Dec(12) = current year, Jan(1)-Jul(7) = previous year
+      const season = month >= 8 ? year : year - 1;
       
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/epl/v1/players${buildQuery({ player_ids: uniqueIds, per_page: 100, season })}`;

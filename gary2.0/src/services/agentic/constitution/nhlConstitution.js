@@ -4,13 +4,13 @@
  * This guides Gary's thinking about NHL matchups.
  * Hockey is a game of possession, special teams, and goaltending.
  * 
- * NOTE: NHL is in BETA mode - uses BDL basic stats + Perplexity-sourced advanced analytics.
+ * NOTE: NHL is in BETA mode - uses BDL basic stats + Gemini Grounding for advanced analytics.
  */
 
 export const NHL_CONSTITUTION = `
 ## NHL SHARP HEURISTICS (BETA - Supplemental Analytics)
 
-Note: NHL picks use Perplexity-sourced advanced stats (Corsi, xG, PDO) in addition to API data.
+Note: NHL picks use Gemini Grounding for advanced stats (Corsi, xG, PDO) in addition to API data.
 Confidence levels may be slightly lower than NBA/NFL due to data source differences.
 
 ### CORSI & EXPECTED GOALS - THE GOLD STANDARD
@@ -148,6 +148,27 @@ Always evaluate BOTH puck line (+1.5/-1.5) and moneyline:
   - One-goal games are likely (~50% of NHL games)
 - AVOID: Puck line bets with odds worse than -200 (too juicy)
 - NHL games are typically close - puck line +1.5 hits ~70% for dogs
+
+### 🎯 NHL ML CONVICTION CHECK
+Before taking puck line +1.5 on an underdog, STOP and ask:
+
+1. "Do I believe this team WINS outright?"
+   - YES → Take the ML. Hockey is volatile - underdogs WIN ~40% of games.
+   - NO → Puck line +1.5 is correct.
+
+2. "What's the ML price?"
+   - +110 to +150 = Strong value if you believe they WIN
+   - +150 to +200 = Excellent value with real upset thesis
+   - +200+ = Only with maximum conviction (backup goalie, tired favorite, etc.)
+
+3. "Am I being a scared bettor?"
+   - Puck line +1.5 hits ~70% for dogs - but the JUICE eats your edge
+   - If you believe they WIN, the ML is almost ALWAYS better EV
+
+**THE VALUE RULE:**
+- Hockey is chaos. Underdogs WIN more often than in other sports.
+- A +140 underdog that wins 40% of the time is hugely profitable
+- Conviction pays. Don't hide behind the puck line when you believe they WIN.
 `;
 
 export default NHL_CONSTITUTION;

@@ -4,11 +4,14 @@
  * Modeled after nbaAgenticContext.js
  */
 import { ballDontLieService } from '../ballDontLieService.js';
-import { perplexityService } from '../perplexityService.js';
+import { getGroundedAdvancedStats, getGroundedRichContext } from './scoutReport/scoutReportBuilder.js';
+// Context sourced from Gemini 3 Flash Grounding
 import {
   formatGameTimeEST,
   buildMarketSnapshot,
-  parseGameDate
+  parseGameDate,
+  safeApiCallArray,
+  safeApiCallObject
 } from './sharedUtils.js';
 
 const SPORT_KEY = 'icehockey_nhl';
@@ -140,7 +143,7 @@ function formatTeamBasics(team, standings = []) {
  */
 function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recentForm, injuries, marketSnapshot) {
   return {
-    // Corsi & Expected Goals (from Perplexity advanced stats)
+    // Corsi & Expected Goals (from Gemini Grounding advanced stats)
     corsi_xg: {
       home: {
         corsiForPct: advancedStats?.home_advanced?.corsi_for_pct ?? null,
@@ -170,7 +173,7 @@ function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recent
       }
     },
     
-    // Goalie Matchup (from Perplexity)
+    // Goalie Matchup (from Gemini Grounding)
     goalie_matchup: {
       home: {
         starter: advancedStats?.goalie_matchup?.home_starter ?? null,
@@ -218,7 +221,7 @@ function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recent
       }
     },
     
-    // Five-on-Five play (from Perplexity)
+    // Five-on-Five play (from Gemini Grounding)
     five_on_five: advancedStats?.five_on_five ?? {
       home: { cfPct: null, xgfPct: null },
       away: { cfPct: null, xgfPct: null }
@@ -248,8 +251,8 @@ export async function buildNhlAgenticContext(game, options = {}) {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
   const month = commenceDate.getMonth() + 1;
   const year = commenceDate.getFullYear();
-  // NHL season spans Oct-June, so if month <= 6, we're in previous year's season
-  const season = month <= 6 ? year - 1 : year;
+  // NHL season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+  const season = month >= 10 ? year : year - 1;
   
   // Lookback window for recent games (21 days)
   const lookbackStart = new Date(commenceDate);
@@ -259,10 +262,16 @@ export async function buildNhlAgenticContext(game, options = {}) {
 
   console.log(`[Agentic][NHL] Building context for ${game.away_team} @ ${game.home_team}`);
 
-  // Resolve teams
+  // Resolve teams - with detailed logging if fails
   const [homeTeam, awayTeam] = await Promise.all([
-    ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team).catch(() => null),
-    ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.away_team).catch(() => null)
+    safeApiCallObject(
+      () => ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team),
+      `NHL: Resolve home team "${game.home_team}"`
+    ),
+    safeApiCallObject(
+      () => ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.away_team),
+      `NHL: Resolve away team "${game.away_team}"`
+    )
   ]);
 
   if (!homeTeam || !awayTeam) {
@@ -273,60 +282,78 @@ export async function buildNhlAgenticContext(game, options = {}) {
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
-  // Parallel fetch: recent games, injuries, standings, season stats
+  // Parallel fetch: recent games, injuries, standings, season stats - with detailed logging
   const [homeRecent, awayRecent, injuries, standings] = await Promise.all([
-    homeTeam ? ballDontLieService.getGames(
-      SPORT_KEY,
-      { seasons: [season], team_ids: [homeTeam.id], postseason: false, start_date: startStr, end_date: endStr, per_page: 50 },
-      options.nocache ? 0 : 10
-    ).catch(() => []) : Promise.resolve([]),
+    homeTeam ? safeApiCallArray(
+      () => ballDontLieService.getGames(
+        SPORT_KEY,
+        { seasons: [season], team_ids: [homeTeam.id], postseason: false, start_date: startStr, end_date: endStr, per_page: 50 },
+        options.nocache ? 0 : 10
+      ),
+      `NHL: Fetch home team "${game.home_team}" recent games`
+    ) : Promise.resolve([]),
     
-    awayTeam ? ballDontLieService.getGames(
-      SPORT_KEY,
-      { seasons: [season], team_ids: [awayTeam.id], postseason: false, start_date: startStr, end_date: endStr, per_page: 50 },
-      options.nocache ? 0 : 10
-    ).catch(() => []) : Promise.resolve([]),
+    awayTeam ? safeApiCallArray(
+      () => ballDontLieService.getGames(
+        SPORT_KEY,
+        { seasons: [season], team_ids: [awayTeam.id], postseason: false, start_date: startStr, end_date: endStr, per_page: 50 },
+        options.nocache ? 0 : 10
+      ),
+      `NHL: Fetch away team "${game.away_team}" recent games`
+    ) : Promise.resolve([]),
     
     teamIds.length > 0 
-      ? ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5).catch(() => [])
+      ? safeApiCallArray(
+          () => ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5),
+          `NHL: Fetch injuries for teams ${teamIds.join(', ')}`
+        )
       : Promise.resolve([]),
     
-    ballDontLieService.getStandingsGeneric(SPORT_KEY, { season }).catch(() => [])
+    safeApiCallArray(
+      () => ballDontLieService.getStandingsGeneric(SPORT_KEY, { season }),
+      `NHL: Fetch ${season} season standings`
+    )
   ]);
 
-  // Fetch season rates (PP%, PK%, shots, goals)
+  // Fetch season rates (PP%, PK%, shots, goals) - with detailed logging
   const [homePairs, awayPairs] = await Promise.all([
-    homeTeam ? ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season, postseason: false }).catch(() => []) : Promise.resolve([]),
-    awayTeam ? ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season, postseason: false }).catch(() => []) : Promise.resolve([])
+    homeTeam ? safeApiCallArray(
+      () => ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season, postseason: false }),
+      `NHL: Fetch home team "${game.home_team}" season stats`
+    ) : Promise.resolve([]),
+    awayTeam ? safeApiCallArray(
+      () => ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season, postseason: false }),
+      `NHL: Fetch away team "${game.away_team}" season stats`
+    ) : Promise.resolve([])
   ]);
 
   const homeRates = ballDontLieService.deriveNhlTeamRates?.(homePairs) || {};
   const awayRates = ballDontLieService.deriveNhlTeamRates?.(awayPairs) || {};
 
-  // Fetch Perplexity advanced stats (Corsi, xG, PDO, goalie matchup)
+  // Fetch Gemini Grounding advanced stats (Corsi, xG, PDO, goalie matchup)
   let advancedStats = null;
   try {
     const dateStr = commenceDate.toISOString().slice(0, 10);
-    console.log('[Agentic][NHL] Fetching Perplexity advanced stats...');
-    advancedStats = await perplexityService.getNhlAdvancedStats(game.home_team, game.away_team, dateStr);
-    if (advancedStats?._source === 'perplexity') {
-      console.log('[Agentic][NHL] ✓ Got Perplexity advanced stats (Corsi, xG, PDO, goalie matchup)');
+    console.log('[Agentic][NHL] Fetching advanced stats via Gemini Grounding...');
+    advancedStats = await getGroundedAdvancedStats(game.home_team, game.away_team, 'nhl', dateStr);
+    if (advancedStats?._source === 'gemini_grounding') {
+      console.log('[Agentic][NHL] ✓ Got Grounding advanced stats (Corsi, xG, PDO, goalie matchup)');
     }
   } catch (e) {
-    console.warn('[Agentic][NHL] Perplexity advanced stats failed:', e.message);
+    console.warn('[Agentic][NHL] Grounding advanced stats failed:', e.message);
   }
 
-  // Fetch Perplexity rich context (streaks, trends, injuries, narratives)
+  // Fetch rich context via Gemini Grounding (streaks, trends, injuries, narratives)
   let richContext = null;
   try {
     const dateStr = commenceDate.toISOString().slice(0, 10);
-    console.log('[Agentic][NHL] Fetching Perplexity rich context...');
-    richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nhl', dateStr);
+    console.log('[Agentic][NHL] Fetching rich context via Gemini Grounding...');
+    richContext = await getGroundedRichContext(game.home_team, game.away_team, 'nhl', dateStr);
     if (richContext && Object.keys(richContext).length > 0) {
-      console.log('[Agentic][NHL] ✓ Got Perplexity rich context');
+      console.log('[Agentic][NHL] ✓ Got Grounding rich context');
     }
   } catch (e) {
-    console.warn('[Agentic][NHL] Perplexity rich context failed:', e.message);
+    console.warn('[Agentic][NHL] Grounding rich context failed:', e.message);
   }
 
   // Calculate rest info
@@ -341,7 +368,7 @@ export async function buildNhlAgenticContext(game, options = {}) {
     away: calcRecentForm(awayRecent, awayTeam?.id, 5)
   };
 
-  // Merge Perplexity recent form if available
+  // Merge Grounding recent form if available
   if (advancedStats?.recent_form) {
     if (advancedStats.recent_form.home_last_10) {
       recentForm.home.last10 = advancedStats.recent_form.home_last_10;
@@ -448,7 +475,7 @@ export async function buildNhlAgenticContext(game, options = {}) {
       window: { start: startStr, end: endStr },
       richKeyFindings: richContext?.key_findings || advancedStats?.key_analytics_insights || [],
       advancedStatsSource: advancedStats?._source || 'none',
-      perplexityDataSources: advancedStats?.data_sources || []
+      groundingDataSources: advancedStats?.data_sources || []
     }
   };
 }

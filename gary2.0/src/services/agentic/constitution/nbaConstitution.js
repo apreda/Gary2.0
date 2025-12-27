@@ -112,6 +112,28 @@ Teams that are "lucky" will regress:
 - High close-game win rate (>60%) = often unsustainable
 - Stats to verify: [LUCK_ADJUSTED] [CLOSE_GAME_RECORD]
 
+### 🎯 BET TYPE SELECTION - ML vs SPREAD (VALUE MINDSET)
+Always ask: "Do I believe this team WINS outright?"
+
+**UNDERDOG ML CONVICTION CHECK:**
+Before taking +3.5 on an underdog, STOP and ask:
+1. "Does my analysis say this team WINS?" → If YES, take the ML (+120, +150, +180)
+2. "Am I taking the spread because it feels safer?" → That's a TRAP mindset
+3. "What's the ML price?" 
+   - +120 to +180 = Strong value if you believe they WIN
+   - +180 to +250 = Excellent value with real upset thesis
+
+**THE VALUE RULE:**
+- Spread is for hedging uncertainty. ML is for conviction.
+- A +150 underdog that wins 40% of the time is HUGELY profitable
+- Books LOVE when you take the spread instead of ML - think about why
+- If you believe they WIN, take the ML. Don't hide behind the spread.
+
+**FAVORITE ML RULES:**
+- Only take favorite ML if odds are -180 or better
+- -200 or worse = ALWAYS take the spread instead
+- If favorite ML is juicy but you believe they WIN big, take the spread
+
 ### ROSTER VERIFICATION (CRITICAL)
 The NBA has frequent trades, releases, and player movement:
 - **ONLY mention players explicitly listed in the scout report roster section**

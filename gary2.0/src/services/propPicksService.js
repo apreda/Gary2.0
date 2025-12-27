@@ -507,9 +507,9 @@ Respond with ONLY a JSON array of your best prop picks in this format:
           playerStatsText = '';
         }
 
-        // Limit stats text to prevent token overflow
-        if (playerStatsText && playerStatsText.length > 5000) {
-          playerStatsText = playerStatsText.substring(0, 5000) + '\n... (stats truncated for brevity)';
+        // Limit stats text to prevent token overflow - generous limit to capture all data
+        if (playerStatsText && playerStatsText.length > 12000) {
+          playerStatsText = playerStatsText.substring(0, 12000) + '\n... (stats truncated for brevity)';
         }
         
         console.log(`Player stats retrieved successfully (${playerStatsText?.length || 0} characters)`);

@@ -131,7 +131,7 @@ const mlbStatsProxy = {
  * Ball Don't Lie API proxy
  */
 const ballDontLieProxy = {
-  baseUrl: 'https://www.balldontlie.io/api/v1',
+  baseUrl: 'https://api.balldontlie.io/v1',
   
   async getGames(params = {}) {
     return makeCachedRequest({

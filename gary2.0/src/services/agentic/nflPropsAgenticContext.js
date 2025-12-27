@@ -7,16 +7,128 @@
  * - Recent form trends (hot/cold)
  * - Consistency scores
  * - Home/Away splits
- * - Opponent defensive matchup data (via Perplexity)
+ * - Opponent defensive matchup data (via Gemini Grounding)
  * - Short week detection (TNF)
  * - Weather impact
  */
 import { ballDontLieService } from '../ballDontLieService.js';
-import { perplexityService } from '../perplexityService.js';
-import { formatGameTimeEST, buildMarketSnapshot, parseGameDate } from './sharedUtils.js';
-import { fetchGroundedContext } from './scoutReport/scoutReportBuilder.js';
+// All context comes from Gemini 3 Flash with Google Search Grounding
+import { formatGameTimeEST, buildMarketSnapshot, parseGameDate, safeApiCallArray, safeApiCallObject, findBestPlayerMatch, checkDataAvailability } from './sharedUtils.js';
+import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
+
+/**
+ * Calculate hit rate for a specific prop line based on game logs
+ * Returns the percentage of recent games where player exceeded the line
+ * @param {Array} games - Recent game logs (from BDL)
+ * @param {string} propType - Type of prop (pass_yds, rush_yds, reception_yds, receptions, etc.)
+ * @param {number} line - The prop line to check against
+ * @returns {Object} Hit rate data
+ */
+function calculateHitRate(games, propType, line) {
+  if (!games || games.length === 0) return null;
+  
+  // Map prop types to game log fields
+  const propToField = {
+    'pass_yds': 'pass_yds',
+    'player_pass_yds': 'pass_yds',
+    'passing_yards': 'pass_yds',
+    'rush_yds': 'rush_yds',
+    'player_rush_yds': 'rush_yds',
+    'rushing_yards': 'rush_yds',
+    'reception_yds': 'rec_yds',
+    'player_reception_yds': 'rec_yds',
+    'receiving_yards': 'rec_yds',
+    'receptions': 'receptions',
+    'player_receptions': 'receptions',
+    'pass_tds': 'pass_tds',
+    'player_pass_tds': 'pass_tds',
+    'rush_tds': 'rush_tds',
+    'player_rush_tds': 'rush_tds',
+    'reception_tds': 'rec_tds',
+    'player_reception_tds': 'rec_tds',
+    'pass_attempts': 'pass_att',
+    'player_pass_attempts': 'pass_att',
+    'pass_completions': 'pass_comp',
+    'player_pass_completions': 'pass_comp',
+    'rush_attempts': 'rush_att',
+    'player_rush_attempts': 'rush_att',
+    'rush_reception_yds': 'rush_rec_yds' // Combined
+  };
+  
+  const field = propToField[propType?.toLowerCase()] || propType;
+  
+  let hitsOver = 0;
+  let hitsUnder = 0;
+  let pushes = 0;
+  const values = [];
+  
+  for (const game of games) {
+    let value;
+    
+    // Handle combined props
+    if (field === 'rush_rec_yds') {
+      value = (game.rush_yds || 0) + (game.rec_yds || 0);
+    } else {
+      value = game[field];
+    }
+    
+    if (value === undefined || value === null) continue;
+    
+    values.push(value);
+    if (value > line) hitsOver++;
+    else if (value < line) hitsUnder++;
+    else pushes++;
+  }
+  
+  const totalGames = values.length;
+  if (totalGames === 0) return null;
+  
+  const avgValue = values.reduce((a, b) => a + b, 0) / totalGames;
+  const overRate = (hitsOver / totalGames) * 100;
+  const underRate = (hitsUnder / totalGames) * 100;
+  
+  // Calculate edge vs line
+  const edge = ((avgValue - line) / line) * 100;
+  
+  // Recommendation based on hit rate AND edge
+  let recommendation = 'CLOSE';
+  if (overRate >= 70 && edge > 5) recommendation = 'STRONG_OVER';
+  else if (overRate >= 60 && edge > 0) recommendation = 'OVER';
+  else if (underRate >= 70 && edge < -5) recommendation = 'STRONG_UNDER';
+  else if (underRate >= 60 && edge < 0) recommendation = 'UNDER';
+  
+  return {
+    totalGames,
+    hitsOver,
+    hitsUnder,
+    pushes,
+    overRate: overRate.toFixed(0),
+    underRate: underRate.toFixed(0),
+    avgValue: avgValue.toFixed(1),
+    edge: edge.toFixed(1),
+    values: values.slice(0, 5), // Last 5 values for display
+    recommendation,
+    display: `${hitsOver}/${totalGames} over (${overRate.toFixed(0)}%), avg ${avgValue.toFixed(1)} vs line ${line}`
+  };
+}
+
+/**
+ * Get hit rates for all props for a specific player
+ */
+function getPlayerHitRates(gameLogs, props) {
+  if (!gameLogs?.games || gameLogs.games.length === 0) return {};
+  
+  const hitRates = {};
+  for (const prop of props) {
+    const hitRate = calculateHitRate(gameLogs.games, prop.type, prop.line);
+    if (hitRate) {
+      hitRates[`${prop.type}_${prop.line}`] = hitRate;
+    }
+  }
+  return hitRates;
+}
 
 /**
  * Group props by player for easier analysis
@@ -51,8 +163,9 @@ function groupPropsByPlayer(props) {
 
 /**
  * Get top prop candidates based on line value and odds quality
+ * Returns top N players PER TEAM (so 7 per team = 14 total for a game)
  */
-function getTopPropCandidates(props, maxPlayers = 15) {
+function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
   const grouped = groupPropsByPlayer(props);
   
   // Score each player by number of props and odds quality
@@ -73,13 +186,36 @@ function getTopPropCandidates(props, maxPlayers = 15) {
     };
   });
   
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxPlayers);
+  // Group by team and take top N from each
+  // Normalize team names to handle variations
+  const byTeam = {};
+  for (const player of scored) {
+    const teamRaw = player.team || 'Unknown';
+    const teamKey = teamRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!byTeam[teamKey]) byTeam[teamKey] = { name: teamRaw, players: [] };
+    byTeam[teamKey].players.push(player);
+  }
+  
+  // Sort each team's players and take top N per team
+  const result = [];
+  const teamNames = Object.keys(byTeam);
+  
+  for (const teamKey of teamNames) {
+    const teamData = byTeam[teamKey];
+    const teamPlayers = teamData.players
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxPlayersPerTeam);
+    result.push(...teamPlayers);
+    console.log(`[NFL Props] Team "${teamData.name}": ${teamPlayers.length} players selected`);
+  }
+  
+  console.log(`[NFL Props] Total: ${result.length} candidates (${maxPlayersPerTeam} per team x ${teamNames.length} teams)`);
+  
+  return result.sort((a, b) => b.score - a.score);
 }
 
 /**
- * Format injuries relevant to NFL props
+ * Format injuries relevant to NFL props from BDL API
  */
 function formatPropsInjuries(injuries = []) {
   return (injuries || [])
@@ -99,147 +235,420 @@ function formatPropsInjuries(injuries = []) {
 }
 
 /**
- * Resolve player IDs and Teams from BDL for prop candidates
+ * Extract structured injuries from Gemini Grounding context
+ * Parses OUT, IR, Questionable, Doubtful players into a structured format
+ * This is the PRIMARY source for injury data (more reliable than BDL API)
+ */
+function extractInjuriesFromGrounding(groundedContext, homeTeam, awayTeam) {
+  if (!groundedContext) return [];
+  
+  const injuries = [];
+  const lines = groundedContext.split('\n');
+  
+  let currentTeam = null;
+  
+  for (const line of lines) {
+    const lineLower = line.toLowerCase();
+    
+    // Detect team context
+    if (lineLower.includes(homeTeam.toLowerCase())) {
+      currentTeam = homeTeam;
+    } else if (lineLower.includes(awayTeam.toLowerCase())) {
+      currentTeam = awayTeam;
+    }
+    
+    // Look for injury patterns with games missed info
+    const injuryPatterns = [
+      // Pattern: **Player Name (Position)** – STATUS – injury – MISSED X GAMES
+      /\*\*([^*]+)\s*\(([^)]+)\)\*\*\s*[–-]\s*(OUT|IR|INJURED RESERVE|Questionable|Doubtful)\s*[–-]\s*([^–-]+?)(?:\s*[–-]\s*\*\*MISSED\s*(\d+)\s*GAMES?\*\*)?/i,
+      // Pattern: Player Name (Position) – STATUS
+      /([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+(?:Jr\.|Sr\.|III|II|IV))?)\s*\(([^)]+)\)\s*[–-]\s*(OUT|IR|Questionable|Doubtful)/i,
+      // Pattern: **Player Name** – STATUS
+      /\*\s*\*\*([^*]+)\*\*\s*[–-]\s*(OUT|IR|Questionable|Doubtful)/i
+    ];
+    
+    for (const pattern of injuryPatterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const playerName = match[1].trim().replace(/\*+/g, '');
+        const position = match[2] || '';
+        const status = (match[3] || match[2]).toUpperCase();
+        const description = match[4] || '';
+        const gamesMissed = match[5] ? parseInt(match[5]) : null;
+        
+        // Skip invalid names
+        if (playerName.length < 3 || playerName.includes('MISSED') || playerName.includes('Week')) {
+          continue;
+        }
+        
+        injuries.push({
+          player: playerName,
+          team: currentTeam || 'Unknown',
+          position: position.toUpperCase(),
+          status: status.includes('INJURED RESERVE') ? 'IR' : status,
+          description: description.trim().substring(0, 100),
+          gamesMissed: gamesMissed
+        });
+        break;
+      }
+    }
+  }
+  
+  // Deduplicate by player name
+  const seen = new Set();
+  const uniqueInjuries = injuries.filter(inj => {
+    const key = inj.player.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  
+  return uniqueInjuries;
+}
+
+/**
+ * Extract weather information from Gemini Grounding context
+ */
+function extractWeatherFromGrounding(groundedContext) {
+  if (!groundedContext) return null;
+  
+  // Look for weather section in grounded context
+  const weatherPatterns = [
+    // Temperature patterns
+    /(\d{1,2})°?\s*F/i,
+    /temperature[:\s]+(\d{1,2})/i,
+    /forecast[:\s]+(\d{1,2})/i
+  ];
+  
+  const windPatterns = [
+    /(\d{1,2})\s*mph\s*wind/i,
+    /wind[:\s]+(\d{1,2})\s*mph/i,
+    /winds?\s+(\d{1,2})/i
+  ];
+  
+  const conditionPatterns = [
+    /(sunny|cloudy|overcast|rain|snow|clear|partly cloudy|dome|indoor|retractable roof)/i
+  ];
+  
+  let temp = null;
+  let wind = null;
+  let conditions = null;
+  let isDome = false;
+  
+  // Check for dome/indoor
+  if (groundedContext.toLowerCase().includes('dome') || 
+      groundedContext.toLowerCase().includes('indoor') ||
+      groundedContext.toLowerCase().includes('retractable roof closed')) {
+    isDome = true;
+    conditions = 'Indoor/Dome';
+  }
+  
+  for (const pattern of weatherPatterns) {
+    const match = groundedContext.match(pattern);
+    if (match) {
+      temp = parseInt(match[1]);
+      break;
+    }
+  }
+  
+  for (const pattern of windPatterns) {
+    const match = groundedContext.match(pattern);
+    if (match) {
+      wind = parseInt(match[1]);
+      break;
+    }
+  }
+  
+  if (!conditions) {
+    for (const pattern of conditionPatterns) {
+      const match = groundedContext.match(pattern);
+      if (match) {
+        conditions = match[1];
+        break;
+      }
+    }
+  }
+  
+  if (temp || conditions) {
+    return {
+      temperature: temp,
+      wind_speed: wind,
+      conditions: conditions || 'Unknown',
+      is_dome: isDome
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Resolve player IDs and Teams from BDL for prop candidates by searching by name
  * Returns { playerIdMap, playerTeamMap } for resolving both IDs and teams
  * 
- * IMPORTANT: BDL is the source of truth for team assignments.
- * The Odds API often has stale/incorrect team data for recently traded players.
+ * IMPORTANT: Uses player search (not team roster) because BDL roster endpoint returns stale data
+ * NOTE: BDL /players?team_ids[]=X returns outdated rosters, but /players?search=name returns current teams
  */
 async function resolvePlayerIdsAndTeams(propCandidates, teamIds, homeTeam, awayTeam, season) {
   const playerIdMap = {}; // name -> id
   const playerTeamMap = {}; // name -> team full name (from BDL, overrides Odds API)
   
-  // Don't trust team data from props - we'll resolve everything from BDL
-  for (const candidate of propCandidates) {
-    if (candidate.playerId) {
-      playerIdMap[candidate.player.toLowerCase()] = candidate.playerId;
-    }
-  }
-  
-  // Resolve ALL players via BDL players endpoint (BDL is source of truth for teams)
+  // Get all player names - we'll search each one individually
   const allPlayerNames = propCandidates.map(c => c.player);
   
-  if (allPlayerNames.length > 0 && teamIds.length > 0) {
-    try {
-      // Fetch active players for these teams
-      const playersResponse = await ballDontLieService.getPlayersGeneric(SPORT_KEY, {
-        team_ids: teamIds,
-        per_page: 100
-      }).catch(() => []);
-      
-      // Build a lookup map from BDL roster
-      const bdlPlayerMap = new Map();
-      for (const player of playersResponse) {
-        const fullName = (player.full_name || `${player.first_name} ${player.last_name}`).toLowerCase().trim();
-        const lastName = (player.last_name || '').toLowerCase().trim();
-        bdlPlayerMap.set(fullName, {
-          id: player.id,
-          team: player.team?.full_name || player.team?.name || ''
-        });
-        // Also index by last name for fuzzy matching
-        if (lastName && !bdlPlayerMap.has(lastName)) {
-          bdlPlayerMap.set(lastName, {
-            id: player.id,
-            team: player.team?.full_name || player.team?.name || ''
-          });
+  if (allPlayerNames.length === 0) {
+    return { playerIdMap, playerTeamMap };
+  }
+  
+  // Normalize team names for matching
+  const normalizeTeamName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const homeNorm = normalizeTeamName(homeTeam);
+  const awayNorm = normalizeTeamName(awayTeam);
+  const validTeamIds = new Set(teamIds);
+  
+  console.log(`[NFL Props Context] Searching BDL by player name for ${allPlayerNames.length} candidates...`);
+  
+  // Search each player by name (batch in parallel, max 5 concurrent)
+  const batchSize = 5;
+  
+  for (let i = 0; i < allPlayerNames.length; i += batchSize) {
+    const batch = allPlayerNames.slice(i, i + batchSize);
+    
+    const searchPromises = batch.map(async (candidateName) => {
+      try {
+        // Extract last name for search (more reliable)
+        const nameParts = candidateName.trim().split(' ');
+        const lastName = nameParts[nameParts.length - 1];
+        
+        // Search by last name - with logging on failure
+        const searchResults = await safeApiCallArray(
+          () => ballDontLieService.getPlayersGeneric(SPORT_KEY, { search: lastName, per_page: 15 }),
+          `NFL Props: Search player "${candidateName}"`
+        );
+        
+        if (!searchResults || searchResults.length === 0) {
+          return { name: candidateName, found: false };
         }
-      }
-      
-      // Match candidates to BDL data (BDL team OVERRIDES any Odds API team data)
-      for (const playerName of allPlayerNames) {
-        const candidateNormalized = playerName.toLowerCase().trim();
-        const candidateLastName = candidateNormalized.split(' ').pop();
         
-        // Try exact match first
-        let match = bdlPlayerMap.get(candidateNormalized);
+        // Find match using fuzzy matching to handle name variations (D.J. vs DJ, etc.)
+        const match = findBestPlayerMatch(candidateName, searchResults);
         
-        // Try last name match if exact fails
         if (!match) {
-          match = bdlPlayerMap.get(candidateLastName);
+          return { name: candidateName, found: false };
         }
         
-        // Try partial match
-        if (!match) {
-          for (const [bdlName, data] of bdlPlayerMap) {
-            if (bdlName.includes(candidateNormalized) || candidateNormalized.includes(bdlName)) {
-              match = data;
-              break;
-            }
-          }
-        }
+        // Check if player is on one of the two teams in this game
+        const playerTeamId = match.team?.id || match.team_id;
+        const playerTeamName = match.team?.full_name || match.team?.name || '';
+        const playerTeamNorm = normalizeTeamName(playerTeamName);
         
-        if (match) {
-          if (match.id) playerIdMap[candidateNormalized] = match.id;
-          if (match.team) playerTeamMap[candidateNormalized] = match.team;
+        // Validate team: check team_id match OR team name contains home/away
+        const isOnValidTeam = validTeamIds.has(playerTeamId) ||
+          playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm) ||
+          playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
+        
+        if (isOnValidTeam) {
+          return {
+            name: candidateName,
+            found: true,
+            id: match.id,
+            team: playerTeamName
+          };
+        } else {
+          return { name: candidateName, found: false, wrongTeam: playerTeamName };
         }
+      } catch (e) {
+        return { name: candidateName, found: false, error: e.message };
       }
-      
-      console.log(`[NFL Props Context] Resolved ${Object.keys(playerIdMap).length}/${propCandidates.length} player IDs`);
-      console.log(`[NFL Props Context] Resolved ${Object.keys(playerTeamMap).length}/${propCandidates.length} player teams from BDL`);
-    } catch (e) {
-      console.warn('[NFL Props Context] Failed to resolve player IDs/teams:', e.message);
+    });
+    
+    const results = await Promise.all(searchPromises);
+    
+    for (const result of results) {
+      if (result.found) {
+        const nameLower = result.name.toLowerCase();
+        if (result.id) playerIdMap[nameLower] = result.id;
+        if (result.team) playerTeamMap[nameLower] = result.team;
+      }
     }
   }
   
+  console.log(`[NFL Props Context] Resolved ${Object.keys(playerIdMap).length}/${propCandidates.length} player IDs`);
+  console.log(`[NFL Props Context] Resolved ${Object.keys(playerTeamMap).length}/${propCandidates.length} player teams from BDL`);
+  
   // Update ALL candidates with BDL-resolved teams (overriding any Odds API data)
-  const unresolvedPlayers = [];
   for (const candidate of propCandidates) {
     const key = candidate.player.toLowerCase();
     if (playerTeamMap[key]) {
       // BDL team ALWAYS overrides Odds API team
       candidate.team = playerTeamMap[key];
-    } else {
-      unresolvedPlayers.push(candidate);
-    }
-  }
-  
-  // For unresolved players, try a direct BDL search (handles recently traded players)
-  if (unresolvedPlayers.length > 0) {
-    console.log(`[NFL Props Context] Searching BDL for ${unresolvedPlayers.length} unresolved players...`);
-    
-    for (const candidate of unresolvedPlayers) {
-      try {
-        // Search BDL for this player by name (not filtered by team)
-        const searchResults = await ballDontLieService.getPlayersGeneric(SPORT_KEY, {
-          search: candidate.player.split(' ').pop(), // Search by last name
-          per_page: 10
-        }).catch(() => []);
-        
-        // Find exact or close match
-        const candidateNormalized = candidate.player.toLowerCase().trim();
-        for (const player of searchResults) {
-          const fullName = (player.full_name || `${player.first_name} ${player.last_name}`).toLowerCase().trim();
-          if (fullName === candidateNormalized || 
-              fullName.includes(candidateNormalized) || 
-              candidateNormalized.includes(fullName)) {
-            const foundTeam = player.team?.full_name || player.team?.name || '';
-            // Only use if it's one of the teams in this game
-            if (foundTeam && (foundTeam === homeTeam || foundTeam === awayTeam)) {
-              candidate.team = foundTeam;
-              playerTeamMap[candidateNormalized] = foundTeam;
-              console.log(`[NFL Props Context] Found ${candidate.player} via search -> ${foundTeam}`);
-              break;
-            }
-          }
-        }
-      } catch (e) {
-        // Ignore search errors
-      }
-      
-      // If still no team, assign based on game context for QBs
-      if (!candidate.team) {
-        const hasPassingProps = candidate.props?.some(p => 
-          ['pass_yds', 'pass_tds', 'pass_attempts', 'pass_completions'].includes(p.type)
-        );
-        if (hasPassingProps) {
-          console.warn(`[NFL Props Context] QB ${candidate.player} not found in BDL - using game context`);
-          // Will need to be resolved from game odds context (spread favorite is usually home team's QB)
-        }
-      }
     }
   }
   
   return { playerIdMap, playerTeamMap };
+}
+
+/**
+ * Fetch team defensive stats from BDL for matchup analysis
+ * Returns enhanced defensive matchups with real BDL data
+ * 
+ * @param {number} homeTeamId - BDL ID for home team
+ * @param {number} awayTeamId - BDL ID for away team
+ * @param {string} homeTeamName - Home team name for display
+ * @param {string} awayTeamName - Away team name for display
+ * @param {number} season - Season year (2025)
+ * @returns {Object} Enhanced defensive matchups with BDL data
+ */
+async function fetchDefensiveMatchups(homeTeamId, awayTeamId, homeTeamName, awayTeamName, season) {
+  // Default structure for when BDL fails
+  const defaultMatchups = {
+    _isDefault: true,
+    home_defense_vs_away: {},
+    away_defense_vs_home: {}
+  };
+  
+  if (!homeTeamId || !awayTeamId || !season) {
+    console.warn('[NFL Props Context] Missing team IDs or season for defensive matchups');
+    return defaultMatchups;
+  }
+  
+  try {
+    console.log(`[NFL Props Context] Fetching BDL defensive stats for teams ${homeTeamId}, ${awayTeamId} (${season} season)...`);
+    
+    const teamStatsResults = await safeApiCallArray(
+      () => ballDontLieService.getTeamSeasonStatsGeneric(SPORT_KEY, { 
+        team_ids: [homeTeamId, awayTeamId], 
+        season 
+      }),
+      `NFL Props: Fetch team defensive stats for ${homeTeamName} vs ${awayTeamName}`
+    );
+    
+    if (!teamStatsResults || teamStatsResults.length === 0) {
+      console.warn('[NFL Props Context] No team stats returned from BDL');
+      return defaultMatchups;
+    }
+    
+    // Parse stats for each team
+    const homeStats = teamStatsResults.find(t => t.team?.id === homeTeamId);
+    const awayStats = teamStatsResults.find(t => t.team?.id === awayTeamId);
+    
+    const buildDefenseProfile = (stats, opponentStats) => {
+      if (!stats) return {};
+      
+      // Defensive stats are in the "opp_" prefixed fields
+      return {
+        // Pass defense - yards allowed per game
+        pass_yards_allowed_per_game: stats.opp_passing_yards_per_game?.toFixed(1) || '?',
+        pass_completion_pct_allowed: stats.opp_passing_completion_pct?.toFixed(1) || '?',
+        pass_tds_allowed: stats.opp_passing_touchdowns || 0,
+        
+        // Rush defense - yards allowed per game
+        rush_yards_allowed_per_game: stats.opp_rushing_yards_per_game?.toFixed(1) || '?',
+        rush_yards_per_attempt_allowed: stats.opp_rushing_yards_per_rush_attempt?.toFixed(2) || '?',
+        rush_tds_allowed: stats.opp_rushing_touchdowns || 0,
+        
+        // Total defense
+        total_yards_allowed_per_game: stats.opp_total_offensive_yards_per_game?.toFixed(1) || '?',
+        points_allowed_per_game: stats.opp_total_points_per_game?.toFixed(1) || '?',
+        
+        // Pressure and turnovers
+        sacks: stats.opp_passing_sacks || 0,
+        interceptions: stats.defensive_interceptions || 0,
+        fumbles_recovered: stats.opp_fumbles_lost || 0,
+        takeaways: stats.misc_total_takeaways || 0,
+        
+        // 3rd down defense
+        third_down_stop_pct: (100 - (stats.opp_misc_third_down_conv_pct || 0)).toFixed(1) || '?',
+        
+        // Games played for context
+        games: stats.games_played || 0,
+        
+        // Opponent offensive context (useful for matchup analysis)
+        opponent_offense: opponentStats ? {
+          passing_yards_per_game: opponentStats.passing_yards_per_game?.toFixed(1),
+          rushing_yards_per_game: opponentStats.rushing_yards_per_game?.toFixed(1),
+          points_per_game: opponentStats.total_points_per_game?.toFixed(1),
+          sacks_allowed: opponentStats.passing_sacks || 0
+        } : null
+      };
+    };
+    
+    const defensiveMatchups = {
+      _isDefault: false,
+      _source: 'BDL',
+      _season: season,
+      
+      // Home team defense vs Away team offense
+      home_defense_vs_away: {
+        team: homeTeamName,
+        ...buildDefenseProfile(homeStats, awayStats)
+      },
+      
+      // Away team defense vs Home team offense
+      away_defense_vs_home: {
+        team: awayTeamName,
+        ...buildDefenseProfile(awayStats, homeStats)
+      },
+      
+      // Generate matchup insights based on stats comparison
+      matchup_insights: []
+    };
+    
+    // Generate insights from the data
+    if (homeStats && awayStats) {
+      const insights = [];
+      
+      // Pass defense mismatch
+      const homePassDef = homeStats.opp_passing_yards_per_game || 0;
+      const awayPassOff = awayStats.passing_yards_per_game || 0;
+      if (awayPassOff > homePassDef + 30) {
+        insights.push(`${awayTeamName} passing attack (${awayPassOff.toFixed(0)} yds/g) faces favorable matchup vs ${homeTeamName} pass D (allows ${homePassDef.toFixed(0)} yds/g)`);
+      }
+      
+      const awayPassDef = awayStats.opp_passing_yards_per_game || 0;
+      const homePassOff = homeStats.passing_yards_per_game || 0;
+      if (homePassOff > awayPassDef + 30) {
+        insights.push(`${homeTeamName} passing attack (${homePassOff.toFixed(0)} yds/g) faces favorable matchup vs ${awayTeamName} pass D (allows ${awayPassDef.toFixed(0)} yds/g)`);
+      }
+      
+      // Rush defense mismatch
+      const homeRushDef = homeStats.opp_rushing_yards_per_game || 0;
+      const awayRushOff = awayStats.rushing_yards_per_game || 0;
+      if (awayRushOff > homeRushDef + 20) {
+        insights.push(`${awayTeamName} rushing attack (${awayRushOff.toFixed(0)} yds/g) vs ${homeTeamName} rush D (allows ${homeRushDef.toFixed(0)} yds/g) - potential smash spot`);
+      }
+      
+      const awayRushDef = awayStats.opp_rushing_yards_per_game || 0;
+      const homeRushOff = homeStats.rushing_yards_per_game || 0;
+      if (homeRushOff > awayRushDef + 20) {
+        insights.push(`${homeTeamName} rushing attack (${homeRushOff.toFixed(0)} yds/g) vs ${awayTeamName} rush D (allows ${awayRushDef.toFixed(0)} yds/g) - potential smash spot`);
+      }
+      
+      // Sack pressure
+      if (homeStats.opp_passing_sacks > 35) {
+        insights.push(`${homeTeamName} defense generates heavy pressure (${homeStats.opp_passing_sacks} sacks) - ${awayTeamName} QB could face disruption`);
+      }
+      if (awayStats.opp_passing_sacks > 35) {
+        insights.push(`${awayTeamName} defense generates heavy pressure (${awayStats.opp_passing_sacks} sacks) - ${homeTeamName} QB could face disruption`);
+      }
+      
+      // Turnover differential
+      if (homeStats.misc_total_takeaways > 20) {
+        insights.push(`${homeTeamName} has ${homeStats.misc_total_takeaways} takeaways - ball security key for ${awayTeamName}`);
+      }
+      if (awayStats.misc_total_takeaways > 20) {
+        insights.push(`${awayTeamName} has ${awayStats.misc_total_takeaways} takeaways - ball security key for ${homeTeamName}`);
+      }
+      
+      defensiveMatchups.matchup_insights = insights.slice(0, 5); // Cap at 5 insights
+    }
+    
+    console.log(`[NFL Props Context] ✓ Defensive matchups loaded with ${defensiveMatchups.matchup_insights.length} insights`);
+    return defensiveMatchups;
+    
+  } catch (e) {
+    console.warn('[NFL Props Context] Failed to fetch defensive matchups:', e.message);
+    return defaultMatchups;
+  }
 }
 
 /**
@@ -266,14 +675,38 @@ async function fetchPlayerGameLogs(playerIdMap, season) {
 }
 
 /**
- * Detect short week (TNF) - similar to NBA's back-to-back detection
- * Teams playing Thursday Night Football have only 3 days rest vs normal 6-7
+ * Detect game day type and special circumstances
+ * Recognizes Christmas Day, Thanksgiving, and other special NFL game days
  */
-function detectShortWeek(gameDate) {
+function detectGameDayType(gameDate) {
   const gameDateObj = new Date(gameDate);
   const dayOfWeek = gameDateObj.getDay(); // 0=Sun, 4=Thu
+  const month = gameDateObj.getMonth(); // 0=Jan, 11=Dec
+  const dayOfMonth = gameDateObj.getDate();
   
-  // Thursday games are short week
+  // Christmas Day games (Dec 25)
+  if (month === 11 && dayOfMonth === 25) {
+    return {
+      isShortWeek: false,
+      type: 'Christmas Day',
+      restDays: 7,
+      impact: 'Christmas Day showcase games - high visibility, primetime atmosphere',
+      isSpecialEvent: true
+    };
+  }
+  
+  // Thanksgiving games (4th Thursday of November)
+  if (month === 10 && dayOfWeek === 4 && dayOfMonth >= 22 && dayOfMonth <= 28) {
+    return {
+      isShortWeek: true,
+      type: 'Thanksgiving',
+      restDays: 3,
+      impact: 'Thanksgiving showcase - short rest, national audience',
+      isSpecialEvent: true
+    };
+  }
+  
+  // Thursday Night Football (not Thanksgiving)
   if (dayOfWeek === 4) {
     return {
       isShortWeek: true,
@@ -283,27 +716,27 @@ function detectShortWeek(gameDate) {
     };
   }
   
-  // Saturday games (late season) can also be short week
+  // Saturday games (late season/playoffs)
   if (dayOfWeek === 6) {
     return {
       isShortWeek: false,
       type: 'Saturday',
-      restDays: 5,
-      impact: null
+      restDays: 6,
+      impact: 'Late-season Saturday game - playoff implications likely'
     };
   }
   
-  // Monday night teams have extra day before next Sunday
+  // Monday Night Football
   if (dayOfWeek === 1) {
     return {
       isShortWeek: false,
       type: 'MNF',
-      restDays: 7,
-      impact: 'Full rest - normal game plans'
+      restDays: 8,
+      impact: 'Extra day of rest - full game plans'
     };
   }
   
-  // Sunday is normal
+  // Sunday games (default)
   return {
     isShortWeek: false,
     type: 'Sunday',
@@ -324,11 +757,43 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
     return playerId ? playerGameLogs[playerId] : null;
   };
   
-  // Helper to format recent games
+  // Helper to format recent games with FULL game-by-game breakdown
   const formatRecentGames = (logs, statKey) => {
     if (!logs?.games || logs.games.length === 0) return '';
     const last5 = logs.games.slice(0, 5).map(g => g[statKey]);
     return `L5: [${last5.join(', ')}]`;
+  };
+  
+  // Helper to format VERIFIED game-by-game stats with dates (for props analysis)
+  const formatVerifiedGameLog = (logs, statKey, statLabel) => {
+    if (!logs?.games || logs.games.length === 0) return '';
+    
+    const games = logs.games.slice(0, 5);
+    const gameLines = games.map((g, i) => {
+      const dateStr = g.date ? new Date(g.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : `Game ${i+1}`;
+      const homeAway = g.isHome ? 'vs' : '@';
+      const opponent = g.opponent || '???';
+      return `${dateStr} ${homeAway} ${opponent}: ${g[statKey]} ${statLabel}`;
+    });
+    
+    // Calculate verified average
+    const values = games.map(g => g[statKey]);
+    const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+    
+    // Count how many times they exceeded common lines
+    const lines = [50, 60, 70, 75, 80, 90, 100];
+    const lineHits = lines.reduce((acc, line) => {
+      const hits = values.filter(v => v >= line).length;
+      if (hits > 0) acc[line] = `${hits}/${values.length}`;
+      return acc;
+    }, {});
+    
+    return {
+      gameByGame: gameLines.join(' | '),
+      verifiedAverage: avg,
+      lineHits: lineHits,
+      values: values
+    };
   };
   
   // Separate candidates by team
@@ -344,31 +809,44 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
   // Check for injured players
   const injuredNames = new Set(injuries.map(i => i.player?.toLowerCase()));
   
-  // Add defensive context headers
+  // Add defensive context headers - now with REAL BDL stats
   if (defensiveMatchups && !defensiveMatchups._isDefault) {
-    statsText += `## DEFENSIVE MATCHUP CONTEXT\n\n`;
+    statsText += `## 🛡️ DEFENSIVE MATCHUP CONTEXT (${defensiveMatchups._season || '2025'} BDL Stats)\n\n`;
     
     const homeD = defensiveMatchups.home_defense_vs_away;
     const awayD = defensiveMatchups.away_defense_vs_home;
     
-    statsText += `### ${homeTeam} Defense (vs ${awayTeam} offense):\n`;
-    statsText += `- Pass Defense: #${homeD?.pass_defense_rank || '?'} (${homeD?.pass_yards_allowed_per_game || '?'} yds/g allowed)\n`;
-    statsText += `- Rush Defense: #${homeD?.rush_defense_rank || '?'} (${homeD?.rush_yards_allowed_per_game || '?'} yds/g allowed)\n`;
-    statsText += `- Fantasy Pts Allowed: QB ${homeD?.fantasy_points_allowed_to_qb || '?'}, RB ${homeD?.fantasy_points_allowed_to_rb || '?'}, WR ${homeD?.fantasy_points_allowed_to_wr || '?'}, TE ${homeD?.fantasy_points_allowed_to_te || '?'}\n`;
+    // Home Defense (what away offense faces)
+    statsText += `### ${homeTeam} DEFENSE (vs ${awayTeam} offense):\n`;
+    statsText += `- 🏈 Pass D: ${homeD?.pass_yards_allowed_per_game || '?'} yds/g allowed (${homeD?.pass_completion_pct_allowed || '?'}% comp), ${homeD?.pass_tds_allowed || '?'} TDs\n`;
+    statsText += `- 🏃 Rush D: ${homeD?.rush_yards_allowed_per_game || '?'} yds/g allowed (${homeD?.rush_yards_per_attempt_allowed || '?'} ypc), ${homeD?.rush_tds_allowed || '?'} TDs\n`;
+    statsText += `- 📊 Total: ${homeD?.total_yards_allowed_per_game || '?'} yds/g, ${homeD?.points_allowed_per_game || '?'} pts/g\n`;
+    statsText += `- 💥 Pressure: ${homeD?.sacks || '?'} sacks, ${homeD?.interceptions || '?'} INTs, ${homeD?.takeaways || '?'} takeaways\n`;
+    statsText += `- ⛔ 3rd Down Stop %: ${homeD?.third_down_stop_pct || '?'}%\n`;
+    if (homeD?.opponent_offense) {
+      statsText += `- 📈 ${awayTeam} Offense Context: ${homeD.opponent_offense.passing_yards_per_game} pass yds/g, ${homeD.opponent_offense.rushing_yards_per_game} rush yds/g, ${homeD.opponent_offense.points_per_game} pts/g\n`;
+    }
     if (homeD?.key_defensive_injuries?.length > 0) {
-      statsText += `- ⚠️ Key Injuries: ${homeD.key_defensive_injuries.join(', ')}\n`;
+      statsText += `- ⚠️ Key Defensive Injuries: ${homeD.key_defensive_injuries.join(', ')}\n`;
     }
     
-    statsText += `\n### ${awayTeam} Defense (vs ${homeTeam} offense):\n`;
-    statsText += `- Pass Defense: #${awayD?.pass_defense_rank || '?'} (${awayD?.pass_yards_allowed_per_game || '?'} yds/g allowed)\n`;
-    statsText += `- Rush Defense: #${awayD?.rush_defense_rank || '?'} (${awayD?.rush_yards_allowed_per_game || '?'} yds/g allowed)\n`;
-    statsText += `- Fantasy Pts Allowed: QB ${awayD?.fantasy_points_allowed_to_qb || '?'}, RB ${awayD?.fantasy_points_allowed_to_rb || '?'}, WR ${awayD?.fantasy_points_allowed_to_wr || '?'}, TE ${awayD?.fantasy_points_allowed_to_te || '?'}\n`;
+    // Away Defense (what home offense faces)
+    statsText += `\n### ${awayTeam} DEFENSE (vs ${homeTeam} offense):\n`;
+    statsText += `- 🏈 Pass D: ${awayD?.pass_yards_allowed_per_game || '?'} yds/g allowed (${awayD?.pass_completion_pct_allowed || '?'}% comp), ${awayD?.pass_tds_allowed || '?'} TDs\n`;
+    statsText += `- 🏃 Rush D: ${awayD?.rush_yards_allowed_per_game || '?'} yds/g allowed (${awayD?.rush_yards_per_attempt_allowed || '?'} ypc), ${awayD?.rush_tds_allowed || '?'} TDs\n`;
+    statsText += `- 📊 Total: ${awayD?.total_yards_allowed_per_game || '?'} yds/g, ${awayD?.points_allowed_per_game || '?'} pts/g\n`;
+    statsText += `- 💥 Pressure: ${awayD?.sacks || '?'} sacks, ${awayD?.interceptions || '?'} INTs, ${awayD?.takeaways || '?'} takeaways\n`;
+    statsText += `- ⛔ 3rd Down Stop %: ${awayD?.third_down_stop_pct || '?'}%\n`;
+    if (awayD?.opponent_offense) {
+      statsText += `- 📈 ${homeTeam} Offense Context: ${awayD.opponent_offense.passing_yards_per_game} pass yds/g, ${awayD.opponent_offense.rushing_yards_per_game} rush yds/g, ${awayD.opponent_offense.points_per_game} pts/g\n`;
+    }
     if (awayD?.key_defensive_injuries?.length > 0) {
-      statsText += `- ⚠️ Key Injuries: ${awayD.key_defensive_injuries.join(', ')}\n`;
+      statsText += `- ⚠️ Key Defensive Injuries: ${awayD.key_defensive_injuries.join(', ')}\n`;
     }
     
+    // Auto-generated matchup insights
     if (defensiveMatchups.matchup_insights?.length > 0) {
-      statsText += `\n### Key Matchup Insights:\n`;
+      statsText += `\n### 🎯 KEY MATCHUP INSIGHTS (Auto-Generated from BDL Stats):\n`;
       defensiveMatchups.matchup_insights.forEach(insight => {
         statsText += `- ${insight}\n`;
       });
@@ -392,21 +870,40 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
       
       if (logs && logs.gamesAnalyzed > 0) {
         const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
-        
-        // Position-specific averages
         const avg = logs.averages;
-        if (parseFloat(avg.pass_yds) > 0) {
-          statsText += `  L${logs.gamesAnalyzed} Avg: PASS ${avg.pass_yds} yds, ${avg.pass_tds} TDs, ${avg.ints} INTs ${formIcon}\n`;
-          statsText += `  Recent Pass Yds: ${formatRecentGames(logs, 'pass_yds')}\n`;
-        }
-        if (parseFloat(avg.rush_yds) > 10) {
-          statsText += `  L${logs.gamesAnalyzed} Avg: RUSH ${avg.rush_yds} yds, ${avg.rush_tds} TDs, ${avg.rush_att} att\n`;
-          statsText += `  Recent Rush Yds: ${formatRecentGames(logs, 'rush_yds')}\n`;
-        }
+        
+        // 🚨 VERIFIED BDL API STATS - These are the ONLY stats you should use
+        statsText += `  📊 VERIFIED STATS FROM BDL API (USE THESE NUMBERS ONLY):\n`;
+        
+        // Position-specific VERIFIED game-by-game breakdowns
         if (parseFloat(avg.rec_yds) > 0 || parseFloat(avg.receptions) > 0) {
-          statsText += `  L${logs.gamesAnalyzed} Avg: REC ${avg.receptions} catches, ${avg.rec_yds} yds, ${avg.rec_tds} TDs\n`;
-          statsText += `  Recent Rec Yds: ${formatRecentGames(logs, 'rec_yds')}\n`;
+          const recLog = formatVerifiedGameLog(logs, 'rec_yds', 'yds');
+          if (recLog.gameByGame) {
+            statsText += `  ✓ RECEIVING - Last 5 Games:\n`;
+            statsText += `    ${recLog.gameByGame}\n`;
+            statsText += `    ⭐ VERIFIED L5 AVG: ${recLog.verifiedAverage} rec yds | Hit 75+: ${recLog.lineHits[75] || '0/5'} | Hit 80+: ${recLog.lineHits[80] || '0/5'}\n`;
+          }
         }
+        
+        if (parseFloat(avg.pass_yds) > 0) {
+          const passLog = formatVerifiedGameLog(logs, 'pass_yds', 'yds');
+          if (passLog.gameByGame) {
+            statsText += `  ✓ PASSING - Last 5 Games:\n`;
+            statsText += `    ${passLog.gameByGame}\n`;
+            statsText += `    ⭐ VERIFIED L5 AVG: ${passLog.verifiedAverage} pass yds\n`;
+          }
+        }
+        
+        if (parseFloat(avg.rush_yds) > 10) {
+          const rushLog = formatVerifiedGameLog(logs, 'rush_yds', 'yds');
+          if (rushLog.gameByGame) {
+            statsText += `  ✓ RUSHING - Last 5 Games:\n`;
+            statsText += `    ${rushLog.gameByGame}\n`;
+            statsText += `    ⭐ VERIFIED L5 AVG: ${rushLog.verifiedAverage} rush yds | Hit 50+: ${rushLog.lineHits[50] || '0/5'} | Hit 75+: ${rushLog.lineHits[75] || '0/5'}\n`;
+          }
+        }
+        
+        statsText += `  ${formIcon} Trend: ${logs.formTrend || 'steady'}\n`;
         
         // Consistency scores
         const consistency = logs.consistency;
@@ -438,6 +935,18 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
             statsText += `  Splits: Home ${home.rec_yds} rec yds (${home.games}g) | Away ${away.rec_yds} rec yds (${away.games}g)\n`;
           }
         }
+        // 🎯 HIT RATE ANALYSIS FOR EACH PROP LINE
+        if (candidate.props && candidate.props.length > 0) {
+          statsText += `  📈 HIT RATE BY PROP LINE (critical for picks):\n`;
+          for (const prop of candidate.props) {
+            const hitRate = calculateHitRate(logs.games, prop.type, prop.line);
+            if (hitRate) {
+              const recIcon = hitRate.recommendation.includes('OVER') ? '✅' : 
+                             hitRate.recommendation.includes('UNDER') ? '⬇️' : '⚠️';
+              statsText += `    ${recIcon} ${prop.type} ${prop.line}: ${hitRate.hitsOver}/${hitRate.totalGames} over (${hitRate.overRate}%) | Avg: ${hitRate.avgValue} | Edge: ${hitRate.edge}% → ${hitRate.recommendation}\n`;
+            }
+          }
+        }
       } else {
         statsText += `  (Game logs unavailable)\n`;
       }
@@ -463,20 +972,40 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
       
       if (logs && logs.gamesAnalyzed > 0) {
         const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
-        
         const avg = logs.averages;
-        if (parseFloat(avg.pass_yds) > 0) {
-          statsText += `  L${logs.gamesAnalyzed} Avg: PASS ${avg.pass_yds} yds, ${avg.pass_tds} TDs, ${avg.ints} INTs ${formIcon}\n`;
-          statsText += `  Recent Pass Yds: ${formatRecentGames(logs, 'pass_yds')}\n`;
-        }
-        if (parseFloat(avg.rush_yds) > 10) {
-          statsText += `  L${logs.gamesAnalyzed} Avg: RUSH ${avg.rush_yds} yds, ${avg.rush_tds} TDs, ${avg.rush_att} att\n`;
-          statsText += `  Recent Rush Yds: ${formatRecentGames(logs, 'rush_yds')}\n`;
-        }
+        
+        // 🚨 VERIFIED BDL API STATS - These are the ONLY stats you should use
+        statsText += `  📊 VERIFIED STATS FROM BDL API (USE THESE NUMBERS ONLY):\n`;
+        
+        // Position-specific VERIFIED game-by-game breakdowns
         if (parseFloat(avg.rec_yds) > 0 || parseFloat(avg.receptions) > 0) {
-          statsText += `  L${logs.gamesAnalyzed} Avg: REC ${avg.receptions} catches, ${avg.rec_yds} yds, ${avg.rec_tds} TDs\n`;
-          statsText += `  Recent Rec Yds: ${formatRecentGames(logs, 'rec_yds')}\n`;
+          const recLog = formatVerifiedGameLog(logs, 'rec_yds', 'yds');
+          if (recLog.gameByGame) {
+            statsText += `  ✓ RECEIVING - Last 5 Games:\n`;
+            statsText += `    ${recLog.gameByGame}\n`;
+            statsText += `    ⭐ VERIFIED L5 AVG: ${recLog.verifiedAverage} rec yds | Hit 75+: ${recLog.lineHits[75] || '0/5'} | Hit 80+: ${recLog.lineHits[80] || '0/5'}\n`;
+          }
         }
+        
+        if (parseFloat(avg.pass_yds) > 0) {
+          const passLog = formatVerifiedGameLog(logs, 'pass_yds', 'yds');
+          if (passLog.gameByGame) {
+            statsText += `  ✓ PASSING - Last 5 Games:\n`;
+            statsText += `    ${passLog.gameByGame}\n`;
+            statsText += `    ⭐ VERIFIED L5 AVG: ${passLog.verifiedAverage} pass yds\n`;
+          }
+        }
+        
+        if (parseFloat(avg.rush_yds) > 10) {
+          const rushLog = formatVerifiedGameLog(logs, 'rush_yds', 'yds');
+          if (rushLog.gameByGame) {
+            statsText += `  ✓ RUSHING - Last 5 Games:\n`;
+            statsText += `    ${rushLog.gameByGame}\n`;
+            statsText += `    ⭐ VERIFIED L5 AVG: ${rushLog.verifiedAverage} rush yds | Hit 50+: ${rushLog.lineHits[50] || '0/5'} | Hit 75+: ${rushLog.lineHits[75] || '0/5'}\n`;
+          }
+        }
+        
+        statsText += `  ${formIcon} Trend: ${logs.formTrend || 'steady'}\n`;
         
         const consistency = logs.consistency;
         const getConsistencyLabel = (score) => {
@@ -504,6 +1033,19 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
             statsText += `  Splits: Home ${home.rush_yds} rush yds (${home.games}g) | Away ${away.rush_yds} rush yds (${away.games}g)\n`;
           } else if (parseFloat(avg.rec_yds) > 0) {
             statsText += `  Splits: Home ${home.rec_yds} rec yds (${home.games}g) | Away ${away.rec_yds} rec yds (${away.games}g)\n`;
+          }
+        }
+        
+        // 🎯 HIT RATE ANALYSIS FOR EACH PROP LINE (HOME TEAM)
+        if (candidate.props && candidate.props.length > 0) {
+          statsText += `  📈 HIT RATE BY PROP LINE (critical for picks):\n`;
+          for (const prop of candidate.props) {
+            const hitRate = calculateHitRate(logs.games, prop.type, prop.line);
+            if (hitRate) {
+              const recIcon = hitRate.recommendation.includes('OVER') ? '✅' : 
+                             hitRate.recommendation.includes('UNDER') ? '⬇️' : '⚠️';
+              statsText += `    ${recIcon} ${prop.type} ${prop.line}: ${hitRate.hitsOver}/${hitRate.totalGames} over (${hitRate.overRate}%) | Avg: ${hitRate.avgValue} | Edge: ${hitRate.edge}% → ${hitRate.recommendation}\n`;
+            }
           }
         }
       } else {
@@ -593,13 +1135,19 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
 
   console.log(`[NFL Props Context] Building ENHANCED context for ${game.away_team} @ ${game.home_team} (${season} season)`);
 
-  // Resolve teams
+  // Resolve teams - with detailed logging if fails
   let homeTeam = null;
   let awayTeam = null;
   try {
     [homeTeam, awayTeam] = await Promise.all([
-      ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team).catch(() => null),
-      ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.away_team).catch(() => null)
+      safeApiCallObject(
+        () => ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team),
+        `NFL Props: Resolve home team "${game.home_team}"`
+      ),
+      safeApiCallObject(
+        () => ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.away_team),
+        `NFL Props: Resolve away team "${game.away_team}"`
+      )
     ]);
   } catch (e) {
     console.warn('[NFL Props Context] Failed to resolve teams:', e.message);
@@ -609,89 +1157,190 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
-  // Process prop candidates first
-  const propCandidates = getTopPropCandidates(playerProps, 15);
-  
-  // Detect short week (TNF, etc.)
-  const shortWeekInfo = detectShortWeek(commenceDate);
-  if (shortWeekInfo.isShortWeek) {
-    console.log(`[NFL Props Context] ⚠️ SHORT WEEK detected: ${shortWeekInfo.type} - ${shortWeekInfo.impact}`);
+  // Detect game day type (Christmas, Thanksgiving, TNF, etc.)
+  const gameDayInfo = detectGameDayType(commenceDate);
+  if (gameDayInfo.isSpecialEvent) {
+    console.log(`[NFL Props Context] 🎄 SPECIAL EVENT: ${gameDayInfo.type} - ${gameDayInfo.impact}`);
+  } else if (gameDayInfo.isShortWeek) {
+    console.log(`[NFL Props Context] ⚠️ SHORT WEEK: ${gameDayInfo.type} - ${gameDayInfo.impact}`);
   }
 
-  // Parallel fetch: injuries, player IDs/teams, defensive matchups, weather, narrative context
-  console.log('[NFL Props Context] Fetching parallel data: injuries, player IDs/teams, defense matchups, weather, narrative context...');
+  // STEP 1: First, resolve player teams from ALL props (before grouping)
+  // This ensures correct team assignments before getTopPropCandidates groups by team
+  console.log('[NFL Props Context] Step 1: Validating player-team assignments via BDL...');
+  const allPropPlayers = groupPropsByPlayer(playerProps);
+  const { playerIdMap, playerTeamMap } = await resolvePlayerIdsAndTeams(
+    allPropPlayers, teamIds, game.home_team, game.away_team, season
+  );
+
+  // Update playerProps with validated team assignments BEFORE grouping
+  for (const prop of playerProps) {
+    const validatedTeam = playerTeamMap[(prop.player || '').toLowerCase()];
+    if (validatedTeam) {
+      prop.team = validatedTeam;
+    }
+  }
+
+  // STEP 2: Now group and select top candidates (with correct team assignments)
+  const propCandidates = getTopPropCandidates(playerProps, 7);
+
+  // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries
+  // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
+  console.log('[NFL Props Context] Step 2: Fetching COMPREHENSIVE narrative + BDL injuries...');
   
-  const [injuries, playerResolution, defensiveMatchups, weather, groundedContext] = await Promise.all([
-    // Injuries from BDL
+  const [bdlInjuries, comprehensiveNarrative] = await Promise.all([
+    // BDL injuries as backup - with logging if fails
     teamIds.length > 0 
-      ? ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5).catch(() => [])
+      ? safeApiCallArray(
+          () => ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5),
+          `NFL Props: Fetch injuries for teams ${teamIds.join(', ')}`
+        )
       : Promise.resolve([]),
     
-    // Resolve player IDs AND Teams from BDL (fixes team misassignment bug)
-    resolvePlayerIdsAndTeams(propCandidates, teamIds, game.home_team, game.away_team, season),
-    
-    // Defensive matchups from Perplexity (NEW!)
-    perplexityService.getNFLDefensiveMatchups(game.home_team, game.away_team, dateStr).catch(e => {
-      console.warn('[NFL Props Context] Defensive matchups fetch failed:', e.message);
-      return perplexityService._getDefaultDefensiveMatchups(game.home_team, game.away_team);
-    }),
-    
-    // Weather (if outdoor game)
-    perplexityService.getNFLGameWeather(game.home_team, game.away_team, null, dateStr).catch(() => null),
-    
-    // NARRATIVE CONTEXT via Gemini Grounding - Critical for storylines, player significance
-    // Use Flash model for props to avoid Pro quota issues
-    fetchGroundedContext(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(e => {
-      console.warn('[NFL Props Context] Gemini Grounding failed:', e.message);
+    // COMPREHENSIVE NARRATIVE CONTEXT - Fetches ALL factors UPFRONT:
+    // - Breaking news (gameday inactives, trades, drama)
+    // - QB situation (confirmed starters, injuries)
+    // - Motivation (revenge games, milestones, contract years)
+    // - Schedule (TNF/MNF, travel, divisional)
+    // - Player-specific (target share trends, quotes)
+    // - Team trends (streaks, ATS)
+    // - Weather
+    // - Betting signals (line movement, public % - MINOR ONLY)
+    fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(e => {
+      console.warn('[NFL Props Context] Comprehensive narrative failed:', e.message);
       return null;
     })
   ]);
   
-  // Extract narrative context for props
-  const narrativeContext = groundedContext?.groundedRaw || null;
+  // Extract narrative context - now includes structured sections
+  const narrativeContext = comprehensiveNarrative?.raw || null;
+  const narrativeSections = comprehensiveNarrative?.sections || {};
   if (narrativeContext) {
-    console.log(`[NFL Props Context] ✓ Got narrative context (${narrativeContext.length} chars) from Gemini Grounding`);
+    console.log(`[NFL Props Context] ✓ Got COMPREHENSIVE narrative context (${narrativeContext.length} chars)`);
+    const foundSections = Object.entries(narrativeSections)
+      .filter(([_, v]) => v && v.length > 10)
+      .map(([k, _]) => k);
+    if (foundSections.length > 0) {
+      console.log(`[NFL Props Context] ✓ Parsed sections: ${foundSections.join(', ')}`);
+    }
   }
   
-  // Extract the playerIdMap from the resolution result
-  const { playerIdMap, playerTeamMap } = playerResolution;
+  // Extract injuries from Gemini Grounding (PRIMARY) + BDL (backup)
+  const groundedInjuries = extractInjuriesFromGrounding(narrativeContext, game.home_team, game.away_team);
+  const bdlFormattedInjuries = formatPropsInjuries(bdlInjuries);
+  
+  // Merge injuries: Grounding injuries take priority (more current), add BDL injuries not already listed
+  const injuryNames = new Set(groundedInjuries.map(i => i.player.toLowerCase()));
+  const mergedInjuries = [
+    ...groundedInjuries,
+    ...bdlFormattedInjuries.filter(i => !injuryNames.has(i.player.toLowerCase()))
+  ];
+  
+  if (mergedInjuries.length > 0) {
+    console.log(`[NFL Props Context] 📋 Injuries: ${groundedInjuries.length} from Grounding, ${bdlFormattedInjuries.length} from BDL → ${mergedInjuries.length} total`);
+  }
+  
+  // Extract weather from Gemini Grounding
+  const weather = extractWeatherFromGrounding(narrativeContext);
+  if (weather) {
+    console.log(`[NFL Props Context] 🌤️ Weather from Grounding: ${weather.temperature}°F, ${weather.conditions}`);
+  }
+  
+  // Fetch REAL defensive matchups from BDL (2025 season stats)
+  // This replaces the placeholder defensive context with actual team defense data
+  let defensiveMatchups = await fetchDefensiveMatchups(
+    homeTeam?.id,
+    awayTeam?.id,
+    game.home_team,
+    game.away_team,
+    season
+  );
+  
+  // Merge grounding injury data into defensive matchups
+  if (defensiveMatchups) {
+    defensiveMatchups.home_defense_vs_away = {
+      ...defensiveMatchups.home_defense_vs_away,
+      key_defensive_injuries: groundedInjuries.filter(i => i.team === game.home_team).map(i => i.player)
+    };
+    defensiveMatchups.away_defense_vs_home = {
+      ...defensiveMatchups.away_defense_vs_home,
+      key_defensive_injuries: groundedInjuries.filter(i => i.team === game.away_team).map(i => i.player)
+    };
+  }
 
-  // NOW fetch player game logs (requires player IDs)
-  console.log('[NFL Props Context] Fetching BDL player game logs (L5)...');
+  // CRITICAL: Filter prop candidates to only include players verified on either team
+  const validatedCandidates = propCandidates.filter(c => {
+    const playerKey = c.player.toLowerCase();
+    const isVerified = playerTeamMap[playerKey] !== undefined;
+    return isVerified;
+  });
+
+  if (validatedCandidates.length < propCandidates.length) {
+    console.log(`[NFL Props Context] Validated ${validatedCandidates.length}/${propCandidates.length} players (filtered out ${propCandidates.length - validatedCandidates.length} unverified)`);
+  }
+
+  // CRITICAL: Filter out players who are Doubtful or Out to avoid void bets
+  // NFL uses "Doubtful", "Out", "Questionable" statuses - we exclude Doubtful/Out
+  // Note: In NFL, "Questionable" often still plays (~75% play rate), so we only exclude definite misses
+  const riskyStatuses = ['doubtful', 'out'];
+  const injuredPlayerNames = mergedInjuries
+    .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase() === status))
+    .map(inj => (inj.player || '').toLowerCase())
+    .filter(name => name.length > 2);
+
+  const availableCandidates = validatedCandidates.filter(c => {
+    const playerNameLower = c.player.toLowerCase();
+    const isRisky = injuredPlayerNames.some(injName => 
+      playerNameLower.includes(injName) || injName.includes(playerNameLower)
+    );
+    if (isRisky) {
+      console.log(`[NFL Props Context] ⚠️ EXCLUDED ${c.player} - Doubtful/Out (risk of void bet)`);
+    }
+    return !isRisky;
+  });
+
+  if (availableCandidates.length < validatedCandidates.length) {
+    const excluded = validatedCandidates.length - availableCandidates.length;
+    console.log(`[NFL Props Context] Filtered out ${excluded} Doubtful/Out player(s) to avoid void bets`);
+  }
+
+  // STEP 4: Fetch player game logs (requires player IDs)
+  console.log('[NFL Props Context] Step 3: Fetching BDL player game logs (L5)...');
   const playerGameLogs = await fetchPlayerGameLogs(playerIdMap, season);
   
   // Log coverage stats
   const playersWithLogs = Object.keys(playerGameLogs).length;
-  const totalCandidates = propCandidates.length;
+  const totalCandidates = availableCandidates.length;
   console.log(`[NFL Props Context] Player game logs coverage: ${playersWithLogs}/${totalCandidates} players`);
 
-  const formattedInjuries = formatPropsInjuries(injuries);
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [], 
     homeTeam?.full_name || game.home_team, 
     awayTeam?.full_name || game.away_team
   );
 
   // Build comprehensive player stats text with ALL context
+  // Use availableCandidates to ensure only verified and available players are included
   const playerStats = buildPlayerStatsText(
     game.home_team,
     game.away_team,
-    propCandidates,
+    availableCandidates,
     playerIdMap,
-    formattedInjuries,
+    mergedInjuries, // Use merged injuries from Grounding + BDL
     playerGameLogs,
     defensiveMatchups
   );
 
   // Build token data with enhanced info
+  // Use availableCandidates to ensure only verified and available players are included
   const tokenData = buildPropsTokenSlices(
     playerStats,
-    propCandidates,
-    formattedInjuries,
+    availableCandidates,
+    mergedInjuries, // Use merged injuries from Grounding + BDL
     marketSnapshot,
     playerIdMap,
     playerGameLogs,
     defensiveMatchups,
-    shortWeekInfo,
+    gameDayInfo, // Use gameDayInfo (Christmas Day, TNF, etc.)
     weather
   );
 
@@ -710,18 +1359,18 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       moneyline: marketSnapshot.moneyline
     },
     propCount: playerProps.length,
-    topCandidates: propCandidates.map(p => p.player).slice(0, 6),
+    topCandidates: availableCandidates.map(p => p.player).slice(0, 6),
     playerLogsAvailable: playersWithLogs > 0,
-    // Short week detection (like NBA B2B)
-    shortWeek: shortWeekInfo,
-    // Defensive matchup headlines
+    // Game day type (Christmas Day, TNF, etc.)
+    gameDay: gameDayInfo,
+    // Key injuries from Grounding
+    keyInjuries: mergedInjuries.slice(0, 5).map(i => `${i.player} (${i.status})`),
+    // Defensive matchup headlines (from Grounding injury data)
     defenseContext: {
-      homePassDRank: defensiveMatchups?.home_defense_vs_away?.pass_defense_rank,
-      homeRushDRank: defensiveMatchups?.home_defense_vs_away?.rush_defense_rank,
-      awayPassDRank: defensiveMatchups?.away_defense_vs_home?.pass_defense_rank,
-      awayRushDRank: defensiveMatchups?.away_defense_vs_home?.rush_defense_rank
+      homeInjuries: defensiveMatchups?.home_defense_vs_away?.key_defensive_injuries || [],
+      awayInjuries: defensiveMatchups?.away_defense_vs_home?.key_defensive_injuries || []
     },
-    // Weather summary
+    // Weather from Gemini Grounding
     weather: weather ? {
       temp: weather.temperature,
       wind: weather.wind_speed,
@@ -730,32 +1379,76 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     } : null
   };
 
+  // Check data availability and flag any gaps for Gary
+  const logsCoverage = playersWithLogs / totalCandidates;
+  const dataGaps = [];
+  
+  if (logsCoverage < 0.7) {
+    dataGaps.push(`⚠️ LOW GAME LOGS COVERAGE: Only ${playersWithLogs}/${totalCandidates} players have recent game logs`);
+  }
+  if (!narrativeContext) {
+    dataGaps.push(`⚠️ NO NARRATIVE CONTEXT: Gemini Grounding failed - missing injury updates, news, weather`);
+  }
+  if (mergedInjuries.length === 0 && teamIds.length > 0) {
+    dataGaps.push(`⚠️ NO INJURIES RETURNED: Injury context may be incomplete`);
+  }
+  if (!weather) {
+    dataGaps.push(`⚠️ NO WEATHER DATA: Weather context unavailable`);
+  }
+  
+  if (dataGaps.length > 0) {
+    console.warn(`[NFL Props Context] ⚠️ DATA GAPS DETECTED - Gary should proceed with caution:`);
+    dataGaps.forEach(gap => console.warn(`   ${gap}`));
+  }
+  
   console.log(`[NFL Props Context] ✓ Built ENHANCED context:`);
-  console.log(`   - ${propCandidates.length} player candidates`);
-  console.log(`   - ${playersWithLogs} players with game logs`);
-  console.log(`   - ${formattedInjuries.length} injuries`);
-  console.log(`   - Defensive matchups: ${defensiveMatchups?._isDefault ? 'DEFAULTS' : 'LIVE DATA'}`);
+  console.log(`   - ${availableCandidates.length} player candidates (verified on team, excludes Doubtful/Out)`);
+  console.log(`   - ${playersWithLogs} players with game logs (${(logsCoverage * 100).toFixed(0)}% coverage)`);
+  console.log(`   - ${mergedInjuries.length} injuries (${groundedInjuries.length} from Grounding)`);
   console.log(`   - Weather: ${weather ? `${weather.temperature}°F, ${weather.conditions}` : 'N/A'}`);
-  console.log(`   - Short week: ${shortWeekInfo.isShortWeek ? shortWeekInfo.type : 'No'}`);
+  console.log(`   - Game day: ${gameDayInfo.type}${gameDayInfo.isSpecialEvent ? ' (Special Event)' : ''}`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
 
   return {
     gameSummary,
     tokenData,
     playerProps,
-    propCandidates,
+    propCandidates: availableCandidates, // Only return available players (excludes Doubtful/Out)
     playerStats,
     playerGameLogs,
-    defensiveMatchups,
-    narrativeContext, // CRITICAL: Gemini Grounding context (storylines, player significance)
+    injuries: mergedInjuries, // Include merged injuries
+    narrativeContext, // CRITICAL: Full raw narrative from Gemini
+    // NEW: Structured narrative sections for easy access
+    narrativeSections: {
+      breakingNews: narrativeSections.breakingNews || null,   // Gameday inactives, trade rumors
+      motivation: narrativeSections.motivation || null,       // Revenge games, milestones, contract years
+      schedule: narrativeSections.schedule || null,           // TNF/MNF, travel, divisional
+      weather: narrativeSections.weather || null,             // Temperature, wind, precipitation, player weather history
+      playerContext: narrativeSections.playerContext || null, // Target share trends, quotes, weather performance
+      teamTrends: narrativeSections.teamTrends || null,       // Streaks, rivalries
+      bettingSignals: narrativeSections.bettingSignals || null, // Line movement, public % (MINOR ONLY)
+      injuries: narrativeSections.injuries || null,           // Parsed injury context
+      qbSituation: narrativeSections.qbSituation || null,     // QB starters, changes
+    },
     meta: {
       homeTeam: homeTeam?.full_name || game.home_team,
       awayTeam: awayTeam?.full_name || game.away_team,
       season,
       gameTime: game.commence_time,
       playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,
-      hasDefensiveData: !defensiveMatchups?._isDefault,
-      hasNarrativeContext: !!narrativeContext
+      gameDayType: gameDayInfo.type,
+      hasNarrativeContext: !!narrativeContext,
+      hasWeather: !!weather,
+      narrativeSectionsFetched: Object.keys(narrativeSections).filter(k => narrativeSections[k]?.length > 10),
+      // NEW: Data availability flags for Gary to see
+      dataAvailability: {
+        logsAvailable: playersWithLogs > 0,
+        injuriesAvailable: mergedInjuries.length > 0,
+        weatherAvailable: !!weather,
+        narrativeAvailable: !!narrativeContext,
+        dataGaps: dataGaps.length > 0 ? dataGaps : null,
+        dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
+      }
     }
   };
 }

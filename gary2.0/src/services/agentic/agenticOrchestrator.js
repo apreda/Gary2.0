@@ -415,11 +415,83 @@ Do NOT include a "stats" field in your JSON - it causes parsing issues.
 3. The "odds" field MUST match what you put in the pick string
 4. **-110 is almost NEVER correct** - real odds vary: -105, -115, -120, +140, -192, etc.
 5. **NO HEAVY FAVORITES:** You CANNOT pick a moneyline at -200 or worse (-230, -300, etc.)
-   - If Chiefs ML is -250, pick "Chiefs -3.5 -105" instead (use spreadOdds)
 6. You CAN pick any underdog ML (+100 or higher) - that's where value lives
 
 Example: If RAW ODDS shows "moneylineHome: -192", your pick is "Kansas City Chiefs ML -192"
 Example: If RAW ODDS shows "spreadOdds: -105", your pick is "Chiefs -3.5 -105"
+
+## 🚨 SPREAD SELECTION - MARGIN OF VICTORY MATTERS 🚨
+
+When you cannot take the ML (too juicy at -200+), you MUST evaluate WHICH SIDE of the spread:
+
+**THE CORE LOGIC:**
+1. Gary analyzes game → "Cowboys are better, they'll win"
+2. Sees Cowboys ML is -250 → "Can't take that juice"
+3. NOW Gary re-evaluates: "I think Cowboys win, but by how much?"
+   - If Gary thinks margin will be 10+ → Cowboys -8 makes sense
+   - If Gary thinks margin will be 3-7 → Commanders +8 is the smarter bet (they lose but cover)
+
+**STEP 1: Form your thesis** - "Who wins and why?"
+**STEP 2: Estimate the margin** - "By approximately how many points?"
+**STEP 3: Compare to the spread number** - "Is the spread larger or smaller than my estimated margin?"
+
+**DECISION RULE:**
+- Estimated margin > spread: Take the FAVORITE (e.g., Cowboys -8 if you think they win by 10+)
+- Estimated margin < spread: Take the UNDERDOG (e.g., Commanders +8 if you think Cowboys win by 3-7)
+
+**EXAMPLE:**
+- Spread: Cowboys -8 / Commanders +8
+- Your thesis: "Cowboys win, but Commanders keep it close. Final: 27-21"
+- Estimated margin: 6 points
+- 6 < 8, so take Commanders +8 (they LOSE but COVER)
+
+⚠️ NEVER just pick the "better team" on the spread. Ask: "Will they cover THIS specific number?"
+
+## BETTING DECISION FRAMEWORK - FIND THE BEST BET
+
+Don't think "ML blocked, now I take the spread." Think: "What's the BEST bet here?"
+
+**1. ANALYZE:** "Who wins? By how much? Why?"
+
+**2. EVALUATE ALL OPTIONS:**
+   - Favorite ML: Is the juice acceptable (-180 or better)?
+   - Underdog ML: Does the underdog have a real path to WINNING?
+   - Favorite spread: Can the favorite win by MORE than the spread?
+   - Underdog spread: Can the underdog keep it within the spread (or win)?
+
+**3. PICK THE OUTCOME MOST LIKELY TO HAPPEN:**
+   - Favorite wins BIG → Favorite spread
+   - Favorite wins CLOSE → Underdog spread (they lose but cover!)
+   - Underdog has real upset potential → Underdog ML (better payout)
+   - Favorite wins convincingly at good juice → Favorite ML
+
+**RISK-TAKING MINDSET (VALUE SEEKERS WIN LONG-TERM):**
+- A +150 underdog that wins 40% of the time is HUGELY profitable
+- The spread is often the "comfortable" bet - but comfort doesn't pay bills
+- **THE VALUE TEST:** If your analysis says "this team WINS," why are you taking +3.5 instead of +150?
+- Spread is for hedging uncertainty. ML is for conviction.
+- Books LOVE when you take the spread instead of ML - think about why
+- If you believe a team wins outright, the ML is almost ALWAYS better EV than the spread
+
+## 🎯 CONVICTION CHECK (BEFORE FINALIZING YOUR PICK)
+
+If you're picking an underdog on the spread, STOP and ask yourself:
+
+1. "Do I believe this team can WIN outright?"
+   - YES → Why am I taking the spread? The ML is better value.
+   - NO → Spread is correct (they lose but cover)
+
+2. "Am I taking the spread because it feels safer?"
+   - If yes, that's a TRAP mindset. Books love scared bettors.
+   - Conviction pays. Hedging costs EV.
+
+3. "What's the ML price?"
+   - +120 to +180 = Strong value if you believe they WIN
+   - +180 to +250 = Excellent value, needs real upset thesis
+   - +250+ = Only with maximum conviction
+
+**THE RULE:** If your rationale says "this team wins" or "this team has the edge," 
+you should be on the ML, not hiding behind the spread.
 
 ## RATIONALE FORMAT - TELL THE STORY (250-400 words)
 
@@ -494,6 +566,32 @@ Based on your advanced sports betting knowledge, provide a confidence score refl
 BETTING SPOTS MATTER: Consider situational factors like rest disadvantage (back-to-backs, 3 games in 4 days), travel, lookahead spots (big game coming up), letdown spots (coming off emotional win), revenge games, etc. A good "spot" can make or break a pick - but only if the line hasn't already adjusted for it.
 
 INJURY CONTEXT: Only treat an injury as an "angle" if it's RECENT (last 1-2 weeks). If a star player has been out for an extended period, the team's stats already reflect playing without them - that's not an edge, that's just reality.
+
+## 🚨 ABSOLUTE RULE: NO OLD NEWS IN RATIONALE 🚨
+
+Your rationale must contain ONLY CURRENT, ACTIONABLE information. The following are **FORBIDDEN** to mention:
+
+**OLD INJURIES (2+ weeks old):**
+- If a player has been OUT for 2+ weeks, their absence is ALREADY REFLECTED in team stats - NOT an angle
+- NEVER say "With [Player] out..." if they've been out for weeks - the market knows, the stats reflect it
+- ONLY mention injuries from the last 7-14 days as potential edges
+
+**OLD NEWS (2+ weeks old):**
+- Trades that happened weeks/months ago = OLD NEWS, team has adjusted
+- Coaching changes from earlier in the season = OLD NEWS
+- "Since acquiring [Player]" narratives = ONLY valid if acquisition was <2 weeks ago
+
+**FORBIDDEN PHRASES:**
+❌ "With Joe Mixon out..." (if he's been out for weeks)
+❌ "Since trading for [Player]..." (if trade was weeks ago)
+❌ "After losing [Star] earlier this season..." (team has already adjusted)
+
+**ALLOWED:**
+✅ "Key injury: [Player] was ruled OUT this week" (recent)
+✅ "[Player] is questionable and may not play" (game-time decision)
+✅ "[Newly acquired player] makes his debut" (immediate impact)
+
+**THE TEST:** Before mentioning any injury or news, ask: "Has the market had 2+ weeks to price this in?" If YES, do NOT mention it as a factor.
 
 `.trim();
 }
@@ -1040,8 +1138,8 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           console.log(`  → [NARRATIVE_CONTEXT] for query: "${args.query}"`);
 
           try {
-            const { perplexityService } = await import('../perplexityService.js');
-            const searchResult = await perplexityService.search(args.query, {
+            const { geminiGroundingSearch } = await import('./scoutReport/scoutReportBuilder.js');
+            const searchResult = await geminiGroundingSearch(args.query, {
               temperature: 0.1,
               maxTokens: 1000
             });
@@ -1057,9 +1155,9 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
                 })
               };
               messages.push(toolResponse);
-              console.log(`    ✓ Found narrative context (${searchResult.data.length} chars)`);
+              console.log(`    ✓ Found narrative context via Gemini Grounding (${searchResult.data.length} chars)`);
             } else {
-              throw new Error('Search failed or returned no data');
+              throw new Error('Grounding search failed or returned no data');
             }
           } catch (e) {
             console.error(`    ❌ narrative_context error:`, e.message);
@@ -1093,7 +1191,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             if (!team) {
               statResult.error = `Team "${args.team}" not found`;
             } else {
-              const season = 2025;
+              // Calculate NFL season dynamically: Aug-Dec = current year, Jan-Jul = previous year
+              const nflMonth = new Date().getMonth() + 1;
+              const nflYear = new Date().getFullYear();
+              const season = nflMonth <= 7 ? nflYear - 1 : nflYear;
 
               if (args.stat_type === 'PASSING') {
                 const data = await ballDontLieService.getNflAdvancedPassingStats({ season });
@@ -1337,7 +1438,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             const { ballDontLieService } = await import('../ballDontLieService.js');
 
             let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
-            const season = 2025;
+            // Calculate NCAAF season dynamically: Aug-Dec = current year, Jan-Jul = previous year
+            const ncaafMonth = new Date().getMonth() + 1;
+            const ncaafYear = new Date().getFullYear();
+            const season = ncaafMonth <= 7 ? ncaafYear - 1 : ncaafYear;
 
             // Get team ID first
             const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
@@ -1579,7 +1683,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
     let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport);
 
     // If pick is null (invalid rationale), retry once with explicit instruction
-    if (!pick && iteration < maxIterations) {
+    if (!pick && iteration < CONFIG.maxIterations) {
       console.log(`[Orchestrator] ⚠️ Invalid or missing rationale - requesting full analysis...`);
       
       messages.push({
@@ -1662,7 +1766,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
       supporting_factors: [],
       contradicting_factors_major: ['no_clear_edge'],
       contradicting_factors_minor: [],
-      rationale: content.substring(0, 500)
+      rationale: content.substring(0, 3000)
     };
   }
 

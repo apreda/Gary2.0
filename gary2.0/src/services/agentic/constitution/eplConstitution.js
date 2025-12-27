@@ -1,13 +1,13 @@
 /**
  * EPL Constitution - Soccer-specific sharp betting heuristics
  * 
- * BETA: Uses Ball Don't Lie API + Perplexity for advanced analytics (xG, possession, etc.)
+ * BETA: Uses Ball Don't Lie API + Gemini Grounding for advanced analytics (xG, possession, etc.)
  */
 
 export const EPL_CONSTITUTION = `
 ## EPL SHARP HEURISTICS (BETA - Supplemental Analytics)
 
-Note: EPL picks use Perplexity-sourced advanced stats (xG, possession metrics) in addition to API data.
+Note: EPL picks use Gemini Grounding for advanced stats (xG, possession metrics) in addition to API data.
 Soccer betting requires understanding 3-way markets (Home/Draw/Away). Confidence may be slightly lower than NBA/NFL.
 
 ### THE DRAW - SOCCER'S HIDDEN VALUE

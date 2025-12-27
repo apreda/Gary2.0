@@ -47,7 +47,8 @@ enum SupabaseAPI {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
         let comps = cal.dateComponents([.year, .month, .day], from: date)
-        let year = comps.year ?? 2024
+        // Use current year as fallback instead of hardcoded 2024
+        let year = comps.year ?? Calendar.current.component(.year, from: Date())
         let month = comps.month ?? 1
         let day = comps.day ?? 1
         return String(format: "%04d-%02d-%02d", year, month, day)
@@ -68,30 +69,56 @@ enum SupabaseAPI {
     
     /// Fetch yesterday's game pick record (wins, losses, pushes) - excludes props
     static func fetchYesterdayGameRecord() async throws -> (wins: Int, losses: Int, pushes: Int) {
-        let yesterday = yesterdayEST()
-        let results = try await fetchAllGameResults(since: yesterday)
+        // Use the new function that finds the most recent day with results
+        return try await fetchMostRecentGameRecord()
+    }
+    
+    /// Fetch game record from the most recent day that has results
+    /// Falls back up to 7 days to find actual performance data
+    /// This ensures Gary always shows a mood based on real results, not a default
+    static func fetchMostRecentGameRecord() async throws -> (wins: Int, losses: Int, pushes: Int) {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
         
-        // Filter to exactly yesterday's date
-        let yesterdayResults = results.filter { $0.game_date == yesterday }
-        
-        var wins = 0
-        var losses = 0
-        var pushes = 0
-        
-        for result in yesterdayResults {
-            switch result.result?.lowercased() {
-            case "won", "win", "w":
-                wins += 1
-            case "lost", "loss", "l":
-                losses += 1
-            case "push", "p":
-                pushes += 1
-            default:
-                break
+        // Try yesterday first, then go back up to 7 days
+        for daysBack in 1...7 {
+            guard let checkDate = calendar.date(byAdding: .day, value: -daysBack, to: Date()) else {
+                continue
+            }
+            let dateStr = formatter.string(from: checkDate)
+            
+            let results = try await fetchAllGameResults(since: dateStr)
+            let dayResults = results.filter { $0.game_date == dateStr }
+            
+            var wins = 0
+            var losses = 0
+            var pushes = 0
+            
+            for result in dayResults {
+                switch result.result?.lowercased() {
+                case "won", "win", "w":
+                    wins += 1
+                case "lost", "loss", "l":
+                    losses += 1
+                case "push", "p":
+                    pushes += 1
+                default:
+                    break
+                }
+            }
+            
+            // If we found results for this day, return them
+            if wins + losses > 0 {
+                print("[SupabaseAPI] Found results from \(dateStr): \(wins)W-\(losses)L")
+                return (wins, losses, pushes)
             }
         }
         
-        return (wins, losses, pushes)
+        // No results found in last 7 days - return zeros (GaryCoin will show)
+        print("[SupabaseAPI] No results found in last 7 days")
+        return (0, 0, 0)
     }
     
     /// Sport record for yesterday's breakdown
@@ -225,10 +252,14 @@ enum SupabaseAPI {
     /// Gets the most recent week's picks (NFL weeks run Thu-Mon, so Monday games are still previous week)
     /// Returns empty array if no picks exist - NO FALLBACK
     static func fetchWeeklyNFLPicks() async throws -> [GaryPick] {
+        // NFL season spans Sept-Feb, so in Jan-July we want previous year's season
         let currentYear = Calendar.current.component(.year, from: Date())
+        let currentMonth = Calendar.current.component(.month, from: Date())
+        let nflSeason = currentMonth <= 7 ? currentYear - 1 : currentYear
+        
         let url = buildURL(table: "weekly_nfl_picks", query: [
             URLQueryItem(name: "select", value: "picks::text,week_start,week_number,season"),
-            URLQueryItem(name: "season", value: "eq.\(currentYear)"),
+            URLQueryItem(name: "season", value: "eq.\(nflSeason)"),
             URLQueryItem(name: "order", value: "week_start.desc"),
             URLQueryItem(name: "limit", value: "1")
         ])

@@ -10,9 +10,10 @@ runAgenticPropsCli({
   sportKey: 'americanfootball_nfl',
   leagueLabel: 'NFL',
   buildContext: buildNflPropsAgenticContext,
-  windowHours: 24 * 7,  // NFL weekly schedule
+  windowHours: 24,  // Today's games within 24h
   propsPerGame: 5,
-  limitDefault: 5  // Number of games to process
+  limitDefault: 20,  // Process up to 20 games (full NFL Sunday slate)
+  useESTDayFiltering: true  // Filter by EST day instead of rolling window
 })
   .then(() => process.exit(0))
   .catch((error) => {

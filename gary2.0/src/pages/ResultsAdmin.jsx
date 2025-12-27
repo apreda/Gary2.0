@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { resultsCheckerService } from '../services/resultsCheckerService';
-import { perplexityService } from '../services/perplexityService';
 import { openaiService } from '../services/openaiService';
 import { garyPerformanceService } from '../services/garyPerformanceService';
 import { propResultsService } from '../services/propResultsService';
@@ -19,12 +18,12 @@ function ResultsAdmin() {
   const [propResultsLoading, setPropResultsLoading] = useState(false);
   const [results, setResults] = useState(null);
   
-  // Set the default date to a recent past date (known to have results) and check API key status
+  // Set the default date to yesterday (most recent date with completed games)
   useEffect(() => {
-    // For testing purposes, we'll use a known date with sports events
-    // This would be yesterday in production
-    const testDate = new Date('2024-04-01'); // April 1, 2024 - recent past date with known sports events
-    setDate(testDate.toISOString().split('T')[0]);
+    // Use yesterday by default - games should have results by then
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    setDate(yesterday.toISOString().split('T')[0]);
     
     // Check OpenAI API key status
     if (openaiService.API_KEY) {

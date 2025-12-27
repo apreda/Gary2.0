@@ -182,3 +182,290 @@ export function calcRecentForm(games, teamId, limit = 5) {
   };
 }
 
+/**
+ * Apply "buy the hook" to spread picks
+ * If spread ends in .5, move it by 0.5 and adjust odds by -10
+ * Example: -7.5 @ -110 becomes -7 @ -120
+ * 
+ * @param {number} spread - The spread number (e.g., -7.5 or +3.5)
+ * @param {number} odds - The current odds (e.g., -110)
+ * @returns {object} - { spread, odds, hooked: boolean }
+ */
+export function applyBuyTheHook(spread, odds) {
+  // Only apply to .5 spreads
+  if (typeof spread !== 'number' || typeof odds !== 'number') {
+    return { spread, odds, hooked: false };
+  }
+  
+  const isHalfPoint = Math.abs(spread) % 1 === 0.5;
+  
+  if (!isHalfPoint) {
+    return { spread, odds, hooked: false };
+  }
+  
+  // Move spread by 0.5 toward 0 (buying the hook)
+  // -7.5 becomes -7 (better for favorite backer)
+  // +3.5 becomes +3 (worse for underdog backer, but we're buying off the hook)
+  const boughtSpread = spread > 0 
+    ? spread - 0.5  // +3.5 -> +3
+    : spread + 0.5; // -7.5 -> -7
+  
+  // Standard hook cost is approximately 10 cents (-110 becomes -120)
+  const boughtOdds = odds - 10;
+  
+  return {
+    spread: boughtSpread,
+    odds: boughtOdds,
+    hooked: true,
+    originalSpread: spread,
+    originalOdds: odds
+  };
+}
+
+/**
+ * Format a spread pick string with buy-the-hook applied
+ * Example: "Cowboys -7.5 -110" becomes "Cowboys -7 -120 (bought hook)"
+ * 
+ * @param {string} teamName - Team name
+ * @param {number} spread - Original spread
+ * @param {number} odds - Original odds
+ * @param {boolean} applyHook - Whether to apply buy-the-hook
+ * @returns {string} - Formatted pick string
+ */
+export function formatSpreadPick(teamName, spread, odds, applyHook = true) {
+  if (applyHook) {
+    const hooked = applyBuyTheHook(spread, odds);
+    if (hooked.hooked) {
+      return {
+        pick: `${teamName} ${hooked.spread > 0 ? '+' : ''}${hooked.spread} ${hooked.odds}`,
+        spread: hooked.spread,
+        odds: hooked.odds,
+        hooked: true,
+        note: `(bought hook from ${spread > 0 ? '+' : ''}${spread} @ ${odds})`
+      };
+    }
+  }
+  
+  return {
+    pick: `${teamName} ${spread > 0 ? '+' : ''}${spread} ${odds}`,
+    spread,
+    odds,
+    hooked: false
+  };
+}
+
+// ============================================================================
+// API ERROR HANDLING UTILITIES - Prevent Silent Data Loss
+// ============================================================================
+
+/**
+ * Safe API call wrapper that logs failures instead of silently swallowing them
+ * This ensures Gary knows when data is unavailable vs actually zero/empty
+ * 
+ * @param {Function} apiCall - The async API call to execute
+ * @param {any} defaultValue - Default value if call fails ([] for arrays, null for objects)
+ * @param {string} context - Description of what this call is fetching (for logging)
+ * @returns {Promise<any>} - Result or default value with logged failure
+ */
+export async function safeApiCall(apiCall, defaultValue, context = 'API call') {
+  try {
+    const result = await apiCall();
+    return result;
+  } catch (error) {
+    console.warn(`[BDL API FAILURE] ${context}: ${error.message}`);
+    console.warn(`[BDL API FAILURE] Gary will proceed WITHOUT this data - analysis may be incomplete`);
+    return defaultValue;
+  }
+}
+
+/**
+ * Safe API call for arrays - returns empty array on failure with logging
+ * @param {Function} apiCall - The async API call
+ * @param {string} context - Context description
+ * @returns {Promise<Array>}
+ */
+export async function safeApiCallArray(apiCall, context) {
+  return safeApiCall(apiCall, [], context);
+}
+
+/**
+ * Safe API call for objects - returns null on failure with logging
+ * @param {Function} apiCall - The async API call
+ * @param {string} context - Context description
+ * @returns {Promise<Object|null>}
+ */
+export async function safeApiCallObject(apiCall, context) {
+  return safeApiCall(apiCall, null, context);
+}
+
+/**
+ * Check if a game status indicates completion (case-insensitive)
+ * Handles various status formats: 'Final', 'final', 'FINAL', 'post', 'completed'
+ * @param {string} status - Game status string
+ * @returns {boolean}
+ */
+export function isGameCompleted(status) {
+  if (!status || typeof status !== 'string') return false;
+  const normalizedStatus = status.toLowerCase().trim();
+  return ['final', 'post', 'completed', 'finished', 'closed'].includes(normalizedStatus);
+}
+
+/**
+ * Format stat value, returning 'N/A' for missing stats instead of 0
+ * This prevents Gary from thinking a player has 0 stats when data is just unavailable
+ * 
+ * @param {any} value - The stat value
+ * @param {number} decimals - Decimal places (default 1)
+ * @param {string} missingLabel - Label for missing data (default 'N/A')
+ * @returns {string|number}
+ */
+export function formatStatValue(value, decimals = 1, missingLabel = 'N/A') {
+  if (value === null || value === undefined || (typeof value === 'number' && isNaN(value))) {
+    return missingLabel;
+  }
+  if (typeof value === 'number') {
+    return Number(value.toFixed(decimals));
+  }
+  return value;
+}
+
+/**
+ * Format stat safely - returns null if genuinely missing, actual value otherwise
+ * Use this when you need to distinguish between "0" and "unavailable"
+ * 
+ * @param {any} value - The stat value  
+ * @returns {number|null}
+ */
+export function safeStatValue(value) {
+  if (value === null || value === undefined || (typeof value === 'number' && isNaN(value))) {
+    return null;
+  }
+  return value;
+}
+
+// ============================================================================
+// FUZZY PLAYER MATCHING - Handle Name Variations
+// ============================================================================
+
+/**
+ * Normalize a player name for fuzzy matching
+ * Handles common variations: "D.J. Moore" vs "DJ Moore", "LeBron James" vs "Lebron James"
+ * @param {string} name - Player name
+ * @returns {string} - Normalized name
+ */
+export function normalizePlayerName(name) {
+  if (!name || typeof name !== 'string') return '';
+  return name
+    .toLowerCase()
+    .replace(/[.']/g, '') // Remove periods and apostrophes: "D.J." -> "DJ", "O'Brien" -> "OBrien"
+    .replace(/\s+jr\.?$/i, '') // Remove Jr suffix
+    .replace(/\s+sr\.?$/i, '') // Remove Sr suffix
+    .replace(/\s+iii$/i, '') // Remove III suffix
+    .replace(/\s+ii$/i, '') // Remove II suffix
+    .replace(/\s+iv$/i, '') // Remove IV suffix
+    .replace(/[^a-z0-9\s]/g, '') // Remove remaining special chars
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
+/**
+ * Fuzzy match player names with tolerance for variations
+ * @param {string} name1 - First name to compare
+ * @param {string} name2 - Second name to compare
+ * @returns {boolean} - True if names likely match
+ */
+export function fuzzyMatchPlayerName(name1, name2) {
+  const n1 = normalizePlayerName(name1);
+  const n2 = normalizePlayerName(name2);
+  
+  // Exact match after normalization
+  if (n1 === n2) return true;
+  
+  // One contains the other (handles "LeBron" vs "LeBron James")
+  if (n1.includes(n2) || n2.includes(n1)) return true;
+  
+  // Check last name match (for "J. Smith" vs "John Smith")
+  const parts1 = n1.split(' ');
+  const parts2 = n2.split(' ');
+  if (parts1.length > 0 && parts2.length > 0) {
+    const lastName1 = parts1[parts1.length - 1];
+    const lastName2 = parts2[parts2.length - 1];
+    
+    // Last names must match
+    if (lastName1 === lastName2) {
+      // If one has abbreviated first name, consider it a match
+      const firstName1 = parts1[0] || '';
+      const firstName2 = parts2[0] || '';
+      if (firstName1.length <= 2 || firstName2.length <= 2) {
+        // Abbreviated first name - check if starts match
+        if (firstName1[0] === firstName2[0]) return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Find best matching player from a list using fuzzy matching
+ * @param {string} targetName - Name to search for
+ * @param {Array} players - Array of player objects with 'first_name' and 'last_name'
+ * @returns {Object|null} - Matched player or null
+ */
+export function findBestPlayerMatch(targetName, players) {
+  if (!targetName || !Array.isArray(players)) return null;
+  
+  const targetNorm = normalizePlayerName(targetName);
+  
+  for (const player of players) {
+    const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim();
+    if (fuzzyMatchPlayerName(targetName, fullName)) {
+      return player;
+    }
+  }
+  
+  return null;
+}
+
+// ============================================================================
+// DATA AVAILABILITY FLAGS - Help Gary Understand Missing Data
+// ============================================================================
+
+/**
+ * Create a data availability object that explicitly shows what's missing
+ * @param {Object} dataObject - Object with various data fields
+ * @param {Array<string>} requiredFields - List of field names that are important
+ * @returns {Object} - Data availability summary
+ */
+export function checkDataAvailability(dataObject, requiredFields = []) {
+  if (!dataObject) {
+    return {
+      hasData: false,
+      availableFields: [],
+      missingFields: requiredFields,
+      message: '⚠️ NO DATA AVAILABLE - Analysis may be incomplete'
+    };
+  }
+  
+  const available = [];
+  const missing = [];
+  
+  for (const field of requiredFields) {
+    const value = dataObject[field];
+    if (value !== null && value !== undefined && value !== '' && value !== 'N/A') {
+      available.push(field);
+    } else {
+      missing.push(field);
+    }
+  }
+  
+  return {
+    hasData: available.length > 0,
+    availableFields: available,
+    missingFields: missing,
+    message: missing.length > 0 
+      ? `⚠️ MISSING DATA: ${missing.join(', ')}` 
+      : '✓ All required data available'
+  };
+}
+
