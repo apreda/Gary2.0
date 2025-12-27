@@ -81,9 +81,343 @@ function getBalancedOptions(props, maxPerGame = 8, totalMax = 80) {
 }
 
 /**
- * Run Gary's TD Scorer Analysis
+ * Validate TD prop players are actually on the correct team via BDL API
+ * Modeled after NBA's resolvePlayerIds() - prevents team assignment errors
+ * @param {Array} tdProps - Array of TD prop objects with player/team
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @returns {Array} - Validated props with correct team assignments
  */
-async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups, narrativeContext = '') {
+async function validateTDPropPlayers(tdProps, homeTeam, awayTeam) {
+  if (!tdProps || tdProps.length === 0) return [];
+  
+  // Normalize team names for matching
+  const normalizeTeamName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const homeNorm = normalizeTeamName(homeTeam);
+  const awayNorm = normalizeTeamName(awayTeam);
+  
+  // Get unique player names
+  const uniquePlayers = [...new Set(tdProps.map(p => p.player))];
+  
+  // Build player-to-team map via BDL search
+  const playerTeamMap = {};
+  const batchSize = 5;
+  
+  for (let i = 0; i < uniquePlayers.length; i += batchSize) {
+    const batch = uniquePlayers.slice(i, i + batchSize);
+    
+    const searchPromises = batch.map(async (playerName) => {
+      try {
+        // Extract last name for search (more reliable)
+        const nameParts = playerName.trim().split(' ');
+        const lastName = nameParts[nameParts.length - 1];
+        
+        // Search BDL by last name
+        const searchResults = await ballDontLieService.getPlayersGeneric(SPORT_KEY, {
+          search: lastName,
+          per_page: 15
+        }).catch(() => []);
+        
+        if (!searchResults || searchResults.length === 0) {
+          return { name: playerName, found: false };
+        }
+        
+        // Find match by full name
+        const playerNorm = playerName.toLowerCase().trim();
+        const match = searchResults.find(p => {
+          const fullName = `${p.first_name} ${p.last_name}`.toLowerCase();
+          return fullName === playerNorm || fullName.includes(playerNorm) || playerNorm.includes(fullName);
+        });
+        
+        if (!match) {
+          return { name: playerName, found: false };
+        }
+        
+        // Get player's actual team
+        const playerTeamName = match.team?.full_name || match.team?.name || '';
+        const playerTeamNorm = normalizeTeamName(playerTeamName);
+        
+        // Check if player is on home or away team
+        const isOnHome = playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm);
+        const isOnAway = playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
+        
+        if (isOnHome) {
+          return { name: playerName, found: true, team: homeTeam, teamFull: playerTeamName };
+        } else if (isOnAway) {
+          return { name: playerName, found: true, team: awayTeam, teamFull: playerTeamName };
+        } else {
+          return { name: playerName, found: false, wrongTeam: playerTeamName };
+        }
+      } catch (e) {
+        return { name: playerName, found: false, error: e.message };
+      }
+    });
+    
+    const results = await Promise.all(searchPromises);
+    for (const result of results) {
+      if (result.found) {
+        playerTeamMap[result.name.toLowerCase()] = result.team;
+      }
+    }
+  }
+  
+  // Update props with validated team assignments
+  const validatedProps = tdProps.map(prop => {
+    const validatedTeam = playerTeamMap[prop.player.toLowerCase()];
+    if (validatedTeam) {
+      return { ...prop, team: validatedTeam, validated: true };
+    }
+    return { ...prop, validated: false };
+  });
+  
+  const validCount = validatedProps.filter(p => p.validated).length;
+  console.log(`   [Validation] Verified ${validCount}/${tdProps.length} player-team assignments via BDL`);
+  
+  return validatedProps;
+}
+
+/**
+ * Fetch player TD rates from BDL season stats
+ * Returns TD rate per game for each player to help Gary make better TD picks
+ * @param {Array} players - Array of player objects with {player, team} 
+ * @param {number} season - Season year (2025)
+ * @returns {Object} Map of player name -> TD rate data
+ */
+async function fetchPlayerTDRates(players, season) {
+  if (!players || players.length === 0) return {};
+  
+  const tdRates = {};
+  const uniquePlayers = [...new Set(players.map(p => p.player))];
+  
+  console.log(`   Fetching TD rates for ${uniquePlayers.length} players...`);
+  
+  // Search and fetch stats in batches of 5
+  const batchSize = 5;
+  let foundCount = 0;
+  
+  for (let i = 0; i < uniquePlayers.length; i += batchSize) {
+    const batch = uniquePlayers.slice(i, i + batchSize);
+    
+    const statPromises = batch.map(async (playerName) => {
+      try {
+        // Search for player in BDL
+        const nameParts = playerName.trim().split(' ');
+        const lastName = nameParts[nameParts.length - 1];
+        
+        const searchResults = await ballDontLieService.getPlayersGeneric(SPORT_KEY, {
+          search: lastName,
+          per_page: 10
+        }).catch(() => []);
+        
+        if (!searchResults || searchResults.length === 0) {
+          return { name: playerName, found: false };
+        }
+        
+        // Find match
+        const playerNorm = playerName.toLowerCase().trim();
+        const match = searchResults.find(p => {
+          const fullName = `${p.first_name} ${p.last_name}`.toLowerCase();
+          return fullName === playerNorm || fullName.includes(playerNorm) || playerNorm.includes(fullName);
+        });
+        
+        if (!match) {
+          return { name: playerName, found: false };
+        }
+        
+        // Fetch season stats for this player
+        const seasonStats = await ballDontLieService.getNflPlayerSeasonStats({
+          playerId: match.id,
+          season: season,
+          postseason: false
+        }).catch(() => []);
+        
+        if (!seasonStats || seasonStats.length === 0) {
+          return { name: playerName, found: false };
+        }
+        
+        const stats = seasonStats[0];
+        const gamesPlayed = stats.games_played || 1;
+        
+        // Calculate TDs by type
+        const rushTDs = stats.rushing_touchdowns || 0;
+        const recTDs = stats.receiving_touchdowns || 0;
+        const passTDs = stats.passing_touchdowns || 0;
+        const totalTDs = rushTDs + recTDs;
+        
+        // Calculate TD rate per game
+        const tdPerGame = totalTDs / gamesPlayed;
+        
+        // Calculate hit rate for anytime TD (any game with 1+ TD)
+        // This is an approximation since we don't have game-by-game TD data
+        const impliedHitRate = totalTDs > 0 ? Math.min(95, (totalTDs / gamesPlayed) * 70) : 5;
+        
+        return {
+          name: playerName,
+          found: true,
+          playerId: match.id,
+          position: match.position_abbreviation || match.position,
+          gamesPlayed,
+          rushTDs,
+          recTDs,
+          passTDs,
+          totalTDs,
+          tdPerGame: tdPerGame.toFixed(2),
+          // Calculate implied anytime TD probability
+          impliedHitRate: impliedHitRate.toFixed(0),
+          // Scoring opportunity proxy
+          rushAttempts: stats.rushing_attempts || 0,
+          targets: stats.receiving_targets || 0,
+          receptions: stats.receptions || 0
+        };
+      } catch (e) {
+        return { name: playerName, found: false, error: e.message };
+      }
+    });
+    
+    const results = await Promise.all(statPromises);
+    
+    for (const result of results) {
+      if (result.found) {
+        tdRates[result.name.toLowerCase()] = result;
+        foundCount++;
+      }
+    }
+  }
+  
+  console.log(`   ✓ Found TD rate data for ${foundCount}/${uniquePlayers.length} players`);
+  return tdRates;
+}
+
+/**
+ * Format TD rates into context for Gary
+ */
+function formatTDRatesContext(tdRates, players) {
+  if (!tdRates || Object.keys(tdRates).length === 0) return '';
+  
+  let context = '\n## 📊 PLAYER TD RATES (2025 Season - BDL Verified)\n';
+  context += 'Use these TD rates to assess value vs odds:\n\n';
+  
+  // Group by high/medium/low TD rate
+  const highTD = []; // 0.6+ TD/game
+  const mediumTD = []; // 0.3-0.6 TD/game
+  const lowTD = []; // <0.3 TD/game
+  
+  for (const [name, data] of Object.entries(tdRates)) {
+    const rate = parseFloat(data.tdPerGame);
+    if (rate >= 0.6) highTD.push({ name, ...data });
+    else if (rate >= 0.3) mediumTD.push({ name, ...data });
+    else if (data.totalTDs > 0) lowTD.push({ name, ...data });
+  }
+  
+  if (highTD.length > 0) {
+    context += '**🔥 HIGH TD VOLUME (0.6+ TD/game):**\n';
+    highTD.sort((a, b) => parseFloat(b.tdPerGame) - parseFloat(a.tdPerGame)).forEach(p => {
+      context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g) | Rush ${p.rushTDs}, Rec ${p.recTDs}\n`;
+    });
+    context += '\n';
+  }
+  
+  if (mediumTD.length > 0) {
+    context += '**📈 MODERATE TD VOLUME (0.3-0.6 TD/game):**\n';
+    mediumTD.sort((a, b) => parseFloat(b.tdPerGame) - parseFloat(a.tdPerGame)).forEach(p => {
+      context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g) | Rush ${p.rushTDs}, Rec ${p.recTDs}\n`;
+    });
+    context += '\n';
+  }
+  
+  if (lowTD.length > 0) {
+    context += '**📉 LOW TD VOLUME (<0.3 TD/game - value plays only):**\n';
+    lowTD.sort((a, b) => parseFloat(b.tdPerGame) - parseFloat(a.tdPerGame)).slice(0, 10).forEach(p => {
+      context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g)\n`;
+    });
+    context += '\n';
+  }
+  
+  return context;
+}
+
+/**
+ * Extract structured injuries from Gemini Grounding context
+ * Parses OUT, IR, Questionable players into a structured format
+ * @param {string} groundedContext - Raw grounded context from Gemini
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @returns {Array} - Structured injury list [{player, team, status, description}]
+ */
+function extractStructuredInjuries(groundedContext, homeTeam, awayTeam) {
+  if (!groundedContext) return [];
+  
+  const injuries = [];
+  const lines = groundedContext.split('\n');
+  
+  let currentTeam = null;
+  
+  for (const line of lines) {
+    const lineLower = line.toLowerCase();
+    
+    // Detect team context
+    if (lineLower.includes(homeTeam.toLowerCase())) {
+      currentTeam = homeTeam;
+    } else if (lineLower.includes(awayTeam.toLowerCase())) {
+      currentTeam = awayTeam;
+    }
+    
+    // Look for injury patterns: "Player Name (Position) – STATUS – injury"
+    // Common patterns: OUT, IR, Questionable, Doubtful
+    const injuryPatterns = [
+      /\*\*([^*]+)\s*\(([^)]+)\)\*\*\s*[–-]\s*(OUT|IR|Questionable|Doubtful|INJURED RESERVE)/i,
+      /([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+(?:Jr\.|Sr\.|III|II|IV))?)\s*\(([^)]+)\)\s*[–-]\s*(OUT|IR|Questionable|Doubtful)/i,
+      /\*\s*\*\*([^*]+)\*\*\s*[–-]\s*(OUT|IR|Questionable|Doubtful)/i
+    ];
+    
+    for (const pattern of injuryPatterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const playerName = match[1].trim().replace(/\*+/g, '');
+        const status = (match[3] || match[2]).toUpperCase();
+        
+        // Skip invalid names
+        if (playerName.length < 3 || playerName.includes('MISSED') || playerName.includes('Week')) {
+          continue;
+        }
+        
+        // Extract description if present
+        const descMatch = line.match(/[–-]\s*(OUT|IR|Questionable|Doubtful)[^–-]*[–-]\s*([^–-]+)/i);
+        const description = descMatch ? descMatch[2].trim() : '';
+        
+        injuries.push({
+          player: playerName,
+          team: currentTeam || 'Unknown',
+          status: status,
+          description: description.substring(0, 100)
+        });
+        break;
+      }
+    }
+  }
+  
+  // Deduplicate by player name
+  const seen = new Set();
+  const uniqueInjuries = injuries.filter(inj => {
+    const key = inj.player.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  
+  return uniqueInjuries;
+}
+
+/**
+ * Run Gary's TD Scorer Analysis
+ * @param {Array} allTDProps - All anytime TD props (validated)
+ * @param {Array} firstTDProps - All first TD props (validated)
+ * @param {string} playerStats - Formatted player stats text
+ * @param {Array} gameMatchups - Array of matchup strings
+ * @param {string} narrativeContext - Raw narrative context
+ * @param {Array} gamesData - Structured game data with injuries [{matchup, homeTeam, awayTeam, injuries, homePlayers, awayPlayers}]
+ */
+async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups, narrativeContext = '', gamesData = []) {
   // Split into standard odds and underdog odds (+200 or better)
   const standardTDs = allTDProps.filter(p => p.odds < 200);
   const underdogTDs = allTDProps.filter(p => p.odds >= 200);
@@ -99,12 +433,104 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
   console.log(`   First TD options: ${firstTDProps.length} total → ${balancedFirstTD.length} balanced`);
   console.log(`   Games covered: ${new Set([...balancedStandard, ...balancedUnderdog, ...balancedFirstTD].map(p => p.matchup)).size}`);
 
+  // Build CRITICAL GAME CONTEXT section with verified team rosters, injuries, and game script data
+  const buildCriticalContext = () => {
+    if (!gamesData || gamesData.length === 0) return '';
+    
+    let context = '\n## CRITICAL GAME CONTEXT (USE THIS DATA - DO NOT HALLUCINATE TEAM ASSIGNMENTS)\n';
+    context += 'The following player-team assignments have been VERIFIED via official NFL data.\n';
+    context += 'ONLY use these team assignments. Do NOT assign players to teams not listed.\n\n';
+    
+    for (const game of gamesData) {
+      context += `### ${game.awayTeam} @ ${game.homeTeam}\n`;
+      
+      // GAME SCRIPT DATA - Critical for TD distribution modeling
+      if (game.spread != null || game.total != null) {
+        context += `**GAME SCRIPT DATA (Use for TD distribution):**\n`;
+        if (game.spread != null) {
+          const favoriteTeam = game.spread < 0 ? game.homeTeam : game.awayTeam;
+          const spreadAbs = Math.abs(game.spread);
+          context += `- Spread: ${game.homeTeam} ${game.spread > 0 ? '+' : ''}${game.spread} (${favoriteTeam} favored by ${spreadAbs})\n`;
+          context += `- Game Type: ${game.spreadContext.replace(/_/g, ' ')}\n`;
+        }
+        if (game.total != null) {
+          context += `- Total (O/U): ${game.total} → ${game.totalContext.replace(/_/g, ' ')} expected scoring\n`;
+        }
+        // Game script impact guidance
+        if (game.spreadContext === 'HOME_BIG_FAVORITE' || game.spreadContext === 'AWAY_BIG_FAVORITE') {
+          const favorite = game.spreadContext === 'HOME_BIG_FAVORITE' ? game.homeTeam : game.awayTeam;
+          const underdog = game.spreadContext === 'HOME_BIG_FAVORITE' ? game.awayTeam : game.homeTeam;
+          context += `- ⚠️ GAME SCRIPT: ${favorite} RB1 likely high volume late. ${underdog} may trail = more passing TDs.\n`;
+        }
+        if (game.totalContext === 'HIGH_SCORING') {
+          context += `- 🔥 HIGH TOTAL: Multiple TDs expected - WRs/TEs have increased equity.\n`;
+        } else if (game.totalContext === 'LOW_SCORING') {
+          context += `- 🧊 LOW TOTAL: Grind game expected - RBs have increased TD equity.\n`;
+        }
+      }
+      
+      // List verified players per team
+      if (game.awayPlayers && game.awayPlayers.length > 0) {
+        context += `**${game.awayTeam} TD CANDIDATES:** ${game.awayPlayers.join(', ')}\n`;
+      }
+      if (game.homePlayers && game.homePlayers.length > 0) {
+        context += `**${game.homeTeam} TD CANDIDATES:** ${game.homePlayers.join(', ')}\n`;
+      }
+      
+      // List key injuries (especially QBs and stars)
+      if (game.injuries && game.injuries.length > 0) {
+        context += `**KEY INJURIES (affects TD opportunities):**\n`;
+        for (const inj of game.injuries.slice(0, 8)) {
+          context += `- ${inj.player} (${inj.team}): ${inj.status}${inj.description ? ` - ${inj.description}` : ''}\n`;
+        }
+      }
+      context += '\n';
+    }
+    
+    return context;
+  };
+
+  const criticalContext = buildCriticalContext();
+
   const systemPrompt = `
 You are Gary, the expert NFL analyst. You're picking Touchdown Scorers for today's games.
 
+🚨🚨🚨 ZERO TOLERANCE FOR HALLUCINATION - READ THIS FIRST 🚨🚨🚨
+
+YOU ARE ABSOLUTELY FORBIDDEN FROM INVENTING ANY STATISTICS OR FACTS.
+
+The ONLY information you can use is:
+1. Player-team assignments from CRITICAL GAME CONTEXT below (verified via BDL API)
+2. Injury reports explicitly listed in the context
+3. Stats explicitly provided in the player_context or live_context data
+4. Information found via Google Search grounding during this analysis
+
+❌ YOU CANNOT:
+- Invent touchdown counts (e.g., "9 TDs in 15 games" unless you verified it)
+- Make up red zone statistics unless explicitly provided
+- Claim any player stat you did not see in the provided data
+- Assign players to wrong teams (CHECK the verified team assignments!)
+
+✅ YOU MUST:
+- Use ONLY verified player-team assignments from the context
+- Cite only stats you actually see in the data
+- Say "strong TD scoring role" instead of inventing specific TD counts
+- Focus on matchup context and game script if stats are unavailable
+
+THE VERIFICATION TEST: Before writing ANY stat, ask:
+"Did I see this EXACT number in the data provided?"
+- If YES → Use it
+- If NO → Do NOT use it, describe qualitatively instead
+
+${criticalContext}
 ## CRITICAL RULE: SPREAD YOUR PICKS ACROSS MULTIPLE GAMES
 You MUST pick from at least 4 DIFFERENT games for each category. Do NOT concentrate all picks in 1-2 games.
 Today's available games: ${gameMatchups.join(', ')}
+
+## IMPORTANT: USE VERIFIED DATA ONLY
+- ONLY use the player-team assignments shown in CRITICAL GAME CONTEXT above
+- Do NOT mention injured players (OUT/IR) as active or capable of affecting the game
+- Check the injury list before including any player in your analysis
 
 ## YOUR TASK
 You must make THREE types of TD scorer picks:
@@ -128,14 +554,82 @@ Pick 5 touchdown scorer bets with odds of +200 or better (higher payout). These 
 
 RULE: Pick from at least 4 different games.
 
-### CATEGORY 3: FIRST TD SCORER (5 picks)
-Pick 5 players most likely to score the FIRST touchdown of their game. These are HIGH VARIANCE plays (typically +300 to +2000 odds):
+### CATEGORY 3: FIRST TD SCORER (3 picks)
+Pick 3 players most likely to score the FIRST touchdown of their game. These are HIGH VARIANCE plays (typically +300 to +2000 odds):
 - Players who get early red zone usage
 - Teams with strong opening drive scripts
 - Goal line backs and red zone targets
 - Consider each team's first-drive tendencies
 
-RULE: Pick from at least 4 different games - ideally one from each game where you have strong conviction.
+RULE: Pick from at least 3 different games - ideally one from each game where you have strong conviction.
+
+## ANALYSIS FRAMEWORK FOR TD PROPS
+
+### 1. HISTORICAL TD RATES BY POSITION (Use this to weight First TD picks)
+First TD scorers historically by position (NFL averages):
+- RB1 (lead back): ~28% of all First TDs - HIGHEST equity
+- WR1 (team's top receiver): ~22% of First TDs
+- TE1 (primary tight end): ~12% of First TDs
+- WR2/Slot: ~10% of First TDs
+- QB (rushing): ~8% of First TDs
+- RB2/Goal-line specialist: ~8% of First TDs
+- All other players: ~12% combined
+
+USE THIS: Weight your First TD picks toward RB1s and WR1s who are their team's primary scoring threats.
+
+### 2. GAME SCRIPT MODELING (Critical for TD distribution)
+Analyze the spread and total to predict game flow:
+
+**CLOSE GAMES (Spread ±3):**
+- More balanced TD distribution
+- Both teams stay committed to game plan
+- RBs maintain volume throughout
+- Good for both sides' TD scorers
+
+**FAVORITES BY 7+ POINTS:**
+- Favorite's RB1 likely to get late-game clock-killing carries = MORE TD EQUITY
+- Underdog may trail = MORE passing TDs to WRs/TEs
+- Underdog RB1 may see REDUCED volume if trailing
+
+**HIGH TOTALS (O/U 48+):**
+- Expect shootout = PASSING TDs more likely
+- WRs and TEs have increased TD equity
+- Multiple TD scorers per game expected
+
+**LOW TOTALS (O/U 40 or less):**
+- Grind-it-out game = RUSHING TDs more likely
+- RBs have increased TD equity
+- Fewer total TDs to go around - pick carefully
+
+### 3. WEATHER IMPACT (For outdoor games - check live_context)
+**COLD WEATHER (Below 35°F):**
+- Passing games suffer (-10-15% efficiency)
+- RBs gain TD equity
+- TEs gain short-yardage TD equity (reliable hands in cold)
+- WR deep threats LOSE equity
+
+**WIND (15+ mph):**
+- Deep passing drastically affected
+- Short/intermediate routes still viable
+- RBs and short-area TEs benefit
+- Kicking game affected = more 4th down attempts in red zone
+
+**RAIN/SNOW:**
+- Run game favored heavily
+- RBs gain significant TD equity
+- Turnovers increase = defensive TDs possible
+- WR TD equity drops significantly
+
+### 4. SNAP COUNT & USAGE TRENDS (From player_context data)
+Look for INCREASING usage patterns:
+- Player's snap % trending UP = more opportunities
+- New role (injury to teammate) = usage spike expected
+- Veteran's snap count declining = vulture back opportunity
+
+Red flags:
+- "Pitch count" or "limited snaps" = reduced TD ceiling
+- Coming off injury = may not have full role yet
+- Backup QB = entire offense's ceiling affected
 
 ## ANALYSIS APPROACH
 - Consider red zone opportunity rates
@@ -143,6 +637,8 @@ RULE: Pick from at least 4 different games - ideally one from each game where yo
 - Factor in game script (blowout vs close game)
 - Consider goal-line personnel tendencies
 - For First TD: opening drive efficiency, scripted plays, early usage patterns
+- APPLY THE WEATHER IMPACT analysis if game is outdoors
+- USE THE GAME SCRIPT MODEL based on spread and total
 - SPREAD PICKS ACROSS THE FULL SLATE - find value in multiple games
 
 ## RESPONSE FORMAT (STRICT JSON)
@@ -182,31 +678,53 @@ RULE: Pick from at least 4 different games - ideally one from each game where yo
 IMPORTANT:
 - Standard picks: Pick exactly 5 from any odds, line is always 0.5
 - Underdog picks: Pick exactly 5 with odds +200 or better. Line can be 0.5 (1+ TD) or 1.5 (2+ TDs)
-- First TD picks: Pick exactly 5 players likely to score the first TD of their game
+- First TD picks: Pick exactly 3 players likely to score the first TD of their game
 - RATIONALES MUST BE DETAILED: Include stats line, 3-5 sentence thesis, bullet point factors, risk note, and confidence
 - Be specific about WHY each player will score - use real stats and matchup analysis
 `;
 
+  // Build structured game context for user content
+  const structuredGames = gamesData.map(game => ({
+    matchup: game.matchup,
+    away_team: game.awayTeam,
+    home_team: game.homeTeam,
+    verified_players: {
+      away: game.awayPlayers,
+      home: game.homePlayers
+    },
+    key_injuries: game.injuries.map(inj => ({
+      player: inj.player,
+      team: inj.team,
+      status: inj.status,
+      description: inj.description || ''
+    }))
+  }));
+
   const userContent = JSON.stringify({
     date: getESTDate(),
     games_today: gameMatchups,
+    // NEW: Structured per-game context with verified players and injuries
+    games_context: structuredGames,
     standard_td_options: balancedStandard.map(p => ({
       player: p.player,
-      team: p.team,
+      team: p.team, // Now validated via BDL
       odds: p.odds,
-      matchup: p.matchup
+      matchup: p.matchup,
+      validated: p.validated || false
     })),
     underdog_td_options: balancedUnderdog.map(p => ({
       player: p.player,
-      team: p.team,
+      team: p.team, // Now validated via BDL
       odds: p.odds,
-      matchup: p.matchup
+      matchup: p.matchup,
+      validated: p.validated || false
     })),
     first_td_options: balancedFirstTD.map(p => ({
       player: p.player,
-      team: p.team,
+      team: p.team, // Now validated via BDL
       odds: p.odds,
-      matchup: p.matchup
+      matchup: p.matchup,
+      validated: p.validated || false
     })),
     player_context: playerStats.substring(0, 5000),  // Player stats from BDL
     live_context: narrativeContext.substring(0, 3000)  // Live narrative from Gemini Grounding
@@ -222,7 +740,7 @@ IMPORTANT:
   const raw = await openaiService.generateResponse(messages, {
     model: GEMINI_FLASH_MODEL, // Use Flash for TD props (high volume)
     temperature: 0.5,
-    maxTokens: 2500
+    maxTokens: 12000  // High limit to handle detailed rationales for 13 picks
   });
 
   // Parse response
@@ -255,14 +773,17 @@ async function main() {
 
   // Fetch NFL games
   const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache });
-  const now = Date.now();
-  const windowMs = 7 * 24 * 60 * 60 * 1000; // 7 days for NFL
-
-  let filteredGames = games
-    .filter(g => {
-      const tip = new Date(g.commence_time).getTime();
-      return !Number.isNaN(tip) && tip > now && tip <= now + windowMs;
-    });
+  
+  // Get current EST date boundaries (start of today and start of tomorrow in EST)
+  const todayEST = getESTDate();
+  const todayStart = new Date(`${todayEST}T00:00:00-05:00`).getTime();
+  const tomorrowStart = new Date(`${todayEST}T00:00:00-05:00`).getTime() + (24 * 60 * 60 * 1000);
+  
+  // Filter games that start on the current EST day
+  let filteredGames = games.filter(g => {
+    const tip = new Date(g.commence_time).getTime();
+    return !Number.isNaN(tip) && tip >= todayStart && tip < tomorrowStart;
+  });
   
   // Apply matchup filter if specified (e.g., --matchup="49ers")
   if (matchupFilter) {
@@ -274,7 +795,7 @@ async function main() {
     console.log(`🎯 Filtered to ${filteredGames.length} game(s) matching "${matchupFilter}"`);
   }
   
-  filteredGames = filteredGames.slice(0, 10);
+  // No hardcoded limit - process all games for the day
 
   console.log(`Found ${filteredGames.length} NFL games.\n`);
 
@@ -283,20 +804,34 @@ async function main() {
     return;
   }
 
-  // Collect all TD props across games
+  // Collect all TD props across games with per-game validation
   const allTDProps = [];
   const firstTDProps = [];
+  const gamesData = []; // NEW: Structured game data with validated players and injuries
   let playerStats = '';
+  let narrativeContext = '';
+
+  // Import player stats formatter
+  let formatNFLPlayerStats;
+  try {
+    const playerPropsModule = await import('../src/services/nflPlayerPropsService.js');
+    formatNFLPlayerStats = playerPropsModule.formatNFLPlayerStats;
+  } catch (e) {
+    console.warn('Could not import formatNFLPlayerStats:', e.message);
+  }
+
+  console.log(`\n📡 Fetching TD props and validating player-team assignments...\n`);
 
   for (const game of filteredGames) {
     const matchup = `${game.away_team} @ ${game.home_team}`;
-    console.log(`📡 Fetching TD props for ${matchup}...`);
+    console.log(`🏈 ${matchup}`);
+    console.log(`   Fetching props...`);
 
     try {
       const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, game.home_team, game.away_team);
       
       // Filter for anytime TD props
-      const tdProps = props.filter(p => {
+      const rawTdProps = props.filter(p => {
         const propType = (p.prop_type || '').toLowerCase();
         return propType === 'anytime_td' || 
                propType === 'player_anytime_td' ||
@@ -306,44 +841,154 @@ async function main() {
       });
 
       // Filter for First TD props
-      const firstProps = props.filter(p => {
+      const rawFirstProps = props.filter(p => {
         const propType = (p.prop_type || '').toLowerCase();
         return propType === 'first_td' || 
                propType === 'player_1st_td' ||
                propType === '1st_td';
       });
 
-      tdProps.forEach(p => {
+      console.log(`   Found ${rawTdProps.length} anytime TD, ${rawFirstProps.length} first TD props`);
+
+      // NEW: Validate player-team assignments via BDL API
+      const allGameProps = [...rawTdProps, ...rawFirstProps].map(p => ({
+        player: p.player,
+        team: p.team,
+        odds: p.over_odds || p.odds
+      }));
+      
+      const validatedProps = await validateTDPropPlayers(allGameProps, game.home_team, game.away_team);
+      
+      // Build player-team map from validated props
+      const playerTeamMap = {};
+      for (const vp of validatedProps.filter(p => p.validated)) {
+        playerTeamMap[vp.player.toLowerCase()] = vp.team;
+      }
+
+      // Apply validated teams to TD props
+      rawTdProps.forEach(p => {
+        const validatedTeam = playerTeamMap[p.player.toLowerCase()];
         allTDProps.push({
           player: p.player,
-          team: p.team,
+          team: validatedTeam || p.team, // Use validated team if available
           odds: p.over_odds || p.odds,
           matchup: matchup,
-          game_time: game.commence_time
+          game_time: game.commence_time,
+          validated: !!validatedTeam
         });
       });
 
-      firstProps.forEach(p => {
+      rawFirstProps.forEach(p => {
+        const validatedTeam = playerTeamMap[p.player.toLowerCase()];
         firstTDProps.push({
           player: p.player,
-          team: p.team,
+          team: validatedTeam || p.team, // Use validated team if available
           odds: p.over_odds || p.odds,
           matchup: matchup,
-          game_time: game.commence_time
+          game_time: game.commence_time,
+          validated: !!validatedTeam
         });
       });
 
-      console.log(`   ✅ Found ${tdProps.length} anytime TD props, ${firstProps.length} first TD props`);
+      // Fetch narrative context via Gemini Grounding
+      const dateStr = new Date(game.commence_time).toLocaleDateString('en-US', { 
+        month: 'long', day: 'numeric', year: 'numeric' 
+      });
+      console.log(`   Fetching narrative context...`);
+      const grounded = await fetchGroundedContext(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(() => null);
+      
+      // NEW: Extract structured injuries from grounded context
+      const gameInjuries = grounded?.groundedRaw 
+        ? extractStructuredInjuries(grounded.groundedRaw, game.home_team, game.away_team)
+        : [];
+      
+      if (gameInjuries.length > 0) {
+        console.log(`   📋 Extracted ${gameInjuries.length} injuries: ${gameInjuries.map(i => `${i.player} (${i.status})`).join(', ')}`);
+      }
+      
+      if (grounded?.groundedRaw) {
+        narrativeContext += `\n=== ${matchup} - Live Context ===\n${grounded.groundedRaw.substring(0, 1500)}\n`;
+        console.log(`   ✅ Got narrative context`);
+      }
+
+      // Fetch player stats
+      if (formatNFLPlayerStats) {
+        try {
+          const stats = await formatNFLPlayerStats(game.home_team, game.away_team);
+          playerStats += `\n=== ${matchup} ===\n${stats}\n`;
+        } catch (e) {
+          // Continue if stats fail
+        }
+      }
+
+      // NEW: Build structured game data for prompt context
+      const homePlayers = validatedProps
+        .filter(p => p.validated && p.team === game.home_team)
+        .map(p => p.player);
+      const awayPlayers = validatedProps
+        .filter(p => p.validated && p.team === game.away_team)
+        .map(p => p.player);
+
+      // Extract spread and total for game script modeling
+      const spread = game.spread_home != null ? game.spread_home : null;
+      const total = game.total != null ? game.total : null;
+      
+      gamesData.push({
+        matchup: matchup,
+        homeTeam: game.home_team,
+        awayTeam: game.away_team,
+        homePlayers: [...new Set(homePlayers)], // Deduplicate
+        awayPlayers: [...new Set(awayPlayers)], // Deduplicate
+        injuries: gameInjuries,
+        gameTime: game.commence_time,
+        // Game script modeling data
+        spread: spread,  // Home team spread (negative = favorite)
+        total: total,    // Over/Under total
+        spreadContext: spread != null 
+          ? Math.abs(spread) <= 3 
+            ? 'CLOSE_GAME' 
+            : spread < -6.5 
+              ? 'HOME_BIG_FAVORITE' 
+              : spread > 6.5 
+                ? 'AWAY_BIG_FAVORITE' 
+                : spread < 0 
+                  ? 'HOME_SLIGHT_FAVORITE' 
+                  : 'AWAY_SLIGHT_FAVORITE'
+          : 'UNKNOWN',
+        totalContext: total != null
+          ? total >= 48 
+            ? 'HIGH_SCORING' 
+            : total <= 40 
+              ? 'LOW_SCORING' 
+              : 'MODERATE'
+          : 'UNKNOWN'
+      });
+
+      console.log(`   ✅ Validated ${homePlayers.length} ${game.home_team} players, ${awayPlayers.length} ${game.away_team} players\n`);
     } catch (e) {
-      console.warn(`   ⚠️ Could not fetch props: ${e.message}`);
+      console.warn(`   ⚠️ Could not fetch props: ${e.message}\n`);
     }
   }
 
   console.log(`\n📊 Total TD props collected: ${allTDProps.length} anytime, ${firstTDProps.length} first TD`);
+  const validatedCount = allTDProps.filter(p => p.validated).length;
+  console.log(`   ✓ ${validatedCount}/${allTDProps.length} props have verified player-team assignments`);
 
   if (allTDProps.length === 0) {
     console.log('⚠️ No TD props available. Exiting.');
     return;
+  }
+
+  // NEW: Fetch TD rates for all unique players
+  console.log(`\n📈 Fetching TD rates from BDL for value analysis...`);
+  const currentSeason = new Date().getMonth() <= 7 ? new Date().getFullYear() - 1 : new Date().getFullYear();
+  const allUniquePlayers = [...new Set([...allTDProps, ...firstTDProps].map(p => ({ player: p.player, team: p.team })))];
+  const tdRates = await fetchPlayerTDRates(allUniquePlayers, currentSeason);
+  
+  // Add TD rate context to player stats
+  const tdRatesContext = formatTDRatesContext(tdRates, allUniquePlayers);
+  if (tdRatesContext) {
+    playerStats = tdRatesContext + '\n' + playerStats;
   }
 
   // Collect all game matchups for prompt
@@ -351,38 +996,22 @@ async function main() {
   console.log(`\n🏈 Games to analyze: ${gameMatchups.length}`);
   gameMatchups.forEach((m, i) => console.log(`   ${i + 1}. ${m}`));
 
-  // Get player stats AND narrative context for each game
-  let narrativeContext = '';
-  try {
-    const { formatNFLPlayerStats } = await import('../src/services/nflPlayerPropsService.js');
-    console.log(`\n📊 Fetching player stats and narrative context from all ${filteredGames.length} games...`);
-    
-    for (const game of filteredGames) {
-      const matchupLabel = `${game.away_team} @ ${game.home_team}`;
-      try {
-        // Fetch player stats
-        const stats = await formatNFLPlayerStats(game.home_team, game.away_team);
-        playerStats += `\n=== ${matchupLabel} ===\n${stats}\n`;
-        
-        // Fetch narrative context via Gemini Grounding (using Flash for props)
-        const dateStr = new Date(game.commence_time).toLocaleDateString('en-US', { 
-          month: 'long', day: 'numeric', year: 'numeric' 
+  // Log injury summary
+  const totalInjuries = gamesData.reduce((sum, g) => sum + g.injuries.length, 0);
+  if (totalInjuries > 0) {
+    console.log(`\n🏥 Key Injuries Detected (${totalInjuries} total):`);
+    for (const game of gamesData) {
+      if (game.injuries.length > 0) {
+        console.log(`   ${game.matchup}:`);
+        game.injuries.slice(0, 5).forEach(inj => {
+          console.log(`      - ${inj.player} (${inj.team}): ${inj.status}`);
         });
-        const grounded = await fetchGroundedContext(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(() => null);
-        if (grounded?.groundedRaw) {
-          narrativeContext += `\n=== ${matchupLabel} - Live Context ===\n${grounded.groundedRaw.substring(0, 1500)}\n`;
-          console.log(`   ✅ Got narrative context for ${matchupLabel}`);
-        }
-      } catch (e) {
-        // Continue if one game fails
       }
     }
-  } catch (e) {
-    console.warn('Could not fetch player stats:', e.message);
   }
 
-  // Run Gary's analysis with game matchups and narrative context
-  const result = await runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups, narrativeContext);
+  // Run Gary's analysis with structured game data including validated players and injuries
+  const result = await runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMatchups, narrativeContext, gamesData);
 
   if (!result) {
     console.error('❌ Failed to get TD picks from Gary');
@@ -408,7 +1037,7 @@ async function main() {
     console.log(`      💡 ${pick.rationale}\n`);
   });
 
-  console.log(`\n🥇 FIRST TD SCORERS (5 High-Variance Plays):`);
+  console.log(`\n🥇 FIRST TD SCORERS (3 High-Variance Plays):`);
   (result.first_td_picks || []).forEach((pick, i) => {
     console.log(`   ${i + 1}. ${pick.player} (${pick.team}) @ +${pick.odds}`);
     console.log(`      ${pick.matchup}`);
@@ -561,7 +1190,7 @@ async function main() {
     if (insertError) {
       console.error(`❌ Insert error: ${insertError.message}`);
     } else {
-      console.log(`✅ Stored ${allTDPicks.length} NFL TD picks (5 standard + 5 underdog + 5 first TD)`);
+      console.log(`✅ Stored ${allTDPicks.length} NFL TD picks (5 standard + 5 underdog + 3 first TD)`);
     }
   }
 

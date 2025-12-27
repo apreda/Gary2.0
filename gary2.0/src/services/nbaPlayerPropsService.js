@@ -10,14 +10,14 @@ const teamCache = new Map();
 /**
  * Get current NBA season
  * NBA season spans two years (e.g., 2024-25 season)
- * For months Jan-June, we're in the second half of the previous year's season
+ * Season starts in October, so Oct-Dec = currentYear, Jan-Sep = previousYear
  */
 function getCurrentNBASeason() {
   const now = new Date();
   const month = now.getMonth() + 1; // 1-12
   const year = now.getFullYear();
-  // Jan-June means we're in the second half of the season (use previous year)
-  return month <= 6 ? year - 1 : year;
+  // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+  return month >= 10 ? year : year - 1;
 }
 
 /**

@@ -44,7 +44,8 @@ export async function runAgenticPropsCli({
   buildContext,
   windowHours = 24 * 7,
   propsPerGame = 5,
-  limitDefault = 5
+  limitDefault = 5,
+  useESTDayFiltering = false  // If true, filter by EST day instead of rolling window
 }) {
   if (!sportKey || !buildContext) {
     throw new Error('runAgenticPropsCli requires sportKey and buildContext');
@@ -68,13 +69,31 @@ export async function runAgenticPropsCli({
   // Fetch upcoming games
   const games = await oddsService.getUpcomingGames(sportKey, { nocache });
   const now = Date.now();
+  
+  // Calculate time window based on filtering mode
+  let todayStart, tomorrowStart;
+  if (useESTDayFiltering) {
+    // Use EST day boundaries for filtering (all games on current EST day)
+    const todayEST = getESTDate();
+    todayStart = new Date(`${todayEST}T00:00:00-05:00`).getTime();
+    tomorrowStart = todayStart + (24 * 60 * 60 * 1000);
+  }
   const windowMs = windowHours ? windowHours * 60 * 60 * 1000 : null;
 
   const filtered = games
     .filter((game) => {
       const tip = new Date(game.commence_time).getTime();
-      if (Number.isNaN(tip) || tip <= now) return false;
-      if (windowMs != null && tip > now + windowMs) return false;
+      if (Number.isNaN(tip)) return false;
+      
+      if (useESTDayFiltering) {
+        // Filter games starting on current EST day
+        if (tip < todayStart || tip >= tomorrowStart) return false;
+      } else {
+        // Use rolling window (original behavior)
+        if (tip <= now) return false;
+        if (windowMs != null && tip > now + windowMs) return false;
+      }
+      
       // Apply matchup filter if provided
       if (matchupFilter) {
         const matchupLower = matchupFilter.toLowerCase();
@@ -145,7 +164,38 @@ export async function runAgenticPropsCli({
         result.picks.forEach((pick, i) => {
           const conf = (pick.confidence * 100).toFixed(0);
           const ev = pick.ev ? ` | EV: ${pick.ev > 0 ? '+' : ''}${pick.ev.toFixed(1)}%` : '';
-          console.log(`   ${i + 1}. ${pick.player}: ${pick.bet.toUpperCase()} ${pick.prop} (${pick.odds}) - ${conf}% conf${ev}`);
+          console.log(`\n   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+          console.log(`   📊 PICK ${i + 1}: ${pick.player} (${pick.team})`);
+          console.log(`   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+          console.log(`   🎯 ${pick.bet.toUpperCase()} ${pick.prop} @ ${pick.odds}`);
+          console.log(`   📈 Confidence: ${conf}%${ev}`);
+          console.log(`   🏟️ Matchup: ${pick.matchup || matchup}`);
+          console.log(`   ⏰ Time: ${pick.time || gameTime}`);
+          
+          // Print rationale if available
+          if (pick.rationale) {
+            console.log(`\n   📝 ANALYSIS:`);
+            // Word wrap the rationale at ~80 chars per line with proper indentation
+            const words = pick.rationale.split(' ');
+            let line = '      ';
+            for (const word of words) {
+              if ((line + word).length > 90) {
+                console.log(line);
+                line = '      ' + word + ' ';
+              } else {
+                line += word + ' ';
+              }
+            }
+            if (line.trim()) console.log(line);
+          }
+          
+          // Print key stats if available
+          if (pick.key_stats && pick.key_stats.length > 0) {
+            console.log(`\n   📊 KEY STATS:`);
+            pick.key_stats.forEach(stat => {
+              console.log(`      • ${stat}`);
+            });
+          }
         });
         allPropPicks.push(...result.picks);
       } else {
@@ -205,10 +255,45 @@ export async function runAgenticPropsCli({
   // Use all picks from pipeline (NBA/NHL/EPL use 2-per-game rule, NFL uses confidence filter)
   const topPicks = sortedPicks;
 
-  console.log(`\n🏆 ${topPicks.length} Picks:`);
+  console.log(`\n🏆 ${topPicks.length} FINAL PICKS WITH ANALYSIS:`);
+  console.log(`${'='.repeat(60)}\n`);
+  
   topPicks.forEach((pick, i) => {
     const conf = (pick.confidence * 100).toFixed(0);
-    console.log(`   ${i + 1}. ${pick.player}: ${pick.bet.toUpperCase()} ${pick.prop} (${pick.odds}) - ${conf}% conf`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`📊 PICK ${i + 1}: ${pick.player} (${pick.team || leagueLabel})`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🎯 ${pick.bet.toUpperCase()} ${pick.prop} @ ${pick.odds}`);
+    console.log(`📈 Confidence: ${conf}%`);
+    console.log(`🏟️ Matchup: ${pick.matchup || 'N/A'}`);
+    console.log(`⏰ Time: ${pick.time || 'TBD'}`);
+    
+    // Print rationale
+    if (pick.rationale) {
+      console.log(`\n📝 ANALYSIS:`);
+      // Word wrap the rationale
+      const words = pick.rationale.split(' ');
+      let line = '   ';
+      for (const word of words) {
+        if ((line + word).length > 85) {
+          console.log(line);
+          line = '   ' + word + ' ';
+        } else {
+          line += word + ' ';
+        }
+      }
+      if (line.trim()) console.log(line);
+    }
+    
+    // Print key stats
+    if (pick.key_stats && pick.key_stats.length > 0) {
+      console.log(`\n📊 KEY STATS:`);
+      pick.key_stats.forEach(stat => {
+        console.log(`   • ${stat}`);
+      });
+    }
+    
+    console.log(''); // Empty line between picks
   });
 
   if (shouldStore) {

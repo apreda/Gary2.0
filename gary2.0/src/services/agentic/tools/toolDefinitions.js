@@ -55,8 +55,8 @@ const NFL_TOKENS = [
   'QB_STATS', 'RB_STATS', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS', 'INJURIES',
   // Context
   'WEATHER', 'QB_WEATHER_HISTORY', 'REST_SITUATION', 'DIVISION_RECORD', 'PRIMETIME_RECORD',
-  // Historical
-  'H2H_HISTORY', 'ATS_TRENDS', 'RECENT_FORM',
+  // Historical (real game data only - NO betting stats like ATS)
+  'H2H_HISTORY', 'RECENT_FORM',
   // Quarter/Half Scoring Trends (NEW)
   'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown - fast starters vs closers
   'FIRST_HALF_TRENDS',    // 1st half scoring patterns - teams that start hot/cold
@@ -64,7 +64,7 @@ const NFL_TOKENS = [
   'HOME_AWAY_SPLITS'      // Home vs road performance
 ];
 
-// NCAAB Stat Tokens - unique fetchers with calculated values + Perplexity advanced stats
+// NCAAB Stat Tokens - unique fetchers with calculated values + Gemini Grounding advanced stats
 const NCAAB_TOKENS = [
   // BDL Core Stats (unique calculations)
   'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING',
@@ -78,7 +78,7 @@ const NCAAB_TOKENS = [
   'NCAAB_AP_RANKING',        // AP Poll rank
   'NCAAB_COACHES_RANKING',   // Coaches Poll rank
   'NCAAB_CONFERENCE_RECORD', // Conference record from standings
-  // Perplexity Advanced Stats (KenPom, NET, etc.)
+  // Gemini Grounding Advanced Stats (KenPom, NET, etc.)
   'NCAAB_KENPOM_RATINGS',    // KenPom AdjEM, AdjO, AdjD, Tempo
   'NCAAB_NET_RANKING',       // NCAA NET ranking
   'NCAAB_STRENGTH_OF_SCHEDULE', // SOS ranking
@@ -92,7 +92,7 @@ const NCAAB_TOKENS = [
   'TOP_PLAYERS', 'INJURIES'
 ];
 
-// NCAAF Stat Tokens - BDL-based tokens that work (Perplexity is broken with 401 errors)
+// NCAAF Stat Tokens - BDL-based tokens that work
 // BDL NCAAF has: team_season_stats with passing/rushing yards, TDs, opponent yards
 const NCAAF_TOKENS = [
   // ===== PRIMARY STATS (BDL team_season_stats - THESE WORK) =====
@@ -117,10 +117,10 @@ const NCAAF_TOKENS = [
   'INJURIES',                 // BDL: injury report
   
   // NOTE: Advanced analytics (SP+, EPA, etc.) are provided via Gemini Grounding
-  // in the Scout Report, not via stat tokens. Perplexity API has auth issues.
+  // in the Scout Report, not via stat tokens.
 ];
 
-// NHL Stat Tokens (BETA - uses BDL + Perplexity for advanced stats)
+// NHL Stat Tokens (BETA - uses BDL + Gemini Grounding for advanced stats)
 const NHL_TOKENS = [
   // Standings & Records
   'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'DIVISION_STANDING',
@@ -130,7 +130,7 @@ const NHL_TOKENS = [
   'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'SCORING_FIRST',
   // Shot Metrics (Corsi proxy)
   'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL', 'SHOT_QUALITY',
-  // Advanced (via Perplexity)
+  // Advanced (via Gemini Grounding)
   'CORSI_FOR_PCT', 'EXPECTED_GOALS', 'PDO', 'HIGH_DANGER_CHANCES',
   // Goaltending
   'GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP',
@@ -140,19 +140,19 @@ const NHL_TOKENS = [
   'FACEOFF_PCT', 'POSSESSION_METRICS',
   // Players
   'TOP_SCORERS', 'TOP_PLAYERS', 'INJURIES', 'LINE_COMBINATIONS',
-  // Historical
-  'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS', 'ATS_TRENDS',
+  // Historical (real game data only - NO betting stats like ATS)
+  'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS',
   // Luck/Regression
   'LUCK_INDICATORS', 'CLOSE_GAME_RECORD', 'OVERTIME_RECORD'
 ];
 
-// EPL Stat Tokens (BETA - uses BDL + Perplexity for advanced analytics)
+// EPL Stat Tokens (BETA - uses BDL + Gemini Grounding for advanced analytics)
 const EPL_TOKENS = [
   // Standings & Records
   'STANDINGS', 'TEAM_RECORD', 'LEAGUE_POSITION', 'HOME_RECORD', 'AWAY_RECORD',
   // Goals & Scoring
   'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'CLEAN_SHEETS',
-  // Advanced Metrics (via Perplexity)
+  // Advanced Metrics (via Gemini Grounding)
   'EXPECTED_GOALS', 'XG_DIFFERENCE', 'XG_OVERPERFORMANCE', 'SHOT_QUALITY',
   // Possession & Passing
   'POSSESSION_PCT', 'PASS_ACCURACY', 'TOUCHES_IN_BOX', 'CROSSES',

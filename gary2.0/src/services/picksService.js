@@ -1008,10 +1008,15 @@ function getNFLWeekStart(date = new Date()) {
 
 /**
  * Get current NFL week number (approximate)
+ * Dynamically calculates based on NFL season start (first week of September)
  */
 function getNFLWeekNumber(date = new Date()) {
-  // NFL 2025 season starts Sep 4, 2025 (Week 1)
-  const seasonStart = new Date('2025-09-01');
+  // Calculate NFL season dynamically: Sep-Dec = current year, Jan-Aug = previous year
+  const month = date.getMonth() + 1;
+  const seasonYear = month >= 9 ? date.getFullYear() : date.getFullYear() - 1;
+  // NFL season typically starts first Thursday after Labor Day (~Sep 5-11)
+  // Use Sep 1 as approximation since exact date varies
+  const seasonStart = new Date(`${seasonYear}-09-01`);
   const diffTime = date.getTime() - seasonStart.getTime();
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   return Math.max(1, Math.min(18, Math.ceil(diffDays / 7)));

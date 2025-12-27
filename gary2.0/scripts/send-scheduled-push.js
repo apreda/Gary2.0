@@ -61,7 +61,6 @@ async function sendPush(title, body, tokens) {
     apns: {
       payload: {
         aps: {
-          alert: { title, body },
           sound: 'default',
         },
       },

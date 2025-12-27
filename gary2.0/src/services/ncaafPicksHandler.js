@@ -2,7 +2,6 @@ import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
-import { perplexityService } from './perplexityService.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 
 const SPORT_KEY = 'americanfootball_ncaaf';
@@ -338,25 +337,9 @@ export async function generateNCAAFPicks(options = {}) {
         home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
         away: Array.isArray(awayTeamStats) ? awayTeamStats : []
       };
-      let richKeyFindings = [];
-      let realTimeNewsText = '';
-      try {
-        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
-        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'ncaaf', dateStr);
-        if (Array.isArray(rich?.key_findings)) {
-          richKeyFindings = rich.key_findings.slice(0, 4);
-        }
-        if (Array.isArray(rich?.key_findings) && rich.key_findings.length > 0) {
-          const toLine = (k) => {
-            const title = k?.title || 'Finding';
-            const rationale = k?.rationale || k?.note || '';
-            return rationale ? `${title}: ${rationale}` : String(title);
-          };
-          realTimeNewsText = rich.key_findings.slice(0, 3).map(toLine).join('\n');
-        } else if (typeof rich?.summary === 'string' && rich.summary.trim().length > 0) {
-          realTimeNewsText = rich.summary.trim();
-        }
-      } catch {}
+      // Rich context now provided by Gemini Grounding in the agentic pipeline
+      const richKeyFindings = [];
+      const realTimeNewsText = '';
       const gameContext = {
         injuries: Array.isArray(injuries) ? injuries : [],
         season,

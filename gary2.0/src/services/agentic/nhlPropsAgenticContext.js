@@ -10,9 +10,9 @@
  * - Recent performance trends
  */
 import { ballDontLieService } from '../ballDontLieService.js';
-import { perplexityService } from '../perplexityService.js';
-import { formatGameTimeEST, buildMarketSnapshot, parseGameDate } from './sharedUtils.js';
-import { fetchGroundedContext } from './scoutReport/scoutReportBuilder.js';
+// All context comes from Gemini 3 Flash with Google Search Grounding
+import { formatGameTimeEST, buildMarketSnapshot, parseGameDate, safeApiCallArray, safeApiCallObject, findBestPlayerMatch, checkDataAvailability } from './sharedUtils.js';
+import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'icehockey_nhl';
 
@@ -49,9 +49,9 @@ function groupPropsByPlayer(props) {
 
 /**
  * Get top prop candidates based on line value and odds quality
- * LIMITED: Only top 5 players per team to reduce API token usage
+ * Returns top N players PER TEAM (so 7 per team = 14 total for a game)
  */
-function getTopPropCandidates(props, maxPlayersPerTeam = 5) {
+function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
   const grouped = groupPropsByPlayer(props);
   
   // Score each player by number of props and odds quality
@@ -72,23 +72,29 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 5) {
   });
   
   // Group by team and take top N from each
+  // Normalize team names to handle variations
   const byTeam = {};
   for (const player of scored) {
-    const team = player.team || 'Unknown';
-    if (!byTeam[team]) byTeam[team] = [];
-    byTeam[team].push(player);
+    const teamRaw = player.team || 'Unknown';
+    const teamKey = teamRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!byTeam[teamKey]) byTeam[teamKey] = { name: teamRaw, players: [] };
+    byTeam[teamKey].players.push(player);
   }
   
-  // Sort each team's players and take top N
+  // Sort each team's players and take top N per team
   const result = [];
-  for (const team of Object.keys(byTeam)) {
-    const teamPlayers = byTeam[team]
+  const teamNames = Object.keys(byTeam);
+  
+  for (const teamKey of teamNames) {
+    const teamData = byTeam[teamKey];
+    const teamPlayers = teamData.players
       .sort((a, b) => b.score - a.score)
       .slice(0, maxPlayersPerTeam);
     result.push(...teamPlayers);
+    console.log(`[NHL Props] Team "${teamData.name}": ${teamPlayers.length} players selected`);
   }
   
-  console.log(`[NHL Props] Filtered to top ${maxPlayersPerTeam} players per team: ${result.length} total candidates`);
+  console.log(`[NHL Props] Total: ${result.length} candidates (${maxPlayersPerTeam} per team x ${teamNames.length} teams)`);
   
   return result.sort((a, b) => b.score - a.score);
 }
@@ -110,79 +116,102 @@ function formatPropsInjuries(injuries = []) {
 }
 
 /**
- * Resolve player IDs from prop data or by searching BDL
- * CRITICAL: Also stores player's actual team to prevent wrong team assignment
+ * Resolve player IDs from prop data by searching BDL by name
+ * CRITICAL: Uses player search (not team roster) because BDL roster endpoint returns stale data
+ * NOTE: BDL /players?team_ids[]=X returns outdated rosters, but /players?search=name returns current teams
  * Returns: { playerName: { id, team } }
  */
 async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, awayTeamName) {
   const playerIdMap = {}; // name -> { id, team }
   
-  // CRITICAL: Do NOT trust pre-populated playerId from Odds API
-  // Always verify against BDL roster to prevent players from other teams slipping through
-  
-  // Get all player names - we'll validate ALL of them against the roster
+  // Get all player names - we'll search each one individually
   const allPlayerNames = propCandidates.map(c => c.player);
   
-  if (allPlayerNames.length > 0 && teamIds.length > 0) {
-    try {
-      // Fetch players for ONLY these two teams - this is our source of truth
-      const playersResponse = await ballDontLieService.getPlayersGeneric(SPORT_KEY, {
-        team_ids: teamIds,
-        seasons: [season],
-        per_page: 100
-      }).catch(() => []);
-      
-      // Build team ID to name mapping
-      const teamIdToName = {};
-      if (teamIds[0]) teamIdToName[teamIds[0]] = homeTeamName;
-      if (teamIds[1]) teamIdToName[teamIds[1]] = awayTeamName;
-      
-      // Build a lookup from BDL roster - these are the ONLY valid players
-      const bdlRoster = new Map();
-      for (const player of playersResponse) {
-        const fullName = player.full_name || `${player.first_name} ${player.last_name}`;
-        const normalizedName = fullName.toLowerCase().trim();
-        const lastName = (player.last_name || '').toLowerCase().trim();
-        const playerTeamId = player.team?.id || player.team_id;
-        const playerTeam = teamIdToName[playerTeamId] || player.team?.full_name || 'Unknown';
+  if (allPlayerNames.length === 0) {
+    return playerIdMap;
+  }
+  
+  // Normalize team names for matching
+  const normalizeTeamName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const homeNorm = normalizeTeamName(homeTeamName);
+  const awayNorm = normalizeTeamName(awayTeamName);
+  const validTeamIds = new Set(teamIds);
+  
+  console.log(`[NHL Props Context] Searching BDL by player name for ${allPlayerNames.length} candidates...`);
+  
+  // Search each player by name (batch in parallel, max 5 concurrent)
+  const batchSize = 5;
+  const invalidPlayers = [];
+  
+  for (let i = 0; i < allPlayerNames.length; i += batchSize) {
+    const batch = allPlayerNames.slice(i, i + batchSize);
+    
+    const searchPromises = batch.map(async (candidateName) => {
+      try {
+        // Extract last name for search (more reliable)
+        const nameParts = candidateName.trim().split(' ');
+        const lastName = nameParts[nameParts.length - 1];
         
-        bdlRoster.set(normalizedName, { id: player.id, team: playerTeam });
-        // Also store by last name for fuzzy matching
-        if (lastName && !bdlRoster.has(lastName)) {
-          bdlRoster.set(lastName, { id: player.id, team: playerTeam });
-        }
-      }
-      
-      // Match prop candidates against BDL roster
-      for (const candidateName of allPlayerNames) {
-        const candidateNormalized = candidateName.toLowerCase().trim();
+        // Search by last name - with logging on failure
+        const searchResults = await safeApiCallArray(
+          () => ballDontLieService.getPlayersGeneric(SPORT_KEY, { search: lastName, per_page: 10 }),
+          `NHL Props: Search player "${candidateName}"`
+        );
         
-        // Try exact match first
-        if (bdlRoster.has(candidateNormalized)) {
-          playerIdMap[candidateNormalized] = bdlRoster.get(candidateNormalized);
-          continue;
+        if (!searchResults || searchResults.length === 0) {
+          return { name: candidateName, found: false };
         }
         
-        // Try substring match against roster
-        for (const [rosterName, playerData] of bdlRoster) {
-          if (rosterName === candidateNormalized ||
-              rosterName.includes(candidateNormalized) ||
-              candidateNormalized.includes(rosterName)) {
-            playerIdMap[candidateNormalized] = playerData;
-            break;
-          }
+        // Find match using fuzzy matching to handle name variations (P.K. vs PK, etc.)
+        const match = findBestPlayerMatch(candidateName, searchResults);
+        
+        if (!match) {
+          return { name: candidateName, found: false };
         }
+        
+        // Check if player is on one of the two teams in this game
+        const playerTeamId = match.team?.id || match.team_id;
+        const playerTeamName = match.team?.full_name || '';
+        const playerTeamNorm = normalizeTeamName(playerTeamName);
+        
+        // Validate team: check team_id match OR team name contains home/away
+        const isOnValidTeam = validTeamIds.has(playerTeamId) ||
+          playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm) ||
+          playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
+        
+        if (isOnValidTeam) {
+          return {
+            name: candidateName,
+            found: true,
+            id: match.id,
+            team: playerTeamName
+          };
+        } else {
+          return { name: candidateName, found: false, wrongTeam: playerTeamName };
+        }
+      } catch (e) {
+        return { name: candidateName, found: false, error: e.message };
       }
-      
-      console.log(`[NHL Props Context] Validated ${Object.keys(playerIdMap).length}/${allPlayerNames.length} players against ${homeTeamName} + ${awayTeamName} roster`);
-      
-      // Log players that aren't on either team (will be filtered out)
-      const invalidPlayers = allPlayerNames.filter(name => !playerIdMap[name.toLowerCase()]);
-      if (invalidPlayers.length > 0) {
-        console.log(`[NHL Props Context] ⚠️ FILTERED OUT ${invalidPlayers.length} players NOT on ${homeTeamName} or ${awayTeamName}: ${invalidPlayers.slice(0, 5).join(', ')}${invalidPlayers.length > 5 ? '...' : ''}`);
+    });
+    
+    const results = await Promise.all(searchPromises);
+    
+    for (const result of results) {
+      if (result.found) {
+        playerIdMap[result.name.toLowerCase()] = { id: result.id, team: result.team };
+      } else {
+        invalidPlayers.push({ name: result.name, reason: result.wrongTeam ? `on ${result.wrongTeam}` : 'not found' });
       }
-    } catch (e) {
-      console.warn('[NHL Props Context] Failed to validate player roster:', e.message);
+    }
+  }
+  
+  console.log(`[NHL Props Context] Validated ${Object.keys(playerIdMap).length}/${allPlayerNames.length} players against ${homeTeamName} + ${awayTeamName}`);
+  
+  // Log players that aren't on either team (will be filtered out)
+  if (invalidPlayers.length > 0) {
+    const filtered = invalidPlayers.filter(p => p.reason !== 'not found');
+    if (filtered.length > 0) {
+      console.log(`[NHL Props Context] ⚠️ FILTERED OUT ${filtered.length} players NOT on ${homeTeamName} or ${awayTeamName}: ${filtered.slice(0, 5).map(p => `${p.name} (${p.reason})`).join(', ')}${filtered.length > 5 ? '...' : ''}`);
     }
   }
   
@@ -240,10 +269,10 @@ async function fetchPlayerGameLogs(playerIdMap) {
 }
 
 /**
- * Process goalie data from BDL and Perplexity
- * BDL provides concrete season stats, Perplexity may have starter confirmations
+ * Process goalie data from BDL and Gemini Grounding
+ * BDL provides concrete season stats, Grounding may have starter confirmations
  * @param {Object} bdlGoalieData - Goalie data from BDL by team ID
- * @param {Object} advancedStats - Perplexity advanced stats (may include goalie_matchup)
+ * @param {Object} advancedStats - Grounding advanced stats (may include goalie_matchup)
  * @param {Object} homeTeam - Home team object from BDL
  * @param {Object} awayTeam - Away team object from BDL
  * @returns {Object} - { home: goalieInfo, away: goalieInfo }
@@ -288,41 +317,41 @@ function processGoalieData(bdlGoalieData, advancedStats, homeTeam, awayTeam) {
     };
   }
 
-  // Enrich with Perplexity data if available (may have starter confirmations)
-  const perplexityGoalies = advancedStats?.goalie_matchup;
-  if (perplexityGoalies) {
-    if (perplexityGoalies.home_starter) {
+  // Enrich with Grounding data if available (may have starter confirmations)
+  const groundingGoalies = advancedStats?.goalie_matchup;
+  if (groundingGoalies) {
+    if (groundingGoalies.home_starter) {
       if (result.home) {
-        // Check if Perplexity names a different starter (confirmed)
-        if (perplexityGoalies.home_starter !== result.home.name) {
-          console.log(`[NHL Props Context] Perplexity indicates different home starter: ${perplexityGoalies.home_starter} vs BDL: ${result.home.name}`);
-          result.home.perplexity_starter = perplexityGoalies.home_starter;
+        // Check if Grounding names a different starter (confirmed)
+        if (groundingGoalies.home_starter !== result.home.name) {
+          console.log(`[NHL Props Context] Grounding indicates different home starter: ${groundingGoalies.home_starter} vs BDL: ${result.home.name}`);
+          result.home.grounding_starter = groundingGoalies.home_starter;
         }
-        result.home.perplexity_sv_pct = perplexityGoalies.home_sv_pct;
-        result.home.isConfirmedStarter = true; // Perplexity usually has day-of info
+        result.home.grounding_sv_pct = groundingGoalies.home_sv_pct;
+        result.home.isConfirmedStarter = true; // Grounding usually has day-of info
       } else {
         result.home = {
-          name: perplexityGoalies.home_starter,
-          source: 'perplexity',
-          save_pct: perplexityGoalies.home_sv_pct,
+          name: groundingGoalies.home_starter,
+          source: 'gemini_grounding',
+          save_pct: groundingGoalies.home_sv_pct,
           isConfirmedStarter: true
         };
       }
     }
 
-    if (perplexityGoalies.away_starter) {
+    if (groundingGoalies.away_starter) {
       if (result.away) {
-        if (perplexityGoalies.away_starter !== result.away.name) {
-          console.log(`[NHL Props Context] Perplexity indicates different away starter: ${perplexityGoalies.away_starter} vs BDL: ${result.away.name}`);
-          result.away.perplexity_starter = perplexityGoalies.away_starter;
+        if (groundingGoalies.away_starter !== result.away.name) {
+          console.log(`[NHL Props Context] Grounding indicates different away starter: ${groundingGoalies.away_starter} vs BDL: ${result.away.name}`);
+          result.away.grounding_starter = groundingGoalies.away_starter;
         }
-        result.away.perplexity_sv_pct = perplexityGoalies.away_sv_pct;
+        result.away.grounding_sv_pct = groundingGoalies.away_sv_pct;
         result.away.isConfirmedStarter = true;
       } else {
         result.away = {
-          name: perplexityGoalies.away_starter,
-          source: 'perplexity',
-          save_pct: perplexityGoalies.away_sv_pct,
+          name: groundingGoalies.away_starter,
+          source: 'gemini_grounding',
+          save_pct: groundingGoalies.away_sv_pct,
           isConfirmedStarter: true
         };
       }
@@ -351,9 +380,12 @@ async function detectBackToBack(teamIds, gameDate) {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().slice(0, 10);
 
-    // Check recent box scores for both teams
+    // Check recent box scores for both teams - with logging on failure
     const recentDates = [yesterdayStr];
-    const boxScores = await ballDontLieService.getNhlRecentBoxScores(recentDates, { team_ids: teamIds }).catch(() => []);
+    const boxScores = await safeApiCallArray(
+      () => ballDontLieService.getNhlRecentBoxScores(recentDates, { team_ids: teamIds }),
+      `NHL Props: B2B detection box scores for ${yesterdayStr}`
+    );
 
     if (boxScores.length > 0) {
       console.log(`[NHL Props Context] Found ${boxScores.length} box scores from yesterday for B2B check`);
@@ -422,7 +454,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
   // Away team section
   statsText += `### ${awayTeam} Players\n`;
   
-  // Team-level context from Perplexity
+  // Team-level context from Gemini Grounding
   if (advancedStats?.away_advanced) {
     const away = advancedStats.away_advanced;
     statsText += `Team: CF% ${away.corsi_for_pct ?? 'N/A'}, xGF% ${away.expected_goals_for_pct ?? 'N/A'}, PDO ${away.pdo ?? 'N/A'}\n`;
@@ -482,7 +514,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
   // Home team section
   statsText += `### ${homeTeam} Players\n`;
   
-  // Team-level context from Perplexity
+  // Team-level context from Gemini Grounding
   if (advancedStats?.home_advanced) {
     const home = advancedStats.home_advanced;
     statsText += `Team: CF% ${home.corsi_for_pct ?? 'N/A'}, xGF% ${home.expected_goals_for_pct ?? 'N/A'}, PDO ${home.pdo ?? 'N/A'}\n`;
@@ -537,7 +569,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
     }
   }
   
-  // Key insights from Perplexity
+  // Key insights from Grounding
   if (advancedStats?.key_analytics_insights?.length > 0) {
     statsText += '\n### Key Insights\n';
     advancedStats.key_analytics_insights.slice(0, 4).forEach((insight, i) => {
@@ -631,18 +663,25 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
   const month = commenceDate.getMonth() + 1;
   const year = commenceDate.getFullYear();
-  const season = month <= 6 ? year - 1 : year;
+  // NHL season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+  const season = month >= 10 ? year : year - 1;
   const dateStr = commenceDate.toISOString().slice(0, 10);
 
   console.log(`[NHL Props Context] Building context for ${game.away_team} @ ${game.home_team} (Season ${season})`);
 
-  // Resolve teams
+  // Resolve teams - with detailed logging if fails
   let homeTeam = null;
   let awayTeam = null;
   try {
     [homeTeam, awayTeam] = await Promise.all([
-      ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team).catch(() => null),
-      ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.away_team).catch(() => null)
+      safeApiCallObject(
+        () => ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team),
+        `NHL Props: Resolve home team "${game.home_team}"`
+      ),
+      safeApiCallObject(
+        () => ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.away_team),
+        `NHL Props: Resolve away team "${game.away_team}"`
+      )
     ]);
   } catch (e) {
     console.warn('[NHL Props Context] Failed to resolve teams:', e.message);
@@ -652,44 +691,61 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
-  // Process prop candidates first - limit to top 5 players per team
-  const propCandidates = getTopPropCandidates(playerProps, 5);
+  // Process prop candidates first - 7 players per team (14 total)
+  const propCandidates = getTopPropCandidates(playerProps, 7);
   
-  // Parallel fetch: injuries, player ID resolution, BDL goalies, Gemini Grounding (PRIMARY)
-  // Note: Gemini Grounding is the PRIMARY source for narrative context. Perplexity removed as backup.
-  const [injuries, playerIdMap, bdlGoalieData, groundedContext] = await Promise.all([
-    // Injuries from BDL
+  // Parallel fetch: injuries, player ID resolution, BDL goalies, COMPREHENSIVE narrative context
+  // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
+  console.log('[NHL Props Context] Fetching injuries, player IDs, goalies, and COMPREHENSIVE narrative...');
+  const [injuries, playerIdMap, bdlGoalieData, comprehensiveNarrative] = await Promise.all([
+    // Injuries from BDL - with logging if fails
     teamIds.length > 0 
-      ? ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5).catch(() => [])
+      ? safeApiCallArray(
+          () => ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5),
+          `NHL Props: Fetch injuries for teams ${teamIds.join(', ')}`
+        )
       : Promise.resolve([]),
     
     // Resolve player IDs from BDL - also validates players are on one of the two teams
     resolvePlayerIds(propCandidates, teamIds, season, game.home_team, game.away_team),
     
-    // Fetch goalies from BDL for both teams
+    // Fetch goalies from BDL for both teams - with logging if fails
     teamIds.length > 0
-      ? ballDontLieService.getNhlTeamGoalies(teamIds, season).catch(e => {
-          console.warn('[NHL Props Context] BDL goalie fetch failed:', e.message);
-          return {};
-        })
+      ? safeApiCallObject(
+          () => ballDontLieService.getNhlTeamGoalies(teamIds, season),
+          `NHL Props: Fetch goalies for teams ${teamIds.join(', ')}`
+        ).then(result => result || {})
       : Promise.resolve({}),
     
-    // NARRATIVE CONTEXT via Gemini Grounding - PRIMARY source for storylines, streaks, player significance
-    // Use Flash model for props to avoid Pro quota issues
-    fetchGroundedContext(game.home_team, game.away_team, 'NHL', dateStr, { useFlash: true }).catch(e => {
-      console.warn('[NHL Props Context] Gemini Grounding failed:', e.message);
+    // COMPREHENSIVE NARRATIVE CONTEXT - Fetches ALL factors UPFRONT:
+    // - Breaking news (last-minute scratches, trades)
+    // - Motivation (revenge games, milestones, contract years)
+    // - Goalie situation (confirmed starters, B2B rest)
+    // - Schedule (B2B fatigue, road trips)
+    // - Player-specific (line changes, hot/cold streaks)
+    // - Team trends (streaks, rivalries)
+    // - Betting signals (line movement, public % - MINOR ONLY)
+    fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NHL', dateStr, { useFlash: true }).catch(e => {
+      console.warn('[NHL Props Context] Comprehensive narrative failed:', e.message);
       return null;
     })
   ]);
   
-  // Advanced stats placeholder (was Perplexity, now skipped - Gemini Grounding provides narrative context)
+  // Advanced stats placeholder (Gemini Grounding provides narrative context)
   const advancedStats = null;
   const richContext = null;
   
-  // Extract narrative context for props (Gemini takes priority, fall back to Perplexity)
-  const narrativeContext = groundedContext?.groundedRaw || null;
+  // Extract narrative context - now includes structured sections
+  const narrativeContext = comprehensiveNarrative?.raw || null;
+  const narrativeSections = comprehensiveNarrative?.sections || {};
   if (narrativeContext) {
-    console.log(`[NHL Props Context] ✓ Got narrative context (${narrativeContext.length} chars) from Gemini Grounding`);
+    console.log(`[NHL Props Context] ✓ Got COMPREHENSIVE narrative context (${narrativeContext.length} chars)`);
+    const foundSections = Object.entries(narrativeSections)
+      .filter(([_, v]) => v && v.length > 10)
+      .map(([k, _]) => k);
+    if (foundSections.length > 0) {
+      console.log(`[NHL Props Context] ✓ Parsed sections: ${foundSections.join(', ')}`);
+    }
   }
 
   // CRITICAL: Filter prop candidates to only include players verified on either team
@@ -708,6 +764,34 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     console.log(`[NHL Props Context] Validated ${validatedCandidates.length}/${propCandidates.length} players (filtered out players not on ${game.away_team} or ${game.home_team})`);
   }
 
+  // CRITICAL: Filter out players who are Doubtful or Day-To-Day to avoid void bets
+  // If a player doesn't play, the bet is voided and we can't replace the pick in time
+  const riskyStatuses = ['doubtful', 'day-to-day', 'day to day', 'questionable'];
+  const injuredPlayerNames = injuries
+    .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase().includes(status)))
+    .map(inj => {
+      const firstName = inj.player?.first_name || inj.first_name || '';
+      const lastName = inj.player?.last_name || inj.last_name || '';
+      return `${firstName} ${lastName}`.trim().toLowerCase();
+    })
+    .filter(name => name.length > 2);
+
+  const availableCandidates = validatedCandidates.filter(c => {
+    const playerNameLower = c.player.toLowerCase();
+    const isRisky = injuredPlayerNames.some(injName => 
+      playerNameLower.includes(injName) || injName.includes(playerNameLower)
+    );
+    if (isRisky) {
+      console.log(`[NHL Props Context] ⚠️ EXCLUDED ${c.player} - Doubtful/Day-To-Day (risk of void bet)`);
+    }
+    return !isRisky;
+  });
+
+  if (availableCandidates.length < validatedCandidates.length) {
+    const excluded = validatedCandidates.length - availableCandidates.length;
+    console.log(`[NHL Props Context] Filtered out ${excluded} Doubtful/Day-To-Day player(s) to avoid void bets`);
+  }
+
   // NOW fetch player season stats AND game logs in parallel (requires player IDs)
   console.log('[NHL Props Context] Fetching BDL player season stats and game logs...');
   const [playerSeasonStats, playerGameLogs] = await Promise.all([
@@ -715,14 +799,14 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     fetchPlayerGameLogs(playerIdMap)
   ]);
   
-  // Log stats coverage (use validated candidates)
+  // Log stats coverage (use available candidates - excludes Doubtful/Day-To-Day)
   const playersWithStats = Object.keys(playerSeasonStats).length;
   const playersWithLogs = Object.keys(playerGameLogs).length;
-  const totalCandidates = validatedCandidates.length;
+  const totalCandidates = availableCandidates.length;
   console.log(`[NHL Props Context] Player stats coverage: ${playersWithStats}/${totalCandidates} players`);
   console.log(`[NHL Props Context] Player game logs coverage: ${playersWithLogs}/${totalCandidates} players`);
 
-  // Process BDL goalie data - prioritize BDL (concrete stats) but include Perplexity for context
+  // Process BDL goalie data - prioritize BDL (concrete stats) but include Grounding for context
   const goalieInfo = processGoalieData(bdlGoalieData, advancedStats, homeTeam, awayTeam);
   if (goalieInfo.home || goalieInfo.away) {
     console.log(`[NHL Props Context] Goalie info: Home=${goalieInfo.home?.name || 'Unknown'} (${goalieInfo.home?.save_pct || 'N/A'} SV%), Away=${goalieInfo.away?.name || 'Unknown'} (${goalieInfo.away?.save_pct || 'N/A'} SV%)`);
@@ -741,12 +825,12 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   );
 
   // Build player stats text with REAL player data and recent form
-  // Build player stats text using validated candidates only
+  // Build player stats text using available candidates only (excludes Doubtful/Day-To-Day)
   const playerStats = buildPlayerStatsText(
     game.home_team,
     game.away_team,
     advancedStats,
-    validatedCandidates,
+    availableCandidates,
     playerSeasonStats,
     playerIdMap,
     richContext,
@@ -756,7 +840,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   // Build token data with enhanced player info and game logs
   const tokenData = buildPropsTokenSlices(
     playerStats,
-    validatedCandidates,
+    availableCandidates,
     formattedInjuries,
     marketSnapshot,
     advancedStats,
@@ -780,8 +864,8 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
       moneyline: marketSnapshot.moneyline
     },
     propCount: playerProps.length,
-    topCandidates: validatedCandidates.map(p => p.player).slice(0, 6),
-    // ENHANCED: Goalie info from BDL + Perplexity
+    topCandidates: availableCandidates.map(p => p.player).slice(0, 6),
+    // ENHANCED: Goalie info from BDL + Grounding
     goalies: {
       home: goalieInfo.home ? {
         name: goalieInfo.home.name,
@@ -814,10 +898,33 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   const advancedSource = advancedStats?._source || 'none';
   const richContextFound = richContext && Object.keys(richContext).length > 0;
   
+  // Check data availability and flag any gaps for Gary
+  const statsCoverage = playersWithStats / totalCandidates;
+  const logsCoverage = playersWithLogs / totalCandidates;
+  const dataGaps = [];
+  
+  if (statsCoverage < 0.7) {
+    dataGaps.push(`⚠️ LOW STATS COVERAGE: Only ${playersWithStats}/${totalCandidates} players have season stats`);
+  }
+  if (logsCoverage < 0.7) {
+    dataGaps.push(`⚠️ LOW GAME LOGS COVERAGE: Only ${playersWithLogs}/${totalCandidates} players have recent game logs`);
+  }
+  if (!narrativeContext) {
+    dataGaps.push(`⚠️ NO NARRATIVE CONTEXT: Gemini Grounding failed - missing goalie confirmations, news, trends`);
+  }
+  if (formattedInjuries.length === 0 && teamIds.length > 0) {
+    dataGaps.push(`⚠️ NO INJURIES RETURNED: BDL may have failed - injury context may be incomplete`);
+  }
+  
+  if (dataGaps.length > 0) {
+    console.warn(`[NHL Props Context] ⚠️ DATA GAPS DETECTED - Gary should proceed with caution:`);
+    dataGaps.forEach(gap => console.warn(`   ${gap}`));
+  }
+  
   console.log(`[NHL Props Context] ✓ Built context:`);
-  console.log(`   - ${validatedCandidates.length} player candidates (verified on team)`);
-  console.log(`   - ${playersWithStats} players with season stats`);
-  console.log(`   - ${playersWithLogs} players with game logs`);
+  console.log(`   - ${availableCandidates.length} player candidates (verified on team, excludes Doubtful/Day-To-Day)`);
+  console.log(`   - ${playersWithStats} players with season stats (${(statsCoverage * 100).toFixed(0)}% coverage)`);
+  console.log(`   - ${playersWithLogs} players with game logs (${(logsCoverage * 100).toFixed(0)}% coverage)`);
   console.log(`   - ${formattedInjuries.length} injuries`);
   console.log(`   - Advanced stats: ${advancedSource}`);
   console.log(`   - Rich context: ${richContextFound}`);
@@ -827,22 +934,42 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     gameSummary,
     tokenData,
     playerProps,
-    propCandidates: validatedCandidates, // Only return validated players on either team
+    propCandidates: availableCandidates, // Only return available players (excludes Doubtful/Day-To-Day)
     playerStats,
     playerSeasonStats,
     playerGameLogs, // Include game logs in return
-    narrativeContext, // CRITICAL: Gemini Grounding context (storylines, player momentum)
+    narrativeContext, // CRITICAL: Full raw narrative from Gemini
+    // NEW: Structured narrative sections for easy access
+    narrativeSections: {
+      breakingNews: narrativeSections.breakingNews || null,   // Last-minute scratches, trade rumors
+      motivation: narrativeSections.motivation || null,       // Revenge games, milestones, contract years
+      schedule: narrativeSections.schedule || null,           // B2B, road trips, rest
+      playerContext: narrativeSections.playerContext || null, // Line changes, hot/cold streaks
+      teamTrends: narrativeSections.teamTrends || null,       // Streaks, rivalries
+      bettingSignals: narrativeSections.bettingSignals || null, // Line movement, public % (MINOR ONLY)
+      goalies: narrativeSections.goalies || null,             // Confirmed starting goalies
+    },
     meta: {
       homeTeam: homeTeam?.full_name || game.home_team,
       awayTeam: awayTeam?.full_name || game.away_team,
       season,
       gameTime: game.commence_time,
       advancedStatsSource: advancedSource,
-      perplexityDataSources: advancedStats?.data_sources || [],
+      groundingDataSources: advancedStats?.data_sources || [],
       keyFindings: richContext?.key_findings || advancedStats?.key_analytics_insights || [],
       playerStatsCoverage: `${playersWithStats}/${totalCandidates}`,
       playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,
-      hasNarrativeContext: !!narrativeContext
+      hasNarrativeContext: !!narrativeContext,
+      narrativeSectionsFetched: Object.keys(narrativeSections).filter(k => narrativeSections[k]?.length > 10),
+      // NEW: Data availability flags for Gary to see
+      dataAvailability: {
+        statsAvailable: playersWithStats > 0,
+        logsAvailable: playersWithLogs > 0,
+        injuriesAvailable: formattedInjuries.length > 0,
+        narrativeAvailable: !!narrativeContext,
+        dataGaps: dataGaps.length > 0 ? dataGaps : null,
+        dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
+      }
     }
   };
 }

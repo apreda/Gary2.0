@@ -1,5 +1,6 @@
 import { ballDontLieService } from '../ballDontLieService.js';
-import { perplexityService } from '../perplexityService.js';
+import { getGroundedRichContext } from './scoutReport/scoutReportBuilder.js';
+// Context sourced from Gemini 3 Flash Grounding
 import { ensureArray } from './agenticUtils.js';
 import {
   resolveTeamByName,
@@ -190,7 +191,10 @@ const aggregateAdvanced = (advList, usageList) => {
 
 export async function buildNbaAgenticContext(game, options = {}) {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
-  const season = commenceDate.getMonth() + 1 <= 6 ? commenceDate.getFullYear() - 1 : commenceDate.getFullYear();
+  // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+  const month = commenceDate.getMonth() + 1;
+  const year = commenceDate.getFullYear();
+  const season = month >= 10 ? year : year - 1;
   const lookbackStart = new Date(commenceDate);
   lookbackStart.setDate(lookbackStart.getDate() - 21);
   const startStr = lookbackStart.toISOString().slice(0, 10);
@@ -360,22 +364,19 @@ export async function buildNbaAgenticContext(game, options = {}) {
   let richContext = null;
   try {
     const dateStr = commenceDate.toISOString().slice(0, 10);
-    console.log('[Agentic][NBA] Fetching Perplexity rich context (venue, tournament, trends)...');
-    richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nba', dateStr);
+    console.log('[Agentic][NBA] Fetching rich context via Gemini Grounding (venue, tournament, trends)...');
+    richContext = await getGroundedRichContext(game.home_team, game.away_team, 'nba', dateStr);
     if (richContext?.venue) {
-      console.log(`[Agentic][NBA] ✓ Venue from Perplexity: ${richContext.venue}`);
+      console.log(`[Agentic][NBA] ✓ Venue from Grounding: ${richContext.venue}`);
     }
-    if (richContext?.tournament_context) {
-      console.log(`[Agentic][NBA] ✓ Tournament context: ${richContext.tournament_context}`);
-    }
-    if (richContext?.is_neutral_site) {
-      console.log(`[Agentic][NBA] ✓ Neutral site game detected`);
+    if (richContext?.gameType && richContext.gameType !== 'Regular Season') {
+      console.log(`[Agentic][NBA] ✓ Game type: ${richContext.gameType}`);
     }
   } catch (error) {
-    console.warn('[Agentic][NBA] Perplexity rich context failed:', error.message);
+    console.warn('[Agentic][NBA] Grounding rich context failed:', error.message);
   }
 
-  // Determine actual game location (use Perplexity venue if available, especially for neutral sites)
+  // Determine actual game location (use Grounding venue if available, especially for neutral sites)
   const isNeutralSite = richContext?.is_neutral_site === true;
   const actualVenue = richContext?.venue || `${homeTeam.city || ''} (${homeTeam.conference} ${homeTeam.division})`;
   const tournamentContext = richContext?.tournament_context || null;

@@ -615,11 +615,12 @@ struct HomeView: View {
     @State private var animateIn = false
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
+    @State private var performanceLoaded = false  // Track if performance data has been fetched
     
-    // Dynamic hero image based on yesterday's performance
+    // Dynamic hero image based on most recent performance
     private var heroImage: String {
         let total = yesterdayRecord.wins + yesterdayRecord.losses
-        guard total > 0 else { return "GaryCoin" } // Default when no data
+        guard total > 0 else { return "GaryCoin" } // Fallback (rarely shown now)
         
         let winRate = Double(yesterdayRecord.wins) / Double(total)
         if winRate >= 0.80 { return "GaryFire" }
@@ -665,14 +666,22 @@ struct HomeView: View {
                     }
                     .padding(.top, 2)
                     
-                    // Hero Image - Dynamic based on Gary's performance
-                    Image(heroImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 262, height: 262)
-                        .shadow(color: heroImageGlow.opacity(0.5), radius: 30)
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 20)
+                    // Hero Image - Dynamic based on Gary's most recent performance
+                    // Only show once performance data is loaded to prevent flash
+                    if performanceLoaded {
+                        Image(heroImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 262, height: 262)
+                            .shadow(color: heroImageGlow.opacity(0.5), radius: 30)
+                            .opacity(animateIn ? 1 : 0)
+                            .offset(y: animateIn ? 0 : 20)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    } else {
+                        // Placeholder while loading - maintains layout
+                        Color.clear
+                            .frame(width: 262, height: 262)
+                    }
                     
                     // Yesterday's Performance Banner (Game Picks only)
                     if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
@@ -800,27 +809,42 @@ struct HomeView: View {
             }
         }
         .task {
-            // Start animation immediately so content is visible
+            // PARALLEL FETCH: Run all independent API calls simultaneously
+            // This reduces load time from ~600ms to ~200ms
+            
+            let date = SupabaseAPI.todayEST()
+            
+            // Start all fetches in parallel using async let
+            async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
+            async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
+            async let picksFetch = SupabaseAPI.fetchAllPicks(date: date)
+            
+            // Wait for performance record first (needed for hero image)
+            if let record = try? await recordFetch {
+                yesterdayRecord = record
+            }
+            
+            // Mark performance as loaded - now safe to show hero image
+            withAnimation(.easeOut(duration: 0.5)) {
+                performanceLoaded = true
+            }
+            
+            // Start main animation after hero image is ready
             withAnimation(.easeOut(duration: 0.8)) {
                 animateIn = true
             }
             
-            // Fetch yesterday's game record for the performance banner
-            if let record = try? await SupabaseAPI.fetchYesterdayGameRecord() {
-                yesterdayRecord = record
-            }
-            
-            // Fetch sport-by-sport breakdown
-            if let breakdown = try? await SupabaseAPI.fetchYesterdayBySport() {
+            // Get the other results (already fetched in parallel, just awaiting)
+            if let breakdown = try? await breakdownFetch {
                 sportBreakdown = breakdown
             }
             
-            // Then load data
+            // Get picks data (already fetched in parallel)
             loading = true
-            let date = SupabaseAPI.todayEST()
-            let allPicks = try? await SupabaseAPI.fetchAllPicks(date: date)
+            let allPicks = try? await picksFetch
             
-            // Filter to only TODAY's games (not tomorrow's NFL, etc.)
+            // Filter to TODAY's games, visible until 3am EST the next day
+            // This matches the GaryPicksView logic for consistency
             let todayOnlyPicks: [GaryPick]? = allPicks?.filter { pick in
                 guard let commenceTime = pick.commence_time else { return true }
                 
@@ -838,12 +862,24 @@ struct HomeView: View {
                 estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
                 let now = Date()
                 let todayStart = estCalendar.startOfDay(for: now)
-                guard let todayEnd = estCalendar.date(byAdding: .day, value: 1, to: todayStart) else {
+                
+                // Calculate 3am EST the next day (the cutoff for "today's" picks)
+                guard let tomorrowEST = estCalendar.date(byAdding: .day, value: 1, to: todayStart),
+                      let cutoffTime = estCalendar.date(bySettingHour: 3, minute: 0, second: 0, of: tomorrowEST) else {
                     return true
                 }
                 
-                // Only include games happening TODAY
-                return gameDate >= todayStart && gameDate < todayEnd
+                // Get the game's date in EST
+                let gameDayEST = estCalendar.startOfDay(for: gameDate)
+                
+                // Show pick if:
+                // 1. Game is today (in EST), OR
+                // 2. We haven't passed 3am EST yet (for late-night viewing of yesterday's picks)
+                let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
+                let isBeforeCutoff = now < cutoffTime
+                let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart)
+                
+                return isGameToday || (isBeforeCutoff && wasGameYesterday)
             }
             
             // Select Top Pick: Check for is_top_pick first, then use thesis-based scoring
@@ -1054,8 +1090,9 @@ struct GaryPicksView: View {
             }
         }
         
-        // Filter out games that have already started (for all sports)
-        let filterPastGames: ([GaryPick]) -> [GaryPick] = { picks in
+        // Show all picks for today until 3am EST the next day (no filtering by game start time)
+        // This matches the web app behavior where users can see all picks for the day
+        let filterToTodaysPicks: ([GaryPick]) -> [GaryPick] = { picks in
             let now = Date()
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -1063,6 +1100,19 @@ struct GaryPicksView: View {
             // Also try without fractional seconds
             let formatterNoFrac = ISO8601DateFormatter()
             formatterNoFrac.formatOptions = [.withInternetDateTime]
+            
+            // Set up EST calendar
+            var estCalendar = Calendar.current
+            estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+            
+            // Get today's date in EST
+            let todayEST = estCalendar.startOfDay(for: now)
+            
+            // Calculate 3am EST the next day (the cutoff for "today's" picks)
+            guard let tomorrowEST = estCalendar.date(byAdding: .day, value: 1, to: todayEST),
+                  let cutoffTime = estCalendar.date(bySettingHour: 3, minute: 0, second: 0, of: tomorrowEST) else {
+                return picks // If we can't calculate, show all picks
+            }
             
             return picks.filter { pick in
                 guard let commenceTime = pick.commence_time else {
@@ -1078,13 +1128,23 @@ struct GaryPicksView: View {
                     return true
                 }
                 
-                // Only show picks for games that haven't started yet
-                return gameDate > now
+                // Get the game's date in EST
+                let gameDayEST = estCalendar.startOfDay(for: gameDate)
+                
+                // Show pick if:
+                // 1. Game is today (in EST), OR
+                // 2. We haven't passed 3am EST yet (for late-night viewing of yesterday's picks)
+                let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
+                let isBeforeCutoff = now < cutoffTime
+                let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayEST) ?? todayEST)
+                
+                // Show if game is today, or if it's before 3am and game was yesterday
+                return isGameToday || (isBeforeCutoff && wasGameYesterday)
             }
         }
         
-        // Apply past games filter to all picks
-        let upcomingPicks = filterPastGames(allPicks)
+        // Apply today's picks filter to all picks
+        let upcomingPicks = filterToTodaysPicks(allPicks)
         
         // For "All" tab: interleave picks by sport (NBA, NFL, NCAAB, NHL, NCAAF, EPL, repeat)
         // This gives users variety as they scroll instead of all picks from one sport first
@@ -5005,7 +5065,8 @@ enum Formatters {
 
 // MARK: - Gary's Fantasy View (DFS Lineups)
 
-struct GaryFantasyView: View {
+// MARK: - Coming Soon View (For App Store Release)
+struct GaryFantasyViewComingSoon: View {
     @State private var animateIn = false
     
     var body: some View {
@@ -5141,8 +5202,8 @@ struct FeaturePreviewRow: View {
     }
 }
 
-// MARK: - Full GaryFantasyView (Hidden for now)
-struct GaryFantasyViewFull: View {
+// MARK: - Gary's Fantasy View (Full DFS Lineups)
+struct GaryFantasyView: View {
     @State private var lineups: [DFSLineup] = []
     @State private var loading = true
     @State private var selectedPlatform: DFSPlatform = .draftkings
@@ -5297,8 +5358,19 @@ struct GaryFantasyViewFull: View {
 struct DFSPlatformToggle: View {
     @Binding var selected: DFSPlatform
     
+    // Official brand colors
+    private let draftKingsGreen = Color(hex: "#53D337") // DraftKings lime green
+    private let fanDuelBlue = Color(hex: "#1493FF")     // FanDuel blue
+    
+    private func brandColor(for platform: DFSPlatform) -> Color {
+        switch platform {
+        case .draftkings: return draftKingsGreen
+        case .fanduel: return fanDuelBlue
+        }
+    }
+    
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             ForEach(DFSPlatform.allCases, id: \.self) { platform in
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -5307,14 +5379,16 @@ struct DFSPlatformToggle: View {
                 } label: {
                     Text(platform.displayName)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(selected == platform ? .white : .secondary)
+                        .foregroundStyle(selected == platform ? brandColor(for: platform) : .secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background {
-                            if selected == platform {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(GaryColors.gold)
-                            }
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(selected == platform ? brandColor(for: platform).opacity(0.15) : Color.clear)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(selected == platform ? brandColor(for: platform).opacity(0.5) : Color.white.opacity(0.1), lineWidth: 0.5)
+                                )
                         }
                 }
                 .buttonStyle(.plain)
@@ -5326,7 +5400,7 @@ struct DFSPlatformToggle: View {
                 .fill(Color(hex: "#1A1A1C"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                 )
         )
     }
@@ -5480,13 +5554,32 @@ struct LineupPositionRow: View {
                         )
                     
                     // Player Info
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        // Player name - clean, no emojis
                         Text(player.player)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                        Text(player.team)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        
+                        // Team + single key badge
+                        HStack(spacing: 6) {
+                            Text(player.team)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            
+                            // Ownership badge (always show if available)
+                            if let ownership = player.ownership {
+                                Text(String(format: "%.0f%% Own", ownership))
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(ownershipColor(ownership))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(ownershipColor(ownership).opacity(0.15))
+                                    )
+                            }
+                        }
                     }
                     
                     Spacer()
@@ -5535,13 +5628,18 @@ struct LineupPositionRow: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             
-                            // Supporting Stats Row
+                            // Supporting Stats Row - Horizontal scrollable
                             if let stats = player.supportingStats, !stats.isEmpty {
-                                HStack(spacing: 8) {
-                                    ForEach(stats) { stat in
-                                        StatBadge(stat: stat, position: player.position)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(stats) { stat in
+                                            StatBadge(stat: stat, position: player.position)
+                                                .fixedSize(horizontal: true, vertical: false)
+                                        }
                                     }
+                                    .fixedSize(horizontal: false, vertical: true)
                                 }
+                                .frame(height: 24) // Fixed height prevents vertical stretching
                             }
                         }
                         .padding(.horizontal, 14)
@@ -5588,6 +5686,17 @@ struct LineupPositionRow: View {
         )
     }
     
+    /// Ownership color: red for chalk (>25%), green for contrarian (<10%), yellow for moderate
+    private func ownershipColor(_ ownership: Double) -> Color {
+        if ownership >= 25 {
+            return Color(hex: "#EF4444") // Red - chalk
+        } else if ownership <= 10 {
+            return Color(hex: "#22C55E") // Green - contrarian
+        } else {
+            return Color(hex: "#FBBF24") // Yellow - moderate
+        }
+    }
+    
     private func positionColor(_ position: String) -> Color {
         switch position {
         case "QB": return Color(hex: "#EF4444") // Red
@@ -5616,33 +5725,47 @@ struct StatBadge: View {
     let stat: DFSStat
     let position: String
     
+    // Use position color for all stats (matches position badge)
     private var badgeColor: Color {
-        switch stat.label {
-        case "Value": return GaryColors.gold
-        case "PPG", "Pass YPG": return Color(hex: "#EF4444")
-        case "RPG", "Rush YPG": return Color(hex: "#22C55E")
-        case "APG", "Rec": return Color(hex: "#3B82F6")
-        case "SPG", "BPG": return Color(hex: "#8B5CF6")
-        case "3PM": return Color(hex: "#F59E0B")
-        default: return Color(hex: "#6B7280")
+        switch position {
+        // NFL positions
+        case "QB": return Color(hex: "#EF4444") // Red
+        case "RB": return Color(hex: "#22C55E") // Green
+        case "WR": return Color(hex: "#3B82F6") // Blue
+        case "TE": return Color(hex: "#F59E0B") // Amber
+        case "FLEX", "FLX": return Color(hex: "#8B5CF6") // Purple
+        case "DST", "DEF": return Color(hex: "#6B7280") // Gray
+        case "K": return Color(hex: "#A855F7") // Purple
+        // NBA positions
+        case "PG": return Color(hex: "#EF4444") // Red
+        case "SG": return Color(hex: "#F59E0B") // Amber
+        case "SF": return Color(hex: "#3B82F6") // Blue
+        case "PF": return Color(hex: "#22C55E") // Green
+        case "C": return Color(hex: "#8B5CF6") // Purple
+        case "G": return Color(hex: "#EC4899") // Pink
+        case "F": return Color(hex: "#14B8A6") // Teal
+        case "UTIL": return GaryColors.gold
+        default: return GaryColors.gold
         }
     }
     
     var body: some View {
-        HStack(spacing: 4) {
+        // Compact horizontal layout: "PPG 30.7" on one line
+        HStack(spacing: 2) {
             Text(stat.label)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(0.7))
             Text(stat.value)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(badgeColor)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
         .background(
             Capsule()
                 .fill(badgeColor.opacity(0.15))
         )
+        .fixedSize() // Prevent wrapping within the badge
     }
 }
 
@@ -5671,18 +5794,7 @@ struct PivotRow: View {
                             .frame(width: 6, height: 6)
                     }
                     
-                    // Tier Badge
-                    Text(tierAbbreviation)
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(tierColor.opacity(0.8))
-                        )
-                    
-                    // Player Info
+                    // Player Info (no tier badge)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(pivot.player)
                             .font(.system(size: 12, weight: .medium))
@@ -5694,15 +5806,16 @@ struct PivotRow: View {
                     
                     Spacer()
                     
-                    // Salary Difference (color-coded text, no box)
+                    // Salary Difference - arrow color shows save (green) vs cost (red)
                     if let diff = pivot.salaryDiff, diff != 0 {
                         HStack(spacing: 3) {
                             Image(systemName: diff < 0 ? "arrow.down" : "arrow.up")
                                 .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(diff < 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
                             Text(pivot.salaryDiffFormatted)
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
                         }
-                        .foregroundStyle(diff < 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
                     }
                     
                     // Salary

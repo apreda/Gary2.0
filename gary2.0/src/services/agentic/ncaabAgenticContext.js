@@ -1,5 +1,6 @@
 import { ballDontLieService } from '../ballDontLieService.js';
-import { perplexityService } from '../perplexityService.js';
+import { getGroundedRichContext } from './scoutReport/scoutReportBuilder.js';
+// Context sourced from Gemini 3 Flash Grounding
 import { formatGameTimeEST, buildMarketSnapshot, calcRestInfo, calcRecentForm, parseGameDate } from './sharedUtils.js';
 
 const SPORT_KEY = 'basketball_ncaab';
@@ -352,7 +353,10 @@ const buildTeamProfile = (seasonRows = [], standingsRow = null) => {
 
 export async function buildNcaabAgenticContext(game, options = {}) {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
-  const season = commenceDate.getMonth() + 1 <= 4 ? commenceDate.getFullYear() - 1 : commenceDate.getFullYear();
+  // NCAAB season starts in November: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+  const month = commenceDate.getMonth() + 1;
+  const year = commenceDate.getFullYear();
+  const season = month >= 10 ? year : year - 1;
 
   const homeTeam = await ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team);
   const awayTeam = await ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.away_team);
@@ -437,9 +441,9 @@ export async function buildNcaabAgenticContext(game, options = {}) {
   let richContext = null;
   try {
     const dateStr = commenceDate.toISOString().slice(0, 10);
-    richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'ncaab', dateStr);
+    richContext = await getGroundedRichContext(game.home_team, game.away_team, 'ncaab', dateStr);
   } catch (error) {
-    console.warn('[Agentic][NCAAB] Perplexity context failed:', error.message);
+    console.warn('[Agentic][NCAAB] Grounding context failed:', error.message);
   }
 
   const tokenData = {

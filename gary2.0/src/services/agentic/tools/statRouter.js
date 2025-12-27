@@ -3,11 +3,26 @@
  * 
  * Maps stat tokens to actual Ball Don't Lie API calls.
  * Uses BDL Season Averages (Advanced) for NBA efficiency stats.
- * Uses Perplexity for QB weather performance history.
+ * Uses Gemini Grounding for live context (QB weather history, etc.)
  */
 
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { perplexityService } from '../../perplexityService.js';
+import { geminiGroundingSearch, getGroundedWeather } from '../scoutReport/scoutReportBuilder.js';
+import { isGameCompleted, formatStatValue, safeStatValue } from '../sharedUtils.js';
+
+/**
+ * Generate dynamic season string for Gemini Grounding queries
+ * Returns format like "2025-26" for academic year sports (college, NBA, NHL)
+ * @returns {string} - Season string like "2025-26"
+ */
+function getCurrentSeasonString() {
+  const month = new Date().getMonth() + 1; // 1-indexed
+  const year = new Date().getFullYear();
+  // Academic year: Aug-Dec = year-(year+1), Jan-Jul = (year-1)-year
+  const startYear = month >= 8 ? year : year - 1;
+  const endYear = startYear + 1;
+  return `${startYear}-${String(endYear).slice(-2)}`;
+}
 
 // BDL API key for direct calls
 const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY;
@@ -15,22 +30,20 @@ const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY;
 /**
  * Main router function - fetches stats based on token
  */
-// Perplexity-only tokens that don't need BDL team lookup
-// NOTE: NCAAF advanced tokens REMOVED - Perplexity has auth issues and Gemini Grounding
-// in the Scout Report provides better live context for NCAAF (coaching changes, portal, injuries)
-const PERPLEXITY_ONLY_TOKENS = [
-  // NCAAF tokens removed - rely on Gemini Grounding in Scout Report instead
+// Tokens that use Gemini Grounding for data (not BDL)
+const GROUNDING_ONLY_TOKENS = [
+  // These tokens rely on Gemini Grounding in Scout Report
 ];
 
-// Tokens that should return N/A immediately (Perplexity-dependent and broken)
+// Tokens that should return N/A immediately (deprecated)
 // Gemini Grounding in Scout Report provides this context instead
-const DEPRECATED_PERPLEXITY_TOKENS = [
-  // NCAAF Perplexity tokens - use Gemini Grounding instead
+const DEPRECATED_TOKENS = [
+  // NCAAF tokens - use Gemini Grounding instead
   'NCAAF_SP_PLUS', 'NCAAF_FPI', 'NCAAF_EPA_ADVANCED', 'NCAAF_HAVOC_RATE',
   'NCAAF_EXPLOSIVENESS', 'NCAAF_RUSHING_EFFICIENCY', 'NCAAF_PASSING_EFFICIENCY',
   'NCAAF_RED_ZONE', 'NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH',
   'NCAAF_VS_POWER_OPPONENTS', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED',
-  // NCAAB Perplexity tokens - use Gemini Grounding instead
+  // NCAAB tokens - use Gemini Grounding instead
   'NCAAB_KENPOM_RATINGS',
   'NCAAB_NET_RANKING',
   'NCAAB_STRENGTH_OF_SCHEDULE',
@@ -39,16 +52,36 @@ const DEPRECATED_PERPLEXITY_TOKENS = [
 
 export async function fetchStats(sport, token, homeTeam, awayTeam, options = {}) {
   const bdlSport = sportToBdlKey(sport);
-  const season = options.season || 2025;
+  // Calculate current season dynamically based on sport
+  const currentMonth = new Date().getMonth() + 1; // 1-indexed
+  const currentYear = new Date().getFullYear();
+  
+  // Sport-specific season logic:
+  // NBA/NHL: Season starts October (month 10) - Oct-Dec=currentYear, Jan-Sep=previousYear
+  // NFL/NCAAF: Season starts August (month 8) - Aug-Dec=currentYear, Jan-Jul=previousYear
+  // MLB: Season April-Oct - if month 1-3, use previousYear
+  let defaultSeason;
+  const normalizedSportForSeason = (sport || '').toLowerCase();
+  if (normalizedSportForSeason.includes('nba') || normalizedSportForSeason.includes('nhl')) {
+    defaultSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
+  } else if (normalizedSportForSeason.includes('nfl') || normalizedSportForSeason.includes('ncaaf')) {
+    defaultSeason = currentMonth <= 7 ? currentYear - 1 : currentYear;
+  } else if (normalizedSportForSeason.includes('mlb')) {
+    defaultSeason = currentMonth <= 3 ? currentYear - 1 : currentYear;
+  } else {
+    // Default fallback for other sports (EPL, etc.) - calendar year
+    defaultSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
+  }
+  const season = options.season || defaultSeason;
   const normalizedSport = normalizeSportName(sport);
   
   console.log(`[Stat Router] Fetching ${token} for ${awayTeam} @ ${homeTeam} (${sport})`);
   
-  // Check for deprecated Perplexity tokens - return N/A immediately
-  // These rely on Perplexity which has auth issues; Gemini Grounding in Scout Report provides context instead
+  // Check for deprecated tokens - return N/A immediately
+  // Gemini Grounding in Scout Report provides this context instead
   const sportSpecificToken = `${normalizedSport}_${token}`;
-  if (DEPRECATED_PERPLEXITY_TOKENS.includes(token) || DEPRECATED_PERPLEXITY_TOKENS.includes(sportSpecificToken)) {
-    console.log(`[Stat Router] Skipping ${token} - deprecated Perplexity token, using Gemini Grounding context instead`);
+  if (DEPRECATED_TOKENS.includes(token) || DEPRECATED_TOKENS.includes(sportSpecificToken)) {
+    console.log(`[Stat Router] Skipping ${token} - deprecated token, using Gemini Grounding context instead`);
     return { 
       token, 
       sport, 
@@ -72,12 +105,12 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
       return { error: `Unknown stat token: ${token}`, token };
     }
     
-    // Check if this is a Perplexity-only token (no BDL team lookup needed)
-    const isPerplexityOnly = PERPLEXITY_ONLY_TOKENS.includes(token) || 
-                           PERPLEXITY_ONLY_TOKENS.includes(sportSpecificToken);
+    // Check if this is a Grounding-only token (no BDL team lookup needed)
+    const isGroundingOnly = GROUNDING_ONLY_TOKENS.includes(token) || 
+                           GROUNDING_ONLY_TOKENS.includes(sportSpecificToken);
     
-    if (isPerplexityOnly) {
-      console.log(`[Stat Router] Using Perplexity-only fetcher (no BDL lookup): ${token}`);
+    if (isGroundingOnly) {
+      console.log(`[Stat Router] Using Grounding-only fetcher (no BDL lookup): ${token}`);
       // Create mock team objects with just the names
       const home = { full_name: homeTeam, name: homeTeam };
       const away = { full_name: awayTeam, name: awayTeam };
@@ -143,7 +176,14 @@ function normalizeSportName(sport) {
  * Fetch NBA team advanced stats via BDL Season Averages endpoint
  * Returns aggregated team stats from their top players
  */
-async function fetchNBATeamAdvancedStats(teamId, season = 2024) {
+async function fetchNBATeamAdvancedStats(teamId, season = null) {
+  // Calculate dynamic default season: NBA starts in October
+  if (!season) {
+    const month = new Date().getMonth() + 1;
+    const year = new Date().getFullYear();
+    // Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    season = month >= 10 ? year : year - 1;
+  }
   try {
     // Get active players for team
     const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=10`;
@@ -153,8 +193,8 @@ async function fetchNBATeamAdvancedStats(teamId, season = 2024) {
     
     if (players.length === 0) return null;
     
-    // Get season averages (advanced) for top 5 players
-    const topPlayerIds = players.slice(0, 5).map(p => p.id);
+    // Get season averages (advanced) for top 10 players (increased from 5 to capture key rotation players)
+    const topPlayerIds = players.slice(0, 10).map(p => p.id);
     const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
     const seasonAvgUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=advanced&${playerIdParams}`;
     
@@ -212,7 +252,14 @@ async function fetchNBATeamAdvancedStats(teamId, season = 2024) {
 /**
  * Fetch NBA Leaders for a stat type
  */
-async function fetchNBALeaders(statType, season = 2024) {
+async function fetchNBALeaders(statType, season = null) {
+  // Calculate dynamic default season: NBA starts in October
+  if (!season) {
+    const month = new Date().getMonth() + 1;
+    const year = new Date().getFullYear();
+    // Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    season = month >= 10 ? year : year - 1;
+  }
   try {
     const url = `https://api.balldontlie.io/v1/leaders?stat_type=${statType}&season=${season}`;
     const resp = await fetch(url, { headers: { Authorization: BDL_API_KEY } });
@@ -232,7 +279,14 @@ async function fetchNBALeaders(statType, season = 2024) {
  * - general/base: pts, reb, ast, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct, ftm, fta, ft_pct, oreb, dreb, tov
  * - general/advanced: off_rating, def_rating, net_rating, efg_pct, pace, ts_pct
  */
-async function fetchNBATeamBaseStats(teamId, season = 2024) {
+async function fetchNBATeamBaseStats(teamId, season = null) {
+  // Calculate dynamic default season: NBA starts in October
+  if (!season) {
+    const month = new Date().getMonth() + 1;
+    const year = new Date().getFullYear();
+    // Oct(10)-Dec = currentYear, Jan-Sep = previousYear
+    season = month >= 10 ? year : year - 1;
+  }
   try {
     // Get active players for team (get more players for better aggregation)
     const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=15`;
@@ -437,6 +491,86 @@ function fmtPct(val) {
   if (val === null || val === undefined || isNaN(val)) return 'N/A';
   const pct = val <= 1 ? val * 100 : val;
   return `${pct.toFixed(1)}%`;
+}
+
+/**
+ * NCAAF Red Zone Stats via Gemini Grounding
+ * BDL doesn't provide NCAAF red zone data, so we fetch from live search
+ */
+async function fetchNCAAFRedZoneFromGrounding(homeTeam, awayTeam) {
+  try {
+    const seasonString = getCurrentSeasonString();
+    const query = `What are the 2025 college football season red zone statistics for ${homeTeam} and ${awayTeam}?
+
+For EACH team, provide:
+1. Red Zone TD Percentage (touchdowns scored when inside opponent's 20-yard line)
+2. Red Zone Scoring Percentage (any points scored in red zone - TDs + FGs)
+3. Number of red zone trips/attempts if available
+
+Be specific with actual percentages (e.g., "85.7%"). If exact stats unavailable, provide team's general scoring efficiency context.
+Focus on the ${seasonString} season only - do NOT use stats from previous years.`;
+
+    const result = await geminiGroundingSearch(query, { temperature: 0.1, maxTokens: 600 });
+    
+    if (result?.success && result?.data) {
+      const responseText = result.data;
+      
+      // Parse red zone percentages from response
+      const parseRZStats = (teamName, text) => {
+        // Look for patterns like "85.7%" or "85%" near the team name
+        const teamSection = text.toLowerCase().includes(teamName.toLowerCase().split(' ')[0]) 
+          ? text : text;
+        
+        // Try to find percentage patterns
+        const pctMatch = teamSection.match(/(\d{1,2}(?:\.\d)?)\s*%/);
+        const tdPct = pctMatch ? `${pctMatch[1]}%` : 'N/A';
+        
+        return {
+          red_zone_td_pct: tdPct,
+          context: responseText.substring(0, 300)
+        };
+      };
+      
+      const homeStats = parseRZStats(homeTeam, responseText);
+      const awayStats = parseRZStats(awayTeam, responseText);
+      
+      console.log(`[Stat Router] ✅ NCAAF Red Zone from Grounding: ${homeTeam} (${homeStats.red_zone_td_pct}), ${awayTeam} (${awayStats.red_zone_td_pct})`);
+      
+      return {
+        category: 'Red Zone Efficiency (via Live Search)',
+        source: 'Gemini Grounding',
+        home: {
+          team: homeTeam,
+          red_zone_td_pct: homeStats.red_zone_td_pct,
+          note: 'From live search - verify in Scout Report context'
+        },
+        away: {
+          team: awayTeam,
+          red_zone_td_pct: awayStats.red_zone_td_pct,
+          note: 'From live search - verify in Scout Report context'
+        },
+        raw_context: responseText.substring(0, 500),
+        note: 'NCAAF red zone stats via Gemini Grounding (BDL does not provide this data)'
+      };
+    }
+    
+    // Grounding failed - return N/A with context
+    return {
+      category: 'Red Zone Efficiency',
+      home: { team: homeTeam, red_zone_td_pct: 'N/A' },
+      away: { team: awayTeam, red_zone_td_pct: 'N/A' },
+      note: 'NCAAF red zone data unavailable - use scoring efficiency and total TDs as proxy'
+    };
+    
+  } catch (e) {
+    console.warn(`[Stat Router] NCAAF Red Zone Grounding failed:`, e.message);
+    return {
+      category: 'Red Zone Efficiency',
+      home: { team: homeTeam, red_zone_td_pct: 'N/A' },
+      away: { team: awayTeam, red_zone_td_pct: 'N/A' },
+      note: 'NCAAF red zone data unavailable - use scoring efficiency and total TDs as proxy'
+    };
+  }
 }
 
 // =============================================================================
@@ -1309,17 +1443,17 @@ const FETCHERS = {
     };
   },
 
-  // ===== NCAAB PERPLEXITY-BASED ADVANCED STATS =====
-  // These use Perplexity to fetch advanced analytics not available in BDL
+  // ===== NCAAB GROUNDING-BASED ADVANCED STATS =====
+  // These use Gemini Grounding to fetch advanced analytics not available in BDL
   
   NCAAB_KENPOM_RATINGS: async (bdlSport, home, away, season) => {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching KenPom ratings for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching KenPom ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current KenPom ratings for ${homeTeamName} and ${awayTeamName} college basketball teams for the 2024-25 season? Include:
+      const query = `What are the current KenPom ratings for ${homeTeamName} and ${awayTeamName} college basketball teams for the ${getCurrentSeasonString()} season? Include:
         - KenPom ranking
         - Adjusted Efficiency Margin (AdjEM)
         - Adjusted Offensive Efficiency (AdjO)
@@ -1328,10 +1462,9 @@ const FETCHERS = {
         
         Provide the exact numbers from kenpom.com. Format as structured data.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 800,
+        maxTokens: 1500,
         systemMessage: 'You are a college basketball analytics expert. Provide accurate KenPom statistics from the current season. Return data in a structured format with exact numbers.'
       });
       
@@ -1359,7 +1492,7 @@ const FETCHERS = {
       
       return {
         category: 'KenPom Ratings',
-        source: 'kenpom.com via Perplexity',
+        source: 'kenpom.com via Gemini Grounding',
         home: {
           team: homeTeamName,
           ...extractKenpomData(content, homeTeamName)
@@ -1368,7 +1501,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractKenpomData(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] KenPom fetch failed:', error.message);
@@ -1386,14 +1519,13 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching NET rankings for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching NET rankings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
       const query = `What are the current NCAA NET rankings for ${homeTeamName} and ${awayTeamName} college basketball teams? Include their NET ranking number and any Quad 1/2/3/4 record information. NET rankings are from ncaa.com and used for NCAA tournament selection.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 600,
+        maxTokens: 1500,
         systemMessage: 'You are a college basketball expert. Provide accurate NET rankings and Quad records from the current season.'
       });
       
@@ -1408,7 +1540,7 @@ const FETCHERS = {
       
       return {
         category: 'NET Ranking',
-        source: 'NCAA via Perplexity',
+        source: 'NCAA via Gemini Grounding',
         home: {
           team: homeTeamName,
           net_rank: extractNetRank(content, homeTeamName)
@@ -1417,7 +1549,7 @@ const FETCHERS = {
           team: awayTeamName,
           net_rank: extractNetRank(content, awayTeamName)
         },
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] NET Ranking fetch failed:', error.message);
@@ -1435,14 +1567,13 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching Strength of Schedule for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching Strength of Schedule for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What is the current strength of schedule (SOS) ranking for ${homeTeamName} and ${awayTeamName} college basketball teams in the 2024-25 season? Include their SOS rank and any notable wins or losses against ranked teams.`;
+      const query = `What is the current strength of schedule (SOS) ranking for ${homeTeamName} and ${awayTeamName} college basketball teams in the ${getCurrentSeasonString()} season? Include their SOS rank and any notable wins or losses against ranked teams.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 600,
+        maxTokens: 1500,
         systemMessage: 'You are a college basketball analytics expert. Provide strength of schedule information.'
       });
       
@@ -1457,7 +1588,7 @@ const FETCHERS = {
       
       return {
         category: 'Strength of Schedule',
-        source: 'Multiple sources via Perplexity',
+        source: 'Multiple sources via Gemini Grounding',
         home: {
           team: homeTeamName,
           sos_rank: extractSOS(content, homeTeamName)
@@ -1466,7 +1597,7 @@ const FETCHERS = {
           team: awayTeamName,
           sos_rank: extractSOS(content, awayTeamName)
         },
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] SOS fetch failed:', error.message);
@@ -1484,14 +1615,13 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching Quad records for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching Quad records for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current Quad 1, Quad 2, Quad 3, and Quad 4 records for ${homeTeamName} and ${awayTeamName} college basketball teams in the 2024-25 season? Quad records are based on opponent NET ranking and game location (home/away/neutral). Format as wins-losses for each quad.`;
+      const query = `What are the current Quad 1, Quad 2, Quad 3, and Quad 4 records for ${homeTeamName} and ${awayTeamName} college basketball teams in the ${getCurrentSeasonString()} season? Quad records are based on opponent NET ranking and game location (home/away/neutral). Format as wins-losses for each quad.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 700,
+        maxTokens: 1500,
         systemMessage: 'You are a college basketball expert specializing in NCAA tournament metrics. Provide accurate Quad records.'
       });
       
@@ -1514,7 +1644,7 @@ const FETCHERS = {
       
       return {
         category: 'Quad Record (NCAA Tournament Metrics)',
-        source: 'NCAA via Perplexity',
+        source: 'NCAA via Gemini Grounding',
         home: {
           team: homeTeamName,
           ...extractQuads(content, homeTeamName)
@@ -1523,7 +1653,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractQuads(content, awayTeamName)
         },
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Quad Record fetch failed:', error.message);
@@ -1770,7 +1900,7 @@ const FETCHERS = {
     }
   },
 
-  // ===== LEGACY NCAAF TOKENS (Perplexity-based - DEPRECATED due to 401 errors) =====
+  // ===== LEGACY NCAAF TOKENS (DEPRECATED) =====
   // These are kept for backwards compatibility but return N/A
   // Advanced analytics are now provided via Gemini Grounding in Scout Report
   
@@ -1779,9 +1909,9 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching NCAAF SOS for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching NCAAF SOS for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current Strength of Schedule (SOS) rankings for ${homeTeamName} and ${awayTeamName} college football teams in the 2024-25 season? 
+      const query = `What are the current Strength of Schedule (SOS) rankings for ${homeTeamName} and ${awayTeamName} college football teams in the ${getCurrentSeasonString()} season? 
       
       For each team provide:
       1. SOS ranking (out of 134 FBS teams)
@@ -1792,10 +1922,9 @@ const FETCHERS = {
       
       SOS data sources include ESPN FPI, Sagarin, and NCAA official rankings.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 800,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Provide accurate Strength of Schedule data. Be specific about Power 4 vs Group of 5 opponent breakdowns.'
       });
       
@@ -1820,7 +1949,7 @@ const FETCHERS = {
       
       return {
         category: 'Strength of Schedule (CFP Context)',
-        source: 'ESPN FPI, Sagarin via Perplexity',
+        source: 'ESPN FPI, Sagarin via Gemini Grounding',
         home: {
           team: homeTeamName,
           ...extractSOS(content, homeTeamName)
@@ -1829,7 +1958,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractSOS(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAF SOS fetch failed:', error.message);
@@ -1847,7 +1976,7 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching Opponent-Adjusted Ratings for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching Opponent-Adjusted Ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
       const query = `What are the current opponent-adjusted ratings for ${homeTeamName} and ${awayTeamName} college football teams? 
       
@@ -1860,10 +1989,9 @@ const FETCHERS = {
       
       These opponent-adjusted metrics account for quality of competition and are critical for CFP analysis.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 900,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert specializing in advanced metrics. Provide accurate opponent-adjusted ratings. FPI, SP+, and EPA are opponent-adjusted metrics that are more predictive than raw stats.'
       });
       
@@ -1889,7 +2017,7 @@ const FETCHERS = {
       
       return {
         category: 'Opponent-Adjusted Ratings (FPI/SP+)',
-        source: 'ESPN FPI, SP+ via Perplexity',
+        source: 'ESPN FPI, SP+ via Gemini Grounding',
         note: 'These metrics adjust for opponent quality - critical for P4 vs G5 matchups',
         home: {
           team: homeTeamName,
@@ -1899,7 +2027,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractRatings(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Opponent-Adjusted Ratings fetch failed:', error.message);
@@ -1917,7 +2045,7 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching Conference Strength for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching Conference Strength for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
       const query = `Provide conference context for ${homeTeamName} vs ${awayTeamName} college football matchup:
       
@@ -1931,10 +2059,9 @@ const FETCHERS = {
       
       CRITICAL: This is essential for CFP analysis where Power 4 vs Group of 5 matchups have different talent levels.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 800,
+        maxTokens: 1500,
         systemMessage: 'You are a college football expert. Provide detailed conference context. Clearly distinguish between Power 4 and Group of 5 conferences.'
       });
       
@@ -1956,7 +2083,7 @@ const FETCHERS = {
       
       return {
         category: 'Conference Strength Analysis',
-        source: 'Multiple sources via Perplexity',
+        source: 'Multiple sources via Gemini Grounding',
         cfp_note: 'Power 4 conferences have significantly higher average talent composites',
         home: {
           team: homeTeamName,
@@ -1966,7 +2093,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractConfData(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Conference Strength fetch failed:', error.message);
@@ -1984,7 +2111,7 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching vs Power Opponents data for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching vs Power Opponents data for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
       const query = `How have ${homeTeamName} and ${awayTeamName} performed against Power 4 (Big Ten, SEC, ACC, Big 12) opponents this season?
       
@@ -1998,10 +2125,9 @@ const FETCHERS = {
       
       If a team hasn't played Power 4 opponents, note this as "NO P4 GAMES" - this is a major red flag for CFP analysis.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 800,
+        maxTokens: 1500,
         systemMessage: 'You are a college football expert. Focus on performance against Power 4 teams. If a team has zero P4 games, emphasize this limitation.'
       });
       
@@ -2024,7 +2150,7 @@ const FETCHERS = {
       
       return {
         category: 'Performance vs Power 4 Opponents',
-        source: 'Perplexity analysis',
+        source: 'Gemini Grounding analysis',
         cfp_note: 'This is the most predictive metric for CFP games - G5 teams often struggle vs P4 talent',
         home: {
           team: homeTeamName,
@@ -2034,7 +2160,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractP4Data(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] vs Power Opponents fetch failed:', error.message);
@@ -2066,10 +2192,9 @@ const FETCHERS = {
       
       Travel fatigue is a real factor - teams crossing 2+ time zones historically underperform by 2-3 points.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 600,
+        maxTokens: 1500,
         systemMessage: 'You are a sports analyst. Provide travel and rest analysis for college football games.'
       });
       
@@ -2082,12 +2207,12 @@ const FETCHERS = {
       
       return {
         category: 'Travel & Fatigue Analysis',
-        source: 'Perplexity analysis',
+        source: 'Gemini Grounding analysis',
         betting_note: 'Teams crossing 2+ time zones historically underperform by 2-3 points ATS',
         distance_miles: distanceMatch ? distanceMatch[1].replace(',', '') : 'N/A',
         time_zones_crossed: timeZonesMatch ? timeZonesMatch[1] : 'N/A',
         away_road_record: roadRecordMatch ? roadRecordMatch[1] : 'N/A',
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Travel Fatigue fetch failed:', error.message);
@@ -2098,16 +2223,16 @@ const FETCHERS = {
     }
   },
 
-  // ===== NCAAF ADVANCED ANALYTICS (Perplexity-based since BDL lacks these) =====
+  // ===== NCAAF ADVANCED ANALYTICS (via Gemini Grounding since BDL lacks these) =====
   
   NCAAF_SP_PLUS: async (bdlSport, home, away, season) => {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
       
-      console.log(`[Stat Router] Fetching SP+ ratings for ${awayTeamName} @ ${homeTeamName} via Perplexity`);
+      console.log(`[Stat Router] Fetching SP+ ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current SP+ ratings (Bill Connelly's efficiency metric) for ${homeTeamName} and ${awayTeamName} college football teams for the 2025 season?
+      const query = `What are the current SP+ ratings (Bill Connelly's efficiency metric) for ${homeTeamName} and ${awayTeamName} college football teams for the ${getCurrentSeasonString()} season?
       
       For each team provide:
       1. Overall SP+ rating
@@ -2118,10 +2243,9 @@ const FETCHERS = {
       
       SP+ is the gold standard for predicting college football outcomes.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 700,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Provide SP+ ratings from Bill Connelly. Be specific with numbers and rankings.'
       });
       
@@ -2144,7 +2268,7 @@ const FETCHERS = {
       
       return {
         category: 'SP+ Ratings (Opponent-Adjusted Efficiency)',
-        source: 'Perplexity/ESPN SP+',
+        source: 'ESPN SP+ via Gemini Grounding',
         note: 'SP+ accounts for opponent strength and is more predictive than raw stats',
         home: {
           team: homeTeamName,
@@ -2154,7 +2278,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractSPPlus(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] SP+ fetch failed:', error.message);
@@ -2186,10 +2310,9 @@ const FETCHERS = {
       
       FPI is ESPN's predictive rating system.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 700,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Provide ESPN FPI data with specific numbers.'
       });
       
@@ -2212,7 +2335,7 @@ const FETCHERS = {
       
       return {
         category: 'ESPN FPI (Football Power Index)',
-        source: 'Perplexity/ESPN',
+        source: 'ESPN via Gemini Grounding',
         predicted_spread: spreadMatch ? spreadMatch[1] : 'N/A',
         home: {
           team: homeTeamName,
@@ -2222,7 +2345,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractFPI(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] FPI fetch failed:', error.message);
@@ -2254,10 +2377,9 @@ const FETCHERS = {
       
       EPA measures how much each play increases or decreases a team's expected points.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 700,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. EPA is a critical advanced metric. Provide specific numbers.'
       });
       
@@ -2278,7 +2400,7 @@ const FETCHERS = {
       
       return {
         category: 'EPA (Expected Points Added)',
-        source: 'Perplexity',
+        source: 'Gemini Grounding',
         note: 'EPA measures efficiency better than yards. Positive = good offense, negative = good defense',
         home: {
           team: homeTeamName,
@@ -2288,7 +2410,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractEPA(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] EPA fetch failed:', error.message);
@@ -2322,10 +2444,9 @@ const FETCHERS = {
       
       High havoc teams can upset better opponents through disruption.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 700,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Havoc rate is crucial for upset potential. Provide specific numbers.'
       });
       
@@ -2349,7 +2470,7 @@ const FETCHERS = {
       
       return {
         category: 'Havoc Rate & Disruption',
-        source: 'Perplexity',
+        source: 'Gemini Grounding',
         note: 'High havoc teams create chaos - critical for G5 teams vs P4 opponents',
         home: {
           team: homeTeamName,
@@ -2359,7 +2480,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractHavoc(content, awayTeamName)
         },
-        raw_response: content.substring(0, 500)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Havoc Rate fetch failed:', error.message);
@@ -2391,10 +2512,9 @@ const FETCHERS = {
       
       Explosiveness indicates "home run" potential - G5 teams often can't match P4 depth.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 600,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Big play ability is a key separator in talent mismatches.'
       });
       
@@ -2414,7 +2534,7 @@ const FETCHERS = {
       
       return {
         category: 'Explosiveness & Big Play Potential',
-        source: 'Perplexity',
+        source: 'Gemini Grounding',
         note: 'Big play ability separates P4 depth from G5 - expect Oregon to hit more explosive plays',
         home: {
           team: homeTeamName,
@@ -2424,7 +2544,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractExplosive(content, awayTeamName)
         },
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Explosiveness fetch failed:', error.message);
@@ -2457,10 +2577,9 @@ const FETCHERS = {
       
       Running the ball effectively controls the clock and is crucial in playoff games.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 600,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Rushing efficiency is key in bowl games.'
       });
       
@@ -2481,7 +2600,7 @@ const FETCHERS = {
       
       return {
         category: 'Rushing Efficiency',
-        source: 'Perplexity',
+        source: 'Gemini Grounding',
         note: 'Controlling the line of scrimmage is critical in CFP games',
         home: {
           team: homeTeamName,
@@ -2491,7 +2610,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractRush(content, awayTeamName)
         },
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Rushing Efficiency fetch failed:', error.message);
@@ -2524,10 +2643,9 @@ const FETCHERS = {
       
       QB play often determines CFP outcomes.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 600,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. QB efficiency metrics are critical for CFP analysis.'
       });
       
@@ -2549,7 +2667,7 @@ const FETCHERS = {
       
       return {
         category: 'Passing Efficiency',
-        source: 'Perplexity',
+        source: 'Gemini Grounding',
         note: 'QB play is the great separator in CFP games',
         home: {
           team: homeTeamName,
@@ -2559,7 +2677,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractPass(content, awayTeamName)
         },
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Passing Efficiency fetch failed:', error.message);
@@ -2591,10 +2709,9 @@ const FETCHERS = {
       
       Red zone efficiency separates good teams from great teams in tight games.`;
       
-      const response = await perplexityService.search(query, {
-        model: 'sonar',
+      const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
-        maxTokens: 500,
+        maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Red zone efficiency is critical in close CFP games.'
       });
       
@@ -2612,7 +2729,7 @@ const FETCHERS = {
       
       return {
         category: 'Red Zone Efficiency',
-        source: 'Perplexity',
+        source: 'Gemini Grounding',
         note: 'Converting in the red zone is crucial for CFP games decided by small margins',
         home: {
           team: homeTeamName,
@@ -2622,7 +2739,7 @@ const FETCHERS = {
           team: awayTeamName,
           ...extractRedZone(content, awayTeamName)
         },
-        raw_response: content.substring(0, 400)
+        raw_response: content.substring(0, 1200)
       };
     } catch (error) {
       console.warn('[Stat Router] Red Zone fetch failed:', error.message);
@@ -2762,6 +2879,17 @@ const FETCHERS = {
   },
   
   HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
+    // NCAAF/NCAAB standings require conference_id - skip to avoid 400 errors
+    // For college sports, return N/A (RECENT_FORM provides game-by-game context)
+    if (bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab') {
+      return {
+        category: 'Home/Away Splits',
+        note: 'College sports home/away splits unavailable via BDL standings - use RECENT_FORM for game context',
+        home: { team: home.full_name || home.name, overall: 'N/A', home_record: 'N/A', away_record: 'N/A' },
+        away: { team: away.full_name || away.name, overall: 'N/A', home_record: 'N/A', away_record: 'N/A' }
+      };
+    }
+    
     const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
     
     const homeSt = standings?.find(s => s.team?.id === home.id);
@@ -2838,14 +2966,16 @@ const FETCHERS = {
           team: away.full_name || away.name,
           ...awayForm
         },
-        note: 'These are REAL game results from this season. Use them in your analysis.'
+        IMPORTANT: '⚠️ These are VERIFIED game results from BDL. Use ONLY these records when citing "last 5 games" - DO NOT guess or estimate different records.',
+        note: 'If Scout Report grounding has more recent data, prefer that for accuracy.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching recent form:`, error.message);
       return {
         category: 'Recent Form',
         home: { team: home.full_name || home.name, record: 'N/A', note: 'Data unavailable' },
-        away: { team: away.full_name || away.name, record: 'N/A', note: 'Data unavailable' }
+        away: { team: away.full_name || away.name, record: 'N/A', note: 'Data unavailable' },
+        WARNING: '⚠️ Recent form data unavailable. Check Scout Report grounding for this information. DO NOT guess records.'
       };
     }
   },
@@ -2863,9 +2993,9 @@ const FETCHERS = {
         ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 20 })
       ]);
       
-      // Filter to completed games only
-      const completedHomeGames = (homeGames || []).filter(g => g.status === 'Final' || g.status === 'final');
-      const completedAwayGames = (awayGames || []).filter(g => g.status === 'Final' || g.status === 'final');
+      // Filter to completed games only - using case-insensitive status check
+      const completedHomeGames = (homeGames || []).filter(g => isGameCompleted(g.status));
+      const completedAwayGames = (awayGames || []).filter(g => isGameCompleted(g.status));
       
       const calcQuarterStats = (games, teamId, teamName) => {
         if (!games || games.length === 0) return null;
@@ -3141,51 +3271,65 @@ const FETCHERS = {
     console.log(`[Stat Router] Fetching H2H_HISTORY for ${awayName} @ ${homeName} (${bdlSport})`);
     
     try {
-      // Get games for home team this season
-      const today = new Date();
-      const seasonStart = new Date(today.getFullYear(), 9, 1); // Oct 1 for NBA/NFL
+      // Calculate dynamic season - NFL/NCAAF: Aug-Feb spans years
+      // If season not provided, calculate based on current date
+      let currentSeason = season;
+      if (!currentSeason) {
+        const month = new Date().getMonth() + 1;
+        const year = new Date().getFullYear();
+        // NFL/NCAAF: Aug-Feb, so Jan-Jul = previous year's season
+        currentSeason = month <= 7 ? year - 1 : year;
+      }
       
       const homeGames = await ballDontLieService.getGames(bdlSport, {
         team_ids: [home.id],
-        start_date: seasonStart.toISOString().split('T')[0],
-        end_date: today.toISOString().split('T')[0],
+        seasons: [currentSeason],
         per_page: 50
       });
       
-      // Filter to only games against the away team
+      // Filter to only COMPLETED games against the away team
       const h2hGames = (homeGames || []).filter(game => {
         const gameHomeId = game.home_team?.id || game.home_team_id;
         const gameAwayId = game.visitor_team?.id || game.visitor_team_id;
-        return (gameHomeId === away.id || gameAwayId === away.id);
+        const isH2H = (gameHomeId === away.id || gameAwayId === away.id);
+        // Per BDL docs: NFL uses status='Final', NCAAB uses 'post'
+        const isCompleted = game.status === 'Final' || game.status === 'post';
+        // Also ensure game date is in the past
+        const gameDate = new Date(game.date);
+        const isPast = gameDate < new Date();
+        return isH2H && isCompleted && isPast;
       }).sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
       
       if (h2hGames.length === 0) {
         return {
-          category: 'Head-to-Head History (This Season)',
+          category: `Head-to-Head History (${currentSeason} Season)`,
           games_found: 0,
-          note: `No previous matchups between ${homeName} and ${awayName} this season.`,
-          revenge_game: false
+          note: `No previous matchups between ${homeName} and ${awayName} in the ${currentSeason} season yet.`,
+          revenge_game: false,
+          IMPORTANT: '⚠️ For historical H2H (prior seasons), check the Scout Report grounding data. DO NOT guess or claim winning streaks.'
         };
       }
       
-      // Format H2H results
+      // Format H2H results with full date including year
       const h2hResults = h2hGames.slice(0, 5).map(game => {
         const isHomeTeamHome = (game.home_team?.id || game.home_team_id) === home.id;
         const homeScore = isHomeTeamHome ? game.home_team_score : game.visitor_team_score;
         const awayScore = isHomeTeamHome ? game.visitor_team_score : game.home_team_score;
         const winner = homeScore > awayScore ? homeName : awayName;
         const margin = Math.abs(homeScore - awayScore);
-        const gameDate = new Date(game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const gameDate = new Date(game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const week = game.week ? `Week ${game.week}` : '';
         
         return {
           date: gameDate,
+          week: week,
           result: `${winner} won by ${margin}`,
           score: `${homeName} ${homeScore} - ${awayScore} ${awayName}`,
           home_won: homeScore > awayScore
         };
       });
       
-      // Calculate series record
+      // Calculate series record for THIS SEASON
       const homeWins = h2hResults.filter(r => r.home_won).length;
       const awayWins = h2hResults.length - homeWins;
       
@@ -3194,18 +3338,20 @@ const FETCHERS = {
       const revengeGame = lastMeeting && !lastMeeting.home_won;
       
       return {
-        category: 'Head-to-Head History (This Season)',
+        category: `Head-to-Head History (${currentSeason} Season ONLY)`,
         games_found: h2hGames.length,
-        series_record: `${homeName} ${homeWins}-${awayWins} ${awayName}`,
-        recent_meetings: h2hResults,
+        this_season_record: `${homeName} ${homeWins}-${awayWins} ${awayName}`,
+        meetings_this_season: h2hResults,
         revenge_game: revengeGame,
-        revenge_note: revengeGame ? `${awayName} lost the last meeting - potential revenge spot` : null
+        revenge_note: revengeGame ? `${awayName} lost the last meeting - potential revenge spot` : null,
+        IMPORTANT: `⚠️ This shows ONLY ${h2hGames.length} game(s) from the ${currentSeason} season. For multi-year H2H history, use Scout Report grounding. DO NOT claim historical streaks beyond this data.`
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching H2H history:`, error.message);
       return {
         category: 'Head-to-Head History',
-        error: 'Data unavailable'
+        error: 'Data unavailable',
+        IMPORTANT: '⚠️ H2H data unavailable. Check Scout Report grounding for this info. DO NOT guess.'
       };
     }
   },
@@ -3215,14 +3361,35 @@ const FETCHERS = {
     console.log(`[Stat Router] Fetching CLUTCH_STATS (close game record) for ${away.name} @ ${home.name}`);
     
     try {
-      // Get recent games to calculate close game record
-      const today = new Date();
-      const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
-      const params = {
-        start_date: ninetyDaysAgo.toISOString().split('T')[0],
-        end_date: today.toISOString().split('T')[0],
-        per_page: 50
-      };
+      // NFL API does NOT support start_date/end_date - use seasons[] instead
+      // Other sports (NBA, etc.) can use date range filtering
+      const isNFL = bdlSport === 'americanfootball_nfl';
+      const isNCAA = bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab';
+      
+      let params;
+      if (isNFL || isNCAA) {
+        // NFL/NCAAF: Use seasons[] parameter (per BDL API docs)
+        // Calculate dynamic season if not provided
+        let effectiveSeason = season;
+        if (!effectiveSeason) {
+          const month = new Date().getMonth() + 1;
+          const year = new Date().getFullYear();
+          effectiveSeason = month <= 7 ? year - 1 : year;
+        }
+        params = {
+          seasons: [effectiveSeason],
+          per_page: 50
+        };
+      } else {
+        // NBA/NHL/etc: Use date range filtering
+        const today = new Date();
+        const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+        params = {
+          start_date: ninetyDaysAgo.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 50
+        };
+      }
       
       const [homeGames, awayGames] = await Promise.all([
         ballDontLieService.getGames(bdlSport, { team_ids: [home.id], ...params }),
@@ -3706,7 +3873,16 @@ const FETCHERS = {
   },
   
   RED_ZONE_OFFENSE: async (bdlSport, home, away, season) => {
-    // Try to get actual red zone data from recent games
+    const homeName = home.full_name || home.name;
+    const awayName = away.full_name || away.name;
+    
+    // NCAAF: Use Gemini Grounding for red zone stats (BDL doesn't have NCAAF red zone data)
+    if (bdlSport === 'americanfootball_ncaaf') {
+      console.log(`[Stat Router] NCAAF Red Zone: Using Gemini Grounding for ${awayName} @ ${homeName}`);
+      return await fetchNCAAFRedZoneFromGrounding(homeName, awayName);
+    }
+    
+    // Try to get actual red zone data from recent games (NFL)
     const [homeGames, awayGames] = await Promise.all([
       ballDontLieService.getTeamStats ? 
         ballDontLieService.getTeamStats(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 10 }) : [],
@@ -3738,13 +3914,13 @@ const FETCHERS = {
       return {
         category: 'Red Zone Scoring Efficiency',
         home: {
-          team: home.full_name || home.name,
+          team: homeName,
           red_zone_td_pct: homeRZ.pct,
           red_zone_scores: homeRZ.scores.toString(),
           red_zone_attempts: homeRZ.attempts.toString()
         },
         away: {
-          team: away.full_name || away.name,
+          team: awayName,
           red_zone_td_pct: awayRZ.pct,
           red_zone_scores: awayRZ.scores.toString(),
           red_zone_attempts: awayRZ.attempts.toString()
@@ -3764,12 +3940,12 @@ const FETCHERS = {
     return {
       category: 'Down Conversion Efficiency (Red Zone Proxy)',
       home: {
-        team: home.full_name || home.name,
+        team: homeName,
         third_down_pct: fmtPct(homeStats?.misc_third_down_conv_pct / 100),
         fourth_down_pct: fmtPct(homeStats?.misc_fourth_down_conv_pct / 100)
       },
       away: {
-        team: away.full_name || away.name,
+        team: awayName,
         third_down_pct: fmtPct(awayStats?.misc_third_down_conv_pct / 100),
         fourth_down_pct: fmtPct(awayStats?.misc_fourth_down_conv_pct / 100)
       },
@@ -4962,7 +5138,7 @@ const FETCHERS = {
     }
   },
 
-  // ===== WEATHER (NFL/NCAAF - uses Perplexity) =====
+  // ===== WEATHER (NFL/NCAAF - uses Gemini Grounding) =====
   WEATHER: async (bdlSport, home, away, season, options = {}) => {
     // Only applicable for football
     if (bdlSport !== 'americanfootball_nfl' && bdlSport !== 'americanfootball_ncaaf') {
@@ -4979,12 +5155,10 @@ const FETCHERS = {
 
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
-      const weather = await perplexityService.getNFLGameWeather(
+      const weather = await getGroundedWeather(
         home.full_name || home.name,
         away.full_name || away.name,
-        home.full_name || home.name,
-        dateStr,
-        sport  // Pass the sport to get correct query
+        dateStr
       );
 
       if (!weather) {
@@ -5061,7 +5235,7 @@ const FETCHERS = {
           ...weatherData  // Same weather for both (it's for the game, not team-specific)
         },
         impact_notes: impactNotes.length > 0 ? impactNotes.join('; ') : 'Normal conditions expected',
-        note: 'Weather data via Perplexity AI'
+        note: 'Weather data via Gemini Grounding'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching weather:`, error.message);
@@ -5074,7 +5248,7 @@ const FETCHERS = {
     }
   },
 
-  // ===== QB WEATHER HISTORY (NFL only - uses Perplexity) =====
+  // ===== QB WEATHER HISTORY (NFL only - uses Gemini Grounding) =====
   QB_WEATHER_HISTORY: async (bdlSport, home, away, season, options = {}) => {
     // Only applicable for NFL
     if (bdlSport !== 'americanfootball_nfl') {
@@ -5089,31 +5263,31 @@ const FETCHERS = {
     console.log(`[Stat Router] Fetching QB_WEATHER_HISTORY for ${away.name} @ ${home.name}`);
 
     try {
-      // First, get weather for the game
+      // First, get weather for the game via Gemini Grounding
       const dateStr = new Date().toISOString().slice(0, 10);
-      const weather = await perplexityService.getNFLGameWeather(
+      const weather = await getGroundedWeather(
         home.full_name || home.name,
         away.full_name || away.name,
-        home.full_name || home.name,
         dateStr
       );
 
-      if (!weather || weather.is_dome) {
+      if (!weather || weather.isDome) {
         return {
           category: 'QB Weather History',
-          note: weather?.is_dome ? 'Indoor/dome stadium - weather not a factor' : 'Weather data unavailable',
+          note: weather?.isDome ? 'Indoor/dome stadium - weather not a factor' : 'Weather data unavailable',
           home: { team: home.full_name || home.name },
           away: { team: away.full_name || away.name },
-          weather_conditions: weather?.is_dome ? 'Indoor' : 'Unknown'
+          weather_conditions: weather?.isDome ? 'Indoor' : 'Unknown'
         };
       }
 
       // Check if weather is adverse enough to matter
       const temp = weather.temperature;
-      const wind = weather.wind_speed;
-      const conditions = weather.conditions?.toLowerCase() || '';
+      const windStr = weather.wind || '';
+      const windSpeed = parseInt((windStr.match(/(\d+)/) || [])[1]) || 0;
+      const conditions = (weather.conditions || '').toLowerCase();
       const isAdverse = (temp && temp < 40) || 
-                        (wind && wind > 15) || 
+                        (windSpeed > 15) || 
                         conditions.includes('snow') || 
                         conditions.includes('rain');
 
@@ -5123,60 +5297,39 @@ const FETCHERS = {
           note: 'Weather conditions are normal - no significant impact expected',
           home: { team: home.full_name || home.name },
           away: { team: away.full_name || away.name },
-          weather_conditions: `${temp}°F, ${wind} mph wind, ${weather.conditions}`,
+          weather_conditions: `${temp}°F, ${windStr}, ${weather.conditions}`,
           impact: 'minimal'
         };
       }
 
-      // Get QB names from team names (will be looked up by Perplexity)
-      const homeQB = `${home.full_name || home.name} starting QB`;
-      const awayQB = `${away.full_name || away.name} starting QB`;
+      // Use Gemini Grounding for QB weather performance history
+      const qbQuery = `NFL QB weather performance history for ${away.full_name || away.name} @ ${home.full_name || home.name}:
 
-      // Fetch QB weather performance history
-      const qbWeatherData = await perplexityService.getQBWeatherPerformance(
-        homeQB,
-        awayQB,
-        home.full_name || home.name,
-        away.full_name || away.name,
-        { temp, wind, conditions, precipitation: conditions }
-      );
+Weather conditions: ${temp}°F, ${windStr}, ${conditions}
 
-      if (qbWeatherData?.skip) {
-        return {
-          category: 'QB Weather History',
-          note: qbWeatherData.reason || 'Weather analysis not needed',
-          home: { team: home.full_name || home.name },
-          away: { team: away.full_name || away.name }
-        };
-      }
+For each team's starting QB:
+1. Name of current starting QB
+2. Career games in similar conditions (cold/snow/rain/wind)
+3. Career record in adverse weather
+4. Completion percentage in cold/adverse weather
+5. Assessment: Does this QB perform better or worse in bad weather?
+
+Be factual with historical stats where available.`;
+
+      const qbResult = await geminiGroundingSearch(qbQuery, { temperature: 0.2, maxTokens: 1500 });
 
       return {
         category: 'QB Cold/Adverse Weather History',
-        weather_conditions: `${temp}°F, ${wind} mph wind, ${weather.conditions}`,
+        weather_conditions: `${temp}°F, ${windStr}, ${weather.conditions}`,
         home: {
           team: home.full_name || home.name,
-          qb_name: qbWeatherData.home_qb_weather?.name || homeQB,
-          career_games_in_condition: qbWeatherData.home_qb_weather?.career_games_in_condition,
-          career_record: qbWeatherData.home_qb_weather?.career_record,
-          completion_pct: qbWeatherData.home_qb_weather?.completion_pct,
-          yards_per_game: qbWeatherData.home_qb_weather?.yards_per_game,
-          passer_rating: qbWeatherData.home_qb_weather?.passer_rating,
-          assessment: qbWeatherData.home_qb_weather?.assessment
+          analysis: qbResult?.success ? qbResult.data : 'Weather analysis unavailable'
         },
         away: {
           team: away.full_name || away.name,
-          qb_name: qbWeatherData.away_qb_weather?.name || awayQB,
-          career_games_in_condition: qbWeatherData.away_qb_weather?.career_games_in_condition,
-          career_record: qbWeatherData.away_qb_weather?.career_record,
-          completion_pct: qbWeatherData.away_qb_weather?.completion_pct,
-          yards_per_game: qbWeatherData.away_qb_weather?.yards_per_game,
-          passer_rating: qbWeatherData.away_qb_weather?.passer_rating,
-          assessment: qbWeatherData.away_qb_weather?.assessment
+          analysis: qbResult?.success ? qbResult.data : 'Weather analysis unavailable'
         },
-        weather_impact_summary: qbWeatherData.weather_impact_summary,
-        edge_assessment: qbWeatherData.edge_assessment,
-        confidence_adjustment: qbWeatherData.confidence_adjustment,
-        note: 'Historical QB performance in similar weather conditions via Perplexity AI'
+        note: 'Historical QB performance in similar weather conditions via Gemini Grounding'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching QB weather history:`, error.message);
@@ -5291,7 +5444,7 @@ const ALIASES = {
   CONFERENCE_STRENGTH: 'NCAAF_CONFERENCE_STRENGTH',
   VS_POWER_OPPONENTS: 'NCAAF_VS_POWER_OPPONENTS',
   TRAVEL_FATIGUE: 'NCAAF_TRAVEL_FATIGUE',
-  // NCAAF-specific advanced stat aliases (BDL doesn't have these - use Perplexity)
+  // NCAAF-specific advanced stat aliases (BDL doesn't have these - use Gemini Grounding)
   NCAAF_SP_PLUS_RATINGS: 'NCAAF_SP_PLUS',
   NCAAF_FPI_RATINGS: 'NCAAF_FPI',
   NCAAF_FEI_RATINGS: 'NCAAF_FPI',
@@ -5448,14 +5601,20 @@ function formatRecentGames(games, teamName) {
     return { record: 'N/A', games: [], note: 'No recent game data available' };
   }
   
-  // Filter to only completed games - handle both NBA and NCAAB field names
-  // NCAAB uses: home_score, away_score, status: 'post', period_detail: 'Final'
-  // NBA uses: home_team_score, visitor_team_score, status: 'Final'
+  // Filter to only completed games - handle NBA, NCAAB, and NFL field names
+  // Per BDL API docs:
+  // - NFL: status: 'Final', uses home_team_score/visitor_team_score
+  // - NBA: status: 'Final', uses home_team_score/visitor_team_score  
+  // - NCAAB: status: 'post', period_detail: 'Final', uses home_score/away_score
   const completedGames = games.filter(g => {
-    const hasStatus = g.status === 'Final' || g.status === 'post' || g.period_detail === 'Final';
+    // NFL and NBA use 'Final', NCAAB uses 'post' or period_detail='Final'
+    const hasStatus = isGameCompleted(g.status) || g.period_detail?.toLowerCase() === 'final';
     const hasNBAScore = g.home_team_score !== null && g.home_team_score !== undefined;
     const hasNCAABScore = g.home_score !== null && g.home_score !== undefined;
-    return hasStatus && (hasNBAScore || hasNCAABScore);
+    // Ensure game date is in the past (avoids including scheduled games)
+    const gameDate = new Date(g.date);
+    const isPast = gameDate < new Date();
+    return hasStatus && (hasNBAScore || hasNCAABScore) && isPast;
   });
   
   if (completedGames.length === 0) {

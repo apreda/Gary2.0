@@ -1,14 +1,13 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
-import { perplexityService } from './perplexityService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 
 /**
- * Parse weather conditions from Perplexity response to determine if adverse
+ * Parse weather conditions from Gemini Grounding response to determine if adverse
  * and what type of weather we're dealing with
  */
 function parseWeatherForQBAnalysis(weatherData) {
@@ -513,116 +512,12 @@ export async function generateNFLPicks(options = {}) {
 
       // Note: no baseline model edge. Decisions are angle- and price-driven only.
 
-      // Perplexity key findings (trim to 3-4) and optional red-zone extraction fallback
-      let richKeyFindings = [];
-      let realTimeNewsText = '';
-      let weatherConditions = null;
-      let weatherData = null; // Parsed weather object
-      let qbWeatherAnalysis = null;
-      try {
-        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
-        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nfl', dateStr);
-        if (Array.isArray(rich?.key_findings)) {
-          richKeyFindings = rich.key_findings.slice(0, 4);
-        }
-        
-        // Extract weather conditions from rich context
-        if (rich?.weather) {
-          weatherConditions = rich.weather;
-          console.log(`[NFL] Weather from rich context for ${game.away_team} @ ${game.home_team}:`, weatherConditions);
-        }
-        
-        // FALLBACK: If no weather from rich context OR if parsing fails, use dedicated weather fetch
-        let parsedFromRich = weatherConditions ? parseWeatherForQBAnalysis(weatherConditions) : null;
-        if (!parsedFromRich || parsedFromRich.temp === null) {
-          console.log(`[NFL] Rich context weather insufficient, fetching dedicated NFL weather...`);
-          const dedicatedWeather = await perplexityService.getNFLGameWeather(
-            game.home_team,
-            game.away_team,
-            null, // venue
-            'tonight'
-          );
-          if (dedicatedWeather && dedicatedWeather.temperature !== null) {
-            // Build weather string from dedicated response
-            const tempStr = `${dedicatedWeather.temperature}°F`;
-            const windStr = dedicatedWeather.wind_speed ? `, wind ${dedicatedWeather.wind_speed} mph` : '';
-            const condStr = dedicatedWeather.conditions ? `, ${dedicatedWeather.conditions}` : '';
-            const domeStr = dedicatedWeather.is_dome ? ' (Dome stadium)' : '';
-            weatherConditions = `${tempStr}${windStr}${condStr}${domeStr}`;
-            console.log(`[NFL] Dedicated weather result: ${weatherConditions}`);
-            
-            // Skip weather analysis if it's a dome stadium
-            if (dedicatedWeather.is_dome) {
-              console.log(`[NFL] Dome stadium detected - weather won't affect gameplay`);
-              weatherConditions = `Indoor/Dome - ${dedicatedWeather.conditions || 'Controlled environment'}`;
-            }
-          }
-        }
-        
-        // Compose a concise, verifiable summary for REAL-TIME NEWS AND TRENDS
-        if (Array.isArray(rich?.key_findings) && rich.key_findings.length > 0) {
-          const toLine = (k) => {
-            const title = k?.title || 'Finding';
-            const rationale = k?.rationale || k?.note || '';
-            return rationale ? `${title}: ${rationale}` : String(title);
-          };
-          realTimeNewsText = rich.key_findings.slice(0, 3).map(toLine).join('\n');
-        } else if (typeof rich?.summary === 'string' && rich.summary.trim().length > 0) {
-          realTimeNewsText = rich.summary.trim();
-        }
-        // If red-zone proxies still missing, try to parse percent from key findings mentioning each team and "red zone"
-        const parsePct = (s = '') => {
-          const m = String(s).match(/(\d{1,3}(?:\.\d+)?)\s*%/);
-          return m ? (Number(m[1]) / 100) : undefined;
-        };
-        const scanFindings = (teamName) => {
-          for (const k of (rich?.key_findings || [])) {
-            const blob = `${k?.title || ''} ${k?.rationale || k?.note || ''}`.toLowerCase();
-            if (blob.includes('red zone') && blob.includes(String(teamName).toLowerCase())) {
-              const pct = parsePct(`${k?.title || ''} ${k?.rationale || k?.note || ''}`);
-              if (typeof pct === 'number' && isFinite(pct)) return pct;
-            }
-          }
-          return undefined;
-        };
-        if (homeRates?.redZoneProxy == null) {
-          const pct = scanFindings(game.home_team);
-          if (typeof pct === 'number') homeRates.redZoneProxy = pct;
-        }
-        if (awayRates?.redZoneProxy == null) {
-          const pct = scanFindings(game.away_team);
-          if (typeof pct === 'number') awayRates.redZoneProxy = pct;
-        }
-        
-        // QB Weather Performance Analysis - fetch if adverse weather detected
-        if (weatherConditions && homeQb && awayQb) {
-          const weatherData = parseWeatherForQBAnalysis(weatherConditions);
-          if (weatherData.isAdverse) {
-            console.log(`[NFL] Adverse weather detected (${weatherData.type}), fetching QB performance history...`);
-            const homeQbName = homeQb.full_name || `${homeQb.first_name || ''} ${homeQb.last_name || ''}`.trim();
-            const awayQbName = awayQb.full_name || `${awayQb.first_name || ''} ${awayQb.last_name || ''}`.trim();
-            
-            qbWeatherAnalysis = await perplexityService.getQBWeatherPerformance(
-              homeQbName,
-              awayQbName,
-              game.home_team,
-              game.away_team,
-              weatherData
-            );
-            
-            if (qbWeatherAnalysis && !qbWeatherAnalysis.skip) {
-              console.log(`[NFL] QB Weather Analysis: ${qbWeatherAnalysis.edge_assessment || 'No clear edge'}`);
-              // Add weather analysis to real-time news
-              if (qbWeatherAnalysis.weather_impact_summary) {
-                realTimeNewsText += `\n\n⚠️ WEATHER FACTOR: ${qbWeatherAnalysis.weather_impact_summary}`;
-              }
-              if (qbWeatherAnalysis.edge_assessment) {
-                realTimeNewsText += `\nQB Weather Edge: ${qbWeatherAnalysis.edge_assessment}`;
-              }
-            }
-          }
-        }
-      } catch {}
+      // Rich context, weather, and QB analysis now provided by Gemini Grounding in the agentic pipeline
+      const richKeyFindings = [];
+      const realTimeNewsText = '';
+      const weatherConditions = null;
+      const weatherData = null;
+      const qbWeatherAnalysis = null;
 
       // QB venue and head-to-head samples (last two seasons)
       let qbVenueH2H = { home: {}, away: {} };
@@ -685,7 +580,7 @@ export async function generateNFLPicks(options = {}) {
         teamStats,
         gameContext,
         statsReport,
-        // Pass Perplexity summary so OpenAI "REAL-TIME NEWS AND TRENDS" section is populated
+        // Pass real-time news summary so OpenAI "REAL-TIME NEWS AND TRENDS" section is populated
         realTimeNews: realTimeNewsText || undefined,
         odds: oddsData,
         gameTime: game.commence_time,

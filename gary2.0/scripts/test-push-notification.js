@@ -76,7 +76,6 @@ async function main() {
       apns: {
         payload: {
           aps: {
-            alert: { title, body },
             sound: 'default',
           },
         },

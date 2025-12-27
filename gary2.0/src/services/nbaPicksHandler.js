@@ -1,6 +1,5 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { perplexityService } from './perplexityService.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js'; // Import shared helper
@@ -463,15 +462,8 @@ export async function generateNBAPicks(options = {}) {
 
       // Removed "model" logic per user guidance
 
-      // Perplexity key findings (trim to 3–4)
-      let richKeyFindings = [];
-      try {
-        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
-        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'nba', dateStr);
-        if (Array.isArray(rich?.key_findings)) {
-          richKeyFindings = rich.key_findings.slice(0, 4);
-        }
-      } catch {}
+      // Rich context now provided by Gemini Grounding in the agentic pipeline
+      const richKeyFindings = [];
 
       const teamStatsCombined = homeTeamInfo || awayTeamInfo ? { home: homeTeamInfo, away: awayTeamInfo } : null;
 

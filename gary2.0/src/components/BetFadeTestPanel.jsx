@@ -5,7 +5,12 @@ import { pickResultsService } from '../services/pickResultsService';
 const BetFadeTestPanel = () => {
   const [testResults, setTestResults] = useState('');
   const [loading, setLoading] = useState(false);
-  const [testDate, setTestDate] = useState('2024-04-01');
+  // Use yesterday's date by default for testing
+  const [testDate, setTestDate] = useState(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  });
 
   const runAutomatedTest = async () => {
     setLoading(true);

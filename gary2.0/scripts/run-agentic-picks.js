@@ -388,6 +388,8 @@ const minConfidenceOverride = (minConfidenceOverrideRaw !== undefined && minConf
 const matchupFilter = getArgValue('--matchup');
 // --force flag to skip deduplication check (for re-running specific games)
 const forceRerun = args.includes('--force');
+// --date flag to filter games to specific date(s) (e.g., "2025-12-25" or "2025-12-25,2025-12-26")
+const dateFilter = getArgValue('--date');
 
 if (runAll) {
   sportsToRun.push('nba', 'nfl', 'nhl', 'epl', 'ncaab', 'ncaaf');
@@ -417,6 +419,10 @@ if (sportsToRun.length === 0) {
 ║                                                                  ║
 ║  Or combine sports:                                              ║
 ║    node scripts/run-agentic-picks.js --nba --nfl                 ║
+║                                                                  ║
+║  NFL-specific options:                                           ║
+║    --date 2025-12-25           (filter to specific date)         ║
+║    --date 2025-12-25,2025-12-26 (multiple dates)                 ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
@@ -504,44 +510,62 @@ async function main() {
         const currentWeekNumber = picksService.getNFLWeekNumber();
         const currentWeekStart = picksService.getNFLWeekStart();
 
-        // NFL weeks run Tuesday-Monday, so we filter games that belong to the current week
-        // Get end of current week (next Tuesday 5:00 AM ET to catch late Monday games)
-        const weekStartDate = new Date(currentWeekStart + 'T00:00:00');
-        const weekEndDate = new Date(weekStartDate);
-        weekEndDate.setDate(weekEndDate.getDate() + 8); // Tuesday of next week
-        weekEndDate.setHours(5, 0, 0, 0); // 5 AM to catch any late Monday finishes
-
-        // Check if today is Monday (MNF day) - only process today's games
-        const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-        const dayOfWeek = estNow.getDay(); // 0 = Sunday, 1 = Monday
-        const isMonday = dayOfWeek === 1;
-
-        if (isMonday) {
-          // On Monday, only process Monday Night Football (games happening today)
-          const todayStart = new Date(estNow);
-          todayStart.setHours(0, 0, 0, 0);
-          const todayEnd = new Date(estNow);
-          todayEnd.setHours(23, 59, 59, 999);
-
+        // CHECK: If --date flag is provided, filter to specific date(s) ONLY
+        if (dateFilter) {
+          // Parse comma-separated dates (e.g., "2025-12-25,2025-12-26")
+          const targetDates = dateFilter.split(',').map(d => d.trim());
+          console.log(`[${config.name}] --date filter active: targeting ${targetDates.join(', ')}`);
+          
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
-            const gameTimeEST = new Date(gameTime.toLocaleString("en-US", { timeZone: "America/New_York" }));
-            // Game must be in the future AND happening today (Monday Night Football)
-            return gameTime >= now && gameTimeEST >= todayStart && gameTimeEST <= todayEnd;
+            const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+            // Game date matches one of the target dates
+            return targetDates.includes(gameDateEST);
           }) || [];
-
-          timeLabel = `MNF (Week ${currentWeekNumber})`;
-          console.log(`[${config.name}] Monday Night Football filter: only today's games`);
+          
+          timeLabel = `${targetDates.join(' & ')}`;
+          console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
         } else {
-          // Other days, process the full week
-          games = allGames?.filter(g => {
-            const gameTime = new Date(g.commence_time);
-            // Game must be in the future AND within the current NFL week
-            return gameTime >= now && gameTime >= weekStartDate && gameTime < weekEndDate;
-          }) || [];
+          // Default NFL week-based filtering (no --date flag)
+          // NFL weeks run Tuesday-Monday, so we filter games that belong to the current week
+          // Get end of current week (next Tuesday 5:00 AM ET to catch late Monday games)
+          const weekStartDate = new Date(currentWeekStart + 'T00:00:00');
+          const weekEndDate = new Date(weekStartDate);
+          weekEndDate.setDate(weekEndDate.getDate() + 8); // Tuesday of next week
+          weekEndDate.setHours(5, 0, 0, 0); // 5 AM to catch any late Monday finishes
 
-          timeLabel = `Week ${currentWeekNumber} (${currentWeekStart})`;
-          console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: weekStart=${currentWeekStart}, weekEnd=${weekEndDate.toISOString()}`);
+          // Check if today is Monday (MNF day) - only process today's games
+          const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+          const dayOfWeek = estNow.getDay(); // 0 = Sunday, 1 = Monday
+          const isMonday = dayOfWeek === 1;
+
+          if (isMonday) {
+            // On Monday, only process Monday Night Football (games happening today)
+            const todayStart = new Date(estNow);
+            todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date(estNow);
+            todayEnd.setHours(23, 59, 59, 999);
+
+            games = allGames?.filter(g => {
+              const gameTime = new Date(g.commence_time);
+              const gameTimeEST = new Date(gameTime.toLocaleString("en-US", { timeZone: "America/New_York" }));
+              // Game must be in the future AND happening today (Monday Night Football)
+              return gameTime >= now && gameTimeEST >= todayStart && gameTimeEST <= todayEnd;
+            }) || [];
+
+            timeLabel = `MNF (Week ${currentWeekNumber})`;
+            console.log(`[${config.name}] Monday Night Football filter: only today's games`);
+          } else {
+            // Other days, process the full week
+            games = allGames?.filter(g => {
+              const gameTime = new Date(g.commence_time);
+              // Game must be in the future AND within the current NFL week
+              return gameTime >= now && gameTime >= weekStartDate && gameTime < weekEndDate;
+            }) || [];
+
+            timeLabel = `Week ${currentWeekNumber} (${currentWeekStart})`;
+            console.log(`[${config.name}] NFL Week ${currentWeekNumber} filter: weekStart=${currentWeekStart}, weekEnd=${weekEndDate.toISOString()}`);
+          }
         }
       } else if (config.useToday) {
         // US sports: Get TODAY's games in EST timezone (games that haven't started yet)
@@ -1286,7 +1310,7 @@ async function main() {
           
           // Sport-specific confidence thresholds (adjust as needed based on results)
           const CONFIDENCE_BY_SPORT = {
-            'NBA': 0.60,    // Calibrated for Gary's honest confidence scoring
+            'NBA': 0.69,    // Targeting 3-4 quality picks per night
             'NCAAF': 0,     // Store all NCAAF picks (CFP games are limited, want all analysis)
             'NCAAB': 0.64,  // Higher bar for college hoops
             'NHL': 0.60,    // Match NBA calibration
@@ -1395,7 +1419,7 @@ async function main() {
       const sportTime = ((Date.now() - sportStartTime) / 1000).toFixed(1);
       // Use same sport-specific thresholds for summary
       const CONFIDENCE_BY_SPORT_SUMMARY = {
-        'NBA': 0.60, 'NCAAF': 0, 'NCAAB': 0.64, 'NHL': 0.60, 'NFL': 0.63, 'EPL': 0.60
+        'NBA': 0.69, 'NCAAF': 0, 'NCAAB': 0.64, 'NHL': 0.60, 'NFL': 0.63, 'EPL': 0.60
       };
       const SUMMARY_MIN_CONFIDENCE = CONFIDENCE_BY_SPORT_SUMMARY[config.name] ?? 0.64;
 

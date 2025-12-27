@@ -1,12 +1,17 @@
 import { ballDontLieService } from '../ballDontLieService.js';
-import { perplexityService } from '../perplexityService.js';
+// Context sourced from Gemini 3 Flash Grounding
 import { formatGameTimeEST, buildMarketSnapshot, calcRestInfo, calcRecentForm, parseGameDate } from './sharedUtils.js';
-import { fetchGroundedContext } from './scoutReport/scoutReportBuilder.js';
+import { fetchGroundedContext, getGroundedRichContext } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'americanfootball_ncaaf';
 
-// BDL uses 2025 for the 2025-2026 college football season
-const NCAAF_SEASON = 2025;
+// Calculate NCAAF season dynamically: Aug-Feb spans years
+// In Jan-Jul we're in the second half of previous year's season
+function getCurrentNcaafSeason() {
+  const month = new Date().getMonth() + 1;
+  const year = new Date().getFullYear();
+  return month <= 7 ? year - 1 : year;
+}
 
 /**
  * NCAAF Conference Tier Mapping (2024-25 Season)
@@ -235,8 +240,8 @@ const buildCollegeMetrics = (map = {}) => {
 
 export async function buildNcaafAgenticContext(game, options = {}) {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
-  // Use fixed season (BDL uses 2025 for the 2025-2026 college football season)
-  const season = NCAAF_SEASON;
+  // Calculate dynamic NCAAF season based on current date
+  const season = getCurrentNcaafSeason();
 
   const [homeTeam, awayTeam] = await Promise.all([
     ballDontLieService.getTeamByNameGeneric(SPORT_KEY, game.home_team),
@@ -308,7 +313,7 @@ export async function buildNcaafAgenticContext(game, options = {}) {
 
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [], homeTeam.full_name, awayTeam.full_name);
 
-  // Extract narrative context from Gemini Grounding (preferred) or fallback to Perplexity
+  // Extract narrative context from Gemini Grounding
   let narrativeContext = null;
   let playerOptOuts = null;
   
@@ -328,13 +333,13 @@ export async function buildNcaafAgenticContext(game, options = {}) {
       }
     }
   } else {
-    // Fallback to Perplexity if Gemini Grounding fails
+    // Retry with alternative Grounding query if first attempt fails
     try {
-      const richContext = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'ncaaf', dateStr);
+      const richContext = await getGroundedRichContext(game.home_team, game.away_team, 'ncaaf', dateStr);
       narrativeContext = richContext?.summary || null;
-      console.log(`[NCAAF Context] Fallback to Perplexity: ${narrativeContext ? 'got context' : 'no context'}`);
+      console.log(`[NCAAF Context] Retry Grounding: ${narrativeContext ? 'got context' : 'no context'}`);
     } catch (error) {
-      console.warn('[Agentic][NCAAF] Perplexity fallback failed:', error.message);
+      console.warn('[Agentic][NCAAF] Grounding retry failed:', error.message);
     }
   }
   

@@ -2,7 +2,6 @@ import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
-import { perplexityService } from './perplexityService.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
 
 const SPORT_KEY = 'basketball_wnba';
@@ -91,14 +90,8 @@ export async function generateWNBAPicks(options = {}) {
         home: Array.isArray(homeTeamStats) ? homeTeamStats : [],
         away: Array.isArray(awayTeamStats) ? awayTeamStats : []
       };
-      let richKeyFindings = [];
-      try {
-        const dateStr = new Date(game.commence_time).toISOString().slice(0, 10);
-        const rich = await perplexityService.getRichGameContext(game.home_team, game.away_team, 'wnba', dateStr);
-        if (Array.isArray(rich?.key_findings)) {
-          richKeyFindings = rich.key_findings.slice(0, 4);
-        }
-      } catch {}
+      // Rich context now provided by Gemini Grounding in the agentic pipeline
+      const richKeyFindings = [];
       const gameContext = {
         injuries: Array.isArray(injuries) ? injuries : [],
         season,

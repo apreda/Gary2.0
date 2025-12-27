@@ -4,20 +4,13 @@
  * Provides an improved implementation of the normal picks service using the following data sources:
  * 1. Ball Don't Lie API for team stats (PRIORITY 1)
  * 2. MLB Stats API for pitcher data (PRIORITY 2)
- * 3. Perplexity for game context, storylines, and other relevant data
+ * 3. Gemini Grounding for game context, storylines, and other relevant data
  * 
  * Focused exclusively on moneyline and spread bets (no totals or player props).
  */
 import { generateGaryAnalysis, parseGaryAnalysis } from './garyEngine.js';
 import { combinedMlbService } from './combinedMlbService.js';
 import { oddsService } from './oddsService.js';
-import { perplexityService } from './perplexityService.js';
-
-// Set the Perplexity API key for Node.js environments
-if (typeof process !== 'undefined' && process.env && process.env.VITE_PERPLEXITY_API_KEY) {
-  perplexityService.API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
-  console.log(`[Enhanced Picks Service] Perplexity API key loaded successfully`);
-}
 
 export const picksService = {
   /**
@@ -424,7 +417,7 @@ export const picksService = {
       prompt += `${awayTeam}: Probable starter TBD\n\n`;
     }
     
-    // Add game context from Perplexity if available
+    // Add game context from Gemini Grounding if available
     if (gameContext) {
       prompt += `GAME CONTEXT:\n`;
       
