@@ -661,13 +661,25 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
                   'NCAAF_RED_ZONE_OFFENSE': 'red_zone_pct',
                   'NCAAF_PLAYER_STATS:OFFENSE': 'passing_yards',
                   // NCAAF additional turnover
-                  'TURNOVER_MARGIN': 'interceptions_thrown',
+                  'TURNOVER_MARGIN': 'turnover_diff',
                   // New derived stats for cleaner display
                   'PASSING_TDS': 'passing_tds',
                   'INTERCEPTIONS': 'interceptions',
                   'RUSHING_TDS': 'rushing_tds',
                   'TOTAL_TDS': 'total_tds',
                   'PASSING_YPG': 'passing_ypg',
+                  'RUSHING_YPG': 'rushing_ypg',
+                  'TOTAL_YPG': 'total_ypg',
+                  'TOTAL_YARDS': 'total_yards',
+                  'PASSING_YARDS': 'passing_yards',
+                  'RUSHING_YARDS': 'rushing_yards',
+                  'OPP_PASSING_YARDS': 'opp_passing_yards',
+                  'OPP_RUSHING_YARDS': 'opp_rushing_yards',
+                  'OPP_TOTAL_YARDS': 'opp_total_yards',
+                  'INTS_THROWN': 'interceptions_thrown',
+                  'INTERCEPTIONS_THROWN': 'interceptions_thrown',
+                  'LAST_5': 'last_5',
+                  'SUMMARY': 'summary',
                   
                   // === NHL STATS ===
                   'GOALS_FOR': 'goals_for_per_game',

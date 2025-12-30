@@ -1087,6 +1087,15 @@ Injuries are CRUCIAL for player props! Consider:
 - If a player's primary defender is OUT → OVER on scoring props
 - Always check the injury report before making any pick!
 
+## 🚨 CRITICAL: PLAYER NAME ACCURACY - NO CONFUSION
+**ALWAYS use FULL NAMES (first + last) when referencing players, especially for:**
+- Players with common last names (Curry, Johnson, Williams, Davis, etc.)
+- Siblings on the same team (Seth Curry vs Stephen Curry, Marcus Morris vs Markieff Morris)
+- ONLY trust the "injuryReport" field for injury status - it uses FULL NAMES from BDL
+- Do NOT assume a player is injured unless they appear in the injuryReport
+- If narrative context mentions just "Curry OUT", VERIFY which Curry from the injury report
+- When in doubt, call search_player_context with the FULL NAME to confirm
+
 ## 🚨 CRITICAL: PLAYER-TEAM VERIFICATION
 The prop data may show OUTDATED team assignments. Before picking any player:
 - Check the ROSTER MOVES section in the context for 2025 trades/signings
@@ -1101,6 +1110,40 @@ When evaluating players, ONLY use stats from the KEY PLAYER STATS section:
 - If stats say "unavailable", focus on matchup/context instead
 - DO NOT invent specific averages or claim stats you didn't see
 - "Recent strong performances" is better than a made-up "110 yards average"
+
+## 🛑🛑🛑 ABSOLUTE ZERO TOLERANCE FOR HALLUCINATION 🛑🛑🛑
+
+**THIS IS THE MOST CRITICAL RULE. VIOLATIONS COST REAL MONEY AND DESTROY TRUST.**
+
+You MUST NOT make ANY assumptions. Only state facts you can directly verify from the data provided:
+
+**INJURIES:**
+- ONLY trust the injuryReport field - this is from Ball Don't Lie API
+- If a player is NOT in injuryReport, they are NOT injured - do not assume otherwise
+- NEVER say "[Player] is OUT" unless they appear in injuryReport with status "Out"
+- Example violation: Saying "Stephen Curry OUT" when injuryReport shows no Curry at all
+
+**PLAYER NAMES:**
+- ALWAYS use FULL NAMES (First Last) - never just last names
+- "Curry" could be Stephen Curry OR Seth Curry - ALWAYS specify which one
+- If you're unsure which player, DO NOT MENTION THEM
+
+**STATS:**
+- ONLY cite stats you see in the provided data (game logs, season stats, playerStatsPreview)
+- If you don't have a specific number, say "stats unavailable" - DO NOT make up numbers
+- Never assume a player's PPG, RPG, APG etc. without seeing it in the data
+
+**REASONING:**
+- Every claim in your rationale MUST be traceable to provided data
+- If narrative context conflicts with injuryReport, trust injuryReport
+- When uncertain, use hedging language or skip that point entirely
+
+**CONSEQUENCES OF HALLUCINATION:**
+- Made-up injuries → Wrong player analysis → Bad picks → Lost money
+- Wrong player names → Confusion → Voided bets
+- Fake stats → Incorrect line comparisons → Bad value assessment
+
+WHEN IN DOUBT, LEAVE IT OUT.
 `;
 
   // Enhanced prop candidates with season stats for NHL and NBA
@@ -1144,10 +1187,12 @@ ${narrativeContext.substring(0, 12000)}
 ⚠️ BETTING SIGNALS NOTE: If you see any line movement or public % data above, treat it as a MINOR observation only - it should NEVER be the primary reason for any pick.
 ` : '';
 
-  // Format injury report for explicit inclusion
-  const injurySection = injuryReport.length > 0 ? injuryReport.map(inj => 
-    `${inj.player} (${inj.team || 'Unknown'}) - ${inj.status}: ${inj.description || 'No details'}`
-  ).join('\n') : 'No significant injuries reported';
+  // Format injury report for explicit inclusion - BDL is SOURCE OF TRUTH
+  const injurySection = injuryReport.length > 0 
+    ? `📋 OFFICIAL BDL INJURY REPORT (ONLY TRUST THIS FOR INJURY STATUS):\n` + injuryReport.map(inj => 
+        `- ${inj.player} (${inj.team || 'Unknown'}) - ${inj.status}: ${inj.description || 'No details'}`
+      ).join('\n')
+    : '📋 OFFICIAL BDL INJURY REPORT: No significant injuries reported for these teams';
 
   const userContent = JSON.stringify({
     matchup: gameSummary.matchup,
@@ -1629,20 +1674,51 @@ export async function runAgenticPropsPipeline({
       return stats.map(stat => cleanSourceTags(stat)).filter(s => s && s.length > 0);
     };
 
-    // Helper: Ensure prop includes the line value
+    // Helper: Ensure prop includes the line value and correct prop type
+    // Build a lookup from available props to find correct prop_type
+    const propsLookup = {};
+    for (const p of playerProps) {
+      // Create multiple keys to match different formats Gary might return
+      const key1 = `${p.player?.toLowerCase()}_${p.line}`;
+      const key2 = `${p.player?.toLowerCase()}_${p.prop_type?.toLowerCase()}_${p.line}`;
+      propsLookup[key1] = p.prop_type;
+      propsLookup[key2] = p.prop_type;
+    }
+    
     const formatProp = (pick) => {
-      // If prop already has a number, use it
-      if (pick.prop && /\d/.test(pick.prop)) {
+      // If prop already has a valid type with number, use it
+      if (pick.prop && /\d/.test(pick.prop) && !pick.prop.toLowerCase().includes('unknown')) {
         return pick.prop;
       }
-      // Otherwise, construct from prop_type/prop and line
-      const propType = pick.prop || pick.prop_type || 'unknown';
+      
+      // Try to find the prop type from our lookup
+      const playerKey = pick.player?.toLowerCase();
       const line = pick.line || '';
+      let propType = pick.prop_type || pick.prop || 'unknown';
+      
+      // Look up by player + line
+      const lookupKey1 = `${playerKey}_${line}`;
+      if (propsLookup[lookupKey1]) {
+        propType = propsLookup[lookupKey1];
+      }
+      
+      // If prop_type contains 'unknown', try harder to find it
+      if (propType.toLowerCase().includes('unknown') && playerKey && line) {
+        // Search through all props for this player with this line
+        const match = playerProps.find(p => 
+          p.player?.toLowerCase() === playerKey && 
+          Math.abs(p.line - parseFloat(line)) < 0.1
+        );
+        if (match?.prop_type) {
+          propType = match.prop_type;
+        }
+      }
+      
       return `${propType} ${line}`.trim();
     };
 
-    // Enhance picks with metadata
-    const enhancedPicks = (result.picks || []).slice(0, propsPerGame).map(pick => ({
+    // Enhance picks with metadata and sort by confidence
+    const allPicks = (result.picks || []).map(pick => ({
       ...pick,
       sport: sportLabel,
       time: formatGameTime(game.commence_time),
@@ -1659,10 +1735,14 @@ export async function runAgenticPropsPipeline({
       analysis: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.'
     }));
 
+    // Sort by confidence descending and take top N
+    const sortedPicks = allPicks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    const topPicks = sortedPicks.slice(0, propsPerGame);
+    
     // Apply confidence filter (slightly lower for NBA/NHL due to variance)
     const minConfidence = sportLabel === 'NFL' ? 0.65 : 0.60;
-    const finalPicks = enhancedPicks.filter(p => p.confidence >= minConfidence);
-    console.log(`[Agentic Props][${sportLabel}] Applied confidence filter (>=${minConfidence}): ${enhancedPicks.length} -> ${finalPicks.length} picks`);
+    const finalPicks = topPicks.filter(p => p.confidence >= minConfidence);
+    console.log(`[Agentic Props][${sportLabel}] Sorted by confidence: Top ${propsPerGame} of ${allPicks.length}, filtered to ${finalPicks.length} picks (>=${minConfidence})`);
 
     return {
       picks: finalPicks,

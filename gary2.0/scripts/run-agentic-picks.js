@@ -26,6 +26,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env.local'), override: true }
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/agenticOrchestrator.js');
+const { runAgenticNhlPipeline } = await import('../src/services/agentic/nhlAgenticRunner.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
@@ -297,7 +298,10 @@ function extractBinaryFlags(pick) {
       f.includes('home_court') || f.includes('home_advantage')
     ),
     efficiency_edge: allFactors.some(f => 
-      f.includes('efficiency') || f.includes('net_rating') || f.includes('offensive_rating')
+      f.includes('efficiency') || f.includes('net_rating') || f.includes('offensive_rating') || f.includes('corsi') || f.includes('xgf')
+    ),
+    goalie_edge: allFactors.some(f =>
+      f.includes('goalie') || f.includes('gsax') || f.includes('save_pct')
     )
   };
 }
@@ -331,7 +335,8 @@ function rankAndFilterPicks(picks, sport) {
       flags.rest_advantage ? '💤REST' : '',
       flags.back_to_back_disadvantage ? '⚠️B2B' : '',
       flags.injury_edge ? '🏥INJ' : '',
-      flags.efficiency_edge ? '📊EFF' : ''
+      flags.efficiency_edge ? '📊EFF' : '',
+      flags.goalie_edge ? '🥅GOALIE' : ''
     ].filter(Boolean).join(' ') || 'none';
     const trapStr = p.trap.isTrap ? `🚨TRAP: ${p.trap.trapReason}` : '';
     console.log(`   ${i + 1}. ${p.pick.padEnd(35)} Conf: ${conf} | Flags: ${flagStr} ${trapStr}`);
@@ -669,11 +674,35 @@ async function main() {
         const skippedGames = [];
         const skippedNonApproved = [];
 
+        // Pre-fetch all teams once to optimize lookup
+        const ncaabTeams = await ballDontLieService.getTeams('basketball_ncaab');
+        const normalize = (name) => name?.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+        
+        const teamMap = new Map();
+        ncaabTeams.forEach(t => {
+          if (t.full_name) teamMap.set(normalize(t.full_name), t);
+          if (t.name) teamMap.set(normalize(t.name), t);
+        });
+
+        // Helper to find team by name using the map
+        const findTeam = (name) => {
+          const norm = normalize(name);
+          if (teamMap.has(norm)) return teamMap.get(norm);
+          // Try fuzzy match
+          for (const [key, team] of teamMap.entries()) {
+            if (key.includes(norm) || norm.includes(key)) return team;
+          }
+          return null;
+        };
+
+        const season = now.getMonth() + 1 <= 4 ? now.getFullYear() - 1 : now.getFullYear();
+        console.log(`[${config.name}] Pre-processing ${games.length} games...`);
+
         for (const game of games) {
           try {
-            // Get team IDs
-            const homeTeam = await ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.home_team);
-            const awayTeam = await ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.away_team);
+            // Get teams from pre-fetched map
+            const homeTeam = findTeam(game.home_team);
+            const awayTeam = findTeam(game.away_team);
 
             if (!homeTeam || !awayTeam) {
               skippedGames.push({ game, reason: 'Team not found in database' });
@@ -699,26 +728,22 @@ async function main() {
             }
 
             // Check season stats for both teams
-            const season = now.getMonth() + 1 <= 4 ? now.getFullYear() - 1 : now.getFullYear();
             const [homeStats, awayStats] = await Promise.all([
               ballDontLieService.getTeamSeasonStats('basketball_ncaab', { teamId: homeTeam.id, season }),
               ballDontLieService.getTeamSeasonStats('basketball_ncaab', { teamId: awayTeam.id, season })
             ]);
 
-            // Extract stats using exact BDL field names from docs
+            // Extract stats
             const h = homeStats?.[0] || {};
             const a = awayStats?.[0] || {};
 
-            // games_played, fgm, fga, fg_pct, fg3m, fg3a, pts are the key fields
             const homeGames = h.games_played || 0;
             const awayGames = a.games_played || 0;
-            const homePts = h.pts || 0;  // Per-game average
+            const homePts = h.pts || 0;
             const awayPts = a.pts || 0;
-            const homeFgPct = h.fg_pct || 0;  // Already a percentage
+            const homeFgPct = h.fg_pct || 0;
             const awayFgPct = a.fg_pct || 0;
 
-            // Data quality: Must have 5+ games AND valid stats (PPG > 40, FG% > 30)
-            // Any real D1 team scores 50+ PPG and shoots 35%+
             const homeHasData = homeGames >= MIN_GAMES_FOR_ANALYSIS && homePts > 40 && homeFgPct > 30;
             const awayHasData = awayGames >= MIN_GAMES_FOR_ANALYSIS && awayPts > 40 && awayFgPct > 30;
 
@@ -733,7 +758,6 @@ async function main() {
               });
             }
           } catch (err) {
-            // If we can't check, include the game (let the 8-stat filter catch bad ones)
             console.warn(`[${config.name}] Could not verify data for ${game.away_team} @ ${game.home_team}: ${err.message}`);
             filteredGames.push(game);
           }
@@ -897,7 +921,14 @@ async function main() {
         }
 
         // Run agentic analysis
-        const result = await analyzeGame(game, config.key);
+        let result;
+        if (config.name === 'NHL') {
+          console.log(`[NHL] Using 3-Stage Pipeline (Judge Audit enabled)`);
+          const runnerOptions = { nocache: process.argv.includes('--nocache') };
+          result = await runAgenticNhlPipeline(game, runnerOptions);
+        } else {
+          result = await analyzeGame(game, config.key);
+        }
 
         if (result && !result.error && result.pick) {
           // Check minimum stats requirement (for NCAAB especially)
@@ -1033,7 +1064,29 @@ async function main() {
             'longest_pass': 'Long Pass',
             'total_yards_per_game': 'Total YPG',
             'passing_ypg': 'Passing YPG',
+            'rushing_ypg': 'Rush YPG',
+            'total_ypg': 'Total YPG',
+            'total_tds': 'Total TDs',
+            'opp_passing_yards': 'Opp Pass Yds',
+            'opp_rushing_yards': 'Opp Rush Yds',
+            'opp_total_yards': 'Opp Total Yds',
+            'total_yards': 'Total Yards',
+            'passing_yards': 'Pass Yards',
+            'rushing_yards': 'Rush Yards',
+            'passing_ints': 'Pass INTs',
+            'interceptions_thrown': 'INTs Thrown',
             'sacks': 'Sacks',
+            'kenpom_rank': 'KenPom Rank',
+            'adj_em': 'AdjEM',
+            'adj_offense': 'AdjO',
+            'adj_defense': 'AdjD',
+            'net_rank': 'NET Rank',
+            'net_ranking': 'NET Rank',
+            'offensive_rating': 'Off Rating',
+            'defensive_rating': 'Def Rating',
+            'conference_record': 'Conf Record',
+            'conference_win_pct': 'Conf Win %',
+            'tempo': 'Tempo',
             'temperature': 'Temperature',
             'feels_like': 'Feels Like',
             'wind_speed': 'Wind Speed',
@@ -1047,52 +1100,27 @@ async function main() {
             // Map common variations to canonical forms
             if (lower === 'opp_ppg' || lower === 'opp_points_per_game') return 'opp_ppg';
             if (lower === 'ppg' || lower === 'points_per_game') return 'ppg';
-            if (lower === 'total_ypg' || lower === 'yards_per_game' || lower === 'total_yards_per_game') return 'ypg';
-            if (lower === 'opp_ypg' || lower === 'opp_yards_per_game') return 'opp_ypg';
+            if (lower === 'total_ypg' || lower === 'yards_per_game' || lower === 'total_yards_per_game' || lower === 'ypg') return 'ypg';
+            if (lower === 'opp_ypg' || lower === 'opp_yards_per_game' || lower === 'opp_total_yards') return 'opp_ypg';
             if (lower === 'pass_tds' || lower === 'passing_tds' || lower === 'passing_touchdowns') return 'pass_tds';
             if (lower === 'rush_tds' || lower === 'rushing_tds' || lower === 'rushing_touchdowns') return 'rush_tds';
-            if (lower === 'ints' || lower === 'interceptions') return 'ints';
+            if (lower === 'ints' || lower === 'interceptions' || lower === 'interceptions_thrown' || lower === 'passing_interceptions') return 'ints';
             if (lower === 'recv_ypg' || lower === 'receiving_yards_per_game' || lower === 'receiving_ypg') return 'recv_ypg';
             if (lower === 'recv_tds' || lower === 'receiving_tds' || lower === 'receiving_touchdowns') return 'recv_tds';
             return lower;
           };
 
           if (result.toolCallHistory) {
-            // NCAAB & NCAAF: keep token-level rows (avoid flattening into token=TURNOVERS_PER_GAME, etc.)
-            // This preserves the full stat objects so the frontend can extract the right field
-            if (config.key === 'basketball_ncaab' || config.key === 'americanfootball_ncaaf') {
-              for (const t of result.toolCallHistory) {
-                if (!t?.token) continue;
+            // All sports now use flattened stats for better Tale of the Tape depth
+            for (const t of result.toolCallHistory) {
+              if (!t.token) continue;
 
-                const homeVal = t.homeValue;
-                const awayVal = t.awayValue;
+              const homeVal = t.homeValue;
+              const awayVal = t.awayValue;
 
-                // Skip unusable tokens for tale-of-the-tape
-                if (t.token === 'TOP_PLAYERS') continue;
-                if (homeVal === 'N/A' || awayVal === 'N/A' || homeVal == null || awayVal == null) continue;
-
-                // Dedup by token+stringified values
-                const statKey = `${t.token}:${JSON.stringify(homeVal)}:${JSON.stringify(awayVal)}`;
-                if (seenStatKeys.has(statKey)) continue;
-                seenStatKeys.add(statKey);
-
-                statsData.push({
-                  name: t.token.replace(/_/g, ' '),
-                  token: t.token,
-                  home: homeVal,
-                  away: awayVal
-                });
-              }
-            } else {
-              for (const t of result.toolCallHistory) {
-                if (!t.token) continue;
-
-                const homeVal = t.homeValue;
-                const awayVal = t.awayValue;
-
-                // If home/away are objects, flatten each key into its own stat row
-                if (typeof homeVal === 'object' && homeVal !== null &&
-                  typeof awayVal === 'object' && awayVal !== null) {
+              // If home/away are objects, flatten each key into its own stat row
+              if (typeof homeVal === 'object' && homeVal !== null &&
+                typeof awayVal === 'object' && awayVal !== null) {
                   const homeKeys = Object.keys(homeVal).filter(k => isValidValue(k, homeVal[k]));
                   const awayKeys = Object.keys(awayVal).filter(k => isValidValue(k, awayVal[k]));
                   const allKeys = [...new Set([...homeKeys, ...awayKeys])];
@@ -1133,8 +1161,7 @@ async function main() {
                     token: t.token,
                     home: homeVal,
                     away: awayVal
-                  });
-                }
+                });
               }
             }
           }
@@ -1313,17 +1340,26 @@ async function main() {
             'NBA': 0.69,    // Targeting 3-4 quality picks per night
             'NCAAF': 0,     // Store all NCAAF picks (CFP games are limited, want all analysis)
             'NCAAB': 0.64,  // Higher bar for college hoops
-            'NHL': 0.60,    // Match NBA calibration
+            'NHL': 0.68,    // User requested 0.68 for NHL
             'NFL': 0.63,    // Week 16: 0.63 threshold (quality over quantity)
             'EPL': 0.60     // Match calibration
           };
-          const MIN_CONFIDENCE = CONFIDENCE_BY_SPORT[config.name] ?? 0.64;
-          const MAX_FAVORITE_SPREAD = -9.5; // Filter out NBA double-digit spreads (-10, -11, etc.)
+          
+          // Use override if provided, otherwise sport-specific default
+          const MIN_CONFIDENCE = minConfidenceOverride ?? (CONFIDENCE_BY_SPORT[config.name] ?? 0.64);
+          const MIN_CONFIDENCE_UNDERDOG = Math.min(MIN_CONFIDENCE, 0.60); // Underdogs always at least 0.60 or lower if min-confidence is lower
+          const MAX_FAVORITE_SPREAD = -10; // Filter out NBA double-digit spreads (-10.5, -11, etc.)
 
           const qualifiedPicks = sportPicks.filter(p => {
             const confidence = typeof p.confidence === 'number' ? p.confidence : 0;
             const majorCount = p.contradicting_factors?.major?.length || 0;
             const trap = detectTrapSituation(p, config.name);
+            
+            // Determine if this is an underdog pick (positive spread)
+            const isUnderdogPick = 
+              (p.type === 'spread' && p.spread && parseFloat(p.spread) > 0) ||
+              (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
+            const effectiveMinConfidence = isUnderdogPick ? MIN_CONFIDENCE_UNDERDOG : MIN_CONFIDENCE;
             
             // 1. PASS/COIN_FLIP CHECK - Gary explicitly passed on this game
             if (p.pick === 'PASS' || p.thesis_type === 'coin_flip') {
@@ -1331,16 +1367,39 @@ async function main() {
               return false;
             }
 
-            // 2. CONFIDENCE CHECK (primary filter)
-            if (confidence < MIN_CONFIDENCE) {
-              console.log(`  ❌ Filtered: ${p.pick} (confidence ${confidence.toFixed(2)} < ${MIN_CONFIDENCE} for ${config.name})`);
+            // 2. CONFIDENCE CHECK (primary filter) - Option A: Underdogs get lower threshold
+            if (confidence < effectiveMinConfidence) {
+              const dogNote = isUnderdogPick ? ' (underdog threshold)' : '';
+              console.log(`  ❌ Filtered: ${p.pick} (confidence ${confidence.toFixed(2)} < ${effectiveMinConfidence}${dogNote} for ${config.name})`);
               return false;
+            }
+            
+            // 2.5 UNDERDOG BONUS LOG - highlight when underdogs pass through
+            if (isUnderdogPick) {
+              console.log(`  🐕 Underdog detected: ${p.pick} (conf: ${confidence.toFixed(2)}) - applying lower threshold`);
             }
 
             // 4. TRAP DETECTION (B2B road favorite laying points)
             if (trap.isTrap) {
               console.log(`  ❌ Filtered: ${p.pick} (TRAP: ${trap.trapReason})`);
               return false;
+            }
+
+            // 4.5 BIG SPREAD SKEPTICISM - Favorites laying 7+ need 3+ supporting factors
+            // This combats the "favorite bias" where Gary picks "better teams" without sufficient edge
+            if (p.type === 'spread' && p.spread && parseFloat(p.spread) < -6.5) {
+              const supportingCount = p.supporting_factors?.length || 0;
+              const spreadValue = Math.abs(parseFloat(p.spread));
+              
+              // For spreads 7-9.5, need 3+ factors. For 10+, need 4+ factors.
+              const requiredFactors = spreadValue >= 10 ? 4 : 3;
+              
+              if (supportingCount < requiredFactors) {
+                console.log(`  ❌ Filtered: ${p.pick} (Big favorite -${spreadValue} lacks conviction - only ${supportingCount}/${requiredFactors} factors)`);
+                return false;
+              } else {
+                console.log(`  ⚠️ Big spread warning: ${p.pick} (-${spreadValue}) passed with ${supportingCount} factors`);
+              }
             }
 
             // 5. NBA: Filter out double-digit favorite spreads (-10 or more)
@@ -1355,14 +1414,30 @@ async function main() {
               }
             }
 
-            // 6. NHL: Filter out heavy favorite puck lines
-            if (config.name === 'NHL' && p.type === 'spread') {
-              const oddsMatch = p.pick.match(/[+-]\d+\.?\d*\s*([+-]\d+)$/);
-              if (oddsMatch) {
-                const oddsValue = parseFloat(oddsMatch[1]);
-                if (p.pick.includes('-1.5') && oddsValue <= -180) {
-                  console.log(`  ❌ Filtered: ${p.pick} (puck line odds ${oddsValue} too heavy)`);
-                  return false;
+            // 6. NHL: Filter out heavy favorite puck lines AND heavy ML favorites
+            if (config.name === 'NHL') {
+              // Filter heavy puck line favorites (-1.5 at -180 or worse)
+              if (p.type === 'spread') {
+                const oddsMatch = p.pick.match(/[+-]\d+\.?\d*\s*([+-]\d+)$/);
+                if (oddsMatch) {
+                  const oddsValue = parseFloat(oddsMatch[1]);
+                  if (p.pick.includes('-1.5') && oddsValue <= -180) {
+                    console.log(`  ❌ Filtered: ${p.pick} (puck line odds ${oddsValue} too heavy)`);
+                    return false;
+                  }
+                }
+              }
+              
+              // NEW: Filter heavy ML favorites (-165 or worse) - these lose at high rate
+              // Data shows ML favorites at -165+ losing consistently
+              if (p.type === 'moneyline') {
+                const mlOddsMatch = p.pick.match(/ML\s*([+-]\d+)/i);
+                if (mlOddsMatch) {
+                  const mlOdds = parseInt(mlOddsMatch[1], 10);
+                  if (mlOdds <= -165) {
+                    console.log(`  ❌ Filtered: ${p.pick} (heavy ML favorite ${mlOdds} - high variance trap)`);
+                    return false;
+                  }
                 }
               }
             }
@@ -1379,7 +1454,8 @@ async function main() {
               flags.rest_advantage ? '💤REST' : '',
               flags.back_to_back_disadvantage ? '⚠️B2B' : '',
               flags.injury_edge ? '🏥INJ' : '',
-              flags.efficiency_edge ? '📊EFF' : ''
+              flags.efficiency_edge ? '📊EFF' : '',
+              flags.goalie_edge ? '🥅GOALIE' : ''
             ].filter(Boolean).join(' ') || 'none';
             
             console.log(`  ✅ Qualified: ${p.pick} (conf: ${confidence.toFixed(2)}, thesis: ${p.thesis_type || 'N/A'}, flags: ${flagStr})`);
@@ -1400,14 +1476,6 @@ async function main() {
             // This organically reduces picks to the strongest ones
             let rankedPicks = rankAndFilterPicks(qualifiedPicks, config.name);
 
-            // NHL: Cap at 3 picks maximum (hockey has high variance)
-            if (config.name === 'NHL' && rankedPicks.length > 3) {
-              console.log(`[NHL] Capping picks from ${rankedPicks.length} to 3 (highest confidence)`);
-              rankedPicks = rankedPicks
-                .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-                .slice(0, 3);
-            }
-
             if (rankedPicks.length > 0) {
               await storePicks(rankedPicks);
               allPicks.push(...rankedPicks);
@@ -1417,17 +1485,24 @@ async function main() {
       }
 
       const sportTime = ((Date.now() - sportStartTime) / 1000).toFixed(1);
-      // Use same sport-specific thresholds for summary
-      const CONFIDENCE_BY_SPORT_SUMMARY = {
-        'NBA': 0.69, 'NCAAF': 0, 'NCAAB': 0.64, 'NHL': 0.60, 'NFL': 0.63, 'EPL': 0.60
-      };
-      const SUMMARY_MIN_CONFIDENCE = CONFIDENCE_BY_SPORT_SUMMARY[config.name] ?? 0.64;
+      
+      // Use the same thresholds we calculated during filtering
+      // Since they were inside the loop, we re-calculate here or just use a shared variable
+      const SUMMARY_MIN_CONFIDENCE = minConfidenceOverride ?? (({
+        'NBA': 0.69, 'NCAAF': 0, 'NCAAB': 0.64, 'NHL': 0.68, 'NFL': 0.63, 'EPL': 0.60
+      })[config.name] ?? 0.64);
 
       // Count qualified picks - confidence-based filtering
       const qualifiedCount = sportPicks.filter(p => {
         const conf = typeof p.confidence === 'number' ? p.confidence : 0;
         const trap = detectTrapSituation(p, config.name);
-        return conf >= SUMMARY_MIN_CONFIDENCE && !trap.isTrap;
+        // Determine if this is an underdog pick (positive spread)
+        const isUnderdogPick = 
+          (p.type === 'spread' && p.spread && parseFloat(p.spread) > 0) ||
+          (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
+        const effectiveMin = isUnderdogPick ? Math.min(SUMMARY_MIN_CONFIDENCE, 0.60) : SUMMARY_MIN_CONFIDENCE;
+        
+        return conf >= effectiveMin && !trap.isTrap;
       }).length;
 
       summary[config.name] = {

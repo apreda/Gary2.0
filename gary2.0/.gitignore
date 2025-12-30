@@ -28,3 +28,8 @@ dist-ssr
 .env
 .env.*
 .env*.local
+
+# Secrets and Service Accounts
+firebase-service-account.json
+ios/GaryApp/Secrets.swift
+ios/GaryApp/GoogleService-Info.plist

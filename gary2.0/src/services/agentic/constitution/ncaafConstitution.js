@@ -219,8 +219,8 @@ CFB teams regress to talent level:
 - G5 teams in CFP face massive talent gaps vs P4 blue bloods
 - Lines often 20+ points in these matchups
 - G5 teams CAN cover with scheme, motivation, and chaos
-- G5 teams with real upset paths = ML offers massive value (+150 to +250)
-- If you believe they WIN, take the ML. If you believe they COVER but lose, take the spread.
+ - G5 teams with real upset paths = ML offers massive value (+150 or much higher)
+   - If your rationale says "this team wins," put your money where your mouth is. There is no ceiling on plus-money value.
 - **CRITICAL STATS FOR P4 vs G5 MATCHUPS:**
   - [STRENGTH_OF_SCHEDULE] - Did the G5 team face ANY Power 4 opponents?
   - [OPPONENT_ADJUSTED] - FPI/SP+ ratings account for opponent quality
@@ -263,7 +263,7 @@ CFB teams regress to talent level:
 Before taking the spread on an underdog, ask yourself:
 
 1. "Do I believe this team WINS outright?" 
-   - YES → Take the ML. +150 to +200 underdogs that WIN are hugely profitable.
+   - YES → Take the ML. Underdogs (+150 or much higher) that WIN are hugely profitable. There is no ceiling on plus-money value.
    - NO → Spread is correct.
 
 2. "What's my thesis mechanism?"

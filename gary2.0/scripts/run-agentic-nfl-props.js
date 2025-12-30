@@ -11,7 +11,7 @@ runAgenticPropsCli({
   leagueLabel: 'NFL',
   buildContext: buildNflPropsAgenticContext,
   windowHours: 24,  // Today's games within 24h
-  propsPerGame: 5,
+  propsPerGame: 3,  // Top 3 highest confidence picks per game
   limitDefault: 20,  // Process up to 20 games (full NFL Sunday slate)
   useESTDayFiltering: true  // Filter by EST day instead of rolling window
 })

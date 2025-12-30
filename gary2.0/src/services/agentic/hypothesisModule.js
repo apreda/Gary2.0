@@ -83,7 +83,7 @@ export async function runHypothesisStage({ gameSummary }) {
 
   const raw = await openaiService.generateResponse(messages, {
     temperature: 0.4,
-    maxTokens: 900
+    maxTokens: 8000
   });
   const parsed = safeJsonParse(raw, null);
   if (!parsed) {

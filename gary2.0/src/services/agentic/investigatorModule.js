@@ -56,7 +56,7 @@ export async function runInvestigatorStage({ gameSummary, hypothesis, tokenPaylo
 
   const raw = await openaiService.generateResponse(messages, {
     temperature: 0.35,
-    maxTokens: 1100
+    maxTokens: 10000
   });
   const parsed = safeJsonParse(raw, null);
   if (!parsed) {

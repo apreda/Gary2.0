@@ -71,6 +71,21 @@ async function main() {
     console.log(`   Games: ${context.gamesCount || 'N/A'}`);
     console.log(`   Grounding used: ${context.groundingUsed ? 'Yes' : 'No'}`);
     
+    // Show salary data quality warning
+    if (context.salaryData) {
+      const { realCount, estimatedCount, quality, warning } = context.salaryData;
+      if (quality === 'poor') {
+        console.log(`\n❌ SALARY DATA ISSUE:`);
+        console.log(`   Only ${realCount}/${context.players.length} players have REAL salaries`);
+        console.log(`   ${estimatedCount} players have ESTIMATED salaries`);
+        console.log(`   ⚠️ Lineup optimization may be inaccurate!`);
+      } else if (quality === 'partial') {
+        console.log(`\n⚠️ Partial salary data: ${realCount} real, ${estimatedCount} estimated`);
+      } else {
+        console.log(`   Salary data: ${realCount} real salaries ✓`);
+      }
+    }
+    
     if (context.targetPlayers?.length > 0) {
       console.log(`\n🎯 Target Players:`);
       context.targetPlayers.slice(0, 3).forEach(p => {
@@ -90,7 +105,11 @@ async function main() {
     const lineup = await generateDFSLineup({
       platform,
       sport,
-      players: context.players
+      players: context.players,
+      context: {
+        fadePlayers: context.fadePlayers || [],
+        targetPlayers: context.targetPlayers || []
+      }
     });
     
     // Validate

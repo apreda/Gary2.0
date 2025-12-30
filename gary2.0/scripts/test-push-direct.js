@@ -14,8 +14,6 @@ import { GoogleAuth } from 'google-auth-library';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const serviceAccountPath = join(__dirname, '../firebase-service-account.json');
-
 function getServiceAccount() {
   // Prefer environment variables (production/CI)
   if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
@@ -28,15 +26,9 @@ function getServiceAccount() {
     };
   }
   
-  // Fallback to local file (development only)
-  if (existsSync(serviceAccountPath)) {
-    console.log('Using Firebase credentials from local file (dev mode)');
-    return JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-  }
-  
   throw new Error(
     'Firebase credentials not found. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL ' +
-    'environment variables, or create firebase-service-account.json for local development.'
+    'environment variables.'
   );
 }
 
@@ -69,9 +61,11 @@ async function main() {
     // Send FCM message directly via HTTP
     // Usage:
     //   node scripts/test-push-direct.js "<FCM_TOKEN>"
-    const fcmToken =
-      process.argv[2] ||
-      'cSGXTJBfgkMLm0WFjWsUNd:APA91bHGN6CwxTk-sXN3ZV4oqLTwzJSjccBjaH69KGtDdWqMjSKmVjJRPmj51vobTlGReZBFIGw-i7Qp4uzqDScHqhFRMAOmdTLEQhZQT2bxDqWOCFocIvE';
+    const fcmToken = process.argv[2];
+    
+    if (!fcmToken) {
+      throw new Error('No FCM token provided. Usage: node scripts/test-push-direct.js "<FCM_TOKEN>"');
+    }
     
     const message = {
       message: {

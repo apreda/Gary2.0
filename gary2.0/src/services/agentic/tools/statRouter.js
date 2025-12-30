@@ -42,12 +42,7 @@ const DEPRECATED_TOKENS = [
   'NCAAF_SP_PLUS', 'NCAAF_FPI', 'NCAAF_EPA_ADVANCED', 'NCAAF_HAVOC_RATE',
   'NCAAF_EXPLOSIVENESS', 'NCAAF_RUSHING_EFFICIENCY', 'NCAAF_PASSING_EFFICIENCY',
   'NCAAF_RED_ZONE', 'NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH',
-  'NCAAF_VS_POWER_OPPONENTS', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED',
-  // NCAAB tokens - use Gemini Grounding instead
-  'NCAAB_KENPOM_RATINGS',
-  'NCAAB_NET_RANKING',
-  'NCAAB_STRENGTH_OF_SCHEDULE',
-  'NCAAB_QUAD_RECORD'
+  'NCAAF_VS_POWER_OPPONENTS', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED'
 ];
 
 export async function fetchStats(sport, token, homeTeam, awayTeam, options = {}) {
@@ -62,7 +57,7 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   // MLB: Season April-Oct - if month 1-3, use previousYear
   let defaultSeason;
   const normalizedSportForSeason = (sport || '').toLowerCase();
-  if (normalizedSportForSeason.includes('nba') || normalizedSportForSeason.includes('nhl')) {
+  if (normalizedSportForSeason.includes('nba') || normalizedSportForSeason.includes('nhl') || normalizedSportForSeason.includes('ncaab')) {
     defaultSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
   } else if (normalizedSportForSeason.includes('nfl') || normalizedSportForSeason.includes('ncaaf')) {
     defaultSeason = currentMonth <= 7 ? currentYear - 1 : currentYear;

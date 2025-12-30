@@ -49,7 +49,7 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   if (cacheMap.has(key)) {
     const { data, expiry } = cacheMap.get(key);
     if (now < expiry) {
-      console.log(`[Ball Don't Lie] Using cached data for ${key}`);
+      // console.log(`[Ball Don't Lie] Using cached data for ${key}`);
       return data;
     }
   }
@@ -1356,14 +1356,17 @@ const ballDontLieService = {
             const logs = await getCachedOrFetch(cacheKey, async () => {
               // Fetch player's game stats using the stats endpoint
               // NOTE: BDL NFL stats API requires "seasons[]" (array format), not "season"
+              // CRITICAL FIX: Must fetch ALL season games (25+) because BDL API returns oldest-first
+              // by default. Only then can we sort and get the ACTUAL most recent 5 games.
               const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery({
                 player_ids: [playerId],
                 seasons: [season], // CRITICAL: Must use seasons[] array format per BDL docs
-                per_page: numGames + 5 // Fetch extra to ensure we have enough
+                per_page: 25 // Fetch full season (17 regular + some extra) to ensure we get ALL games
               })}`;
               
               const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-              // CRITICAL: Sort by game date descending to get most recent games first
+              // CRITICAL: BDL returns stats oldest-first, so we MUST sort by date DESCENDING
+              // to get the actual most recent games (Dec games, not Sept games)
               const allStats = (response.data?.data || [])
                 .filter(g => g.game?.date) // Ensure valid date
                 .sort((a, b) => new Date(b.game.date) - new Date(a.game.date));
@@ -1471,6 +1474,73 @@ const ballDontLieService = {
                 else if (l2Avg < l5Avg * 0.85) formTrend = 'cold';
               }
               
+              // TARGET SHARE TRENDING - Detect usage spikes for WR/TE/RB
+              // Compare L2 targets vs L5 average
+              let targetTrend = null;
+              const targetValues = gameByGame.map(g => g.targets || 0);
+              if (targetValues.some(t => t > 0)) {
+                const l5TargetsAvg = targetValues.reduce((a, b) => a + b, 0) / gp;
+                const l2TargetsAvg = gp >= 2 
+                  ? targetValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2 
+                  : l5TargetsAvg;
+                const l3TargetsAvg = gp >= 3
+                  ? targetValues.slice(0, 3).reduce((a, b) => a + b, 0) / 3
+                  : l5TargetsAvg;
+                
+                // Calculate target share trend
+                const targetChange = l5TargetsAvg > 0 
+                  ? ((l2TargetsAvg - l5TargetsAvg) / l5TargetsAvg * 100).toFixed(0) 
+                  : 0;
+                
+                // Detect spike (L2 avg > L5 avg by 20%+)
+                const isSpike = parseFloat(targetChange) >= 20;
+                const isDeclining = parseFloat(targetChange) <= -20;
+                
+                targetTrend = {
+                  l5Avg: l5TargetsAvg.toFixed(1),
+                  l3Avg: l3TargetsAvg.toFixed(1),
+                  l2Avg: l2TargetsAvg.toFixed(1),
+                  lastGame: targetValues[0],
+                  change: targetChange,
+                  trend: isSpike ? 'SPIKE' : isDeclining ? 'DECLINING' : 'STABLE',
+                  gameByGame: targetValues.slice(0, 5)
+                };
+              }
+              
+              // USAGE TRACKING - Proxy for snap counts using touches + targets
+              // Higher total touches = more involvement = likely more snaps
+              let usageTrend = null;
+              const usageValues = gameByGame.map(g => 
+                (g.targets || 0) + (g.rush_att || 0) + (g.receptions || 0)
+              );
+              if (usageValues.some(u => u > 0)) {
+                const l5UsageAvg = usageValues.reduce((a, b) => a + b, 0) / gp;
+                const l2UsageAvg = gp >= 2 
+                  ? usageValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2 
+                  : l5UsageAvg;
+                
+                const usageChange = l5UsageAvg > 0 
+                  ? ((l2UsageAvg - l5UsageAvg) / l5UsageAvg * 100).toFixed(0) 
+                  : 0;
+                
+                // Categorize usage level
+                let usageLevel = 'LOW';
+                if (l5UsageAvg >= 15) usageLevel = 'ELITE';
+                else if (l5UsageAvg >= 10) usageLevel = 'HIGH';
+                else if (l5UsageAvg >= 5) usageLevel = 'MODERATE';
+                
+                usageTrend = {
+                  l5Avg: l5UsageAvg.toFixed(1),
+                  l2Avg: l2UsageAvg.toFixed(1),
+                  lastGame: usageValues[0],
+                  change: usageChange,
+                  level: usageLevel,
+                  trend: parseFloat(usageChange) >= 15 ? 'INCREASING' : 
+                         parseFloat(usageChange) <= -15 ? 'DECREASING' : 'STABLE',
+                  gameByGame: usageValues.slice(0, 5)
+                };
+              }
+              
               return {
                 gamesAnalyzed: gp,
                 games: gameByGame,
@@ -1478,6 +1548,8 @@ const ballDontLieService = {
                 consistency,
                 splits,
                 formTrend,
+                targetTrend, // NEW: Target share trending
+                usageTrend,  // NEW: Usage/touch tracking (snap count proxy)
                 lastGame: gameByGame[0] || null
               };
             }, ttlMinutes);
@@ -2387,13 +2459,11 @@ const ballDontLieService = {
           return resp?.data || [];
         }
         // HTTP fallback for sports with documented injuries endpoints
-        // NOTE: NHL/NCAAF/NCAAB injuries NOT supported by BDL - Gemini Grounding is primary source
         const endpointMap = {
           basketball_nba: 'nba/v1/player_injuries',
           basketball_wnba: 'wnba/v1/player_injuries',
-          americanfootball_nfl: 'nfl/v1/player_injuries'
-          // NHL: No BDL injuries endpoint (404 confirmed) - use Gemini Grounding instead
-          // NCAAF/NCAAB: No BDL injuries endpoint - use Gemini Grounding instead
+          americanfootball_nfl: 'nfl/v1/player_injuries',
+          icehockey_nhl: 'nhl/v1/player_injuries'
         };
         const path = endpointMap[sportKey];
         if (!path) {
@@ -2412,6 +2482,131 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getInjuries error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get NHL League Ranks for key stats
+   */
+  async getNhlLeagueRanks(season) {
+    try {
+      const cacheKey = `nhl_league_ranks_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Fetch leaders for PP%, PK%, Goals For, Goals Against
+        const statTypes = [
+          { type: 'power_play_percentage', key: 'pp_rank' },
+          { type: 'penalty_kill_percentage', key: 'pk_rank' },
+          { type: 'goals_for_per_game', key: 'gf_rank' },
+          { type: 'goals_against_per_game', key: 'ga_rank' }
+        ];
+
+        const allRanks = {}; // { teamId: { pp_rank: 1, ... } }
+
+        await Promise.all(statTypes.map(async ({ type, key }) => {
+          const leaders = await this.getLeadersGeneric('icehockey_nhl_team', { season, type, per_page: 32 });
+          leaders.forEach((l, index) => {
+            if (!l.team?.id) return;
+            if (!allRanks[l.team.id]) allRanks[l.team.id] = {};
+            allRanks[l.team.id][key] = index + 1;
+          });
+        }));
+
+        return allRanks;
+      }, 120); // Cache for 2 hours
+    } catch (e) {
+      console.error(`[Ball Don't Lie] getNhlLeagueRanks error:`, e.message);
+      return {};
+    }
+  },
+
+  /**
+   * Get top performers for a specific team in the last N days
+   */
+  async getTeamTopPerformers(sportKey, teamId, days = 14, limit = 3) {
+    try {
+      const cacheKey = `top_performers_${sportKey}_${teamId}_${days}_${limit}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const dates = [];
+        const now = new Date();
+        for (let i = 1; i <= days; i++) {
+          const d = new Date(now);
+          d.setDate(d.getDate() - i);
+          dates.push(d.toISOString().slice(0, 10));
+        }
+
+        const boxScores = await this.getNhlRecentBoxScores(dates, { team_ids: [teamId] });
+        if (!boxScores || boxScores.length === 0) return [];
+
+        const playerStats = {}; // { playerId: { name, points, goals, assists, games } }
+
+        boxScores.forEach(bs => {
+          if (!bs.player?.id || bs.team?.id !== teamId) return;
+          const pid = bs.player.id;
+          if (!playerStats[pid]) {
+            playerStats[pid] = {
+              name: `${bs.player.first_name} ${bs.player.last_name}`,
+              points: 0,
+              goals: 0,
+              assists: 0,
+              games: 0
+            };
+          }
+          playerStats[pid].points += (bs.points || 0);
+          playerStats[pid].goals += (bs.goals || 0);
+          playerStats[pid].assists += (bs.assists || 0);
+          playerStats[pid].games++;
+        });
+
+        return Object.values(playerStats)
+          .filter(p => p.games > 0)
+          .sort((a, b) => b.points - a.points || b.goals - a.goals)
+          .slice(0, limit)
+          .map(p => ({
+            ...p,
+            ppg: (p.points / p.games).toFixed(2)
+          }));
+      }, 60); // Cache for 1 hour
+    } catch (e) {
+      console.error(`[Ball Don't Lie] getTeamTopPerformers error:`, e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get head-to-head history between two teams
+   * @param {string} sportKey - The sport key (e.g., 'basketball_nba')
+   * @param {number} teamId1 - First team ID
+   * @param {number} teamId2 - Second team ID
+   * @param {number} limit - Max number of games to return
+   * @returns {Promise<Array>} Array of H2H game results
+   */
+  async getHeadToHeadHistory(sportKey, teamId1, teamId2, limit = 10) {
+    try {
+      const cacheKey = `h2h_${sportKey}_${teamId1}_${teamId2}_${limit}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const currentYear = new Date().getFullYear();
+        // Fetch last 2 seasons to get enough H2H samples
+        const seasons = [currentYear, currentYear - 1];
+        
+        const games = await this.getGames(sportKey, {
+          team_ids: [teamId1, teamId2],
+          seasons: seasons,
+          per_page: 100
+        });
+
+        // Filter for games where BOTH teams were playing each other
+        const h2h = games.filter(g => 
+          (g.home_team.id === teamId1 && g.visitor_team?.id === teamId2) ||
+          (g.home_team.id === teamId2 && g.visitor_team?.id === teamId1) ||
+          (g.home_team.id === teamId1 && g.away_team?.id === teamId2) ||
+          (g.home_team.id === teamId2 && g.away_team?.id === teamId1)
+        );
+
+        return h2h.sort((a, b) => new Date(b.date || b.datetime) - new Date(a.date || a.datetime)).slice(0, limit);
+      }, 60); // Cache for 1 hour
+    } catch (e) {
+      console.error(`[Ball Don't Lie] getH2HHistory error:`, e.message);
       return [];
     }
   },

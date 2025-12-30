@@ -63,27 +63,28 @@ STRICT JSON schema to output (all fields required):
 RATIONALE FORMAT (CRITICAL FOR iOS APP)
 ═══════════════════════════════════════════════════════════════════════
 
-Your rationale MUST follow this EXACT format:
+Your rationale MUST follow this EXACT format (iOS app depends on this):
 
 TALE OF THE TAPE
 
                     [HOME TEAM]          [AWAY TEAM]
-Record                  X-X       ←          X-X         (arrow points to better record)
-Off Rating             XXX.X      ←         XXX.X        (arrow points to higher/better)
-Def Rating             XXX.X      →         XXX.X        (arrow points to LOWER/better defense)
-Net Rating             +X.X       ←         -X.X         (arrow points to higher)
+Record                  X-X       ←          X-X
+Off Rating             XXX.X      ←         XXX.X
+Def Rating             XXX.X      →         XXX.X
+Net Rating             +X.X       ←         -X.X
 Key Injuries           [names]              [names]
 
-The arrow (← or →) shows which side has the advantage for that stat.
-Use stats from the evidence that are most relevant (3-5 stats).
+### CRITICAL RULES:
+1. Headers: Use the EXACT team names provided in payload.game (Home/Away). Do NOT use brackets [ ] around team names.
+2. Alignment: Use spaces to align the Home and Away columns under the team names.
+3. Arrows: Always include the arrow (← or →) showing who has the advantage for that row.
+4. Stats: Choose 4-6 most relevant stats from the evidence. For NHL, include Special Teams or Goalie stats if relevant.
 
 Gary's Take
 Write 2-3 paragraphs explaining your pick like you're Gary talking to a friend at a sportsbook.
 - Reference the stats by name (not values - users see the numbers above)
 - Name key players and explain the matchup
 - End with a confident closing sentence that includes the pick
-
-IF WRONG: One sentence explaining the main way this bet could miss.
 
 ═══════════════════════════════════════════════════════════════════════
 
@@ -118,7 +119,7 @@ export async function runJudgeStage({ gameSummary, hypothesis, investigation, od
 
   const raw = await openaiService.generateResponse(messages, {
     temperature: 0.45,
-    maxTokens: 1200
+    maxTokens: 12000
   });
   const parsed = safeJsonParse(raw, null);
   if (!parsed) {

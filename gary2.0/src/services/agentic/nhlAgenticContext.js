@@ -11,7 +11,8 @@ import {
   buildMarketSnapshot,
   parseGameDate,
   safeApiCallArray,
-  safeApiCallObject
+  safeApiCallObject,
+  getEstDate
 } from './sharedUtils.js';
 
 const SPORT_KEY = 'icehockey_nhl';
@@ -141,8 +142,40 @@ function formatTeamBasics(team, standings = []) {
 /**
  * Build NHL-specific token data from BDL stats
  */
-function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recentForm, injuries, marketSnapshot) {
+function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recentForm, injuries, marketSnapshot, h2hHistory, leagueRanks, homeTeam, awayTeam, homeHotPlayers, awayHotPlayers) {
+  const homeRanks = leagueRanks[homeTeam?.id] || {};
+  const awayRanks = leagueRanks[awayTeam?.id] || {};
+
   return {
+    // Player Streaks
+    hot_players: {
+      home: homeHotPlayers,
+      away: awayHotPlayers
+    },
+    // League Ranks
+    league_ranks: {
+      home: {
+        pp_rank: homeRanks.pp_rank || 'N/A',
+        pk_rank: homeRanks.pk_rank || 'N/A',
+        goals_for_rank: homeRanks.gf_rank || 'N/A',
+        goals_against_rank: homeRanks.ga_rank || 'N/A'
+      },
+      away: {
+        pp_rank: awayRanks.pp_rank || 'N/A',
+        pk_rank: awayRanks.pk_rank || 'N/A',
+        goals_for_rank: awayRanks.gf_rank || 'N/A',
+        goals_against_rank: awayRanks.ga_rank || 'N/A'
+      }
+    },
+    // Head-to-Head History
+    h2h_history: {
+      games_found: h2hHistory.length,
+      recent_meetings: h2hHistory.map(g => ({
+        date: g.date || g.datetime,
+        score: `${g.home_team_score}-${g.visitor_team_score || g.away_team_score}`,
+        winner: (g.home_team_score > (g.visitor_team_score || g.away_team_score)) ? g.home_team.full_name : g.visitor_team?.full_name || g.away_team?.full_name
+      }))
+    },
     // Corsi & Expected Goals (from Gemini Grounding advanced stats)
     corsi_xg: {
       home: {
@@ -222,9 +255,15 @@ function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recent
     },
     
     // Five-on-Five play (from Gemini Grounding)
-    five_on_five: advancedStats?.five_on_five ?? {
-      home: { cfPct: null, xgfPct: null },
-      away: { cfPct: null, xgfPct: null }
+    five_on_five: {
+      home: { 
+        cfPct: advancedStats?.home_advanced?.corsi_for_pct ?? null, 
+        xgfPct: advancedStats?.home_advanced?.expected_goals_for_pct ?? null 
+      },
+      away: { 
+        cfPct: advancedStats?.away_advanced?.corsi_for_pct ?? null, 
+        xgfPct: advancedStats?.away_advanced?.expected_goals_for_pct ?? null 
+      }
     },
     
     // Rest & Travel
@@ -283,7 +322,7 @@ export async function buildNhlAgenticContext(game, options = {}) {
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
   // Parallel fetch: recent games, injuries, standings, season stats - with detailed logging
-  const [homeRecent, awayRecent, injuries, standings] = await Promise.all([
+  const [homeRecent, awayRecent, injuries, standings, h2hHistory, leagueRanks, homeHotPlayers, awayHotPlayers] = await Promise.all([
     homeTeam ? safeApiCallArray(
       () => ballDontLieService.getGames(
         SPORT_KEY,
@@ -312,7 +351,29 @@ export async function buildNhlAgenticContext(game, options = {}) {
     safeApiCallArray(
       () => ballDontLieService.getStandingsGeneric(SPORT_KEY, { season }),
       `NHL: Fetch ${season} season standings`
-    )
+    ),
+
+    (homeTeam?.id && awayTeam?.id)
+      ? safeApiCallArray(
+          () => ballDontLieService.getH2HHistory(SPORT_KEY, homeTeam.id, awayTeam.id),
+          `NHL: Fetch H2H history between ${game.home_team} and ${game.away_team}`
+        )
+      : Promise.resolve([]),
+
+    safeApiCallObject(
+      () => ballDontLieService.getNhlLeagueRanks(season),
+      `NHL: Fetch ${season} league rankings`
+    ),
+
+    homeTeam ? safeApiCallArray(
+      () => ballDontLieService.getTeamTopPerformers(SPORT_KEY, homeTeam.id),
+      `NHL: Fetch top performers for home team "${game.home_team}"`
+    ) : Promise.resolve([]),
+
+    awayTeam ? safeApiCallArray(
+      () => ballDontLieService.getTeamTopPerformers(SPORT_KEY, awayTeam.id),
+      `NHL: Fetch top performers for away team "${game.away_team}"`
+    ) : Promise.resolve([])
   ]);
 
   // Fetch season rates (PP%, PK%, shots, goals) - with detailed logging
@@ -333,7 +394,7 @@ export async function buildNhlAgenticContext(game, options = {}) {
   // Fetch Gemini Grounding advanced stats (Corsi, xG, PDO, goalie matchup)
   let advancedStats = null;
   try {
-    const dateStr = commenceDate.toISOString().slice(0, 10);
+    const dateStr = getEstDate(commenceDate);
     console.log('[Agentic][NHL] Fetching advanced stats via Gemini Grounding...');
     advancedStats = await getGroundedAdvancedStats(game.home_team, game.away_team, 'nhl', dateStr);
     if (advancedStats?._source === 'gemini_grounding') {
@@ -429,7 +490,13 @@ export async function buildNhlAgenticContext(game, options = {}) {
     restInfo,
     recentForm,
     formattedInjuries,
-    marketSnapshot
+    marketSnapshot,
+    h2hHistory,
+    leagueRanks,
+    homeTeam,
+    awayTeam,
+    homeHotPlayers,
+    awayHotPlayers
   );
 
   // Build game summary

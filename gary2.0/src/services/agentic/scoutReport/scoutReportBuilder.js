@@ -26,6 +26,56 @@ function getGeminiClient() {
 }
 
 /**
+ * Fetch a snapshot of the league landscape (standings) to ground analysis
+ * This prevents Gary from using historical knowledge for current season evaluation.
+ */
+async function fetchStandingsSnapshot(sport) {
+  try {
+    const bdlSport = sportToBdlKey(sport);
+    if (!bdlSport || sport === 'NCAAB' || sport === 'NCAAF') return '';
+
+    // Calculate current season dynamically
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const currentSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
+
+    const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
+    if (!standings || standings.length === 0) return '';
+
+    // Sort by conference/division and rank
+    const snapshot = [];
+    
+    // NBA: Groups by Conference
+    if (sport === 'NBA') {
+      const east = standings.filter(s => (s.conference === 'East' || s.team?.conference === 'East')).sort((a, b) => a.conference_rank - b.conference_rank);
+      const west = standings.filter(s => (s.conference === 'West' || s.team?.conference === 'West')).sort((a, b) => a.conference_rank - b.conference_rank);
+
+      const formatRec = (s) => `${s.wins}-${s.losses}`;
+
+      snapshot.push('EASTERN CONFERENCE TOP 3: ' + east.slice(0, 3).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+      snapshot.push('EASTERN CONFERENCE BOTTOM 2: ' + east.slice(-2).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+      snapshot.push('WESTERN CONFERENCE TOP 3: ' + west.slice(0, 3).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+      snapshot.push('WESTERN CONFERENCE BOTTOM 2: ' + west.slice(-2).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+    } else {
+      // General top 5 for other sports
+      const top5 = [...standings].sort((a, b) => (b.wins || 0) - (a.wins || 0)).slice(0, 5);
+      const formatRec = (s) => s.overall_record || `${s.wins}-${s.losses}`;
+      snapshot.push('LEAGUE TOP 5: ' + top5.map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
+    }
+
+    return `
+LEAGUE LANDSCAPE (CURRENT 2025-26 STANDINGS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${snapshot.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+  } catch (error) {
+    console.warn(`[Scout Report] Error fetching standings snapshot:`, error.message);
+    return '';
+  }
+}
+
+/**
  * Build a scout report for a game
  * This gives Gary enough context to think, not just react to odds.
  */
@@ -35,12 +85,13 @@ export async function buildScoutReport(game, sport) {
   const sportKey = normalizeSport(sport);
   
   // Fetch basic data in parallel
-  const [homeProfile, awayProfile, injuries, recentHome, recentAway] = await Promise.all([
+  const [homeProfile, awayProfile, injuries, recentHome, recentAway, standingsSnapshot] = await Promise.all([
     fetchTeamProfile(homeTeam, sportKey),
     fetchTeamProfile(awayTeam, sportKey),
     fetchInjuries(homeTeam, awayTeam, sportKey),
     fetchRecentGames(homeTeam, sportKey, 5),
-    fetchRecentGames(awayTeam, sportKey, 5)
+    fetchRecentGames(awayTeam, sportKey, 5),
+    fetchStandingsSnapshot(sportKey)
   ]);
   
   // For NBA, fetch game context using Gemini Grounding (venue, tournament context, game significance)
@@ -463,6 +514,20 @@ function formatGameTime(timeString) {
 }
 
 /**
+ * Generate dynamic season string for Gemini Grounding queries
+ * Returns format like "2025-26" for academic year sports (college, NBA, NHL)
+ * @returns {string} - Season string like "2025-26"
+ */
+function getCurrentSeasonString() {
+  const month = new Date().getMonth() + 1; // 1-indexed
+  const year = new Date().getFullYear();
+  // Academic year: Aug-Dec = year-(year+1), Jan-Jul = (year-1)-year
+  const startYear = month >= 8 ? year : year - 1;
+  const endYear = startYear + 1;
+  return `${startYear}-${String(endYear).slice(-2)}`;
+}
+
+/**
  * Fetch team profile (record, key metrics, identity)
  */
 async function fetchTeamProfile(teamName, sport) {
@@ -882,7 +947,7 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     const bdlSport = sportToBdlKey(sport);
     
     // Sports where BDL has injury endpoints (verified working)
-    const bdlInjurySports = ['basketball_nba', 'americanfootball_nfl'];
+    const bdlInjurySports = ['basketball_nba', 'americanfootball_nfl', 'icehockey_nhl'];
     const hasBdlInjuries = bdlInjurySports.includes(bdlSport);
     
     // Fetch from BDL
@@ -1708,44 +1773,40 @@ async function fetchGroundingInjuries(homeTeam, awayTeam, sport) {
 ${homeTeam} injuries:
 ${awayTeam} injuries:`;
 
-    } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
-      query = `Current NFL injuries and QB situation for ${homeTeam} vs ${awayTeam} as of ${today}:
-
-1. INJURIES: List ALL players OUT, DOUBTFUL, QUESTIONABLE, or on IR
-   Format: "PLAYER NAME (POSITION) - STATUS - INJURY - DURATION"
-   Duration: RECENT (1-2 weeks), MID-SEASON (3-8 weeks), or SEASON-LONG
-
-2. QB SITUATION: Starting QB for each team, any IR QBs with injury date
-
-${homeTeam} injuries:
-${awayTeam} injuries:
-${homeTeam} QB:
-${awayTeam} QB:`;
-    } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      query = `Current NBA injuries and starting lineup for ${homeTeam} vs ${awayTeam} as of ${today}:
-
-1. INJURIES: List ALL players OUT, DOUBTFUL, QUESTIONABLE, or SIDELINED
-   Format: "PLAYER NAME (POSITION) - STATUS - INJURY - DURATION"
-   Duration: RECENT (1-2 weeks), MID-SEASON (3-8 weeks), or SEASON-LONG
-
-2. STARTING 5: Expected starting lineup for each team (PG, SG, SF, PF, C)
-
-3. ROSTER CHANGES: Any recent trades or releases
-
-${homeTeam} injuries:
-${awayTeam} injuries:`;
     } else if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
-      query = `Current college basketball injuries for ${homeTeam} vs ${awayTeam} as of ${today}:
+      query = `For the college basketball game ${awayTeam} @ ${homeTeam} on ${today} (Current ${getCurrentSeasonString()} Season):
 
-1. INJURIES: List ALL players OUT, DOUBTFUL, or QUESTIONABLE
-   Format: "PLAYER NAME (POSITION) - STATUS - INJURY"
+1. INJURIES & ROSTER UPDATES - CRITICAL:
+   - List ALL players OUT, QUESTIONABLE, or DOUBTFUL for each team.
+   - Include player name, position, and impact (e.g., "Starting PG", "Leading Rebounder").
+   - Mark if RECENT (last 2 weeks) or SEASON-LONG.
+   - Any transfer portal impacts or recent suspensions?
+   
+2. STARTING 5: Expected starters for both teams.
 
-2. STARTING 5: Expected starters for each team
+3. ADVANCED ANALYTICS (KenPom/NET):
+   - What are the current KenPom rankings and Adjusted Efficiency Margins (AdjEM) for both teams?
+   - What are the current NCAA NET rankings?
+   - What are their records in Quad 1 and Quad 2 games?
+   - Strength of Schedule (SOS) rankings?
 
-3. KEY PLAYERS: Leading scorers and impact freshmen/transfers
+4. TEAM IDENTITY & TRENDS:
+   - Pace/Tempo: Does one team prefer a fast-paced game vs a slow grind?
+   - Shooting: How do they rank in 3PT% and defensive 3PT%?
+   - Home Court: Is ${homeTeam} particularly dominant at home?
 
-${homeTeam} injuries:
-${awayTeam} injuries:`;
+5. GAME CONTEXT:
+   - Conference opener or mid-season clash?
+   - Tournament implications?
+
+Be factual. Format injuries clearly. NO betting predictions.
+
+🚫 CRITICAL ANTI-OPINION RULES:
+1. FACTS ONLY - Do NOT include betting predictions from articles
+2. NO OPINIONS - Extract FACTS only, ignore betting advice
+3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
+4. NO BETTING ADVICE - Gary makes his own picks`;
+    } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
     } else if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
       query = `Current college football injuries for ${homeTeam} vs ${awayTeam} as of ${today}:
 
@@ -2449,6 +2510,11 @@ function findTeam(teams, teamName) {
   const TEAM_ALIASES = {
     'los angeles clippers': 'la clippers',  // BDL uses "LA Clippers"
     'la clippers': 'la clippers',
+    'vegas golden knights': 'vegas',
+    'montreal canadiens': 'montréal canadiens',
+    'montréal canadiens': 'montréal canadiens',
+    'utah hockey club': 'utah',
+    'utah mammoth': 'utah',
     // Add more as needed
   };
 
@@ -4870,6 +4936,11 @@ export async function geminiGroundingSearch(query, options = {}) {
     const response = result.response;
     const text = response.text();
     
+    // Debug log: Show first 200 chars of grounding response
+    if (text) {
+      console.log(`[Grounding Search] ✅ Response received (${text.length} chars). Preview: ${text.substring(0, 200).replace(/\n/g, ' ')}...`);
+    }
+    
     return {
       success: true,
       data: text,
@@ -4991,15 +5062,37 @@ export async function getGroundedAdvancedStats(homeTeam, awayTeam, sport, dateSt
   if (sport === 'nhl' || sport === 'icehockey_nhl') {
     query = `For the NHL game ${awayTeam} @ ${homeTeam} on ${dateStr}:
 
-Provide current advanced analytics for both teams:
-1. Corsi % (shot attempt differential at 5v5)
-2. Expected Goals (xG) for and against per 60
-3. PDO (shooting % + save %)
-4. Power play and penalty kill percentages
-5. Starting goalie and their save percentage this season
+CRITICAL - Provide these SPECIFIC current stats (use MoneyPuck, Natural Stat Trick, or official NHL sources):
 
-Format as structured data. Be precise with current statistics.`;
-  } else if (sport === 'ncaab' || sport === 'basketball_ncaab') {
+**${homeTeam}:**
+- Corsi For % (CF%) at 5v5 (Season vs Last 10): ____% / ____%
+- Expected Goals For % (xGF%) at 5v5 (Season vs Last 10): ____% / ____%
+- High-Danger Chances For % (HDCF%) at 5v5: ____%
+- PDO (shooting% + save%): _____
+- Power Play %: ____%
+- Penalty Kill %: ____%
+- Goals For/Against per game: ___ / ___
+- Last 5 games record: ___
+- CONFIRMED starting goalie for this game: [NAME] (Season SV%: ____, GSAx: ____)
+
+**${awayTeam}:**
+- Corsi For % (CF%) at 5v5 (Season vs Last 10): ____% / ____%
+- Expected Goals For % (xGF%) at 5v5 (Season vs Last 10): ____% / ____%
+- High-Danger Chances For % (HDCF%) at 5v5: ____%
+- PDO (shooting% + save%): _____
+- Power Play %: ____%
+- Penalty Kill %: ____%
+- Goals For/Against per game: ___ / ___
+- Last 5 games record: ___
+- CONFIRMED starting goalie for this game: [NAME] (Season SV%: ____, GSAx: ____)
+
+**Key Context:**
+- Is either team on a back-to-back?
+- Any significant RECENT injuries (last 14 days) affecting the top 6 forwards or top 4 defensemen?
+- Goalie matchup breakdown (Starter vs Backup if unconfirmed)?
+
+Use the most recent available data. If goalie is unconfirmed, state "UNCONFIRMED" and provide both potential starters.`;
+    } else if (sport === 'ncaab' || sport === 'basketball_ncaab') {
     query = `For the college basketball game ${awayTeam} @ ${homeTeam} on ${dateStr}:
 
 Provide current advanced analytics for both teams:
@@ -5009,7 +5102,7 @@ Provide current advanced analytics for both teams:
 4. Strength of schedule ranking
 5. Quad 1/2/3/4 records
 
-Format as structured data. Use current 2024-25 season data.`;
+Format as structured data. Use current ${getCurrentSeasonString()} season data.`;
   } else if (sport === 'ncaaf' || sport === 'americanfootball_ncaaf') {
     query = `For the college football game ${awayTeam} @ ${homeTeam} on ${dateStr}:
 
@@ -5020,7 +5113,7 @@ Provide current advanced analytics for both teams:
 4. Strength of schedule ranking
 5. Power 4 vs Group of 5 context
 
-Format as structured data. Use current 2024-25 season data.`;
+Format as structured data. Use current ${getCurrentSeasonString()} season data.`;
   } else {
     return null;
   }
@@ -5028,7 +5121,9 @@ Format as structured data. Use current 2024-25 season data.`;
   const result = await geminiGroundingSearch(query, { temperature: 0.2, maxTokens: 1000 });
   
   if (result.success && result.data) {
+    const parsed = parseNhlAdvancedStats(result.data, homeTeam, awayTeam);
     return {
+      ...parsed,
       raw: result.data,
       _source: 'gemini_grounding'
     };
@@ -5467,6 +5562,82 @@ function parseNarrativeSections(text) {
   }
   
   return sections;
+}
+
+/**
+ * Parse NHL advanced stats from grounded text
+ */
+function parseNhlAdvancedStats(text, homeTeam, awayTeam) {
+  const result = {
+    home_advanced: {},
+    away_advanced: {},
+    goalie_matchup: {},
+    recent_form: {},
+    key_analytics_insights: []
+  };
+
+  const homeSection = extractTeamSection(text, homeTeam);
+  const awaySection = extractTeamSection(text, awayTeam);
+
+  const extractMetric = (section, label) => {
+    // Label can be a string or array of aliases
+    const labels = Array.isArray(label) ? label : [label];
+    for (const l of labels) {
+      // Look for the label, followed by anything until a colon, then the number
+      const regex = new RegExp(`${l}.*?:\\s*(\\d+\\.?\\d*)`, 'i');
+      const match = section.match(regex);
+      if (match) return parseFloat(match[1]);
+    }
+    return null;
+  };
+
+  // Home metrics
+  result.home_advanced.corsi_for_pct = extractMetric(homeSection, ['Corsi For %', 'CF%', 'Corsi For Percentage']);
+  result.home_advanced.expected_goals_for_pct = extractMetric(homeSection, ['Expected Goals For %', 'xGF%', 'xG For %', 'Expected Goals Percentage']);
+  result.home_advanced.pdo = extractMetric(homeSection, 'PDO');
+  result.home_advanced.high_danger_chances_for_pct = extractMetric(homeSection, ['High-Danger Chances For %', 'HDCF%', 'High Danger %', 'HD Chances For %']);
+
+  // Away metrics
+  result.away_advanced.corsi_for_pct = extractMetric(awaySection, ['Corsi For %', 'CF%', 'Corsi For Percentage']);
+  result.away_advanced.expected_goals_for_pct = extractMetric(awaySection, ['Expected Goals For %', 'xGF%', 'xG For %', 'Expected Goals Percentage']);
+  result.away_advanced.pdo = extractMetric(awaySection, 'PDO');
+  result.away_advanced.high_danger_chances_for_pct = extractMetric(awaySection, ['High-Danger Chances For %', 'HDCF%', 'High Danger %', 'HD Chances For %']);
+
+  const extractGoalie = (section) => {
+    const nameMatch = section.match(/(?:starting goalie|confirmed starting goalie|goalie|starter).*?:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i);
+    const svPctMatch = section.match(/(?:SV%|Save %|Save Percentage).*?:\s*(\.?\d+)/i);
+    const gsaxMatch = section.match(/(?:GSAx|Goals Saved Above Expected).*?:\s*([+-]?\d+\.?\d*)/i);
+    return {
+      name: nameMatch ? nameMatch[1].trim() : 'Unknown',
+      savePct: svPctMatch ? parseFloat(svPctMatch[1]) : null,
+      gsax: gsaxMatch ? parseFloat(gsaxMatch[1]) : null
+    };
+  };
+
+  const homeGoalie = extractGoalie(homeSection);
+  const awayGoalie = extractGoalie(awaySection);
+
+  result.goalie_matchup = {
+    home_starter: homeGoalie.name,
+    home_sv_pct: homeGoalie.savePct,
+    home_gsax: homeGoalie.gsax,
+    away_starter: awayGoalie.name,
+    away_sv_pct: awayGoalie.savePct,
+    away_gsax: awayGoalie.gsax
+  };
+
+  // Recent Form (Last 10)
+  const extractLast10 = (section) => {
+    const match = section.match(/Last 5 games record:\s*(\d+-\d+-\d+|\d+-\d+)/i);
+    return match ? match[1] : null;
+  };
+  
+  result.recent_form = {
+    home_last_10: extractLast10(homeSection),
+    away_last_10: extractLast10(awaySection)
+  };
+
+  return result;
 }
 
 export { fetchGroundedContext, fetchComprehensivePropsNarrative };

@@ -14,6 +14,9 @@ export function normalizeTeamName(name = '') {
     .replace(/\bnew orleans\b/g, 'no')
     .replace(/\boklahoma city\b/g, 'okc')
     .replace(/\bgolden state\b/g, 'gs')
+    .replace(/\blas vegas\b/g, 'vegas') // NHL/NFL alias
+    .replace(/\butah hockey club\b/g, 'utah') // NHL alias
+    .replace(/\butah mammoth\b/g, 'utah') // NHL alias
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -47,6 +50,16 @@ export function formatGameTimeEST(isoString) {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return isoString;
   return `${new Intl.DateTimeFormat('en-US', EST_TIME_OPTIONS).format(date)} EST`;
+}
+
+/**
+ * Get YYYY-MM-DD date string for a date in America/New_York timezone
+ * This prevents UTC rollover issues where a 7pm EST game on Dec 30 
+ * shows up as Dec 31 in UTC.
+ */
+export function getEstDate(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
 export function parseGameDate(value) {
