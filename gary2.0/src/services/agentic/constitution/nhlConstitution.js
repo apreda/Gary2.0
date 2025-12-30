@@ -13,6 +13,24 @@ export const NHL_CONSTITUTION = `
 Note: NHL picks use Gemini Grounding for advanced stats (Corsi, xG, PDO) in addition to API data.
 Confidence levels may be slightly lower than NBA/NFL due to data source differences.
 
+### ACTIVE PLAYER "HOT STREAKS"
+Hockey is often driven by a single line or player getting "hot":
+- Check [HOT_PLAYERS] section for top performers in the last 14 days.
+- A superstar surge (high PPG/Goals) can override a team's mediocre 5v5 metrics.
+- Look for players with 1.0+ points per game (PPG) over the last 5 outings.
+
+### HEAD-TO-HEAD (H2H) HISTORY
+Familiarity breeds specific matchup advantages:
+- Check [H2H_HISTORY] for the last 3-5 meetings.
+- Some teams' systems are designed to neutralize specific opponents (Matchup Mastery).
+- Use recent scores to identify mental edges or "revenge" spots.
+
+### LEAGUE RANKINGS - THE COMPETITIVE CONTEXT
+Numerical stats are better when ranked:
+- Check [LEAGUE_RANKS] for PP%, PK%, and Goals For/Against rankings (1-32).
+- Example: "#1 PP vs #31 PK" is a massive tactical edge.
+- Always contextualize percentages with their league rank in your rationale.
+
 ### CORSI & EXPECTED GOALS - THE GOLD STANDARD
 These possession/chance-quality metrics are the best predictors in hockey:
 - CF% (Corsi For %) > 52% = controlling play at 5v5
@@ -135,40 +153,78 @@ Hockey has frequent trades, call-ups, and roster moves:
 
 ⚠️ NEVER assume a player's team - the NHL has many mid-season trades. Always verify.
 
+### 🚨 CRITICAL: AVOID HEAVY FAVORITES 🚨
+**REAL DATA SHOWS: NHL favorites at -165 or worse are VALUE TRAPS**
+- Our historical results: Heavy favorites (-165+) lose at an alarming rate
+- Hockey has too much variance for chalk to cover the juice
+- Even elite teams lose 30%+ of games as heavy favorites
+
+**SHARP TIP: AVOID HEAVY FAVORITES**
+NHL favorites at -165 or worse are VALUE TRAPS. 
+- Even elite teams lose 30%+ of games as heavy favorites.
+- Hockey has too much variance for chalk to cover the juice consistently.
+
+**VALUE CHALLENGE:**
+1. **ML favorites at -170 or worse** are sucker bets - the risk/reward is broken.
+2. **Puck line -1.5 favorites at -180 or worse** are rarely worth the juice.
+3. **BEST VALUE**: Underdogs at +110 or much higher. There is no maximum odds limit for an organic underdog play.
+
 ### BET TYPE SELECTION - PUCK LINE VS MONEYLINE
 Always evaluate BOTH puck line (+1.5/-1.5) and moneyline:
-- Prefer PUCK LINE +1.5 when:
-  - Underdog has strong underlying metrics but inconsistent finishing
-  - Close game expected (tight goalie matchup)
-  - Road team with good shot metrics against home favorite
-  - Odds are +120 or better on the +1.5
-- Prefer MONEYLINE when:
-  - Dog has legitimate upset potential (plus money ML)
-  - Favorite's edge is large enough to win by 2+ (rare in NHL)
-  - One-goal games are likely (~50% of NHL games)
-- AVOID: Puck line bets with odds worse than -200 (too juicy)
-- NHL games are typically close - puck line +1.5 hits ~70% for dogs
 
-### 🎯 NHL ML CONVICTION CHECK
-Before taking puck line +1.5 on an underdog, STOP and ask:
+**PUCK LINE -1.5 (FAVORITE COVERS BY 2+):**
+- ONLY when you have ELITE confidence (0.80+) in a dominant win
+- Favorite has massive underlying metrics edge AND rested AND confirmed elite goalie
+- These are RARE - most NHL games are 1-2 goal margins
+- Our data shows these hit when done selectively
 
-1. "Do I believe this team WINS outright?"
-   - YES → Take the ML. Hockey is volatile - underdogs WIN ~40% of games.
-   - NO → Puck line +1.5 is correct.
+**PUCK LINE +1.5 (UNDERDOG STAYS WITHIN 1):**
+- PREFERRED bet type for underdogs
+- Underdog has strong underlying metrics but inconsistent finishing
+- Close game expected (tight goalie matchup)
+- Road team with good shot metrics against home favorite
+- Hits ~70% for dogs - great for building bankroll
 
-2. "What's the ML price?"
-   - +110 to +150 = Strong value if you believe they WIN
-   - +150 to +200 = Excellent value with real upset thesis
-   - +200+ = Only with maximum conviction (backup goalie, tired favorite, etc.)
+**MONEYLINE:**
+- UNDERDOG ML (+110 to +170) = BEST VALUE IN HOCKEY
+  - Hockey underdogs win 40%+ outright
+  - Plus-money MLs are where sharps make their money
+- FAVORITE ML (-110 to -150) = ACCEPTABLE
+  - Only when you have a clear edge (goalie, rest, metrics)
+- FAVORITE ML (-160 to -165) = CAUTION
+  - Need 62%+ win rate just to break even
+  - Better to take the puck line or pass
+- FAVORITE ML (-170+) = AVOID ENTIRELY
+  - Historical data shows these are losing propositions
 
-3. "Am I being a scared bettor?"
-   - Puck line +1.5 hits ~70% for dogs - but the JUICE eats your edge
-   - If you believe they WIN, the ML is almost ALWAYS better EV
+### 🎯 NHL BET SELECTION FLOWCHART
 
-**THE VALUE RULE:**
-- Hockey is chaos. Underdogs WIN more often than in other sports.
-- A +140 underdog that wins 40% of the time is hugely profitable
-- Conviction pays. Don't hide behind the puck line when you believe they WIN.
+**STEP 1: Do you like the UNDERDOG or FAVORITE?**
+
+**If UNDERDOG:**
+1. "Do I believe they stay within 1 goal?"
+   - **PREFERENCE: Take the Puck Line +1.5**. 
+   - Underdog +1.5 is the sharpest bet in hockey because ~30% of games are decided by exactly one goal.
+   - Only take UNDERDOG ML (+110+) if you have elite confidence (0.80+) in an outright win.
+   
+**If FAVORITE:**
+1. Check the ML odds:
+   - -170 or worse → **PASS on this game** or look at puck line -1.5
+   - -155 to -165 → **EXTREME CAUTION** - need ironclad thesis
+   - -110 to -150 → ACCEPTABLE if edge is clear
+2. "Will they win by 2+ goals?"
+   - YES with high confidence (0.80+) → Take puck line -1.5
+   - NO → Take the ML (if acceptable odds) or PASS
+
+### CONFIDENCE CALIBRATION
+Due to NHL's high variance, be conservative with confidence:
+- 0.72-0.75 = Moderate edge (one or two clear factors)
+- 0.76-0.80 = Strong edge (multiple factors align)
+- 0.81+ = Elite conviction (RARE - save for obvious spots)
+
+**GOLDEN RULE 1: GOALIE CONFIRMATION**. If the starting goalie is a backup with a sub-.900 SV% or negative GSAx, and you were planning to bet the favorite, ABANDON the bet or pivot to the underdog.
+
+**GOLDEN RULE 2: UNDERDOG PROTECTION**. When in doubt, take the +1.5 spread rather than the ML for underdogs. It turns a "close loss" into a win.
 `;
 
 export default NHL_CONSTITUTION;

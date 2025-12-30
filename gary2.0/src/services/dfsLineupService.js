@@ -271,11 +271,87 @@ export function calculateProjectedPoints(player, sport, platform) {
   }
   
   if (sport === 'NBA') {
-    return calculateNBAProjection(player, platform);
+    const projection = calculateNBAProjection(player, platform);
+    // If no stats but has salary, estimate based on salary tier
+    if (projection === 0 && player.salary > 0) {
+      return estimateProjectionFromSalary(player.salary, sport, platform);
+    }
+    return projection;
   } else if (sport === 'NFL') {
-    return calculateNFLProjection(player, platform);
+    const projection = calculateNFLProjection(player, platform);
+    if (projection === 0 && player.salary > 0) {
+      return estimateProjectionFromSalary(player.salary, sport, platform);
+    }
+    return projection;
   }
   return 0;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SALARY-BASED PROJECTION ESTIMATION
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * When a player has salary but no stats (e.g., not in BDL yet, injury return),
+ * we estimate their projection based on their DFS salary tier.
+ * 
+ * DFS sites set salaries based on their own projections, so:
+ * - $10,000+ player = site expects ~50+ fantasy points
+ * - $7,000 player = site expects ~35 fantasy points
+ * - $4,000 player = site expects ~20 fantasy points
+ * - $3,000 player = site expects ~15 fantasy points (minimum)
+ * 
+ * This gives players with no stats a reasonable floor so they don't
+ * drag down lineups when selected for positional needs.
+ * 
+ * @param {number} salary - Player's DFS salary
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @returns {number} Estimated fantasy points
+ */
+function estimateProjectionFromSalary(salary, sport, platform) {
+  if (!salary || salary <= 0) return 0;
+  
+  // Different salary ranges for each platform/sport
+  let baseSalary, baseProjection, valueMultiplier;
+  
+  if (sport === 'NBA') {
+    if (platform === 'fanduel') {
+      // FanDuel NBA: $3,500 min, $60,000 cap, 9 players
+      // Avg salary per player = $6,666
+      baseSalary = 6000;
+      baseProjection = 30;
+      valueMultiplier = 5.0; // pts per $1000
+    } else {
+      // DraftKings NBA: $3,000 min, $50,000 cap, 8 players
+      // Avg salary per player = $6,250
+      baseSalary = 5000;
+      baseProjection = 25;
+      valueMultiplier = 5.0;
+    }
+  } else { // NFL
+    if (platform === 'fanduel') {
+      // FanDuel NFL: $60,000 cap, 10 players (incl kicker)
+      baseSalary = 6000;
+      baseProjection = 12;
+      valueMultiplier = 2.0;
+    } else {
+      // DraftKings NFL: $50,000 cap, 9 players
+      baseSalary = 5000;
+      baseProjection = 10;
+      valueMultiplier = 2.0;
+    }
+  }
+  
+  // Calculate estimated projection based on salary tier
+  // Higher salary = higher expectation from the site
+  const salaryDiff = salary - baseSalary;
+  const estimatedPts = baseProjection + (salaryDiff / 1000) * valueMultiplier;
+  
+  // Ensure minimum floor (don't go below 10 for NBA, 5 for NFL)
+  const minFloor = sport === 'NBA' ? 10 : 5;
+  
+  return Math.round(Math.max(estimatedPts, minFloor) * 10) / 10;
 }
 
 /**
@@ -511,6 +587,7 @@ function calculateNFLProjection(player, platform) {
 export function findPivotAlternatives(starter, playerPool, sport, platform) {
   const starterSalary = starter.salary;
   const pivots = [];
+  const usedPlayers = new Set(); // Track already-selected pivot players to avoid duplicates
   
   // Filter out the starter and players who are OUT
   const eligiblePlayers = playerPool.filter(p => 
@@ -532,13 +609,15 @@ export function findPivotAlternatives(starter, playerPool, sport, platform) {
     const salaryDiffMin = config.salaryRange.min;
     const salaryDiffMax = config.salaryRange.max;
     
-    // Find highest-projected player within this salary range
+    // Find highest-projected player within this salary range (that hasn't been used already)
     const candidate = sortedPool.find(p => {
+      if (usedPlayers.has(p.name)) return false; // Skip if already used in another tier
       const diff = p.salary - starterSalary;
       return diff >= salaryDiffMin && diff <= salaryDiffMax;
     });
     
     if (candidate) {
+      usedPlayers.add(candidate.name); // Mark as used
       pivots.push({
         tier,
         tierLabel: config.label,
@@ -548,6 +627,32 @@ export function findPivotAlternatives(starter, playerPool, sport, platform) {
         salary: candidate.salary,
         projected_pts: candidate.projected_pts || calculateProjectedPoints(candidate, sport, platform),
         salaryDiff: candidate.salary - starterSalary
+      });
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ALWAYS SHOW AT LEAST ONE ALTERNATIVE
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Substitutions are options for users - they don't affect salary cap.
+  // On small slates with limited options, still show the best available player
+  // even if it's outside normal salary tiers.
+  if (pivots.length === 0 && sortedPool.length > 0) {
+    // Find best available player not already used
+    const bestAvailable = sortedPool.find(p => !usedPlayers.has(p.name));
+    if (bestAvailable) {
+      const salaryDiff = bestAvailable.salary - starterSalary;
+      const tierLabel = salaryDiff > 0 ? 'Upgrade' : (salaryDiff < 0 ? 'Budget Play' : 'Direct Swap');
+      
+      pivots.push({
+        tier: 'best_available',
+        tierLabel,
+        tierDescription: 'Best available alternative at this position',
+        player: bestAvailable.name,
+        team: bestAvailable.team,
+        salary: bestAvailable.salary,
+        projected_pts: bestAvailable.projected_pts || calculateProjectedPoints(bestAvailable, sport, platform),
+        salaryDiff
       });
     }
   }
@@ -562,10 +667,33 @@ export function findPivotAlternatives(starter, playerPool, sport, platform) {
  * @param {Object} constraints - Platform constraints
  * @param {string} sport - 'NBA' or 'NFL'
  * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {Object} context - Optional narrative context (fadePlayers, targetPlayers)
  * @returns {Object} Optimized lineup
  */
-export function optimizeLineup(players, constraints, sport, platform) {
+export function optimizeLineup(players, constraints, sport, platform, context = {}) {
   const { salaryCap, positions, positionRules } = constraints;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NARRATIVE CONTEXT: Gary's intelligence beyond raw numbers
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Extract narrative data for Gary to factor into decisions
+  const fadePlayers = context.fadePlayers || [];
+  const targetPlayers = context.targetPlayers || [];
+  
+  // Create lookup sets for quick access
+  const fadeSet = new Set(fadePlayers.map(p => p.name?.toLowerCase()));
+  const targetSet = new Set(targetPlayers.map(p => p.name?.toLowerCase()));
+  
+  // Log narrative intelligence
+  if (fadePlayers.length > 0 || targetPlayers.length > 0) {
+    console.log(`[Optimizer] 📖 Narrative context:`);
+    if (targetPlayers.length > 0) {
+      console.log(`   🎯 Targets: ${targetPlayers.map(p => `${p.name} (${p.reason?.substring(0, 40)}...)`).join(', ')}`);
+    }
+    if (fadePlayers.length > 0) {
+      console.log(`   ⚠️ Fades: ${fadePlayers.map(p => `${p.name} (${p.reason?.substring(0, 40)}...)`).join(', ')}`);
+    }
+  }
   const lineup = [];
   const usedPlayers = new Set();
   let totalSalary = 0;
@@ -597,12 +725,36 @@ export function optimizeLineup(players, constraints, sport, platform) {
   };
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // STEP 1: CALCULATE PROJECTED POINTS FOR ALL PLAYERS FIRST
+  // STEP 1: CALCULATE PROJECTED POINTS + APPLY NARRATIVE MODIFIERS
   // ═══════════════════════════════════════════════════════════════════════════
   // We need to calculate projections BEFORE sorting so we can rank by ceiling
+  // Gary's narrative intelligence can boost targets and deprioritize fades
   for (const player of players) {
     if (!player.projected_pts || player.projected_pts === 0) {
       player.projected_pts = calculateProjectedPoints(player, sport, platform);
+    }
+    
+    const playerNameLower = player.name?.toLowerCase();
+    
+    // Mark players based on narrative context
+    player.isTarget = targetSet.has(playerNameLower);
+    player.isFade = fadeSet.has(playerNameLower);
+    
+    // Apply small narrative modifier to projections (organic, not forced)
+    // Target players get a small boost (~5% ceiling recognition)
+    // Fade players get a small penalty (~5% risk recognition)
+    // These are soft nudges, not hard rules - Gary still picks best players
+    if (player.isTarget && !player.narrativeModified) {
+      const boost = player.projected_pts * 0.05;
+      player.projected_pts += boost;
+      player.narrativeModified = true;
+      console.log(`[Optimizer] 🎯 Target boost: ${player.name} +${boost.toFixed(1)} pts (narrative upside)`);
+    }
+    if (player.isFade && !player.narrativeModified) {
+      const penalty = player.projected_pts * 0.05;
+      player.projected_pts -= penalty;
+      player.narrativeModified = true;
+      console.log(`[Optimizer] ⚠️ Fade penalty: ${player.name} -${penalty.toFixed(1)} pts (narrative risk)`);
     }
   }
   
@@ -621,30 +773,78 @@ export function optimizeLineup(players, constraints, sport, platform) {
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // STEP 2: SORT BY PROJECTED POINTS (MAXIMIZE TOTAL CEILING)
+  // STEP 2: SORT BY PROJECTED POINTS (Ownership + Value as Tie-Breakers)
   // ═══════════════════════════════════════════════════════════════════════════
   // Gary's goal is to build the highest-scoring lineup possible under the cap.
-  // NOT to maximize "value" (pts/$1000) - that leaves money on the table.
-  // Sort by projected points to get the best players first.
+  // 
+  // TIE-BREAKER LOGIC (organic, not forced):
+  //   1. Similar projections (within 1.5 pts): Prefer lower ownership
+  //   2. Value contrarian (3-6 pts less): Consider if LOW ownership + saves $1500+
+  //      - The savings can upgrade other positions
+  //      - Low ownership means differentiation upside
+  //      - Gary only does this if he believes it could pan out
   // ═══════════════════════════════════════════════════════════════════════════
   for (const pos in playersByPosition) {
     playersByPosition[pos].sort((a, b) => {
       const ptsA = a.projected_pts || 0;
       const ptsB = b.projected_pts || 0;
-      // Sort by PROJECTED POINTS (highest first) - Gary wants the best players
-      return ptsB - ptsA;
+      const ptsDiff = ptsB - ptsA;
+      const salaryA = a.salary || 5000;
+      const salaryB = b.salary || 5000;
+      const ownA = a.ownership || 15;
+      const ownB = b.ownership || 15;
+      
+      // If projections are similar (within 1.5 pts), prefer lower ownership
+      if (Math.abs(ptsDiff) <= 1.5) {
+        return ownA - ownB;
+      }
+      
+      // VALUE CONTRARIAN: If player A is 3-6 pts less but saves $1500+ AND is low-owned (<12%),
+      // consider them competitive (could be worth the savings to upgrade elsewhere)
+      if (ptsDiff > 0 && ptsDiff <= 6 && ptsDiff >= 3) {
+        const salarySaved = salaryB - salaryA;
+        if (salarySaved >= 1500 && ownA < 12) {
+          // Player A is a "value contrarian" - bump them up in the sort
+          // But not above similar-projection players
+          return -0.5; // Slight preference for value contrarian
+        }
+      }
+      if (ptsDiff < 0 && Math.abs(ptsDiff) <= 6 && Math.abs(ptsDiff) >= 3) {
+        const salarySaved = salaryA - salaryB;
+        if (salarySaved >= 1500 && ownB < 12) {
+          return 0.5; // Slight preference for value contrarian
+        }
+      }
+      
+      // Otherwise, sort by projected points (highest first)
+      return ptsDiff;
     });
   }
   
-  // ⭐ FIX: Fill specific positions first, flex positions last
-  // This prevents using a star player in UTIL when they should be in their position
+  // ⭐ FIX: Sort positions by ACTUAL AVAILABLE PLAYERS (fewest first)
+  // This prevents using all 'F' players on SF before PF gets filled
+  // Count how many players are eligible for each position, then fill scarcer first
+  
+  // Count available players per position
+  const availablePerPosition = {};
+  for (const pos of [...new Set(positions)]) {
+    availablePerPosition[pos] = (playersByPosition[pos] || []).filter(p => 
+      p.salary > 0 && p.status !== 'OUT'
+    ).length;
+  }
+  
   const sortedPositions = [...positions].sort((a, b) => {
     const flexSlots = ['G', 'F', 'UTIL', 'FLEX'];
     const aIsFlex = flexSlots.includes(a);
     const bIsFlex = flexSlots.includes(b);
     if (aIsFlex && !bIsFlex) return 1; // Flex goes last
     if (!aIsFlex && bIsFlex) return -1;
-    return 0;
+    
+    // Fill positions with fewer available players FIRST
+    // This ensures scarce positions get filled before players are used elsewhere
+    const availA = availablePerPosition[a] || 0;
+    const availB = availablePerPosition[b] || 0;
+    return availA - availB;
   });
   
   // Calculate minimum salary to reserve for remaining positions
@@ -663,11 +863,16 @@ export function optimizeLineup(players, constraints, sport, platform) {
     const maxSalaryForThisSlot = salaryCap - totalSalary - reservedSalary;
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // FIND HIGHEST-CEILING PLAYER THAT FITS THE SALARY CONSTRAINT
+    // FIND HIGHEST-CEILING PLAYER (Ownership + Value as Tie-Breakers)
     // ═══════════════════════════════════════════════════════════════════════════
-    // Gary picks the BEST projected player that fits, not the best "value"
+    // Gary picks the BEST projected player that fits.
+    // Tie-breakers (organic):
+    //   1. Similar projection (~1.5 pts): prefer lower ownership
+    //   2. Value contrarian (3-6 pts less): consider if saves $1500+ AND low-owned (<12%)
     let bestPlayer = null;
     let bestPts = -1;
+    let bestOwnership = 100;
+    let bestSalary = 0;
     
     // Candidates are already sorted by projected_pts (highest first)
     const candidates = playersByPosition[posSlot] || [];
@@ -685,11 +890,29 @@ export function optimizeLineup(players, constraints, sport, platform) {
       // Skip if no salary (invalid player)
       if (!player.salary || player.salary <= 0) continue;
       
-      // ⭐ CHANGED: Pick by PROJECTED POINTS, not value
       const pts = player.projected_pts || 0;
-      if (pts > bestPts) {
+      const own = player.ownership || 15;
+      const sal = player.salary || 5000;
+      
+      // Determine if this player should be selected
+      const isBetter = pts > bestPts + 1.5; // Clearly better projection
+      const isSimilarButLowerOwned = Math.abs(pts - bestPts) <= 1.5 && own < bestOwnership;
+      
+      // VALUE CONTRARIAN: 3-6 pts less but saves $1500+ AND low-owned (<12%)
+      // Gary considers this if the savings could upgrade other positions
+      const ptsDiff = bestPts - pts;
+      const salarySaved = bestSalary - sal;
+      const isValueContrarian = ptsDiff >= 3 && ptsDiff <= 6 && salarySaved >= 1500 && own < 12;
+      
+      if (isBetter || isSimilarButLowerOwned || bestPlayer === null) {
         bestPts = pts;
+        bestOwnership = own;
+        bestSalary = sal;
         bestPlayer = player;
+      } else if (isValueContrarian && bestPlayer) {
+        // Log this as a value contrarian consideration (Gary may choose it)
+        // Only swap if we haven't already found someone clearly better
+        console.log(`[Optimizer] 💡 Value contrarian option: ${player.name} (${pts.toFixed(1)} pts, ${own}% own, saves $${salarySaved})`);
       }
     }
     
@@ -840,23 +1063,59 @@ function generatePlayerRationale(player, sport, platform) {
 export function addPivotsToLineup(lineup, playerPool, constraints, sport, platform) {
   const { positionRules } = constraints;
   
+  // Get all players already in the lineup
+  const lineupPlayers = new Set(lineup.map(slot => slot.player));
+  
   return lineup.map(slot => {
     const rule = positionRules[slot.position];
     if (!rule) return slot;
     
-    // Get all players eligible for this position
+    // Get all players eligible for this position (excluding those already in lineup)
     const eligiblePlayers = playerPool.filter(p => {
       const playerPos = p.position?.toUpperCase();
-      return rule.eligible.includes(playerPos);
+      const isEligible = rule.eligible.includes(playerPos);
+      const notInLineup = !lineupPlayers.has(p.name);
+      return isEligible && notInLineup;
     });
     
-    // Find pivots
-    const pivots = findPivotAlternatives(
+    // Find pivots from non-lineup players first
+    let pivots = findPivotAlternatives(
       { player: slot.player, salary: slot.salary },
       eligiblePlayers,
       sport,
       platform
     );
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FALLBACK: If no alternatives found, show lineup players as swap options
+    // ═══════════════════════════════════════════════════════════════════════════
+    // On small slates, sometimes all position-eligible players are in the lineup.
+    // Show them as alternatives with note that it requires a lineup rearrangement.
+    if (pivots.length === 0) {
+      const lineupAlternatives = playerPool.filter(p => {
+        const playerPos = p.position?.toUpperCase();
+        const isEligible = rule.eligible.includes(playerPos);
+        const inLineup = lineupPlayers.has(p.name);
+        const notSelf = p.name !== slot.player;
+        return isEligible && inLineup && notSelf;
+      }).sort((a, b) => (b.projected_pts || 0) - (a.projected_pts || 0));
+      
+      if (lineupAlternatives.length > 0) {
+        const alt = lineupAlternatives[0];
+        const salaryDiff = alt.salary - slot.salary;
+        pivots.push({
+          tier: 'lineup_swap',
+          tierLabel: 'Swap Option',
+          tierDescription: 'Already in lineup - would require rearranging',
+          player: alt.name,
+          team: alt.team,
+          salary: alt.salary,
+          projected_pts: alt.projected_pts || calculateProjectedPoints(alt, sport, platform),
+          salaryDiff,
+          requiresSwap: true
+        });
+      }
+    }
     
     return {
       ...slot,
@@ -871,9 +1130,10 @@ export function addPivotsToLineup(lineup, playerPool, constraints, sport, platfo
  * @param {string} params.platform - 'draftkings' or 'fanduel'
  * @param {string} params.sport - 'NBA' or 'NFL'
  * @param {Array} params.players - Player pool with salaries and stats
+ * @param {Object} params.context - Optional narrative context (fadePlayers, targetPlayers)
  * @returns {Object} Complete lineup object
  */
-export async function generateDFSLineup({ platform, sport, players }) {
+export async function generateDFSLineup({ platform, sport, players, context = {} }) {
   const constraints = PLATFORM_CONSTRAINTS[platform]?.[sport];
   if (!constraints) {
     throw new Error(`Unsupported platform/sport combination: ${platform}/${sport}`);
@@ -885,12 +1145,13 @@ export async function generateDFSLineup({ platform, sport, players }) {
     projected_pts: p.projected_pts || calculateProjectedPoints(p, sport, platform)
   }));
   
-  // Step 1: Initial greedy optimization
+  // Step 1: Initial greedy optimization (with narrative context for Gary's intelligence)
   const initialResult = optimizeLineup(
     playersWithProjections,
     constraints,
     sport,
-    platform
+    platform,
+    context  // Pass narrative context (fadePlayers, targetPlayers)
   );
   
   // Step 2: Gary's 2-round self-review (salary efficiency + ownership)
@@ -952,7 +1213,7 @@ export function selfReviewLineup(lineup, playerPool, constraints, sport, platfor
   // ═══════════════════════════════════════════════════════════════════════════
   // ROUND 1: SALARY EFFICIENCY - Upgrade weak spots with remaining salary
   // ═══════════════════════════════════════════════════════════════════════════
-  const remainingSalary = salaryCap - totalSalary;
+  let remainingSalary = salaryCap - totalSalary;
   if (remainingSalary >= 500) {
     console.log(`[Gary Self-Review] 💰 Round 1: $${remainingSalary} unspent - looking for upgrades...`);
     
@@ -963,6 +1224,10 @@ export function selfReviewLineup(lineup, playerPool, constraints, sport, platfor
     
     // Try to upgrade weakest positions
     for (const weakSpot of sortedByPts.slice(0, 3)) { // Check 3 weakest spots
+      // Recalculate remaining salary after each potential upgrade
+      remainingSalary = salaryCap - totalSalary;
+      if (remainingSalary < 200) break; // Stop if we've used most of the cap
+      
       const position = weakSpot.position;
       const currentPts = weakSpot.projected_pts || 0;
       const currentSalary = weakSpot.salary || 0;
@@ -996,8 +1261,9 @@ export function selfReviewLineup(lineup, playerPool, constraints, sport, platfor
         const ptsGain = upgradePts - currentPts;
         const costIncrease = upgrade.salary - currentSalary;
         
-        // Only upgrade if it's a meaningful improvement
-        if (ptsGain >= 2 && costIncrease <= remainingSalary) {
+        // Only upgrade if it's a meaningful improvement AND stays under cap
+        const newTotalSalary = totalSalary + costIncrease;
+        if (ptsGain >= 2 && newTotalSalary <= salaryCap) {
           console.log(`[Gary Self-Review] ⬆️ UPGRADE: ${weakSpot.player} → ${upgrade.name} (+${ptsGain.toFixed(1)} pts, +$${costIncrease})`);
           
           // Apply upgrade
@@ -1010,7 +1276,7 @@ export function selfReviewLineup(lineup, playerPool, constraints, sport, platfor
               salary: upgrade.salary,
               projected_pts: upgradePts
             };
-            totalSalary += costIncrease;
+            totalSalary = newTotalSalary;
             totalPts += ptsGain;
           }
         }
@@ -1019,61 +1285,35 @@ export function selfReviewLineup(lineup, playerPool, constraints, sport, platfor
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // ROUND 2: OWNERSHIP & CONTRARIAN VALUE
+  // ROUND 2: OWNERSHIP SUMMARY (Informational Only)
   // ═══════════════════════════════════════════════════════════════════════════
-  console.log(`[Gary Self-Review] 🎯 Round 2: Checking ownership for contrarian opportunities...`);
+  // Ownership is used as a TIE-BREAKER during optimization, not for forced swaps.
+  // If two players have similar projections, Gary prefers the lower-owned one
+  // because it differentiates AND is often cheaper (freeing salary elsewhere).
+  // This round just logs ownership info for transparency.
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log(`[Gary Self-Review] 🎯 Round 2: Ownership summary...`);
   
-  // Identify high-ownership (chalk) plays
-  const chalkPlays = currentLineup.filter(p => {
-    const ownership = p.ownership || playerPool.find(pp => pp.name === p.player)?.ownership || 0;
-    return ownership >= 25; // 25%+ ownership = chalk
-  });
-  
-  if (chalkPlays.length >= 4) {
-    console.log(`[Gary Self-Review] ⚠️ ${chalkPlays.length} chalk plays detected - considering contrarian swaps`);
-    
-    // Try to swap ONE chalk play for a lower-owned alternative
-    for (const chalk of chalkPlays.slice(0, 2)) { // Only consider swapping up to 2
-      const chalkOwnership = chalk.ownership || 
-        playerPool.find(p => p.name === chalk.player)?.ownership || 30;
-      const chalkPts = chalk.projected_pts || 0;
-      
-      // Find lower-owned alternative with similar projection
-      const contrarians = playerPool.filter(p => {
-        if (p.name === chalk.player) return false;
-        if (currentLineup.some(l => l.player === p.name)) return false;
-        if (p.status === 'OUT' || p.status === 'DOUBTFUL') return false;
-        
-        const ownership = p.ownership || 15;
-        const pts = p.projected_pts || calculateProjectedPoints(p, sport, platform);
-        
-        // Must be lower owned and within 2 pts of chalk
-        return ownership < chalkOwnership - 10 && 
-               pts >= chalkPts - 2 &&
-               p.salary <= chalk.salary + 300; // Small salary flexibility
-      }).sort((a, b) => {
-        // Sort by projected points (prefer higher upside)
-        return (b.projected_pts || 0) - (a.projected_pts || 0);
-      });
-      
-      if (contrarians.length > 0) {
-        const contrarian = contrarians[0];
-        const contrarianOwn = contrarian.ownership || 15;
-        const contrarianPts = contrarian.projected_pts || calculateProjectedPoints(contrarian, sport, platform);
-        
-        console.log(`[Gary Self-Review] 🎲 CONTRARIAN OPTION: ${chalk.player} (${chalkOwnership}% own) → ${contrarian.name} (${contrarianOwn}% own)`);
-        console.log(`[Gary Self-Review]    Points diff: ${(contrarianPts - chalkPts).toFixed(1)} | Salary diff: $${contrarian.salary - chalk.salary}`);
-        
-        // Store as alternative but don't auto-swap (let Gary's notes mention it)
-        chalk.contrarianAlt = {
-          player: contrarian.name,
-          team: contrarian.team,
-          salary: contrarian.salary,
-          projected_pts: contrarianPts,
-          ownership: contrarianOwn
-        };
-      }
+  // Get ownership data for current lineup players
+  for (const lineupPlayer of currentLineup) {
+    const poolPlayer = playerPool.find(p => p.name === lineupPlayer.player);
+    if (poolPlayer) {
+      lineupPlayer.ownership = poolPlayer.ownership || lineupPlayer.ownership || 15;
+      lineupPlayer.isChalk = lineupPlayer.ownership >= 25;
+      lineupPlayer.isContrarian = lineupPlayer.ownership < 10;
     }
+  }
+  
+  // Count ownership breakdown
+  const chalkPlays = currentLineup.filter(p => (p.ownership || 15) >= 25);
+  const contrarianPlays = currentLineup.filter(p => (p.ownership || 15) < 10);
+  const rosterSize = currentLineup.length;
+  
+  console.log(`[Gary Self-Review] Ownership breakdown: ${chalkPlays.length} chalk (>25%), ${contrarianPlays.length} contrarian (<10%), ${rosterSize - chalkPlays.length - contrarianPlays.length} moderate`);
+  
+  // Log any contrarian picks Gary made organically (bonus for tournament differentiation)
+  if (contrarianPlays.length > 0) {
+    console.log(`[Gary Self-Review] 🎲 Contrarian picks: ${contrarianPlays.map(p => `${p.player} (${p.ownership || 15}%)`).join(', ')}`);
   }
   
   // Recalculate totals

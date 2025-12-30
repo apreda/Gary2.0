@@ -11,8 +11,6 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const serviceAccountPath = join(__dirname, '../firebase-service-account.json');
-
 function getServiceAccount() {
   if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
     return {
@@ -23,16 +21,16 @@ function getServiceAccount() {
     };
   }
   
-  if (existsSync(serviceAccountPath)) {
-    return JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-  }
-  
-  throw new Error('Firebase credentials not found');
+  throw new Error('Firebase credentials not found in environment variables (FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL)');
 }
 
 async function fetchActiveTokens() {
-  const supabaseUrl = 'https://***REMOVED***.supabase.co';
-  const supabaseAnonKey = '***REMOVED***';
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase configuration missing (SUPABASE_URL, SUPABASE_ANON_KEY)');
+  }
   
   const url = `${supabaseUrl}/rest/v1/push_tokens?select=device_token&active=eq.true&order=created_at.desc`;
   const response = await fetch(url, {

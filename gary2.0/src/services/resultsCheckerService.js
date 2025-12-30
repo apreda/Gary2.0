@@ -10,7 +10,7 @@ const SCORE_REGEX = /^\d+-\d+$/;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://***REMOVED***.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 const adminSupabase = SUPABASE_SERVICE_KEY

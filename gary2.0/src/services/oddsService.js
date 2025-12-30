@@ -221,8 +221,20 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
 
   if (!bookmakers || !bookmakers.length) return result;
 
-  // Use first available bookmaker
-  const bookmaker = bookmakers[0];
+  // Prioritize DraftKings and FanDuel for consistency
+  const preferredKeys = ['draftkings', 'fanduel'];
+  let bookmaker = null;
+  
+  for (const key of preferredKeys) {
+    bookmaker = bookmakers.find(b => b.key.toLowerCase() === key);
+    if (bookmaker) break;
+  }
+  
+  // Fallback to first available if no preferred bookmaker found
+  if (!bookmaker) {
+    bookmaker = bookmakers[0];
+  }
+
   if (!bookmaker?.markets) return result;
 
   // Extract spreads

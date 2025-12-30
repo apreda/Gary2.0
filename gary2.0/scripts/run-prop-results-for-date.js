@@ -47,6 +47,27 @@ const boxScoreCache = {
   NCAAF: null,
   EPL: null
 };
+const nflFirstTDScorers = {}; // { gameId: "First TD Scorer Text" }
+
+// Helper to match player name in play text (e.g. "J.Taylor" matches "Jonathan Taylor")
+function matchesFirstTD(playerName, playText) {
+  if (!playText) return false;
+  const lowerText = playText.toLowerCase();
+  const lowerName = playerName.toLowerCase();
+  
+  // Direct match
+  if (lowerText.includes(lowerName)) return true;
+  
+  // Initial.LastName match (e.g. "J.Taylor" for "Jonathan Taylor")
+  const parts = playerName.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    const lastName = parts[parts.length - 1];
+    const initialMatch = `${parts[0][0]}.${lastName}`.toLowerCase();
+    if (lowerText.includes(initialMatch)) return true;
+  }
+  
+  return false;
+}
 
 // Get date from command line or use yesterday
 const getTargetDate = () => {
@@ -289,6 +310,7 @@ async function fetchNFLStats(dateStr) {
     // Now fetch stats for these games
     const allPlayerStats = [];
     for (const gameId of allGameIds) {
+      // 1. Fetch Stats
       const statsUrl = `https://api.balldontlie.io/nfl/v1/stats?game_ids[]=${gameId}&per_page=100`;
       const statsResponse = await fetch(statsUrl, {
         headers: { 'Authorization': BDL_API_KEY }
@@ -301,16 +323,47 @@ async function fetchNFLStats(dateStr) {
             allPlayerStats.push({
               player_name: `${stat.player.first_name} ${stat.player.last_name}`,
               team: stat.team?.full_name || '',
+              game_id: gameId,
               pass_yds: stat.passing_yards ?? 0,
               pass_tds: stat.passing_touchdowns ?? 0,
+              pass_att: stat.passing_attempts ?? 0,
+              pass_comp: stat.passing_completions ?? 0,
               rush_yds: stat.rushing_yards ?? 0,
               rush_tds: stat.rushing_touchdowns ?? 0,
               rush_att: stat.rushing_attempts ?? 0,
               rec_yds: stat.receiving_yards ?? 0,
               rec_tds: stat.receiving_touchdowns ?? 0,
               receptions: stat.receptions ?? 0,
-              targets: stat.receiving_targets ?? 0
+              targets: stat.receiving_targets ?? 0,
+              sacks: stat.sacks ?? 0,
+              tackles: stat.tackles ?? 0,
+              interceptions: stat.interceptions ?? 0
             });
+          }
+        }
+      }
+
+      // 2. Fetch Plays (to find First TD)
+      const playsUrl = `https://api.balldontlie.io/nfl/v1/plays?game_id=${gameId}&per_page=100`;
+      const playsResponse = await fetch(playsUrl, {
+        headers: { 'Authorization': BDL_API_KEY }
+      });
+      
+      if (playsResponse.ok) {
+        const playsData = await playsResponse.json();
+        if (playsData.data) {
+          // Sort by wallclock if available, or just take first in sequence
+          const sortedPlays = playsData.data.sort((a, b) => {
+            if (a.wallclock && b.wallclock) return new Date(a.wallclock) - new Date(b.wallclock);
+            return parseInt(a.id) - parseInt(b.id);
+          });
+
+          for (const play of sortedPlays) {
+            if (play.scoring_play && (play.type_slug?.includes('touchdown') || play.text?.includes('TOUCHDOWN'))) {
+              nflFirstTDScorers[gameId] = play.text;
+              console.log(`     🎯 First TD in game ${gameId}: ${play.text.substring(0, 60)}...`);
+              break;
+            }
           }
         }
       }
@@ -349,19 +402,34 @@ async function getNFLPlayerStats(playerName, dateStr) {
       const passTds = playerStats.pass_tds ?? 0;
       const totalTds = rushTds + recTds + passTds;
       
-      console.log(`     📊 ${playerName} TDs: Rush=${rushTds}, Rec=${recTds}, Pass=${passTds}, Total=${totalTds}`);
+      console.log(`     📊 ${playerName} TDs: Rush=${rushTds}, Rec=${recTds}, Pass=${passTds}, Total=${totalTds}, PassAtt=${playerStats.pass_att ?? 0}, Sacks=${playerStats.sacks ?? 0}`);
+      
+      // Determine if they scored the first TD
+      const gameId = playerStats.game_id;
+      const firstTDText = nflFirstTDScorers[gameId];
+      const isFirstTD = matchesFirstTD(playerName, firstTDText);
+      if (isFirstTD) {
+        console.log(`     🔥 ${playerName} scored the FIRST TD of the game!`);
+      }
       
       return {
         player: playerName,
         pass_yds: playerStats.pass_yds ?? 0,
         pass_tds: passTds,
+        pass_att: playerStats.pass_att ?? 0,
+        pass_comp: playerStats.pass_comp ?? 0,
         rush_yds: playerStats.rush_yds ?? 0,
         rush_tds: rushTds,
+        rush_att: playerStats.rush_att ?? 0,
         rec_yds: playerStats.rec_yds ?? 0,
         rec_tds: recTds,
         receptions: playerStats.receptions ?? 0,
         targets: playerStats.targets ?? 0,
         total_tds: totalTds,
+        is_first_td_scored: isFirstTD ? 1 : 0,
+        sacks: playerStats.sacks ?? 0,
+        tackles: playerStats.tackles ?? 0,
+        interceptions: playerStats.interceptions ?? 0,
         source: 'BallDontLie'
       };
     }
@@ -1034,9 +1102,33 @@ const propToStatField = {
   'receptionyds': 'rec_yds',
   'receptions': 'receptions',
   'rec': 'receptions',
+  // NFL Attempts and other stats
+  'pass_attempts': 'pass_att',
+  'passattempts': 'pass_att',
+  'passing_attempts': 'pass_att',
+  'passingattempts': 'pass_att',
+  'pass_att': 'pass_att',
+  'pass_completions': 'pass_comp',
+  'passcompletions': 'pass_comp',
+  'completions': 'pass_comp',
+  'rush_attempts': 'rush_att',
+  'rushattempts': 'rush_att',
+  'rushing_attempts': 'rush_att',
+  'rushingattempts': 'rush_att',
+  'rush_att': 'rush_att',
+  'carries': 'rush_att',
+  'sacks': 'sacks',
+  'sack': 'sacks',
+  'tackles_nfl': 'tackles',
+  'interceptions': 'interceptions',
+  'int': 'interceptions',
+  'ints': 'interceptions',
   // NFL Anytime TD props
   'anytimetd': 'total_tds',
   'anytime_td': 'total_tds',
+  'tds_over': 'total_tds',
+  'firsttd': 'is_first_td_scored',
+  'first_td': 'is_first_td_scored',
   'td': 'total_tds',
   'touchdown': 'total_tds',
   'touchdowns': 'total_tds',
@@ -1070,8 +1162,9 @@ const sportSpecificFields = {
   'NCAAB': { 'assists': 'ast', 'points': 'pts' },
   'CBB': { 'assists': 'ast', 'points': 'pts' },
   'NHL': { 'points': 'points', 'pts': 'points', 'assists': 'assists_nhl' },
-  'NFL': { 'assists': 'ast' },  // NFL doesn't have assists, but just in case
-  'EPL': { 'points': 'goals' }  // Soccer doesn't really have points prop
+  'NFL': { 'tackles': 'tackles', 'interceptions': 'interceptions', 'firsttd': 'is_first_td_scored', 'first_td': 'is_first_td_scored', 'tds_over': 'total_tds' },
+  'NCAAF': { 'tackles': 'tackles', 'interceptions': 'interceptions', 'firsttd': 'is_first_td_scored', 'first_td': 'is_first_td_scored', 'tds_over': 'total_tds' },
+  'EPL': { 'points': 'goals', 'tackles': 'tackles' }  // Soccer doesn't really have points prop
 };
 
 // Get player stats based on sport

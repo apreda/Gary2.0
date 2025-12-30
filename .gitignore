@@ -58,3 +58,7 @@ Thumbs.db
 firebase-service-account.json
 **/firebase-service-account.json
 *.pem
+
+# iOS Secrets
+ios/GaryApp/Secrets.swift
+ios/GaryApp/GoogleService-Info.plist

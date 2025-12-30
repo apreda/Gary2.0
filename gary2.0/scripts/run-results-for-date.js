@@ -708,17 +708,22 @@ async function processDailyPicks(dateStr) {
  * Get NFL Week start (Monday) for a given date
  * NFL week runs Monday to Sunday, so we find the previous Monday
  */
-function getNFLWeekStart(date = new Date()) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
+function getNFLWeekStart(dateStr) {
+  // Use a regex to parse the date to avoid timezone shifts
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  d.setHours(12, 0, 0, 0); // Noon to avoid rollover issues
+  const dayOfWeek = d.getDay();
   // Sunday (0) -> go back 6 days to Monday
   // Monday (1) -> stay
   // Tuesday (2) -> go back 1 day
-  // etc.
-  const daysToSubtract = day === 0 ? 6 : day - 1;
+  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   d.setDate(d.getDate() - daysToSubtract);
-  return d.toISOString().split('T')[0];
+  
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dayNum = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dayNum}`;
 }
 
 /**
@@ -728,7 +733,7 @@ async function processWeeklyNFLPicks(dateStr) {
   console.log(`\n🏈 Processing WEEKLY NFL PICKS...`);
   
   // Get the NFL week for the target date
-  const weekStart = getNFLWeekStart(new Date(dateStr));
+  const weekStart = getNFLWeekStart(dateStr);
   console.log(`  NFL Week starting: ${weekStart}`);
   
   // Get weekly NFL picks

@@ -90,7 +90,7 @@ const openaiServiceInstance = {
       
       // Gemini prefers temperature 1.0-1.1 for Deep Think
       const defaultTemp = provider === 'gemini' ? 1.1 : 0.5;
-      const { temperature = defaultTemp, maxTokens = 6000 } = options;
+      const { temperature = defaultTemp, maxTokens = 16000 } = options;
       
       // Allow model override (e.g., props use Flash when Pro has quota issues)
       const modelToUse = options.model || GEMINI_MODEL_DEFAULT;

@@ -18,6 +18,7 @@
  * 4. Home/Away Splits - Player-specific home/road performance
  */
 import { ballDontLieService } from '../ballDontLieService.js';
+import axios from 'axios';
 // All context comes from Gemini 3 Flash with Google Search Grounding
 import { formatGameTimeEST, buildMarketSnapshot, parseGameDate, safeApiCallArray, safeApiCallObject, fuzzyMatchPlayerName, findBestPlayerMatch, checkDataAvailability } from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
@@ -272,9 +273,9 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
  * Format injuries relevant to NBA props
  */
 function formatPropsInjuries(injuries = []) {
+  // NO SLICE - include ALL injuries from BDL to prevent any truncation
   return (injuries || [])
     .filter(inj => inj?.player?.full_name || inj?.player?.first_name)
-    .slice(0, 12)
     .map((injury) => ({
       player: injury?.player?.full_name || `${injury?.player?.first_name || ''} ${injury?.player?.last_name || ''}`.trim(),
       position: injury?.player?.position || 'Unknown',
@@ -282,6 +283,84 @@ function formatPropsInjuries(injuries = []) {
       description: injury?.description || '',
       team: injury?.team?.full_name || ''
     }));
+}
+
+/**
+ * Detect players who are likely injured but NOT in BDL injury report
+ * Strategy: Players with props available but NO recent game logs are likely injured
+ * This catches cases like Seth Curry (injured since Dec 4, but not in BDL injury API)
+ * Note: Game logs filter out 0-minute games, so injured players have NO logs
+ */
+async function detectLikelyInjuredFromStats(playerIdMap, injuries, propCandidates) {
+  const likelyInjured = [];
+  const injuredNames = new Set(injuries.map(i => i.player?.toLowerCase()));
+  
+  // Get player IDs that have props available
+  const playerIdsToCheck = [];
+  const playerNameById = {};
+  
+  for (const candidate of propCandidates) {
+    const playerInfo = playerIdMap[candidate.player.toLowerCase()];
+    if (!playerInfo?.id) continue;
+    
+    // Skip if already in BDL injury report
+    if (injuredNames.has(candidate.player.toLowerCase())) continue;
+    
+    playerIdsToCheck.push(playerInfo.id);
+    playerNameById[playerInfo.id] = {
+      name: candidate.player,
+      team: candidate.team
+    };
+  }
+  
+  if (playerIdsToCheck.length === 0) return likelyInjured;
+  
+  // Fetch UNFILTERED stats directly from BDL to check for 0-minute games
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 14); // Last 2 weeks
+  
+  try {
+    // Check each player for 0-minute games (limit to 15 to avoid rate limits)
+    for (const playerId of playerIdsToCheck.slice(0, 15)) {
+      const playerInfo = playerNameById[playerId];
+      
+      try {
+        const statsUrl = `https://api.balldontlie.io/v1/stats?player_ids[]=${playerId}&start_date=${startDate.toISOString().slice(0, 10)}&end_date=${endDate.toISOString().slice(0, 10)}&per_page=10`;
+        const response = await axios.get(statsUrl, {
+          headers: { 'Authorization': process.env.BALLDONTLIE_API_KEY }
+        });
+        
+        const recentGames = response.data?.data || [];
+        
+        // Check if ALL recent games are 0 minutes
+        if (recentGames.length >= 3) {
+          const allZeroMinutes = recentGames.every(g => {
+            const mins = parseInt(g.min) || 0;
+            return mins === 0;
+          });
+          
+          if (allZeroMinutes) {
+            likelyInjured.push({
+              player: playerInfo.name,
+              status: 'Likely Out (0 min in recent games)',
+              description: `Has played 0 minutes in last ${recentGames.length} games - likely injured but not in BDL injury report`,
+              team: playerInfo.team || '',
+              detected: true
+            });
+            console.log(`[NBA Props Context] ⚠️ DETECTED likely injury: ${playerInfo.name} - 0 minutes in last ${recentGames.length} games`);
+          }
+        }
+      } catch (e) {
+        // Skip this player on error
+        continue;
+      }
+    }
+  } catch (e) {
+    console.warn('[NBA Props Context] Failed to detect injuries from stats:', e.message);
+  }
+  
+  return likelyInjured;
 }
 
 /**
@@ -623,11 +702,11 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
     }
   }
   
-  // Add injury summary if any
+  // Add injury summary if any - NO SLICE to include ALL injuries
   if (injuries.length > 0) {
-    statsText += '\n### Injury Report\n';
-    injuries.slice(0, 8).forEach(inj => {
-      statsText += `- ${inj.player} (${inj.status}): ${inj.description?.slice(0, 80) || 'No details'}\n`;
+    statsText += '\n### Injury Report (from BDL - SOURCE OF TRUTH)\n';
+    injuries.forEach(inj => {
+      statsText += `- ${inj.player} (${inj.status}): ${inj.description?.slice(0, 100) || 'No details'}\n`;
     });
   }
   
@@ -726,7 +805,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       blowoutNote: paceContext.blowoutNote
     },
     injury_report: {
-      notable: injuries.slice(0, 10),
+      notable: injuries, // NO SLICE - include ALL injuries from BDL
       total_listed: injuries.length
     },
     market_context: marketSnapshot
@@ -880,6 +959,33 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   }
 
   const formattedInjuries = formatPropsInjuries(injuries);
+  
+  // CRITICAL: Detect players likely injured but NOT in BDL injury report
+  // This catches cases like Seth Curry (0 minutes since Dec 4, but not in BDL injury API)
+  // Note: This makes additional BDL calls to check for 0-minute games
+  const detectedInjuries = await detectLikelyInjuredFromStats(playerIdMap, formattedInjuries, validatedCandidates);
+  
+  // Merge BDL injuries with detected injuries
+  const allInjuries = [...formattedInjuries, ...detectedInjuries];
+  
+  // Log exact injuries from BDL to help debug any hallucinations
+  if (formattedInjuries.length > 0) {
+    console.log(`[NBA Props Context] 🏥 BDL Injury Report (${formattedInjuries.length} injuries):`);
+    formattedInjuries.forEach(inj => {
+      console.log(`   - ${inj.player} (${inj.team}) - ${inj.status}`);
+    });
+  } else {
+    console.log(`[NBA Props Context] 🏥 BDL: No injuries reported for these teams`);
+  }
+  
+  // Log detected injuries (from 0 minutes in game logs)
+  if (detectedInjuries.length > 0) {
+    console.log(`[NBA Props Context] ⚠️ DETECTED ${detectedInjuries.length} additional likely injuries from game logs:`);
+    detectedInjuries.forEach(inj => {
+      console.log(`   - ${inj.player} - ${inj.status}`);
+    });
+  }
+  
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [], 
     homeTeam?.full_name || game.home_team, 
     awayTeam?.full_name || game.away_team
@@ -893,7 +999,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     availableCandidates,
     playerSeasonStats,
     playerIdMap,
-    formattedInjuries,
+    allInjuries,  // Use ALL injuries (BDL + detected from 0-minute games)
     playerGameLogs // Pass game logs for recent form
   );
 
@@ -901,7 +1007,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   const tokenData = buildPropsTokenSlices(
     playerStats,
     availableCandidates,
-    formattedInjuries,
+    allInjuries,  // Use ALL injuries (BDL + detected from 0-minute games)
     marketSnapshot,
     playerSeasonStats,
     playerIdMap,
@@ -946,8 +1052,8 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   if (!narrativeContext) {
     dataGaps.push(`⚠️ NO NARRATIVE CONTEXT: Gemini Grounding failed - missing injury updates, news, trends`);
   }
-  if (formattedInjuries.length === 0 && teamIds.length > 0) {
-    dataGaps.push(`⚠️ NO INJURIES RETURNED: BDL may have failed - injury context may be incomplete`);
+  if (allInjuries.length === 0 && teamIds.length > 0) {
+    dataGaps.push(`⚠️ NO INJURIES RETURNED: Neither BDL nor game log detection found injuries`);
   }
   
   if (dataGaps.length > 0) {
@@ -959,7 +1065,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   console.log(`   - ${availableCandidates.length} player candidates (verified on team, excludes Doubtful/Day-To-Day)`);
   console.log(`   - ${playersWithStats} players with season stats (${(statsCoverage * 100).toFixed(0)}% coverage)`);
   console.log(`   - ${playersWithLogs} players with game logs (${(logsCoverage * 100).toFixed(0)}% coverage)`);
-  console.log(`   - ${formattedInjuries.length} injuries`);
+  console.log(`   - ${allInjuries.length} injuries (${formattedInjuries.length} from BDL + ${detectedInjuries.length} detected from game logs)`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
 
   return {
@@ -994,7 +1100,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
       dataAvailability: {
         statsAvailable: playersWithStats > 0,
         logsAvailable: playersWithLogs > 0,
-        injuriesAvailable: formattedInjuries.length > 0,
+        injuriesAvailable: allInjuries.length > 0,
         narrativeAvailable: !!narrativeContext,
         dataGaps: dataGaps.length > 0 ? dataGaps : null,
         dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'

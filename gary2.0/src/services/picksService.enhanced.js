@@ -471,7 +471,7 @@ export const picksService = {
     prompt += `   - The game is expected to be close (strong pitching matchup)\n`;
     prompt += `   - The underdog has upset potential but might lose by 1 run\n`;
     prompt += `   - The favorite's ML odds are reasonable (-150 or better)\n`;
-    prompt += `3. IMPORTANT: Aim for a balanced mix of spread and moneyline picks\n\n`;
+    prompt += `3. IMPORTANT: Make the pick that offers the best organic value based on the matchup, regardless of whether it is a spread or moneyline.\n\n`;
     
     prompt += `CRITICAL: You must return ONLY a single JSON object in the exact format specified. Do not return an analysis object with recommendations array. Return the pick directly.\n\n`;
     

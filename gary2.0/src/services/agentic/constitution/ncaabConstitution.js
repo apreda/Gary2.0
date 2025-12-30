@@ -304,7 +304,7 @@ Before taking the spread on an underdog, STOP and ask:
 2. "What's the ML price?"
    - +120 to +180 = Strong value if you believe they WIN
    - +180 to +250 = Excellent value with real upset thesis
-   - +250+ = Only with maximum conviction
+   - +250 and higher = Maximum value, only with high conviction and organic path to upset. There is no ceiling on plus-money value in college hoops.
 
 3. "What's my thesis mechanism?"
    - "They keep it close" → Spread

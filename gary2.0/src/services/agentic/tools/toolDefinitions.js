@@ -204,7 +204,7 @@ export const toolDefinitions = [
     function: {
       name: "fetch_stats",
       description: `Fetches specific statistical data for the matchup analysis. 
-Use this to request the exact stats you need to verify your hypothesis.
+Use this to request the exact stats you need to conduct your investigation.
 Only request stats that are directly relevant to your analysis - don't request everything.
 Typical analysis needs 2-5 stat categories.`,
       parameters: {
@@ -226,6 +226,67 @@ Typical analysis needs 2-5 stat categories.`,
           }
         },
         required: ["sport", "token"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_player_game_logs",
+      description: `Fetches raw game logs for a specific player (last 5-10 games).
+Use this to identify "Hot Streaks," "Slumps," or consistency issues that season-long stats might mask.
+Available for: NBA, NFL, NHL, NCAAB, NCAAF.`,
+      parameters: {
+        type: "object",
+        properties: {
+          sport: {
+            type: "string",
+            enum: ["NBA", "NFL", "NHL", "NCAAB", "NCAAF"],
+            description: "The sport league"
+          },
+          player_name: {
+            type: "string",
+            description: "Full player name (e.g., 'LeBron James' or 'Patrick Mahomes')"
+          },
+          num_games: {
+            type: "integer",
+            description: "Number of games to fetch (default: 5, max: 15)",
+            default: 5
+          }
+        },
+        required: ["sport", "player_name"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_nba_player_stats",
+      description: `Fetches advanced NBA player statistics and metrics for deeper analysis.
+Use this for detailed player-level analysis beyond season averages.
+Available modes:
+- ADVANCED: PIE, Net Rating, Assist Ratio, True Shooting %
+- USAGE: Usage Rate %, Shot Attempts per game, Ball Dominance
+- DEFENSIVE: Contested shots, rim protection metrics, defensive rating
+- TRENDS: Last 5 vs Last 10 vs Season comparisons`,
+      parameters: {
+        type: "object",
+        properties: {
+          stat_type: {
+            type: "string",
+            enum: ["ADVANCED", "USAGE", "DEFENSIVE", "TRENDS"],
+            description: "The type of metrics to fetch"
+          },
+          team: {
+            type: "string",
+            description: "Team name to filter results (returns top players for that team)"
+          },
+          player_name: {
+            type: "string",
+            description: "Optional: specific player name to search for"
+          }
+        },
+        required: ["stat_type", "team"]
       }
     }
   },

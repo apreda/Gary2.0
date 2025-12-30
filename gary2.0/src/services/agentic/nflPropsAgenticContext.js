@@ -764,7 +764,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
     return `L5: [${last5.join(', ')}]`;
   };
   
-  // Helper to format VERIFIED game-by-game stats with dates (for props analysis)
+  // Helper to format VERIFIED game-by-game stats with TREND ANALYSIS (not averages)
   const formatVerifiedGameLog = (logs, statKey, statLabel) => {
     if (!logs?.games || logs.games.length === 0) return '';
     
@@ -776,12 +776,40 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
       return `${dateStr} ${homeAway} ${opponent}: ${g[statKey]} ${statLabel}`;
     });
     
-    // Calculate verified average
     const values = games.map(g => g[statKey]);
-    const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+    
+    // Calculate TREND instead of just average
+    // Compare most recent 2 games vs older 3 games
+    const recent2 = values.slice(0, 2);
+    const older3 = values.slice(2, 5);
+    const recent2Avg = recent2.length > 0 ? recent2.reduce((a, b) => a + b, 0) / recent2.length : 0;
+    const older3Avg = older3.length > 0 ? older3.reduce((a, b) => a + b, 0) / older3.length : recent2Avg;
+    
+    // Determine trend direction
+    let trendDirection = 'STABLE';
+    let trendIcon = '➡️';
+    let trendPct = 0;
+    if (older3Avg > 0) {
+      trendPct = ((recent2Avg - older3Avg) / older3Avg * 100).toFixed(0);
+      if (recent2Avg > older3Avg * 1.15) {
+        trendDirection = 'TRENDING UP';
+        trendIcon = '⬆️';
+      } else if (recent2Avg < older3Avg * 0.85) {
+        trendDirection = 'TRENDING DOWN';
+        trendIcon = '⬇️';
+      }
+    }
+    
+    // Also check game-over-game direction (is each game higher than previous?)
+    let consecutiveUp = 0;
+    let consecutiveDown = 0;
+    for (let i = 0; i < values.length - 1; i++) {
+      if (values[i] > values[i + 1]) consecutiveUp++;
+      else if (values[i] < values[i + 1]) consecutiveDown++;
+    }
     
     // Count how many times they exceeded common lines
-    const lines = [50, 60, 70, 75, 80, 90, 100];
+    const lines = [50, 60, 70, 75, 80, 90, 100, 150, 200, 250];
     const lineHits = lines.reduce((acc, line) => {
       const hits = values.filter(v => v >= line).length;
       if (hits > 0) acc[line] = `${hits}/${values.length}`;
@@ -790,9 +818,17 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
     
     return {
       gameByGame: gameLines.join(' | '),
-      verifiedAverage: avg,
+      values: values,
       lineHits: lineHits,
-      values: values
+      // TREND DATA (primary focus)
+      trendDirection,
+      trendIcon,
+      trendPct: parseInt(trendPct),
+      recent2Avg: recent2Avg.toFixed(0),
+      older3Avg: older3Avg.toFixed(0),
+      mostRecent: values[0],
+      consecutiveUp,
+      consecutiveDown
     };
   };
   
@@ -811,42 +847,42 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
   
   // Add defensive context headers - now with REAL BDL stats
   if (defensiveMatchups && !defensiveMatchups._isDefault) {
-    statsText += `## 🛡️ DEFENSIVE MATCHUP CONTEXT (${defensiveMatchups._season || '2025'} BDL Stats)\n\n`;
+    statsText += `## Defensive Matchups (${defensiveMatchups._season || '2025'} Season)\n\n`;
     
     const homeD = defensiveMatchups.home_defense_vs_away;
     const awayD = defensiveMatchups.away_defense_vs_home;
     
     // Home Defense (what away offense faces)
-    statsText += `### ${homeTeam} DEFENSE (vs ${awayTeam} offense):\n`;
-    statsText += `- 🏈 Pass D: ${homeD?.pass_yards_allowed_per_game || '?'} yds/g allowed (${homeD?.pass_completion_pct_allowed || '?'}% comp), ${homeD?.pass_tds_allowed || '?'} TDs\n`;
-    statsText += `- 🏃 Rush D: ${homeD?.rush_yards_allowed_per_game || '?'} yds/g allowed (${homeD?.rush_yards_per_attempt_allowed || '?'} ypc), ${homeD?.rush_tds_allowed || '?'} TDs\n`;
-    statsText += `- 📊 Total: ${homeD?.total_yards_allowed_per_game || '?'} yds/g, ${homeD?.points_allowed_per_game || '?'} pts/g\n`;
-    statsText += `- 💥 Pressure: ${homeD?.sacks || '?'} sacks, ${homeD?.interceptions || '?'} INTs, ${homeD?.takeaways || '?'} takeaways\n`;
-    statsText += `- ⛔ 3rd Down Stop %: ${homeD?.third_down_stop_pct || '?'}%\n`;
+    statsText += `### ${homeTeam} Defense (vs ${awayTeam} offense):\n`;
+    statsText += `- Pass defense: ${homeD?.pass_yards_allowed_per_game || '?'} yds/g allowed (${homeD?.pass_completion_pct_allowed || '?'}% comp), ${homeD?.pass_tds_allowed || '?'} TDs\n`;
+    statsText += `- Rush defense: ${homeD?.rush_yards_allowed_per_game || '?'} yds/g allowed (${homeD?.rush_yards_per_attempt_allowed || '?'} ypc), ${homeD?.rush_tds_allowed || '?'} TDs\n`;
+    statsText += `- Total: ${homeD?.total_yards_allowed_per_game || '?'} yds/g, ${homeD?.points_allowed_per_game || '?'} pts/g\n`;
+    statsText += `- Pressure: ${homeD?.sacks || '?'} sacks, ${homeD?.interceptions || '?'} INTs, ${homeD?.takeaways || '?'} takeaways\n`;
+    statsText += `- 3rd down stop rate: ${homeD?.third_down_stop_pct || '?'}%\n`;
     if (homeD?.opponent_offense) {
-      statsText += `- 📈 ${awayTeam} Offense Context: ${homeD.opponent_offense.passing_yards_per_game} pass yds/g, ${homeD.opponent_offense.rushing_yards_per_game} rush yds/g, ${homeD.opponent_offense.points_per_game} pts/g\n`;
+      statsText += `- ${awayTeam} offense averages: ${homeD.opponent_offense.passing_yards_per_game} pass yds/g, ${homeD.opponent_offense.rushing_yards_per_game} rush yds/g, ${homeD.opponent_offense.points_per_game} pts/g\n`;
     }
     if (homeD?.key_defensive_injuries?.length > 0) {
-      statsText += `- ⚠️ Key Defensive Injuries: ${homeD.key_defensive_injuries.join(', ')}\n`;
+      statsText += `- Key defensive injuries: ${homeD.key_defensive_injuries.join(', ')}\n`;
     }
     
     // Away Defense (what home offense faces)
-    statsText += `\n### ${awayTeam} DEFENSE (vs ${homeTeam} offense):\n`;
-    statsText += `- 🏈 Pass D: ${awayD?.pass_yards_allowed_per_game || '?'} yds/g allowed (${awayD?.pass_completion_pct_allowed || '?'}% comp), ${awayD?.pass_tds_allowed || '?'} TDs\n`;
-    statsText += `- 🏃 Rush D: ${awayD?.rush_yards_allowed_per_game || '?'} yds/g allowed (${awayD?.rush_yards_per_attempt_allowed || '?'} ypc), ${awayD?.rush_tds_allowed || '?'} TDs\n`;
-    statsText += `- 📊 Total: ${awayD?.total_yards_allowed_per_game || '?'} yds/g, ${awayD?.points_allowed_per_game || '?'} pts/g\n`;
-    statsText += `- 💥 Pressure: ${awayD?.sacks || '?'} sacks, ${awayD?.interceptions || '?'} INTs, ${awayD?.takeaways || '?'} takeaways\n`;
-    statsText += `- ⛔ 3rd Down Stop %: ${awayD?.third_down_stop_pct || '?'}%\n`;
+    statsText += `\n### ${awayTeam} Defense (vs ${homeTeam} offense):\n`;
+    statsText += `- Pass defense: ${awayD?.pass_yards_allowed_per_game || '?'} yds/g allowed (${awayD?.pass_completion_pct_allowed || '?'}% comp), ${awayD?.pass_tds_allowed || '?'} TDs\n`;
+    statsText += `- Rush defense: ${awayD?.rush_yards_allowed_per_game || '?'} yds/g allowed (${awayD?.rush_yards_per_attempt_allowed || '?'} ypc), ${awayD?.rush_tds_allowed || '?'} TDs\n`;
+    statsText += `- Total: ${awayD?.total_yards_allowed_per_game || '?'} yds/g, ${awayD?.points_allowed_per_game || '?'} pts/g\n`;
+    statsText += `- Pressure: ${awayD?.sacks || '?'} sacks, ${awayD?.interceptions || '?'} INTs, ${awayD?.takeaways || '?'} takeaways\n`;
+    statsText += `- 3rd down stop rate: ${awayD?.third_down_stop_pct || '?'}%\n`;
     if (awayD?.opponent_offense) {
-      statsText += `- 📈 ${homeTeam} Offense Context: ${awayD.opponent_offense.passing_yards_per_game} pass yds/g, ${awayD.opponent_offense.rushing_yards_per_game} rush yds/g, ${awayD.opponent_offense.points_per_game} pts/g\n`;
+      statsText += `- ${homeTeam} offense averages: ${awayD.opponent_offense.passing_yards_per_game} pass yds/g, ${awayD.opponent_offense.rushing_yards_per_game} rush yds/g, ${awayD.opponent_offense.points_per_game} pts/g\n`;
     }
     if (awayD?.key_defensive_injuries?.length > 0) {
-      statsText += `- ⚠️ Key Defensive Injuries: ${awayD.key_defensive_injuries.join(', ')}\n`;
+      statsText += `- Key defensive injuries: ${awayD.key_defensive_injuries.join(', ')}\n`;
     }
     
     // Auto-generated matchup insights
     if (defensiveMatchups.matchup_insights?.length > 0) {
-      statsText += `\n### 🎯 KEY MATCHUP INSIGHTS (Auto-Generated from BDL Stats):\n`;
+      statsText += `\nMatchup insights:\n`;
       defensiveMatchups.matchup_insights.forEach(insight => {
         statsText += `- ${insight}\n`;
       });
@@ -858,30 +894,51 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
   // Away team section
   statsText += `## ${awayTeam} Players\n\n`;
   
+  // Helper to find injury context for a player
+  const getPlayerInjuryContext = (playerName) => {
+    const playerLower = playerName.toLowerCase();
+    const injury = injuries.find(i => i.player?.toLowerCase().includes(playerLower) || playerLower.includes(i.player?.toLowerCase()));
+    if (injury) {
+      return {
+        status: injury.status,
+        description: injury.description || injury.injury || '',
+        hasContext: true
+      };
+    }
+    return { hasContext: false };
+  };
+  
   if (awayPlayers.length > 0) {
     statsText += '**Player Stats & Recent Form:**\n';
     for (const candidate of awayPlayers) {
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       const isInjured = injuredNames.has(candidate.player.toLowerCase());
+      const injuryContext = getPlayerInjuryContext(candidate.player);
       const injuryFlag = isInjured ? ' ⚠️ INJURED' : '';
       
       statsText += `\n- **${candidate.player}**${injuryFlag}:\n`;
       
+      // Add injury context if available (explains WHY stats might be affected)
+      if (injuryContext.hasContext) {
+        statsText += `  ⚠️ INJURY CONTEXT: ${injuryContext.status}${injuryContext.description ? ` - ${injuryContext.description}` : ''}\n`;
+        statsText += `  (Stats below may be affected by this injury - consider if player is trending back to form or still limited)\n`;
+      }
+      
       if (logs && logs.gamesAnalyzed > 0) {
-        const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
         const avg = logs.averages;
         
-        // 🚨 VERIFIED BDL API STATS - These are the ONLY stats you should use
-        statsText += `  📊 VERIFIED STATS FROM BDL API (USE THESE NUMBERS ONLY):\n`;
+        // 🚨 VERIFIED BDL API STATS with TREND FOCUS
+        statsText += `  📊 VERIFIED STATS (BDL API) - TREND ANALYSIS:\n`;
         
-        // Position-specific VERIFIED game-by-game breakdowns
+        // Position-specific game-by-game breakdowns with TREND EMPHASIS
         if (parseFloat(avg.rec_yds) > 0 || parseFloat(avg.receptions) > 0) {
           const recLog = formatVerifiedGameLog(logs, 'rec_yds', 'yds');
           if (recLog.gameByGame) {
             statsText += `  ✓ RECEIVING - Last 5 Games:\n`;
             statsText += `    ${recLog.gameByGame}\n`;
-            statsText += `    ⭐ VERIFIED L5 AVG: ${recLog.verifiedAverage} rec yds | Hit 75+: ${recLog.lineHits[75] || '0/5'} | Hit 80+: ${recLog.lineHits[80] || '0/5'}\n`;
+            statsText += `    ${recLog.trendIcon} ${recLog.trendDirection} (recent 2 avg: ${recLog.recent2Avg} vs older 3 avg: ${recLog.older3Avg}, ${recLog.trendPct >= 0 ? '+' : ''}${recLog.trendPct}%)\n`;
+            statsText += `    Most recent: ${recLog.mostRecent} yds | Hit 75+: ${recLog.lineHits[75] || '0/5'}\n`;
           }
         }
         
@@ -890,7 +947,8 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
           if (passLog.gameByGame) {
             statsText += `  ✓ PASSING - Last 5 Games:\n`;
             statsText += `    ${passLog.gameByGame}\n`;
-            statsText += `    ⭐ VERIFIED L5 AVG: ${passLog.verifiedAverage} pass yds\n`;
+            statsText += `    ${passLog.trendIcon} ${passLog.trendDirection} (recent 2 avg: ${passLog.recent2Avg} vs older 3 avg: ${passLog.older3Avg}, ${passLog.trendPct >= 0 ? '+' : ''}${passLog.trendPct}%)\n`;
+            statsText += `    Most recent: ${passLog.mostRecent} yds | Hit 200+: ${passLog.lineHits[200] || '0/5'} | Hit 250+: ${passLog.lineHits[250] || '0/5'}\n`;
           }
         }
         
@@ -899,51 +957,50 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
           if (rushLog.gameByGame) {
             statsText += `  ✓ RUSHING - Last 5 Games:\n`;
             statsText += `    ${rushLog.gameByGame}\n`;
-            statsText += `    ⭐ VERIFIED L5 AVG: ${rushLog.verifiedAverage} rush yds | Hit 50+: ${rushLog.lineHits[50] || '0/5'} | Hit 75+: ${rushLog.lineHits[75] || '0/5'}\n`;
+            statsText += `    ${rushLog.trendIcon} ${rushLog.trendDirection} (recent 2 avg: ${rushLog.recent2Avg} vs older 3 avg: ${rushLog.older3Avg}, ${rushLog.trendPct >= 0 ? '+' : ''}${rushLog.trendPct}%)\n`;
+            statsText += `    Most recent: ${rushLog.mostRecent} yds | Hit 50+: ${rushLog.lineHits[50] || '0/5'} | Hit 75+: ${rushLog.lineHits[75] || '0/5'}\n`;
           }
         }
         
-        statsText += `  ${formIcon} Trend: ${logs.formTrend || 'steady'}\n`;
-        
-        // Consistency scores
+        // Volatility indicator (how predictable is this player?)
         const consistency = logs.consistency;
-        const getConsistencyLabel = (score) => {
+        const getVolatilityLabel = (score) => {
           const s = parseFloat(score);
-          if (s >= 0.7) return 'HIGH';
-          if (s >= 0.5) return 'MED';
-          return 'LOW';
+          if (s >= 0.7) return 'CONSISTENT';
+          if (s >= 0.5) return 'VARIABLE';
+          return 'VOLATILE';
         };
         
-        const relevantConsistency = [];
-        if (parseFloat(avg.pass_yds) > 0) relevantConsistency.push(`Pass: ${getConsistencyLabel(consistency.pass_yds)}`);
-        if (parseFloat(avg.rush_yds) > 10) relevantConsistency.push(`Rush: ${getConsistencyLabel(consistency.rush_yds)}`);
-        if (parseFloat(avg.rec_yds) > 0) relevantConsistency.push(`Rec: ${getConsistencyLabel(consistency.rec_yds)}`);
+        const relevantVolatility = [];
+        if (parseFloat(avg.pass_yds) > 0) relevantVolatility.push(`Pass: ${getVolatilityLabel(consistency.pass_yds)}`);
+        if (parseFloat(avg.rush_yds) > 10) relevantVolatility.push(`Rush: ${getVolatilityLabel(consistency.rush_yds)}`);
+        if (parseFloat(avg.rec_yds) > 0) relevantVolatility.push(`Rec: ${getVolatilityLabel(consistency.rec_yds)}`);
         
-        if (relevantConsistency.length > 0) {
-          statsText += `  Consistency: ${relevantConsistency.join(', ')}\n`;
+        if (relevantVolatility.length > 0) {
+          statsText += `  Volatility: ${relevantVolatility.join(', ')}\n`;
         }
         
-        // Home/Away splits
-        if (logs.splits?.home && logs.splits?.away) {
-          const home = logs.splits.home;
-          const away = logs.splits.away;
-          if (parseFloat(avg.pass_yds) > 0) {
-            statsText += `  Splits: Home ${home.pass_yds} pass yds (${home.games}g) | Away ${away.pass_yds} pass yds (${away.games}g)\n`;
-          } else if (parseFloat(avg.rush_yds) > 10) {
-            statsText += `  Splits: Home ${home.rush_yds} rush yds (${home.games}g) | Away ${away.rush_yds} rush yds (${away.games}g)\n`;
-          } else if (parseFloat(avg.rec_yds) > 0) {
-            statsText += `  Splits: Home ${home.rec_yds} rec yds (${home.games}g) | Away ${away.rec_yds} rec yds (${away.games}g)\n`;
-          }
+        // Target share trending (for WR/TE/RB) - TREND FOCUS
+        if (logs.targetTrend && parseFloat(logs.targetTrend.l5Avg) > 0) {
+          const tt = logs.targetTrend;
+          const trendIcon = tt.trend === 'SPIKE' ? '⬆️' : tt.trend === 'DECLINING' ? '⬇️' : '➡️';
+          statsText += `  Target Trend: ${trendIcon} Recent: ${tt.l2Avg}/game vs Earlier: ${tt.l3Avg}/game (${tt.change >= 0 ? '+' : ''}${tt.change}%)\n`;
         }
-        // 🎯 HIT RATE ANALYSIS FOR EACH PROP LINE
+        
+        // Usage/snap proxy (touches + targets as involvement metric) - TREND FOCUS
+        if (logs.usageTrend && parseFloat(logs.usageTrend.l5Avg) > 0) {
+          const ut = logs.usageTrend;
+          const trendIcon = ut.trend === 'INCREASING' ? '⬆️' : ut.trend === 'DECREASING' ? '⬇️' : '➡️';
+          statsText += `  Usage Trend: ${trendIcon} Recent: ${ut.l2Avg} touches vs Earlier: ${ut.l5Avg} touches (${ut.change >= 0 ? '+' : ''}${ut.change}%)\n`;
+        }
+        
+        // Hit rate analysis for each prop line (simplified - just hit count)
         if (candidate.props && candidate.props.length > 0) {
-          statsText += `  📈 HIT RATE BY PROP LINE (critical for picks):\n`;
+          statsText += `  Line performance:\n`;
           for (const prop of candidate.props) {
             const hitRate = calculateHitRate(logs.games, prop.type, prop.line);
             if (hitRate) {
-              const recIcon = hitRate.recommendation.includes('OVER') ? '✅' : 
-                             hitRate.recommendation.includes('UNDER') ? '⬇️' : '⚠️';
-              statsText += `    ${recIcon} ${prop.type} ${prop.line}: ${hitRate.hitsOver}/${hitRate.totalGames} over (${hitRate.overRate}%) | Avg: ${hitRate.avgValue} | Edge: ${hitRate.edge}% → ${hitRate.recommendation}\n`;
+              statsText += `    ${prop.type} ${prop.line}: Hit ${hitRate.hitsOver}/${hitRate.totalGames} games\n`;
             }
           }
         }
@@ -966,24 +1023,31 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       const isInjured = injuredNames.has(candidate.player.toLowerCase());
+      const injuryContext = getPlayerInjuryContext(candidate.player);
       const injuryFlag = isInjured ? ' ⚠️ INJURED' : '';
       
       statsText += `\n- **${candidate.player}**${injuryFlag}:\n`;
       
+      // Add injury context if available (explains WHY stats might be affected)
+      if (injuryContext.hasContext) {
+        statsText += `  ⚠️ INJURY CONTEXT: ${injuryContext.status}${injuryContext.description ? ` - ${injuryContext.description}` : ''}\n`;
+        statsText += `  (Stats below may be affected by this injury - consider if player is trending back to form or still limited)\n`;
+      }
+      
       if (logs && logs.gamesAnalyzed > 0) {
-        const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
         const avg = logs.averages;
         
-        // 🚨 VERIFIED BDL API STATS - These are the ONLY stats you should use
-        statsText += `  📊 VERIFIED STATS FROM BDL API (USE THESE NUMBERS ONLY):\n`;
+        // 🚨 VERIFIED BDL API STATS with TREND FOCUS
+        statsText += `  📊 VERIFIED STATS (BDL API) - TREND ANALYSIS:\n`;
         
-        // Position-specific VERIFIED game-by-game breakdowns
+        // Position-specific game-by-game breakdowns with TREND EMPHASIS
         if (parseFloat(avg.rec_yds) > 0 || parseFloat(avg.receptions) > 0) {
           const recLog = formatVerifiedGameLog(logs, 'rec_yds', 'yds');
           if (recLog.gameByGame) {
             statsText += `  ✓ RECEIVING - Last 5 Games:\n`;
             statsText += `    ${recLog.gameByGame}\n`;
-            statsText += `    ⭐ VERIFIED L5 AVG: ${recLog.verifiedAverage} rec yds | Hit 75+: ${recLog.lineHits[75] || '0/5'} | Hit 80+: ${recLog.lineHits[80] || '0/5'}\n`;
+            statsText += `    ${recLog.trendIcon} ${recLog.trendDirection} (recent 2 avg: ${recLog.recent2Avg} vs older 3 avg: ${recLog.older3Avg}, ${recLog.trendPct >= 0 ? '+' : ''}${recLog.trendPct}%)\n`;
+            statsText += `    Most recent: ${recLog.mostRecent} yds | Hit 75+: ${recLog.lineHits[75] || '0/5'}\n`;
           }
         }
         
@@ -992,7 +1056,8 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
           if (passLog.gameByGame) {
             statsText += `  ✓ PASSING - Last 5 Games:\n`;
             statsText += `    ${passLog.gameByGame}\n`;
-            statsText += `    ⭐ VERIFIED L5 AVG: ${passLog.verifiedAverage} pass yds\n`;
+            statsText += `    ${passLog.trendIcon} ${passLog.trendDirection} (recent 2 avg: ${passLog.recent2Avg} vs older 3 avg: ${passLog.older3Avg}, ${passLog.trendPct >= 0 ? '+' : ''}${passLog.trendPct}%)\n`;
+            statsText += `    Most recent: ${passLog.mostRecent} yds | Hit 200+: ${passLog.lineHits[200] || '0/5'} | Hit 250+: ${passLog.lineHits[250] || '0/5'}\n`;
           }
         }
         
@@ -1001,50 +1066,50 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
           if (rushLog.gameByGame) {
             statsText += `  ✓ RUSHING - Last 5 Games:\n`;
             statsText += `    ${rushLog.gameByGame}\n`;
-            statsText += `    ⭐ VERIFIED L5 AVG: ${rushLog.verifiedAverage} rush yds | Hit 50+: ${rushLog.lineHits[50] || '0/5'} | Hit 75+: ${rushLog.lineHits[75] || '0/5'}\n`;
+            statsText += `    ${rushLog.trendIcon} ${rushLog.trendDirection} (recent 2 avg: ${rushLog.recent2Avg} vs older 3 avg: ${rushLog.older3Avg}, ${rushLog.trendPct >= 0 ? '+' : ''}${rushLog.trendPct}%)\n`;
+            statsText += `    Most recent: ${rushLog.mostRecent} yds | Hit 50+: ${rushLog.lineHits[50] || '0/5'} | Hit 75+: ${rushLog.lineHits[75] || '0/5'}\n`;
           }
         }
         
-        statsText += `  ${formIcon} Trend: ${logs.formTrend || 'steady'}\n`;
-        
+        // Volatility indicator (how predictable is this player?)
         const consistency = logs.consistency;
-        const getConsistencyLabel = (score) => {
+        const getVolatilityLabel = (score) => {
           const s = parseFloat(score);
-          if (s >= 0.7) return 'HIGH';
-          if (s >= 0.5) return 'MED';
-          return 'LOW';
+          if (s >= 0.7) return 'CONSISTENT';
+          if (s >= 0.5) return 'VARIABLE';
+          return 'VOLATILE';
         };
         
-        const relevantConsistency = [];
-        if (parseFloat(avg.pass_yds) > 0) relevantConsistency.push(`Pass: ${getConsistencyLabel(consistency.pass_yds)}`);
-        if (parseFloat(avg.rush_yds) > 10) relevantConsistency.push(`Rush: ${getConsistencyLabel(consistency.rush_yds)}`);
-        if (parseFloat(avg.rec_yds) > 0) relevantConsistency.push(`Rec: ${getConsistencyLabel(consistency.rec_yds)}`);
+        const relevantVolatility = [];
+        if (parseFloat(avg.pass_yds) > 0) relevantVolatility.push(`Pass: ${getVolatilityLabel(consistency.pass_yds)}`);
+        if (parseFloat(avg.rush_yds) > 10) relevantVolatility.push(`Rush: ${getVolatilityLabel(consistency.rush_yds)}`);
+        if (parseFloat(avg.rec_yds) > 0) relevantVolatility.push(`Rec: ${getVolatilityLabel(consistency.rec_yds)}`);
         
-        if (relevantConsistency.length > 0) {
-          statsText += `  Consistency: ${relevantConsistency.join(', ')}\n`;
+        if (relevantVolatility.length > 0) {
+          statsText += `  Volatility: ${relevantVolatility.join(', ')}\n`;
         }
         
-        if (logs.splits?.home && logs.splits?.away) {
-          const home = logs.splits.home;
-          const away = logs.splits.away;
-          if (parseFloat(avg.pass_yds) > 0) {
-            statsText += `  Splits: Home ${home.pass_yds} pass yds (${home.games}g) | Away ${away.pass_yds} pass yds (${away.games}g)\n`;
-          } else if (parseFloat(avg.rush_yds) > 10) {
-            statsText += `  Splits: Home ${home.rush_yds} rush yds (${home.games}g) | Away ${away.rush_yds} rush yds (${away.games}g)\n`;
-          } else if (parseFloat(avg.rec_yds) > 0) {
-            statsText += `  Splits: Home ${home.rec_yds} rec yds (${home.games}g) | Away ${away.rec_yds} rec yds (${away.games}g)\n`;
-          }
+        // Target share trending (for WR/TE/RB) - TREND FOCUS
+        if (logs.targetTrend && parseFloat(logs.targetTrend.l5Avg) > 0) {
+          const tt = logs.targetTrend;
+          const trendIcon = tt.trend === 'SPIKE' ? '⬆️' : tt.trend === 'DECLINING' ? '⬇️' : '➡️';
+          statsText += `  Target Trend: ${trendIcon} Recent: ${tt.l2Avg}/game vs Earlier: ${tt.l3Avg}/game (${tt.change >= 0 ? '+' : ''}${tt.change}%)\n`;
         }
         
-        // 🎯 HIT RATE ANALYSIS FOR EACH PROP LINE (HOME TEAM)
+        // Usage/snap proxy (touches + targets as involvement metric) - TREND FOCUS
+        if (logs.usageTrend && parseFloat(logs.usageTrend.l5Avg) > 0) {
+          const ut = logs.usageTrend;
+          const trendIcon = ut.trend === 'INCREASING' ? '⬆️' : ut.trend === 'DECREASING' ? '⬇️' : '➡️';
+          statsText += `  Usage Trend: ${trendIcon} Recent: ${ut.l2Avg} touches vs Earlier: ${ut.l5Avg} touches (${ut.change >= 0 ? '+' : ''}${ut.change}%)\n`;
+        }
+        
+        // Hit rate analysis for each prop line (simplified - just hit count)
         if (candidate.props && candidate.props.length > 0) {
-          statsText += `  📈 HIT RATE BY PROP LINE (critical for picks):\n`;
+          statsText += `  Line performance:\n`;
           for (const prop of candidate.props) {
             const hitRate = calculateHitRate(logs.games, prop.type, prop.line);
             if (hitRate) {
-              const recIcon = hitRate.recommendation.includes('OVER') ? '✅' : 
-                             hitRate.recommendation.includes('UNDER') ? '⬇️' : '⚠️';
-              statsText += `    ${recIcon} ${prop.type} ${prop.line}: ${hitRate.hitsOver}/${hitRate.totalGames} over (${hitRate.overRate}%) | Avg: ${hitRate.avgValue} | Edge: ${hitRate.edge}% → ${hitRate.recommendation}\n`;
+              statsText += `    ${prop.type} ${prop.line}: Hit ${hitRate.hitsOver}/${hitRate.totalGames} games\n`;
             }
           }
         }
@@ -1092,9 +1157,26 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           rush_yds: g.rush_yds,
           rec_yds: g.rec_yds,
           receptions: g.receptions,
+          targets: g.targets,
           opponent: g.opponent,
           isHome: g.isHome
-        }))
+        })),
+        // NEW: Target share trending
+        targetTrend: logs.targetTrend ? {
+          l5Avg: logs.targetTrend.l5Avg,
+          l2Avg: logs.targetTrend.l2Avg,
+          change: logs.targetTrend.change,
+          trend: logs.targetTrend.trend, // SPIKE, DECLINING, STABLE
+          gameByGame: logs.targetTrend.gameByGame
+        } : null,
+        // NEW: Usage/snap count proxy
+        usageTrend: logs.usageTrend ? {
+          l5Avg: logs.usageTrend.l5Avg,
+          l2Avg: logs.usageTrend.l2Avg,
+          change: logs.usageTrend.change,
+          level: logs.usageTrend.level, // ELITE, HIGH, MODERATE, LOW
+          trend: logs.usageTrend.trend // INCREASING, DECREASING, STABLE
+        } : null
       } : null
     };
   });

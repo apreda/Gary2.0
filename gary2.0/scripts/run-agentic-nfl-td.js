@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agentic NFL Touchdown Scorer Runner
- * Special feature: Gary picks 5 standard TDs + 5 underdog TDs (+200 or better) + 3 First TD scorers
+ * Special feature: Gary picks 5 standard TDs + 5 underdog TDs (+200 or better) + 1 First TD per game
  */
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -310,23 +310,23 @@ function formatTDRatesContext(tdRates, players) {
   }
   
   if (highTD.length > 0) {
-    context += '**🔥 HIGH TD VOLUME (0.6+ TD/game):**\n';
+    context += '**High TD volume (0.6+ TD/game):**\n';
     highTD.sort((a, b) => parseFloat(b.tdPerGame) - parseFloat(a.tdPerGame)).forEach(p => {
-      context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g) | Rush ${p.rushTDs}, Rec ${p.recTDs}\n`;
+      context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g), rush ${p.rushTDs}, rec ${p.recTDs}\n`;
     });
     context += '\n';
   }
   
   if (mediumTD.length > 0) {
-    context += '**📈 MODERATE TD VOLUME (0.3-0.6 TD/game):**\n';
+    context += '**Moderate TD volume (0.3-0.6 TD/game):**\n';
     mediumTD.sort((a, b) => parseFloat(b.tdPerGame) - parseFloat(a.tdPerGame)).forEach(p => {
-      context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g) | Rush ${p.rushTDs}, Rec ${p.recTDs}\n`;
+      context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g), rush ${p.rushTDs}, rec ${p.recTDs}\n`;
     });
     context += '\n';
   }
   
   if (lowTD.length > 0) {
-    context += '**📉 LOW TD VOLUME (<0.3 TD/game - value plays only):**\n';
+    context += '**Low TD volume (<0.3 TD/game - value plays only):**\n';
     lowTD.sort((a, b) => parseFloat(b.tdPerGame) - parseFloat(a.tdPerGame)).slice(0, 10).forEach(p => {
       context += `- ${p.name}: ${p.totalTDs} TDs in ${p.gamesPlayed}g (${p.tdPerGame}/g)\n`;
     });
@@ -463,9 +463,9 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
           context += `- ⚠️ GAME SCRIPT: ${favorite} RB1 likely high volume late. ${underdog} may trail = more passing TDs.\n`;
         }
         if (game.totalContext === 'HIGH_SCORING') {
-          context += `- 🔥 HIGH TOTAL: Multiple TDs expected - WRs/TEs have increased equity.\n`;
+          context += `- High total: Multiple TDs expected - WRs/TEs have increased equity.\n`;
         } else if (game.totalContext === 'LOW_SCORING') {
-          context += `- 🧊 LOW TOTAL: Grind game expected - RBs have increased TD equity.\n`;
+          context += `- Low total: Grind game expected - RBs have increased TD equity.\n`;
         }
       }
       
@@ -491,6 +491,10 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
   };
 
   const criticalContext = buildCriticalContext();
+
+  const isSingleGame = gameMatchups.length === 1;
+  const standardCount = isSingleGame ? 1 : 5;
+  const underdogCount = isSingleGame ? 1 : 5;
 
   const systemPrompt = `
 You are Gary, the expert NFL analyst. You're picking Touchdown Scorers for today's games.
@@ -524,7 +528,7 @@ THE VERIFICATION TEST: Before writing ANY stat, ask:
 
 ${criticalContext}
 ## CRITICAL RULE: SPREAD YOUR PICKS ACROSS MULTIPLE GAMES
-You MUST pick from at least 4 DIFFERENT games for each category. Do NOT concentrate all picks in 1-2 games.
+${isSingleGame ? 'This is a single game slate. Focus your analysis on this specific matchup.' : 'You MUST pick from at least 4 DIFFERENT games for each category. Do NOT concentrate all picks in 1-2 games.'}
 Today's available games: ${gameMatchups.join(', ')}
 
 ## IMPORTANT: USE VERIFIED DATA ONLY
@@ -535,33 +539,34 @@ Today's available games: ${gameMatchups.join(', ')}
 ## YOUR TASK
 You must make THREE types of TD scorer picks:
 
-### CATEGORY 1: STANDARD TD SCORERS (5 picks)
-Pick your 5 BEST touchdown scorer bets regardless of odds. These are your highest-confidence plays backed by:
+### CATEGORY 1: STANDARD TD SCORERS (${standardCount} pick${standardCount > 1 ? 's' : ''})
+Pick your ${standardCount} BEST touchdown scorer bet${standardCount > 1 ? 's' : ''} regardless of odds. These are your highest-confidence plays backed by:
 - Red zone usage and targets
 - Goal line carries
 - Recent TD scoring trends
 - Matchup advantages
 - Game script projections
 
-RULE: Pick from at least 4 different games. For standard picks, use line 0.5 (Over 0.5 TDs = scores at least 1 TD).
+RULE: ${isSingleGame ? 'Pick exactly 1 standard TD scorer.' : 'Pick from at least 4 different games.'} For standard picks, use line 0.5 (Over 0.5 TDs = scores at least 1 TD).
 
-### CATEGORY 2: UNDERDOG TD SCORERS (5 picks)  
-Pick 5 touchdown scorer bets with odds of +200 or better (higher payout). These are your VALUE plays:
+### CATEGORY 2: UNDERDOG TD SCORERS (${underdogCount} pick${underdogCount > 1 ? 's' : ''})  
+Pick ${underdogCount} touchdown scorer bet${underdogCount > 1 ? 's' : ''} with odds of +200 or better (higher payout). These are your VALUE plays:
 - Players who could vulture a TD or score multiple
 - Boom/bust candidates in high-scoring games
 - Players in favorable TD-scoring situations that oddsmakers are undervaluing
 - You CAN pick Over 1.5 TDs (2+ touchdowns) for players you think will have big games
 
-RULE: Pick from at least 4 different games.
+RULE: ${isSingleGame ? 'Pick exactly 1 value TD scorer.' : 'Pick from at least 4 different games.'}
 
-### CATEGORY 3: FIRST TD SCORER (3 picks)
-Pick 3 players most likely to score the FIRST touchdown of their game. These are HIGH VARIANCE plays (typically +300 to +2000 odds):
+### CATEGORY 3: FIRST TD SCORER (1 pick PER GAME)
+Pick exactly ONE player from EACH game who is most likely to score the FIRST touchdown of that game. These are HIGH VARIANCE plays (typically +300 to +2000 odds):
 - Players who get early red zone usage
 - Teams with strong opening drive scripts
 - Goal line backs and red zone targets
 - Consider each team's first-drive tendencies
+- Weight toward RB1s (28% of first TDs) and WR1s (22% of first TDs)
 
-RULE: Pick from at least 3 different games - ideally one from each game where you have strong conviction.
+CRITICAL RULE: You MUST pick exactly 1 First TD scorer from EACH game on the slate. If there are 4 games, pick 4 First TD scorers (one per game).
 
 ## ANALYSIS FRAMEWORK FOR TD PROPS
 
@@ -676,9 +681,9 @@ Red flags:
 }
 
 IMPORTANT:
-- Standard picks: Pick exactly 5 from any odds, line is always 0.5
-- Underdog picks: Pick exactly 5 with odds +200 or better. Line can be 0.5 (1+ TD) or 1.5 (2+ TDs)
-- First TD picks: Pick exactly 3 players likely to score the first TD of their game
+- Standard picks: Pick exactly ${standardCount} from any odds, line is always 0.5
+- Underdog picks: Pick exactly ${underdogCount} with odds +200 or better. Line can be 0.5 (1+ TD) or 1.5 (2+ TDs)
+- First TD picks: Pick exactly 1 player PER GAME (so if 1 game, pick 1 First TD scorer)
 - RATIONALES MUST BE DETAILED: Include stats line, 3-5 sentence thesis, bullet point factors, risk note, and confidence
 - Be specific about WHY each player will score - use real stats and matchup analysis
 `;
@@ -830,14 +835,13 @@ async function main() {
     try {
       const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, game.home_team, game.away_team);
       
-      // Filter for anytime TD props
+      // Filter for anytime TD props ONLY (single TD to score)
+      // IMPORTANT: Do NOT include player_tds_over (2+ TDs) - that's a different market!
       const rawTdProps = props.filter(p => {
         const propType = (p.prop_type || '').toLowerCase();
+        // Only anytime TD (single TD) - exclude tds_over which is 2+ TDs
         return propType === 'anytime_td' || 
-               propType === 'player_anytime_td' ||
-               propType === 'player_tds_over' ||
-               propType === 'tds_over' ||
-               (propType.includes('td') && !propType.includes('pass_td') && !propType.includes('1st_td') && !propType.includes('first_td'));
+               propType === 'player_anytime_td';
       });
 
       // Filter for First TD props
@@ -980,7 +984,7 @@ async function main() {
   }
 
   // NEW: Fetch TD rates for all unique players
-  console.log(`\n📈 Fetching TD rates from BDL for value analysis...`);
+  console.log(`\nFetching TD rates from BDL for value analysis...`);
   const currentSeason = new Date().getMonth() <= 7 ? new Date().getFullYear() - 1 : new Date().getFullYear();
   const allUniquePlayers = [...new Set([...allTDProps, ...firstTDProps].map(p => ({ player: p.player, team: p.team })))];
   const tdRates = await fetchPlayerTDRates(allUniquePlayers, currentSeason);
@@ -1037,7 +1041,7 @@ async function main() {
     console.log(`      💡 ${pick.rationale}\n`);
   });
 
-  console.log(`\n🥇 FIRST TD SCORERS (3 High-Variance Plays):`);
+  console.log(`\n🥇 FIRST TD SCORERS (1 Per Game):`);
   (result.first_td_picks || []).forEach((pick, i) => {
     console.log(`   ${i + 1}. ${pick.player} (${pick.team}) @ +${pick.odds}`);
     console.log(`      ${pick.matchup}`);
@@ -1190,7 +1194,7 @@ async function main() {
     if (insertError) {
       console.error(`❌ Insert error: ${insertError.message}`);
     } else {
-      console.log(`✅ Stored ${allTDPicks.length} NFL TD picks (5 standard + 5 underdog + 3 first TD)`);
+      console.log(`✅ Stored ${allTDPicks.length} NFL TD picks (${standardPicks.length} standard + ${underdogPicks.length} underdog + ${firstTDPicks.length} first TD)`);
     }
   }
 
